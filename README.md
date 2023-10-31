@@ -12,12 +12,12 @@ It's the successor of the [Material Shell](https://github.com/material-shell/mat
 The workflow is designed to synergize with your spatial awareness in order to provide a most intuitive and ergonomic navigation and organization in the digital environment.
 
 Organize all your applications in a two-dimensional space where you can group them by use-cases, categories or or any other criteria that makes sense to you.
-
+<br/><br/>
 <p align="center" valign="middle">
  <img align="center" valign="middle" src="./documentation/spatialisation.gif"
             alt="Spatialisation illustrated">
 </p>
-
+<br/>
 Our persistence feature automatically saves your layout and organization on-the-fly, so you can build your own configuration that persists even after a reboot by simply using it.
 
 Navigate through your tailored environment with ease, using super intuitive directional inputs inspired by the video game industry.
