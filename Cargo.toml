@@ -1,0 +1,28 @@
+[package]
+name = "veshell"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+members = [
+    "third_party/smithay-drm-extras",
+]
+
+[dependencies]
+smithay = { git = "https://github.com/Smithay/smithay", rev = "4e41ab0", features = ["default", "wayland_frontend", "backend_egl", "use_system_lib"] }
+smithay-drm-extras = {path = "third_party/smithay-drm-extras" }
+input-linux = "0.6.0"
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
+log = "0.4.20"
+tracing = { version = "0.1.37", features = [] }
+profiling = "1.0.11"
+thiserror = "1.0.49"
+xcursor = "0.3.4"
+serde = "1.0.189"
+serde_json = "1.0.107"
+lazy_static = { version = "1.4.0", features = [] }
+
+[build-dependencies]
+bindgen = "0.68.1"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
