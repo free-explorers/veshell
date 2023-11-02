@@ -6,6 +6,10 @@ Veshell is a Wayland compositor providing an [innovative workflow](#the-innovati
 
 It's the successor of the [Material Shell](https://github.com/material-shell/material-shell) project.
 
+# Crowdfunding
+
+<a href="https://opencollective.com/free-explorers/projects/veshell/contribute/kickstart-veshell-67471"><img  src="https://veshell.s3.eu-west-1.amazonaws.com/Board.svg"
+            alt="Spatialisation illustrated"></a>
 
 # The innovative workflow
 
