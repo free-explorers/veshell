@@ -5,18 +5,24 @@
 Veshell is a Wayland compositor providing an [innovative workflow](#the-innovative-workflows) that utilizes humans natural spatial cognition to enhance navigation and organization in the digital environment.
 
 It's the successor of the [Material Shell](https://github.com/material-shell/material-shell) project.
+<br/>
+<br/>
 
 # Crowdfunding
 
 Support the project by participate in our Kickstarter crowdfunding or by becoming a [free explorers member](https://opencollective.com/free-explorers) !
 
+<br/> 
 <a href="https://opencollective.com/free-explorers/projects/veshell/contribute/kickstart-veshell-67471"><img  src="https://veshell.s3.eu-west-1.amazonaws.com/Board.svg"
             alt="Spatialisation illustrated"></a>
+<br/>
 <br/>
 
 # Prototype
 
 Veshell is currently in early stage of development and you can find the Proof Of Concept prototype at [**free-explorers/veshell-prototype**](https://github.com/free-explorers/veshell-prototype)
+<br/>
+<br/>
 
 # The innovative workflow
 
