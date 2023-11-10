@@ -3,6 +3,7 @@ use std::mem::size_of;
 use std::ops::{Deref, DerefMut};
 use std::os::unix::ffi::OsStrExt;
 use std::ptr::{null, null_mut};
+use std::rc::Rc;
 use std::time::Duration;
 
 use smithay::{
@@ -18,6 +19,7 @@ use smithay::{
     reexports::calloop::channel,
     utils::{Physical, Size},
 };
+use smithay::backend::renderer::gles::ffi::RGBA8;
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::calloop::Dispatcher;
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
@@ -48,8 +50,14 @@ use crate::{Backend, CalloopData, flutter_engine::{
 }, ServerState};
 use crate::flutter_engine::callbacks::{gl_external_texture_frame_callback, platform_message_callback, populate_existing_damage, post_task_callback, runs_task_on_current_thread_callback, vsync_callback};
 use crate::flutter_engine::embedder::{FlutterCustomTaskRunners, FlutterEngineMarkExternalTextureFrameAvailable, FlutterEngineRegisterExternalTexture, FlutterEngineRunTask, FlutterEngineSendPointerEvent, FlutterPointerEvent, FlutterTaskRunnerDescription};
+use crate::flutter_engine::platform_channel_callbacks::platform_message_handler;
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::flutter_engine::platform_channels::binary_messenger_impl::BinaryMessengerImpl;
+use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
+use crate::flutter_engine::platform_channels::method_call::MethodCall;
+use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
+use crate::flutter_engine::platform_channels::method_result::MethodResult;
+use crate::flutter_engine::platform_channels::standard_method_codec::StandardMethodCodec;
 use crate::flutter_engine::task_runner::TaskRunner;
 use crate::gles_framebuffer_importer::GlesFramebufferImporter;
 use crate::mouse_button_tracker::MouseButtonTracker;
@@ -59,6 +67,7 @@ pub mod embedder;
 pub mod platform_channels;
 pub mod task_runner;
 pub mod wayland_messages;
+pub mod platform_channel_callbacks;
 
 /// Wrap the handle for various safety reasons:
 /// - Clone & Copy is willingly not implemented to avoid using the engine after being shut down.
@@ -77,7 +86,7 @@ pub struct FlutterEngine {
 pub struct Baton(isize);
 
 impl FlutterEngine {
-    pub fn new<BackendData: Backend + 'static>(root_egl_context: &EGLContext, server_state: &ServerState<BackendData>) -> Result<(Box<Self>, EmbedderChannels), Box<dyn std::error::Error>> {
+    pub fn new<BackendData: Backend + 'static>(server_state: &mut ServerState<BackendData>) -> Result<(Box<Self>, EmbedderChannels), Box<dyn std::error::Error>> {
         let (tx_present, rx_present) = channel::channel::<()>();
         let (tx_request_fbo, rx_request_fbo) = channel::channel::<()>();
         let (tx_fbo, rx_fbo) = channel::channel::<Option<Dmabuf>>();
@@ -103,8 +112,6 @@ impl FlutterEngine {
             tx_fbo,
             tx_output_height,
             rx_baton,
-            rx_request_external_texture_name,
-            tx_external_texture_name,
         };
 
         let assets_path = CString::new(if option_env!("BUNDLE").is_some() { "data/flutter_assets" } else { "veshell_flutter/build/linux/x64/debug/bundle/data/flutter_assets" })?;
@@ -118,6 +125,9 @@ impl FlutterEngine {
             observatory_port.as_ptr(),
             disable_service_auth_codes.as_ptr(),
         ];
+
+        let gles_renderer = server_state.gles_renderer.as_ref().unwrap();
+        let root_egl_context = gles_renderer.egl_context();
 
         let mut this = Box::new(Self {
             handle: null_mut(),
@@ -222,6 +232,19 @@ impl FlutterEngine {
         }
 
         this.handle = flutter_engine;
+        this.binary_messenger = Some(BinaryMessengerImpl::new(flutter_engine));
+
+        let codec = Rc::new(StandardMethodCodec::new());
+        let (tx_platform_message, rx_platform_message) = channel::channel::<(MethodCall, Box<dyn MethodResult>)>();
+        let mut platform_method_channel = MethodChannel::<EncodableValue>::new(
+            this.binary_messenger.as_mut().unwrap(),
+            "platform".to_string(),
+            codec,
+        );
+        // TODO: Provide a way to specify a channel directly, without registering a callback.
+        platform_method_channel.set_method_call_handler(Some(Box::new(move |method_call, result| {
+            tx_platform_message.send((method_call, result)).unwrap();
+        })));
 
         let task_runner_timer_dispatcher = Dispatcher::new(Timer::immediate(), move |deadline, _, data: &mut CalloopData<BackendData>| {
             let duration = data.state.flutter_engine_mut().task_runner.execute_expired_tasks(move |task| {
@@ -229,7 +252,6 @@ impl FlutterEngine {
             });
             TimeoutAction::ToDuration(duration)
         });
-
         let task_runner_timer_registration_token = server_state.loop_handle.register_dispatcher(task_runner_timer_dispatcher.clone()).unwrap();
 
         server_state.loop_handle.insert_source(rx_reschedule_task_runner_timer, move |event, _, data: &mut CalloopData<BackendData>| {
@@ -239,7 +261,24 @@ impl FlutterEngine {
             }
         }).unwrap();
 
-        this.binary_messenger = Some(BinaryMessengerImpl::new(flutter_engine));
+        server_state.loop_handle.insert_source(rx_request_external_texture_name, move |event, _, data| {
+            if let Msg(texture_id) = event {
+                let texture_swap_chain = data.state.texture_swapchains.get_mut(&texture_id);
+                let texture_id = match texture_swap_chain {
+                    Some(texture) => {
+                        let texture = texture.start_read();
+                        texture.tex_id()
+                    }
+                    None => 0,
+                };
+                let _ = tx_external_texture_name.send((texture_id, RGBA8));
+            }
+        }).unwrap();
+
+        server_state.loop_handle.insert_source(
+            rx_platform_message,
+            platform_message_handler,
+        ).unwrap();
 
         Ok((this, embedder_channels))
     }
@@ -371,6 +410,4 @@ pub struct EmbedderChannels {
     pub tx_fbo: channel::Sender<Option<Dmabuf>>,
     pub tx_output_height: channel::Sender<u16>,
     pub rx_baton: channel::Channel<Baton>,
-    pub rx_request_external_texture_name: channel::Channel<i64>,
-    pub tx_external_texture_name: channel::Sender<(u32, u32)>,
 }

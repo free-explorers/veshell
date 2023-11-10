@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::os::fd::{AsRawFd, FromRawFd};
 use std::path::Path;
 use std::sync::atomic::Ordering;
 
@@ -42,7 +41,7 @@ use tracing::{error, info, warn};
 use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
 use smithay_drm_extras::edid::EdidInfo;
 
-use crate::{Backend, CalloopData, flutter_engine::EmbedderChannels, ServerState};
+use crate::{Backend, CalloopData, flutter_engine::EmbedderChannels, send_frames_surface_tree, ServerState};
 use crate::flutter_engine::FlutterEngine;
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::input_handling::handle_input;
@@ -164,17 +163,15 @@ pub fn run_drm_backend() {
 
     // Start the Flutter engine.
     let (
-        mut flutter_engine,
+        flutter_engine,
         EmbedderChannels {
             rx_present,
             rx_request_fbo,
             mut tx_fbo,
             tx_output_height: _,
             rx_baton,
-            rx_request_external_texture_name,
-            tx_external_texture_name,
         },
-    ) = FlutterEngine::new(egl_context, &state).unwrap();
+    ) = FlutterEngine::new(&mut state).unwrap();
 
     state.flutter_engine = Some(flutter_engine);
 
@@ -406,7 +403,7 @@ impl ServerState<DrmBackend> {
             )
             .map_err(DeviceAddError::DeviceOpen)?;
 
-        let fd = DrmDeviceFd::new(unsafe { DeviceFd::from_raw_fd(fd.as_raw_fd()) });
+        let fd = DrmDeviceFd::new(unsafe { DeviceFd::from(fd) });
         let (drm, notifier) = DrmDevice::new(fd.clone(), true).map_err(DeviceAddError::DrmDevice)?;
 
         let registration_token = self
@@ -422,6 +419,14 @@ impl ServerState<DrmBackend> {
                         if let Some(baton) = data.baton.take() {
                             data.state.flutter_engine().on_vsync(baton).unwrap();
                         }
+                        let start_time = std::time::Instant::now();
+                        for surface in data.state.xdg_shell_state.toplevel_surfaces() {
+                            send_frames_surface_tree(surface.wl_surface(), start_time.elapsed().as_millis() as u32);
+                        }
+                        for surface in data.state.xdg_popups.values() {
+                            send_frames_surface_tree(surface.wl_surface(), start_time.elapsed().as_millis() as u32);
+                        }
+                        data.state.is_next_flutter_frame_scheduled = false;
                     }
                     DrmEvent::Error(error) => {
                         error!("{:?}", error);
