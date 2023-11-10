@@ -20,8 +20,9 @@ use smithay::{
     utils::{Physical, Size},
 };
 use smithay::backend::renderer::gles::ffi::RGBA8;
+use smithay::reexports::calloop;
+use smithay::reexports::calloop::{Dispatcher, LoopHandle};
 use smithay::reexports::calloop::channel::Event::Msg;
-use smithay::reexports::calloop::Dispatcher;
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 
 use crate::{Backend, CalloopData, flutter_engine::{
@@ -72,21 +73,23 @@ pub mod platform_channel_callbacks;
 /// Wrap the handle for various safety reasons:
 /// - Clone & Copy is willingly not implemented to avoid using the engine after being shut down.
 /// - Send is not implemented because all its methods must be called from the thread the engine was created.
-pub struct FlutterEngine {
+pub struct FlutterEngine<BackendData: Backend + 'static> {
+    loop_handle: LoopHandle<'static, CalloopData<BackendData>>,
     pub handle: FlutterEngineHandle,
     data: FlutterEngineData,
     pub task_runner: TaskRunner,
     current_thread_id: std::thread::ThreadId,
     pub(crate) mouse_button_tracker: MouseButtonTracker,
     pub binary_messenger: Option<BinaryMessengerImpl>,
+    rx_request_external_texture_name_registration_token: Option<calloop::RegistrationToken>,
 }
 
 /// I don't want people to clone it because it's UB to call [FlutterEngine::on_vsync] multiple times
 /// with the same baton, which will most probably segfault.
 pub struct Baton(isize);
 
-impl FlutterEngine {
-    pub fn new<BackendData: Backend + 'static>(server_state: &mut ServerState<BackendData>) -> Result<(Box<Self>, EmbedderChannels), Box<dyn std::error::Error>> {
+impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
+    pub fn new(server_state: &mut ServerState<BackendData>) -> Result<(Box<Self>, EmbedderChannels), Box<dyn std::error::Error>> {
         let (tx_present, rx_present) = channel::channel::<()>();
         let (tx_request_fbo, rx_request_fbo) = channel::channel::<()>();
         let (tx_fbo, rx_fbo) = channel::channel::<Option<Dmabuf>>();
@@ -130,19 +133,21 @@ impl FlutterEngine {
         let root_egl_context = gles_renderer.egl_context();
 
         let mut this = Box::new(Self {
+            loop_handle: server_state.loop_handle.clone(),
             handle: null_mut(),
             data: FlutterEngineData::new(root_egl_context, flutter_engine_channels)?,
             task_runner: TaskRunner::new(tx_reschedule_task_runner_timer),
             current_thread_id: std::thread::current().id(),
             mouse_button_tracker: MouseButtonTracker::new(),
             binary_messenger: None,
+            rx_request_external_texture_name_registration_token: None,
         });
 
         let task_runner_description = FlutterTaskRunnerDescription {
             struct_size: size_of::<FlutterTaskRunnerDescription>(),
             user_data: this.deref_mut() as *const _ as *mut _,
-            runs_task_on_current_thread_callback: Some(runs_task_on_current_thread_callback),
-            post_task_callback: Some(post_task_callback),
+            runs_task_on_current_thread_callback: Some(runs_task_on_current_thread_callback::<BackendData>),
+            post_task_callback: Some(post_task_callback::<BackendData>),
             identifier: 1,
         };
 
@@ -161,7 +166,7 @@ impl FlutterEngine {
             icu_data_path: icu_data_path.as_ptr(),
             command_line_argc: command_line_argv.len() as c_int,
             command_line_argv: command_line_argv.as_ptr(),
-            platform_message_callback: Some(platform_message_callback),
+            platform_message_callback: Some(platform_message_callback::<BackendData>),
             vm_snapshot_data: null(),
             vm_snapshot_data_size: 0,
             vm_snapshot_instructions: null(),
@@ -175,7 +180,7 @@ impl FlutterEngine {
             update_semantics_custom_action_callback: None,
             persistent_cache_path: null(),
             is_persistent_cache_read_only: false,
-            vsync_callback: Some(vsync_callback),
+            vsync_callback: Some(vsync_callback::<BackendData>),
             custom_dart_entrypoint: null(),
             custom_task_runners: &task_runners,
             shutdown_dart_vm_when_done: true,
@@ -198,20 +203,20 @@ impl FlutterEngine {
             __bindgen_anon_1: FlutterRendererConfig__bindgen_ty_1 {
                 open_gl: FlutterOpenGLRendererConfig {
                     struct_size: size_of::<FlutterOpenGLRendererConfig>(),
-                    make_current: Some(make_current),
-                    clear_current: Some(clear_current),
+                    make_current: Some(make_current::<BackendData>),
+                    clear_current: Some(clear_current::<BackendData>),
                     present: None,
-                    fbo_callback: Some(fbo_callback),
-                    make_resource_current: Some(make_resource_current),
+                    fbo_callback: Some(fbo_callback::<BackendData>),
+                    make_resource_current: Some(make_resource_current::<BackendData>),
                     // Flutter must request another framebuffer every frame
                     // because we're using a triple-buffered swapchain.
                     fbo_reset_after_present: true,
-                    surface_transformation: Some(surface_transformation),
+                    surface_transformation: Some(surface_transformation::<BackendData>),
                     gl_proc_resolver: None,
-                    gl_external_texture_frame_callback: Some(gl_external_texture_frame_callback),
+                    gl_external_texture_frame_callback: Some(gl_external_texture_frame_callback::<BackendData>),
                     fbo_with_frame_info_callback: None,
-                    present_with_info: Some(present_with_info),
-                    populate_existing_damage: Some(populate_existing_damage),
+                    present_with_info: Some(present_with_info::<BackendData>),
+                    populate_existing_damage: Some(populate_existing_damage::<BackendData>),
                 }
             },
         };
@@ -261,19 +266,21 @@ impl FlutterEngine {
             }
         }).unwrap();
 
-        server_state.loop_handle.insert_source(rx_request_external_texture_name, move |event, _, data| {
-            if let Msg(texture_id) = event {
-                let texture_swap_chain = data.state.texture_swapchains.get_mut(&texture_id);
-                let texture_id = match texture_swap_chain {
-                    Some(texture) => {
-                        let texture = texture.start_read();
-                        texture.tex_id()
-                    }
-                    None => 0,
-                };
-                let _ = tx_external_texture_name.send((texture_id, RGBA8));
-            }
-        }).unwrap();
+        this.rx_request_external_texture_name_registration_token = Some(server_state.loop_handle.insert_source(
+            rx_request_external_texture_name,
+            move |event, _, data| {
+                if let Msg(texture_id) = event {
+                    let texture_swap_chain = data.state.texture_swapchains.get_mut(&texture_id);
+                    let texture_id = match texture_swap_chain {
+                        Some(texture) => {
+                            let texture = texture.start_read();
+                            texture.tex_id()
+                        }
+                        None => 0,
+                    };
+                    let _ = tx_external_texture_name.send((texture_id, RGBA8));
+                }
+            }).unwrap());
 
         server_state.loop_handle.insert_source(
             rx_platform_message,
@@ -287,7 +294,7 @@ impl FlutterEngine {
         unsafe { FlutterEngineGetCurrentTime() }
     }
 
-    pub fn current_time_ms() -> u64 {
+    pub fn current_time_us() -> u64 {
         unsafe { FlutterEngineGetCurrentTime() / 1000 }
     }
 
@@ -348,9 +355,12 @@ impl FlutterEngine {
     }
 }
 
-impl Drop for FlutterEngine {
+impl<BackendData: Backend + 'static> Drop for FlutterEngine<BackendData> {
     fn drop(&mut self) {
         if !self.handle.is_null() {
+            // Avoid indefinite hang in the Flutter render thread waiting for an external texture.
+            let token = self.rx_request_external_texture_name_registration_token.take().unwrap();
+            self.loop_handle.remove(token);
             let _ = unsafe { FlutterEngineShutdown(self.handle) };
         }
     }

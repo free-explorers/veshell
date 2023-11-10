@@ -228,18 +228,16 @@ pub fn run_x11_client() {
                     send_frames_surface_tree(surface.wl_surface(), start_time.elapsed().as_millis() as u32);
                 }
             }
-            X11Event::Input(event) => handle_input(&event, data),
+            X11Event::Input(event) => handle_input::<X11Data>(&event, data),
         })
         .expect("Failed to insert X11 Backend into event loop");
 
     event_loop.handle().insert_source(rx_baton, move |baton, _, data| {
         if let Msg(baton) = baton {
-            data.baton = Some(baton);
-        }
-        if data.state.is_next_vblank_scheduled {
-            return;
-        }
-        if let Some(baton) = data.baton.take() {
+            if data.state.is_next_flutter_frame_scheduled {
+                data.baton = Some(baton);
+                return;
+            }
             data.state.flutter_engine().on_vsync(baton).unwrap();
         }
     }).unwrap();
@@ -257,7 +255,7 @@ pub fn run_x11_client() {
     }).unwrap();
 
     event_loop.handle().insert_source(rx_present, move |_, _, data| {
-        data.state.is_next_vblank_scheduled = true;
+        data.state.is_next_flutter_frame_scheduled = true;
         if let Err(err) = data.state.backend_data.x11_surface.submit() {
             data.state.backend_data.x11_surface.reset_buffers();
             warn!("Failed to submit buffer: {}. Retrying", err);

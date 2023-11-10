@@ -50,13 +50,13 @@ pub struct ServerState<BackendData: Backend + 'static> {
     pub data_device_state: DataDeviceState,
     pub pointer: PointerHandle<ServerState<BackendData>>,
     pub backend_data: Box<BackendData>,
-    pub flutter_engine: Option<Box<FlutterEngine>>,
+    pub flutter_engine: Option<Box<FlutterEngine<BackendData>>>,
     pub next_view_id: u64,
     pub next_texture_id: i64,
 
     pub mouse_position: (f64, f64),
     pub view_id_under_cursor: Option<u64>,
-    pub is_next_vblank_scheduled: bool,
+    pub is_next_flutter_frame_scheduled: bool,
 
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
@@ -89,10 +89,10 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
 }
 
 impl<BackendData: Backend + 'static> ServerState<BackendData> {
-    pub fn flutter_engine(&self) -> &FlutterEngine {
+    pub fn flutter_engine(&self) -> &FlutterEngine<BackendData> {
         self.flutter_engine.as_ref().unwrap()
     }
-    pub fn flutter_engine_mut(&mut self) -> &mut FlutterEngine {
+    pub fn flutter_engine_mut(&mut self) -> &mut FlutterEngine<BackendData> {
         self.flutter_engine.as_mut().unwrap()
     }
 }
@@ -172,7 +172,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             backend_data: Box::new(backend_data),
             mouse_position: (0.0, 0.0),
             view_id_under_cursor: None,
-            is_next_vblank_scheduled: false,
+            is_next_flutter_frame_scheduled: false,
             compositor_state,
             xdg_shell_state,
             shm_state,

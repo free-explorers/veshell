@@ -191,7 +191,7 @@ pub fn run_drm_backend() {
         .handle()
         .insert_source(libinput_backend, move |event, _, data| {
             let _dh = data.state.display_handle.clone();
-            handle_input(&event, data);
+            handle_input::<DrmBackend>(&event, data);
             // TODO: When the cursor moves, the cursor CRTC plane has to be updated.
             // However, we should call this only when the cursor actually moves, and not on every
             // input event.
@@ -219,13 +219,12 @@ pub fn run_drm_backend() {
 
     event_loop.handle().insert_source(rx_baton, move |baton, _, data| {
         if let Event::Msg(baton) = baton {
-            data.baton = Some(baton);
-        }
-        if data.state.is_next_vblank_scheduled {
-            return;
-        }
-        if let Some(baton) = data.baton.take() {
+            if data.state.is_next_flutter_frame_scheduled {
+                data.baton = Some(baton);
+                return;
+            }
             data.state.flutter_engine().on_vsync(baton).unwrap();
+            data.state.is_next_flutter_frame_scheduled = true;
         }
     }).unwrap();
 
@@ -241,7 +240,6 @@ pub fn run_drm_backend() {
         let gpu_data = data.state.backend_data.get_gpu_data_mut();
         gpu_data.last_rendered_slot = gpu_data.current_slot.take();
         data.state.update_crtc_planes();
-        data.state.is_next_vblank_scheduled = true;
     }).unwrap();
 
     while state.running.load(Ordering::SeqCst) {
@@ -293,9 +291,7 @@ impl ServerState<DrmBackend> {
         let slot = if let Some(slot) = last_rendered_slot.as_mut() {
             slot
         } else {
-            // Flutter hasn't rendered anything yet. Just draw a black frame to keep the VBlank cycle going.
-            surface.compositor.render_frame::<GlesRenderer, TextureRenderElement<GlesTexture>, GlesTexture>(gles_renderer, &[], [0.0, 0.0, 0.0, 0.0]).unwrap();
-            surface.compositor.queue_frame(None).unwrap();
+            // Flutter hasn't rendered anything yet.
             return;
         };
 
@@ -412,7 +408,6 @@ impl ServerState<DrmBackend> {
                 notifier,
                 move |event, _metadata, data: &mut CalloopData<_>| match event {
                     DrmEvent::VBlank(crtc) => {
-                        data.state.is_next_vblank_scheduled = false;
                         if let Some(surface) = data.state.backend_data.gpus.get_mut(&node).unwrap().surfaces.get_mut(&crtc) {
                             let _ = surface.compositor.frame_submitted();
                         }
