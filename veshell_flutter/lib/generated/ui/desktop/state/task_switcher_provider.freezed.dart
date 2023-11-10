@@ -63,22 +63,22 @@ class _$TaskSwitcherStateCopyWithImpl<$Res, $Val extends TaskSwitcherState>
 }
 
 /// @nodoc
-abstract class _$$_TaskSwitcherStateCopyWith<$Res>
+abstract class _$$TaskSwitcherStateImplCopyWith<$Res>
     implements $TaskSwitcherStateCopyWith<$Res> {
-  factory _$$_TaskSwitcherStateCopyWith(_$_TaskSwitcherState value,
-          $Res Function(_$_TaskSwitcherState) then) =
-      __$$_TaskSwitcherStateCopyWithImpl<$Res>;
+  factory _$$TaskSwitcherStateImplCopyWith(_$TaskSwitcherStateImpl value,
+          $Res Function(_$TaskSwitcherStateImpl) then) =
+      __$$TaskSwitcherStateImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call({bool shown, int index});
 }
 
 /// @nodoc
-class __$$_TaskSwitcherStateCopyWithImpl<$Res>
-    extends _$TaskSwitcherStateCopyWithImpl<$Res, _$_TaskSwitcherState>
-    implements _$$_TaskSwitcherStateCopyWith<$Res> {
-  __$$_TaskSwitcherStateCopyWithImpl(
-      _$_TaskSwitcherState _value, $Res Function(_$_TaskSwitcherState) _then)
+class __$$TaskSwitcherStateImplCopyWithImpl<$Res>
+    extends _$TaskSwitcherStateCopyWithImpl<$Res, _$TaskSwitcherStateImpl>
+    implements _$$TaskSwitcherStateImplCopyWith<$Res> {
+  __$$TaskSwitcherStateImplCopyWithImpl(_$TaskSwitcherStateImpl _value,
+      $Res Function(_$TaskSwitcherStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -87,7 +87,7 @@ class __$$_TaskSwitcherStateCopyWithImpl<$Res>
     Object? shown = null,
     Object? index = null,
   }) {
-    return _then(_$_TaskSwitcherState(
+    return _then(_$TaskSwitcherStateImpl(
       shown: null == shown
           ? _value.shown
           : shown // ignore: cast_nullable_to_non_nullable
@@ -102,8 +102,8 @@ class __$$_TaskSwitcherStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_TaskSwitcherState implements _TaskSwitcherState {
-  const _$_TaskSwitcherState({required this.shown, required this.index});
+class _$TaskSwitcherStateImpl implements _TaskSwitcherState {
+  const _$TaskSwitcherStateImpl({required this.shown, required this.index});
 
   @override
   final bool shown;
@@ -119,7 +119,7 @@ class _$_TaskSwitcherState implements _TaskSwitcherState {
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_TaskSwitcherState &&
+            other is _$TaskSwitcherStateImpl &&
             (identical(other.shown, shown) || other.shown == shown) &&
             (identical(other.index, index) || other.index == index));
   }
@@ -130,15 +130,15 @@ class _$_TaskSwitcherState implements _TaskSwitcherState {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_TaskSwitcherStateCopyWith<_$_TaskSwitcherState> get copyWith =>
-      __$$_TaskSwitcherStateCopyWithImpl<_$_TaskSwitcherState>(
+  _$$TaskSwitcherStateImplCopyWith<_$TaskSwitcherStateImpl> get copyWith =>
+      __$$TaskSwitcherStateImplCopyWithImpl<_$TaskSwitcherStateImpl>(
           this, _$identity);
 }
 
 abstract class _TaskSwitcherState implements TaskSwitcherState {
   const factory _TaskSwitcherState(
       {required final bool shown,
-      required final int index}) = _$_TaskSwitcherState;
+      required final int index}) = _$TaskSwitcherStateImpl;
 
   @override
   bool get shown;
@@ -146,6 +146,6 @@ abstract class _TaskSwitcherState implements TaskSwitcherState {
   int get index;
   @override
   @JsonKey(ignore: true)
-  _$$_TaskSwitcherStateCopyWith<_$_TaskSwitcherState> get copyWith =>
+  _$$TaskSwitcherStateImplCopyWith<_$TaskSwitcherStateImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

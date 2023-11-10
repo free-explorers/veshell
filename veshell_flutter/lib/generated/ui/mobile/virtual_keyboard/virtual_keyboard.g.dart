@@ -115,8 +115,8 @@ class KeyboardLayerProvider
     extends AutoDisposeNotifierProviderImpl<KeyboardLayer, KbLayerEnum> {
   /// See also [KeyboardLayer].
   KeyboardLayerProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           () => KeyboardLayer()..viewId = viewId,
           from: keyboardLayerProvider,
           name: r'keyboardLayerProvider',
@@ -127,9 +127,51 @@ class KeyboardLayerProvider
           dependencies: KeyboardLayerFamily._dependencies,
           allTransitiveDependencies:
               KeyboardLayerFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  KeyboardLayerProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  KbLayerEnum runNotifierBuild(
+    covariant KeyboardLayer notifier,
+  ) {
+    return notifier.build(
+      viewId,
+    );
+  }
+
+  @override
+  Override overrideWith(KeyboardLayer Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: KeyboardLayerProvider._internal(
+        () => create()..viewId = viewId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeNotifierProviderElement<KeyboardLayer, KbLayerEnum>
+      createElement() {
+    return _KeyboardLayerProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -143,15 +185,20 @@ class KeyboardLayerProvider
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin KeyboardLayerRef on AutoDisposeNotifierProviderRef<KbLayerEnum> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _KeyboardLayerProviderElement
+    extends AutoDisposeNotifierProviderElement<KeyboardLayer, KbLayerEnum>
+    with KeyboardLayerRef {
+  _KeyboardLayerProviderElement(super.provider);
 
   @override
-  KbLayerEnum runNotifierBuild(
-    covariant KeyboardLayer notifier,
-  ) {
-    return notifier.build(
-      viewId,
-    );
-  }
+  int get viewId => (origin as KeyboardLayerProvider).viewId;
 }
 
 String _$keyboardCaseHash() => r'393a7d3c147186e29e841bd2a90b460724e7da0b';
@@ -211,8 +258,8 @@ class KeyboardCaseProvider
     extends AutoDisposeNotifierProviderImpl<KeyboardCase, Case> {
   /// See also [KeyboardCase].
   KeyboardCaseProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           () => KeyboardCase()..viewId = viewId,
           from: keyboardCaseProvider,
           name: r'keyboardCaseProvider',
@@ -223,9 +270,50 @@ class KeyboardCaseProvider
           dependencies: KeyboardCaseFamily._dependencies,
           allTransitiveDependencies:
               KeyboardCaseFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  KeyboardCaseProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  Case runNotifierBuild(
+    covariant KeyboardCase notifier,
+  ) {
+    return notifier.build(
+      viewId,
+    );
+  }
+
+  @override
+  Override overrideWith(KeyboardCase Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: KeyboardCaseProvider._internal(
+        () => create()..viewId = viewId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeNotifierProviderElement<KeyboardCase, Case> createElement() {
+    return _KeyboardCaseProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -239,15 +327,20 @@ class KeyboardCaseProvider
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin KeyboardCaseRef on AutoDisposeNotifierProviderRef<Case> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _KeyboardCaseProviderElement
+    extends AutoDisposeNotifierProviderElement<KeyboardCase, Case>
+    with KeyboardCaseRef {
+  _KeyboardCaseProviderElement(super.provider);
 
   @override
-  Case runNotifierBuild(
-    covariant KeyboardCase notifier,
-  ) {
-    return notifier.build(
-      viewId,
-    );
-  }
+  int get viewId => (origin as KeyboardCaseProvider).viewId;
 }
 
 String _$keyboardKeyWidthHash() => r'dff0fb730a1a44c86d543f492625d64dfe2a51ea';
@@ -307,8 +400,8 @@ class KeyboardKeyWidthProvider
     extends NotifierProviderImpl<KeyboardKeyWidth, double> {
   /// See also [KeyboardKeyWidth].
   KeyboardKeyWidthProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           () => KeyboardKeyWidth()..viewId = viewId,
           from: keyboardKeyWidthProvider,
           name: r'keyboardKeyWidthProvider',
@@ -319,9 +412,50 @@ class KeyboardKeyWidthProvider
           dependencies: KeyboardKeyWidthFamily._dependencies,
           allTransitiveDependencies:
               KeyboardKeyWidthFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  KeyboardKeyWidthProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  double runNotifierBuild(
+    covariant KeyboardKeyWidth notifier,
+  ) {
+    return notifier.build(
+      viewId,
+    );
+  }
+
+  @override
+  Override overrideWith(KeyboardKeyWidth Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: KeyboardKeyWidthProvider._internal(
+        () => create()..viewId = viewId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  NotifierProviderElement<KeyboardKeyWidth, double> createElement() {
+    return _KeyboardKeyWidthProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -335,14 +469,20 @@ class KeyboardKeyWidthProvider
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin KeyboardKeyWidthRef on NotifierProviderRef<double> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _KeyboardKeyWidthProviderElement
+    extends NotifierProviderElement<KeyboardKeyWidth, double>
+    with KeyboardKeyWidthRef {
+  _KeyboardKeyWidthProviderElement(super.provider);
 
   @override
-  double runNotifierBuild(
-    covariant KeyboardKeyWidth notifier,
-  ) {
-    return notifier.build(
-      viewId,
-    );
-  }
+  int get viewId => (origin as KeyboardKeyWidthProvider).viewId;
 }
-// ignore_for_file: unnecessary_raw_strings, subtype_of_sealed_class, invalid_use_of_internal_member, do_not_use_environment, prefer_const_constructors, public_member_api_docs, avoid_private_typedef_functions
+// ignore_for_file: type=lint
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

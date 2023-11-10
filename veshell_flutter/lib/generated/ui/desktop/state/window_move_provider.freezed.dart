@@ -76,11 +76,11 @@ class _$WindowMoveStateCopyWithImpl<$Res, $Val extends WindowMoveState>
 }
 
 /// @nodoc
-abstract class _$$_WindowMoveStateCopyWith<$Res>
+abstract class _$$WindowMoveStateImplCopyWith<$Res>
     implements $WindowMoveStateCopyWith<$Res> {
-  factory _$$_WindowMoveStateCopyWith(
-          _$_WindowMoveState value, $Res Function(_$_WindowMoveState) then) =
-      __$$_WindowMoveStateCopyWithImpl<$Res>;
+  factory _$$WindowMoveStateImplCopyWith(_$WindowMoveStateImpl value,
+          $Res Function(_$WindowMoveStateImpl) then) =
+      __$$WindowMoveStateImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call(
@@ -88,11 +88,11 @@ abstract class _$$_WindowMoveStateCopyWith<$Res>
 }
 
 /// @nodoc
-class __$$_WindowMoveStateCopyWithImpl<$Res>
-    extends _$WindowMoveStateCopyWithImpl<$Res, _$_WindowMoveState>
-    implements _$$_WindowMoveStateCopyWith<$Res> {
-  __$$_WindowMoveStateCopyWithImpl(
-      _$_WindowMoveState _value, $Res Function(_$_WindowMoveState) _then)
+class __$$WindowMoveStateImplCopyWithImpl<$Res>
+    extends _$WindowMoveStateCopyWithImpl<$Res, _$WindowMoveStateImpl>
+    implements _$$WindowMoveStateImplCopyWith<$Res> {
+  __$$WindowMoveStateImplCopyWithImpl(
+      _$WindowMoveStateImpl _value, $Res Function(_$WindowMoveStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -103,7 +103,7 @@ class __$$_WindowMoveStateCopyWithImpl<$Res>
     Object? movedPosition = null,
     Object? delta = null,
   }) {
-    return _then(_$_WindowMoveState(
+    return _then(_$WindowMoveStateImpl(
       moving: null == moving
           ? _value.moving
           : moving // ignore: cast_nullable_to_non_nullable
@@ -126,8 +126,8 @@ class __$$_WindowMoveStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_WindowMoveState implements _WindowMoveState {
-  const _$_WindowMoveState(
+class _$WindowMoveStateImpl implements _WindowMoveState {
+  const _$WindowMoveStateImpl(
       {required this.moving,
       required this.startPosition,
       required this.movedPosition,
@@ -151,7 +151,7 @@ class _$_WindowMoveState implements _WindowMoveState {
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_WindowMoveState &&
+            other is _$WindowMoveStateImpl &&
             (identical(other.moving, moving) || other.moving == moving) &&
             (identical(other.startPosition, startPosition) ||
                 other.startPosition == startPosition) &&
@@ -167,8 +167,9 @@ class _$_WindowMoveState implements _WindowMoveState {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_WindowMoveStateCopyWith<_$_WindowMoveState> get copyWith =>
-      __$$_WindowMoveStateCopyWithImpl<_$_WindowMoveState>(this, _$identity);
+  _$$WindowMoveStateImplCopyWith<_$WindowMoveStateImpl> get copyWith =>
+      __$$WindowMoveStateImplCopyWithImpl<_$WindowMoveStateImpl>(
+          this, _$identity);
 }
 
 abstract class _WindowMoveState implements WindowMoveState {
@@ -176,7 +177,7 @@ abstract class _WindowMoveState implements WindowMoveState {
       {required final bool moving,
       required final Offset startPosition,
       required final Offset movedPosition,
-      required final Offset delta}) = _$_WindowMoveState;
+      required final Offset delta}) = _$WindowMoveStateImpl;
 
   @override
   bool get moving;
@@ -188,6 +189,6 @@ abstract class _WindowMoveState implements WindowMoveState {
   Offset get delta;
   @override
   @JsonKey(ignore: true)
-  _$$_WindowMoveStateCopyWith<_$_WindowMoveState> get copyWith =>
+  _$$WindowMoveStateImplCopyWith<_$WindowMoveStateImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

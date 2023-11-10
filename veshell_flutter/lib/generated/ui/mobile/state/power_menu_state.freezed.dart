@@ -80,11 +80,11 @@ class _$PowerMenuStateCopyWithImpl<$Res, $Val extends PowerMenuState>
 }
 
 /// @nodoc
-abstract class _$$_PowerMenuStateCopyWith<$Res>
+abstract class _$$PowerMenuStateImplCopyWith<$Res>
     implements $PowerMenuStateCopyWith<$Res> {
-  factory _$$_PowerMenuStateCopyWith(
-          _$_PowerMenuState value, $Res Function(_$_PowerMenuState) then) =
-      __$$_PowerMenuStateCopyWithImpl<$Res>;
+  factory _$$PowerMenuStateImplCopyWith(_$PowerMenuStateImpl value,
+          $Res Function(_$PowerMenuStateImpl) then) =
+      __$$PowerMenuStateImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call(
@@ -96,11 +96,11 @@ abstract class _$$_PowerMenuStateCopyWith<$Res>
 }
 
 /// @nodoc
-class __$$_PowerMenuStateCopyWithImpl<$Res>
-    extends _$PowerMenuStateCopyWithImpl<$Res, _$_PowerMenuState>
-    implements _$$_PowerMenuStateCopyWith<$Res> {
-  __$$_PowerMenuStateCopyWithImpl(
-      _$_PowerMenuState _value, $Res Function(_$_PowerMenuState) _then)
+class __$$PowerMenuStateImplCopyWithImpl<$Res>
+    extends _$PowerMenuStateCopyWithImpl<$Res, _$PowerMenuStateImpl>
+    implements _$$PowerMenuStateImplCopyWith<$Res> {
+  __$$PowerMenuStateImplCopyWithImpl(
+      _$PowerMenuStateImpl _value, $Res Function(_$PowerMenuStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -112,7 +112,7 @@ class __$$_PowerMenuStateCopyWithImpl<$Res>
     Object? show = null,
     Object? hide = null,
   }) {
-    return _then(_$_PowerMenuState(
+    return _then(_$PowerMenuStateImpl(
       overlayEntry: null == overlayEntry
           ? _value.overlayEntry
           : overlayEntry // ignore: cast_nullable_to_non_nullable
@@ -133,8 +133,8 @@ class __$$_PowerMenuStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_PowerMenuState implements _PowerMenuState {
-  const _$_PowerMenuState(
+class _$PowerMenuStateImpl implements _PowerMenuState {
+  const _$PowerMenuStateImpl(
       {required this.overlayEntry,
       required this.overlayEntryInserted,
       required this.shown,
@@ -161,7 +161,7 @@ class _$_PowerMenuState implements _PowerMenuState {
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_PowerMenuState &&
+            other is _$PowerMenuStateImpl &&
             (identical(other.overlayEntry, overlayEntry) ||
                 other.overlayEntry == overlayEntry) &&
             (identical(other.overlayEntryInserted, overlayEntryInserted) ||
@@ -183,8 +183,9 @@ class _$_PowerMenuState implements _PowerMenuState {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_PowerMenuStateCopyWith<_$_PowerMenuState> get copyWith =>
-      __$$_PowerMenuStateCopyWithImpl<_$_PowerMenuState>(this, _$identity);
+  _$$PowerMenuStateImplCopyWith<_$PowerMenuStateImpl> get copyWith =>
+      __$$PowerMenuStateImplCopyWithImpl<_$PowerMenuStateImpl>(
+          this, _$identity);
 }
 
 abstract class _PowerMenuState implements PowerMenuState {
@@ -193,7 +194,7 @@ abstract class _PowerMenuState implements PowerMenuState {
       required final bool overlayEntryInserted,
       required final bool shown,
       required final Object show,
-      required final Object hide}) = _$_PowerMenuState;
+      required final Object hide}) = _$PowerMenuStateImpl;
 
   @override
   OverlayEntry get overlayEntry;
@@ -207,6 +208,6 @@ abstract class _PowerMenuState implements PowerMenuState {
   Object get hide;
   @override
   @JsonKey(ignore: true)
-  _$$_PowerMenuStateCopyWith<_$_PowerMenuState> get copyWith =>
+  _$$PowerMenuStateImplCopyWith<_$PowerMenuStateImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

@@ -69,22 +69,22 @@ class _$WindowStackStateCopyWithImpl<$Res, $Val extends WindowStackState>
 }
 
 /// @nodoc
-abstract class _$$_WindowStackStateCopyWith<$Res>
+abstract class _$$WindowStackStateImplCopyWith<$Res>
     implements $WindowStackStateCopyWith<$Res> {
-  factory _$$_WindowStackStateCopyWith(
-          _$_WindowStackState value, $Res Function(_$_WindowStackState) then) =
-      __$$_WindowStackStateCopyWithImpl<$Res>;
+  factory _$$WindowStackStateImplCopyWith(_$WindowStackStateImpl value,
+          $Res Function(_$WindowStackStateImpl) then) =
+      __$$WindowStackStateImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call({IList<int> stack, ISet<int> animateClosing, Size desktopSize});
 }
 
 /// @nodoc
-class __$$_WindowStackStateCopyWithImpl<$Res>
-    extends _$WindowStackStateCopyWithImpl<$Res, _$_WindowStackState>
-    implements _$$_WindowStackStateCopyWith<$Res> {
-  __$$_WindowStackStateCopyWithImpl(
-      _$_WindowStackState _value, $Res Function(_$_WindowStackState) _then)
+class __$$WindowStackStateImplCopyWithImpl<$Res>
+    extends _$WindowStackStateCopyWithImpl<$Res, _$WindowStackStateImpl>
+    implements _$$WindowStackStateImplCopyWith<$Res> {
+  __$$WindowStackStateImplCopyWithImpl(_$WindowStackStateImpl _value,
+      $Res Function(_$WindowStackStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -94,7 +94,7 @@ class __$$_WindowStackStateCopyWithImpl<$Res>
     Object? animateClosing = null,
     Object? desktopSize = null,
   }) {
-    return _then(_$_WindowStackState(
+    return _then(_$WindowStackStateImpl(
       stack: null == stack
           ? _value.stack
           : stack // ignore: cast_nullable_to_non_nullable
@@ -113,8 +113,8 @@ class __$$_WindowStackStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_WindowStackState extends _WindowStackState {
-  const _$_WindowStackState(
+class _$WindowStackStateImpl extends _WindowStackState {
+  const _$WindowStackStateImpl(
       {required this.stack,
       required this.animateClosing,
       required this.desktopSize})
@@ -136,7 +136,7 @@ class _$_WindowStackState extends _WindowStackState {
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_WindowStackState &&
+            other is _$WindowStackStateImpl &&
             const DeepCollectionEquality().equals(other.stack, stack) &&
             const DeepCollectionEquality()
                 .equals(other.animateClosing, animateClosing) &&
@@ -154,15 +154,16 @@ class _$_WindowStackState extends _WindowStackState {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_WindowStackStateCopyWith<_$_WindowStackState> get copyWith =>
-      __$$_WindowStackStateCopyWithImpl<_$_WindowStackState>(this, _$identity);
+  _$$WindowStackStateImplCopyWith<_$WindowStackStateImpl> get copyWith =>
+      __$$WindowStackStateImplCopyWithImpl<_$WindowStackStateImpl>(
+          this, _$identity);
 }
 
 abstract class _WindowStackState extends WindowStackState {
   const factory _WindowStackState(
       {required final IList<int> stack,
       required final ISet<int> animateClosing,
-      required final Size desktopSize}) = _$_WindowStackState;
+      required final Size desktopSize}) = _$WindowStackStateImpl;
   const _WindowStackState._() : super._();
 
   @override
@@ -173,6 +174,6 @@ abstract class _WindowStackState extends WindowStackState {
   Size get desktopSize;
   @override
   @JsonKey(ignore: true)
-  _$$_WindowStackStateCopyWith<_$_WindowStackState> get copyWith =>
+  _$$WindowStackStateImplCopyWith<_$WindowStackStateImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

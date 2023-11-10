@@ -84,8 +84,8 @@ class WindowMoveProvider
     extends NotifierProviderImpl<WindowMove, WindowMoveState> {
   /// See also [WindowMove].
   WindowMoveProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           () => WindowMove()..viewId = viewId,
           from: windowMoveProvider,
           name: r'windowMoveProvider',
@@ -96,9 +96,50 @@ class WindowMoveProvider
           dependencies: WindowMoveFamily._dependencies,
           allTransitiveDependencies:
               WindowMoveFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  WindowMoveProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  WindowMoveState runNotifierBuild(
+    covariant WindowMove notifier,
+  ) {
+    return notifier.build(
+      viewId,
+    );
+  }
+
+  @override
+  Override overrideWith(WindowMove Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: WindowMoveProvider._internal(
+        () => create()..viewId = viewId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  NotifierProviderElement<WindowMove, WindowMoveState> createElement() {
+    return _WindowMoveProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -112,14 +153,20 @@ class WindowMoveProvider
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin WindowMoveRef on NotifierProviderRef<WindowMoveState> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _WindowMoveProviderElement
+    extends NotifierProviderElement<WindowMove, WindowMoveState>
+    with WindowMoveRef {
+  _WindowMoveProviderElement(super.provider);
 
   @override
-  WindowMoveState runNotifierBuild(
-    covariant WindowMove notifier,
-  ) {
-    return notifier.build(
-      viewId,
-    );
-  }
+  int get viewId => (origin as WindowMoveProvider).viewId;
 }
-// ignore_for_file: unnecessary_raw_strings, subtype_of_sealed_class, invalid_use_of_internal_member, do_not_use_environment, prefer_const_constructors, public_member_api_docs, avoid_private_typedef_functions
+// ignore_for_file: type=lint
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

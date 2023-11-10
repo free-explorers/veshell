@@ -29,8 +29,6 @@ class _SystemHash {
   }
 }
 
-typedef SubsurfaceWidgetRef = ProviderRef<Subsurface>;
-
 /// See also [subsurfaceWidget].
 @ProviderFor(subsurfaceWidget)
 const subsurfaceWidgetProvider = SubsurfaceWidgetFamily();
@@ -77,10 +75,10 @@ class SubsurfaceWidgetFamily extends Family<Subsurface> {
 class SubsurfaceWidgetProvider extends Provider<Subsurface> {
   /// See also [subsurfaceWidget].
   SubsurfaceWidgetProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           (ref) => subsurfaceWidget(
-            ref,
+            ref as SubsurfaceWidgetRef,
             viewId,
           ),
           from: subsurfaceWidgetProvider,
@@ -92,9 +90,43 @@ class SubsurfaceWidgetProvider extends Provider<Subsurface> {
           dependencies: SubsurfaceWidgetFamily._dependencies,
           allTransitiveDependencies:
               SubsurfaceWidgetFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  SubsurfaceWidgetProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  Override overrideWith(
+    Subsurface Function(SubsurfaceWidgetRef provider) create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: SubsurfaceWidgetProvider._internal(
+        (ref) => create(ref as SubsurfaceWidgetRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  ProviderElement<Subsurface> createElement() {
+    return _SubsurfaceWidgetProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -110,7 +142,20 @@ class SubsurfaceWidgetProvider extends Provider<Subsurface> {
   }
 }
 
-String _$subsurfaceStatesHash() => r'4f9acc62d958c409876790f543760795dd38c5dd';
+mixin SubsurfaceWidgetRef on ProviderRef<Subsurface> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _SubsurfaceWidgetProviderElement extends ProviderElement<Subsurface>
+    with SubsurfaceWidgetRef {
+  _SubsurfaceWidgetProviderElement(super.provider);
+
+  @override
+  int get viewId => (origin as SubsurfaceWidgetProvider).viewId;
+}
+
+String _$subsurfaceStatesHash() => r'30e609cd91a810f3477db020d3264d91d4d50686';
 
 abstract class _$SubsurfaceStates extends BuildlessNotifier<SubsurfaceState> {
   late final int viewId;
@@ -167,8 +212,8 @@ class SubsurfaceStatesProvider
     extends NotifierProviderImpl<SubsurfaceStates, SubsurfaceState> {
   /// See also [SubsurfaceStates].
   SubsurfaceStatesProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           () => SubsurfaceStates()..viewId = viewId,
           from: subsurfaceStatesProvider,
           name: r'subsurfaceStatesProvider',
@@ -179,9 +224,50 @@ class SubsurfaceStatesProvider
           dependencies: SubsurfaceStatesFamily._dependencies,
           allTransitiveDependencies:
               SubsurfaceStatesFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  SubsurfaceStatesProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  SubsurfaceState runNotifierBuild(
+    covariant SubsurfaceStates notifier,
+  ) {
+    return notifier.build(
+      viewId,
+    );
+  }
+
+  @override
+  Override overrideWith(SubsurfaceStates Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: SubsurfaceStatesProvider._internal(
+        () => create()..viewId = viewId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  NotifierProviderElement<SubsurfaceStates, SubsurfaceState> createElement() {
+    return _SubsurfaceStatesProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -195,14 +281,20 @@ class SubsurfaceStatesProvider
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin SubsurfaceStatesRef on NotifierProviderRef<SubsurfaceState> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _SubsurfaceStatesProviderElement
+    extends NotifierProviderElement<SubsurfaceStates, SubsurfaceState>
+    with SubsurfaceStatesRef {
+  _SubsurfaceStatesProviderElement(super.provider);
 
   @override
-  SubsurfaceState runNotifierBuild(
-    covariant SubsurfaceStates notifier,
-  ) {
-    return notifier.build(
-      viewId,
-    );
-  }
+  int get viewId => (origin as SubsurfaceStatesProvider).viewId;
 }
-// ignore_for_file: unnecessary_raw_strings, subtype_of_sealed_class, invalid_use_of_internal_member, do_not_use_environment, prefer_const_constructors, public_member_api_docs, avoid_private_typedef_functions
+// ignore_for_file: type=lint
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

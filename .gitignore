@@ -1,1 +1,4 @@
 /target
+/third_party/flutter_engine/debug/*.so
+/third_party/flutter_engine/profile/*.so
+/third_party/flutter_engine/release/*.so

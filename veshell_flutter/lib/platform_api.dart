@@ -4,6 +4,7 @@ import 'dart:ffi' show Finalizable;
 import 'package:flutter/services.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:zenith/ui/common/state/subsurface_state.dart';
+import 'package:zenith/ui/common/state/surface_ids.dart';
 import 'package:zenith/ui/common/state/surface_state.dart';
 import 'package:zenith/ui/common/state/tasks_provider.dart';
 import 'package:zenith/ui/common/state/xdg_popup_state.dart';
@@ -66,15 +67,6 @@ class PlatformApi extends _$PlatformApi {
       switch (call.method) {
         case "commit_surface":
           _commitSurface(call.arguments);
-          break;
-        case "unmap_xdg_surface":
-          _unmapXdgSurface(call.arguments);
-          break;
-        case "map_subsurface":
-          _mapSubsurface(call.arguments);
-          break;
-        case "unmap_subsurface":
-          _unmapSubsurface(call.arguments);
           break;
         case "send_text_input_event":
           _sendTextInputEvent(call.arguments);
@@ -255,6 +247,8 @@ class PlatformApi extends _$PlatformApi {
 
   void _commitSurface(dynamic event) {
     int viewId = event["view_id"];
+    ref.read(surfaceIdsProvider.notifier).update((state) => state.add(viewId));
+
     dynamic surface = event["surface"];
     int role = surface["role"];
 
@@ -290,32 +284,18 @@ class PlatformApi extends _$PlatformApi {
       bottom.toDouble(),
     );
 
-    List<dynamic> subsurfacesBelow = surface["subsurfaces_below"];
-    List<dynamic> subsurfacesAbove = surface["subsurfaces_above"];
+    List<dynamic> subsurfaceBelow = surface["subsurfaces_below"];
+    List<dynamic> subsurfaceAbove = surface["subsurfaces_above"];
 
-    List<int> subsurfaceIdsBelow = [];
-    List<int> subsurfaceIdsAbove = [];
+    List<int> subsurfaceIdsBelow = subsurfaceBelow.cast<int>();
+    List<int> subsurfaceIdsAbove = subsurfaceAbove.cast<int>();
 
-    for (dynamic subsurface in subsurfacesBelow) {
-      int id = subsurface["id"];
-      int x = subsurface["x"];
-      int y = subsurface["y"];
-
-      subsurfaceIdsBelow.add(id);
-
-      var position = Offset(x.toDouble(), y.toDouble());
-      ref.read(subsurfaceStatesProvider(id).notifier).commit(position: position);
+    for (int id in subsurfaceIdsBelow) {
+      ref.read(subsurfaceStatesProvider(id).notifier).set_parent(viewId);
     }
 
-    for (dynamic subsurface in subsurfacesAbove) {
-      int id = subsurface["id"];
-      int x = subsurface["x"];
-      int y = subsurface["y"];
-
-      subsurfaceIdsAbove.add(id);
-
-      var position = Offset(x.toDouble(), y.toDouble());
-      ref.read(subsurfaceStatesProvider(id).notifier).commit(position: position);
+    for (int id in subsurfaceIdsAbove) {
+      ref.read(subsurfaceStatesProvider(id).notifier).set_parent(viewId);
     }
 
     ref.read(surfaceStatesProvider(viewId).notifier).commit(
@@ -333,7 +313,6 @@ class PlatformApi extends _$PlatformApi {
     if (hasXdgSurface) {
       dynamic xdgSurface = event["xdg_surface"];
       int role = xdgSurface["role"];
-      bool mapped = xdgSurface["mapped"];
       int x = xdgSurface["x"];
       int y = xdgSurface["y"];
       int width = xdgSurface["width"];
@@ -341,7 +320,6 @@ class PlatformApi extends _$PlatformApi {
 
       ref.read(xdgSurfaceStatesProvider(viewId).notifier).commit(
             role: XdgSurfaceRole.values[role],
-            mapped: mapped,
             visibleBounds: Rect.fromLTWH(
               x.toDouble(),
               y.toDouble(),
@@ -350,30 +328,32 @@ class PlatformApi extends _$PlatformApi {
             ),
           );
 
-      print("MERGE1");
       bool hasXdgPopup = event["has_xdg_popup"];
-      print("MERGE2");
       if (hasXdgPopup) {
         dynamic xdgPopup = event["xdg_popup"];
-        print("MERGE3");
         int parentId = xdgPopup["parent_id"];
-        print("MERGE4");
         int x = xdgPopup["x"];
-        print("MERGE5");
         int y = xdgPopup["y"];
         // TODO: What to do with these?
-        print("MERGE6");
         int width = xdgPopup["width"];
-        print("MERGE7");
         int height = xdgPopup["height"];
-
-        print("MERGE8");
 
         ref.read(xdgPopupStatesProvider(viewId).notifier).commit(
               parentViewId: parentId,
               position: Offset(x.toDouble(), y.toDouble()),
             );
       }
+    }
+
+    bool hasSubsurface = event["has_subsurface"];
+    if (hasSubsurface) {
+      dynamic subsurface = event["subsurface"];
+      int x = subsurface["x"];
+      int y = subsurface["y"];
+      var position = Offset(x.toDouble(), y.toDouble());
+      ref.read(subsurfaceStatesProvider(viewId).notifier).commit(
+            position: position,
+          );
     }
 
     bool hasToplevelDecoration = event["has_toplevel_decoration"];
@@ -394,23 +374,6 @@ class PlatformApi extends _$PlatformApi {
       String appId = event["toplevel_app_id"];
       ref.read(xdgToplevelStatesProvider(viewId).notifier).setAppId(appId);
     }
-  }
-
-  void _unmapXdgSurface(dynamic event) async {
-    int viewId = event["view_id"];
-
-    ref.read(xdgSurfaceStatesProvider(viewId).notifier).unmap();
-  }
-
-  void _mapSubsurface(dynamic event) {
-    int viewId = event["view_id"];
-
-    ref.read(subsurfaceStatesProvider(viewId).notifier).map(true);
-  }
-
-  void _unmapSubsurface(dynamic event) {
-    int viewId = event["view_id"];
-    ref.read(subsurfaceStatesProvider(viewId).notifier).map(false);
   }
 
   void _sendTextInputEvent(dynamic event) {
@@ -450,10 +413,12 @@ class PlatformApi extends _$PlatformApi {
 
   void _destroySurface(dynamic event) async {
     int viewId = event["view_id"];
+    ref.read(surfaceStatesProvider(viewId).notifier).unmap();
     // TODO: Find a better way. Maybe store subscriptions in a list.
     // 3 sec is more than enough for any close animations.
     await Future.delayed(const Duration(seconds: 3));
     ref.read(surfaceStatesProvider(viewId).notifier).dispose();
+    ref.read(surfaceIdsProvider.notifier).update((state) => state.remove(viewId));
   }
 
   Future<void> hideKeyboard(int viewId) {

@@ -6,10 +6,11 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-use smithay::{delegate_compositor, delegate_dmabuf, delegate_output, delegate_seat, delegate_shm, delegate_xdg_shell};
+use smithay::{delegate_compositor, delegate_data_device, delegate_dmabuf, delegate_output, delegate_seat, delegate_shm, delegate_xdg_shell};
 use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::backend::input::ButtonState;
 use smithay::backend::renderer::{ImportAll, Texture};
+use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::input::pointer::{ButtonEvent, CursorImageStatus, MotionEvent, PointerHandle};
@@ -17,16 +18,19 @@ use smithay::reexports::calloop::{channel, Interest, LoopHandle, Mode, PostActio
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::calloop::generic::Generic;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
-use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::XdgToplevel;
 use smithay::reexports::wayland_server::{Client, Display, DisplayHandle, Resource};
 use smithay::reexports::wayland_server::protocol::{wl_buffer, wl_seat};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::utils::{Buffer as BufferCoords, Clock, Monotonic, Rectangle, Serial, Size};
+use smithay::utils::{Buffer as BufferCoords, Clock, Monotonic, Rectangle, Serial, SERIAL_COUNTER, Size};
 use smithay::wayland::buffer::BufferHandler;
-use smithay::wayland::compositor::{BufferAssignment, CompositorClientState, CompositorHandler, CompositorState, SurfaceAttributes, with_states};
+use smithay::wayland::compositor;
+use smithay::wayland::compositor::{BufferAssignment, CompositorClientState, CompositorHandler, CompositorState, SubsurfaceCachedState, SurfaceAttributes, TraversalAction, with_states, with_surface_tree_upward};
 use smithay::wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportError};
+use smithay::wayland::seat::WaylandFocus;
+use smithay::wayland::selection::data_device::{ClientDndGrabHandler, DataDeviceHandler, DataDeviceState, ServerDndGrabHandler, set_data_device_focus};
+use smithay::wayland::selection::SelectionHandler;
 use smithay::wayland::shell::xdg;
-use smithay::wayland::shell::xdg::{PopupSurface, PositionerState, SurfaceCachedState, ToplevelSurface, XdgShellHandler, XdgShellState};
+use smithay::wayland::shell::xdg::{PopupSurface, PositionerState, SurfaceCachedState, ToplevelSurface, XdgPopupSurfaceData, XdgShellHandler, XdgShellState, XdgToplevelSurfaceData};
 use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::wayland::socket::ListeningSocketSource;
 use tracing::{info, warn};
@@ -38,7 +42,7 @@ use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::flutter_engine::platform_channels::standard_method_codec::StandardMethodCodec;
-use crate::flutter_engine::wayland_messages::{SurfaceCommitMessage, XdgSurfaceCommitMessage};
+use crate::flutter_engine::wayland_messages::{SubsurfaceCommitMessage, SurfaceCommitMessage, XdgPopupCommitMessage, XdgSurfaceCommitMessage};
 use crate::mouse_button_tracker::FLUTTER_TO_LINUX_MOUSE_BUTTONS;
 use crate::texture_swap_chain::TextureSwapChain;
 
@@ -49,14 +53,15 @@ pub struct ServerState<BackendData: Backend + 'static> {
     pub clock: Clock<Monotonic>,
     pub seat: Seat<ServerState<BackendData>>,
     pub seat_state: SeatState<ServerState<BackendData>>,
+    pub data_device_state: DataDeviceState,
     pub pointer: PointerHandle<ServerState<BackendData>>,
     pub backend_data: Box<BackendData>,
     pub flutter_engine: Option<Box<FlutterEngine>>,
     pub next_view_id: u64,
     pub next_texture_id: i64,
-    // space: Space<WindowElement>,
 
     pub mouse_position: (f64, f64),
+    pub view_id_under_cursor: Option<u64>,
     pub is_next_vblank_scheduled: bool,
 
     pub compositor_state: CompositorState,
@@ -66,8 +71,10 @@ pub struct ServerState<BackendData: Backend + 'static> {
 
     pub imported_dmabufs: Vec<Dmabuf>,
     pub gles_renderer: Option<GlesRenderer>,
+    pub gl: Option<Gles2>,
     pub surfaces: HashMap<u64, WlSurface>,
-    pub xdg_toplevels: HashMap<u64, XdgToplevel>,
+    pub xdg_toplevels: HashMap<u64, ToplevelSurface>,
+    pub xdg_popups: HashMap<u64, PopupSurface>,
     pub texture_ids_per_view_id: HashMap<u64, Vec<i64>>,
     pub view_id_per_texture_id: HashMap<i64, u64>,
     pub texture_swapchains: HashMap<i64, TextureSwapChain>,
@@ -105,7 +112,7 @@ delegate_shm!(@<BackendData: Backend + 'static> ServerState<BackendData>);
 delegate_dmabuf!(@<BackendData: Backend + 'static> ServerState<BackendData>);
 delegate_output!(@<BackendData: Backend + 'static> ServerState<BackendData>);
 delegate_seat!(@<BackendData: Backend + 'static> ServerState<BackendData>);
-// delegate_data_device!(App);
+delegate_data_device!(@<BackendData: Backend + 'static> ServerState<BackendData>);
 
 impl<BackendData: Backend + 'static> ServerState<BackendData> {
     pub fn new(
@@ -115,7 +122,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         dmabuf_state: Option<DmabufState>,
     ) -> ServerState<BackendData> {
         let display_handle = display.handle();
-        let clock = Clock::new().expect("failed to initialize clock");
+        let clock = Clock::new();
         let compositor_state = CompositorState::new::<Self>(&display_handle);
         let xdg_shell_state = XdgShellState::new::<Self>(&display_handle);
         let shm_state = ShmState::new::<Self>(&display_handle, vec![]);
@@ -126,6 +133,8 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         let mut seat = seat_state.new_wl_seat(&display_handle, seat_name.clone());
         seat.add_keyboard(Default::default(), 200, 200).unwrap();
         let pointer = seat.add_pointer();
+
+        let data_device_state = DataDeviceState::new::<Self>(&display_handle);
 
         // init wayland clients
         let source = ListeningSocketSource::new_auto().unwrap();
@@ -201,13 +210,15 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
                                 let x = *extract!(get_value(args, "x"), EncodableValue::Double);
                                 let y = *extract!(get_value(args, "y"), EncodableValue::Double);
 
+                                data.state.view_id_under_cursor = Some(view_id as u64);
+
                                 if let Some(surface) = data.state.surfaces.get(&(view_id as u64)).cloned() {
                                     pointer.motion(
                                         &mut data.state,
                                         Some((surface.clone(), (0, 0).into())),
                                         &MotionEvent {
                                             location: (x, y).into(),
-                                            serial: Serial::from(0), // TODO
+                                            serial: SERIAL_COUNTER.next_serial(),
                                             time: now,
                                         },
                                     );
@@ -222,12 +233,14 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
                                 }
                             }
                             "pointer_exit" => {
+                                data.state.view_id_under_cursor = None;
+
                                 pointer.motion(
                                     &mut data.state,
                                     None,
                                     &MotionEvent {
                                         location: (0.0, 0.0).into(),
-                                        serial: Serial::from(0), // TODO
+                                        serial: SERIAL_COUNTER.next_serial(),
                                         time: now,
                                     },
                                 );
@@ -241,7 +254,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
                                 pointer.button(
                                     &mut data.state,
                                     &ButtonEvent {
-                                        serial: Serial::from(0), // TODO
+                                        serial: SERIAL_COUNTER.next_serial(),
                                         time: now,
                                         button: *FLUTTER_TO_LINUX_MOUSE_BUTTONS.get(&(button as u32)).unwrap() as u32,
                                         state: if is_pressed { ButtonState::Pressed } else { ButtonState::Released },
@@ -256,23 +269,34 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
                                 let view_id = args[0].long_value().unwrap();
                                 let activate = extract!(args[1], EncodableValue::Bool);
 
-                                if let Some(toplevel) = data.state.xdg_toplevels.get(&(view_id as u64)) {
-                                    let toplevel = data.state.xdg_shell_state.get_toplevel(toplevel).unwrap();
-                                    toplevel.with_pending_state(|state| {
-                                        if activate {
-                                            state.states.set(xdg_toplevel::State::Activated);
-                                        } else {
-                                            state.states.unset(xdg_toplevel::State::Activated);
+                                let pointer = data.state.seat.get_pointer().unwrap();
+                                let keyboard = data.state.seat.get_keyboard().unwrap();
+
+                                let serial = SERIAL_COUNTER.next_serial();
+
+                                if !pointer.is_grabbed() {
+                                    let toplevel = data.state.xdg_toplevels.get(&(view_id as u64)).cloned();
+                                    if let Some(toplevel) = toplevel {
+                                        toplevel.with_pending_state(|state| {
+                                            if activate {
+                                                state.states.set(xdg_toplevel::State::Activated);
+                                            } else {
+                                                state.states.unset(xdg_toplevel::State::Activated);
+                                            }
+                                        });
+                                        keyboard.set_focus(&mut data.state, Some(toplevel.wl_surface().clone()), serial);
+
+                                        for toplevel in data.state.xdg_toplevels.values() {
+                                            toplevel.send_pending_configure();
                                         }
-                                    });
-                                    toplevel.send_configure();
-                                    result.success(None);
-                                } else {
-                                    result.error(
-                                        "surface_doesnt_exist".to_string(),
-                                        format!("Surface {view_id} doesn't exist"),
-                                        None,
-                                    );
+                                        result.success(None);
+                                    } else {
+                                        result.error(
+                                            "surface_doesnt_exist".to_string(),
+                                            format!("Surface {view_id} doesn't exist"),
+                                            None,
+                                        );
+                                    }
                                 }
                             }
                             _ => {
@@ -291,6 +315,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             clock,
             backend_data: Box::new(backend_data),
             mouse_position: (0.0, 0.0),
+            view_id_under_cursor: None,
             is_next_vblank_scheduled: false,
             compositor_state,
             xdg_shell_state,
@@ -299,13 +324,16 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             dmabuf_state,
             seat,
             seat_state,
+            data_device_state,
             pointer,
             next_view_id: 1,
             next_texture_id: 1,
             imported_dmabufs: Vec::new(),
             gles_renderer: None,
+            gl: None,
             surfaces: HashMap::new(),
             xdg_toplevels: HashMap::new(),
+            xdg_popups: HashMap::new(),
             texture_ids_per_view_id: HashMap::new(),
             view_id_per_texture_id: HashMap::new(),
             texture_swapchains: HashMap::new(),
@@ -327,20 +355,26 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
         let view_id = with_states(surface.wl_surface(), |surface_data| {
             surface_data.data_map.get::<RefCell<MySurfaceState>>().unwrap().borrow().view_id
         });
-        self.xdg_toplevels.insert(view_id, surface.xdg_toplevel().clone());
+        self.xdg_toplevels.insert(view_id, surface.clone());
 
         surface.with_pending_state(|state| {
             state.states.set(xdg_toplevel::State::Activated);
         });
-        surface.send_configure();
     }
 
     fn new_popup(&mut self, _surface: PopupSurface, _positioner: PositionerState) {
-        // Handle popup creation here
+        let view_id = with_states(_surface.wl_surface(), |surface_data| {
+            surface_data.data_map.get::<RefCell<MySurfaceState>>().unwrap().borrow().view_id
+        });
+        self.xdg_popups.insert(view_id, _surface.clone());
     }
 
     fn grab(&mut self, _surface: PopupSurface, _seat: wl_seat::WlSeat, _serial: Serial) {
         // Handle popup grab here
+    }
+
+    fn reposition_request(&mut self, surface: PopupSurface, positioner: PositionerState, token: u32) {
+        surface.send_repositioned(token);
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
@@ -377,10 +411,46 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        // on_commit_buffer_handler::<Self>(surface);
+        let view_id = with_states(surface, |states| {
+            states.data_map.get::<RefCell<MySurfaceState>>().unwrap().borrow().view_id
+        });
+        if let Some(toplevel) = self.xdg_toplevels.get(&view_id) {
+            let initial_configure_sent = with_states(surface, |states| {
+                states
+                    .data_map
+                    .get::<XdgToplevelSurfaceData>()
+                    .unwrap()
+                    .lock()
+                    .unwrap()
+                    .initial_configure_sent
+            });
 
-        let commit_message = with_states(surface, |surface_data| {
+            if !initial_configure_sent {
+                toplevel.send_configure();
+            }
+        }
+
+        if let Some(popup) = self.xdg_popups.get(&view_id) {
+            let initial_configure_sent = with_states(surface, |states| {
+                states
+                    .data_map
+                    .get::<XdgPopupSurfaceData>()
+                    .unwrap()
+                    .lock()
+                    .unwrap()
+                    .initial_configure_sent
+            });
+
+            if !initial_configure_sent {
+                // NOTE: This should never fail as the initial configure is always
+                // allowed.
+                popup.send_configure().expect("initial configure failed");
+            }
+        }
+
+        let mut commit_message = with_states(surface, |surface_data| {
             let role = surface_data.role;
+
             let state = surface_data.cached_state.current::<SurfaceAttributes>();
             let my_state = surface_data.data_map.get::<RefCell<MySurfaceState>>().unwrap();
 
@@ -399,6 +469,8 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                 });
 
             let (texture_id, size) = if let Some(texture) = texture {
+                unsafe { self.gl.as_ref().unwrap().Finish(); }
+
                 let size = texture.size();
 
                 let size_changed = match old_texture_size {
@@ -438,7 +510,7 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
             SurfaceCommitMessage {
                 view_id,
                 role,
-                texture_id: dbg!(texture_id),
+                texture_id,
                 buffer_delta: state.buffer_delta,
                 buffer_size: size,
                 scale: state.buffer_scale,
@@ -451,7 +523,6 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                             .geometry;
 
                         Some(XdgSurfaceCommitMessage {
-                            mapped: texture_id != -1,
                             role,
                             geometry: match geometry {
                                 Some(geometry) => Some(geometry),
@@ -467,8 +538,62 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                     },
                     _ => None,
                 },
+                xdg_popup: match role {
+                    Some(xdg::XDG_POPUP_ROLE) => {
+                        let popup_data = surface_data.data_map.get::<XdgPopupSurfaceData>().unwrap().lock().unwrap();
+                        let parent_id = popup_data.parent.as_ref().map(|surface| {
+                            with_states(surface, |surface_data| {
+                                surface_data.data_map.get::<RefCell<MySurfaceState>>().unwrap().borrow().view_id
+                            })
+                        }).unwrap_or(0);
+
+                        Some(XdgPopupCommitMessage {
+                            parent_id,
+                            geometry: dbg!(popup_data.current.geometry),
+                        })
+                    }
+                    _ => None,
+                },
+                subsurface: match role {
+                    Some(compositor::SUBSURFACE_ROLE) => {
+                        Some(SubsurfaceCommitMessage {
+                            location: surface_data.cached_state.current::<SubsurfaceCachedState>().location,
+                        })
+                    }
+                    _ => None,
+                },
+                subsurfaces_below: vec![],
+                subsurfaces_above: vec![],
             }
         });
+
+        let mut subsurfaces_below = vec![];
+        let mut subsurfaces_above = vec![];
+        let mut above = false;
+
+        with_surface_tree_upward(surface, (), |child_surface, _, ()| {
+            // Only traverse the direct children of the surface
+            if child_surface == surface {
+                TraversalAction::DoChildren(())
+            } else {
+                TraversalAction::SkipChildren
+            }
+        }, |child_surface, surface_data, ()| {
+            if child_surface == surface {
+                above = true;
+                return;
+            }
+
+            let view_id = surface_data.data_map.get::<RefCell<MySurfaceState>>().unwrap().borrow().view_id;
+            if above {
+                subsurfaces_above.push(view_id);
+            } else {
+                subsurfaces_below.push(view_id);
+            }
+        }, |_, _, _| true);
+
+        commit_message.subsurfaces_below = subsurfaces_below;
+        commit_message.subsurfaces_above = subsurfaces_above;
 
         let commit_message = commit_message.serialize();
 
@@ -486,6 +611,16 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
             surface_data.data_map.get::<RefCell<MySurfaceState>>().unwrap().borrow().view_id
         });
         self.surfaces.remove(&view_id);
+
+        let codec = Rc::new(StandardMethodCodec::new());
+        let mut method_channel = MethodChannel::new(
+            self.flutter_engine_mut().binary_messenger.as_mut().unwrap(),
+            "platform".to_string(),
+            codec,
+        );
+        method_channel.invoke_method("destroy_surface", Some(Box::new(EncodableValue::Map(vec![
+            (EncodableValue::String("view_id".to_string()), EncodableValue::Int64(view_id as i64)),
+        ]))), None);
     }
 }
 
@@ -529,9 +664,26 @@ impl<BackendData: Backend> SeatHandler for ServerState<BackendData> {
     }
 
     fn focus_changed(&mut self, seat: &Seat<Self>, target: Option<&WlSurface>) {
-
+        let dh = &self.display_handle;
+        let client = target.and_then(|s| dh.get_client(s.id()).ok());
+        set_data_device_focus(dh, seat, client);
     }
+
     fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {
 
+    }
+}
+
+impl<BackendData: Backend> SelectionHandler for ServerState<BackendData> {
+    type SelectionUserData = ();
+}
+
+impl<BackendData: Backend> ClientDndGrabHandler for ServerState<BackendData> {}
+
+impl<BackendData: Backend> ServerDndGrabHandler for ServerState<BackendData> {}
+
+impl<BackendData: Backend> DataDeviceHandler for ServerState<BackendData> {
+    fn data_device_state(&self) -> &DataDeviceState {
+        &self.data_device_state
     }
 }

@@ -67,22 +67,22 @@ class _$TasksStateCopyWithImpl<$Res, $Val extends TasksState>
 }
 
 /// @nodoc
-abstract class _$$_TasksStateCopyWith<$Res>
+abstract class _$$TasksStateImplCopyWith<$Res>
     implements $TasksStateCopyWith<$Res> {
-  factory _$$_TasksStateCopyWith(
-          _$_TasksState value, $Res Function(_$_TasksState) then) =
-      __$$_TasksStateCopyWithImpl<$Res>;
+  factory _$$TasksStateImplCopyWith(
+          _$TasksStateImpl value, $Res Function(_$TasksStateImpl) then) =
+      __$$TasksStateImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call({IList<int> tasks, IList<DiffOperation<int>> diff});
 }
 
 /// @nodoc
-class __$$_TasksStateCopyWithImpl<$Res>
-    extends _$TasksStateCopyWithImpl<$Res, _$_TasksState>
-    implements _$$_TasksStateCopyWith<$Res> {
-  __$$_TasksStateCopyWithImpl(
-      _$_TasksState _value, $Res Function(_$_TasksState) _then)
+class __$$TasksStateImplCopyWithImpl<$Res>
+    extends _$TasksStateCopyWithImpl<$Res, _$TasksStateImpl>
+    implements _$$TasksStateImplCopyWith<$Res> {
+  __$$TasksStateImplCopyWithImpl(
+      _$TasksStateImpl _value, $Res Function(_$TasksStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -91,7 +91,7 @@ class __$$_TasksStateCopyWithImpl<$Res>
     Object? tasks = null,
     Object? diff = null,
   }) {
-    return _then(_$_TasksState(
+    return _then(_$TasksStateImpl(
       tasks: null == tasks
           ? _value.tasks
           : tasks // ignore: cast_nullable_to_non_nullable
@@ -106,8 +106,8 @@ class __$$_TasksStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_TasksState implements _TasksState {
-  const _$_TasksState({required this.tasks, required this.diff});
+class _$TasksStateImpl implements _TasksState {
+  const _$TasksStateImpl({required this.tasks, required this.diff});
 
   @override
   final IList<int> tasks;
@@ -127,7 +127,7 @@ class _$_TasksState implements _TasksState {
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_TasksState &&
+            other is _$TasksStateImpl &&
             const DeepCollectionEquality().equals(other.tasks, tasks) &&
             const DeepCollectionEquality().equals(other.diff, diff));
   }
@@ -141,14 +141,14 @@ class _$_TasksState implements _TasksState {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_TasksStateCopyWith<_$_TasksState> get copyWith =>
-      __$$_TasksStateCopyWithImpl<_$_TasksState>(this, _$identity);
+  _$$TasksStateImplCopyWith<_$TasksStateImpl> get copyWith =>
+      __$$TasksStateImplCopyWithImpl<_$TasksStateImpl>(this, _$identity);
 }
 
 abstract class _TasksState implements TasksState {
   const factory _TasksState(
       {required final IList<int> tasks,
-      required final IList<DiffOperation<int>> diff}) = _$_TasksState;
+      required final IList<DiffOperation<int>> diff}) = _$TasksStateImpl;
 
   @override
   IList<int> get tasks;
@@ -160,6 +160,6 @@ abstract class _TasksState implements TasksState {
   IList<DiffOperation<int>> get diff;
   @override
   @JsonKey(ignore: true)
-  _$$_TasksStateCopyWith<_$_TasksState> get copyWith =>
+  _$$TasksStateImplCopyWith<_$TasksStateImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

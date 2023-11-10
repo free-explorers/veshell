@@ -6,7 +6,7 @@ part of '../../../../ui/common/state/xdg_surface_state.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$xdgSurfaceStatesHash() => r'604f2bfdfc7819f81145941643b4b99e59c72c65';
+String _$xdgSurfaceStatesHash() => r'def7803523154cdaa9fcb46a8bf7439a682cc0ca';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -84,8 +84,8 @@ class XdgSurfaceStatesProvider
     extends NotifierProviderImpl<XdgSurfaceStates, XdgSurfaceState> {
   /// See also [XdgSurfaceStates].
   XdgSurfaceStatesProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           () => XdgSurfaceStates()..viewId = viewId,
           from: xdgSurfaceStatesProvider,
           name: r'xdgSurfaceStatesProvider',
@@ -96,9 +96,50 @@ class XdgSurfaceStatesProvider
           dependencies: XdgSurfaceStatesFamily._dependencies,
           allTransitiveDependencies:
               XdgSurfaceStatesFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  XdgSurfaceStatesProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  XdgSurfaceState runNotifierBuild(
+    covariant XdgSurfaceStates notifier,
+  ) {
+    return notifier.build(
+      viewId,
+    );
+  }
+
+  @override
+  Override overrideWith(XdgSurfaceStates Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: XdgSurfaceStatesProvider._internal(
+        () => create()..viewId = viewId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  NotifierProviderElement<XdgSurfaceStates, XdgSurfaceState> createElement() {
+    return _XdgSurfaceStatesProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -112,14 +153,20 @@ class XdgSurfaceStatesProvider
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin XdgSurfaceStatesRef on NotifierProviderRef<XdgSurfaceState> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _XdgSurfaceStatesProviderElement
+    extends NotifierProviderElement<XdgSurfaceStates, XdgSurfaceState>
+    with XdgSurfaceStatesRef {
+  _XdgSurfaceStatesProviderElement(super.provider);
 
   @override
-  XdgSurfaceState runNotifierBuild(
-    covariant XdgSurfaceStates notifier,
-  ) {
-    return notifier.build(
-      viewId,
-    );
-  }
+  int get viewId => (origin as XdgSurfaceStatesProvider).viewId;
 }
-// ignore_for_file: unnecessary_raw_strings, subtype_of_sealed_class, invalid_use_of_internal_member, do_not_use_environment, prefer_const_constructors, public_member_api_docs, avoid_private_typedef_functions
+// ignore_for_file: type=lint
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

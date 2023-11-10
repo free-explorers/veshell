@@ -1,6 +1,5 @@
 pub mod binary_messenger;
 pub mod binary_messenger_impl;
-
 pub mod method_call;
 pub mod encodable_value;
 pub mod method_result;

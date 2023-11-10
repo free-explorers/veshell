@@ -16,9 +16,10 @@ final _privateConstructorUsedError = UnsupportedError(
 
 /// @nodoc
 mixin _$SubsurfaceState {
+  bool get mapped => throw _privateConstructorUsedError;
+  int get parent => throw _privateConstructorUsedError;
   Offset get position =>
       throw _privateConstructorUsedError; // relative to the parent
-  bool get mapped => throw _privateConstructorUsedError;
   Key get widgetKey => throw _privateConstructorUsedError;
 
   @JsonKey(ignore: true)
@@ -32,7 +33,7 @@ abstract class $SubsurfaceStateCopyWith<$Res> {
           SubsurfaceState value, $Res Function(SubsurfaceState) then) =
       _$SubsurfaceStateCopyWithImpl<$Res, SubsurfaceState>;
   @useResult
-  $Res call({Offset position, bool mapped, Key widgetKey});
+  $Res call({bool mapped, int parent, Offset position, Key widgetKey});
 }
 
 /// @nodoc
@@ -48,19 +49,24 @@ class _$SubsurfaceStateCopyWithImpl<$Res, $Val extends SubsurfaceState>
   @pragma('vm:prefer-inline')
   @override
   $Res call({
-    Object? position = null,
     Object? mapped = null,
+    Object? parent = null,
+    Object? position = null,
     Object? widgetKey = null,
   }) {
     return _then(_value.copyWith(
-      position: null == position
-          ? _value.position
-          : position // ignore: cast_nullable_to_non_nullable
-              as Offset,
       mapped: null == mapped
           ? _value.mapped
           : mapped // ignore: cast_nullable_to_non_nullable
               as bool,
+      parent: null == parent
+          ? _value.parent
+          : parent // ignore: cast_nullable_to_non_nullable
+              as int,
+      position: null == position
+          ? _value.position
+          : position // ignore: cast_nullable_to_non_nullable
+              as Offset,
       widgetKey: null == widgetKey
           ? _value.widgetKey
           : widgetKey // ignore: cast_nullable_to_non_nullable
@@ -70,40 +76,45 @@ class _$SubsurfaceStateCopyWithImpl<$Res, $Val extends SubsurfaceState>
 }
 
 /// @nodoc
-abstract class _$$_SubsurfaceStateCopyWith<$Res>
+abstract class _$$SubsurfaceStateImplCopyWith<$Res>
     implements $SubsurfaceStateCopyWith<$Res> {
-  factory _$$_SubsurfaceStateCopyWith(
-          _$_SubsurfaceState value, $Res Function(_$_SubsurfaceState) then) =
-      __$$_SubsurfaceStateCopyWithImpl<$Res>;
+  factory _$$SubsurfaceStateImplCopyWith(_$SubsurfaceStateImpl value,
+          $Res Function(_$SubsurfaceStateImpl) then) =
+      __$$SubsurfaceStateImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({Offset position, bool mapped, Key widgetKey});
+  $Res call({bool mapped, int parent, Offset position, Key widgetKey});
 }
 
 /// @nodoc
-class __$$_SubsurfaceStateCopyWithImpl<$Res>
-    extends _$SubsurfaceStateCopyWithImpl<$Res, _$_SubsurfaceState>
-    implements _$$_SubsurfaceStateCopyWith<$Res> {
-  __$$_SubsurfaceStateCopyWithImpl(
-      _$_SubsurfaceState _value, $Res Function(_$_SubsurfaceState) _then)
+class __$$SubsurfaceStateImplCopyWithImpl<$Res>
+    extends _$SubsurfaceStateCopyWithImpl<$Res, _$SubsurfaceStateImpl>
+    implements _$$SubsurfaceStateImplCopyWith<$Res> {
+  __$$SubsurfaceStateImplCopyWithImpl(
+      _$SubsurfaceStateImpl _value, $Res Function(_$SubsurfaceStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
   @override
   $Res call({
-    Object? position = null,
     Object? mapped = null,
+    Object? parent = null,
+    Object? position = null,
     Object? widgetKey = null,
   }) {
-    return _then(_$_SubsurfaceState(
-      position: null == position
-          ? _value.position
-          : position // ignore: cast_nullable_to_non_nullable
-              as Offset,
+    return _then(_$SubsurfaceStateImpl(
       mapped: null == mapped
           ? _value.mapped
           : mapped // ignore: cast_nullable_to_non_nullable
               as bool,
+      parent: null == parent
+          ? _value.parent
+          : parent // ignore: cast_nullable_to_non_nullable
+              as int,
+      position: null == position
+          ? _value.position
+          : position // ignore: cast_nullable_to_non_nullable
+              as Offset,
       widgetKey: null == widgetKey
           ? _value.widgetKey
           : widgetKey // ignore: cast_nullable_to_non_nullable
@@ -114,59 +125,70 @@ class __$$_SubsurfaceStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_SubsurfaceState implements _SubsurfaceState {
-  const _$_SubsurfaceState(
-      {required this.position, required this.mapped, required this.widgetKey});
+class _$SubsurfaceStateImpl implements _SubsurfaceState {
+  const _$SubsurfaceStateImpl(
+      {required this.mapped,
+      required this.parent,
+      required this.position,
+      required this.widgetKey});
 
+  @override
+  final bool mapped;
+  @override
+  final int parent;
   @override
   final Offset position;
 // relative to the parent
-  @override
-  final bool mapped;
   @override
   final Key widgetKey;
 
   @override
   String toString() {
-    return 'SubsurfaceState(position: $position, mapped: $mapped, widgetKey: $widgetKey)';
+    return 'SubsurfaceState(mapped: $mapped, parent: $parent, position: $position, widgetKey: $widgetKey)';
   }
 
   @override
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_SubsurfaceState &&
+            other is _$SubsurfaceStateImpl &&
+            (identical(other.mapped, mapped) || other.mapped == mapped) &&
+            (identical(other.parent, parent) || other.parent == parent) &&
             (identical(other.position, position) ||
                 other.position == position) &&
-            (identical(other.mapped, mapped) || other.mapped == mapped) &&
             (identical(other.widgetKey, widgetKey) ||
                 other.widgetKey == widgetKey));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, position, mapped, widgetKey);
+  int get hashCode =>
+      Object.hash(runtimeType, mapped, parent, position, widgetKey);
 
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_SubsurfaceStateCopyWith<_$_SubsurfaceState> get copyWith =>
-      __$$_SubsurfaceStateCopyWithImpl<_$_SubsurfaceState>(this, _$identity);
+  _$$SubsurfaceStateImplCopyWith<_$SubsurfaceStateImpl> get copyWith =>
+      __$$SubsurfaceStateImplCopyWithImpl<_$SubsurfaceStateImpl>(
+          this, _$identity);
 }
 
 abstract class _SubsurfaceState implements SubsurfaceState {
   const factory _SubsurfaceState(
-      {required final Offset position,
-      required final bool mapped,
-      required final Key widgetKey}) = _$_SubsurfaceState;
+      {required final bool mapped,
+      required final int parent,
+      required final Offset position,
+      required final Key widgetKey}) = _$SubsurfaceStateImpl;
 
+  @override
+  bool get mapped;
+  @override
+  int get parent;
   @override
   Offset get position;
   @override // relative to the parent
-  bool get mapped;
-  @override
   Key get widgetKey;
   @override
   @JsonKey(ignore: true)
-  _$$_SubsurfaceStateCopyWith<_$_SubsurfaceState> get copyWith =>
+  _$$SubsurfaceStateImplCopyWith<_$SubsurfaceStateImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

@@ -29,8 +29,6 @@ class _SystemHash {
   }
 }
 
-typedef PopupWidgetRef = ProviderRef<Popup>;
-
 /// See also [popupWidget].
 @ProviderFor(popupWidget)
 const popupWidgetProvider = PopupWidgetFamily();
@@ -77,10 +75,10 @@ class PopupWidgetFamily extends Family<Popup> {
 class PopupWidgetProvider extends Provider<Popup> {
   /// See also [popupWidget].
   PopupWidgetProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           (ref) => popupWidget(
-            ref,
+            ref as PopupWidgetRef,
             viewId,
           ),
           from: popupWidgetProvider,
@@ -92,9 +90,43 @@ class PopupWidgetProvider extends Provider<Popup> {
           dependencies: PopupWidgetFamily._dependencies,
           allTransitiveDependencies:
               PopupWidgetFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  PopupWidgetProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  Override overrideWith(
+    Popup Function(PopupWidgetRef provider) create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: PopupWidgetProvider._internal(
+        (ref) => create(ref as PopupWidgetRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  ProviderElement<Popup> createElement() {
+    return _PopupWidgetProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -108,6 +140,19 @@ class PopupWidgetProvider extends Provider<Popup> {
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin PopupWidgetRef on ProviderRef<Popup> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _PopupWidgetProviderElement extends ProviderElement<Popup>
+    with PopupWidgetRef {
+  _PopupWidgetProviderElement(super.provider);
+
+  @override
+  int get viewId => (origin as PopupWidgetProvider).viewId;
 }
 
 String _$xdgPopupStatesHash() => r'21bc9d8c0b8e062e6c78cffe58f2d68182aad623';
@@ -167,8 +212,8 @@ class XdgPopupStatesProvider
     extends NotifierProviderImpl<XdgPopupStates, XdgPopupState> {
   /// See also [XdgPopupStates].
   XdgPopupStatesProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           () => XdgPopupStates()..viewId = viewId,
           from: xdgPopupStatesProvider,
           name: r'xdgPopupStatesProvider',
@@ -179,9 +224,50 @@ class XdgPopupStatesProvider
           dependencies: XdgPopupStatesFamily._dependencies,
           allTransitiveDependencies:
               XdgPopupStatesFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  XdgPopupStatesProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  XdgPopupState runNotifierBuild(
+    covariant XdgPopupStates notifier,
+  ) {
+    return notifier.build(
+      viewId,
+    );
+  }
+
+  @override
+  Override overrideWith(XdgPopupStates Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: XdgPopupStatesProvider._internal(
+        () => create()..viewId = viewId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  NotifierProviderElement<XdgPopupStates, XdgPopupState> createElement() {
+    return _XdgPopupStatesProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -195,14 +281,20 @@ class XdgPopupStatesProvider
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin XdgPopupStatesRef on NotifierProviderRef<XdgPopupState> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _XdgPopupStatesProviderElement
+    extends NotifierProviderElement<XdgPopupStates, XdgPopupState>
+    with XdgPopupStatesRef {
+  _XdgPopupStatesProviderElement(super.provider);
 
   @override
-  XdgPopupState runNotifierBuild(
-    covariant XdgPopupStates notifier,
-  ) {
-    return notifier.build(
-      viewId,
-    );
-  }
+  int get viewId => (origin as XdgPopupStatesProvider).viewId;
 }
-// ignore_for_file: unnecessary_raw_strings, subtype_of_sealed_class, invalid_use_of_internal_member, do_not_use_environment, prefer_const_constructors, public_member_api_docs, avoid_private_typedef_functions
+// ignore_for_file: type=lint
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

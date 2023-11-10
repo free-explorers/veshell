@@ -73,11 +73,11 @@ class _$WindowProviderStateCopyWithImpl<$Res, $Val extends WindowProviderState>
 }
 
 /// @nodoc
-abstract class _$$_WindowProviderStateCopyWith<$Res>
+abstract class _$$WindowProviderStateImplCopyWith<$Res>
     implements $WindowProviderStateCopyWith<$Res> {
-  factory _$$_WindowProviderStateCopyWith(_$_WindowProviderState value,
-          $Res Function(_$_WindowProviderState) then) =
-      __$$_WindowProviderStateCopyWithImpl<$Res>;
+  factory _$$WindowProviderStateImplCopyWith(_$WindowProviderStateImpl value,
+          $Res Function(_$WindowProviderStateImpl) then) =
+      __$$WindowProviderStateImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call(
@@ -87,11 +87,11 @@ abstract class _$$_WindowProviderStateCopyWith<$Res>
 }
 
 /// @nodoc
-class __$$_WindowProviderStateCopyWithImpl<$Res>
-    extends _$WindowProviderStateCopyWithImpl<$Res, _$_WindowProviderState>
-    implements _$$_WindowProviderStateCopyWith<$Res> {
-  __$$_WindowProviderStateCopyWithImpl(_$_WindowProviderState _value,
-      $Res Function(_$_WindowProviderState) _then)
+class __$$WindowProviderStateImplCopyWithImpl<$Res>
+    extends _$WindowProviderStateCopyWithImpl<$Res, _$WindowProviderStateImpl>
+    implements _$$WindowProviderStateImplCopyWith<$Res> {
+  __$$WindowProviderStateImplCopyWithImpl(_$WindowProviderStateImpl _value,
+      $Res Function(_$WindowProviderStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -101,7 +101,7 @@ class __$$_WindowProviderStateCopyWithImpl<$Res>
     Object? repaintBoundaryKey = null,
     Object? snapshot = freezed,
   }) {
-    return _then(_$_WindowProviderState(
+    return _then(_$WindowProviderStateImpl(
       tiling: null == tiling
           ? _value.tiling
           : tiling // ignore: cast_nullable_to_non_nullable
@@ -120,8 +120,8 @@ class __$$_WindowProviderStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_WindowProviderState implements _WindowProviderState {
-  const _$_WindowProviderState(
+class _$WindowProviderStateImpl implements _WindowProviderState {
+  const _$WindowProviderStateImpl(
       {required this.tiling,
       required this.repaintBoundaryKey,
       required this.snapshot});
@@ -142,7 +142,7 @@ class _$_WindowProviderState implements _WindowProviderState {
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_WindowProviderState &&
+            other is _$WindowProviderStateImpl &&
             (identical(other.tiling, tiling) || other.tiling == tiling) &&
             (identical(other.repaintBoundaryKey, repaintBoundaryKey) ||
                 other.repaintBoundaryKey == repaintBoundaryKey) &&
@@ -157,8 +157,8 @@ class _$_WindowProviderState implements _WindowProviderState {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_WindowProviderStateCopyWith<_$_WindowProviderState> get copyWith =>
-      __$$_WindowProviderStateCopyWithImpl<_$_WindowProviderState>(
+  _$$WindowProviderStateImplCopyWith<_$WindowProviderStateImpl> get copyWith =>
+      __$$WindowProviderStateImplCopyWithImpl<_$WindowProviderStateImpl>(
           this, _$identity);
 }
 
@@ -166,7 +166,7 @@ abstract class _WindowProviderState implements WindowProviderState {
   const factory _WindowProviderState(
       {required final Tiling tiling,
       required final GlobalKey<State<StatefulWidget>> repaintBoundaryKey,
-      required final ui.Image? snapshot}) = _$_WindowProviderState;
+      required final ui.Image? snapshot}) = _$WindowProviderStateImpl;
 
   @override
   Tiling get tiling;
@@ -176,6 +176,6 @@ abstract class _WindowProviderState implements WindowProviderState {
   ui.Image? get snapshot;
   @override
   @JsonKey(ignore: true)
-  _$$_WindowProviderStateCopyWith<_$_WindowProviderState> get copyWith =>
+  _$$WindowProviderStateImplCopyWith<_$WindowProviderStateImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

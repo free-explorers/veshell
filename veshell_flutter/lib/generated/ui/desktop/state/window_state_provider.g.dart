@@ -6,7 +6,7 @@ part of '../../../../ui/desktop/state/window_state_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$windowStateHash() => r'63e0a621cfca1654e28ff7b9181f76188624673e';
+String _$windowStateHash() => r'385539b0f91dc3e85fc66c834b5e5c399b64ff5b';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -84,8 +84,8 @@ class WindowStateProvider
     extends NotifierProviderImpl<WindowState, WindowProviderState> {
   /// See also [WindowState].
   WindowStateProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           () => WindowState()..viewId = viewId,
           from: windowStateProvider,
           name: r'windowStateProvider',
@@ -96,9 +96,50 @@ class WindowStateProvider
           dependencies: WindowStateFamily._dependencies,
           allTransitiveDependencies:
               WindowStateFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  WindowStateProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  WindowProviderState runNotifierBuild(
+    covariant WindowState notifier,
+  ) {
+    return notifier.build(
+      viewId,
+    );
+  }
+
+  @override
+  Override overrideWith(WindowState Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: WindowStateProvider._internal(
+        () => create()..viewId = viewId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  NotifierProviderElement<WindowState, WindowProviderState> createElement() {
+    return _WindowStateProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -112,14 +153,20 @@ class WindowStateProvider
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin WindowStateRef on NotifierProviderRef<WindowProviderState> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _WindowStateProviderElement
+    extends NotifierProviderElement<WindowState, WindowProviderState>
+    with WindowStateRef {
+  _WindowStateProviderElement(super.provider);
 
   @override
-  WindowProviderState runNotifierBuild(
-    covariant WindowState notifier,
-  ) {
-    return notifier.build(
-      viewId,
-    );
-  }
+  int get viewId => (origin as WindowStateProvider).viewId;
 }
-// ignore_for_file: unnecessary_raw_strings, subtype_of_sealed_class, invalid_use_of_internal_member, do_not_use_environment, prefer_const_constructors, public_member_api_docs, avoid_private_typedef_functions
+// ignore_for_file: type=lint
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

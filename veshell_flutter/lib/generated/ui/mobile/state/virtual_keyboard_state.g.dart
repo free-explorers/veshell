@@ -88,8 +88,8 @@ class VirtualKeyboardStateNotifierProvider
         VirtualKeyboardState> {
   /// See also [VirtualKeyboardStateNotifier].
   VirtualKeyboardStateNotifierProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           () => VirtualKeyboardStateNotifier()..viewId = viewId,
           from: virtualKeyboardStateNotifierProvider,
           name: r'virtualKeyboardStateNotifierProvider',
@@ -100,9 +100,51 @@ class VirtualKeyboardStateNotifierProvider
           dependencies: VirtualKeyboardStateNotifierFamily._dependencies,
           allTransitiveDependencies:
               VirtualKeyboardStateNotifierFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  VirtualKeyboardStateNotifierProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  VirtualKeyboardState runNotifierBuild(
+    covariant VirtualKeyboardStateNotifier notifier,
+  ) {
+    return notifier.build(
+      viewId,
+    );
+  }
+
+  @override
+  Override overrideWith(VirtualKeyboardStateNotifier Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: VirtualKeyboardStateNotifierProvider._internal(
+        () => create()..viewId = viewId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeNotifierProviderElement<VirtualKeyboardStateNotifier,
+      VirtualKeyboardState> createElement() {
+    return _VirtualKeyboardStateNotifierProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -117,14 +159,21 @@ class VirtualKeyboardStateNotifierProvider
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin VirtualKeyboardStateNotifierRef
+    on AutoDisposeNotifierProviderRef<VirtualKeyboardState> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _VirtualKeyboardStateNotifierProviderElement
+    extends AutoDisposeNotifierProviderElement<VirtualKeyboardStateNotifier,
+        VirtualKeyboardState> with VirtualKeyboardStateNotifierRef {
+  _VirtualKeyboardStateNotifierProviderElement(super.provider);
 
   @override
-  VirtualKeyboardState runNotifierBuild(
-    covariant VirtualKeyboardStateNotifier notifier,
-  ) {
-    return notifier.build(
-      viewId,
-    );
-  }
+  int get viewId => (origin as VirtualKeyboardStateNotifierProvider).viewId;
 }
-// ignore_for_file: unnecessary_raw_strings, subtype_of_sealed_class, invalid_use_of_internal_member, do_not_use_environment, prefer_const_constructors, public_member_api_docs, avoid_private_typedef_functions
+// ignore_for_file: type=lint
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

@@ -137,8 +137,8 @@ pub unsafe extern "C" fn platform_message_callback(message: *const FlutterPlatfo
 pub unsafe extern "C" fn gl_external_texture_frame_callback(
     user_data: *mut c_void,
     texture_id: i64,
-    width: usize,
-    height: usize,
+    _width: usize,
+    _height: usize,
     texture_out: *mut FlutterOpenGLTexture,
 ) -> bool {
     let flutter_engine = &mut *(user_data as *mut FlutterEngine);
@@ -148,22 +148,20 @@ pub unsafe extern "C" fn gl_external_texture_frame_callback(
         channels.rx_external_texture_name.recv().ok()
     }).unwrap_or((0, ffi::RGBA8));
 
-    unsafe {
-        // std::ptr::addr_of_mut!(*texture_out).write(FlutterOpenGLTexture {
-            std::ptr::addr_of_mut!((*texture_out).target).write(ffi::TEXTURE_2D);
-            std::ptr::addr_of_mut!((*texture_out).name).write(dbg!(texture_name));
-            std::ptr::addr_of_mut!((*texture_out).format).write(ffi::RGBA8);
-            std::ptr::addr_of_mut!((*texture_out).user_data).write(null_mut());
-            std::ptr::addr_of_mut!((*texture_out).destruction_callback).write(None);
-            std::ptr::addr_of_mut!((*texture_out).width).write(0);
-            std::ptr::addr_of_mut!((*texture_out).height).write(0);
-            // name: dbg!(texture_name),
-            // format,
-            // user_data: null_mut(),
-            // destruction_callback: None,
-            // width: 0,
-            // height: 0,
-        // });
-    }
+    let texture_out = &mut *texture_out;
+
+    // TODO: Don't hardcode the target.
+    // If the texture is imported from a DMABUF, I think it the target should be GL_TEXTURE_EXTERNAL_OES.
+    texture_out.target = ffi::TEXTURE_2D;
+    texture_out.name = texture_name;
+    // TODO: Should probably not hardcode the format in case the texture is not RGBA8.
+    // I can't just assign the format obtained from the channel because it's BGRA_EXT and for some
+    // reason it doesn't work while RGBA8 does.
+    texture_out.format = ffi::RGBA8;
+    texture_out.user_data = null_mut();
+    texture_out.destruction_callback = None;
+    texture_out.width = 0;
+    texture_out.height = 0;
+
     texture_name != 0
 }

@@ -84,8 +84,8 @@ class WindowPositionProvider
     extends NotifierProviderImpl<WindowPosition, Offset> {
   /// See also [WindowPosition].
   WindowPositionProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           () => WindowPosition()..viewId = viewId,
           from: windowPositionProvider,
           name: r'windowPositionProvider',
@@ -96,9 +96,50 @@ class WindowPositionProvider
           dependencies: WindowPositionFamily._dependencies,
           allTransitiveDependencies:
               WindowPositionFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  WindowPositionProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  Offset runNotifierBuild(
+    covariant WindowPosition notifier,
+  ) {
+    return notifier.build(
+      viewId,
+    );
+  }
+
+  @override
+  Override overrideWith(WindowPosition Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: WindowPositionProvider._internal(
+        () => create()..viewId = viewId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  NotifierProviderElement<WindowPosition, Offset> createElement() {
+    return _WindowPositionProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -112,14 +153,20 @@ class WindowPositionProvider
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin WindowPositionRef on NotifierProviderRef<Offset> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _WindowPositionProviderElement
+    extends NotifierProviderElement<WindowPosition, Offset>
+    with WindowPositionRef {
+  _WindowPositionProviderElement(super.provider);
 
   @override
-  Offset runNotifierBuild(
-    covariant WindowPosition notifier,
-  ) {
-    return notifier.build(
-      viewId,
-    );
-  }
+  int get viewId => (origin as WindowPositionProvider).viewId;
 }
-// ignore_for_file: unnecessary_raw_strings, subtype_of_sealed_class, invalid_use_of_internal_member, do_not_use_environment, prefer_const_constructors, public_member_api_docs, avoid_private_typedef_functions
+// ignore_for_file: type=lint
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

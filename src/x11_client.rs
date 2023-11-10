@@ -1,6 +1,5 @@
 use std::rc::Rc;
 use std::sync::atomic::Ordering;
-use std::time::Duration;
 
 use log::{error, warn};
 use smithay::{
@@ -35,10 +34,10 @@ use smithay::{
     },
     utils::DeviceFd,
 };
-use smithay::backend::renderer::gles::ffi::RGBA8;
+use smithay::backend::renderer::gles::ffi::{Gles2, RGBA8};
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::renderer::Texture;
-use smithay::reexports::calloop::channel;
+use smithay::output::{Output, PhysicalProperties, Subpixel};
 use smithay::reexports::calloop::channel::Event;
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::wayland_server::protocol::wl_shm;
@@ -70,6 +69,23 @@ pub fn run_x11_client() {
         .title("Anvil")
         .build(&x11_handle)
         .expect("Failed to create first window");
+
+    let mode = Mode {
+        size: (window.size().w as i32, window.size().h as i32).into(),
+        refresh: 144_000,
+    };
+    let output = Output::new(
+        "x11".to_string(),
+        PhysicalProperties {
+            size: (0, 0).into(),
+            subpixel: Subpixel::Unknown,
+            make: "Veshell".into(),
+            model: "x11".into(),
+        },
+    );
+    let _global = output.create_global::<ServerState<X11Data>>(&display_handle);
+    output.change_current_state(Some(mode), None, None, Some((0, 0).into()));
+    output.set_preferred(mode);
 
     let skip_vulkan = std::env::var("ANVIL_NO_VULKAN")
         .map(|x| {
@@ -134,10 +150,10 @@ pub fn run_x11_client() {
         .build()
         .unwrap();
     let mut dmabuf_state = DmabufState::new();
-    let _dmabuf_global = dmabuf_state.create_global_with_default_feedback::<ServerState<X11Data>>(
-        &display.handle(),
-        &dmabuf_default_feedback,
-    );
+    // let _dmabuf_global = dmabuf_state.create_global_with_default_feedback::<ServerState<X11Data>>(
+    //     &display.handle(),
+    //     &dmabuf_default_feedback,
+    // );
 
     let mut state = ServerState::new(
         display,
@@ -156,7 +172,7 @@ pub fn run_x11_client() {
     );
 
     let (
-        mut flutter_engine,
+        flutter_engine,
         EmbedderChannels {
             rx_present,
             rx_request_fbo,
@@ -199,6 +215,7 @@ pub fn run_x11_client() {
     let gles_renderer = unsafe { GlesRenderer::new(egl_context) }.expect("Failed to initialize GLES");
 
     state.gles_renderer = Some(gles_renderer);
+    state.gl = Some(Gles2::load_with(|s| unsafe { egl::get_proc_address(s) } as *const _));
 
     event_loop
         .handle()
@@ -214,6 +231,9 @@ pub fn run_x11_client() {
                     refresh: 144_000,
                 };
 
+                output.change_current_state(Some(data.state.backend_data.mode), None, None, Some((0, 0).into()));
+                output.set_preferred(mode);
+
                 let _ = tx_output_height.send(new_size.h);
                 data.state.flutter_engine().send_window_metrics((size.w as u32, size.h as u32).into()).unwrap();
             }
@@ -224,6 +244,9 @@ pub fn run_x11_client() {
                 }
                 let start_time = std::time::Instant::now();
                 for surface in data.state.xdg_shell_state.toplevel_surfaces() {
+                    send_frames_surface_tree(surface.wl_surface(), start_time.elapsed().as_millis() as u32);
+                }
+                for surface in data.state.xdg_popups.values() {
                     send_frames_surface_tree(surface.wl_surface(), start_time.elapsed().as_millis() as u32);
                 }
             }
@@ -289,7 +312,7 @@ pub fn run_x11_client() {
             baton,
         };
 
-        let result = event_loop.dispatch(Duration::from_secs(1), &mut calloop_data);
+        let result = event_loop.dispatch(None, &mut calloop_data);
 
         CalloopData {
             state,

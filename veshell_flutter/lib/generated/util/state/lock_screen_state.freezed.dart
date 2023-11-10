@@ -63,22 +63,22 @@ class _$LockScreenStateCopyWithImpl<$Res, $Val extends LockScreenState>
 }
 
 /// @nodoc
-abstract class _$$_LockScreenStateCopyWith<$Res>
+abstract class _$$LockScreenStateImplCopyWith<$Res>
     implements $LockScreenStateCopyWith<$Res> {
-  factory _$$_LockScreenStateCopyWith(
-          _$_LockScreenState value, $Res Function(_$_LockScreenState) then) =
-      __$$_LockScreenStateCopyWithImpl<$Res>;
+  factory _$$LockScreenStateImplCopyWith(_$LockScreenStateImpl value,
+          $Res Function(_$LockScreenStateImpl) then) =
+      __$$LockScreenStateImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call({bool locked, Object lock, Object unlock});
 }
 
 /// @nodoc
-class __$$_LockScreenStateCopyWithImpl<$Res>
-    extends _$LockScreenStateCopyWithImpl<$Res, _$_LockScreenState>
-    implements _$$_LockScreenStateCopyWith<$Res> {
-  __$$_LockScreenStateCopyWithImpl(
-      _$_LockScreenState _value, $Res Function(_$_LockScreenState) _then)
+class __$$LockScreenStateImplCopyWithImpl<$Res>
+    extends _$LockScreenStateCopyWithImpl<$Res, _$LockScreenStateImpl>
+    implements _$$LockScreenStateImplCopyWith<$Res> {
+  __$$LockScreenStateImplCopyWithImpl(
+      _$LockScreenStateImpl _value, $Res Function(_$LockScreenStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -88,7 +88,7 @@ class __$$_LockScreenStateCopyWithImpl<$Res>
     Object? lock = null,
     Object? unlock = null,
   }) {
-    return _then(_$_LockScreenState(
+    return _then(_$LockScreenStateImpl(
       locked: null == locked
           ? _value.locked
           : locked // ignore: cast_nullable_to_non_nullable
@@ -101,8 +101,8 @@ class __$$_LockScreenStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_LockScreenState implements _LockScreenState {
-  const _$_LockScreenState(
+class _$LockScreenStateImpl implements _LockScreenState {
+  const _$LockScreenStateImpl(
       {required this.locked, required this.lock, required this.unlock});
 
   @override
@@ -121,7 +121,7 @@ class _$_LockScreenState implements _LockScreenState {
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_LockScreenState &&
+            other is _$LockScreenStateImpl &&
             (identical(other.locked, locked) || other.locked == locked) &&
             const DeepCollectionEquality().equals(other.lock, lock) &&
             const DeepCollectionEquality().equals(other.unlock, unlock));
@@ -137,15 +137,16 @@ class _$_LockScreenState implements _LockScreenState {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_LockScreenStateCopyWith<_$_LockScreenState> get copyWith =>
-      __$$_LockScreenStateCopyWithImpl<_$_LockScreenState>(this, _$identity);
+  _$$LockScreenStateImplCopyWith<_$LockScreenStateImpl> get copyWith =>
+      __$$LockScreenStateImplCopyWithImpl<_$LockScreenStateImpl>(
+          this, _$identity);
 }
 
 abstract class _LockScreenState implements LockScreenState {
   const factory _LockScreenState(
       {required final bool locked,
       required final Object lock,
-      required final Object unlock}) = _$_LockScreenState;
+      required final Object unlock}) = _$LockScreenStateImpl;
 
   @override
   bool get locked;
@@ -155,6 +156,6 @@ abstract class _LockScreenState implements LockScreenState {
   Object get unlock;
   @override
   @JsonKey(ignore: true)
-  _$$_LockScreenStateCopyWith<_$_LockScreenState> get copyWith =>
+  _$$LockScreenStateImplCopyWith<_$LockScreenStateImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
