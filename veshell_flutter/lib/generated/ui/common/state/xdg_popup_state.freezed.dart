@@ -80,11 +80,11 @@ class _$XdgPopupStateCopyWithImpl<$Res, $Val extends XdgPopupState>
 }
 
 /// @nodoc
-abstract class _$$_XdgPopupStateCopyWith<$Res>
+abstract class _$$XdgPopupStateImplCopyWith<$Res>
     implements $XdgPopupStateCopyWith<$Res> {
-  factory _$$_XdgPopupStateCopyWith(
-          _$_XdgPopupState value, $Res Function(_$_XdgPopupState) then) =
-      __$$_XdgPopupStateCopyWithImpl<$Res>;
+  factory _$$XdgPopupStateImplCopyWith(
+          _$XdgPopupStateImpl value, $Res Function(_$XdgPopupStateImpl) then) =
+      __$$XdgPopupStateImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call(
@@ -95,11 +95,11 @@ abstract class _$$_XdgPopupStateCopyWith<$Res>
 }
 
 /// @nodoc
-class __$$_XdgPopupStateCopyWithImpl<$Res>
-    extends _$XdgPopupStateCopyWithImpl<$Res, _$_XdgPopupState>
-    implements _$$_XdgPopupStateCopyWith<$Res> {
-  __$$_XdgPopupStateCopyWithImpl(
-      _$_XdgPopupState _value, $Res Function(_$_XdgPopupState) _then)
+class __$$XdgPopupStateImplCopyWithImpl<$Res>
+    extends _$XdgPopupStateCopyWithImpl<$Res, _$XdgPopupStateImpl>
+    implements _$$XdgPopupStateImplCopyWith<$Res> {
+  __$$XdgPopupStateImplCopyWithImpl(
+      _$XdgPopupStateImpl _value, $Res Function(_$XdgPopupStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -110,7 +110,7 @@ class __$$_XdgPopupStateCopyWithImpl<$Res>
     Object? animationsKey = null,
     Object? isClosing = null,
   }) {
-    return _then(_$_XdgPopupState(
+    return _then(_$XdgPopupStateImpl(
       parentViewId: null == parentViewId
           ? _value.parentViewId
           : parentViewId // ignore: cast_nullable_to_non_nullable
@@ -133,8 +133,10 @@ class __$$_XdgPopupStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_XdgPopupState with DiagnosticableTreeMixin implements _XdgPopupState {
-  const _$_XdgPopupState(
+class _$XdgPopupStateImpl
+    with DiagnosticableTreeMixin
+    implements _XdgPopupState {
+  const _$XdgPopupStateImpl(
       {required this.parentViewId,
       required this.position,
       required this.animationsKey,
@@ -169,7 +171,7 @@ class _$_XdgPopupState with DiagnosticableTreeMixin implements _XdgPopupState {
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_XdgPopupState &&
+            other is _$XdgPopupStateImpl &&
             (identical(other.parentViewId, parentViewId) ||
                 other.parentViewId == parentViewId) &&
             (identical(other.position, position) ||
@@ -187,8 +189,8 @@ class _$_XdgPopupState with DiagnosticableTreeMixin implements _XdgPopupState {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_XdgPopupStateCopyWith<_$_XdgPopupState> get copyWith =>
-      __$$_XdgPopupStateCopyWithImpl<_$_XdgPopupState>(this, _$identity);
+  _$$XdgPopupStateImplCopyWith<_$XdgPopupStateImpl> get copyWith =>
+      __$$XdgPopupStateImplCopyWithImpl<_$XdgPopupStateImpl>(this, _$identity);
 }
 
 abstract class _XdgPopupState implements XdgPopupState {
@@ -196,7 +198,7 @@ abstract class _XdgPopupState implements XdgPopupState {
       {required final int parentViewId,
       required final Offset position,
       required final GlobalKey<AnimationsState> animationsKey,
-      required final bool isClosing}) = _$_XdgPopupState;
+      required final bool isClosing}) = _$XdgPopupStateImpl;
 
   @override
   int get parentViewId;
@@ -208,6 +210,6 @@ abstract class _XdgPopupState implements XdgPopupState {
   bool get isClosing;
   @override
   @JsonKey(ignore: true)
-  _$$_XdgPopupStateCopyWith<_$_XdgPopupState> get copyWith =>
+  _$$XdgPopupStateImplCopyWith<_$XdgPopupStateImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

@@ -9,8 +9,9 @@ members = [
 ]
 
 [dependencies]
-smithay = { git = "https://github.com/Smithay/smithay", rev = "4e41ab0", features = ["default", "wayland_frontend", "backend_egl", "use_system_lib"] }
+smithay = { git = "https://github.com/Smithay/smithay", rev = "a8f3c46", features = ["default", "wayland_frontend", "backend_egl", "use_system_lib"] }
 smithay-drm-extras = {path = "third_party/smithay-drm-extras" }
+rustix = "0.38.21"
 input-linux = "0.6.0"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 log = "0.4.20"

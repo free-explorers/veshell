@@ -29,8 +29,6 @@ class _SystemHash {
   }
 }
 
-typedef TaskWidgetRef = ProviderRef<Task>;
-
 /// See also [taskWidget].
 @ProviderFor(taskWidget)
 const taskWidgetProvider = TaskWidgetFamily();
@@ -77,10 +75,10 @@ class TaskWidgetFamily extends Family<Task> {
 class TaskWidgetProvider extends Provider<Task> {
   /// See also [taskWidget].
   TaskWidgetProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           (ref) => taskWidget(
-            ref,
+            ref as TaskWidgetRef,
             viewId,
           ),
           from: taskWidgetProvider,
@@ -92,9 +90,43 @@ class TaskWidgetProvider extends Provider<Task> {
           dependencies: TaskWidgetFamily._dependencies,
           allTransitiveDependencies:
               TaskWidgetFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  TaskWidgetProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  Override overrideWith(
+    Task Function(TaskWidgetRef provider) create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: TaskWidgetProvider._internal(
+        (ref) => create(ref as TaskWidgetRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  ProviderElement<Task> createElement() {
+    return _TaskWidgetProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -108,6 +140,19 @@ class TaskWidgetProvider extends Provider<Task> {
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin TaskWidgetRef on ProviderRef<Task> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _TaskWidgetProviderElement extends ProviderElement<Task>
+    with TaskWidgetRef {
+  _TaskWidgetProviderElement(super.provider);
+
+  @override
+  int get viewId => (origin as TaskWidgetProvider).viewId;
 }
 
 String _$taskStateNotifierHash() => r'e471d5b2f87ec17f9d4ea2786d580abc3cf1b0c2';
@@ -167,8 +212,8 @@ class TaskStateNotifierProvider
     extends NotifierProviderImpl<TaskStateNotifier, TaskState> {
   /// See also [TaskStateNotifier].
   TaskStateNotifierProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           () => TaskStateNotifier()..viewId = viewId,
           from: taskStateNotifierProvider,
           name: r'taskStateNotifierProvider',
@@ -179,9 +224,50 @@ class TaskStateNotifierProvider
           dependencies: TaskStateNotifierFamily._dependencies,
           allTransitiveDependencies:
               TaskStateNotifierFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  TaskStateNotifierProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  TaskState runNotifierBuild(
+    covariant TaskStateNotifier notifier,
+  ) {
+    return notifier.build(
+      viewId,
+    );
+  }
+
+  @override
+  Override overrideWith(TaskStateNotifier Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: TaskStateNotifierProvider._internal(
+        () => create()..viewId = viewId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  NotifierProviderElement<TaskStateNotifier, TaskState> createElement() {
+    return _TaskStateNotifierProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -195,15 +281,20 @@ class TaskStateNotifierProvider
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin TaskStateNotifierRef on NotifierProviderRef<TaskState> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _TaskStateNotifierProviderElement
+    extends NotifierProviderElement<TaskStateNotifier, TaskState>
+    with TaskStateNotifierRef {
+  _TaskStateNotifierProviderElement(super.provider);
 
   @override
-  TaskState runNotifierBuild(
-    covariant TaskStateNotifier notifier,
-  ) {
-    return notifier.build(
-      viewId,
-    );
-  }
+  int get viewId => (origin as TaskStateNotifierProvider).viewId;
 }
 
 String _$taskPositionHash() => r'8b1381e2330cded890010168c7cfb8846211ce09';
@@ -262,8 +353,8 @@ class TaskPositionFamily extends Family<double> {
 class TaskPositionProvider extends NotifierProviderImpl<TaskPosition, double> {
   /// See also [TaskPosition].
   TaskPositionProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           () => TaskPosition()..viewId = viewId,
           from: taskPositionProvider,
           name: r'taskPositionProvider',
@@ -274,9 +365,50 @@ class TaskPositionProvider extends NotifierProviderImpl<TaskPosition, double> {
           dependencies: TaskPositionFamily._dependencies,
           allTransitiveDependencies:
               TaskPositionFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  TaskPositionProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  double runNotifierBuild(
+    covariant TaskPosition notifier,
+  ) {
+    return notifier.build(
+      viewId,
+    );
+  }
+
+  @override
+  Override overrideWith(TaskPosition Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: TaskPositionProvider._internal(
+        () => create()..viewId = viewId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  NotifierProviderElement<TaskPosition, double> createElement() {
+    return _TaskPositionProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -290,15 +422,19 @@ class TaskPositionProvider extends NotifierProviderImpl<TaskPosition, double> {
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin TaskPositionRef on NotifierProviderRef<double> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _TaskPositionProviderElement
+    extends NotifierProviderElement<TaskPosition, double> with TaskPositionRef {
+  _TaskPositionProviderElement(super.provider);
 
   @override
-  double runNotifierBuild(
-    covariant TaskPosition notifier,
-  ) {
-    return notifier.build(
-      viewId,
-    );
-  }
+  int get viewId => (origin as TaskPositionProvider).viewId;
 }
 
 String _$taskVerticalPositionHash() =>
@@ -359,8 +495,8 @@ class TaskVerticalPositionProvider
     extends NotifierProviderImpl<TaskVerticalPosition, double> {
   /// See also [TaskVerticalPosition].
   TaskVerticalPositionProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           () => TaskVerticalPosition()..viewId = viewId,
           from: taskVerticalPositionProvider,
           name: r'taskVerticalPositionProvider',
@@ -371,9 +507,50 @@ class TaskVerticalPositionProvider
           dependencies: TaskVerticalPositionFamily._dependencies,
           allTransitiveDependencies:
               TaskVerticalPositionFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  TaskVerticalPositionProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  double runNotifierBuild(
+    covariant TaskVerticalPosition notifier,
+  ) {
+    return notifier.build(
+      viewId,
+    );
+  }
+
+  @override
+  Override overrideWith(TaskVerticalPosition Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: TaskVerticalPositionProvider._internal(
+        () => create()..viewId = viewId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  NotifierProviderElement<TaskVerticalPosition, double> createElement() {
+    return _TaskVerticalPositionProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -387,14 +564,20 @@ class TaskVerticalPositionProvider
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin TaskVerticalPositionRef on NotifierProviderRef<double> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _TaskVerticalPositionProviderElement
+    extends NotifierProviderElement<TaskVerticalPosition, double>
+    with TaskVerticalPositionRef {
+  _TaskVerticalPositionProviderElement(super.provider);
 
   @override
-  double runNotifierBuild(
-    covariant TaskVerticalPosition notifier,
-  ) {
-    return notifier.build(
-      viewId,
-    );
-  }
+  int get viewId => (origin as TaskVerticalPositionProvider).viewId;
 }
-// ignore_for_file: unnecessary_raw_strings, subtype_of_sealed_class, invalid_use_of_internal_member, do_not_use_environment, prefer_const_constructors, public_member_api_docs, avoid_private_typedef_functions
+// ignore_for_file: type=lint
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

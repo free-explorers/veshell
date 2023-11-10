@@ -86,11 +86,11 @@ class _$ResizerStateCopyWithImpl<$Res, $Val extends ResizerState>
 }
 
 /// @nodoc
-abstract class _$$_ResizerStateCopyWith<$Res>
+abstract class _$$ResizerStateImplCopyWith<$Res>
     implements $ResizerStateCopyWith<$Res> {
-  factory _$$_ResizerStateCopyWith(
-          _$_ResizerState value, $Res Function(_$_ResizerState) then) =
-      __$$_ResizerStateCopyWithImpl<$Res>;
+  factory _$$ResizerStateImplCopyWith(
+          _$ResizerStateImpl value, $Res Function(_$ResizerStateImpl) then) =
+      __$$ResizerStateImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call(
@@ -102,11 +102,11 @@ abstract class _$$_ResizerStateCopyWith<$Res>
 }
 
 /// @nodoc
-class __$$_ResizerStateCopyWithImpl<$Res>
-    extends _$ResizerStateCopyWithImpl<$Res, _$_ResizerState>
-    implements _$$_ResizerStateCopyWith<$Res> {
-  __$$_ResizerStateCopyWithImpl(
-      _$_ResizerState _value, $Res Function(_$_ResizerState) _then)
+class __$$ResizerStateImplCopyWithImpl<$Res>
+    extends _$ResizerStateCopyWithImpl<$Res, _$ResizerStateImpl>
+    implements _$$ResizerStateImplCopyWith<$Res> {
+  __$$ResizerStateImplCopyWithImpl(
+      _$ResizerStateImpl _value, $Res Function(_$ResizerStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -118,7 +118,7 @@ class __$$_ResizerStateCopyWithImpl<$Res>
     Object? wantedSize = null,
     Object? delta = null,
   }) {
-    return _then(_$_ResizerState(
+    return _then(_$ResizerStateImpl(
       resizing: null == resizing
           ? _value.resizing
           : resizing // ignore: cast_nullable_to_non_nullable
@@ -145,8 +145,8 @@ class __$$_ResizerStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_ResizerState implements _ResizerState {
-  const _$_ResizerState(
+class _$ResizerStateImpl implements _ResizerState {
+  const _$ResizerStateImpl(
       {required this.resizing,
       required this.resizeEdge,
       required this.startSize,
@@ -173,7 +173,7 @@ class _$_ResizerState implements _ResizerState {
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_ResizerState &&
+            other is _$ResizerStateImpl &&
             (identical(other.resizing, resizing) ||
                 other.resizing == resizing) &&
             (identical(other.resizeEdge, resizeEdge) ||
@@ -192,8 +192,8 @@ class _$_ResizerState implements _ResizerState {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_ResizerStateCopyWith<_$_ResizerState> get copyWith =>
-      __$$_ResizerStateCopyWithImpl<_$_ResizerState>(this, _$identity);
+  _$$ResizerStateImplCopyWith<_$ResizerStateImpl> get copyWith =>
+      __$$ResizerStateImplCopyWithImpl<_$ResizerStateImpl>(this, _$identity);
 }
 
 abstract class _ResizerState implements ResizerState {
@@ -202,7 +202,7 @@ abstract class _ResizerState implements ResizerState {
       required final ResizeEdge? resizeEdge,
       required final Size startSize,
       required final Size wantedSize,
-      required final Offset delta}) = _$_ResizerState;
+      required final Offset delta}) = _$ResizerStateImpl;
 
   @override
   bool get resizing;
@@ -216,6 +216,6 @@ abstract class _ResizerState implements ResizerState {
   Offset get delta;
   @override
   @JsonKey(ignore: true)
-  _$$_ResizerStateCopyWith<_$_ResizerState> get copyWith =>
+  _$$ResizerStateImplCopyWith<_$ResizerStateImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

@@ -86,11 +86,11 @@ class _$TaskSwitcherStateCopyWithImpl<$Res, $Val extends TaskSwitcherState>
 }
 
 /// @nodoc
-abstract class _$$_TaskSwitcherStateCopyWith<$Res>
+abstract class _$$TaskSwitcherStateImplCopyWith<$Res>
     implements $TaskSwitcherStateCopyWith<$Res> {
-  factory _$$_TaskSwitcherStateCopyWith(_$_TaskSwitcherState value,
-          $Res Function(_$_TaskSwitcherState) then) =
-      __$$_TaskSwitcherStateCopyWithImpl<$Res>;
+  factory _$$TaskSwitcherStateImplCopyWith(_$TaskSwitcherStateImpl value,
+          $Res Function(_$TaskSwitcherStateImpl) then) =
+      __$$TaskSwitcherStateImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call(
@@ -102,11 +102,11 @@ abstract class _$$_TaskSwitcherStateCopyWith<$Res>
 }
 
 /// @nodoc
-class __$$_TaskSwitcherStateCopyWithImpl<$Res>
-    extends _$TaskSwitcherStateCopyWithImpl<$Res, _$_TaskSwitcherState>
-    implements _$$_TaskSwitcherStateCopyWith<$Res> {
-  __$$_TaskSwitcherStateCopyWithImpl(
-      _$_TaskSwitcherState _value, $Res Function(_$_TaskSwitcherState) _then)
+class __$$TaskSwitcherStateImplCopyWithImpl<$Res>
+    extends _$TaskSwitcherStateCopyWithImpl<$Res, _$TaskSwitcherStateImpl>
+    implements _$$TaskSwitcherStateImplCopyWith<$Res> {
+  __$$TaskSwitcherStateImplCopyWithImpl(_$TaskSwitcherStateImpl _value,
+      $Res Function(_$TaskSwitcherStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -118,7 +118,7 @@ class __$$_TaskSwitcherStateCopyWithImpl<$Res>
     Object? areAnimationsPlaying = null,
     Object? constraintsChanged = null,
   }) {
-    return _then(_$_TaskSwitcherState(
+    return _then(_$TaskSwitcherStateImpl(
       inOverview: null == inOverview
           ? _value.inOverview
           : inOverview // ignore: cast_nullable_to_non_nullable
@@ -144,8 +144,8 @@ class __$$_TaskSwitcherStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_TaskSwitcherState implements _TaskSwitcherState {
-  _$_TaskSwitcherState(
+class _$TaskSwitcherStateImpl implements _TaskSwitcherState {
+  _$TaskSwitcherStateImpl(
       {required this.inOverview,
       required this.scale,
       required this.disableUserControl,
@@ -173,7 +173,7 @@ class _$_TaskSwitcherState implements _TaskSwitcherState {
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_TaskSwitcherState &&
+            other is _$TaskSwitcherStateImpl &&
             (identical(other.inOverview, inOverview) ||
                 other.inOverview == inOverview) &&
             (identical(other.scale, scale) || other.scale == scale) &&
@@ -197,8 +197,8 @@ class _$_TaskSwitcherState implements _TaskSwitcherState {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_TaskSwitcherStateCopyWith<_$_TaskSwitcherState> get copyWith =>
-      __$$_TaskSwitcherStateCopyWithImpl<_$_TaskSwitcherState>(
+  _$$TaskSwitcherStateImplCopyWith<_$TaskSwitcherStateImpl> get copyWith =>
+      __$$TaskSwitcherStateImplCopyWithImpl<_$TaskSwitcherStateImpl>(
           this, _$identity);
 }
 
@@ -208,7 +208,7 @@ abstract class _TaskSwitcherState implements TaskSwitcherState {
       required final double scale,
       required final bool disableUserControl,
       required final bool areAnimationsPlaying,
-      required final Object constraintsChanged}) = _$_TaskSwitcherState;
+      required final Object constraintsChanged}) = _$TaskSwitcherStateImpl;
 
   @override
   bool get inOverview;
@@ -222,6 +222,6 @@ abstract class _TaskSwitcherState implements TaskSwitcherState {
   Object get constraintsChanged;
   @override
   @JsonKey(ignore: true)
-  _$$_TaskSwitcherStateCopyWith<_$_TaskSwitcherState> get copyWith =>
+  _$$TaskSwitcherStateImplCopyWith<_$TaskSwitcherStateImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

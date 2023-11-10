@@ -84,8 +84,8 @@ class WindowResizeProvider
     extends NotifierProviderImpl<WindowResize, ResizerState> {
   /// See also [WindowResize].
   WindowResizeProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           () => WindowResize()..viewId = viewId,
           from: windowResizeProvider,
           name: r'windowResizeProvider',
@@ -96,9 +96,50 @@ class WindowResizeProvider
           dependencies: WindowResizeFamily._dependencies,
           allTransitiveDependencies:
               WindowResizeFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  WindowResizeProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  ResizerState runNotifierBuild(
+    covariant WindowResize notifier,
+  ) {
+    return notifier.build(
+      viewId,
+    );
+  }
+
+  @override
+  Override overrideWith(WindowResize Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: WindowResizeProvider._internal(
+        () => create()..viewId = viewId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  NotifierProviderElement<WindowResize, ResizerState> createElement() {
+    return _WindowResizeProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -112,14 +153,20 @@ class WindowResizeProvider
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin WindowResizeRef on NotifierProviderRef<ResizerState> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _WindowResizeProviderElement
+    extends NotifierProviderElement<WindowResize, ResizerState>
+    with WindowResizeRef {
+  _WindowResizeProviderElement(super.provider);
 
   @override
-  ResizerState runNotifierBuild(
-    covariant WindowResize notifier,
-  ) {
-    return notifier.build(
-      viewId,
-    );
-  }
+  int get viewId => (origin as WindowResizeProvider).viewId;
 }
-// ignore_for_file: unnecessary_raw_strings, subtype_of_sealed_class, invalid_use_of_internal_member, do_not_use_environment, prefer_const_constructors, public_member_api_docs, avoid_private_typedef_functions
+// ignore_for_file: type=lint
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

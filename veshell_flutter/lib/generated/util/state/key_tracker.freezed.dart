@@ -80,10 +80,11 @@ class _$KeyStateCopyWithImpl<$Res, $Val extends KeyState>
 }
 
 /// @nodoc
-abstract class _$$_KeyStateCopyWith<$Res> implements $KeyStateCopyWith<$Res> {
-  factory _$$_KeyStateCopyWith(
-          _$_KeyState value, $Res Function(_$_KeyState) then) =
-      __$$_KeyStateCopyWithImpl<$Res>;
+abstract class _$$KeyStateImplCopyWith<$Res>
+    implements $KeyStateCopyWith<$Res> {
+  factory _$$KeyStateImplCopyWith(
+          _$KeyStateImpl value, $Res Function(_$KeyStateImpl) then) =
+      __$$KeyStateImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call(
@@ -96,11 +97,11 @@ abstract class _$$_KeyStateCopyWith<$Res> implements $KeyStateCopyWith<$Res> {
 }
 
 /// @nodoc
-class __$$_KeyStateCopyWithImpl<$Res>
-    extends _$KeyStateCopyWithImpl<$Res, _$_KeyState>
-    implements _$$_KeyStateCopyWith<$Res> {
-  __$$_KeyStateCopyWithImpl(
-      _$_KeyState _value, $Res Function(_$_KeyState) _then)
+class __$$KeyStateImplCopyWithImpl<$Res>
+    extends _$KeyStateCopyWithImpl<$Res, _$KeyStateImpl>
+    implements _$$KeyStateImplCopyWith<$Res> {
+  __$$KeyStateImplCopyWithImpl(
+      _$KeyStateImpl _value, $Res Function(_$KeyStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -113,7 +114,7 @@ class __$$_KeyStateCopyWithImpl<$Res>
     Object? up = null,
     Object? longPressTimer = freezed,
   }) {
-    return _then(_$_KeyState(
+    return _then(_$KeyStateImpl(
       isDown: null == isDown
           ? _value.isDown
           : isDown // ignore: cast_nullable_to_non_nullable
@@ -132,8 +133,8 @@ class __$$_KeyStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_KeyState implements _KeyState {
-  const _$_KeyState(
+class _$KeyStateImpl implements _KeyState {
+  const _$KeyStateImpl(
       {required this.isDown,
       required this.down,
       required this.longPress,
@@ -163,7 +164,7 @@ class _$_KeyState implements _KeyState {
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_KeyState &&
+            other is _$KeyStateImpl &&
             (identical(other.isDown, isDown) || other.isDown == isDown) &&
             const DeepCollectionEquality().equals(other.down, down) &&
             const DeepCollectionEquality().equals(other.longPress, longPress) &&
@@ -187,8 +188,8 @@ class _$_KeyState implements _KeyState {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_KeyStateCopyWith<_$_KeyState> get copyWith =>
-      __$$_KeyStateCopyWithImpl<_$_KeyState>(this, _$identity);
+  _$$KeyStateImplCopyWith<_$KeyStateImpl> get copyWith =>
+      __$$KeyStateImplCopyWithImpl<_$KeyStateImpl>(this, _$identity);
 }
 
 abstract class _KeyState implements KeyState {
@@ -198,7 +199,7 @@ abstract class _KeyState implements KeyState {
       required final Object longPress,
       required final Object shortPress,
       required final Object up,
-      required final Timer? longPressTimer}) = _$_KeyState;
+      required final Timer? longPressTimer}) = _$KeyStateImpl;
 
   @override
   bool get isDown;
@@ -214,6 +215,6 @@ abstract class _KeyState implements KeyState {
   Timer? get longPressTimer;
   @override
   @JsonKey(ignore: true)
-  _$$_KeyStateCopyWith<_$_KeyState> get copyWith =>
+  _$$KeyStateImplCopyWith<_$KeyStateImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

@@ -137,11 +137,11 @@ class _$SurfaceStateCopyWithImpl<$Res, $Val extends SurfaceState>
 }
 
 /// @nodoc
-abstract class _$$_SurfaceStateCopyWith<$Res>
+abstract class _$$SurfaceStateImplCopyWith<$Res>
     implements $SurfaceStateCopyWith<$Res> {
-  factory _$$_SurfaceStateCopyWith(
-          _$_SurfaceState value, $Res Function(_$_SurfaceState) then) =
-      __$$_SurfaceStateCopyWithImpl<$Res>;
+  factory _$$SurfaceStateImplCopyWith(
+          _$SurfaceStateImpl value, $Res Function(_$SurfaceStateImpl) then) =
+      __$$SurfaceStateImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call(
@@ -160,11 +160,11 @@ abstract class _$$_SurfaceStateCopyWith<$Res>
 }
 
 /// @nodoc
-class __$$_SurfaceStateCopyWithImpl<$Res>
-    extends _$SurfaceStateCopyWithImpl<$Res, _$_SurfaceState>
-    implements _$$_SurfaceStateCopyWith<$Res> {
-  __$$_SurfaceStateCopyWithImpl(
-      _$_SurfaceState _value, $Res Function(_$_SurfaceState) _then)
+class __$$SurfaceStateImplCopyWithImpl<$Res>
+    extends _$SurfaceStateCopyWithImpl<$Res, _$SurfaceStateImpl>
+    implements _$$SurfaceStateImplCopyWith<$Res> {
+  __$$SurfaceStateImplCopyWithImpl(
+      _$SurfaceStateImpl _value, $Res Function(_$SurfaceStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -183,7 +183,7 @@ class __$$_SurfaceStateCopyWithImpl<$Res>
     Object? subsurfacesAbove = null,
     Object? inputRegion = null,
   }) {
-    return _then(_$_SurfaceState(
+    return _then(_$SurfaceStateImpl(
       role: null == role
           ? _value.role
           : role // ignore: cast_nullable_to_non_nullable
@@ -238,8 +238,8 @@ class __$$_SurfaceStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_SurfaceState implements _SurfaceState {
-  const _$_SurfaceState(
+class _$SurfaceStateImpl implements _SurfaceState {
+  const _$SurfaceStateImpl(
       {required this.role,
       required this.viewId,
       required this.textureId,
@@ -303,7 +303,7 @@ class _$_SurfaceState implements _SurfaceState {
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_SurfaceState &&
+            other is _$SurfaceStateImpl &&
             (identical(other.role, role) || other.role == role) &&
             (identical(other.viewId, viewId) || other.viewId == viewId) &&
             (identical(other.textureId, textureId) ||
@@ -346,8 +346,8 @@ class _$_SurfaceState implements _SurfaceState {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_SurfaceStateCopyWith<_$_SurfaceState> get copyWith =>
-      __$$_SurfaceStateCopyWithImpl<_$_SurfaceState>(this, _$identity);
+  _$$SurfaceStateImplCopyWith<_$SurfaceStateImpl> get copyWith =>
+      __$$SurfaceStateImplCopyWithImpl<_$SurfaceStateImpl>(this, _$identity);
 }
 
 abstract class _SurfaceState implements SurfaceState {
@@ -363,7 +363,7 @@ abstract class _SurfaceState implements SurfaceState {
       required final GlobalKey<State<StatefulWidget>> textureKey,
       required final List<int> subsurfacesBelow,
       required final List<int> subsurfacesAbove,
-      required final Rect inputRegion}) = _$_SurfaceState;
+      required final Rect inputRegion}) = _$SurfaceStateImpl;
 
   @override
   SurfaceRole get role;
@@ -391,6 +391,6 @@ abstract class _SurfaceState implements SurfaceState {
   Rect get inputRegion;
   @override
   @JsonKey(ignore: true)
-  _$$_SurfaceStateCopyWith<_$_SurfaceState> get copyWith =>
+  _$$SurfaceStateImplCopyWith<_$SurfaceStateImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

@@ -104,11 +104,11 @@ class _$AppDrawerStateCopyWithImpl<$Res, $Val extends AppDrawerState>
 }
 
 /// @nodoc
-abstract class _$$_AppDrawerStateCopyWith<$Res>
+abstract class _$$AppDrawerStateImplCopyWith<$Res>
     implements $AppDrawerStateCopyWith<$Res> {
-  factory _$$_AppDrawerStateCopyWith(
-          _$_AppDrawerState value, $Res Function(_$_AppDrawerState) then) =
-      __$$_AppDrawerStateCopyWithImpl<$Res>;
+  factory _$$AppDrawerStateImplCopyWith(_$AppDrawerStateImpl value,
+          $Res Function(_$AppDrawerStateImpl) then) =
+      __$$AppDrawerStateImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call(
@@ -123,11 +123,11 @@ abstract class _$$_AppDrawerStateCopyWith<$Res>
 }
 
 /// @nodoc
-class __$$_AppDrawerStateCopyWithImpl<$Res>
-    extends _$AppDrawerStateCopyWithImpl<$Res, _$_AppDrawerState>
-    implements _$$_AppDrawerStateCopyWith<$Res> {
-  __$$_AppDrawerStateCopyWithImpl(
-      _$_AppDrawerState _value, $Res Function(_$_AppDrawerState) _then)
+class __$$AppDrawerStateImplCopyWithImpl<$Res>
+    extends _$AppDrawerStateCopyWithImpl<$Res, _$AppDrawerStateImpl>
+    implements _$$AppDrawerStateImplCopyWith<$Res> {
+  __$$AppDrawerStateImplCopyWithImpl(
+      _$AppDrawerStateImpl _value, $Res Function(_$AppDrawerStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -142,7 +142,7 @@ class __$$_AppDrawerStateCopyWithImpl<$Res>
     Object? closePanel = null,
     Object? fullyClosed = null,
   }) {
-    return _then(_$_AppDrawerState(
+    return _then(_$AppDrawerStateImpl(
       draggable: null == draggable
           ? _value.draggable
           : draggable // ignore: cast_nullable_to_non_nullable
@@ -178,8 +178,8 @@ class __$$_AppDrawerStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_AppDrawerState implements _AppDrawerState {
-  const _$_AppDrawerState(
+class _$AppDrawerStateImpl implements _AppDrawerState {
+  const _$AppDrawerStateImpl(
       {required this.draggable,
       required this.dragging,
       required this.interactable,
@@ -215,7 +215,7 @@ class _$_AppDrawerState implements _AppDrawerState {
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_AppDrawerState &&
+            other is _$AppDrawerStateImpl &&
             (identical(other.draggable, draggable) ||
                 other.draggable == draggable) &&
             (identical(other.dragging, dragging) ||
@@ -248,8 +248,9 @@ class _$_AppDrawerState implements _AppDrawerState {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_AppDrawerStateCopyWith<_$_AppDrawerState> get copyWith =>
-      __$$_AppDrawerStateCopyWithImpl<_$_AppDrawerState>(this, _$identity);
+  _$$AppDrawerStateImplCopyWith<_$AppDrawerStateImpl> get copyWith =>
+      __$$AppDrawerStateImplCopyWithImpl<_$AppDrawerStateImpl>(
+          this, _$identity);
 }
 
 abstract class _AppDrawerState implements AppDrawerState {
@@ -261,7 +262,7 @@ abstract class _AppDrawerState implements AppDrawerState {
       required final double offset,
       required final double slideDistance,
       required final Object closePanel,
-      required final bool fullyClosed}) = _$_AppDrawerState;
+      required final bool fullyClosed}) = _$AppDrawerStateImpl;
 
   @override
   bool get draggable;
@@ -281,6 +282,6 @@ abstract class _AppDrawerState implements AppDrawerState {
   bool get fullyClosed;
   @override
   @JsonKey(ignore: true)
-  _$$_AppDrawerStateCopyWith<_$_AppDrawerState> get copyWith =>
+  _$$AppDrawerStateImplCopyWith<_$AppDrawerStateImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

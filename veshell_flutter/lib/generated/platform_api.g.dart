@@ -30,8 +30,6 @@ class _SystemHash {
   }
 }
 
-typedef _TextInputEventStreamByIdRef = StreamProviderRef<dynamic>;
-
 /// See also [_textInputEventStreamById].
 @ProviderFor(_textInputEventStreamById)
 const _textInputEventStreamByIdProvider = _TextInputEventStreamByIdFamily();
@@ -78,10 +76,10 @@ class _TextInputEventStreamByIdFamily extends Family<AsyncValue<dynamic>> {
 class _TextInputEventStreamByIdProvider extends StreamProvider<dynamic> {
   /// See also [_textInputEventStreamById].
   _TextInputEventStreamByIdProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           (ref) => _textInputEventStreamById(
-            ref,
+            ref as _TextInputEventStreamByIdRef,
             viewId,
           ),
           from: _textInputEventStreamByIdProvider,
@@ -93,9 +91,43 @@ class _TextInputEventStreamByIdProvider extends StreamProvider<dynamic> {
           dependencies: _TextInputEventStreamByIdFamily._dependencies,
           allTransitiveDependencies:
               _TextInputEventStreamByIdFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  _TextInputEventStreamByIdProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  Override overrideWith(
+    Stream<dynamic> Function(_TextInputEventStreamByIdRef provider) create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: _TextInputEventStreamByIdProvider._internal(
+        (ref) => create(ref as _TextInputEventStreamByIdRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  StreamProviderElement<dynamic> createElement() {
+    return _TextInputEventStreamByIdProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -111,9 +143,21 @@ class _TextInputEventStreamByIdProvider extends StreamProvider<dynamic> {
   }
 }
 
+mixin _TextInputEventStreamByIdRef on StreamProviderRef<dynamic> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _TextInputEventStreamByIdProviderElement
+    extends StreamProviderElement<dynamic> with _TextInputEventStreamByIdRef {
+  _TextInputEventStreamByIdProviderElement(super.provider);
+
+  @override
+  int get viewId => (origin as _TextInputEventStreamByIdProvider).viewId;
+}
+
 String _$textInputEventStreamHash() =>
     r'a1c50514a750715c755720256bb540d7649ddc1a';
-typedef TextInputEventStreamRef = FutureProviderRef<TextInputEventType>;
 
 /// See also [textInputEventStream].
 @ProviderFor(textInputEventStream)
@@ -162,10 +206,10 @@ class TextInputEventStreamFamily
 class TextInputEventStreamProvider extends FutureProvider<TextInputEventType> {
   /// See also [textInputEventStream].
   TextInputEventStreamProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           (ref) => textInputEventStream(
-            ref,
+            ref as TextInputEventStreamRef,
             viewId,
           ),
           from: textInputEventStreamProvider,
@@ -177,9 +221,44 @@ class TextInputEventStreamProvider extends FutureProvider<TextInputEventType> {
           dependencies: TextInputEventStreamFamily._dependencies,
           allTransitiveDependencies:
               TextInputEventStreamFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  TextInputEventStreamProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  Override overrideWith(
+    FutureOr<TextInputEventType> Function(TextInputEventStreamRef provider)
+        create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: TextInputEventStreamProvider._internal(
+        (ref) => create(ref as TextInputEventStreamRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  FutureProviderElement<TextInputEventType> createElement() {
+    return _TextInputEventStreamProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -193,6 +272,20 @@ class TextInputEventStreamProvider extends FutureProvider<TextInputEventType> {
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin TextInputEventStreamRef on FutureProviderRef<TextInputEventType> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _TextInputEventStreamProviderElement
+    extends FutureProviderElement<TextInputEventType>
+    with TextInputEventStreamRef {
+  _TextInputEventStreamProviderElement(super.provider);
+
+  @override
+  int get viewId => (origin as TextInputEventStreamProvider).viewId;
 }
 
 String _$windowMappedStreamHash() =>
@@ -229,7 +322,7 @@ final windowUnmappedStreamProvider =
 );
 
 typedef _$WindowUnmappedStream = StreamNotifier<int>;
-String _$platformApiHash() => r'4bbfd717c0a2bbb9c36fc8a95da5442bc7355168';
+String _$platformApiHash() => r'f89b772c12337ae88bc05dbf6d7807c3e05efbd1';
 
 /// See also [PlatformApi].
 @ProviderFor(PlatformApi)
@@ -244,4 +337,5 @@ final platformApiProvider =
 );
 
 typedef _$PlatformApi = Notifier<PlatformApiState>;
-// ignore_for_file: unnecessary_raw_strings, subtype_of_sealed_class, invalid_use_of_internal_member, do_not_use_environment, prefer_const_constructors, public_member_api_docs, avoid_private_typedef_functions
+// ignore_for_file: type=lint
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

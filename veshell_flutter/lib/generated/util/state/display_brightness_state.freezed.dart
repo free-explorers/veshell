@@ -87,11 +87,12 @@ class _$DisplayBrightnessStateCopyWithImpl<$Res,
 }
 
 /// @nodoc
-abstract class _$$_DisplayBrightnessStateCopyWith<$Res>
+abstract class _$$DisplayBrightnessStateImplCopyWith<$Res>
     implements $DisplayBrightnessStateCopyWith<$Res> {
-  factory _$$_DisplayBrightnessStateCopyWith(_$_DisplayBrightnessState value,
-          $Res Function(_$_DisplayBrightnessState) then) =
-      __$$_DisplayBrightnessStateCopyWithImpl<$Res>;
+  factory _$$DisplayBrightnessStateImplCopyWith(
+          _$DisplayBrightnessStateImpl value,
+          $Res Function(_$DisplayBrightnessStateImpl) then) =
+      __$$DisplayBrightnessStateImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call(
@@ -103,12 +104,13 @@ abstract class _$$_DisplayBrightnessStateCopyWith<$Res>
 }
 
 /// @nodoc
-class __$$_DisplayBrightnessStateCopyWithImpl<$Res>
+class __$$DisplayBrightnessStateImplCopyWithImpl<$Res>
     extends _$DisplayBrightnessStateCopyWithImpl<$Res,
-        _$_DisplayBrightnessState>
-    implements _$$_DisplayBrightnessStateCopyWith<$Res> {
-  __$$_DisplayBrightnessStateCopyWithImpl(_$_DisplayBrightnessState _value,
-      $Res Function(_$_DisplayBrightnessState) _then)
+        _$DisplayBrightnessStateImpl>
+    implements _$$DisplayBrightnessStateImplCopyWith<$Res> {
+  __$$DisplayBrightnessStateImplCopyWithImpl(
+      _$DisplayBrightnessStateImpl _value,
+      $Res Function(_$DisplayBrightnessStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -120,7 +122,7 @@ class __$$_DisplayBrightnessStateCopyWithImpl<$Res>
     Object? brightness = null,
     Object? savedBrightness = null,
   }) {
-    return _then(_$_DisplayBrightnessState(
+    return _then(_$DisplayBrightnessStateImpl(
       available: null == available
           ? _value.available
           : available // ignore: cast_nullable_to_non_nullable
@@ -147,8 +149,8 @@ class __$$_DisplayBrightnessStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_DisplayBrightnessState implements _DisplayBrightnessState {
-  const _$_DisplayBrightnessState(
+class _$DisplayBrightnessStateImpl implements _DisplayBrightnessState {
+  const _$DisplayBrightnessStateImpl(
       {required this.available,
       required this.brightnessFile,
       required this.maxBrightness,
@@ -175,7 +177,7 @@ class _$_DisplayBrightnessState implements _DisplayBrightnessState {
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_DisplayBrightnessState &&
+            other is _$DisplayBrightnessStateImpl &&
             (identical(other.available, available) ||
                 other.available == available) &&
             (identical(other.brightnessFile, brightnessFile) ||
@@ -195,9 +197,9 @@ class _$_DisplayBrightnessState implements _DisplayBrightnessState {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_DisplayBrightnessStateCopyWith<_$_DisplayBrightnessState> get copyWith =>
-      __$$_DisplayBrightnessStateCopyWithImpl<_$_DisplayBrightnessState>(
-          this, _$identity);
+  _$$DisplayBrightnessStateImplCopyWith<_$DisplayBrightnessStateImpl>
+      get copyWith => __$$DisplayBrightnessStateImplCopyWithImpl<
+          _$DisplayBrightnessStateImpl>(this, _$identity);
 }
 
 abstract class _DisplayBrightnessState implements DisplayBrightnessState {
@@ -206,7 +208,7 @@ abstract class _DisplayBrightnessState implements DisplayBrightnessState {
       required final File brightnessFile,
       required final int maxBrightness,
       required final double brightness,
-      required final double savedBrightness}) = _$_DisplayBrightnessState;
+      required final double savedBrightness}) = _$DisplayBrightnessStateImpl;
 
   @override
   bool get available;
@@ -220,6 +222,6 @@ abstract class _DisplayBrightnessState implements DisplayBrightnessState {
   double get savedBrightness;
   @override
   @JsonKey(ignore: true)
-  _$$_DisplayBrightnessStateCopyWith<_$_DisplayBrightnessState> get copyWith =>
-      throw _privateConstructorUsedError;
+  _$$DisplayBrightnessStateImplCopyWith<_$DisplayBrightnessStateImpl>
+      get copyWith => throw _privateConstructorUsedError;
 }

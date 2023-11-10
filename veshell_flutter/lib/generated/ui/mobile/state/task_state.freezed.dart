@@ -69,10 +69,11 @@ class _$TaskStateCopyWithImpl<$Res, $Val extends TaskState>
 }
 
 /// @nodoc
-abstract class _$$_TaskStateCopyWith<$Res> implements $TaskStateCopyWith<$Res> {
-  factory _$$_TaskStateCopyWith(
-          _$_TaskState value, $Res Function(_$_TaskState) then) =
-      __$$_TaskStateCopyWithImpl<$Res>;
+abstract class _$$TaskStateImplCopyWith<$Res>
+    implements $TaskStateCopyWith<$Res> {
+  factory _$$TaskStateImplCopyWith(
+          _$TaskStateImpl value, $Res Function(_$TaskStateImpl) then) =
+      __$$TaskStateImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call(
@@ -82,11 +83,11 @@ abstract class _$$_TaskStateCopyWith<$Res> implements $TaskStateCopyWith<$Res> {
 }
 
 /// @nodoc
-class __$$_TaskStateCopyWithImpl<$Res>
-    extends _$TaskStateCopyWithImpl<$Res, _$_TaskState>
-    implements _$$_TaskStateCopyWith<$Res> {
-  __$$_TaskStateCopyWithImpl(
-      _$_TaskState _value, $Res Function(_$_TaskState) _then)
+class __$$TaskStateImplCopyWithImpl<$Res>
+    extends _$TaskStateCopyWithImpl<$Res, _$TaskStateImpl>
+    implements _$$TaskStateImplCopyWith<$Res> {
+  __$$TaskStateImplCopyWithImpl(
+      _$TaskStateImpl _value, $Res Function(_$TaskStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -96,7 +97,7 @@ class __$$_TaskStateCopyWithImpl<$Res>
     Object? startDismissAnimation = null,
     Object? cancelDismissAnimation = null,
   }) {
-    return _then(_$_TaskState(
+    return _then(_$TaskStateImpl(
       dismissState: null == dismissState
           ? _value.dismissState
           : dismissState // ignore: cast_nullable_to_non_nullable
@@ -113,8 +114,8 @@ class __$$_TaskStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_TaskState implements _TaskState {
-  const _$_TaskState(
+class _$TaskStateImpl implements _TaskState {
+  const _$TaskStateImpl(
       {required this.dismissState,
       required this.startDismissAnimation,
       required this.cancelDismissAnimation});
@@ -135,7 +136,7 @@ class _$_TaskState implements _TaskState {
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_TaskState &&
+            other is _$TaskStateImpl &&
             (identical(other.dismissState, dismissState) ||
                 other.dismissState == dismissState) &&
             const DeepCollectionEquality()
@@ -154,15 +155,15 @@ class _$_TaskState implements _TaskState {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_TaskStateCopyWith<_$_TaskState> get copyWith =>
-      __$$_TaskStateCopyWithImpl<_$_TaskState>(this, _$identity);
+  _$$TaskStateImplCopyWith<_$TaskStateImpl> get copyWith =>
+      __$$TaskStateImplCopyWithImpl<_$TaskStateImpl>(this, _$identity);
 }
 
 abstract class _TaskState implements TaskState {
   const factory _TaskState(
       {required final TaskDismissState dismissState,
       required final Object startDismissAnimation,
-      required final Object cancelDismissAnimation}) = _$_TaskState;
+      required final Object cancelDismissAnimation}) = _$TaskStateImpl;
 
   @override
   TaskDismissState get dismissState;
@@ -172,6 +173,6 @@ abstract class _TaskState implements TaskState {
   Object get cancelDismissAnimation;
   @override
   @JsonKey(ignore: true)
-  _$$_TaskStateCopyWith<_$_TaskState> get copyWith =>
+  _$$TaskStateImplCopyWith<_$TaskStateImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

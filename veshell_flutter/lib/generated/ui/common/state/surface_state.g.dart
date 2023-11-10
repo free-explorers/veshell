@@ -29,8 +29,6 @@ class _SystemHash {
   }
 }
 
-typedef SurfaceWidgetRef = ProviderRef<Surface>;
-
 /// See also [surfaceWidget].
 @ProviderFor(surfaceWidget)
 const surfaceWidgetProvider = SurfaceWidgetFamily();
@@ -77,10 +75,10 @@ class SurfaceWidgetFamily extends Family<Surface> {
 class SurfaceWidgetProvider extends Provider<Surface> {
   /// See also [surfaceWidget].
   SurfaceWidgetProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           (ref) => surfaceWidget(
-            ref,
+            ref as SurfaceWidgetRef,
             viewId,
           ),
           from: surfaceWidgetProvider,
@@ -92,9 +90,43 @@ class SurfaceWidgetProvider extends Provider<Surface> {
           dependencies: SurfaceWidgetFamily._dependencies,
           allTransitiveDependencies:
               SurfaceWidgetFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  SurfaceWidgetProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  Override overrideWith(
+    Surface Function(SurfaceWidgetRef provider) create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: SurfaceWidgetProvider._internal(
+        (ref) => create(ref as SurfaceWidgetRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  ProviderElement<Surface> createElement() {
+    return _SurfaceWidgetProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -110,7 +142,20 @@ class SurfaceWidgetProvider extends Provider<Surface> {
   }
 }
 
-String _$surfaceStatesHash() => r'5caa225a3c1de7b3e468b079377ed5e9c7fee3d8';
+mixin SurfaceWidgetRef on ProviderRef<Surface> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _SurfaceWidgetProviderElement extends ProviderElement<Surface>
+    with SurfaceWidgetRef {
+  _SurfaceWidgetProviderElement(super.provider);
+
+  @override
+  int get viewId => (origin as SurfaceWidgetProvider).viewId;
+}
+
+String _$surfaceStatesHash() => r'9d292503b8280003f333d367754673ab0187a5c1';
 
 abstract class _$SurfaceStates extends BuildlessNotifier<SurfaceState> {
   late final int viewId;
@@ -167,8 +212,8 @@ class SurfaceStatesProvider
     extends NotifierProviderImpl<SurfaceStates, SurfaceState> {
   /// See also [SurfaceStates].
   SurfaceStatesProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           () => SurfaceStates()..viewId = viewId,
           from: surfaceStatesProvider,
           name: r'surfaceStatesProvider',
@@ -179,9 +224,50 @@ class SurfaceStatesProvider
           dependencies: SurfaceStatesFamily._dependencies,
           allTransitiveDependencies:
               SurfaceStatesFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  SurfaceStatesProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  SurfaceState runNotifierBuild(
+    covariant SurfaceStates notifier,
+  ) {
+    return notifier.build(
+      viewId,
+    );
+  }
+
+  @override
+  Override overrideWith(SurfaceStates Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: SurfaceStatesProvider._internal(
+        () => create()..viewId = viewId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  NotifierProviderElement<SurfaceStates, SurfaceState> createElement() {
+    return _SurfaceStatesProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -195,14 +281,20 @@ class SurfaceStatesProvider
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin SurfaceStatesRef on NotifierProviderRef<SurfaceState> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _SurfaceStatesProviderElement
+    extends NotifierProviderElement<SurfaceStates, SurfaceState>
+    with SurfaceStatesRef {
+  _SurfaceStatesProviderElement(super.provider);
 
   @override
-  SurfaceState runNotifierBuild(
-    covariant SurfaceStates notifier,
-  ) {
-    return notifier.build(
-      viewId,
-    );
-  }
+  int get viewId => (origin as SurfaceStatesProvider).viewId;
 }
-// ignore_for_file: unnecessary_raw_strings, subtype_of_sealed_class, invalid_use_of_internal_member, do_not_use_environment, prefer_const_constructors, public_member_api_docs, avoid_private_typedef_functions
+// ignore_for_file: type=lint
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

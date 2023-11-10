@@ -80,8 +80,6 @@ class SurfaceStates extends _$SurfaceStates {
       currentTexture = textureId;
     }
 
-    print("new texture ${textureId.value} for $viewId");
-
     state = state.copyWith(
       role: role,
       textureId: currentTexture,
@@ -92,6 +90,12 @@ class SurfaceStates extends _$SurfaceStates {
       subsurfacesBelow: subsurfacesBelow,
       subsurfacesAbove: subsurfacesAbove,
       inputRegion: inputRegion,
+    );
+  }
+
+  void unmap() {
+    state = state.copyWith(
+      role: SurfaceRole.none,
     );
   }
 

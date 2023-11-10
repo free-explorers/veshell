@@ -30,8 +30,6 @@ class _SystemHash {
   }
 }
 
-typedef XdgToplevelSurfaceWidgetRef = ProviderRef<XdgToplevelSurface>;
-
 /// See also [xdgToplevelSurfaceWidget].
 @ProviderFor(xdgToplevelSurfaceWidget)
 const xdgToplevelSurfaceWidgetProvider = XdgToplevelSurfaceWidgetFamily();
@@ -78,10 +76,10 @@ class XdgToplevelSurfaceWidgetFamily extends Family<XdgToplevelSurface> {
 class XdgToplevelSurfaceWidgetProvider extends Provider<XdgToplevelSurface> {
   /// See also [xdgToplevelSurfaceWidget].
   XdgToplevelSurfaceWidgetProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           (ref) => xdgToplevelSurfaceWidget(
-            ref,
+            ref as XdgToplevelSurfaceWidgetRef,
             viewId,
           ),
           from: xdgToplevelSurfaceWidgetProvider,
@@ -93,9 +91,43 @@ class XdgToplevelSurfaceWidgetProvider extends Provider<XdgToplevelSurface> {
           dependencies: XdgToplevelSurfaceWidgetFamily._dependencies,
           allTransitiveDependencies:
               XdgToplevelSurfaceWidgetFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  XdgToplevelSurfaceWidgetProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  Override overrideWith(
+    XdgToplevelSurface Function(XdgToplevelSurfaceWidgetRef provider) create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: XdgToplevelSurfaceWidgetProvider._internal(
+        (ref) => create(ref as XdgToplevelSurfaceWidgetRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  ProviderElement<XdgToplevelSurface> createElement() {
+    return _XdgToplevelSurfaceWidgetProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -109,6 +141,20 @@ class XdgToplevelSurfaceWidgetProvider extends Provider<XdgToplevelSurface> {
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin XdgToplevelSurfaceWidgetRef on ProviderRef<XdgToplevelSurface> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _XdgToplevelSurfaceWidgetProviderElement
+    extends ProviderElement<XdgToplevelSurface>
+    with XdgToplevelSurfaceWidgetRef {
+  _XdgToplevelSurfaceWidgetProviderElement(super.provider);
+
+  @override
+  int get viewId => (origin as XdgToplevelSurfaceWidgetProvider).viewId;
 }
 
 String _$xdgToplevelStatesHash() => r'df3d83b090758345e241bc50c1d90347227dd84b';
@@ -168,8 +214,8 @@ class XdgToplevelStatesProvider
     extends NotifierProviderImpl<XdgToplevelStates, XdgToplevelState> {
   /// See also [XdgToplevelStates].
   XdgToplevelStatesProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           () => XdgToplevelStates()..viewId = viewId,
           from: xdgToplevelStatesProvider,
           name: r'xdgToplevelStatesProvider',
@@ -180,9 +226,50 @@ class XdgToplevelStatesProvider
           dependencies: XdgToplevelStatesFamily._dependencies,
           allTransitiveDependencies:
               XdgToplevelStatesFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  XdgToplevelStatesProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  XdgToplevelState runNotifierBuild(
+    covariant XdgToplevelStates notifier,
+  ) {
+    return notifier.build(
+      viewId,
+    );
+  }
+
+  @override
+  Override overrideWith(XdgToplevelStates Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: XdgToplevelStatesProvider._internal(
+        () => create()..viewId = viewId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  NotifierProviderElement<XdgToplevelStates, XdgToplevelState> createElement() {
+    return _XdgToplevelStatesProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -196,14 +283,20 @@ class XdgToplevelStatesProvider
 
     return _SystemHash.finish(hash);
   }
+}
+
+mixin XdgToplevelStatesRef on NotifierProviderRef<XdgToplevelState> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _XdgToplevelStatesProviderElement
+    extends NotifierProviderElement<XdgToplevelStates, XdgToplevelState>
+    with XdgToplevelStatesRef {
+  _XdgToplevelStatesProviderElement(super.provider);
 
   @override
-  XdgToplevelState runNotifierBuild(
-    covariant XdgToplevelStates notifier,
-  ) {
-    return notifier.build(
-      viewId,
-    );
-  }
+  int get viewId => (origin as XdgToplevelStatesProvider).viewId;
 }
-// ignore_for_file: unnecessary_raw_strings, subtype_of_sealed_class, invalid_use_of_internal_member, do_not_use_environment, prefer_const_constructors, public_member_api_docs, avoid_private_typedef_functions
+// ignore_for_file: type=lint
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

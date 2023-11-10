@@ -96,12 +96,12 @@ class _$MobileLockScreenWidgetStateCopyWithImpl<$Res,
 }
 
 /// @nodoc
-abstract class _$$_MobileLockScreenWidgetStateCopyWith<$Res>
+abstract class _$$MobileLockScreenWidgetStateImplCopyWith<$Res>
     implements $MobileLockScreenWidgetStateCopyWith<$Res> {
-  factory _$$_MobileLockScreenWidgetStateCopyWith(
-          _$_MobileLockScreenWidgetState value,
-          $Res Function(_$_MobileLockScreenWidgetState) then) =
-      __$$_MobileLockScreenWidgetStateCopyWithImpl<$Res>;
+  factory _$$MobileLockScreenWidgetStateImplCopyWith(
+          _$MobileLockScreenWidgetStateImpl value,
+          $Res Function(_$MobileLockScreenWidgetStateImpl) then) =
+      __$$MobileLockScreenWidgetStateImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call(
@@ -114,13 +114,13 @@ abstract class _$$_MobileLockScreenWidgetStateCopyWith<$Res>
 }
 
 /// @nodoc
-class __$$_MobileLockScreenWidgetStateCopyWithImpl<$Res>
+class __$$MobileLockScreenWidgetStateImplCopyWithImpl<$Res>
     extends _$MobileLockScreenWidgetStateCopyWithImpl<$Res,
-        _$_MobileLockScreenWidgetState>
-    implements _$$_MobileLockScreenWidgetStateCopyWith<$Res> {
-  __$$_MobileLockScreenWidgetStateCopyWithImpl(
-      _$_MobileLockScreenWidgetState _value,
-      $Res Function(_$_MobileLockScreenWidgetState) _then)
+        _$MobileLockScreenWidgetStateImpl>
+    implements _$$MobileLockScreenWidgetStateImplCopyWith<$Res> {
+  __$$MobileLockScreenWidgetStateImplCopyWithImpl(
+      _$MobileLockScreenWidgetStateImpl _value,
+      $Res Function(_$MobileLockScreenWidgetStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -133,7 +133,7 @@ class __$$_MobileLockScreenWidgetStateCopyWithImpl<$Res>
     Object? offset = null,
     Object? slideDistance = null,
   }) {
-    return _then(_$_MobileLockScreenWidgetState(
+    return _then(_$MobileLockScreenWidgetStateImpl(
       overlayEntry: null == overlayEntry
           ? _value.overlayEntry
           : overlayEntry // ignore: cast_nullable_to_non_nullable
@@ -164,8 +164,9 @@ class __$$_MobileLockScreenWidgetStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_MobileLockScreenWidgetState implements _MobileLockScreenWidgetState {
-  const _$_MobileLockScreenWidgetState(
+class _$MobileLockScreenWidgetStateImpl
+    implements _MobileLockScreenWidgetState {
+  const _$MobileLockScreenWidgetStateImpl(
       {required this.overlayEntry,
       required this.overlayEntryInserted,
       required this.dragging,
@@ -195,7 +196,7 @@ class _$_MobileLockScreenWidgetState implements _MobileLockScreenWidgetState {
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_MobileLockScreenWidgetState &&
+            other is _$MobileLockScreenWidgetStateImpl &&
             (identical(other.overlayEntry, overlayEntry) ||
                 other.overlayEntry == overlayEntry) &&
             (identical(other.overlayEntryInserted, overlayEntryInserted) ||
@@ -216,9 +217,9 @@ class _$_MobileLockScreenWidgetState implements _MobileLockScreenWidgetState {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_MobileLockScreenWidgetStateCopyWith<_$_MobileLockScreenWidgetState>
-      get copyWith => __$$_MobileLockScreenWidgetStateCopyWithImpl<
-          _$_MobileLockScreenWidgetState>(this, _$identity);
+  _$$MobileLockScreenWidgetStateImplCopyWith<_$MobileLockScreenWidgetStateImpl>
+      get copyWith => __$$MobileLockScreenWidgetStateImplCopyWithImpl<
+          _$MobileLockScreenWidgetStateImpl>(this, _$identity);
 }
 
 abstract class _MobileLockScreenWidgetState
@@ -229,7 +230,7 @@ abstract class _MobileLockScreenWidgetState
       required final bool dragging,
       required final double dragVelocity,
       required final double offset,
-      required final double slideDistance}) = _$_MobileLockScreenWidgetState;
+      required final double slideDistance}) = _$MobileLockScreenWidgetStateImpl;
 
   @override
   OverlayEntry get overlayEntry;
@@ -245,6 +246,6 @@ abstract class _MobileLockScreenWidgetState
   double get slideDistance;
   @override
   @JsonKey(ignore: true)
-  _$$_MobileLockScreenWidgetStateCopyWith<_$_MobileLockScreenWidgetState>
+  _$$MobileLockScreenWidgetStateImplCopyWith<_$MobileLockScreenWidgetStateImpl>
       get copyWith => throw _privateConstructorUsedError;
 }

@@ -29,8 +29,6 @@ class _SystemHash {
   }
 }
 
-typedef WindowWidgetRef = ProviderRef<Window>;
-
 /// See also [windowWidget].
 @ProviderFor(windowWidget)
 const windowWidgetProvider = WindowWidgetFamily();
@@ -77,10 +75,10 @@ class WindowWidgetFamily extends Family<Window> {
 class WindowWidgetProvider extends Provider<Window> {
   /// See also [windowWidget].
   WindowWidgetProvider(
-    this.viewId,
-  ) : super.internal(
+    int viewId,
+  ) : this._internal(
           (ref) => windowWidget(
-            ref,
+            ref as WindowWidgetRef,
             viewId,
           ),
           from: windowWidgetProvider,
@@ -92,9 +90,43 @@ class WindowWidgetProvider extends Provider<Window> {
           dependencies: WindowWidgetFamily._dependencies,
           allTransitiveDependencies:
               WindowWidgetFamily._allTransitiveDependencies,
+          viewId: viewId,
         );
 
+  WindowWidgetProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.viewId,
+  }) : super.internal();
+
   final int viewId;
+
+  @override
+  Override overrideWith(
+    Window Function(WindowWidgetRef provider) create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: WindowWidgetProvider._internal(
+        (ref) => create(ref as WindowWidgetRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        viewId: viewId,
+      ),
+    );
+  }
+
+  @override
+  ProviderElement<Window> createElement() {
+    return _WindowWidgetProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -109,4 +141,18 @@ class WindowWidgetProvider extends Provider<Window> {
     return _SystemHash.finish(hash);
   }
 }
-// ignore_for_file: unnecessary_raw_strings, subtype_of_sealed_class, invalid_use_of_internal_member, do_not_use_environment, prefer_const_constructors, public_member_api_docs, avoid_private_typedef_functions
+
+mixin WindowWidgetRef on ProviderRef<Window> {
+  /// The parameter `viewId` of this provider.
+  int get viewId;
+}
+
+class _WindowWidgetProviderElement extends ProviderElement<Window>
+    with WindowWidgetRef {
+  _WindowWidgetProviderElement(super.provider);
+
+  @override
+  int get viewId => (origin as WindowWidgetProvider).viewId;
+}
+// ignore_for_file: type=lint
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

@@ -114,11 +114,11 @@ class _$XdgToplevelStateCopyWithImpl<$Res, $Val extends XdgToplevelState>
 }
 
 /// @nodoc
-abstract class _$$_XdgToplevelStateCopyWith<$Res>
+abstract class _$$XdgToplevelStateImplCopyWith<$Res>
     implements $XdgToplevelStateCopyWith<$Res> {
-  factory _$$_XdgToplevelStateCopyWith(
-          _$_XdgToplevelState value, $Res Function(_$_XdgToplevelState) then) =
-      __$$_XdgToplevelStateCopyWithImpl<$Res>;
+  factory _$$XdgToplevelStateImplCopyWith(_$XdgToplevelStateImpl value,
+          $Res Function(_$XdgToplevelStateImpl) then) =
+      __$$XdgToplevelStateImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call(
@@ -134,11 +134,11 @@ abstract class _$$_XdgToplevelStateCopyWith<$Res>
 }
 
 /// @nodoc
-class __$$_XdgToplevelStateCopyWithImpl<$Res>
-    extends _$XdgToplevelStateCopyWithImpl<$Res, _$_XdgToplevelState>
-    implements _$$_XdgToplevelStateCopyWith<$Res> {
-  __$$_XdgToplevelStateCopyWithImpl(
-      _$_XdgToplevelState _value, $Res Function(_$_XdgToplevelState) _then)
+class __$$XdgToplevelStateImplCopyWithImpl<$Res>
+    extends _$XdgToplevelStateCopyWithImpl<$Res, _$XdgToplevelStateImpl>
+    implements _$$XdgToplevelStateImplCopyWith<$Res> {
+  __$$XdgToplevelStateImplCopyWithImpl(_$XdgToplevelStateImpl _value,
+      $Res Function(_$XdgToplevelStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -154,7 +154,7 @@ class __$$_XdgToplevelStateCopyWithImpl<$Res>
     Object? appId = null,
     Object? tilingRequested = freezed,
   }) {
-    return _then(_$_XdgToplevelState(
+    return _then(_$XdgToplevelStateImpl(
       visible: null == visible
           ? _value.visible
           : visible // ignore: cast_nullable_to_non_nullable
@@ -196,8 +196,8 @@ class __$$_XdgToplevelStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_XdgToplevelState implements _XdgToplevelState {
-  const _$_XdgToplevelState(
+class _$XdgToplevelStateImpl implements _XdgToplevelState {
+  const _$XdgToplevelStateImpl(
       {required this.visible,
       required this.virtualKeyboardKey,
       required this.focusNode,
@@ -236,7 +236,7 @@ class _$_XdgToplevelState implements _XdgToplevelState {
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_XdgToplevelState &&
+            other is _$XdgToplevelStateImpl &&
             (identical(other.visible, visible) || other.visible == visible) &&
             (identical(other.virtualKeyboardKey, virtualKeyboardKey) ||
                 other.virtualKeyboardKey == virtualKeyboardKey) &&
@@ -272,8 +272,9 @@ class _$_XdgToplevelState implements _XdgToplevelState {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_XdgToplevelStateCopyWith<_$_XdgToplevelState> get copyWith =>
-      __$$_XdgToplevelStateCopyWithImpl<_$_XdgToplevelState>(this, _$identity);
+  _$$XdgToplevelStateImplCopyWith<_$XdgToplevelStateImpl> get copyWith =>
+      __$$XdgToplevelStateImplCopyWithImpl<_$XdgToplevelStateImpl>(
+          this, _$identity);
 }
 
 abstract class _XdgToplevelState implements XdgToplevelState {
@@ -286,7 +287,7 @@ abstract class _XdgToplevelState implements XdgToplevelState {
       required final ToplevelDecoration decoration,
       required final String title,
       required final String appId,
-      required final Tiling? tilingRequested}) = _$_XdgToplevelState;
+      required final Tiling? tilingRequested}) = _$XdgToplevelStateImpl;
 
   @override
   bool get visible;
@@ -308,6 +309,6 @@ abstract class _XdgToplevelState implements XdgToplevelState {
   Tiling? get tilingRequested;
   @override
   @JsonKey(ignore: true)
-  _$$_XdgToplevelStateCopyWith<_$_XdgToplevelState> get copyWith =>
+  _$$XdgToplevelStateImplCopyWith<_$XdgToplevelStateImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

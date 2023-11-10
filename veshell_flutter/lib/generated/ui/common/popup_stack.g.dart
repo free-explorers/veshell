@@ -11,8 +11,7 @@ String _$popupStackGlobalKeyHash() =>
 
 /// See also [popupStackGlobalKey].
 @ProviderFor(popupStackGlobalKey)
-final popupStackGlobalKeyProvider =
-    Provider<GlobalKey<State<StatefulWidget>>>.internal(
+final popupStackGlobalKeyProvider = Provider<GlobalKey>.internal(
   popupStackGlobalKey,
   name: r'popupStackGlobalKeyProvider',
   debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
@@ -22,7 +21,7 @@ final popupStackGlobalKeyProvider =
   allTransitiveDependencies: null,
 );
 
-typedef PopupStackGlobalKeyRef = ProviderRef<GlobalKey<State<StatefulWidget>>>;
+typedef PopupStackGlobalKeyRef = ProviderRef<GlobalKey>;
 String _$popupStackChildrenHash() =>
     r'03c8602175bf1c73be917deeccf3a38071b935a0';
 
@@ -40,4 +39,5 @@ final popupStackChildrenProvider =
 );
 
 typedef _$PopupStackChildren = Notifier<IList<int>>;
-// ignore_for_file: unnecessary_raw_strings, subtype_of_sealed_class, invalid_use_of_internal_member, do_not_use_environment, prefer_const_constructors, public_member_api_docs, avoid_private_typedef_functions
+// ignore_for_file: type=lint
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

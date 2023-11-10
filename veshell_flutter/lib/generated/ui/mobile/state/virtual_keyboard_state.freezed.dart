@@ -64,22 +64,22 @@ class _$VirtualKeyboardStateCopyWithImpl<$Res,
 }
 
 /// @nodoc
-abstract class _$$_VirtualKeyboardStateCopyWith<$Res>
+abstract class _$$VirtualKeyboardStateImplCopyWith<$Res>
     implements $VirtualKeyboardStateCopyWith<$Res> {
-  factory _$$_VirtualKeyboardStateCopyWith(_$_VirtualKeyboardState value,
-          $Res Function(_$_VirtualKeyboardState) then) =
-      __$$_VirtualKeyboardStateCopyWithImpl<$Res>;
+  factory _$$VirtualKeyboardStateImplCopyWith(_$VirtualKeyboardStateImpl value,
+          $Res Function(_$VirtualKeyboardStateImpl) then) =
+      __$$VirtualKeyboardStateImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call({bool activated, Size size});
 }
 
 /// @nodoc
-class __$$_VirtualKeyboardStateCopyWithImpl<$Res>
-    extends _$VirtualKeyboardStateCopyWithImpl<$Res, _$_VirtualKeyboardState>
-    implements _$$_VirtualKeyboardStateCopyWith<$Res> {
-  __$$_VirtualKeyboardStateCopyWithImpl(_$_VirtualKeyboardState _value,
-      $Res Function(_$_VirtualKeyboardState) _then)
+class __$$VirtualKeyboardStateImplCopyWithImpl<$Res>
+    extends _$VirtualKeyboardStateCopyWithImpl<$Res, _$VirtualKeyboardStateImpl>
+    implements _$$VirtualKeyboardStateImplCopyWith<$Res> {
+  __$$VirtualKeyboardStateImplCopyWithImpl(_$VirtualKeyboardStateImpl _value,
+      $Res Function(_$VirtualKeyboardStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -88,7 +88,7 @@ class __$$_VirtualKeyboardStateCopyWithImpl<$Res>
     Object? activated = null,
     Object? size = null,
   }) {
-    return _then(_$_VirtualKeyboardState(
+    return _then(_$VirtualKeyboardStateImpl(
       activated: null == activated
           ? _value.activated
           : activated // ignore: cast_nullable_to_non_nullable
@@ -103,8 +103,9 @@ class __$$_VirtualKeyboardStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_VirtualKeyboardState implements _VirtualKeyboardState {
-  const _$_VirtualKeyboardState({required this.activated, required this.size});
+class _$VirtualKeyboardStateImpl implements _VirtualKeyboardState {
+  const _$VirtualKeyboardStateImpl(
+      {required this.activated, required this.size});
 
   @override
   final bool activated;
@@ -120,7 +121,7 @@ class _$_VirtualKeyboardState implements _VirtualKeyboardState {
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_VirtualKeyboardState &&
+            other is _$VirtualKeyboardStateImpl &&
             (identical(other.activated, activated) ||
                 other.activated == activated) &&
             (identical(other.size, size) || other.size == size));
@@ -132,15 +133,16 @@ class _$_VirtualKeyboardState implements _VirtualKeyboardState {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_VirtualKeyboardStateCopyWith<_$_VirtualKeyboardState> get copyWith =>
-      __$$_VirtualKeyboardStateCopyWithImpl<_$_VirtualKeyboardState>(
-          this, _$identity);
+  _$$VirtualKeyboardStateImplCopyWith<_$VirtualKeyboardStateImpl>
+      get copyWith =>
+          __$$VirtualKeyboardStateImplCopyWithImpl<_$VirtualKeyboardStateImpl>(
+              this, _$identity);
 }
 
 abstract class _VirtualKeyboardState implements VirtualKeyboardState {
   const factory _VirtualKeyboardState(
       {required final bool activated,
-      required final Size size}) = _$_VirtualKeyboardState;
+      required final Size size}) = _$VirtualKeyboardStateImpl;
 
   @override
   bool get activated;
@@ -148,6 +150,6 @@ abstract class _VirtualKeyboardState implements VirtualKeyboardState {
   Size get size;
   @override
   @JsonKey(ignore: true)
-  _$$_VirtualKeyboardStateCopyWith<_$_VirtualKeyboardState> get copyWith =>
-      throw _privateConstructorUsedError;
+  _$$VirtualKeyboardStateImplCopyWith<_$VirtualKeyboardStateImpl>
+      get copyWith => throw _privateConstructorUsedError;
 }

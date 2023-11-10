@@ -110,40 +110,21 @@ class _WindowState extends ConsumerState<Window> with SingleTickerProviderStateM
             break;
         }
 
-        return TweenAnimationBuilder(
-          duration: duration,
-          tween: Tween(begin: offset, end: offset),
-          curve: Curves.easeInOutCubic,
-          builder: (context, offset, child) {
-            return TweenAnimationBuilder(
-              duration: duration,
-              tween: Tween(begin: position, end: position),
-              curve: Curves.easeInOutCubic,
-              builder: (context, position, child) {
-                return Positioned(
-                  left: position.dx - offset.dx,
-                  top: position.dy - offset.dy,
-                  child: child!,
-                );
-              },
-              child: child,
-            );
-          },
-          child: child,
+        return Positioned(
+          left: position.dx - offset.dx,
+          top: position.dy - offset.dy,
+          child: child!,
         );
       },
       child: _OpenCloseAnimations(
         viewId: widget.viewId,
-        child: _TilingAnimations(
-          viewId: widget.viewId,
-          child: RepaintBoundary(
-            key: ref.watch(windowStateProvider(widget.viewId).select((value) => value.repaintBoundaryKey)),
-            child: WithDecorations(
+        child: RepaintBoundary(
+          key: ref.watch(windowStateProvider(widget.viewId).select((value) => value.repaintBoundaryKey)),
+          child: WithDecorations(
+            viewId: widget.viewId,
+            child: InteractiveMoveAndResizeListener(
               viewId: widget.viewId,
-              child: InteractiveMoveAndResizeListener(
-                viewId: widget.viewId,
-                child: ref.watch(xdgToplevelSurfaceWidgetProvider(widget.viewId)),
-              ),
+              child: ref.watch(xdgToplevelSurfaceWidgetProvider(widget.viewId)),
             ),
           ),
         ),
@@ -212,7 +193,6 @@ class _OpenCloseAnimationsState extends ConsumerState<_OpenCloseAnimations> {
           onEnd: () {
             if (!forward) {
               ref.read(windowStackProvider.notifier).remove(widget.viewId);
-              print("remove");
             }
           },
         ),

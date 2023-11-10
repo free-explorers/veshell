@@ -97,8 +97,6 @@ class _SystemHash {
   }
 }
 
-typedef IconRef = FutureProviderRef<File?>;
-
 /// See also [icon].
 @ProviderFor(icon)
 const iconProvider = IconFamily();
@@ -145,10 +143,10 @@ class IconFamily extends Family<AsyncValue<File?>> {
 class IconProvider extends FutureProvider<File?> {
   /// See also [icon].
   IconProvider(
-    this.query,
-  ) : super.internal(
+    IconQuery query,
+  ) : this._internal(
           (ref) => icon(
-            ref,
+            ref as IconRef,
             query,
           ),
           from: iconProvider,
@@ -157,9 +155,43 @@ class IconProvider extends FutureProvider<File?> {
               const bool.fromEnvironment('dart.vm.product') ? null : _$iconHash,
           dependencies: IconFamily._dependencies,
           allTransitiveDependencies: IconFamily._allTransitiveDependencies,
+          query: query,
         );
 
+  IconProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.query,
+  }) : super.internal();
+
   final IconQuery query;
+
+  @override
+  Override overrideWith(
+    FutureOr<File?> Function(IconRef provider) create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: IconProvider._internal(
+        (ref) => create(ref as IconRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        query: query,
+      ),
+    );
+  }
+
+  @override
+  FutureProviderElement<File?> createElement() {
+    return _IconProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -175,9 +207,20 @@ class IconProvider extends FutureProvider<File?> {
   }
 }
 
+mixin IconRef on FutureProviderRef<File?> {
+  /// The parameter `query` of this provider.
+  IconQuery get query;
+}
+
+class _IconProviderElement extends FutureProviderElement<File?> with IconRef {
+  _IconProviderElement(super.provider);
+
+  @override
+  IconQuery get query => (origin as IconProvider).query;
+}
+
 String _$fileToScalableImageHash() =>
     r'cdee05cbedc6229524232afe652f39fafdb7da6f';
-typedef FileToScalableImageRef = FutureProviderRef<ScalableImage>;
 
 /// See also [fileToScalableImage].
 @ProviderFor(fileToScalableImage)
@@ -225,10 +268,10 @@ class FileToScalableImageFamily extends Family<AsyncValue<ScalableImage>> {
 class FileToScalableImageProvider extends FutureProvider<ScalableImage> {
   /// See also [fileToScalableImage].
   FileToScalableImageProvider(
-    this.path,
-  ) : super.internal(
+    String path,
+  ) : this._internal(
           (ref) => fileToScalableImage(
-            ref,
+            ref as FileToScalableImageRef,
             path,
           ),
           from: fileToScalableImageProvider,
@@ -240,9 +283,43 @@ class FileToScalableImageProvider extends FutureProvider<ScalableImage> {
           dependencies: FileToScalableImageFamily._dependencies,
           allTransitiveDependencies:
               FileToScalableImageFamily._allTransitiveDependencies,
+          path: path,
         );
 
+  FileToScalableImageProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.path,
+  }) : super.internal();
+
   final String path;
+
+  @override
+  Override overrideWith(
+    FutureOr<ScalableImage> Function(FileToScalableImageRef provider) create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: FileToScalableImageProvider._internal(
+        (ref) => create(ref as FileToScalableImageRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        path: path,
+      ),
+    );
+  }
+
+  @override
+  FutureProviderElement<ScalableImage> createElement() {
+    return _FileToScalableImageProviderElement(this);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -257,4 +334,18 @@ class FileToScalableImageProvider extends FutureProvider<ScalableImage> {
     return _SystemHash.finish(hash);
   }
 }
-// ignore_for_file: unnecessary_raw_strings, subtype_of_sealed_class, invalid_use_of_internal_member, do_not_use_environment, prefer_const_constructors, public_member_api_docs, avoid_private_typedef_functions
+
+mixin FileToScalableImageRef on FutureProviderRef<ScalableImage> {
+  /// The parameter `path` of this provider.
+  String get path;
+}
+
+class _FileToScalableImageProviderElement
+    extends FutureProviderElement<ScalableImage> with FileToScalableImageRef {
+  _FileToScalableImageProviderElement(super.provider);
+
+  @override
+  String get path => (origin as FileToScalableImageProvider).path;
+}
+// ignore_for_file: type=lint
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member

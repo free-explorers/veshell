@@ -91,22 +91,22 @@ class _$ScreenStateCopyWithImpl<$Res, $Val extends ScreenState>
 }
 
 /// @nodoc
-abstract class _$$_ScreenStateCopyWith<$Res>
+abstract class _$$ScreenStateImplCopyWith<$Res>
     implements $ScreenStateCopyWith<$Res> {
-  factory _$$_ScreenStateCopyWith(
-          _$_ScreenState value, $Res Function(_$_ScreenState) then) =
-      __$$_ScreenStateCopyWithImpl<$Res>;
+  factory _$$ScreenStateImplCopyWith(
+          _$ScreenStateImpl value, $Res Function(_$ScreenStateImpl) then) =
+      __$$ScreenStateImplCopyWithImpl<$Res>;
   @override
   @useResult
   $Res call({bool on, bool pending, int rotation, Size size, Size rotatedSize});
 }
 
 /// @nodoc
-class __$$_ScreenStateCopyWithImpl<$Res>
-    extends _$ScreenStateCopyWithImpl<$Res, _$_ScreenState>
-    implements _$$_ScreenStateCopyWith<$Res> {
-  __$$_ScreenStateCopyWithImpl(
-      _$_ScreenState _value, $Res Function(_$_ScreenState) _then)
+class __$$ScreenStateImplCopyWithImpl<$Res>
+    extends _$ScreenStateCopyWithImpl<$Res, _$ScreenStateImpl>
+    implements _$$ScreenStateImplCopyWith<$Res> {
+  __$$ScreenStateImplCopyWithImpl(
+      _$ScreenStateImpl _value, $Res Function(_$ScreenStateImpl) _then)
       : super(_value, _then);
 
   @pragma('vm:prefer-inline')
@@ -118,7 +118,7 @@ class __$$_ScreenStateCopyWithImpl<$Res>
     Object? size = null,
     Object? rotatedSize = null,
   }) {
-    return _then(_$_ScreenState(
+    return _then(_$ScreenStateImpl(
       on: null == on
           ? _value.on
           : on // ignore: cast_nullable_to_non_nullable
@@ -145,8 +145,8 @@ class __$$_ScreenStateCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$_ScreenState implements _ScreenState {
-  const _$_ScreenState(
+class _$ScreenStateImpl implements _ScreenState {
+  const _$ScreenStateImpl(
       {required this.on,
       required this.pending,
       required this.rotation,
@@ -183,7 +183,7 @@ class _$_ScreenState implements _ScreenState {
   bool operator ==(dynamic other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
-            other is _$_ScreenState &&
+            other is _$ScreenStateImpl &&
             (identical(other.on, on) || other.on == on) &&
             (identical(other.pending, pending) || other.pending == pending) &&
             (identical(other.rotation, rotation) ||
@@ -200,8 +200,8 @@ class _$_ScreenState implements _ScreenState {
   @JsonKey(ignore: true)
   @override
   @pragma('vm:prefer-inline')
-  _$$_ScreenStateCopyWith<_$_ScreenState> get copyWith =>
-      __$$_ScreenStateCopyWithImpl<_$_ScreenState>(this, _$identity);
+  _$$ScreenStateImplCopyWith<_$ScreenStateImpl> get copyWith =>
+      __$$ScreenStateImplCopyWithImpl<_$ScreenStateImpl>(this, _$identity);
 }
 
 abstract class _ScreenState implements ScreenState {
@@ -210,7 +210,7 @@ abstract class _ScreenState implements ScreenState {
       required final bool pending,
       required final int rotation,
       required final Size size,
-      required final Size rotatedSize}) = _$_ScreenState;
+      required final Size rotatedSize}) = _$ScreenStateImpl;
 
   @override
   bool get on;
@@ -234,6 +234,6 @@ abstract class _ScreenState implements ScreenState {
   Size get rotatedSize;
   @override
   @JsonKey(ignore: true)
-  _$$_ScreenStateCopyWith<_$_ScreenState> get copyWith =>
+  _$$ScreenStateImplCopyWith<_$ScreenStateImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
