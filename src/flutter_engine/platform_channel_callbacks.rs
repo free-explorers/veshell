@@ -13,7 +13,7 @@ use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::mouse_button_tracker::FLUTTER_TO_LINUX_MOUSE_BUTTONS;
 
-pub fn platform_message_handler<BackendData: Backend + 'static>(
+pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
     event: Event<(MethodCall, Box<dyn MethodResult>)>,
     _: &mut (),
     data: &mut CalloopData<BackendData>,

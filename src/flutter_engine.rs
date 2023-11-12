@@ -51,7 +51,7 @@ use crate::{Backend, CalloopData, flutter_engine::{
 }, ServerState};
 use crate::flutter_engine::callbacks::{gl_external_texture_frame_callback, platform_message_callback, populate_existing_damage, post_task_callback, runs_task_on_current_thread_callback, vsync_callback};
 use crate::flutter_engine::embedder::{FlutterCustomTaskRunners, FlutterEngineMarkExternalTextureFrameAvailable, FlutterEngineRegisterExternalTexture, FlutterEngineRunTask, FlutterEngineSendPointerEvent, FlutterPointerEvent, FlutterTaskRunnerDescription};
-use crate::flutter_engine::platform_channel_callbacks::platform_message_handler;
+use crate::flutter_engine::platform_channel_callbacks::platform_channel_method_handler;
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::flutter_engine::platform_channels::binary_messenger_impl::BinaryMessengerImpl;
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
@@ -284,7 +284,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
 
         server_state.loop_handle.insert_source(
             rx_platform_message,
-            platform_message_handler,
+            platform_channel_method_handler,
         ).unwrap();
 
         Ok((this, embedder_channels))
