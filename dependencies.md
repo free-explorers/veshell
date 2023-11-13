@@ -1,0 +1,62 @@
+
+<table>
+  <thead>
+    <tr>
+      <th>dependencies</th>
+      <th>Arch</th>
+      <th>Fedora</th>
+      <th>Debian</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>rust</td>
+      <td colspan=3><a href="https://rustup.rs/">https://rustup.rs/</a></td>
+    </tr>
+    <tr>
+      <td colspan=4>make</td>
+    </tr>
+    <tr>
+      <td colspan=4>cmake</td>
+    </tr>
+    <tr>
+      <td colspan=4>clang</td>
+    </tr>
+    <tr>
+      <td>ninja-build</td>
+      <td>ninja</td>
+      <td>ninja-build</td>
+      <td>ninja-build</td>
+    </tr>
+    <tr>
+      <td>gtk3</td>
+      <td>gtk3</td>
+      <td>gtk3-devel</td>
+      <td>gtk3-dev</td>
+    </tr>
+    <tr>
+      <td>udev</td>
+      <td>base-devel</td>
+      <td>libudev-devel</td>
+      <td>libudev-dev</td>
+    </tr>
+    <tr>
+      <td>seat</td>
+      <td>seatd</td>
+      <td>libseat-devel</td>
+      <td>libseat-dev</td>
+    </tr>
+    <tr>
+      <td>libinput</td>
+      <td>libinput</td>
+      <td>libinput-devel</td>
+      <td>libinput-dev</td>
+    </tr>
+    <tr>
+      <td>gbm</td>
+      <td>libgbm</td>
+      <td>libgm-devel</td>
+      <td>libgbm-dev</td>
+    </tr>
+  </tbody>
+</table>
