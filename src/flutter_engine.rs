@@ -3,6 +3,7 @@ use std::mem::size_of;
 use std::ops::{Deref, DerefMut};
 use std::os::unix::ffi::OsStrExt;
 use std::ptr::{null, null_mut};
+use std::rc::Rc;
 use std::time::Duration;
 
 use smithay::{
@@ -18,8 +19,10 @@ use smithay::{
     reexports::calloop::channel,
     utils::{Physical, Size},
 };
+use smithay::backend::renderer::gles::ffi::RGBA8;
+use smithay::reexports::calloop;
+use smithay::reexports::calloop::{Dispatcher, LoopHandle};
 use smithay::reexports::calloop::channel::Event::Msg;
-use smithay::reexports::calloop::Dispatcher;
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 
 use crate::{Backend, CalloopData, flutter_engine::{
@@ -48,8 +51,14 @@ use crate::{Backend, CalloopData, flutter_engine::{
 }, ServerState};
 use crate::flutter_engine::callbacks::{gl_external_texture_frame_callback, platform_message_callback, populate_existing_damage, post_task_callback, runs_task_on_current_thread_callback, vsync_callback};
 use crate::flutter_engine::embedder::{FlutterCustomTaskRunners, FlutterEngineMarkExternalTextureFrameAvailable, FlutterEngineRegisterExternalTexture, FlutterEngineRunTask, FlutterEngineSendPointerEvent, FlutterPointerEvent, FlutterTaskRunnerDescription};
+use crate::flutter_engine::platform_channel_callbacks::platform_channel_method_handler;
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::flutter_engine::platform_channels::binary_messenger_impl::BinaryMessengerImpl;
+use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
+use crate::flutter_engine::platform_channels::method_call::MethodCall;
+use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
+use crate::flutter_engine::platform_channels::method_result::MethodResult;
+use crate::flutter_engine::platform_channels::standard_method_codec::StandardMethodCodec;
 use crate::flutter_engine::task_runner::TaskRunner;
 use crate::gles_framebuffer_importer::GlesFramebufferImporter;
 use crate::mouse_button_tracker::MouseButtonTracker;
@@ -59,25 +68,28 @@ pub mod embedder;
 pub mod platform_channels;
 pub mod task_runner;
 pub mod wayland_messages;
+pub mod platform_channel_callbacks;
 
 /// Wrap the handle for various safety reasons:
 /// - Clone & Copy is willingly not implemented to avoid using the engine after being shut down.
 /// - Send is not implemented because all its methods must be called from the thread the engine was created.
-pub struct FlutterEngine {
+pub struct FlutterEngine<BackendData: Backend + 'static> {
+    loop_handle: LoopHandle<'static, CalloopData<BackendData>>,
     pub handle: FlutterEngineHandle,
     data: FlutterEngineData,
     pub task_runner: TaskRunner,
     current_thread_id: std::thread::ThreadId,
     pub(crate) mouse_button_tracker: MouseButtonTracker,
     pub binary_messenger: Option<BinaryMessengerImpl>,
+    rx_request_external_texture_name_registration_token: Option<calloop::RegistrationToken>,
 }
 
 /// I don't want people to clone it because it's UB to call [FlutterEngine::on_vsync] multiple times
 /// with the same baton, which will most probably segfault.
 pub struct Baton(isize);
 
-impl FlutterEngine {
-    pub fn new<BackendData: Backend + 'static>(root_egl_context: &EGLContext, server_state: &ServerState<BackendData>) -> Result<(Box<Self>, EmbedderChannels), Box<dyn std::error::Error>> {
+impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
+    pub fn new(server_state: &mut ServerState<BackendData>) -> Result<(Box<Self>, EmbedderChannels), Box<dyn std::error::Error>> {
         let (tx_present, rx_present) = channel::channel::<()>();
         let (tx_request_fbo, rx_request_fbo) = channel::channel::<()>();
         let (tx_fbo, rx_fbo) = channel::channel::<Option<Dmabuf>>();
@@ -103,8 +115,6 @@ impl FlutterEngine {
             tx_fbo,
             tx_output_height,
             rx_baton,
-            rx_request_external_texture_name,
-            tx_external_texture_name,
         };
 
         let assets_path = CString::new(if option_env!("BUNDLE").is_some() { "data/flutter_assets" } else { "veshell_flutter/build/linux/x64/debug/bundle/data/flutter_assets" })?;
@@ -119,20 +129,25 @@ impl FlutterEngine {
             disable_service_auth_codes.as_ptr(),
         ];
 
+        let gles_renderer = server_state.gles_renderer.as_ref().unwrap();
+        let root_egl_context = gles_renderer.egl_context();
+
         let mut this = Box::new(Self {
+            loop_handle: server_state.loop_handle.clone(),
             handle: null_mut(),
             data: FlutterEngineData::new(root_egl_context, flutter_engine_channels)?,
             task_runner: TaskRunner::new(tx_reschedule_task_runner_timer),
             current_thread_id: std::thread::current().id(),
             mouse_button_tracker: MouseButtonTracker::new(),
             binary_messenger: None,
+            rx_request_external_texture_name_registration_token: None,
         });
 
         let task_runner_description = FlutterTaskRunnerDescription {
             struct_size: size_of::<FlutterTaskRunnerDescription>(),
             user_data: this.deref_mut() as *const _ as *mut _,
-            runs_task_on_current_thread_callback: Some(runs_task_on_current_thread_callback),
-            post_task_callback: Some(post_task_callback),
+            runs_task_on_current_thread_callback: Some(runs_task_on_current_thread_callback::<BackendData>),
+            post_task_callback: Some(post_task_callback::<BackendData>),
             identifier: 1,
         };
 
@@ -151,7 +166,7 @@ impl FlutterEngine {
             icu_data_path: icu_data_path.as_ptr(),
             command_line_argc: command_line_argv.len() as c_int,
             command_line_argv: command_line_argv.as_ptr(),
-            platform_message_callback: Some(platform_message_callback),
+            platform_message_callback: Some(platform_message_callback::<BackendData>),
             vm_snapshot_data: null(),
             vm_snapshot_data_size: 0,
             vm_snapshot_instructions: null(),
@@ -165,7 +180,7 @@ impl FlutterEngine {
             update_semantics_custom_action_callback: None,
             persistent_cache_path: null(),
             is_persistent_cache_read_only: false,
-            vsync_callback: Some(vsync_callback),
+            vsync_callback: Some(vsync_callback::<BackendData>),
             custom_dart_entrypoint: null(),
             custom_task_runners: &task_runners,
             shutdown_dart_vm_when_done: true,
@@ -188,20 +203,20 @@ impl FlutterEngine {
             __bindgen_anon_1: FlutterRendererConfig__bindgen_ty_1 {
                 open_gl: FlutterOpenGLRendererConfig {
                     struct_size: size_of::<FlutterOpenGLRendererConfig>(),
-                    make_current: Some(make_current),
-                    clear_current: Some(clear_current),
+                    make_current: Some(make_current::<BackendData>),
+                    clear_current: Some(clear_current::<BackendData>),
                     present: None,
-                    fbo_callback: Some(fbo_callback),
-                    make_resource_current: Some(make_resource_current),
+                    fbo_callback: Some(fbo_callback::<BackendData>),
+                    make_resource_current: Some(make_resource_current::<BackendData>),
                     // Flutter must request another framebuffer every frame
                     // because we're using a triple-buffered swapchain.
                     fbo_reset_after_present: true,
-                    surface_transformation: Some(surface_transformation),
+                    surface_transformation: Some(surface_transformation::<BackendData>),
                     gl_proc_resolver: None,
-                    gl_external_texture_frame_callback: Some(gl_external_texture_frame_callback),
+                    gl_external_texture_frame_callback: Some(gl_external_texture_frame_callback::<BackendData>),
                     fbo_with_frame_info_callback: None,
-                    present_with_info: Some(present_with_info),
-                    populate_existing_damage: Some(populate_existing_damage),
+                    present_with_info: Some(present_with_info::<BackendData>),
+                    populate_existing_damage: Some(populate_existing_damage::<BackendData>),
                 }
             },
         };
@@ -222,6 +237,19 @@ impl FlutterEngine {
         }
 
         this.handle = flutter_engine;
+        this.binary_messenger = Some(BinaryMessengerImpl::new(flutter_engine));
+
+        let codec = Rc::new(StandardMethodCodec::new());
+        let (tx_platform_message, rx_platform_message) = channel::channel::<(MethodCall, Box<dyn MethodResult>)>();
+        let mut platform_method_channel = MethodChannel::<EncodableValue>::new(
+            this.binary_messenger.as_mut().unwrap(),
+            "platform".to_string(),
+            codec,
+        );
+        // TODO: Provide a way to specify a channel directly, without registering a callback.
+        platform_method_channel.set_method_call_handler(Some(Box::new(move |method_call, result| {
+            tx_platform_message.send((method_call, result)).unwrap();
+        })));
 
         let task_runner_timer_dispatcher = Dispatcher::new(Timer::immediate(), move |deadline, _, data: &mut CalloopData<BackendData>| {
             let duration = data.state.flutter_engine_mut().task_runner.execute_expired_tasks(move |task| {
@@ -229,7 +257,6 @@ impl FlutterEngine {
             });
             TimeoutAction::ToDuration(duration)
         });
-
         let task_runner_timer_registration_token = server_state.loop_handle.register_dispatcher(task_runner_timer_dispatcher.clone()).unwrap();
 
         server_state.loop_handle.insert_source(rx_reschedule_task_runner_timer, move |event, _, data: &mut CalloopData<BackendData>| {
@@ -239,7 +266,26 @@ impl FlutterEngine {
             }
         }).unwrap();
 
-        this.binary_messenger = Some(BinaryMessengerImpl::new(flutter_engine));
+        this.rx_request_external_texture_name_registration_token = Some(server_state.loop_handle.insert_source(
+            rx_request_external_texture_name,
+            move |event, _, data| {
+                if let Msg(texture_id) = event {
+                    let texture_swap_chain = data.state.texture_swapchains.get_mut(&texture_id);
+                    let texture_id = match texture_swap_chain {
+                        Some(texture) => {
+                            let texture = texture.start_read();
+                            texture.tex_id()
+                        }
+                        None => 0,
+                    };
+                    let _ = tx_external_texture_name.send((texture_id, RGBA8));
+                }
+            }).unwrap());
+
+        server_state.loop_handle.insert_source(
+            rx_platform_message,
+            platform_channel_method_handler,
+        ).unwrap();
 
         Ok((this, embedder_channels))
     }
@@ -248,7 +294,7 @@ impl FlutterEngine {
         unsafe { FlutterEngineGetCurrentTime() }
     }
 
-    pub fn current_time_ms() -> u64 {
+    pub fn current_time_us() -> u64 {
         unsafe { FlutterEngineGetCurrentTime() / 1000 }
     }
 
@@ -309,9 +355,12 @@ impl FlutterEngine {
     }
 }
 
-impl Drop for FlutterEngine {
+impl<BackendData: Backend + 'static> Drop for FlutterEngine<BackendData> {
     fn drop(&mut self) {
         if !self.handle.is_null() {
+            // Avoid indefinite hang in the Flutter render thread waiting for an external texture.
+            let token = self.rx_request_external_texture_name_registration_token.take().unwrap();
+            self.loop_handle.remove(token);
             let _ = unsafe { FlutterEngineShutdown(self.handle) };
         }
     }
@@ -371,6 +420,4 @@ pub struct EmbedderChannels {
     pub tx_fbo: channel::Sender<Option<Dmabuf>>,
     pub tx_output_height: channel::Sender<u16>,
     pub rx_baton: channel::Channel<Baton>,
-    pub rx_request_external_texture_name: channel::Channel<i64>,
-    pub tx_external_texture_name: channel::Sender<(u32, u32)>,
 }

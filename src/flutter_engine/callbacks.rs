@@ -4,12 +4,15 @@ use std::ptr::null_mut;
 use smithay::backend::renderer::gles::ffi;
 use tracing::error;
 
+use crate::Backend;
 use crate::flutter_engine::{Baton, FlutterEngine};
 use crate::flutter_engine::embedder::{FlutterDamage, FlutterOpenGLTexture, FlutterPlatformMessage, FlutterPresentInfo, FlutterRect, FlutterTask, FlutterTransformation};
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 
-pub unsafe extern "C" fn make_current(user_data: *mut c_void) -> bool {
-    let flutter_engine = &mut *(user_data as *mut FlutterEngine);
+pub unsafe extern "C" fn make_current<BackendData>(user_data: *mut c_void) -> bool
+    where BackendData: Backend + 'static
+{
+    let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     match flutter_engine.data.main_egl_context.make_current() {
         Ok(()) => true,
         Err(err) => {
@@ -19,8 +22,10 @@ pub unsafe extern "C" fn make_current(user_data: *mut c_void) -> bool {
     }
 }
 
-pub unsafe extern "C" fn make_resource_current(user_data: *mut c_void) -> bool {
-    let flutter_engine = &mut *(user_data as *mut FlutterEngine);
+pub unsafe extern "C" fn make_resource_current<BackendData>(user_data: *mut c_void) -> bool
+    where BackendData: Backend + 'static
+{
+    let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     match flutter_engine.data.resource_egl_context.make_current() {
         Ok(()) => true,
         Err(err) => {
@@ -30,8 +35,10 @@ pub unsafe extern "C" fn make_resource_current(user_data: *mut c_void) -> bool {
     }
 }
 
-pub unsafe extern "C" fn clear_current(user_data: *mut c_void) -> bool {
-    let flutter_engine = &mut *(user_data as *mut FlutterEngine);
+pub unsafe extern "C" fn clear_current<BackendData>(user_data: *mut c_void) -> bool
+    where BackendData: Backend + 'static
+{
+    let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     match flutter_engine.data.main_egl_context.unbind() {
         Ok(()) => true,
         Err(err) => {
@@ -41,8 +48,10 @@ pub unsafe extern "C" fn clear_current(user_data: *mut c_void) -> bool {
     }
 }
 
-pub unsafe extern "C" fn fbo_callback(user_data: *mut c_void) -> u32 {
-    let flutter_engine = &mut *(user_data as *mut FlutterEngine);
+pub unsafe extern "C" fn fbo_callback<BackendData>(user_data: *mut c_void) -> u32
+    where BackendData: Backend + 'static
+{
+    let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     if flutter_engine.data.channels.tx_request_fbo.send(()).is_err() {
         return 0;
     }
@@ -53,13 +62,17 @@ pub unsafe extern "C" fn fbo_callback(user_data: *mut c_void) -> u32 {
     }
 }
 
-pub unsafe extern "C" fn present_with_info(user_data: *mut c_void, _frame_present_info: *const FlutterPresentInfo) -> bool {
-    let flutter_engine = &mut *(user_data as *mut FlutterEngine);
+pub unsafe extern "C" fn present_with_info<BackendData>(user_data: *mut c_void, _frame_present_info: *const FlutterPresentInfo) -> bool
+    where BackendData: Backend + 'static
+{
+    let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     flutter_engine.data.gl.Finish();
     flutter_engine.data.channels.tx_present.send(()).is_ok()
 }
 
-pub unsafe extern "C" fn populate_existing_damage(_user_data: *mut c_void, _fbo_id: isize, existing_damage: *mut FlutterDamage) {
+pub unsafe extern "C" fn populate_existing_damage<BackendData>(_user_data: *mut c_void, _fbo_id: isize, existing_damage: *mut FlutterDamage)
+    where BackendData: Backend + 'static
+{
     let existing_damage = &mut *existing_damage;
     existing_damage.struct_size = std::mem::size_of::<FlutterDamage>();
     existing_damage.num_rects = 1;
@@ -79,8 +92,10 @@ pub unsafe extern "C" fn populate_existing_damage(_user_data: *mut c_void, _fbo_
     existing_damage.damage = &FLUTTER_RECT as *const _ as *mut _;
 }
 
-pub unsafe extern "C" fn surface_transformation(user_data: *mut c_void) -> FlutterTransformation {
-    let flutter_engine = &mut *(user_data as *mut FlutterEngine);
+pub unsafe extern "C" fn surface_transformation<BackendData>(user_data: *mut c_void) -> FlutterTransformation
+    where BackendData: Backend + 'static
+{
+    let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
 
     while let Ok(output_height) = flutter_engine.data.channels.rx_output_height.try_recv() {
         flutter_engine.data.output_height = Some(output_height);
@@ -112,36 +127,43 @@ pub unsafe extern "C" fn surface_transformation(user_data: *mut c_void) -> Flutt
     }
 }
 
-pub unsafe extern "C" fn vsync_callback(user_data: *mut std::os::raw::c_void, baton: isize) {
-    let flutter_engine = &mut *(user_data as *mut FlutterEngine);
+pub unsafe extern "C" fn vsync_callback<BackendData>(user_data: *mut std::os::raw::c_void, baton: isize)
+    where BackendData: Backend + 'static
+{
+    let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     let _ = flutter_engine.data.channels.tx_baton.send(Baton(baton));
 }
 
-pub unsafe extern "C" fn runs_task_on_current_thread_callback(user_data: *mut c_void) -> bool {
-    let flutter_engine = &mut *(user_data as *mut FlutterEngine);
+pub unsafe extern "C" fn runs_task_on_current_thread_callback<BackendData>(user_data: *mut c_void) -> bool where BackendData: Backend + 'static {
+    let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     flutter_engine.current_thread_id == std::thread::current().id()
 }
 
-pub unsafe extern "C" fn post_task_callback(task: FlutterTask, target_time: u64, user_data: *mut c_void) {
-    let flutter_engine = &mut *(user_data as *mut FlutterEngine);
+pub unsafe extern "C" fn post_task_callback<BackendData>(task: FlutterTask, target_time: u64, user_data: *mut c_void)
+    where BackendData: Backend + 'static
+{
+    let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     let timeout = flutter_engine.task_runner.enqueue_task(task, target_time);
     flutter_engine.task_runner.reschedule_timer.send(timeout).unwrap();
 }
 
-pub unsafe extern "C" fn platform_message_callback(message: *const FlutterPlatformMessage, user_data: *mut c_void) {
-    let flutter_engine = &mut *(user_data as *mut FlutterEngine);
+pub unsafe extern "C" fn platform_message_callback<BackendData>(message: *const FlutterPlatformMessage, user_data: *mut c_void)
+    where BackendData: Backend + 'static
+{
+    let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     let message = &*message;
     flutter_engine.binary_messenger.as_mut().unwrap().handle_message(message);
 }
 
-pub unsafe extern "C" fn gl_external_texture_frame_callback(
+pub unsafe extern "C" fn gl_external_texture_frame_callback<BackendData>(
     user_data: *mut c_void,
     texture_id: i64,
     _width: usize,
     _height: usize,
-    texture_out: *mut FlutterOpenGLTexture,
-) -> bool {
-    let flutter_engine = &mut *(user_data as *mut FlutterEngine);
+    texture_out: *mut FlutterOpenGLTexture) -> bool
+    where BackendData: Backend + 'static
+{
+    let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     let channels = &mut flutter_engine.data.channels;
 
     let (texture_name, format) = channels.tx_request_external_texture_name.send(texture_id).ok().and_then(|()| {

@@ -63,8 +63,8 @@ pub trait Backend {
     fn seat_name(&self) -> String;
 }
 
-pub struct FlutterState {
-    pub flutter_engine: FlutterEngine,
+pub struct FlutterState<BackendData: Backend + 'static> {
+    pub flutter_engine: FlutterEngine<BackendData>,
     pub mouse_button_tracker: MouseButtonTracker,
 }
 

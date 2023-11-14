@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::sync::atomic::Ordering;
 
 use log::{error, warn};
@@ -34,21 +33,15 @@ use smithay::{
     },
     utils::DeviceFd,
 };
-use smithay::backend::renderer::gles::ffi::{Gles2, RGBA8};
+use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
-use smithay::backend::renderer::Texture;
 use smithay::output::{Output, PhysicalProperties, Subpixel};
-use smithay::reexports::calloop::channel::Event;
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::wayland_server::protocol::wl_shm;
-use smithay::wayland::dmabuf::{DmabufFeedbackBuilder, DmabufState};
+use smithay::wayland::dmabuf::DmabufState;
 
 use crate::{Backend, CalloopData, flutter_engine::EmbedderChannels, send_frames_surface_tree, ServerState};
 use crate::flutter_engine::FlutterEngine;
-use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
-use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
-use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
-use crate::flutter_engine::platform_channels::standard_method_codec::StandardMethodCodec;
 use crate::input_handling::handle_input;
 
 pub fn run_x11_client() {
@@ -142,14 +135,14 @@ pub fn run_x11_client() {
         },
     };
 
-    let dmabuf_formats = egl_context.dmabuf_texture_formats()
-        .iter()
-        .copied()
-        .collect::<Vec<_>>();
-    let dmabuf_default_feedback = DmabufFeedbackBuilder::new(node.dev_id(), dmabuf_formats)
-        .build()
-        .unwrap();
-    let mut dmabuf_state = DmabufState::new();
+    // let dmabuf_formats = egl_context.dmabuf_texture_formats()
+    //     .iter()
+    //     .copied()
+    //     .collect::<Vec<_>>();
+    // let dmabuf_default_feedback = DmabufFeedbackBuilder::new(node.dev_id(), dmabuf_formats)
+    //     .build()
+    //     .unwrap();
+    let dmabuf_state = DmabufState::new();
     // let _dmabuf_global = dmabuf_state.create_global_with_default_feedback::<ServerState<X11Data>>(
     //     &display.handle(),
     //     &dmabuf_default_feedback,
@@ -171,6 +164,11 @@ pub fn run_x11_client() {
         Some(dmabuf_state),
     );
 
+    let gles_renderer = unsafe { GlesRenderer::new(egl_context) }.expect("Failed to initialize GLES");
+
+    state.gles_renderer = Some(gles_renderer);
+    state.gl = Some(Gles2::load_with(|s| unsafe { egl::get_proc_address(s) } as *const _));
+
     let (
         flutter_engine,
         EmbedderChannels {
@@ -179,25 +177,10 @@ pub fn run_x11_client() {
             mut tx_fbo,
             tx_output_height,
             rx_baton,
-            rx_request_external_texture_name,
-            tx_external_texture_name,
         },
-    ) = FlutterEngine::new(&egl_context, &state).unwrap();
+    ) = FlutterEngine::new(&mut state).unwrap();
 
     state.flutter_engine = Some(flutter_engine);
-
-    let codec = Rc::new(StandardMethodCodec::new());
-
-    let tx_platform_message = state.tx_platform_message.take().unwrap();
-    let mut platform_method_channel = MethodChannel::<EncodableValue>::new(
-        state.flutter_engine_mut().binary_messenger.as_mut().unwrap(),
-        "platform".to_string(),
-        codec,
-    );
-    // TODO: Provide a way to specify a channel directly, without registering a callback.
-    platform_method_channel.set_method_call_handler(Some(Box::new(move |method_call, result| {
-        tx_platform_message.send((method_call, result)).unwrap();
-    })));
 
     let size = window.size();
     tx_output_height.send(size.h).unwrap();
@@ -211,11 +194,6 @@ pub fn run_x11_client() {
     ]);
 
     let mut baton = None;
-
-    let gles_renderer = unsafe { GlesRenderer::new(egl_context) }.expect("Failed to initialize GLES");
-
-    state.gles_renderer = Some(gles_renderer);
-    state.gl = Some(Gles2::load_with(|s| unsafe { egl::get_proc_address(s) } as *const _));
 
     event_loop
         .handle()
@@ -238,7 +216,7 @@ pub fn run_x11_client() {
                 data.state.flutter_engine().send_window_metrics((size.w as u32, size.h as u32).into()).unwrap();
             }
             X11Event::PresentCompleted { .. } | X11Event::Refresh { .. } => {
-                data.state.is_next_vblank_scheduled = false;
+                data.state.is_next_flutter_frame_scheduled = false;
                 if let Some(baton) = data.baton.take() {
                     data.state.flutter_engine().on_vsync(baton).unwrap();
                 }
@@ -250,25 +228,18 @@ pub fn run_x11_client() {
                     send_frames_surface_tree(surface.wl_surface(), start_time.elapsed().as_millis() as u32);
                 }
             }
-            X11Event::Input(event) => handle_input(&event, data),
+            X11Event::Input(event) => handle_input::<X11Data>(&event, data),
         })
         .expect("Failed to insert X11 Backend into event loop");
 
     event_loop.handle().insert_source(rx_baton, move |baton, _, data| {
-        if let Event::Msg(baton) = baton {
-            data.baton = Some(baton);
-        }
-        if data.state.is_next_vblank_scheduled {
-            return;
-        }
-        if let Some(baton) = data.baton.take() {
+        if let Msg(baton) = baton {
+            if data.state.is_next_flutter_frame_scheduled {
+                data.baton = Some(baton);
+                return;
+            }
             data.state.flutter_engine().on_vsync(baton).unwrap();
         }
-
-        // if let Err(err) = data.state.backend_data.x11_surface.submit() {
-        //     data.state.backend_data.x11_surface.reset_buffers();
-        //     warn!("Failed to submit buffer: {}. Retrying", err);
-        // };
     }).unwrap();
 
     event_loop.handle().insert_source(rx_request_fbo, move |_, _, data| {
@@ -284,25 +255,11 @@ pub fn run_x11_client() {
     }).unwrap();
 
     event_loop.handle().insert_source(rx_present, move |_, _, data| {
-        data.state.is_next_vblank_scheduled = true;
+        data.state.is_next_flutter_frame_scheduled = true;
         if let Err(err) = data.state.backend_data.x11_surface.submit() {
             data.state.backend_data.x11_surface.reset_buffers();
             warn!("Failed to submit buffer: {}. Retrying", err);
         };
-    }).unwrap();
-
-    event_loop.handle().insert_source(rx_request_external_texture_name, move |event, _, data| {
-        if let Msg(texture_id) = event {
-            let texture_swap_chain = data.state.texture_swapchains.get_mut(&texture_id);
-            let texture_id = match texture_swap_chain {
-                Some(texture) => {
-                    let texture = texture.start_read();
-                    texture.tex_id()
-                }
-                None => 0,
-            };
-            let _ = tx_external_texture_name.send((texture_id, RGBA8));
-        }
     }).unwrap();
 
     while state.running.load(Ordering::SeqCst) {
