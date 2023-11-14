@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/ui/common/state/xdg_toplevel_state.dart';
-import 'package:zenith/ui/desktop/decorations/client_side_decorations.dart';
-import 'package:zenith/ui/desktop/decorations/server_side_decorations.dart';
+import 'package:veshell/ui/common/state/xdg_toplevel_state.dart';
+import 'package:veshell/ui/desktop/decorations/client_side_decorations.dart';
+import 'package:veshell/ui/desktop/decorations/server_side_decorations.dart';
 
 class WithDecorations extends ConsumerWidget {
   final int viewId;

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/ui/mobile/app_drawer/app_drawer.dart';
-import 'package:zenith/ui/mobile/quick_settings/status_bar_with_quick_settings.dart';
-import 'package:zenith/ui/mobile/state/mobile_lock_screen_widget_state.dart';
-import 'package:zenith/ui/mobile/task_switcher/task_switcher.dart';
-import 'package:zenith/ui/mobile/virtual_keyboard/with_virtual_keyboard.dart';
+import 'package:veshell/ui/mobile/app_drawer/app_drawer.dart';
+import 'package:veshell/ui/mobile/quick_settings/status_bar_with_quick_settings.dart';
+import 'package:veshell/ui/mobile/state/mobile_lock_screen_widget_state.dart';
+import 'package:veshell/ui/mobile/task_switcher/task_switcher.dart';
+import 'package:veshell/ui/mobile/virtual_keyboard/with_virtual_keyboard.dart';
 
 class MobileUi extends ConsumerWidget {
   const MobileUi({super.key});

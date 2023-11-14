@@ -1,9 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:zenith/ui/mobile/lock_screen.dart';
-import 'package:zenith/util/state/lock_screen_state.dart';
-import 'package:zenith/util/state/root_overlay.dart';
+import 'package:veshell/ui/mobile/lock_screen.dart';
+import 'package:veshell/util/state/lock_screen_state.dart';
+import 'package:veshell/util/state/root_overlay.dart';
 
 part '../../../generated/ui/mobile/state/mobile_lock_screen_widget_state.freezed.dart';
 

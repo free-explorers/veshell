@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/ui/common/state/surface_state.dart';
+import 'package:veshell/ui/common/state/surface_state.dart';
 
 class SurfaceSize extends ConsumerWidget {
   final int viewId;

@@ -2,8 +2,8 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/dbus/power_management.dart';
-import 'package:zenith/ui/mobile/state/power_menu_state.dart';
+import 'package:veshell/dbus/power_management.dart';
+import 'package:veshell/ui/mobile/state/power_menu_state.dart';
 
 class PowerMenu extends ConsumerWidget {
   const PowerMenu({super.key});

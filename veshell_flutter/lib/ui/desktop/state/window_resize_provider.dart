@@ -3,8 +3,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:zenith/platform_api.dart';
-import 'package:zenith/ui/common/state/xdg_toplevel_state.dart';
+import 'package:veshell/platform_api.dart';
+import 'package:veshell/ui/common/state/xdg_toplevel_state.dart';
 
 part '../../../generated/ui/desktop/state/window_resize_provider.freezed.dart';
 

@@ -3,9 +3,9 @@ import 'dart:ui';
 import 'package:flutter/scheduler.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:zenith/platform_api.dart';
-import 'package:zenith/util/state/display_brightness_state.dart';
-import 'package:zenith/util/state/lock_screen_state.dart';
+import 'package:veshell/platform_api.dart';
+import 'package:veshell/util/state/display_brightness_state.dart';
+import 'package:veshell/util/state/lock_screen_state.dart';
 
 part '../../generated/util/state/screen_state.freezed.dart';
 

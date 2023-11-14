@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:zenith/ui/common/state/app_drawer.dart';
-import 'package:zenith/ui/common/app_icon.dart';
-import 'package:zenith/ui/mobile/state/app_drawer_state.dart';
-import 'package:zenith/util/app_launch.dart';
+import 'package:veshell/ui/common/state/app_drawer.dart';
+import 'package:veshell/ui/common/app_icon.dart';
+import 'package:veshell/ui/mobile/state/app_drawer_state.dart';
+import 'package:veshell/util/app_launch.dart';
 
 part '../../../generated/ui/mobile/app_drawer/app_grid.g.dart';
 

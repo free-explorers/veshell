@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:zenith/ui/desktop/app_drawer/app_drawer_button.dart';
-import 'package:zenith/util/state/ui_mode_state.dart';
+import 'package:veshell/ui/desktop/app_drawer/app_drawer_button.dart';
+import 'package:veshell/util/state/ui_mode_state.dart';
 
 part '../../generated/ui/desktop/task_bar.g.dart';
 

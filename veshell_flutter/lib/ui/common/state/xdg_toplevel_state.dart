@@ -3,9 +3,9 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:zenith/platform_api.dart';
-import 'package:zenith/ui/common/state/xdg_surface_state.dart';
-import 'package:zenith/ui/common/xdg_toplevel_surface.dart';
+import 'package:veshell/platform_api.dart';
+import 'package:veshell/ui/common/state/xdg_surface_state.dart';
+import 'package:veshell/ui/common/xdg_toplevel_surface.dart';
 
 part '../../../generated/ui/common/state/xdg_toplevel_state.freezed.dart';
 

@@ -2,9 +2,9 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/util/state/screen_state.dart';
-import 'package:zenith/ui/mobile/quick_settings/quick_settings.dart';
-import 'package:zenith/ui/mobile/quick_settings/status_bar.dart';
+import 'package:veshell/util/state/screen_state.dart';
+import 'package:veshell/ui/mobile/quick_settings/quick_settings.dart';
+import 'package:veshell/ui/mobile/quick_settings/status_bar.dart';
 
 class StatusBarWithQuickSettings extends ConsumerStatefulWidget {
   const StatusBarWithQuickSettings({Key? key}) : super(key: key);

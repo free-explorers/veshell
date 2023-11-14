@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_portal/flutter_portal.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/ui/common/state/tasks_provider.dart';
-import 'package:zenith/ui/common/state/xdg_toplevel_state.dart';
-import 'package:zenith/ui/desktop/app_drawer/app_drawer_button.dart';
-import 'package:zenith/ui/desktop/state/task_switcher_provider.dart';
-import 'package:zenith/ui/desktop/task_bar.dart';
-import 'package:zenith/ui/desktop/task_switcher.dart';
-import 'package:zenith/ui/desktop/window_manager.dart';
+import 'package:veshell/ui/common/state/tasks_provider.dart';
+import 'package:veshell/ui/common/state/xdg_toplevel_state.dart';
+import 'package:veshell/ui/desktop/app_drawer/app_drawer_button.dart';
+import 'package:veshell/ui/desktop/state/task_switcher_provider.dart';
+import 'package:veshell/ui/desktop/task_bar.dart';
+import 'package:veshell/ui/desktop/task_switcher.dart';
+import 'package:veshell/ui/desktop/window_manager.dart';
 
 class DesktopUi extends ConsumerStatefulWidget {
   const DesktopUi({Key? key}) : super(key: key);

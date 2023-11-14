@@ -3,13 +3,13 @@ import 'dart:ffi' show Finalizable;
 
 import 'package:flutter/services.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:zenith/ui/common/state/subsurface_state.dart';
-import 'package:zenith/ui/common/state/surface_ids.dart';
-import 'package:zenith/ui/common/state/surface_state.dart';
-import 'package:zenith/ui/common/state/tasks_provider.dart';
-import 'package:zenith/ui/common/state/xdg_popup_state.dart';
-import 'package:zenith/ui/common/state/xdg_surface_state.dart';
-import 'package:zenith/ui/common/state/xdg_toplevel_state.dart';
+import 'package:veshell/ui/common/state/subsurface_state.dart';
+import 'package:veshell/ui/common/state/surface_ids.dart';
+import 'package:veshell/ui/common/state/surface_state.dart';
+import 'package:veshell/ui/common/state/tasks_provider.dart';
+import 'package:veshell/ui/common/state/xdg_popup_state.dart';
+import 'package:veshell/ui/common/state/xdg_surface_state.dart';
+import 'package:veshell/ui/common/state/xdg_toplevel_state.dart';
 
 part 'generated/platform_api.g.dart';
 

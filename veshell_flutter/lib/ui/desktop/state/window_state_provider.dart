@@ -3,8 +3,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/widgets.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:zenith/ui/common/state/surface_state.dart';
-import 'package:zenith/ui/common/state/xdg_toplevel_state.dart';
+import 'package:veshell/ui/common/state/surface_state.dart';
+import 'package:veshell/ui/common/state/xdg_toplevel_state.dart';
 
 part '../../../generated/ui/desktop/state/window_state_provider.freezed.dart';
 

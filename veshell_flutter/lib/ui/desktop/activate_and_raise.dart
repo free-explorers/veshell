@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/ui/common/state/tasks_provider.dart';
-import 'package:zenith/ui/common/state/xdg_toplevel_state.dart';
+import 'package:veshell/ui/common/state/tasks_provider.dart';
+import 'package:veshell/ui/common/state/xdg_toplevel_state.dart';
 
 class ActivateAndRaise extends ConsumerWidget {
   final int viewId;

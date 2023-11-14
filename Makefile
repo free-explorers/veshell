@@ -77,14 +77,14 @@ release_bundle: $(DEPS_DIR)/release/libflutter_engine.so flutter_release cargo_r
 
 # Usage: make deb_package VERSION=0.2
 deb_package: release_bundle
-	mkdir -p build/zenith/release/deb/debpkg
-	cp -r dpkg/* build/zenith/release/deb/debpkg
+	mkdir -p build/veshell/release/deb/debpkg
+	cp -r dpkg/* build/veshell/release/deb/debpkg
 
-	sed -i 's/$$VERSION/$(VERSION)/g' build/zenith/release/deb/debpkg/DEBIAN/control
-	sed -i 's/$$ARCH/$(ARCH_DEB)/g' build/zenith/release/deb/debpkg/DEBIAN/control
-	cp -r build/zenith/release/bundle/* build/zenith/release/deb/debpkg/opt/zenith
+	sed -i 's/$$VERSION/$(VERSION)/g' build/veshell/release/deb/debpkg/DEBIAN/control
+	sed -i 's/$$ARCH/$(ARCH_DEB)/g' build/veshell/release/deb/debpkg/DEBIAN/control
+	cp -r build/veshell/release/bundle/* build/veshell/release/deb/debpkg/opt/veshell
 
-	dpkg-deb -Zxz --root-owner-group --build build/zenith/release/deb/debpkg build/zenith/release/deb
+	dpkg-deb -Zxz --root-owner-group --build build/veshell/release/deb/debpkg build/veshell/release/deb
 
 attach_debugger:
 	flutter attach --debug-uri=http://127.0.0.1:12345/

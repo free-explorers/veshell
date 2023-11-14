@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_portal/flutter_portal.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:zenith/ui/desktop/app_drawer/app_drawer.dart';
-import 'package:zenith/ui/desktop/task_bar.dart';
+import 'package:veshell/ui/desktop/app_drawer/app_drawer.dart';
+import 'package:veshell/ui/desktop/task_bar.dart';
 
 part '../../../generated/ui/desktop/app_drawer/app_drawer_button.g.dart';
 

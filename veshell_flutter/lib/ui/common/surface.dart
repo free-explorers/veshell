@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/ui/common/state/subsurface_state.dart';
-import 'package:zenith/ui/common/state/surface_state.dart';
-import 'package:zenith/ui/common/subsurface.dart';
-import 'package:zenith/ui/common/surface_size.dart';
-import 'package:zenith/ui/common/view_input_listener.dart';
+import 'package:veshell/ui/common/state/subsurface_state.dart';
+import 'package:veshell/ui/common/state/surface_state.dart';
+import 'package:veshell/ui/common/subsurface.dart';
+import 'package:veshell/ui/common/surface_size.dart';
+import 'package:veshell/ui/common/view_input_listener.dart';
 
 class Surface extends ConsumerWidget {
   final int viewId;

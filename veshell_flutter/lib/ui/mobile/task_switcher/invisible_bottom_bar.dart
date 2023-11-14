@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/ui/mobile/state/task_switcher_state.dart';
-import 'package:zenith/ui/mobile/task_switcher/task_switcher.dart';
+import 'package:veshell/ui/mobile/state/task_switcher_state.dart';
+import 'package:veshell/ui/mobile/task_switcher/task_switcher.dart';
 
 class InvisibleBottomBar extends ConsumerStatefulWidget {
   const InvisibleBottomBar({Key? key}) : super(key: key);

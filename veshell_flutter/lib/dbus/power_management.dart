@@ -1,6 +1,6 @@
 import 'package:dbus/dbus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/dbus/dbus.dart';
+import 'package:veshell/dbus/dbus.dart';
 
 DBusRemoteObject _getLoginDbusObject(WidgetRef ref) {
   return DBusRemoteObject(

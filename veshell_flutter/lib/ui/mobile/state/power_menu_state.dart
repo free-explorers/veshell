@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:zenith/util/state/root_overlay.dart';
-import 'package:zenith/ui/mobile/power_menu.dart';
+import 'package:veshell/util/state/root_overlay.dart';
+import 'package:veshell/ui/mobile/power_menu.dart';
 
 part '../../../generated/ui/mobile/state/power_menu_state.freezed.dart';
 

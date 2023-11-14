@@ -1,6 +1,6 @@
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:zenith/ui/common/state/desktop_entries.dart';
+import 'package:veshell/ui/common/state/desktop_entries.dart';
 
 part '../../../generated/ui/common/state/app_drawer.g.dart';
 

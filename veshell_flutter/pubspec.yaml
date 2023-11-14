@@ -1,4 +1,4 @@
-name: zenith
+name: veshell
 description: A wlroots-based Wayland compositor that uses Flutter for rendering.
 
 # The following line prevents the package from being accidentally published to
