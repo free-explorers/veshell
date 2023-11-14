@@ -117,8 +117,8 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             rx_baton,
         };
 
-        let assets_path = CString::new(if option_env!("BUNDLE").is_some() { "data/flutter_assets" } else { "veshell_flutter/build/linux/x64/debug/bundle/data/flutter_assets" })?;
-        let icu_data_path = CString::new(if option_env!("BUNDLE").is_some() { "data/icudtl.dat" } else { "veshell_flutter/build/linux/x64/debug/bundle/data/icudtl.dat" })?;
+        let assets_path = CString::new(if option_env!("BUNDLE").is_some() { "data/flutter_assets" } else { "../shell/build/linux/x64/debug/bundle/data/flutter_assets" })?;
+        let icu_data_path = CString::new(if option_env!("BUNDLE").is_some() { "data/icudtl.dat" } else { "../shell/build/linux/x64/debug/bundle/data/icudtl.dat" })?;
         let executable_path = CString::new(std::fs::canonicalize("/proc/self/exe")?.as_os_str().as_bytes())?;
         let observatory_port = CString::new("--observatory-port=12345")?;
         let disable_service_auth_codes = CString::new("--disable-service-auth-codes")?;

@@ -8,11 +8,11 @@ ARCH_DEB += arm64
 endif
 
 TARGET_EXEC := veshell
-DEPS_DIR := third_party/flutter_engine
+DEPS_DIR := embedder/third_party/flutter_engine
 
-DEBUG_BUILD_DIR := target/debug
-PROFILE_BUILD_DIR := target/profile
-RELEASE_BUILD_DIR := target/release
+DEBUG_BUILD_DIR := embedder/target/debug
+PROFILE_BUILD_DIR := embedder/target/profile
+RELEASE_BUILD_DIR := embedder/target/release
 
 DEBUG_BUNDLE_DIR := $(DEBUG_BUILD_DIR)/bundle
 PROFILE_BUNDLE_DIR := $(PROFILE_BUILD_DIR)/bundle
@@ -37,7 +37,7 @@ $(DEPS_DIR)/release/libflutter_engine.so:
 	mv /tmp/libflutter_engine.so $(DEPS_DIR)/release
 
 cargo_debug:
-	BUNDLE= cargo build
+	BUNDLE= cd embedder && cargo build
 
 cargo_profile:
 	BUNDLE= cargo build --release
@@ -46,34 +46,34 @@ cargo_release:
 	BUNDLE= cargo build --release
 
 flutter_debug:
-	cd veshell_flutter && flutter build linux --debug
+	cd shell && flutter build linux --debug
 
 flutter_profile:
-	cd veshell_flutter && flutter build linux --profile
+	cd shell && flutter build linux --profile
 
 flutter_release:
-	cd veshell_flutter && flutter build linux --release
+	cd shell && flutter build linux --release
 
 debug_bundle: $(DEPS_DIR)/debug/libflutter_engine.so flutter_debug cargo_debug
 	mkdir -p $(DEBUG_BUNDLE_DIR)/lib/
-	cp target/debug/$(TARGET_EXEC) $(DEBUG_BUNDLE_DIR)
+	cp embedder/target/debug/$(TARGET_EXEC) $(DEBUG_BUNDLE_DIR)
 	cp $(DEPS_DIR)/debug/libflutter_engine.so $(DEBUG_BUNDLE_DIR)/lib
-	cp -r veshell_flutter/build/linux/$(ARCH)/debug/bundle/data $(DEBUG_BUNDLE_DIR)
+	cp -r shell/build/linux/$(ARCH)/debug/bundle/data $(DEBUG_BUNDLE_DIR)
 #	cp lsan_suppressions.txt $(DEBUG_BUNDLE_DIR)
 
 profile_bundle: $(DEPS_DIR)/profile/libflutter_engine.so flutter_profile cargo_profile
 	mkdir -p $(PROFILE_BUNDLE_DIR)/lib/
-	cp target/release/$(TARGET_EXEC) $(PROFILE_BUNDLE_DIR)
+	cp embedder/target/release/$(TARGET_EXEC) $(PROFILE_BUNDLE_DIR)
 	cp $(DEPS_DIR)/profile/libflutter_engine.so $(PROFILE_BUNDLE_DIR)/lib
-	cp veshell_flutter/build/linux/$(ARCH)/profile/bundle/lib/libapp.so $(PROFILE_BUNDLE_DIR)/lib
-	cp -r veshell_flutter/build/linux/$(ARCH)/profile/bundle/data $(PROFILE_BUNDLE_DIR)
+	cp shell/build/linux/$(ARCH)/profile/bundle/lib/libapp.so $(PROFILE_BUNDLE_DIR)/lib
+	cp -r shell/build/linux/$(ARCH)/profile/bundle/data $(PROFILE_BUNDLE_DIR)
 
 release_bundle: $(DEPS_DIR)/release/libflutter_engine.so flutter_release cargo_release
 	mkdir -p $(RELEASE_BUNDLE_DIR)/lib/
-	cp target/release/$(TARGET_EXEC) $(RELEASE_BUNDLE_DIR)
+	cp embedder/target/release/$(TARGET_EXEC) $(RELEASE_BUNDLE_DIR)
 	cp $(DEPS_DIR)/release/libflutter_engine.so $(RELEASE_BUNDLE_DIR)/lib
-	cp veshell_flutter/build/linux/$(ARCH)/release/bundle/lib/libapp.so $(RELEASE_BUNDLE_DIR)/lib
-	cp -r veshell_flutter/build/linux/$(ARCH)/release/bundle/data $(RELEASE_BUNDLE_DIR)
+	cp shell/build/linux/$(ARCH)/release/bundle/lib/libapp.so $(RELEASE_BUNDLE_DIR)/lib
+	cp -r shell/build/linux/$(ARCH)/release/bundle/data $(RELEASE_BUNDLE_DIR)
 
 # Usage: make deb_package VERSION=0.2
 deb_package: release_bundle
@@ -100,3 +100,9 @@ clean:
 		cargo_debug cargo_profile cargo_release \
  		debug_bundle profile_bundle release_bundle \
  		deb_package attach_debugger
+
+dev_shell:
+	cd shell && flutter run 
+
+dev_embedder:
+	cd embedder && cargo run

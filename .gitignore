@@ -1,4 +1,4 @@
-/target
-/third_party/flutter_engine/debug/*.so
-/third_party/flutter_engine/profile/*.so
-/third_party/flutter_engine/release/*.so
+embedder/target
+embedder/third_party/flutter_engine/debug/*.so
+embedder/third_party/flutter_engine/profile/*.so
+embedder/third_party/flutter_engine/release/*.so
