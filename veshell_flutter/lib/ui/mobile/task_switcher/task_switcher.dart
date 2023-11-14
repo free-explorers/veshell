@@ -5,15 +5,15 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:zenith/platform_api.dart';
-import 'package:zenith/ui/common/popup_stack.dart';
-import 'package:zenith/ui/common/state/tasks_provider.dart';
-import 'package:zenith/ui/common/state/xdg_toplevel_state.dart';
-import 'package:zenith/ui/mobile/app_drawer/handle.dart';
-import 'package:zenith/ui/mobile/state/task_state.dart';
-import 'package:zenith/ui/mobile/state/task_switcher_state.dart';
-import 'package:zenith/ui/mobile/task_switcher/invisible_bottom_bar.dart';
-import 'package:zenith/ui/mobile/task_switcher/task_switcher_scroller.dart';
+import 'package:veshell/platform_api.dart';
+import 'package:veshell/ui/common/popup_stack.dart';
+import 'package:veshell/ui/common/state/tasks_provider.dart';
+import 'package:veshell/ui/common/state/xdg_toplevel_state.dart';
+import 'package:veshell/ui/mobile/app_drawer/handle.dart';
+import 'package:veshell/ui/mobile/state/task_state.dart';
+import 'package:veshell/ui/mobile/state/task_switcher_state.dart';
+import 'package:veshell/ui/mobile/task_switcher/invisible_bottom_bar.dart';
+import 'package:veshell/ui/mobile/task_switcher/task_switcher_scroller.dart';
 
 part '../../../generated/ui/mobile/task_switcher/task_switcher.g.dart';
 

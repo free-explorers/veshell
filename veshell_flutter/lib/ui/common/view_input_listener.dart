@@ -2,10 +2,10 @@ import 'package:arena_listener/arena_listener.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/platform_api.dart';
-import 'package:zenith/ui/common/state/surface_state.dart';
-import 'package:zenith/util/mouse_button_tracker.dart';
-import 'package:zenith/util/pointer_focus_manager.dart';
+import 'package:veshell/platform_api.dart';
+import 'package:veshell/ui/common/state/surface_state.dart';
+import 'package:veshell/util/mouse_button_tracker.dart';
+import 'package:veshell/util/pointer_focus_manager.dart';
 
 /// Handles all input events for a given window or popup, and redirects them to the platform which will then be
 /// forwarded to the appropriate surface.

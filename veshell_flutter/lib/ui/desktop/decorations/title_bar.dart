@@ -2,11 +2,11 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/platform_api.dart';
-import 'package:zenith/ui/common/app_icon.dart';
-import 'package:zenith/ui/common/state/xdg_toplevel_state.dart';
-import 'package:zenith/ui/desktop/state/window_move_provider.dart';
-import 'package:zenith/ui/desktop/state/window_position_provider.dart';
+import 'package:veshell/platform_api.dart';
+import 'package:veshell/ui/common/app_icon.dart';
+import 'package:veshell/ui/common/state/xdg_toplevel_state.dart';
+import 'package:veshell/ui/desktop/state/window_move_provider.dart';
+import 'package:veshell/ui/desktop/state/window_position_provider.dart';
 
 class TitleBar extends ConsumerStatefulWidget {
   final int viewId;

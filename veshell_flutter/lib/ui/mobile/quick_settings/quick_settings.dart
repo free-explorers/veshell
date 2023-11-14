@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/util/state/display_brightness_state.dart';
-import 'package:zenith/util/state/screen_state.dart';
-import 'package:zenith/util/state/ui_mode_state.dart';
+import 'package:veshell/util/state/display_brightness_state.dart';
+import 'package:veshell/util/state/screen_state.dart';
+import 'package:veshell/util/state/ui_mode_state.dart';
 
 class QuickSettings extends ConsumerStatefulWidget {
   final VoidCallback? onChangeBrightnessStart;

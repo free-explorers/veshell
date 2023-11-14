@@ -1,8 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:zenith/ui/mobile/task_switcher/task.dart';
-import 'package:zenith/ui/mobile/task_switcher/task_switcher.dart';
+import 'package:veshell/ui/mobile/task_switcher/task.dart';
+import 'package:veshell/ui/mobile/task_switcher/task_switcher.dart';
 
 part '../../../generated/ui/mobile/state/task_state.freezed.dart';
 

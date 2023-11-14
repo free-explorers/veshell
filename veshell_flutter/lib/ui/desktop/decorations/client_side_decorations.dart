@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/ui/common/state/xdg_surface_state.dart';
-import 'package:zenith/ui/desktop/activate_and_raise.dart';
-import 'package:zenith/ui/desktop/contain_to_input_region.dart';
+import 'package:veshell/ui/common/state/xdg_surface_state.dart';
+import 'package:veshell/ui/desktop/activate_and_raise.dart';
+import 'package:veshell/ui/desktop/contain_to_input_region.dart';
 
 class ClientSideDecorations extends StatelessWidget {
   final int viewId;

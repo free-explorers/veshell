@@ -5,11 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:zenith/enums.dart';
-import 'package:zenith/platform_api.dart';
-import 'package:zenith/ui/mobile/state/mobile_lock_screen_widget_state.dart';
-import 'package:zenith/util/state/lock_screen_state.dart';
-import 'package:zenith/util/state/screen_state.dart';
+import 'package:veshell/enums.dart';
+import 'package:veshell/platform_api.dart';
+import 'package:veshell/ui/mobile/state/mobile_lock_screen_widget_state.dart';
+import 'package:veshell/util/state/lock_screen_state.dart';
+import 'package:veshell/util/state/screen_state.dart';
 
 part '../../generated/ui/mobile/lock_screen.g.dart';
 

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:zenith/platform_api.dart';
-import 'package:zenith/ui/common/state/subsurface_state.dart';
-import 'package:zenith/ui/common/state/xdg_surface_state.dart';
-import 'package:zenith/ui/common/surface.dart';
+import 'package:veshell/platform_api.dart';
+import 'package:veshell/ui/common/state/subsurface_state.dart';
+import 'package:veshell/ui/common/state/xdg_surface_state.dart';
+import 'package:veshell/ui/common/surface.dart';
 
 part '../../../generated/ui/common/state/surface_state.freezed.dart';
 part '../../../generated/ui/common/state/surface_state.g.dart';

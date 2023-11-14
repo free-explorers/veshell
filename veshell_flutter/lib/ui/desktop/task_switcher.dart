@@ -2,10 +2,10 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/ui/common/app_icon.dart';
-import 'package:zenith/ui/common/state/tasks_provider.dart';
-import 'package:zenith/ui/common/state/xdg_toplevel_state.dart';
-import 'package:zenith/ui/desktop/state/task_switcher_provider.dart';
+import 'package:veshell/ui/common/app_icon.dart';
+import 'package:veshell/ui/common/state/tasks_provider.dart';
+import 'package:veshell/ui/common/state/xdg_toplevel_state.dart';
+import 'package:veshell/ui/desktop/state/task_switcher_provider.dart';
 
 class TaskSwitcherWidget extends ConsumerStatefulWidget {
   const TaskSwitcherWidget({super.key});

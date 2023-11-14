@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:glissando/glissando.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:zenith/ui/mobile/virtual_keyboard/key.dart';
-import 'package:zenith/ui/mobile/virtual_keyboard/layouts.dart';
+import 'package:veshell/ui/mobile/virtual_keyboard/key.dart';
+import 'package:veshell/ui/mobile/virtual_keyboard/layouts.dart';
 
 part '../../../generated/ui/mobile/virtual_keyboard/virtual_keyboard.g.dart';
 

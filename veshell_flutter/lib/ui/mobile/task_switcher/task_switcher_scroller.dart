@@ -1,7 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/ui/mobile/state/task_switcher_state.dart';
+import 'package:veshell/ui/mobile/state/task_switcher_state.dart';
 
 class TaskSwitcherScroller extends ConsumerStatefulWidget {
   final ScrollPosition scrollPosition;

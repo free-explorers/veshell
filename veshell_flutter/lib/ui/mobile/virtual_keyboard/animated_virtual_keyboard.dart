@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/ui/mobile/state/virtual_keyboard_state.dart';
-import 'package:zenith/ui/mobile/virtual_keyboard/layouts.dart';
-import 'package:zenith/ui/mobile/virtual_keyboard/virtual_keyboard.dart';
+import 'package:veshell/ui/mobile/state/virtual_keyboard_state.dart';
+import 'package:veshell/ui/mobile/virtual_keyboard/layouts.dart';
+import 'package:veshell/ui/mobile/virtual_keyboard/virtual_keyboard.dart';
 
 class AnimatedVirtualKeyboard extends ConsumerStatefulWidget {
   final int id;

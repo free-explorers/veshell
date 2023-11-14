@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/ui/common/state/subsurface_state.dart';
-import 'package:zenith/ui/common/state/surface_state.dart';
+import 'package:veshell/ui/common/state/subsurface_state.dart';
+import 'package:veshell/ui/common/state/surface_state.dart';
 
 class Subsurface extends StatelessWidget {
   final int viewId;

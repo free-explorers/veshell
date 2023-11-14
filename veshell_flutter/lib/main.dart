@@ -5,15 +5,15 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:visibility_detector/visibility_detector.dart';
-import 'package:zenith/platform_api.dart';
-import 'package:zenith/ui/desktop/desktop_ui.dart';
-import 'package:zenith/ui/mobile/mobile_ui.dart';
-import 'package:zenith/ui/mobile/state/power_menu_state.dart';
-import 'package:zenith/util/state/key_tracker.dart';
-import 'package:zenith/util/state/lock_screen_state.dart';
-import 'package:zenith/util/state/root_overlay.dart';
-import 'package:zenith/util/state/screen_state.dart';
-import 'package:zenith/util/state/ui_mode_state.dart';
+import 'package:veshell/platform_api.dart';
+import 'package:veshell/ui/desktop/desktop_ui.dart';
+import 'package:veshell/ui/mobile/mobile_ui.dart';
+import 'package:veshell/ui/mobile/state/power_menu_state.dart';
+import 'package:veshell/util/state/key_tracker.dart';
+import 'package:veshell/util/state/lock_screen_state.dart';
+import 'package:veshell/util/state/root_overlay.dart';
+import 'package:veshell/util/state/screen_state.dart';
+import 'package:veshell/util/state/ui_mode_state.dart';
 
 void main() {
   // debugRepaintRainbowEnabled = true;
@@ -52,7 +52,7 @@ void main() {
                 ),
               );
             },
-            child: Zenith(),
+            child: Veshell(),
           );
         },
       ),
@@ -62,10 +62,10 @@ void main() {
 
 const _notchHeight = 80.0; // physical pixels
 
-class Zenith extends ConsumerWidget {
+class Veshell extends ConsumerWidget {
   final GlobalKey<OverlayState> overlayKey = GlobalKey();
 
-  Zenith({Key? key}) : super(key: key);
+  Veshell({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

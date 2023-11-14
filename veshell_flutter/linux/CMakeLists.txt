@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
 project(runner LANGUAGES CXX)
 
-set(BINARY_NAME "zenith")
-set(APPLICATION_ID "com.example.zenith")
+set(BINARY_NAME "veshell")
+set(APPLICATION_ID "com.example.veshell")
 
 cmake_policy(SET CMP0063 NEW)
 

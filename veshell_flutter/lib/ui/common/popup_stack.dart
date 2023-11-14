@@ -2,7 +2,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:zenith/ui/common/state/xdg_popup_state.dart';
+import 'package:veshell/ui/common/state/xdg_popup_state.dart';
 
 part '../../generated/ui/common/popup_stack.g.dart';
 

@@ -1,12 +1,12 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/ui/common/state/xdg_surface_state.dart';
-import 'package:zenith/ui/common/state/xdg_toplevel_state.dart';
-import 'package:zenith/ui/desktop/manual_pan_gesture_recognizer.dart';
-import 'package:zenith/ui/desktop/state/window_move_provider.dart';
-import 'package:zenith/ui/desktop/state/window_position_provider.dart';
-import 'package:zenith/ui/desktop/state/window_resize_provider.dart';
+import 'package:veshell/ui/common/state/xdg_surface_state.dart';
+import 'package:veshell/ui/common/state/xdg_toplevel_state.dart';
+import 'package:veshell/ui/desktop/manual_pan_gesture_recognizer.dart';
+import 'package:veshell/ui/desktop/state/window_move_provider.dart';
+import 'package:veshell/ui/desktop/state/window_position_provider.dart';
+import 'package:veshell/ui/desktop/state/window_resize_provider.dart';
 
 class InteractiveMoveAndResizeListener extends ConsumerStatefulWidget {
   final int viewId;

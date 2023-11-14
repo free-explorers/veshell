@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_portal/flutter_portal.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:zenith/enums.dart';
-import 'package:zenith/platform_api.dart';
-import 'package:zenith/ui/common/popup_stack.dart';
-import 'package:zenith/ui/desktop/state/cursor_position_provider.dart';
-import 'package:zenith/ui/desktop/state/window_stack_provider.dart';
-import 'package:zenith/ui/desktop/window.dart';
+import 'package:veshell/enums.dart';
+import 'package:veshell/platform_api.dart';
+import 'package:veshell/ui/common/popup_stack.dart';
+import 'package:veshell/ui/desktop/state/cursor_position_provider.dart';
+import 'package:veshell/ui/desktop/state/window_stack_provider.dart';
+import 'package:veshell/ui/desktop/window.dart';
 
 part '../../generated/ui/desktop/window_manager.g.dart';
 

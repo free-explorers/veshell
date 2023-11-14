@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/ui/mobile/state/app_drawer_state.dart';
+import 'package:veshell/ui/mobile/state/app_drawer_state.dart';
 
 class AppDrawerHandle extends ConsumerWidget {
   const AppDrawerHandle({super.key});

@@ -2,14 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/platform_api.dart';
-import 'package:zenith/ui/common/app_icon.dart';
-import 'package:zenith/ui/common/state/xdg_toplevel_state.dart';
-import 'package:zenith/ui/mobile/state/task_state.dart';
-import 'package:zenith/ui/mobile/state/task_switcher_state.dart';
-import 'package:zenith/ui/mobile/task_switcher/fitted_window.dart';
-import 'package:zenith/ui/mobile/task_switcher/task_switcher.dart';
-import 'package:zenith/ui/mobile/virtual_keyboard/with_virtual_keyboard.dart';
+import 'package:veshell/platform_api.dart';
+import 'package:veshell/ui/common/app_icon.dart';
+import 'package:veshell/ui/common/state/xdg_toplevel_state.dart';
+import 'package:veshell/ui/mobile/state/task_state.dart';
+import 'package:veshell/ui/mobile/state/task_switcher_state.dart';
+import 'package:veshell/ui/mobile/task_switcher/fitted_window.dart';
+import 'package:veshell/ui/mobile/task_switcher/task_switcher.dart';
+import 'package:veshell/ui/mobile/virtual_keyboard/with_virtual_keyboard.dart';
 
 class Task extends ConsumerStatefulWidget {
   final int viewId;

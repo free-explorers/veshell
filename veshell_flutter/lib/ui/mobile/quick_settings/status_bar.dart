@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/util/state/screen_state.dart';
-import 'package:zenith/ui/mobile/quick_settings/digital_clock.dart';
+import 'package:veshell/util/state/screen_state.dart';
+import 'package:veshell/ui/mobile/quick_settings/digital_clock.dart';
 
 /// The status bar has the same height as the notch, and widgets inside it are scaled the same
 /// regardless of the ratio between the physical and logical pixel.

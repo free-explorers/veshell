@@ -2,9 +2,9 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/ui/common/state/app_drawer.dart';
-import 'package:zenith/ui/desktop/app_drawer/app_drawer_button.dart';
-import 'package:zenith/ui/desktop/app_drawer/app_grid.dart';
+import 'package:veshell/ui/common/state/app_drawer.dart';
+import 'package:veshell/ui/desktop/app_drawer/app_drawer_button.dart';
+import 'package:veshell/ui/desktop/app_drawer/app_grid.dart';
 
 class AppDrawer extends ConsumerStatefulWidget {
   const AppDrawer({super.key});

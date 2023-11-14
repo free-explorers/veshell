@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/ui/desktop/activate_and_raise.dart';
-import 'package:zenith/ui/desktop/contain_to_visible_bounds.dart';
-import 'package:zenith/ui/desktop/decorations/title_bar.dart';
-import 'package:zenith/ui/desktop/with_resize_handles.dart';
+import 'package:veshell/ui/desktop/activate_and_raise.dart';
+import 'package:veshell/ui/desktop/contain_to_visible_bounds.dart';
+import 'package:veshell/ui/desktop/decorations/title_bar.dart';
+import 'package:veshell/ui/desktop/with_resize_handles.dart';
 
 class ServerSideDecorations extends StatelessWidget {
   static const double borderWidth = 10;

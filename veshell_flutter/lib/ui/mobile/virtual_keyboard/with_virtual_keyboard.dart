@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zenith/platform_api.dart';
-import 'package:zenith/ui/common/state/xdg_toplevel_state.dart';
-import 'package:zenith/ui/mobile/state/task_switcher_state.dart';
-import 'package:zenith/ui/mobile/state/virtual_keyboard_state.dart';
-import 'package:zenith/ui/mobile/virtual_keyboard/animated_virtual_keyboard.dart';
-import 'package:zenith/ui/mobile/virtual_keyboard/layouts.dart';
+import 'package:veshell/platform_api.dart';
+import 'package:veshell/ui/common/state/xdg_toplevel_state.dart';
+import 'package:veshell/ui/mobile/state/task_switcher_state.dart';
+import 'package:veshell/ui/mobile/state/virtual_keyboard_state.dart';
+import 'package:veshell/ui/mobile/virtual_keyboard/animated_virtual_keyboard.dart';
+import 'package:veshell/ui/mobile/virtual_keyboard/layouts.dart';
 
 class WithVirtualKeyboard extends ConsumerStatefulWidget {
   final int viewId;

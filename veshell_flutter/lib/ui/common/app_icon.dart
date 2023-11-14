@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:jovial_svg/jovial_svg.dart';
-import 'package:zenith/ui/common/state/desktop_entries.dart';
-import 'package:zenith/ui/common/state/xdg_toplevel_state.dart';
+import 'package:veshell/ui/common/state/desktop_entries.dart';
+import 'package:veshell/ui/common/state/xdg_toplevel_state.dart';
 
 class AppIconByPath extends StatelessWidget {
   final String? path;

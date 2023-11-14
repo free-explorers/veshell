@@ -1,7 +1,7 @@
 import 'package:flutter/rendering.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:zenith/platform_api.dart';
+import 'package:veshell/platform_api.dart';
 
 part '../../../generated/ui/mobile/state/virtual_keyboard_state.freezed.dart';
 
