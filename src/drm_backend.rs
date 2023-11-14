@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::os::fd::{AsRawFd, FromRawFd};
 use std::path::Path;
 use std::sync::atomic::Ordering;
 
@@ -42,7 +41,7 @@ use tracing::{error, info, warn};
 use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
 use smithay_drm_extras::edid::EdidInfo;
 
-use crate::{Backend, CalloopData, flutter_engine::EmbedderChannels, ServerState};
+use crate::{Backend, CalloopData, flutter_engine::EmbedderChannels, send_frames_surface_tree, ServerState};
 use crate::flutter_engine::FlutterEngine;
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::input_handling::handle_input;
@@ -164,17 +163,15 @@ pub fn run_drm_backend() {
 
     // Start the Flutter engine.
     let (
-        mut flutter_engine,
+        flutter_engine,
         EmbedderChannels {
             rx_present,
             rx_request_fbo,
             mut tx_fbo,
             tx_output_height: _,
             rx_baton,
-            rx_request_external_texture_name,
-            tx_external_texture_name,
         },
-    ) = FlutterEngine::new(egl_context, &state).unwrap();
+    ) = FlutterEngine::new(&mut state).unwrap();
 
     state.flutter_engine = Some(flutter_engine);
 
@@ -194,7 +191,7 @@ pub fn run_drm_backend() {
         .handle()
         .insert_source(libinput_backend, move |event, _, data| {
             let _dh = data.state.display_handle.clone();
-            handle_input(&event, data);
+            handle_input::<DrmBackend>(&event, data);
             // TODO: When the cursor moves, the cursor CRTC plane has to be updated.
             // However, we should call this only when the cursor actually moves, and not on every
             // input event.
@@ -222,13 +219,12 @@ pub fn run_drm_backend() {
 
     event_loop.handle().insert_source(rx_baton, move |baton, _, data| {
         if let Event::Msg(baton) = baton {
-            data.baton = Some(baton);
-        }
-        if data.state.is_next_vblank_scheduled {
-            return;
-        }
-        if let Some(baton) = data.baton.take() {
+            if data.state.is_next_flutter_frame_scheduled {
+                data.baton = Some(baton);
+                return;
+            }
             data.state.flutter_engine().on_vsync(baton).unwrap();
+            data.state.is_next_flutter_frame_scheduled = true;
         }
     }).unwrap();
 
@@ -244,7 +240,6 @@ pub fn run_drm_backend() {
         let gpu_data = data.state.backend_data.get_gpu_data_mut();
         gpu_data.last_rendered_slot = gpu_data.current_slot.take();
         data.state.update_crtc_planes();
-        data.state.is_next_vblank_scheduled = true;
     }).unwrap();
 
     while state.running.load(Ordering::SeqCst) {
@@ -296,9 +291,7 @@ impl ServerState<DrmBackend> {
         let slot = if let Some(slot) = last_rendered_slot.as_mut() {
             slot
         } else {
-            // Flutter hasn't rendered anything yet. Just draw a black frame to keep the VBlank cycle going.
-            surface.compositor.render_frame::<GlesRenderer, TextureRenderElement<GlesTexture>, GlesTexture>(gles_renderer, &[], [0.0, 0.0, 0.0, 0.0]).unwrap();
-            surface.compositor.queue_frame(None).unwrap();
+            // Flutter hasn't rendered anything yet.
             return;
         };
 
@@ -406,7 +399,7 @@ impl ServerState<DrmBackend> {
             )
             .map_err(DeviceAddError::DeviceOpen)?;
 
-        let fd = DrmDeviceFd::new(unsafe { DeviceFd::from_raw_fd(fd.as_raw_fd()) });
+        let fd = DrmDeviceFd::new(unsafe { DeviceFd::from(fd) });
         let (drm, notifier) = DrmDevice::new(fd.clone(), true).map_err(DeviceAddError::DrmDevice)?;
 
         let registration_token = self
@@ -415,13 +408,20 @@ impl ServerState<DrmBackend> {
                 notifier,
                 move |event, _metadata, data: &mut CalloopData<_>| match event {
                     DrmEvent::VBlank(crtc) => {
-                        data.state.is_next_vblank_scheduled = false;
                         if let Some(surface) = data.state.backend_data.gpus.get_mut(&node).unwrap().surfaces.get_mut(&crtc) {
                             let _ = surface.compositor.frame_submitted();
                         }
                         if let Some(baton) = data.baton.take() {
                             data.state.flutter_engine().on_vsync(baton).unwrap();
                         }
+                        let start_time = std::time::Instant::now();
+                        for surface in data.state.xdg_shell_state.toplevel_surfaces() {
+                            send_frames_surface_tree(surface.wl_surface(), start_time.elapsed().as_millis() as u32);
+                        }
+                        for surface in data.state.xdg_popups.values() {
+                            send_frames_surface_tree(surface.wl_surface(), start_time.elapsed().as_millis() as u32);
+                        }
+                        data.state.is_next_flutter_frame_scheduled = false;
                     }
                     DrmEvent::Error(error) => {
                         error!("{:?}", error);

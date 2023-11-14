@@ -1,5 +1,4 @@
 use std::mem::size_of;
-use std::rc::Rc;
 use std::sync::atomic::Ordering;
 
 use input_linux::sys::KEY_ESC;
@@ -9,12 +8,10 @@ use smithay::backend::input::{AbsolutePositionEvent, ButtonState, InputBackend, 
 use crate::{Backend, CalloopData};
 use crate::flutter_engine::embedder::{FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse, FlutterPointerEvent, FlutterPointerPhase_kDown, FlutterPointerPhase_kHover, FlutterPointerPhase_kMove, FlutterPointerPhase_kUp, FlutterPointerSignalKind_kFlutterPointerSignalKindNone, FlutterPointerSignalKind_kFlutterPointerSignalKindScroll};
 use crate::flutter_engine::FlutterEngine;
-use crate::flutter_engine::platform_channels::binary_messenger_impl::BinaryMessengerImpl;
-use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
-use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
-use crate::flutter_engine::platform_channels::standard_method_codec::StandardMethodCodec;
 
-pub fn handle_input(event: &InputEvent<impl InputBackend>, data: &mut CalloopData<impl Backend>) {
+pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &mut CalloopData<BackendData>)
+    where BackendData: Backend + 'static
+{
     match event {
         InputEvent::DeviceAdded { .. } => {}
         InputEvent::DeviceRemoved { .. } => {}
@@ -48,7 +45,7 @@ pub fn handle_input(event: &InputEvent<impl InputBackend>, data: &mut CalloopDat
             data.state.flutter_engine().send_pointer_event(FlutterPointerEvent {
                 struct_size: size_of::<FlutterPointerEvent>(),
                 phase,
-                timestamp: FlutterEngine::current_time_ms() as usize,
+                timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
                 x: data.state.mouse_position.0,
                 y: data.state.mouse_position.1,
                 device: 0,
@@ -71,7 +68,7 @@ pub fn handle_input(event: &InputEvent<impl InputBackend>, data: &mut CalloopDat
                 } else {
                     FlutterPointerPhase_kDown
                 },
-                timestamp: FlutterEngine::current_time_ms() as usize,
+                timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
                 x: data.state.mouse_position.0,
                 y: data.state.mouse_position.1,
                 device: 0,
@@ -116,7 +113,9 @@ pub fn handle_input(event: &InputEvent<impl InputBackend>, data: &mut CalloopDat
     }
 }
 
-fn send_motion_event(data: &mut CalloopData<impl Backend>) {
+fn send_motion_event<BackendData>(data: &mut CalloopData<BackendData>)
+    where BackendData: Backend + 'static
+{
     data.state.flutter_engine().send_pointer_event(FlutterPointerEvent {
         struct_size: size_of::<FlutterPointerEvent>(),
         phase: if data.state.flutter_engine().mouse_button_tracker.are_any_buttons_pressed() {
@@ -124,7 +123,7 @@ fn send_motion_event(data: &mut CalloopData<impl Backend>) {
         } else {
             FlutterPointerPhase_kHover
         },
-        timestamp: FlutterEngine::current_time_ms() as usize,
+        timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
         x: data.state.mouse_position.0,
         y: data.state.mouse_position.1,
         device: 0,
