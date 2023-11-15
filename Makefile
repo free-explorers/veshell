@@ -18,32 +18,14 @@ DEBUG_BUNDLE_DIR := $(DEBUG_BUILD_DIR)/bundle
 PROFILE_BUNDLE_DIR := $(PROFILE_BUILD_DIR)/bundle
 RELEASE_BUNDLE_DIR := $(RELEASE_BUILD_DIR)/bundle
 
-ENGINE_REVISION := $(shell flutter --version | grep Engine | awk '{print $$NF}')
-
-$(DEPS_DIR)/debug/libflutter_engine.so:
-	curl -L https://github.com/sony/flutter-embedded-linux/releases/download/$(ENGINE_REVISION)/elinux-$(ARCH)-debug.zip >/tmp/elinux-$(ARCH)-debug.zip
-	unzip -o /tmp/elinux-$(ARCH)-debug.zip -d /tmp || exit
-	mkdir -p $(DEPS_DIR)/debug
-	mv /tmp/libflutter_engine.so $(DEPS_DIR)/debug
-
-$(DEPS_DIR)/profile/libflutter_engine.so:
-	curl -L https://github.com/sony/flutter-embedded-linux/releases/download/$(ENGINE_REVISION)/elinux-$(ARCH)-profile.zip >/tmp/elinux-$(ARCH)-profile.zip
-	unzip -o /tmp/elinux-$(ARCH)-profile.zip -d /tmp || exit
-	mv /tmp/libflutter_engine.so $(DEPS_DIR)/profile
-
-$(DEPS_DIR)/release/libflutter_engine.so:
-	curl -L https://github.com/sony/flutter-embedded-linux/releases/download/$(ENGINE_REVISION)/elinux-$(ARCH)-release.zip >/tmp/elinux-$(ARCH)-release.zip
-	unzip -o /tmp/elinux-$(ARCH)-release.zip -d /tmp || exit
-	mv /tmp/libflutter_engine.so $(DEPS_DIR)/release
-
 cargo_debug:
-	BUNDLE= cd embedder && cargo build
+	cd embedder && BUNDLE= FLUTTER_ENGINE_BUILD=debug cargo build
 
 cargo_profile:
-	BUNDLE= cargo build --release
+	cd embedder && BUNDLE= FLUTTER_ENGINE_BUILD=profile cargo build --release
 
 cargo_release:
-	BUNDLE= cargo build --release
+	cd embedder && BUNDLE= FLUTTER_ENGINE_BUILD=release cargo build --release
 
 flutter_debug:
 	cd shell && flutter build linux --debug
@@ -92,7 +74,7 @@ attach_debugger:
 all: debug_bundle profile_bundle release_bundle
 
 clean:
-	cargo clean
+	cd embedder && cargo clean
 	cd dart && flutter clean
 
 .PHONY: clean all \
