@@ -2,9 +2,9 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:veshell/ui/common/state/tasks_provider.dart';
 
-part '../../../generated/ui/desktop/state/task_switcher_provider.freezed.dart';
+part 'task_switcher_provider.freezed.dart';
 
-part '../../../generated/ui/desktop/state/task_switcher_provider.g.dart';
+part 'task_switcher_provider.g.dart';
 
 @Riverpod(keepAlive: true)
 class TaskSwitcher extends _$TaskSwitcher {

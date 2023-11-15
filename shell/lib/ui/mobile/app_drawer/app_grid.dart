@@ -7,7 +7,7 @@ import 'package:veshell/ui/common/app_icon.dart';
 import 'package:veshell/ui/mobile/state/app_drawer_state.dart';
 import 'package:veshell/util/app_launch.dart';
 
-part '../../../generated/ui/mobile/app_drawer/app_grid.g.dart';
+part 'app_grid.g.dart';
 
 @Riverpod(keepAlive: true)
 Future<List<AppEntry>> _appWidgets(_AppWidgetsRef ref) async {

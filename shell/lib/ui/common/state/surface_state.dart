@@ -6,8 +6,8 @@ import 'package:veshell/ui/common/state/subsurface_state.dart';
 import 'package:veshell/ui/common/state/xdg_surface_state.dart';
 import 'package:veshell/ui/common/surface.dart';
 
-part '../../../generated/ui/common/state/surface_state.freezed.dart';
-part '../../../generated/ui/common/state/surface_state.g.dart';
+part 'surface_state.freezed.dart';
+part 'surface_state.g.dart';
 
 @Riverpod(keepAlive: true)
 Surface surfaceWidget(SurfaceWidgetRef ref, int viewId) {

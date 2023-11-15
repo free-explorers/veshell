@@ -4,7 +4,7 @@ import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:jovial_svg/jovial_svg.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-part '../../../generated/ui/common/state/desktop_entries.g.dart';
+part 'desktop_entries.g.dart';
 
 @Riverpod(keepAlive: true)
 Future<Map<String, DesktopEntry>> installedDesktopEntries(InstalledDesktopEntriesRef ref) async {

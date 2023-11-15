@@ -5,9 +5,9 @@ import 'package:veshell/ui/mobile/lock_screen.dart';
 import 'package:veshell/util/state/lock_screen_state.dart';
 import 'package:veshell/util/state/root_overlay.dart';
 
-part '../../../generated/ui/mobile/state/mobile_lock_screen_widget_state.freezed.dart';
+part 'mobile_lock_screen_widget_state.freezed.dart';
 
-part '../../../generated/ui/mobile/state/mobile_lock_screen_widget_state.g.dart';
+part 'mobile_lock_screen_widget_state.g.dart';
 
 @Riverpod(keepAlive: true)
 class MobileLockScreenState extends _$MobileLockScreenState {

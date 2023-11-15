@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
-part '../../generated/util/state/lock_screen_state.freezed.dart';
+part 'lock_screen_state.freezed.dart';
 
 final lockScreenStateProvider =
     StateNotifierProvider<LockScreenStateNotifier, LockScreenState>((ref) => LockScreenStateNotifier());

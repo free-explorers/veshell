@@ -7,7 +7,7 @@ import 'package:veshell/ui/common/state/app_drawer.dart';
 import 'package:veshell/ui/desktop/app_drawer/app_drawer_button.dart';
 import 'package:veshell/util/app_launch.dart';
 
-part '../../../generated/ui/desktop/app_drawer/app_grid.g.dart';
+part 'app_grid.g.dart';
 
 @Riverpod(keepAlive: true)
 List<AppEntry> appEntryWidget(AppEntryWidgetRef ref) {

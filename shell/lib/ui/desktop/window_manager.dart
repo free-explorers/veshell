@@ -9,7 +9,7 @@ import 'package:veshell/ui/desktop/state/cursor_position_provider.dart';
 import 'package:veshell/ui/desktop/state/window_stack_provider.dart';
 import 'package:veshell/ui/desktop/window.dart';
 
-part '../../generated/ui/desktop/window_manager.g.dart';
+part 'window_manager.g.dart';
 
 @Riverpod(keepAlive: true)
 GlobalKey windowStackGlobalKey(WindowStackGlobalKeyRef ref) => GlobalKey();

@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
-part '../../generated/util/state/key_tracker.freezed.dart';
+part 'key_tracker.freezed.dart';
 
 final keyTrackerProvider =
     StateNotifierProvider.family<KeyTrackerNotifier, KeyState, KeyboardKey>((ref, KeyboardKey key) {

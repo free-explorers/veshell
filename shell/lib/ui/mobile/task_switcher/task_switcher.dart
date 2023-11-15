@@ -15,7 +15,7 @@ import 'package:veshell/ui/mobile/state/task_switcher_state.dart';
 import 'package:veshell/ui/mobile/task_switcher/invisible_bottom_bar.dart';
 import 'package:veshell/ui/mobile/task_switcher/task_switcher_scroller.dart';
 
-part '../../../generated/ui/mobile/task_switcher/task_switcher.g.dart';
+part 'task_switcher.g.dart';
 
 @Riverpod(keepAlive: true)
 class TaskList extends _$TaskList {

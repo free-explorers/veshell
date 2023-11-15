@@ -20,7 +20,7 @@ import 'package:veshell/ui/desktop/state/window_state_provider.dart';
 import 'package:veshell/ui/mobile/state/virtual_keyboard_state.dart';
 import 'package:veshell/util/rect_overflow_box.dart';
 
-part '../../generated/ui/desktop/window.g.dart';
+part 'window.g.dart';
 
 const duration = Duration(milliseconds: 300);
 
@@ -417,7 +417,7 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations> with Singl
 // import 'package:veshell/ui/desktop/state/window_state_provider.dart';
 // import 'package:veshell/ui/mobile/state/virtual_keyboard_state.dart';
 //
-// part '../../generated/ui/desktop/window.g.dart';
+// part 'window.g.dart';
 //
 // @Riverpod(keepAlive: true)
 // Window windowWidget(WindowWidgetRef ref, int viewId) {

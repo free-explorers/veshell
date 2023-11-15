@@ -7,7 +7,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:veshell/ui/mobile/virtual_keyboard/key.dart';
 import 'package:veshell/ui/mobile/virtual_keyboard/layouts.dart';
 
-part '../../../generated/ui/mobile/virtual_keyboard/virtual_keyboard.g.dart';
+part 'virtual_keyboard.g.dart';
 
 @Riverpod(keepAlive: true)
 class KeyboardLayout extends _$KeyboardLayout {

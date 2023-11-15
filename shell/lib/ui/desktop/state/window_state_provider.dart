@@ -6,9 +6,9 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:veshell/ui/common/state/surface_state.dart';
 import 'package:veshell/ui/common/state/xdg_toplevel_state.dart';
 
-part '../../../generated/ui/desktop/state/window_state_provider.freezed.dart';
+part 'window_state_provider.freezed.dart';
 
-part '../../../generated/ui/desktop/state/window_state_provider.g.dart';
+part 'window_state_provider.g.dart';
 
 @Riverpod(keepAlive: true)
 class WindowState extends _$WindowState {

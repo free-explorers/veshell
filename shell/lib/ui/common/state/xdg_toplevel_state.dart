@@ -7,9 +7,9 @@ import 'package:veshell/platform_api.dart';
 import 'package:veshell/ui/common/state/xdg_surface_state.dart';
 import 'package:veshell/ui/common/xdg_toplevel_surface.dart';
 
-part '../../../generated/ui/common/state/xdg_toplevel_state.freezed.dart';
+part 'xdg_toplevel_state.freezed.dart';
 
-part '../../../generated/ui/common/state/xdg_toplevel_state.g.dart';
+part 'xdg_toplevel_state.g.dart';
 
 @Riverpod(keepAlive: true)
 XdgToplevelSurface xdgToplevelSurfaceWidget(XdgToplevelSurfaceWidgetRef ref, int viewId) {

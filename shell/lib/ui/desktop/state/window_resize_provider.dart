@@ -6,9 +6,9 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:veshell/platform_api.dart';
 import 'package:veshell/ui/common/state/xdg_toplevel_state.dart';
 
-part '../../../generated/ui/desktop/state/window_resize_provider.freezed.dart';
+part 'window_resize_provider.freezed.dart';
 
-part '../../../generated/ui/desktop/state/window_resize_provider.g.dart';
+part 'window_resize_provider.g.dart';
 
 @Riverpod(keepAlive: true)
 class WindowResize extends _$WindowResize {

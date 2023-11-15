@@ -1,7 +1,7 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-part '../../../generated/ui/common/state/surface_ids.g.dart';
+part 'surface_ids.g.dart';
 
 @Riverpod(keepAlive: true)
 class SurfaceIds extends _$SurfaceIds {
