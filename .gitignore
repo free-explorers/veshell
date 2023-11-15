@@ -2,3 +2,4 @@ embedder/target
 embedder/third_party/flutter_engine/debug/*.so
 embedder/third_party/flutter_engine/profile/*.so
 embedder/third_party/flutter_engine/release/*.so
+embedder/third_party/flutter_engine/.flutter_engine_revision
