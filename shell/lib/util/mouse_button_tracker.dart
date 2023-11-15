@@ -1,6 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-part '../generated/util/mouse_button_tracker.g.dart';
+part 'mouse_button_tracker.g.dart';
 
 @Riverpod(keepAlive: true)
 MouseButtonTracker mouseButtonTracker(MouseButtonTrackerRef ref) => MouseButtonTracker();

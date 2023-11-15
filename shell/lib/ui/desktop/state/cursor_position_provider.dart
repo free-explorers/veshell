@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-part '../../../generated/ui/desktop/state/cursor_position_provider.g.dart';
+part 'cursor_position_provider.g.dart';
 
 @Riverpod(keepAlive: true)
 class CursorPosition extends _$CursorPosition {

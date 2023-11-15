@@ -6,7 +6,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:veshell/ui/desktop/app_drawer/app_drawer.dart';
 import 'package:veshell/ui/desktop/task_bar.dart';
 
-part '../../../generated/ui/desktop/app_drawer/app_drawer_button.g.dart';
+part 'app_drawer_button.g.dart';
 
 @Riverpod(keepAlive: true)
 class AppDrawerVisible extends _$AppDrawerVisible {

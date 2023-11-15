@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:veshell/platform_api.dart';
 
-part '../generated/util/pointer_focus_manager.g.dart';
+part 'pointer_focus_manager.g.dart';
 
 @Riverpod(keepAlive: true)
 PointerFocusManager pointerFocusManager(PointerFocusManagerRef ref) => PointerFocusManager(ref);

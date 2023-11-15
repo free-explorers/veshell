@@ -1,7 +1,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:veshell/platform_api.dart';
 
-part '../../generated/util/state/ui_mode_state.g.dart';
+part 'ui_mode_state.g.dart';
 
 enum UiMode {
   mobile,

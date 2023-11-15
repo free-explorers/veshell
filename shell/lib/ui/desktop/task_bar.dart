@@ -4,7 +4,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:veshell/ui/desktop/app_drawer/app_drawer_button.dart';
 import 'package:veshell/util/state/ui_mode_state.dart';
 
-part '../../generated/ui/desktop/task_bar.g.dart';
+part 'task_bar.g.dart';
 
 @Riverpod(keepAlive: true)
 double taskBarHeight(TaskBarHeightRef ref) => 50.0;

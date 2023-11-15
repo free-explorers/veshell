@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:veshell/ui/common/state/xdg_popup_state.dart';
 
-part '../../generated/ui/common/popup_stack.g.dart';
+part 'popup_stack.g.dart';
 
 class PopupStack extends ConsumerWidget {
   const PopupStack({super.key});

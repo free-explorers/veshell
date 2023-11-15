@@ -11,7 +11,7 @@ import 'package:veshell/ui/mobile/state/mobile_lock_screen_widget_state.dart';
 import 'package:veshell/util/state/lock_screen_state.dart';
 import 'package:veshell/util/state/screen_state.dart';
 
-part '../../generated/ui/mobile/lock_screen.g.dart';
+part 'lock_screen.g.dart';
 
 @Riverpod(keepAlive: true)
 class _AuthErrorMessage extends _$AuthErrorMessage {

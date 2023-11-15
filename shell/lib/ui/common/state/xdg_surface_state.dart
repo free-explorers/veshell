@@ -8,9 +8,9 @@ import 'package:veshell/ui/common/state/surface_state.dart';
 import 'package:veshell/ui/common/state/xdg_popup_state.dart';
 import 'package:veshell/ui/common/state/xdg_toplevel_state.dart';
 
-part '../../../generated/ui/common/state/xdg_surface_state.freezed.dart';
+part 'xdg_surface_state.freezed.dart';
 
-part '../../../generated/ui/common/state/xdg_surface_state.g.dart';
+part 'xdg_surface_state.g.dart';
 
 @freezed
 class XdgSurfaceState with _$XdgSurfaceState {

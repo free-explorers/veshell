@@ -4,9 +4,9 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:veshell/util/state/root_overlay.dart';
 import 'package:veshell/ui/mobile/power_menu.dart';
 
-part '../../../generated/ui/mobile/state/power_menu_state.freezed.dart';
+part 'power_menu_state.freezed.dart';
 
-part '../../../generated/ui/mobile/state/power_menu_state.g.dart';
+part 'power_menu_state.g.dart';
 
 @Riverpod(keepAlive: true)
 class PowerMenuStateNotifier extends _$PowerMenuStateNotifier {

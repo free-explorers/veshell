@@ -1,9 +1,9 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-part '../../../generated/ui/mobile/state/app_drawer_state.freezed.dart';
+part 'app_drawer_state.freezed.dart';
 
-part '../../../generated/ui/mobile/state/app_drawer_state.g.dart';
+part 'app_drawer_state.g.dart';
 
 @Riverpod(keepAlive: true)
 class AppDrawerNotifier extends _$AppDrawerNotifier {

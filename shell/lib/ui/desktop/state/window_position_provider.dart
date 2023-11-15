@@ -2,7 +2,7 @@ import 'dart:ui';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-part '../../../generated/ui/desktop/state/window_position_provider.g.dart';
+part 'window_position_provider.g.dart';
 
 @Riverpod(keepAlive: true)
 class WindowPosition extends _$WindowPosition {

@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-part '../../../generated/ui/mobile/state/task_switcher_state.freezed.dart';
+part 'task_switcher_state.freezed.dart';
 
-part '../../../generated/ui/mobile/state/task_switcher_state.g.dart';
+part 'task_switcher_state.g.dart';
 
 @Riverpod(keepAlive: true)
 class TaskSwitcherStateNotifier extends _$TaskSwitcherStateNotifier {

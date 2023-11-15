@@ -5,9 +5,9 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:veshell/ui/common/popup.dart';
 import 'package:veshell/ui/common/state/xdg_surface_state.dart';
 
-part '../../../generated/ui/common/state/xdg_popup_state.freezed.dart';
+part 'xdg_popup_state.freezed.dart';
 
-part '../../../generated/ui/common/state/xdg_popup_state.g.dart';
+part 'xdg_popup_state.g.dart';
 
 @Riverpod(keepAlive: true)
 Popup popupWidget(PopupWidgetRef ref, int viewId) {

@@ -7,9 +7,9 @@ import 'package:veshell/platform_api.dart';
 import 'package:veshell/util/state/display_brightness_state.dart';
 import 'package:veshell/util/state/lock_screen_state.dart';
 
-part '../../generated/util/state/screen_state.freezed.dart';
+part 'screen_state.freezed.dart';
 
-part '../../generated/util/state/screen_state.g.dart';
+part 'screen_state.g.dart';
 
 @Riverpod(keepAlive: true)
 class ScreenStateNotifier extends _$ScreenStateNotifier {

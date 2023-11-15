@@ -4,7 +4,7 @@ import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
-part '../../generated/util/state/display_brightness_state.freezed.dart';
+part 'display_brightness_state.freezed.dart';
 
 final displayBrightnessStateProvider =
     StateNotifierProvider<DisplayBrightnessStateNotifier, DisplayBrightnessState>((ref) {

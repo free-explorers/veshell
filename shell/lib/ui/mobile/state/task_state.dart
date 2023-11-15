@@ -4,9 +4,9 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:veshell/ui/mobile/task_switcher/task.dart';
 import 'package:veshell/ui/mobile/task_switcher/task_switcher.dart';
 
-part '../../../generated/ui/mobile/state/task_state.freezed.dart';
+part 'task_state.freezed.dart';
 
-part '../../../generated/ui/mobile/state/task_state.g.dart';
+part 'task_state.g.dart';
 
 @Riverpod(keepAlive: true)
 class TaskStateNotifier extends _$TaskStateNotifier {

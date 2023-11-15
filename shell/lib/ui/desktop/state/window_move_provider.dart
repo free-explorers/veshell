@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-part '../../../generated/ui/desktop/state/window_move_provider.freezed.dart';
+part 'window_move_provider.freezed.dart';
 
-part '../../../generated/ui/desktop/state/window_move_provider.g.dart';
+part 'window_move_provider.g.dart';
 
 @Riverpod(keepAlive: true)
 class WindowMove extends _$WindowMove {
