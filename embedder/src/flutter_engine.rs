@@ -130,7 +130,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         // Default build is debug if not specified.
         let flutter_engine_build = option_env!("FLUTTER_ENGINE_BUILD").unwrap_or("debug");
 
-        let flutter_project_root = if option_env!("BUNDLE").is_some() {
+        let bundle_root = if option_env!("BUNDLE").is_some() {
             executable_dir.display().to_string()
         } else {
             format!("../shell/build/linux/{arch}/{flutter_engine_build}/bundle")

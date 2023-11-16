@@ -75,7 +75,7 @@ all: debug_bundle profile_bundle release_bundle
 
 clean:
 	cd embedder && cargo clean
-	cd dart && flutter clean
+	cd shell && flutter clean
 
 .PHONY: clean all \
 		flutter_debug flutter_profile flutter_release \
