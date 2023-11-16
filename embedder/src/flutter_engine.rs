@@ -136,8 +136,8 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             format!("../shell/build/linux/{arch}/{flutter_engine_build}/bundle")
         };
 
-        let assets_path = CString::new(format!("{flutter_project_root}/data/flutter_assets"))?;
-        let icu_data_path = CString::new(format!("{flutter_project_root}/data/icudtl.dat"))?;
+        let assets_path = CString::new(format!("{bundle_root}/data/flutter_assets"))?;
+        let icu_data_path = CString::new(format!("{bundle_root}/data/icudtl.dat"))?;
         let executable_path = CString::new(executable_path.as_os_str().as_bytes())?;
         let observatory_port = CString::new("--observatory-port=12345")?;
         let disable_service_auth_codes = CString::new("--disable-service-auth-codes")?;
@@ -148,7 +148,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             disable_service_auth_codes.as_ptr(),
         ];
 
-        let elf_path = CString::new(format!("{flutter_project_root}/lib/libapp.so"))?;
+        let elf_path = CString::new(format!("{bundle_root}/lib/libapp.so"))?;
         let mut aot_data: FlutterEngineAOTData = null_mut();
 
         if flutter_engine_build != "debug" {
