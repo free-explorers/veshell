@@ -1,6 +1,6 @@
 use std::ffi::{c_int, CString};
 use std::mem::size_of;
-use std::ops::{Deref, DerefMut};
+use std::ops::DerefMut;
 use std::os::unix::ffi::OsStrExt;
 use std::ptr::{null, null_mut};
 use std::rc::Rc;
@@ -50,9 +50,8 @@ use crate::{Backend, CalloopData, flutter_engine::{
     },
 }, ServerState};
 use crate::flutter_engine::callbacks::{gl_external_texture_frame_callback, platform_message_callback, populate_existing_damage, post_task_callback, runs_task_on_current_thread_callback, vsync_callback};
-use crate::flutter_engine::embedder::{FlutterCustomTaskRunners, FlutterEngineMarkExternalTextureFrameAvailable, FlutterEngineRegisterExternalTexture, FlutterEngineRunTask, FlutterEngineSendPointerEvent, FlutterPointerEvent, FlutterTaskRunnerDescription};
+use crate::flutter_engine::embedder::{FlutterCustomTaskRunners, FlutterEngineAOTData, FlutterEngineAOTDataSource, FlutterEngineAOTDataSource__bindgen_ty_1, FlutterEngineAOTDataSourceType_kFlutterEngineAOTDataSourceTypeElfPath, FlutterEngineCreateAOTData, FlutterEngineMarkExternalTextureFrameAvailable, FlutterEngineRegisterExternalTexture, FlutterEngineRunTask, FlutterEngineSendPointerEvent, FlutterPointerEvent, FlutterTaskRunnerDescription};
 use crate::flutter_engine::platform_channel_callbacks::platform_channel_method_handler;
-use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::flutter_engine::platform_channels::binary_messenger_impl::BinaryMessengerImpl;
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
@@ -117,9 +116,29 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             rx_baton,
         };
 
-        let assets_path = CString::new(if option_env!("BUNDLE").is_some() { "data/flutter_assets" } else { "../shell/build/linux/x64/debug/bundle/data/flutter_assets" })?;
-        let icu_data_path = CString::new(if option_env!("BUNDLE").is_some() { "data/icudtl.dat" } else { "../shell/build/linux/x64/debug/bundle/data/icudtl.dat" })?;
-        let executable_path = CString::new(std::fs::canonicalize("/proc/self/exe")?.as_os_str().as_bytes())?;
+        let arch = if cfg!(target_arch = "x86_64") {
+            "x64"
+        } else if cfg!(target_arch = "aarch64") {
+            "arm64"
+        } else {
+            panic!("Unsupported architecture");
+        };
+
+        let executable_path = std::fs::canonicalize("/proc/self/exe")?;
+        let executable_dir = executable_path.parent().unwrap();
+
+        // Default build is debug if not specified.
+        let flutter_engine_build = option_env!("FLUTTER_ENGINE_BUILD").unwrap_or("debug");
+
+        let flutter_project_root = if option_env!("BUNDLE").is_some() {
+            executable_dir.display().to_string()
+        } else {
+            format!("../shell/build/linux/{arch}/{flutter_engine_build}/bundle")
+        };
+
+        let assets_path = CString::new(format!("{flutter_project_root}/data/flutter_assets"))?;
+        let icu_data_path = CString::new(format!("{flutter_project_root}/data/icudtl.dat"))?;
+        let executable_path = CString::new(executable_path.as_os_str().as_bytes())?;
         let observatory_port = CString::new("--observatory-port=12345")?;
         let disable_service_auth_codes = CString::new("--disable-service-auth-codes")?;
 
@@ -128,6 +147,22 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             observatory_port.as_ptr(),
             disable_service_auth_codes.as_ptr(),
         ];
+
+        let elf_path = CString::new(format!("{flutter_project_root}/lib/libapp.so"))?;
+        let mut aot_data: FlutterEngineAOTData = null_mut();
+
+        if flutter_engine_build != "debug" {
+            let aot_data_source = FlutterEngineAOTDataSource {
+                type_: FlutterEngineAOTDataSourceType_kFlutterEngineAOTDataSourceTypeElfPath,
+                __bindgen_anon_1: FlutterEngineAOTDataSource__bindgen_ty_1 {
+                    elf_path: elf_path.as_ptr(),
+                },
+            };
+            let result = unsafe { FlutterEngineCreateAOTData(&aot_data_source as *const _, &mut aot_data as *mut _) };
+            if result != 0 {
+                return Err(format!("Could not create AOT data, error {result}").into());
+            }
+        }
 
         let gles_renderer = server_state.gles_renderer.as_ref().unwrap();
         let root_egl_context = gles_renderer.egl_context();
@@ -186,7 +221,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             shutdown_dart_vm_when_done: true,
             compositor: null(),
             dart_old_gen_heap_size: 0,
-            aot_data: null_mut(),
+            aot_data,
             compute_platform_resolved_locale_callback: None,
             dart_entrypoint_argc: 0,
             dart_entrypoint_argv: null(),
