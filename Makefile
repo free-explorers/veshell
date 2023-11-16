@@ -36,21 +36,21 @@ flutter_profile:
 flutter_release:
 	cd shell && flutter build linux --release
 
-debug_bundle: $(DEPS_DIR)/debug/libflutter_engine.so flutter_debug cargo_debug
+debug_bundle: flutter_debug cargo_debug
 	mkdir -p $(DEBUG_BUNDLE_DIR)/lib/
 	cp embedder/target/debug/$(TARGET_EXEC) $(DEBUG_BUNDLE_DIR)
 	cp $(DEPS_DIR)/debug/libflutter_engine.so $(DEBUG_BUNDLE_DIR)/lib
 	cp -r shell/build/linux/$(ARCH)/debug/bundle/data $(DEBUG_BUNDLE_DIR)
 #	cp lsan_suppressions.txt $(DEBUG_BUNDLE_DIR)
 
-profile_bundle: $(DEPS_DIR)/profile/libflutter_engine.so flutter_profile cargo_profile
+profile_bundle: flutter_profile cargo_profile
 	mkdir -p $(PROFILE_BUNDLE_DIR)/lib/
 	cp embedder/target/release/$(TARGET_EXEC) $(PROFILE_BUNDLE_DIR)
 	cp $(DEPS_DIR)/profile/libflutter_engine.so $(PROFILE_BUNDLE_DIR)/lib
 	cp shell/build/linux/$(ARCH)/profile/bundle/lib/libapp.so $(PROFILE_BUNDLE_DIR)/lib
 	cp -r shell/build/linux/$(ARCH)/profile/bundle/data $(PROFILE_BUNDLE_DIR)
 
-release_bundle: $(DEPS_DIR)/release/libflutter_engine.so flutter_release cargo_release
+release_bundle: flutter_release cargo_release
 	mkdir -p $(RELEASE_BUNDLE_DIR)/lib/
 	cp embedder/target/release/$(TARGET_EXEC) $(RELEASE_BUNDLE_DIR)
 	cp $(DEPS_DIR)/release/libflutter_engine.so $(RELEASE_BUNDLE_DIR)/lib
