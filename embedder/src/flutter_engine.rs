@@ -1,5 +1,6 @@
+use std::cell::RefCell;
 use std::ffi::{c_int, CString};
-use std::mem::size_of;
+use std::mem::{MaybeUninit, size_of};
 use std::ops::DerefMut;
 use std::os::unix::ffi::OsStrExt;
 use std::ptr::{null, null_mut};
@@ -39,7 +40,6 @@ use crate::{Backend, CalloopData, flutter_engine::{
         FlutterEngine as FlutterEngineHandle,
         FlutterEngineGetCurrentTime,
         FlutterEngineOnVsync,
-        FlutterEngineRun,
         FlutterEngineSendWindowMetricsEvent,
         FlutterEngineShutdown,
         FlutterOpenGLRendererConfig,
@@ -50,7 +50,7 @@ use crate::{Backend, CalloopData, flutter_engine::{
     },
 }, ServerState};
 use crate::flutter_engine::callbacks::{gl_external_texture_frame_callback, platform_message_callback, populate_existing_damage, post_task_callback, runs_task_on_current_thread_callback, vsync_callback};
-use crate::flutter_engine::embedder::{FlutterCustomTaskRunners, FlutterEngineAOTData, FlutterEngineAOTDataSource, FlutterEngineAOTDataSource__bindgen_ty_1, FlutterEngineAOTDataSourceType_kFlutterEngineAOTDataSourceTypeElfPath, FlutterEngineCreateAOTData, FlutterEngineMarkExternalTextureFrameAvailable, FlutterEngineRegisterExternalTexture, FlutterEngineRunTask, FlutterEngineSendPointerEvent, FlutterPointerEvent, FlutterTaskRunnerDescription};
+use crate::flutter_engine::embedder::{FlutterCustomTaskRunners, FlutterEngineAOTData, FlutterEngineAOTDataSource, FlutterEngineAOTDataSource__bindgen_ty_1, FlutterEngineAOTDataSourceType_kFlutterEngineAOTDataSourceTypeElfPath, FlutterEngineCreateAOTData, FlutterEngineInitialize, FlutterEngineMarkExternalTextureFrameAvailable, FlutterEngineRegisterExternalTexture, FlutterEngineRunInitialized, FlutterEngineRunTask, FlutterEngineSendPointerEvent, FlutterPointerEvent, FlutterTaskRunnerDescription};
 use crate::flutter_engine::platform_channel_callbacks::platform_channel_method_handler;
 use crate::flutter_engine::platform_channels::binary_messenger_impl::BinaryMessengerImpl;
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
@@ -79,8 +79,9 @@ pub struct FlutterEngine<BackendData: Backend + 'static> {
     pub task_runner: TaskRunner,
     current_thread_id: std::thread::ThreadId,
     pub(crate) mouse_button_tracker: MouseButtonTracker,
-    pub binary_messenger: Option<BinaryMessengerImpl>,
-    rx_request_external_texture_name_registration_token: Option<calloop::RegistrationToken>,
+    pub binary_messenger: Rc<RefCell<BinaryMessengerImpl>>,
+    pub platform_method_channel: MethodChannel,
+    rx_request_external_texture_name_registration_token: calloop::RegistrationToken,
 }
 
 /// I don't want people to clone it because it's UB to call [FlutterEngine::on_vsync] multiple times
@@ -167,16 +168,8 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         let gles_renderer = server_state.gles_renderer.as_ref().unwrap();
         let root_egl_context = gles_renderer.egl_context();
 
-        let mut this = Box::new(Self {
-            loop_handle: server_state.loop_handle.clone(),
-            handle: null_mut(),
-            data: FlutterEngineData::new(root_egl_context, flutter_engine_channels)?,
-            task_runner: TaskRunner::new(tx_reschedule_task_runner_timer),
-            current_thread_id: std::thread::current().id(),
-            mouse_button_tracker: MouseButtonTracker::new(),
-            binary_messenger: None,
-            rx_request_external_texture_name_registration_token: None,
-        });
+        // We need a pointer to the memory location before initializing the struct.
+        let mut this = Box::new(MaybeUninit::<Self>::uninit());
 
         let task_runner_description = FlutterTaskRunnerDescription {
             struct_size: size_of::<FlutterTaskRunnerDescription>(),
@@ -258,7 +251,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
 
         let mut flutter_engine: FlutterEngineHandle = null_mut();
         let result = unsafe {
-            FlutterEngineRun(
+            FlutterEngineInitialize(
                 FLUTTER_ENGINE_VERSION as usize,
                 &renderer_config,
                 &project_args,
@@ -266,25 +259,29 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                 &mut flutter_engine,
             )
         };
-
         if result != 0 {
             return Err(format!("Could not initalize the Flutter engine, error {result}").into());
         }
 
-        this.handle = flutter_engine;
-        this.binary_messenger = Some(BinaryMessengerImpl::new(flutter_engine));
+        let binary_messenger = Rc::new(RefCell::new(BinaryMessengerImpl::new(flutter_engine)));
 
         let codec = Rc::new(StandardMethodCodec::new());
-        let (tx_platform_message, rx_platform_message) = channel::channel::<(MethodCall, Box<dyn MethodResult>)>();
         let mut platform_method_channel = MethodChannel::<EncodableValue>::new(
-            this.binary_messenger.as_mut().unwrap(),
+            binary_messenger.clone(),
             "platform".to_string(),
             codec,
         );
+
+        let (tx_platform_message, rx_platform_message) = channel::channel::<(MethodCall, Box<dyn MethodResult>)>();
         // TODO: Provide a way to specify a channel directly, without registering a callback.
         platform_method_channel.set_method_call_handler(Some(Box::new(move |method_call, result| {
             tx_platform_message.send((method_call, result)).unwrap();
         })));
+
+        server_state.loop_handle.insert_source(
+            rx_platform_message,
+            platform_channel_method_handler,
+        ).unwrap();
 
         let task_runner_timer_dispatcher = Dispatcher::new(Timer::immediate(), move |deadline, _, data: &mut CalloopData<BackendData>| {
             let duration = data.state.flutter_engine_mut().task_runner.execute_expired_tasks(move |task| {
@@ -301,26 +298,46 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             }
         }).unwrap();
 
-        this.rx_request_external_texture_name_registration_token = Some(server_state.loop_handle.insert_source(
-            rx_request_external_texture_name,
-            move |event, _, data| {
-                if let Msg(texture_id) = event {
-                    let texture_swap_chain = data.state.texture_swapchains.get_mut(&texture_id);
-                    let texture_id = match texture_swap_chain {
-                        Some(texture) => {
-                            let texture = texture.start_read();
-                            texture.tex_id()
-                        }
-                        None => 0,
-                    };
-                    let _ = tx_external_texture_name.send((texture_id, RGBA8));
-                }
-            }).unwrap());
+        let rx_request_external_texture_name_registration_token =
+            server_state.loop_handle.insert_source(
+                rx_request_external_texture_name,
+                move |event, _, data| {
+                    if let Msg(texture_id) = event {
+                        let texture_swap_chain = data.state.texture_swapchains.get_mut(&texture_id);
+                        let texture_id = match texture_swap_chain {
+                            Some(texture) => {
+                                let texture = texture.start_read();
+                                texture.tex_id()
+                            }
+                            None => 0,
+                        };
+                        let _ = tx_external_texture_name.send((texture_id, RGBA8));
+                    }
+                }).unwrap();
 
-        server_state.loop_handle.insert_source(
-            rx_platform_message,
-            platform_channel_method_handler,
-        ).unwrap();
+        this.write(Self {
+            loop_handle: server_state.loop_handle.clone(),
+            handle: flutter_engine,
+            data: FlutterEngineData::new(root_egl_context, flutter_engine_channels)?,
+            task_runner: TaskRunner::new(tx_reschedule_task_runner_timer),
+            current_thread_id: std::thread::current().id(),
+            mouse_button_tracker: MouseButtonTracker::new(),
+            binary_messenger: binary_messenger.clone(),
+            platform_method_channel,
+            rx_request_external_texture_name_registration_token,
+        });
+
+        // TODO: Delete this function once Box::assume_init gets stabilized.
+        pub unsafe fn assume_init<T>(var: Box<MaybeUninit<T>>) -> Box<T> {
+            let raw = Box::into_raw(var);
+            unsafe { Box::from_raw(raw as *mut T) }
+        }
+        let this = unsafe { assume_init(this) };
+
+        let result = unsafe { FlutterEngineRunInitialized(flutter_engine) };
+        if result != 0 {
+            return Err(format!("Could not run the Flutter engine, error {result}").into());
+        }
 
         Ok((this, embedder_channels))
     }
@@ -394,7 +411,7 @@ impl<BackendData: Backend + 'static> Drop for FlutterEngine<BackendData> {
     fn drop(&mut self) {
         if !self.handle.is_null() {
             // Avoid indefinite hang in the Flutter render thread waiting for an external texture.
-            let token = self.rx_request_external_texture_name_registration_token.take().unwrap();
+            let token = self.rx_request_external_texture_name_registration_token;
             self.loop_handle.remove(token);
             let _ = unsafe { FlutterEngineShutdown(self.handle) };
         }
