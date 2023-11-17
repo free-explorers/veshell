@@ -30,11 +30,11 @@ dependencies:
   flutter:
     sdk: flutter
 
-  flutter_riverpod: ^2.3.6
-  riverpod_annotation: ^2.1.1
+  hooks_riverpod: ^2.4.6
+  riverpod_annotation: ^2.3.1
   intl: ^0.18.1
-  freezed: ^2.3.5
-  freezed_annotation: ^2.2.0
+  freezed: ^2.4.5
+  freezed_annotation: ^2.4.1
   tuple: ^2.0.2
   freedesktop_desktop_entry: ^0.6.0
   jovial_svg: ^1.1.15
@@ -43,7 +43,7 @@ dependencies:
   flutter_portal: ^1.1.4
   glissando: ^0.0.3
   arena_listener: ^0.0.1
-  fast_immutable_collections: ^9.1.5
+  fast_immutable_collections: ^9.2.0
 
 dev_dependencies:
   # The "flutter_lints" package below contains a set of recommended lints to
@@ -51,9 +51,13 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^2.0.1
-  build_runner: ^2.4.5
-  riverpod_generator: ^2.2.3
+  flutter_lints: ^3.0.1
+  build_runner: ^2.4.6
+  riverpod_generator: ^2.3.6
+  very_good_analysis: ^5.1.0
+  custom_lint: ^0.5.6
+  riverpod_lint: ^2.3.4
+  json_serializable: ^6.7.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -67,9 +71,8 @@ flutter:
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
-  assets:
-    - assets/images/background.jpg
-
+  # assets:
+  
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware.
 

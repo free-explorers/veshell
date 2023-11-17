@@ -1,0 +1,18 @@
+import 'package:flutter/cupertino.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:veshell/shared/wayland/xdg_popup/xdg_popup.provider.dart';
+
+class PopupStack extends ConsumerWidget {
+  const PopupStack({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Stack(
+      key: ref.watch(popupStackGlobalKeyProvider),
+      children: [
+        for (int viewId in ref.watch(popupStackChildrenProvider))
+          ref.watch(popupWidgetProvider(viewId)),
+      ],
+    );
+  }
+}

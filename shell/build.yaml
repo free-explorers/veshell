@@ -3,6 +3,12 @@ targets:
     builders:
       source_gen|combining_builder:
         generate_for:
-          - lib/**.dart
+          - lib/**.provider.dart
+          - lib/**.manager.dart
+          - lib/**.model.serializable.dart
+          
       freezed|freezed:
         enabled: true
+        generate_for:
+          - lib/**.model.dart
+          - lib/**.model.serializable.dart
