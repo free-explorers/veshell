@@ -15,7 +15,7 @@ void main() {
   final platformApi = container.read(platformApiProvider.notifier);
 
   SchedulerBinding.instance.addPostFrameCallback((_) {
-    //platformApi.startupComplete();
+    platformApi.startupComplete();
   });
 
   container.read(platformApiProvider.notifier).init();

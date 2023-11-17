@@ -69,7 +69,7 @@ deb_package: release_bundle
 	dpkg-deb -Zxz --root-owner-group --build build/veshell/release/deb/debpkg build/veshell/release/deb
 
 attach_debugger:
-	flutter attach --debug-uri=http://127.0.0.1:12345/
+	cd shell && flutter attach --debug-uri=http://127.0.0.1:12345/
 
 all: debug_bundle profile_bundle release_bundle
 
