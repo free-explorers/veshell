@@ -12,3 +12,6 @@ targets:
         generate_for:
           - lib/**.model.dart
           - lib/**.model.serializable.dart
+      json_serializable:
+        options:
+          explicit_to_json: true

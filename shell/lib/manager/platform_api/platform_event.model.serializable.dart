@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:veshell/shared/wayland/surface/surface.model.dart';
 import 'package:veshell/shared/wayland/xdg_surface/xdg_surface.model.dart';
@@ -22,11 +24,20 @@ class InputRegion with _$InputRegion {
       _$InputRegionFromJson(json);
 }
 
+enum SurfaceRole {
+  @JsonValue(0)
+  none,
+  @JsonValue(1)
+  xdgSurface,
+  @JsonValue(2)
+  subsurface,
+}
+
 /// Model for Surface
 @freezed
-class Surface with _$Surface {
+class SurfaceEvent with _$SurfaceEvent {
   /// Factory
-  factory Surface({
+  factory SurfaceEvent({
     required SurfaceRole role,
     required int textureId,
     required int x,
@@ -37,10 +48,10 @@ class Surface with _$Surface {
     required InputRegion inputRegion,
     required List<int> subsurfacesBelow,
     required List<int> subsurfacesAbove,
-  }) = _Surface;
+  }) = _SurfaceEvent;
 
-  factory Surface.fromJson(Map<String, dynamic> json) =>
-      _$SurfaceFromJson(json);
+  factory SurfaceEvent.fromJson(Map<String, dynamic> json) =>
+      _$SurfaceEventFromJson(json);
 }
 
 /// Model for XdgSurface
@@ -95,7 +106,7 @@ class CommitSurfaceEvent with _$CommitSurfaceEvent {
   /// Factory
   factory CommitSurfaceEvent({
     required int viewId,
-    required Surface surface,
+    required SurfaceEvent surface,
     required bool hasXdgSurface,
     required bool hasXdgPopup,
     required bool hasSubsurface,

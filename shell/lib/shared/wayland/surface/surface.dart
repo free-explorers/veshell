@@ -7,8 +7,8 @@ import 'package:veshell/shared/wayland/surface/surface.provider.dart';
 import 'package:veshell/shared/wayland/surface/surface_size.dart';
 import 'package:veshell/shared/wayland/view_input_listener.dart';
 
-class Surface extends ConsumerWidget {
-  const Surface({
+class SurfaceWidget extends ConsumerWidget {
+  const SurfaceWidget({
     required this.viewId,
     super.key,
   });
@@ -74,7 +74,7 @@ class _Subsurfaces extends ConsumerWidget {
           (id) =>
               ref.watch(subsurfaceStatesProvider(id).select((ss) => ss.mapped)),
         )
-        .map((id) => Subsurface(viewId: id))
+        .map((id) => SubsurfaceWidget(viewId: id))
         .toList();
 
     return Stack(

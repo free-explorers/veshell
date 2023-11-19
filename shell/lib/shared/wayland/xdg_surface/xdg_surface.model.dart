@@ -16,7 +16,10 @@ class XdgSurfaceState with _$XdgSurfaceState {
 }
 
 enum XdgSurfaceRole {
+  @JsonValue(0)
   none,
+  @JsonValue(1)
   toplevel,
+  @JsonValue(2)
   popup,
 }

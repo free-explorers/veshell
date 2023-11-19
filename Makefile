@@ -28,13 +28,13 @@ cargo_release:
 	cd embedder && BUNDLE= FLUTTER_ENGINE_BUILD=release cargo build --release
 
 flutter_debug:
-	cd shell && flutter build linux --debug
+	cd shell && dart run build_runner build && flutter build linux --debug
 
 flutter_profile:
-	cd shell && flutter build linux --profile
+	cd shell && dart run build_runner build && flutter build linux --profile
 
 flutter_release:
-	cd shell && flutter build linux --release
+	cd shell && dart run build_runner build && flutter build linux --release
 
 debug_bundle: flutter_debug cargo_debug
 	mkdir -p $(DEBUG_BUNDLE_DIR)/lib/

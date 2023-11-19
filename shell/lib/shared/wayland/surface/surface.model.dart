@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:veshell/manager/platform_api/platform_api.provider.dart';
+import 'package:veshell/manager/platform_api/platform_event.model.serializable.dart';
 
 part 'surface.model.freezed.dart';
 
@@ -20,10 +21,4 @@ class SurfaceState with _$SurfaceState {
     required List<int> subsurfacesAbove,
     required Rect inputRegion,
   }) = _SurfaceState;
-}
-
-enum SurfaceRole {
-  none,
-  xdgSurface,
-  subsurface,
 }

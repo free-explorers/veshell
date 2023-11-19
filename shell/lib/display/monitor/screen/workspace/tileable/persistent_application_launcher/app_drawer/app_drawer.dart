@@ -6,116 +6,12 @@ import 'package:veshell/display/monitor/screen/workspace/tileable/persistent_app
 import 'package:veshell/display/monitor/screen/workspace/tileable/persistent_application_launcher/app_drawer/app_grid.dart';
 import 'package:veshell/manager/application/app_drawer.provider.dart';
 
-class AppDrawer extends ConsumerStatefulWidget {
+class AppDrawer extends HookConsumerWidget {
   const AppDrawer({super.key});
 
   @override
-  ConsumerState<AppDrawer> createState() => _AppDrawerState();
-}
-
-class _AppDrawerState extends ConsumerState<AppDrawer>
-    with TickerProviderStateMixin {
-  late AnimationController controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 200),
-  );
-  late Animation<double> slideAnimation =
-      Tween<double>(begin: 50, end: 0).animate(
-    CurvedAnimation(
-      parent: controller,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
-    ),
-  );
-  late Animation<double> opacityAnimation =
-      Tween<double>(begin: 0, end: 1).animate(
-    CurvedAnimation(
-      parent: controller,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
-    ),
-  );
-  FocusScopeNode focusScopeNode = FocusScopeNode();
-
-  @override
-  void initState() {
-    super.initState();
-    controller.forward();
-  }
-
-  @override
-  void dispose() {
-    controller.dispose();
-    focusScopeNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    ref.listen(appDrawerVisibleProvider, (_, bool next) async {
-      if (next) {
-        await controller.forward();
-        focusScopeNode.requestFocus();
-      } else {
-        await controller.reverse();
-        WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-          focusScopeNode.unfocus(
-            disposition: UnfocusDisposition.previouslyFocusedChild,
-          );
-        });
-      }
-    });
-
-    return FocusScope(
-      node: focusScopeNode,
-      // canRequestFocus: ref.watch(appDrawerVisibleProvider),
-      child: AnimatedBuilder(
-        animation: slideAnimation,
-        builder: (BuildContext context, Widget? child) {
-          return AnimatedBuilder(
-            animation: opacityAnimation,
-            builder: (BuildContext context, Widget? child) {
-              return Opacity(
-                opacity: opacityAnimation.value,
-                child: Transform.translate(
-                  offset: Offset(0, slideAnimation.value),
-                  transformHitTests: false,
-                  child: child,
-                ),
-              );
-            },
-            child: child,
-          );
-        },
-        child: SizedBox(
-          width: 600,
-          height: 600,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(
-                sigmaX: 10,
-                sigmaY: 10,
-              ),
-              child: Container(
-                color: Colors.white54,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(30, 30, 30, 10),
-                      child: _AppDrawerTextField(),
-                    ),
-                    const Expanded(
-                      child: AppGrid(),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SizedBox(width: 600, height: 600, child: AppGrid());
   }
 }
 

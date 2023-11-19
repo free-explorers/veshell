@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:veshell/manager/platform_api/platform_api.provider.dart';
+import 'package:veshell/manager/platform_api/platform_event.model.serializable.dart';
 import 'package:veshell/shared/wayland/subsurface/subsurface.provider.dart';
 import 'package:veshell/shared/wayland/surface/surface.dart';
 import 'package:veshell/shared/wayland/surface/surface.model.dart';
@@ -9,8 +10,8 @@ import 'package:veshell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
 part 'surface.provider.g.dart';
 
 @Riverpod(keepAlive: true)
-Surface surfaceWidget(SurfaceWidgetRef ref, int viewId) {
-  return Surface(
+SurfaceWidget surfaceWidget(SurfaceWidgetRef ref, int viewId) {
+  return SurfaceWidget(
     key: ref.watch(
       surfaceStatesProvider(viewId).select((state) => state.widgetKey),
     ),

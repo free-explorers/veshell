@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:veshell/manager/platform_api/platform_event.model.serializable.dart';
 import 'package:veshell/shared/wayland/subsurface/subsurface.dart';
 import 'package:veshell/shared/wayland/subsurface/subsurface.model.dart';
 import 'package:veshell/shared/wayland/surface/surface.model.dart';
@@ -11,8 +12,8 @@ import 'package:veshell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
 part 'subsurface.provider.g.dart';
 
 @Riverpod(keepAlive: true)
-Subsurface subsurfaceWidget(SubsurfaceWidgetRef ref, int viewId) {
-  return Subsurface(
+SubsurfaceWidget subsurfaceWidget(SubsurfaceWidgetRef ref, int viewId) {
+  return SubsurfaceWidget(
     key: ref.watch(
       subsurfaceStatesProvider(viewId).select((state) => state.widgetKey),
     ),

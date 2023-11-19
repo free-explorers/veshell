@@ -3,8 +3,8 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:veshell/shared/wayland/subsurface/subsurface.provider.dart';
 import 'package:veshell/shared/wayland/surface/surface.provider.dart';
 
-class Subsurface extends StatelessWidget {
-  const Subsurface({
+class SubsurfaceWidget extends StatelessWidget {
+  const SubsurfaceWidget({
     required this.viewId,
     super.key,
   });
