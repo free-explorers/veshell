@@ -24,6 +24,7 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             "pointer_exit" => pointer_exit(method_call, result, data),
             "mouse_button_event" => mouse_button_event(method_call, result, data),
             "activate_window" => activate_window(method_call, result, data),
+            "resize_window" => resize_window(method_call, result, data),
             _ => result.error(
                 "method_not_found".to_string(),
                 format!("Method {} not found", method_call.method()),
@@ -177,4 +178,32 @@ pub fn activate_window<BackendData: Backend + 'static>(
             );
         }
     }
+}
+
+pub fn resize_window<BackendData: Backend + 'static>(
+    method_call: MethodCall,
+    mut result: Box<dyn MethodResult>,
+    data: &mut CalloopData<BackendData>,
+) {
+    let args = method_call.arguments().unwrap();
+    let view_id = get(args, "view_id").long_value().unwrap();
+    let width = get(args, "width").long_value().unwrap();
+    let height = get(args, "height").long_value().unwrap();
+
+    match data.state.xdg_toplevels.get(&(view_id as u64)).cloned() {
+        Some(toplevel) => {
+            toplevel.with_pending_state(|state| {
+                state.size = Some((width as i32, height as i32).into());
+            });
+            toplevel.send_pending_configure();
+            result.success(None);
+        }
+        None => {
+            result.error(
+                "surface_doesnt_exist".to_string(),
+                format!("Surface {view_id} doesn't exist"),
+                None,
+            )
+        }
+    };
 }

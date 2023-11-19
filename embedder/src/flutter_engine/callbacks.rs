@@ -152,7 +152,7 @@ pub unsafe extern "C" fn platform_message_callback<BackendData>(message: *const 
 {
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     let message = &*message;
-    flutter_engine.binary_messenger.as_mut().unwrap().handle_message(message);
+    flutter_engine.binary_messenger.borrow_mut().handle_message(message);
 }
 
 pub unsafe extern "C" fn gl_external_texture_frame_callback<BackendData>(

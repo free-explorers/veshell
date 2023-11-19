@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::flutter_engine::platform_channels::binary_messenger::{BinaryMessageHandler, BinaryMessenger, BinaryReply};
@@ -9,14 +10,14 @@ use crate::flutter_engine::platform_channels::method_result::MethodResult;
 
 type MethodCallHandler<T> = Option<Box<dyn FnMut(MethodCall<T>, Box<dyn MethodResult<T>>)>>;
 
-pub struct MethodChannel<'m, T = EncodableValue> {
-    messenger: &'m mut dyn BinaryMessenger,
+pub struct MethodChannel<T = EncodableValue> {
+    messenger: Rc<RefCell<dyn BinaryMessenger>>,
     name: String,
     codec: Rc<dyn MethodCodec<T>>,
 }
 
-impl<'m, T: 'static> MethodChannel<'m, T> {
-    pub fn new(messenger: &'m mut dyn BinaryMessenger, name: String, codec: Rc<dyn MethodCodec<T>>) -> Self {
+impl<T: 'static> MethodChannel<T> {
+    pub fn new(messenger: Rc<RefCell<dyn BinaryMessenger>>, name: String, codec: Rc<dyn MethodCodec<T>>) -> Self {
         Self {
             messenger,
             name,
@@ -30,7 +31,7 @@ impl<'m, T: 'static> MethodChannel<'m, T> {
         let mut result = if let Some(result) = result {
             result
         } else {
-            self.messenger.send(&self.name, &message, None);
+            self.messenger.borrow_mut().send(&self.name, &message, None);
             return;
         };
 
@@ -47,14 +48,14 @@ impl<'m, T: 'static> MethodChannel<'m, T> {
             codec.decode_and_process_response_envelope(response, result.as_mut());
         }));
 
-        self.messenger.send(&channel_name, &message, reply_handler);
+        self.messenger.borrow_mut().send(&channel_name, &message, reply_handler);
     }
 
     pub fn set_method_call_handler(&mut self, handler: MethodCallHandler<T>) {
         let mut handler = if let Some(handler) = handler {
             handler
         } else {
-            self.messenger.set_message_handler(&self.name, None);
+            self.messenger.borrow_mut().set_message_handler(&self.name, None);
             return;
         };
 
@@ -71,6 +72,6 @@ impl<'m, T: 'static> MethodChannel<'m, T> {
                 result.not_implemented();
             }
         }));
-        self.messenger.set_message_handler(&self.name, binary_handler);
+        self.messenger.borrow_mut().set_message_handler(&self.name, binary_handler);
     }
 }

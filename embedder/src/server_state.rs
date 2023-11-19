@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env::{remove_var, set_var};
-use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -15,15 +14,16 @@ use smithay::input::pointer::{CursorImageStatus, PointerHandle};
 use smithay::reexports::calloop::{Interest, LoopHandle, Mode, PostAction};
 use smithay::reexports::calloop::generic::Generic;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
+use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge;
 use smithay::reexports::wayland_server::{Client, Display, DisplayHandle, Resource};
-use smithay::reexports::wayland_server::protocol::{wl_buffer, wl_seat};
+use smithay::reexports::wayland_server::protocol::wl_buffer;
+use smithay::reexports::wayland_server::protocol::wl_seat::WlSeat;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Buffer as BufferCoords, Clock, Monotonic, Rectangle, Serial, Size};
 use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor;
 use smithay::wayland::compositor::{BufferAssignment, CompositorClientState, CompositorHandler, CompositorState, SubsurfaceCachedState, SurfaceAttributes, TraversalAction, with_states, with_surface_tree_upward};
 use smithay::wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportError};
-use smithay::wayland::seat::WaylandFocus;
 use smithay::wayland::selection::data_device::{ClientDndGrabHandler, DataDeviceHandler, DataDeviceState, ServerDndGrabHandler, set_data_device_focus};
 use smithay::wayland::selection::SelectionHandler;
 use smithay::wayland::shell::xdg;
@@ -35,8 +35,6 @@ use tracing::{info, warn};
 use crate::{Backend, CalloopData, ClientState};
 use crate::flutter_engine::FlutterEngine;
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
-use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
-use crate::flutter_engine::platform_channels::standard_method_codec::StandardMethodCodec;
 use crate::flutter_engine::wayland_messages::{SubsurfaceCommitMessage, SurfaceCommitMessage, XdgPopupCommitMessage, XdgSurfaceCommitMessage};
 use crate::texture_swap_chain::TextureSwapChain;
 
@@ -224,11 +222,32 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
         self.xdg_popups.insert(view_id, _surface.clone());
     }
 
-    fn grab(&mut self, _surface: PopupSurface, _seat: wl_seat::WlSeat, _serial: Serial) {
+    fn move_request(&mut self, surface: ToplevelSurface, _seat: WlSeat, _serial: Serial) {
+        let view_id = with_states(surface.wl_surface(), |surface_data| {
+            surface_data.data_map.get::<RefCell<MySurfaceState>>().unwrap().borrow().view_id
+        });
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method("interactive_move", Some(Box::new(EncodableValue::Map(vec![
+            (EncodableValue::String("view_id".to_string()), EncodableValue::Int64(view_id as i64)),
+        ]))), None);
+    }
+
+    fn resize_request(&mut self, surface: ToplevelSurface, _seat: WlSeat, _serial: Serial, edges: ResizeEdge) {
+        let view_id = with_states(surface.wl_surface(), |surface_data| {
+            surface_data.data_map.get::<RefCell<MySurfaceState>>().unwrap().borrow().view_id
+        });
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method("interactive_resize", Some(Box::new(EncodableValue::Map(vec![
+            (EncodableValue::String("view_id".to_string()), EncodableValue::Int64(view_id as i64)),
+            (EncodableValue::String("edge".to_string()), EncodableValue::Int64(edges as i64)),
+        ]))), None);
+    }
+
+    fn grab(&mut self, _surface: PopupSurface, _seat: WlSeat, _serial: Serial) {
         // Handle popup grab here
     }
 
-    fn reposition_request(&mut self, surface: PopupSurface, positioner: PositionerState, token: u32) {
+    fn reposition_request(&mut self, surface: PopupSurface, _positioner: PositionerState, token: u32) {
         surface.send_repositioned(token);
     }
 
@@ -452,13 +471,8 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
 
         let commit_message = commit_message.serialize();
 
-        let codec = Rc::new(StandardMethodCodec::new());
-        let mut method_channel = MethodChannel::new(
-            self.flutter_engine_mut().binary_messenger.as_mut().unwrap(),
-            "platform".to_string(),
-            codec,
-        );
-        method_channel.invoke_method("commit_surface", Some(Box::new(commit_message)), None);
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method("commit_surface", Some(Box::new(commit_message)), None);
     }
 
     fn destroyed(&mut self, _surface: &WlSurface) {
@@ -467,13 +481,8 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
         });
         self.surfaces.remove(&view_id);
 
-        let codec = Rc::new(StandardMethodCodec::new());
-        let mut method_channel = MethodChannel::new(
-            self.flutter_engine_mut().binary_messenger.as_mut().unwrap(),
-            "platform".to_string(),
-            codec,
-        );
-        method_channel.invoke_method("destroy_surface", Some(Box::new(EncodableValue::Map(vec![
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method("destroy_surface", Some(Box::new(EncodableValue::Map(vec![
             (EncodableValue::String("view_id".to_string()), EncodableValue::Int64(view_id as i64)),
         ]))), None);
     }
