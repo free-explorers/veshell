@@ -1,0 +1,20 @@
+{
+  "custom-devices": [
+    {
+      "id": "veshell",
+      "label": "Veshell",
+      "sdkNameAndVersion": "Veshell",
+      "platform": "linux-x64",
+      "enabled": true,
+      "ping": ["ping", "-c", "1", "-w", "1", "localhost"],
+      "pingSuccessRegex": null,
+      "postBuild": null,
+      "install": ["pwd"],
+      "uninstall": ["pwd"],
+      "runDebug": ["make", "-j", "16", "-C", "..", "run_debug_bundle"],
+      "forwardPort": null,
+      "forwardPortSuccessRegex": null,
+      "screenshot": null
+    }
+  ]
+}
