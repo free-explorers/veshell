@@ -9,7 +9,8 @@ class ScreenWidget extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     const worskpaceList = [];
-    return const Column(
+    return const Stack(
+      fit: StackFit.expand,
       children: [WorkspaceWidget()],
     );
   }

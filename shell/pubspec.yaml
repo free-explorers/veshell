@@ -31,6 +31,7 @@ dependencies:
     sdk: flutter
 
   hooks_riverpod: ^2.4.6
+  flutter_hooks: ^0.20.3
   riverpod_annotation: ^2.3.1
   intl: ^0.18.1
   freezed: ^2.4.5
@@ -44,6 +45,7 @@ dependencies:
   glissando: ^0.0.3
   arena_listener: ^0.0.1
   fast_immutable_collections: ^9.2.0
+  material_design_icons_flutter: ^7.0.7296
 
 dev_dependencies:
   # The "flutter_lints" package below contains a set of recommended lints to
