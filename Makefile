@@ -10,31 +10,33 @@ endif
 TARGET_EXEC := veshell
 DEPS_DIR := embedder/third_party/flutter_engine
 
-DEBUG_BUILD_DIR := embedder/target/debug
-PROFILE_BUILD_DIR := embedder/target/profile
-RELEASE_BUILD_DIR := embedder/target/release
-
-DEBUG_BUNDLE_DIR := $(DEBUG_BUILD_DIR)/bundle
-PROFILE_BUNDLE_DIR := $(PROFILE_BUILD_DIR)/bundle
-RELEASE_BUNDLE_DIR := $(RELEASE_BUILD_DIR)/bundle
+DEBUG_BUNDLE_DIR := build/$(ARCH)/debug
+PROFILE_BUNDLE_DIR := build/$(ARCH)/profile
+RELEASE_BUNDLE_DIR := build/$(ARCH)/release
 
 cargo_debug:
-	cd embedder && BUNDLE= FLUTTER_ENGINE_BUILD=debug cargo build
+	cd embedder && FLUTTER_ENGINE_BUILD=debug cargo build
 
 cargo_profile:
-	cd embedder && BUNDLE= FLUTTER_ENGINE_BUILD=profile cargo build --release
+	cd embedder && FLUTTER_ENGINE_BUILD=profile cargo build --release
 
 cargo_release:
-	cd embedder && BUNDLE= FLUTTER_ENGINE_BUILD=release cargo build --release
+	cd embedder && FLUTTER_ENGINE_BUILD=release cargo build --release
 
 flutter_debug:
-	cd shell && flutter build linux --debug
+	cd shell && \
+	dart run build_runner build --delete-conflicting-outputs && \
+	flutter build linux --debug
 
 flutter_profile:
-	cd shell && flutter build linux --profile
+	cd shell && \
+	dart run build_runner build --delete-conflicting-outputs && \
+	flutter build linux --profile
 
 flutter_release:
-	cd shell && flutter build linux --release
+	cd shell && \
+	dart run build_runner build --delete-conflicting-outputs && \
+	flutter build linux --release
 
 debug_bundle: flutter_debug cargo_debug
 	mkdir -p $(DEBUG_BUNDLE_DIR)/lib/
@@ -42,6 +44,9 @@ debug_bundle: flutter_debug cargo_debug
 	cp $(DEPS_DIR)/debug/libflutter_engine.so $(DEBUG_BUNDLE_DIR)/lib
 	cp -r shell/build/linux/$(ARCH)/debug/bundle/data $(DEBUG_BUNDLE_DIR)
 #	cp lsan_suppressions.txt $(DEBUG_BUNDLE_DIR)
+
+run_debug_bundle: debug_bundle
+	./$(DEBUG_BUNDLE_DIR)/$(TARGET_EXEC)
 
 profile_bundle: flutter_profile cargo_profile
 	mkdir -p $(PROFILE_BUNDLE_DIR)/lib/
@@ -76,6 +81,7 @@ all: debug_bundle profile_bundle release_bundle
 clean:
 	cd embedder && cargo clean
 	cd shell && flutter clean
+	rm -r build
 
 .PHONY: clean all \
 		flutter_debug flutter_profile flutter_release \
@@ -84,7 +90,6 @@ clean:
  		deb_package attach_debugger
 
 dev_shell:
-	cd shell && flutter run 
-
+	export XDG_CONFIG_HOME=$(PWD)/shell/.config && cd shell && flutter run -d veshell
 dev_embedder:
 	cd embedder && cargo run

@@ -1,3 +1,4 @@
+build
 embedder/target
 embedder/third_party/flutter_engine/debug/*.so
 embedder/third_party/flutter_engine/profile/*.so
