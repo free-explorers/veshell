@@ -1,3 +1,8 @@
+# Restore XDG_CONFIG_HOME to what it was before sourcing setup_env.sh
+ifdef SETUP_ENV_SOURCED
+XDG_CONFIG_HOME = $(OLD_XDG_CONFIG_HOME)
+endif
+
 uname_m = $(shell uname -m)
 ifeq ($(uname_m),x86_64)
 ARCH += x64
