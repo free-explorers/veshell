@@ -1,8 +1,3 @@
-# Restore XDG_CONFIG_HOME to what it was before sourcing setup_env.sh
-ifdef SETUP_ENV_SOURCED
-XDG_CONFIG_HOME = $(OLD_XDG_CONFIG_HOME)
-endif
-
 uname_m = $(shell uname -m)
 ifeq ($(uname_m),x86_64)
 ARCH += x64
@@ -95,7 +90,6 @@ clean:
  		deb_package attach_debugger
 
 dev_shell:
-	cd shell && flutter run 
-
+	export XDG_CONFIG_HOME=$(PWD)/shell/.config && cd shell && flutter run -d veshell
 dev_embedder:
 	cd embedder && cargo run

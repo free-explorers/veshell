@@ -7,27 +7,12 @@
         {
             "name": "shell",
             "cwd": "shell",
-            "request": "attach",
-            "preLaunchTask": "embedder run",
-            "type": "dart",
-            "toolArgs": [
-                "--debug-uri",
-                "http://127.0.0.1:12345/"
-            ]
-        },
-        {
-            "name": "shell (profile mode)",
-            "cwd": "shell",
             "request": "launch",
             "type": "dart",
-            "flutterMode": "profile"
+            "env": {
+                "XDG_CONFIG_HOME": "${workspaceFolder}/shell/.config",
+            },
+            "deviceId": "veshell",
         },
-        {
-            "name": "shell (release mode)",
-            "cwd": "shell",
-            "request": "launch",
-            "type": "dart",
-            "flutterMode": "release"
-        }
     ]
 }
