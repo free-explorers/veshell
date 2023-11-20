@@ -10,9 +10,7 @@ The project responsibility will be splitted into parts:
 
 # run
 ```shell
-source ./setup_env.sh
-cd shell
-flutter run -d veshell
+make dev_shell
 ```
 
 # Special thanks
