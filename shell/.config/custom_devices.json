@@ -6,15 +6,34 @@
       "sdkNameAndVersion": "Veshell",
       "platform": "linux-x64",
       "enabled": true,
-      "ping": ["ping", "-c", "1", "-w", "1", "localhost"],
+      "ping": [
+        "ping",
+        "-c",
+        "1",
+        "-w",
+        "1",
+        "localhost"
+      ],
       "pingSuccessRegex": null,
       "postBuild": null,
-      "install": ["pwd"],
-      "uninstall": ["pwd"],
-      "runDebug": ["make", "-j", "16", "-C", "..", "run_debug_bundle"],
+      "install": [
+        "pwd"
+      ],
+      "uninstall": [
+        "pwd"
+      ],
+      "runDebug": [
+        "make",
+        "-j",
+        "16",
+        "-C",
+        "..",
+        "run_debug_bundle"
+      ],
       "forwardPort": null,
       "forwardPortSuccessRegex": null,
       "screenshot": null
     }
-  ]
+  ],
+  "$schema": "file:///home/papyelgringo/workspace/flutter/packages/flutter_tools/static/custom-devices.schema.json"
 }
