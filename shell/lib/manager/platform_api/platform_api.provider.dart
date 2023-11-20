@@ -80,33 +80,38 @@ class PlatformApi extends _$PlatformApi {
     ref.read(tasksProvider);
 
     state.platform.setMethodCallHandler((call) async {
-      final json = call.arguments as Map<String, dynamic>;
-      switch (call.method) {
-        case 'commit_surface':
-          _commitSurface(
-            CommitSurfaceEvent.fromJson(
-              json,
-            ),
-          );
-        case 'send_text_input_event':
-          _sendTextInputEvent(TextInputEvent.fromJson(json));
-        case 'interactive_move':
-          _interactiveMove(InteractiveMoveEvent.fromJson(json));
-        case 'interactive_resize':
-          _interactiveResize(InteractiveResizeEvent.fromJson(json));
-        case 'set_title':
-          _setTitle(SetTitleEvent.fromJson(json));
-        case 'set_app_id':
-          _setAppId(SetAppIdEvent.fromJson(json));
-        case 'request_maximize':
-          _requestMaximize(RequestMaxmizeEvent.fromJson(json));
-        case 'destroy_surface':
-          await _destroySurface(DestroySurfaceEvent.fromJson(json));
-        default:
-          throw PlatformException(
-            code: 'unknown_method',
-            message: 'Unknown method ${call.method}',
-          );
+      try {
+        final json = (call.arguments as Map).cast<String, dynamic>();
+        switch (call.method) {
+          case 'commit_surface':
+            _commitSurface(
+              CommitSurfaceEvent.fromJson(
+                json,
+              ),
+            );
+          case 'send_text_input_event':
+            _sendTextInputEvent(TextInputEvent.fromJson(json));
+          case 'interactive_move':
+            _interactiveMove(InteractiveMoveEvent.fromJson(json));
+          case 'interactive_resize':
+            _interactiveResize(InteractiveResizeEvent.fromJson(json));
+          case 'set_title':
+            _setTitle(SetTitleEvent.fromJson(json));
+          case 'set_app_id':
+            _setAppId(SetAppIdEvent.fromJson(json));
+          case 'request_maximize':
+            _requestMaximize(RequestMaxmizeEvent.fromJson(json));
+          case 'destroy_surface':
+            await _destroySurface(DestroySurfaceEvent.fromJson(json));
+          default:
+            throw PlatformException(
+              code: 'unknown_method',
+              message: 'Unknown method ${call.method}',
+            );
+        }
+      } catch (e) {
+        print(e);
+        rethrow;
       }
     });
   }
