@@ -10,7 +10,9 @@ The project responsibility will be splitted into parts:
 
 # run
 ```shell
-make debug_bundle && cargo run
+source ./setup_env.sh
+cd shell
+flutter run -d veshell
 ```
 
 # Special thanks
