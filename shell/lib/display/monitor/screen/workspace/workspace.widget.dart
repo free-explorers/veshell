@@ -25,7 +25,9 @@ class WorkspaceWidget extends HookConsumerWidget {
       );
     }
     final tabController = useTabController(
-        initialLength: tileableList.length, keys: [windowStackList]);
+      initialLength: tileableList.length,
+      keys: [windowStackList],
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
