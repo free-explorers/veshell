@@ -14,12 +14,14 @@ class PersistentWindow extends Tileable {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Window(key: GlobalKey(), viewId: viewId);
+    return Window(viewId: viewId);
   }
 
   @override
   Widget buildPanelWidget(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(XdgToplevelStatesProvider(viewId));
-    return Tab(child: Text(state.title));
+    final title = ref.watch(
+      xdgToplevelStatesProvider(viewId).select((value) => value.title),
+    );
+    return Tab(child: Text(title));
   }
 }

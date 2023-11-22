@@ -109,8 +109,9 @@ class PlatformApi extends _$PlatformApi {
               message: 'Unknown method ${call.method}',
             );
         }
-      } catch (e) {
+      } catch (e, stackTrace) {
         print(e);
+        print(stackTrace);
         rethrow;
       }
     });
@@ -317,11 +318,11 @@ class PlatformApi extends _$PlatformApi {
           ),
           scale: event.surface.scale.toDouble(),
           subsurfacesBelow: event.surface.subsurfacesBelow,
-          subsurfacesAbove: event.surface.subsurfacesBelow,
+          subsurfacesAbove: event.surface.subsurfacesAbove,
           inputRegion: inputRegionRect,
         );
 
-    if (event.hasXdgSurface) {
+    if (event.xdgSurface != null) {
       final xdgSurface = event.xdgSurface!;
       ref.read(xdgSurfaceStatesProvider(event.viewId).notifier).commit(
             role: xdgSurface.role,
@@ -333,7 +334,7 @@ class PlatformApi extends _$PlatformApi {
             ),
           );
 
-      if (event.hasXdgPopup) {
+      if (event.xdgPopup != null) {
         final xdgPopup = event.xdgPopup!;
 
         // TODO: What to do with the xdgPopup width & height?
@@ -345,7 +346,7 @@ class PlatformApi extends _$PlatformApi {
       }
     }
 
-    if (event.hasSubsurface) {
+    if (event.subsurface != null) {
       final subsurface = event.subsurface!;
       final position = Offset(subsurface.x.toDouble(), subsurface.y.toDouble());
       ref.read(subsurfaceStatesProvider(event.viewId).notifier).commit(
@@ -353,19 +354,19 @@ class PlatformApi extends _$PlatformApi {
           );
     }
 
-    if (event.hasToplevelDecoration) {
+    if (event.toplevelDecoration != null) {
       ref
           .read(xdgToplevelStatesProvider(event.viewId).notifier)
           .setDecoration(event.toplevelDecoration!);
     }
 
-    if (event.hasToplevelTitle) {
+    if (event.toplevelTitle != null) {
       ref
           .read(xdgToplevelStatesProvider(event.viewId).notifier)
           .setTitle(event.toplevelTitle!);
     }
 
-    if (event.hasToplevelAppId) {
+    if (event.toplevelAppId != null) {
       ref
           .read(xdgToplevelStatesProvider(event.viewId).notifier)
           .setAppId(event.toplevelAppId!);
