@@ -102,8 +102,15 @@ X-GDM-SessionRegisters=true
 
   print(importantColor(
       'Installing the session in the system require sudo privileges'));
-  await runProcess(
-      'sudo', ['cp', desktopFilePath, '/usr/share/wayland-sessions/']);
+  if (Platform.environment['container'] != null) {
+    print(errorColor(
+        '\nYou are in a container to finish the setup you should call in your host system'));
+    print(importantColor(
+        'sudo mkdir -p /usr/local/share/wayland-sessions && sudo cp ${desktopFile.absolute.path} /usr/local/share/wayland-sessions/'));
+  } else {
+    await runProcess(
+        'sudo', ['cp', desktopFilePath, '/usr/share/wayland-sessions/']);
+  }
 
   print(successColor('\nSession installation completed\n'));
 }
