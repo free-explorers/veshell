@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:veshell/shared/wayland/xdg_popup/popup.dart';
+import 'package:shell/shared/wayland/xdg_popup/popup.dart';
 
 part 'xdg_popup.model.freezed.dart';
 

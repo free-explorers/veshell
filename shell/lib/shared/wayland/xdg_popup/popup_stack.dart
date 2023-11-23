@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:veshell/shared/wayland/xdg_popup/xdg_popup.provider.dart';
+import 'package:shell/shared/wayland/xdg_popup/xdg_popup.provider.dart';
 
 class PopupStack extends ConsumerWidget {
   const PopupStack({super.key});

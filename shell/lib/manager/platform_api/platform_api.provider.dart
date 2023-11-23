@@ -3,15 +3,15 @@ import 'dart:ffi' show Finalizable;
 
 import 'package:flutter/services.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:veshell/manager/platform_api/platform_event.model.serializable.dart';
-import 'package:veshell/shared/tasks/tasks.provider.dart';
-import 'package:veshell/shared/wayland/subsurface/subsurface.provider.dart';
-import 'package:veshell/shared/wayland/surface/surface.provider.dart';
-import 'package:veshell/shared/wayland/surface_ids.provider.dart';
-import 'package:veshell/shared/wayland/xdg_popup/xdg_popup.provider.dart';
-import 'package:veshell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
-import 'package:veshell/shared/wayland/xdg_toplevel/xdg_toplevel.model.dart';
-import 'package:veshell/shared/wayland/xdg_toplevel/xdg_toplevel.provider.dart';
+import 'package:shell/manager/platform_api/platform_event.model.serializable.dart';
+import 'package:shell/shared/tasks/tasks.provider.dart';
+import 'package:shell/shared/wayland/subsurface/subsurface.provider.dart';
+import 'package:shell/shared/wayland/surface/surface.provider.dart';
+import 'package:shell/shared/wayland/surface_ids.provider.dart';
+import 'package:shell/shared/wayland/xdg_popup/xdg_popup.provider.dart';
+import 'package:shell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
+import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.model.dart';
+import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.provider.dart';
 
 part 'platform_api.provider.g.dart';
 

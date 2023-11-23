@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:veshell/shared/util/rect_overflow_box.dart';
-import 'package:veshell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
+import 'package:shell/shared/util/rect_overflow_box.dart';
+import 'package:shell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
 
 class ContainToVisibleBounds extends ConsumerWidget {
   const ContainToVisibleBounds({

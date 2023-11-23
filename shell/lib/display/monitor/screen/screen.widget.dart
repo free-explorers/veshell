@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:veshell/display/monitor/screen/workspace/workspace.widget.dart';
+import 'package:shell/display/monitor/screen/workspace/workspace.widget.dart';
 
 /// Widget that represent the Screen in the widget tree
 class ScreenWidget extends HookConsumerWidget {

@@ -1,6 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:veshell/shared/state/task_switcher/task_switcher.model.dart';
-import 'package:veshell/shared/tasks/tasks.provider.dart';
+import 'package:shell/shared/state/task_switcher/task_switcher.model.dart';
+import 'package:shell/shared/tasks/tasks.provider.dart';
 
 part 'task_switcher.provider.g.dart';
 

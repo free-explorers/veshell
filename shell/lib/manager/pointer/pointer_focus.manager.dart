@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:veshell/manager/platform_api/platform_api.provider.dart';
+import 'package:shell/manager/platform_api/platform_api.provider.dart';
 
 part 'pointer_focus.manager.g.dart';
 

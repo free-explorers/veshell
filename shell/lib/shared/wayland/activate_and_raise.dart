@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:veshell/shared/tasks/tasks.provider.dart';
-import 'package:veshell/shared/wayland/xdg_toplevel/xdg_toplevel.provider.dart';
+import 'package:shell/shared/tasks/tasks.provider.dart';
+import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.provider.dart';
 
 class ActivateAndRaise extends ConsumerWidget {
   const ActivateAndRaise({

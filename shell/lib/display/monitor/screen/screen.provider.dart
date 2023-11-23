@@ -1,6 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:veshell/display/monitor/monitor.provider.dart';
-import 'package:veshell/display/monitor/screen/screen.model.dart';
+import 'package:shell/display/monitor/monitor.provider.dart';
+import 'package:shell/display/monitor/screen/screen.model.dart';
 
 part 'screen.provider.g.dart';
 

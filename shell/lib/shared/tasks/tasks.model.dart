@@ -1,6 +1,6 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:veshell/shared/tasks/tasks.provider.dart';
+import 'package:shell/shared/tasks/tasks.provider.dart';
 
 part 'tasks.model.freezed.dart';
 

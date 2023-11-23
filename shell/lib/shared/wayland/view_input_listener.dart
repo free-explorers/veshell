@@ -2,10 +2,10 @@ import 'package:arena_listener/arena_listener.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:veshell/manager/platform_api/platform_api.provider.dart';
-import 'package:veshell/manager/pointer/pointer_focus.manager.dart';
-import 'package:veshell/shared/util/mouse_button_tracker.provider.dart';
-import 'package:veshell/shared/wayland/surface/surface.provider.dart';
+import 'package:shell/manager/platform_api/platform_api.provider.dart';
+import 'package:shell/manager/pointer/pointer_focus.manager.dart';
+import 'package:shell/shared/util/mouse_button_tracker.provider.dart';
+import 'package:shell/shared/wayland/surface/surface.provider.dart';
 
 /// Handles all input events for a given window or popup, and redirects them to the platform which will then be
 /// forwarded to the appropriate surface.

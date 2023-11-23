@@ -2,16 +2,16 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:veshell/shared/state/cursor_position/cursor_position.provider.dart';
-import 'package:veshell/shared/state/window_move/window_move.provider.dart';
-import 'package:veshell/shared/state/window_position/window_position.provider.dart';
-import 'package:veshell/shared/state/window_resize/window_resize.provider.dart';
-import 'package:veshell/shared/state/window_stack/window_stack.provider.dart';
-import 'package:veshell/shared/state/window_state/window_state.provider.dart';
-import 'package:veshell/shared/wayland/surface/surface.provider.dart';
-import 'package:veshell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
-import 'package:veshell/shared/wayland/xdg_toplevel/xdg_toplevel.model.dart';
-import 'package:veshell/shared/wayland/xdg_toplevel/xdg_toplevel.provider.dart';
+import 'package:shell/shared/state/cursor_position/cursor_position.provider.dart';
+import 'package:shell/shared/state/window_move/window_move.provider.dart';
+import 'package:shell/shared/state/window_position/window_position.provider.dart';
+import 'package:shell/shared/state/window_resize/window_resize.provider.dart';
+import 'package:shell/shared/state/window_stack/window_stack.provider.dart';
+import 'package:shell/shared/state/window_state/window_state.provider.dart';
+import 'package:shell/shared/wayland/surface/surface.provider.dart';
+import 'package:shell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
+import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.model.dart';
+import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.provider.dart';
 
 const duration = Duration(milliseconds: 300);
 
@@ -399,18 +399,18 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 // import 'package:flutter/material.dart';
 // import 'package:flutter/rendering.dart';
 // import 'package:hooks_riverpod/hooks_riverpod.dart';// import 'package:riverpod_annotation/riverpod_annotation.dart';
-// import 'package:veshell/ui/common/state/surface_state.dart';
-// import 'package:veshell/ui/common/state/xdg_surface_state.dart';
-// import 'package:veshell/ui/common/state/xdg_toplevel_state.dart';
-// import 'package:veshell/ui/desktop/decorations/with_decorations.dart';
-// import 'package:veshell/ui/desktop/interactive_move_and_resize_listener.dart';
-// import 'package:veshell/ui/desktop/state/cursor_position_provider.dart';
-// import 'package:veshell/ui/desktop/state/window_move_provider.dart';
-// import 'package:veshell/ui/desktop/state/window_position_provider.dart';
-// import 'package:veshell/ui/desktop/state/window_resize_provider.dart';
-// import 'package:veshell/ui/desktop/state/window_stack_provider.dart';
-// import 'package:veshell/ui/desktop/state/window_state_provider.dart';
-// import 'package:veshell/ui/mobile/state/virtual_keyboard_state.dart';
+// import 'package:shell/ui/common/state/surface_state.dart';
+// import 'package:shell/ui/common/state/xdg_surface_state.dart';
+// import 'package:shell/ui/common/state/xdg_toplevel_state.dart';
+// import 'package:shell/ui/desktop/decorations/with_decorations.dart';
+// import 'package:shell/ui/desktop/interactive_move_and_resize_listener.dart';
+// import 'package:shell/ui/desktop/state/cursor_position_provider.dart';
+// import 'package:shell/ui/desktop/state/window_move_provider.dart';
+// import 'package:shell/ui/desktop/state/window_position_provider.dart';
+// import 'package:shell/ui/desktop/state/window_resize_provider.dart';
+// import 'package:shell/ui/desktop/state/window_stack_provider.dart';
+// import 'package:shell/ui/desktop/state/window_state_provider.dart';
+// import 'package:shell/ui/mobile/state/virtual_keyboard_state.dart';
 //
 // part 'window.g.dart';
 //

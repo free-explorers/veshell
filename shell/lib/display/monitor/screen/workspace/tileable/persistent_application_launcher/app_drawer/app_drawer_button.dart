@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_portal/flutter_portal.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:veshell/display/monitor/screen/workspace/tileable/persistent_application_launcher/app_drawer/app_drawer.dart';
-import 'package:veshell/display/monitor/screen/workspace/tileable/persistent_application_launcher/app_drawer/app_drawer.provider.dart';
+import 'package:shell/display/monitor/screen/workspace/tileable/persistent_application_launcher/app_drawer/app_drawer.dart';
+import 'package:shell/display/monitor/screen/workspace/tileable/persistent_application_launcher/app_drawer/app_drawer.provider.dart';
 
 class AppDrawerButton extends ConsumerWidget {
   const AppDrawerButton({super.key});

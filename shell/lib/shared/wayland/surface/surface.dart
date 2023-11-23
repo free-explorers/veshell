@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:veshell/shared/wayland/subsurface/subsurface.dart';
-import 'package:veshell/shared/wayland/subsurface/subsurface.provider.dart';
-import 'package:veshell/shared/wayland/surface/surface.model.dart';
-import 'package:veshell/shared/wayland/surface/surface.provider.dart';
-import 'package:veshell/shared/wayland/surface/surface_size.dart';
-import 'package:veshell/shared/wayland/view_input_listener.dart';
+import 'package:shell/shared/wayland/subsurface/subsurface.dart';
+import 'package:shell/shared/wayland/subsurface/subsurface.provider.dart';
+import 'package:shell/shared/wayland/surface/surface.model.dart';
+import 'package:shell/shared/wayland/surface/surface.provider.dart';
+import 'package:shell/shared/wayland/surface/surface_size.dart';
+import 'package:shell/shared/wayland/view_input_listener.dart';
 
 class SurfaceWidget extends ConsumerWidget {
   const SurfaceWidget({

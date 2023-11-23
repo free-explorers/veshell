@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:veshell/shared/wayland/subsurface/subsurface.provider.dart';
-import 'package:veshell/shared/wayland/surface/surface.provider.dart';
+import 'package:shell/shared/wayland/subsurface/subsurface.provider.dart';
+import 'package:shell/shared/wayland/surface/surface.provider.dart';
 
 class SubsurfaceWidget extends StatelessWidget {
   const SubsurfaceWidget({

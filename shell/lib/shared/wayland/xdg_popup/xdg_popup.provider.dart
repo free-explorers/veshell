@@ -1,9 +1,9 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:veshell/shared/wayland/xdg_popup/popup.dart';
-import 'package:veshell/shared/wayland/xdg_popup/xdg_popup.model.dart';
-import 'package:veshell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
+import 'package:shell/shared/wayland/xdg_popup/popup.dart';
+import 'package:shell/shared/wayland/xdg_popup/xdg_popup.model.dart';
+import 'package:shell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
 
 part 'xdg_popup.provider.g.dart';
 

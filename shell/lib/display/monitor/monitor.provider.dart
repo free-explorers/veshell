@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:veshell/display/display.provider.dart';
-import 'package:veshell/display/monitor/monitor.model.dart';
+import 'package:shell/display/display.provider.dart';
+import 'package:shell/display/monitor/monitor.model.dart';
 
 part 'monitor.provider.g.dart';
 

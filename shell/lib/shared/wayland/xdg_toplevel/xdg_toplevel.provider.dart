@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:veshell/manager/platform_api/platform_api.provider.dart';
-import 'package:veshell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
-import 'package:veshell/shared/wayland/xdg_toplevel/xdg_toplevel.model.dart';
-import 'package:veshell/shared/wayland/xdg_toplevel/xdg_toplevel_surface.dart';
+import 'package:shell/manager/platform_api/platform_api.provider.dart';
+import 'package:shell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
+import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.model.dart';
+import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel_surface.dart';
 
 part 'xdg_toplevel.provider.g.dart';
 

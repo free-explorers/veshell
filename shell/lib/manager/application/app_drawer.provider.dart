@@ -1,6 +1,6 @@
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:veshell/manager/application/desktop_entries.provider.dart';
+import 'package:shell/manager/application/desktop_entries.provider.dart';
 
 part 'app_drawer.provider.g.dart';
 

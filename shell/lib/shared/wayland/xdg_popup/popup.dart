@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:veshell/shared/wayland/surface/surface.provider.dart';
-import 'package:veshell/shared/wayland/xdg_popup/xdg_popup.provider.dart';
-import 'package:veshell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
+import 'package:shell/shared/wayland/surface/surface.provider.dart';
+import 'package:shell/shared/wayland/xdg_popup/xdg_popup.provider.dart';
+import 'package:shell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
 
 class Popup extends StatelessWidget {
   const Popup({

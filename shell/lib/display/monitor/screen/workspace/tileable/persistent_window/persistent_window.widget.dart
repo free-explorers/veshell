@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:veshell/display/monitor/screen/workspace/tileable/tileable.widget.dart';
-import 'package:veshell/manager/window/window.dart';
-import 'package:veshell/shared/wayland/xdg_toplevel/xdg_toplevel.provider.dart';
+import 'package:shell/display/monitor/screen/workspace/tileable/tileable.widget.dart';
+import 'package:shell/manager/window/window.dart';
+import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.provider.dart';
 
 /// Tileable Window that persist when closed
 class PersistentWindow extends Tileable {

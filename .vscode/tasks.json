@@ -12,6 +12,25 @@
 			"options": {
 				"cwd": "${workspaceFolder}/embedder"
 			}
+		},
+		{
+			"type": "dart",
+			"command": "dart",
+			"args": [
+				"run",
+				"build_runner",
+				"watch"
+			],
+			"problemMatcher": [
+				"$dart-build_runner"
+			],
+			"group": "build",
+			"label": "build_runner watch",
+			"detail": "shell",
+			"options": {
+				"cwd": "${workspaceFolder}/shell"
+			},
+			"isBackground": true
 		}
 	]
 }

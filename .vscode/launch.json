@@ -13,6 +13,7 @@
                 "XDG_CONFIG_HOME": "${workspaceFolder}/shell/.config",
             },
             "deviceId": "veshell",
+            "preLaunchTask": "build_runner watch"
         },
     ]
 }

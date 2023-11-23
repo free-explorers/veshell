@@ -1,7 +1,7 @@
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:veshell/display/monitor/screen/workspace/tileable/persistent_application_launcher/app_drawer/app_grid.dart';
-import 'package:veshell/manager/application/app_drawer.provider.dart';
+import 'package:shell/display/monitor/screen/workspace/tileable/persistent_application_launcher/app_drawer/app_grid.dart';
+import 'package:shell/manager/application/app_drawer.provider.dart';
 
 part 'app_drawer.provider.g.dart';
 
