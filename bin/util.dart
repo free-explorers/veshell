@@ -41,3 +41,8 @@ Future<int> runProcess(String executable, List<String> arguments,
 
   return exitCode;
 }
+
+Future<bool> isCommandAvailable(String command) async {
+  var result = await Process.run('which', [command]);
+  return result.exitCode == 0;
+}

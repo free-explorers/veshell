@@ -48,8 +48,3 @@ Future<void> check() async {
 
   print(successColor('All dependencies are installed.\n'));
 }
-
-Future<bool> isCommandAvailable(String command) async {
-  var result = await Process.run('command', ['-v', command]);
-  return result.exitCode == 0;
-}

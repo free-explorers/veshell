@@ -16,7 +16,7 @@ class Apt extends PackageManagerBase {
   String get ninja => 'ninja-build';
 
   @override
-  String get gtk3 => 'gtk3-dev';
+  String get gtk3 => 'libgtk-3-dev';
 
   @override
   String get seat => 'libseat-dev';
@@ -28,7 +28,7 @@ class Apt extends PackageManagerBase {
   String get gbm => 'libgbm-dev';
 
   @override
-  String get openssl => 'openssl-dev';
+  String get openssl => 'openssl';
 
   @override
   String printInstallDependenciesCommand(List<String> dependencyList) {
@@ -42,6 +42,6 @@ class Apt extends PackageManagerBase {
 
   @override
   Future<int> isInstalled() async {
-    return runProcess('command', ['-v', 'apt'], verbose: false);
+    return runProcess('which', ['apt'], verbose: false);
   }
 }

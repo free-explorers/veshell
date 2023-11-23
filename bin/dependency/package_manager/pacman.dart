@@ -42,6 +42,6 @@ class Pacman extends PackageManagerBase {
 
   @override
   Future<int> isInstalled() async {
-    return runProcess('command', ['-v', 'pacman'], verbose: false);
+    return runProcess('which', ['pacman'], verbose: false);
   }
 }

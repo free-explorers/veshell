@@ -43,6 +43,6 @@ class Dnf extends PackageManagerBase {
 
   @override
   Future<int> isInstalled() async {
-    return runProcess('command', ['-v', 'dnf'], verbose: false);
+    return runProcess('which', ['dnf'], verbose: false);
   }
 }

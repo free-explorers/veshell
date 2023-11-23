@@ -90,45 +90,20 @@ Future<void> createSession({BuildTarget target = BuildTarget.debug}) async {
   var desktopFileContent = '''
 [Desktop Entry]
 Name=Veshell
-Exec='${buildDirectory.absolute.path}/$targetExec'
+Exec=${buildDirectory.absolute.path}/$targetExec
 Type=Application
+X-GDM-SessionRegisters=true
 ''';
 
   final desktopFilePath = '${buildDirectory.path}/veshell.desktop';
-  print('Creating $desktopFilePath');
+  print('Creating $desktopFilePath\n');
   var desktopFile = File(desktopFilePath);
   await desktopFile.writeAsString(desktopFileContent);
 
-  var sessionFileContent = '''
-[GNOME Session]
-Name=Veshell
-RequiredComponents=veshell;gnome-settings-daemon;
-''';
+  print(importantColor(
+      'Installing the session in the system require sudo privileges'));
+  await runProcess(
+      'sudo', ['cp', desktopFilePath, '/usr/share/wayland-sessions/']);
 
-  final sessionFilePath = '${buildDirectory.path}/veshell.session';
-  print('Creating $sessionFilePath');
-  var sessionFile = File(sessionFilePath);
-  await sessionFile.writeAsString(sessionFileContent);
-
-  var desktopDir =
-      Directory('${Platform.environment['HOME']}/.local/share/xsessions');
-  await desktopDir.create(recursive: true);
-  print('Symlink ${desktopFile.path} to ${desktopDir.path} ');
-  var desktopFileLink = Link('${desktopDir.path}/veshell.desktop');
-  if (await desktopFileLink.exists()) {
-    await desktopFileLink.delete();
-  }
-  await desktopFileLink.create(desktopFile.absolute.path, recursive: true);
-
-  var sessionDir = Directory(
-      '${Platform.environment['HOME']}/.local/share/gnome-session/sessions');
-  await sessionDir.create(recursive: true);
-  print('Symlink ${sessionFile.path} to ${sessionDir.path} ');
-  var sessionFileLink = Link('${sessionDir.path}/veshell.session');
-  if (await sessionFileLink.exists()) {
-    await sessionFileLink.delete();
-  }
-  await sessionFileLink.create(sessionFile.absolute.path, recursive: true);
-
-  print(successColor('\nSession completed\n'));
+  print(successColor('\nSession installation completed\n'));
 }
