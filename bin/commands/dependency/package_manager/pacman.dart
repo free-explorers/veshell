@@ -1,4 +1,4 @@
-import '../../util.dart';
+import '../../../util.dart';
 import 'package_manager_base.dart';
 
 class Pacman extends PackageManagerBase {
@@ -25,7 +25,7 @@ class Pacman extends PackageManagerBase {
   String get libinput => 'libinput';
 
   @override
-  String get gbm => 'libgbm';
+  String get gbm => 'mesa';
 
   @override
   String get openssl => 'openssl';

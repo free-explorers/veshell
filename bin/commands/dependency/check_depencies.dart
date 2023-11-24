@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:mason_logger/mason_logger.dart';
 
-import '../util.dart';
+import '../../util.dart';
 import 'package_manager/apt.dart';
 import 'package_manager/dnf.dart';
 import 'package_manager/package_manager_base.dart';

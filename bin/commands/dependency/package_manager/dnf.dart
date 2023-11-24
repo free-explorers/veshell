@@ -1,4 +1,4 @@
-import '../../util.dart';
+import '../../../util.dart';
 import 'package_manager_base.dart';
 
 class Dnf extends PackageManagerBase {
