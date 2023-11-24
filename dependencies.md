@@ -58,5 +58,11 @@
       <td>libgm-devel</td>
       <td>libgbm-dev</td>
     </tr>
+    <tr>
+      <td>openssl</td>
+      <td>openssl</td>
+      <td>openssl-devel</td>
+      <td>openssl-dev</td>
+    </tr>
   </tbody>
 </table>
