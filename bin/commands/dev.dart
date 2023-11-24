@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:args/command_runner.dart';
 import 'package:mason_logger/mason_logger.dart';
 
-import '../tasks/util.dart';
+import '../util.dart';
 
 class DevCommand extends Command<int> {
   DevCommand({required this.logger});

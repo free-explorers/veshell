@@ -10,7 +10,7 @@ import 'commands/clean.dart';
 import 'commands/dev.dart';
 import 'commands/install.dart';
 import 'commands/run.dart';
-import 'tasks/util.dart';
+import 'util.dart';
 
 void main(List<String> arguments) async {
   // The script can either be run from project root or from the shell directory by flutter

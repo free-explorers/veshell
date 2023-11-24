@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:args/command_runner.dart';
 import 'package:mason_logger/mason_logger.dart';
 
-import '../tasks/dependency/check_depencies.dart' as dependencies;
-import '../tasks/util.dart';
+import '../util.dart';
+import 'dependency/check_depencies.dart' as dependencies;
 import '../veshell.dart';
 
 const targetExec = 'veshell';
