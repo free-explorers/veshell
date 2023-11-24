@@ -1,9 +1,9 @@
+use std::{env, io};
 use std::fmt::{Display, Formatter};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
-use std::{env, io};
 
 use lazy_static::lazy_static;
 
@@ -11,7 +11,7 @@ const FLUTTER_ENGINE_LIBS_DIR: &str = "third_party/flutter_engine";
 const FLUTTER_ENGINE_LIB_NAME: &str = "libflutter_engine.so";
 const FLUTTER_ENGINE_LINK_NAME: &str = "flutter_engine";
 lazy_static! {
-    static ref FLUTTER_ENGINE_REVISION_FILE: String =
+    static ref LIBS_REVISION_FILE: String =
         format!("{FLUTTER_ENGINE_LIBS_DIR}/.flutter_engine_revision");
 }
 
@@ -20,11 +20,9 @@ fn main() {
         Ok(val) => println!("FLUTTER_ENGINE_BUILD: {}", val),
         Err(_e) => println!("Couldn't read FLUTTER_ENGINE_BUILD"),
     }
+    let flutter_engine_revision = get_flutter_engine_revision();
     println!("cargo:rerun-if-changed={FLUTTER_ENGINE_LIBS_DIR}");
-    let flutter_engine_revision = exec(
-        "sh",
-        &["-c", "flutter --version | grep Engine | awk '{print $NF}'"],
-    );
+
     let flutter_engine_build = match option_env!("FLUTTER_ENGINE_BUILD") {
         Some(build) => FlutterEngineBuild::from_str(&build)
             .expect("FLUTTER_ENGINE_BUILD must be one of debug, profile, release"),
@@ -38,6 +36,15 @@ fn main() {
     link_libflutter_engine(flutter_engine_build);
 }
 
+fn get_flutter_engine_revision() -> String {
+    let flutter_cli_path = exec("which", &["flutter"]);
+    let flutter_cli_path = Path::new(&flutter_cli_path).parent().unwrap();
+    let engine_revision_file = flutter_cli_path.join("internal").join("engine.version");
+    let engine_revision_str = engine_revision_file.as_path().display().to_string();
+    println!("cargo:rerun-if-changed={engine_revision_str}");
+    std::fs::read_to_string(engine_revision_file).unwrap()
+}
+
 fn should_download_flutter_engine_library(
     flutter_engine_revision: &str,
     flutter_engine_build: FlutterEngineBuild,
@@ -46,7 +53,7 @@ fn should_download_flutter_engine_library(
         return false;
     }
     // Is the revision different? If so, Flutter was probably upgraded.
-    match std::fs::read_to_string(&*FLUTTER_ENGINE_REVISION_FILE) {
+    match std::fs::read_to_string(&*LIBS_REVISION_FILE) {
         Ok(libs_revision) => {
             if libs_revision != flutter_engine_revision {
                 return true;
@@ -78,7 +85,8 @@ fn download_flutter_engine_library(
     };
 
     // Download the archive.
-    let url = format!("https://github.com/sony/flutter-embedded-linux/releases/download/{flutter_engine_revision}/elinux-{arch}-{flutter_engine_build}.zip");
+    let short_hash = flutter_engine_revision[..10].to_string();
+    let url = format!("https://github.com/sony/flutter-embedded-linux/releases/download/{short_hash}/elinux-{arch}-{flutter_engine_build}.zip");
     let bytes = download_from_url(&url)
         .expect("Failed to download Flutter engine archive. Try downgrading Flutter.");
     let mut archive = zip::ZipArchive::new(io::Cursor::new(bytes)).expect("Not an archive");
@@ -94,7 +102,7 @@ fn download_flutter_engine_library(
     io::copy(&mut lib, &mut file).expect("Failed to copy Flutter engine library");
 
     // Remember the revision.
-    let mut revision_file = std::fs::File::create(&*FLUTTER_ENGINE_REVISION_FILE)
+    let mut revision_file = std::fs::File::create(&*LIBS_REVISION_FILE)
         .expect("Failed to create .flutter_engine_revision");
     write!(revision_file, "{}", flutter_engine_revision)
         .expect("Failed to write .flutter_engine_revision");
