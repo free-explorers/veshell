@@ -37,8 +37,11 @@ class Dnf extends PackageManagerBase {
 
   @override
   Future<int> isPackageInstalled(String packageName) async {
-    return runProcess('dnf', ['list', 'installed', packageName],
-        verbose: false);
+    return runProcess(
+      'dnf',
+      ['list', 'installed', packageName],
+      verbose: false,
+    );
   }
 
   @override
