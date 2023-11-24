@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:veshell/display/monitor/screen/workspace/tileable/persistent_application_launcher/persistent_application_launcher.widget.dart';
-import 'package:veshell/display/monitor/screen/workspace/tileable/persistent_window/persistent_window.widget.dart';
-import 'package:veshell/display/monitor/screen/workspace/tileable/tileable.widget.dart';
-import 'package:veshell/display/monitor/screen/workspace/workspace_panel.widget.dart';
-import 'package:veshell/shared/state/window_stack/window_stack.provider.dart';
-import 'package:veshell/shared/wayland/xdg_popup/popup_stack.dart';
+import 'package:shell/display/monitor/screen/workspace/tileable/persistent_application_launcher/persistent_application_launcher.widget.dart';
+import 'package:shell/display/monitor/screen/workspace/tileable/persistent_window/persistent_window.widget.dart';
+import 'package:shell/display/monitor/screen/workspace/tileable/tileable.widget.dart';
+import 'package:shell/display/monitor/screen/workspace/workspace_panel.widget.dart';
+import 'package:shell/shared/state/window_stack/window_stack.provider.dart';
+import 'package:shell/shared/wayland/xdg_popup/popup_stack.dart';
 
 class WorkspaceWidget extends HookConsumerWidget {
   const WorkspaceWidget({super.key});

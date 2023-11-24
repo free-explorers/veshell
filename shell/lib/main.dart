@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:veshell/display/display.widget.dart';
-import 'package:veshell/manager/platform_api/platform_api.provider.dart';
-import 'package:veshell/shared/util/root_overlay.provider.dart';
+import 'package:shell/display/display.widget.dart';
+import 'package:shell/manager/platform_api/platform_api.provider.dart';
+import 'package:shell/shared/util/root_overlay.provider.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
 void main() {

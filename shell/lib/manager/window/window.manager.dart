@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_portal/flutter_portal.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:veshell/enums.dart';
-import 'package:veshell/manager/platform_api/platform_api.provider.dart';
-import 'package:veshell/manager/window/window.dart';
-import 'package:veshell/shared/state/cursor_position/cursor_position.provider.dart';
-import 'package:veshell/shared/state/window_stack/window_stack.provider.dart';
-import 'package:veshell/shared/wayland/xdg_popup/popup_stack.dart';
+import 'package:shell/enums.dart';
+import 'package:shell/manager/platform_api/platform_api.provider.dart';
+import 'package:shell/manager/window/window.dart';
+import 'package:shell/shared/state/cursor_position/cursor_position.provider.dart';
+import 'package:shell/shared/state/window_stack/window_stack.provider.dart';
+import 'package:shell/shared/wayland/xdg_popup/popup_stack.dart';
 
 part 'window.manager.g.dart';
 

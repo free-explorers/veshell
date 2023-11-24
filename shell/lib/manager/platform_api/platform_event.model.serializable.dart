@@ -1,9 +1,6 @@
-import 'dart:developer';
-
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:veshell/shared/wayland/surface/surface.model.dart';
-import 'package:veshell/shared/wayland/xdg_surface/xdg_surface.model.dart';
-import 'package:veshell/shared/wayland/xdg_toplevel/xdg_toplevel.model.dart';
+import 'package:shell/shared/wayland/xdg_surface/xdg_surface.model.dart';
+import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.model.dart';
 
 part 'platform_event.model.serializable.freezed.dart';
 part 'platform_event.model.serializable.g.dart';

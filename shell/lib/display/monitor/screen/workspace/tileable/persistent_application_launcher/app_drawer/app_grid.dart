@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:veshell/display/monitor/screen/workspace/tileable/persistent_application_launcher/app_drawer/app_drawer.provider.dart';
-import 'package:veshell/manager/application/app_icon.dart';
-import 'package:veshell/shared/util/app_launch.dart';
+import 'package:shell/display/monitor/screen/workspace/tileable/persistent_application_launcher/app_drawer/app_drawer.provider.dart';
+import 'package:shell/manager/application/app_icon.dart';
+import 'package:shell/shared/util/app_launch.dart';
 
 class AppGrid extends ConsumerStatefulWidget {
   const AppGrid({super.key});

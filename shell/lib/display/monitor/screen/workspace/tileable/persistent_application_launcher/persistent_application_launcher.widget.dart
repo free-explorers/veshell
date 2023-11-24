@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
-import 'package:veshell/display/monitor/screen/workspace/tileable/persistent_application_launcher/app_drawer/app_drawer.dart';
-import 'package:veshell/display/monitor/screen/workspace/tileable/tileable.widget.dart';
+import 'package:shell/display/monitor/screen/workspace/tileable/persistent_application_launcher/app_drawer/app_drawer.dart';
+import 'package:shell/display/monitor/screen/workspace/tileable/tileable.widget.dart';
 
 /// Tileable Application Launcher to launch tileable applications
 class PersistentApplicationLauncher extends Tileable {

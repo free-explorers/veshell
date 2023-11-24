@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:veshell/manager/platform_api/platform_api.provider.dart';
-import 'package:veshell/manager/platform_api/platform_event.model.serializable.dart';
-import 'package:veshell/shared/wayland/subsurface/subsurface.provider.dart';
-import 'package:veshell/shared/wayland/surface/surface.dart';
-import 'package:veshell/shared/wayland/surface/surface.model.dart';
-import 'package:veshell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
+import 'package:shell/manager/platform_api/platform_api.provider.dart';
+import 'package:shell/manager/platform_api/platform_event.model.serializable.dart';
+import 'package:shell/shared/wayland/subsurface/subsurface.provider.dart';
+import 'package:shell/shared/wayland/surface/surface.dart';
+import 'package:shell/shared/wayland/surface/surface.model.dart';
+import 'package:shell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
 
 part 'surface.provider.g.dart';
 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:veshell/display/monitor/screen/screen.provider.dart';
-import 'package:veshell/display/monitor/screen/screen.widget.dart';
+import 'package:shell/display/monitor/screen/screen.provider.dart';
+import 'package:shell/display/monitor/screen/screen.widget.dart';
 
 /// Widget that represent the Monitor in the widget tree
 class MonitorWidget extends HookConsumerWidget {

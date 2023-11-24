@@ -2,9 +2,9 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:veshell/manager/platform_api/platform_api.provider.dart';
-import 'package:veshell/shared/state/window_resize/window_resize.model.dart';
-import 'package:veshell/shared/wayland/xdg_toplevel/xdg_toplevel.model.dart';
+import 'package:shell/manager/platform_api/platform_api.provider.dart';
+import 'package:shell/shared/state/window_resize/window_resize.model.dart';
+import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.model.dart';
 
 part 'window_resize.provider.g.dart';
 

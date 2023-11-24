@@ -1,10 +1,7 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:veshell/display/monitor/screen/workspace/tileable/persistent_application_launcher/app_drawer/app_drawer.provider.dart';
-import 'package:veshell/display/monitor/screen/workspace/tileable/persistent_application_launcher/app_drawer/app_grid.dart';
-import 'package:veshell/manager/application/app_drawer.provider.dart';
+import 'package:shell/display/monitor/screen/workspace/tileable/persistent_application_launcher/app_drawer/app_grid.dart';
+import 'package:shell/manager/application/app_drawer.provider.dart';
 
 class AppDrawer extends HookConsumerWidget {
   const AppDrawer({super.key});

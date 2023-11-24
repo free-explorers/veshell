@@ -12,6 +12,48 @@
 			"options": {
 				"cwd": "${workspaceFolder}/embedder"
 			}
+		},
+		{
+			"type": "cargo",
+			"command": "build",
+			"problemMatcher": [
+				"$rustc"
+			],
+			"isBackground": true,
+			"label": "embedder build",
+			"options": {
+				"cwd": "${workspaceFolder}/embedder"
+			}
+		},
+		{
+			"type": "shell",
+			"command": "dart",
+			"args": [
+				"run",
+				"veshell",
+				"build"
+			],
+			"label": "build veshell",
+		},
+		{
+			"type": "dart",
+			"command": "dart",
+			"args": [
+				"run",
+				"build_runner",
+				"watch"
+			],
+			"problemMatcher": [
+				"$dart-build_runner"
+			],
+			"group": "build",
+			"label": "build_runner watch",
+			"detail": "shell",
+			"options": {
+				"cwd": "${workspaceFolder}/shell"
+			},
+			"isBackground": true,
+			"dependsOn": "build veshell"
 		}
 	]
 }

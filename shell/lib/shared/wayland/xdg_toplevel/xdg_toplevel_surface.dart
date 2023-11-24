@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:veshell/shared/wayland/surface/surface.provider.dart';
-import 'package:veshell/shared/wayland/xdg_toplevel/xdg_toplevel.provider.dart';
+import 'package:shell/shared/wayland/surface/surface.provider.dart';
+import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.provider.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
 class XdgToplevelSurface extends ConsumerWidget {

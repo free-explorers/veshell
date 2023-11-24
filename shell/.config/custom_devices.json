@@ -23,12 +23,10 @@
         "pwd"
       ],
       "runDebug": [
-        "make",
-        "-j",
-        "16",
-        "-C",
-        "..",
-        "run_debug_bundle"
+        "dart",
+        "run",
+        "../bin/veshell.dart",
+        "run"
       ],
       "forwardPort": null,
       "forwardPortSuccessRegex": null,
