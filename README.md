@@ -25,13 +25,15 @@ Usage: veshell <command> [arguments]
 Global options:
 -h, --help            Print this usage information.
     --[no-]verbose    Noisy logging, including all shell commands executed.
+-t, --target          Specify the build target
+                      [debug (default), profile, release]
 
 Available commands:
   build     Build and package Veshell
   clean     Clean the project and restore it to a fresh state
   dev       Start a build_runner watch and run flutter shell
   install   Build and install Veshell localy
-  run       Run veshell
+  run       run veshell
 
 Run "veshell help <command>" for more information about a command.
 ```
