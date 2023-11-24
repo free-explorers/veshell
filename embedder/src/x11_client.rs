@@ -193,7 +193,7 @@ pub fn run_x11_client() {
         wl_shm::Format::Xrgb8888,
     ]);
 
-    let mut baton = None;
+    let mut baton = vec![];
 
     event_loop
         .handle()
@@ -217,7 +217,7 @@ pub fn run_x11_client() {
             }
             X11Event::PresentCompleted { .. } | X11Event::Refresh { .. } => {
                 data.state.is_next_flutter_frame_scheduled = false;
-                if let Some(baton) = data.baton.take() {
+                for baton in data.batons.drain(..) {
                     data.state.flutter_engine().on_vsync(baton).unwrap();
                 }
                 let start_time = std::time::Instant::now();
@@ -235,7 +235,7 @@ pub fn run_x11_client() {
     event_loop.handle().insert_source(rx_baton, move |baton, _, data| {
         if let Msg(baton) = baton {
             if data.state.is_next_flutter_frame_scheduled {
-                data.baton = Some(baton);
+                data.batons.push(baton);
                 return;
             }
             data.state.flutter_engine().on_vsync(baton).unwrap();
@@ -266,7 +266,7 @@ pub fn run_x11_client() {
         let mut calloop_data = CalloopData {
             state,
             tx_fbo,
-            baton,
+            batons: baton,
         };
 
         let result = event_loop.dispatch(None, &mut calloop_data);
@@ -274,7 +274,7 @@ pub fn run_x11_client() {
         CalloopData {
             state,
             tx_fbo,
-            baton,
+            batons: baton,
         } = calloop_data;
 
         if result.is_err() {

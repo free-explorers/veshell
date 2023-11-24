@@ -71,7 +71,7 @@ pub struct FlutterState<BackendData: Backend + 'static> {
 pub struct CalloopData<BackendData: Backend + 'static> {
     pub state: ServerState<BackendData>,
     pub tx_fbo: channel::Sender<Option<Dmabuf>>,
-    pub baton: Option<flutter_engine::Baton>,
+    pub batons: Vec<flutter_engine::Baton>,
 }
 
 pub fn send_frames_surface_tree(surface: &wl_surface::WlSurface, time: u32) {
