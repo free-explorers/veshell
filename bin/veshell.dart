@@ -41,15 +41,25 @@ Future<void> _flushThenExit(int status) {
       .then<void>((_) => exit(status));
 }
 
+enum BuildTarget { debug, profile, release }
+
 class VeshellCommandRunner extends CompletionCommandRunner<int> {
   VeshellCommandRunner({
     Logger? logger,
   })  : _logger = logger ?? Logger(),
         super('veshell', 'This CLI help install and develop Veshell') {
-    argParser.addFlag(
-      'verbose',
-      help: 'Noisy logging, including all shell commands executed.',
-    );
+    argParser
+      ..addFlag(
+        'verbose',
+        help: 'Noisy logging, including all shell commands executed.',
+      )
+      ..addOption(
+        'target',
+        abbr: 't',
+        help: 'Specify the build target',
+        allowed: BuildTarget.values.map((e) => e.name),
+        defaultsTo: BuildTarget.debug.name,
+      );
     // Add sub commands
     addCommand(BuildCommand(logger: _logger));
     addCommand(InstallCommand(logger: _logger));

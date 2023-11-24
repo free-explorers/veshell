@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:args/command_runner.dart';
 import 'package:mason_logger/mason_logger.dart';
 
+import '../veshell.dart';
 import 'build.dart';
 
 class RunCommand extends Command<int> {
@@ -16,26 +17,30 @@ class RunCommand extends Command<int> {
 
   @override
   Future<int> run() async {
-    const target = BuildTarget.debug;
+    final target =
+        BuildTarget.values.byName(globalResults?['target'] as String);
 
     final binaryPath = 'build/${target.name}/$targetExec';
     final binary = File('${Directory.current.path}/$binaryPath');
 
     if (!binary.existsSync()) {
-      await buildAll(logger);
+      await buildAll(logger, target: target);
     }
+    Process process;
     if (Platform.environment['container'] != null) {
-      await Process.start(
+      process = await Process.start(
         'flatpak-spawn',
         ['--host', binary.absolute.path],
         mode: ProcessStartMode.inheritStdio,
       );
+    } else {
+      process = await Process.start(
+        binary.path,
+        [],
+        mode: ProcessStartMode.inheritStdio,
+      );
     }
-    await Process.start(
-      binary.path,
-      [],
-      mode: ProcessStartMode.inheritStdio,
-    );
-    return ExitCode.success.code;
+
+    return process.exitCode;
   }
 }

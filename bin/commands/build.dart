@@ -5,20 +5,12 @@ import 'package:mason_logger/mason_logger.dart';
 
 import '../tasks/dependency/check_depencies.dart' as dependencies;
 import '../tasks/util.dart';
-
-enum BuildTarget { debug, profile, release }
+import '../veshell.dart';
 
 const targetExec = 'veshell';
 
 class BuildCommand extends Command<int> {
-  BuildCommand({required this.logger}) {
-    argParser.addOption(
-      'target',
-      abbr: 't',
-      help: 'Specify the build target',
-      allowed: BuildTarget.values.map((e) => e.name),
-    );
-  }
+  BuildCommand({required this.logger});
 
   final Logger logger;
   @override
@@ -29,8 +21,8 @@ class BuildCommand extends Command<int> {
   // [run] may also return a Future.
   @override
   Future<int> run() async {
-    final targetString = argResults?['target'] as String?;
-    final target = BuildTarget.values.byName(targetString ?? 'debug');
+    final target =
+        BuildTarget.values.byName(globalResults?['target'] as String);
     await dependencies.check(logger);
     await buildAll(logger, target: target);
     return ExitCode.success.code;
@@ -39,16 +31,16 @@ class BuildCommand extends Command<int> {
 
 Future<void> buildAll(
   Logger logger, {
-  BuildTarget target = BuildTarget.debug,
+  required BuildTarget target,
 }) async {
-  await buildEmbedder(logger);
-  await buildShell(logger);
-  await packageBuild(logger);
+  await buildEmbedder(logger, target: target);
+  await buildShell(logger, target: target);
+  await packageBuild(logger, target: target);
 }
 
 Future<void> buildEmbedder(
   Logger logger, {
-  BuildTarget target = BuildTarget.debug,
+  required BuildTarget target,
 }) async {
   logger.info('Building the rust embedder in ${target.name}...\n');
   final exitCode = await runProcess(
@@ -65,7 +57,7 @@ Future<void> buildEmbedder(
 
 Future<void> buildShell(
   Logger logger, {
-  BuildTarget target = BuildTarget.debug,
+  required BuildTarget target,
 }) async {
   logger.info('Building the shell in ${target.name}...\n');
   var exitCode = await runProcess(
@@ -102,7 +94,7 @@ Future<void> buildShell(
 
 Future<void> packageBuild(
   Logger logger, {
-  BuildTarget target = BuildTarget.debug,
+  required BuildTarget target,
 }) async {
   logger.info('Packaging build...\n');
 
