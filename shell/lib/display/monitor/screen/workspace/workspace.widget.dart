@@ -19,7 +19,7 @@ class WorkspaceWidget extends HookConsumerWidget {
 
     for (final viewdId in windowStackList) {
       tileableList.add(
-        PersistentWindow(
+        PersistentWindowTileable(
           viewId: viewdId,
         ),
       );

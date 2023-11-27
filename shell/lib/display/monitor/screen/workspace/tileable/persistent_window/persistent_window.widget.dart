@@ -5,9 +5,9 @@ import 'package:shell/manager/window/window.dart';
 import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.provider.dart';
 
 /// Tileable Window that persist when closed
-class PersistentWindow extends Tileable {
+class PersistentWindowTileable extends Tileable {
   /// Const constructor
-  const PersistentWindow({required this.viewId, super.key});
+  const PersistentWindowTileable({required this.viewId, super.key});
 
   /// The id of the wayland surface
   final int viewId;
