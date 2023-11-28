@@ -2,11 +2,6 @@ use std::env;
 
 use smithay::{
     backend::allocator::dmabuf::Dmabuf,
-    delegate_compositor,
-    delegate_dmabuf,
-    delegate_output,
-    delegate_shm,
-    delegate_xdg_shell,
     reexports::{
         wayland_server::{
             backend::{ClientData, ClientId, DisconnectReason},
