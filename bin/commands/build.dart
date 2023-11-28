@@ -43,9 +43,17 @@ Future<void> buildEmbedder(
   required BuildTarget target,
 }) async {
   logger.info('Building the rust embedder in ${target.name}...\n');
+
+  final cargoArgs = ['build', '--color', 'always'];
+  if (target != BuildTarget.debug) {
+    // Profile mode does not exist in Cargo by default.
+    // Just compile in release mode instead.
+    cargoArgs.add('--release');
+  }
+
   final exitCode = await runProcess(
     'cargo',
-    ['build', '--color', 'always'],
+    cargoArgs,
     workingDirectory: 'embedder',
     environment: {'FLUTTER_ENGINE_BUILD': target.name},
   );
@@ -112,7 +120,12 @@ Future<void> packageBuild(
   logger.info('Create $buildDirectory directory');
   await Directory('$buildDirectory/lib/').create(recursive: true);
 
-  final binaryPath = 'embedder/target/${target.name}/$targetExec';
+  var cargoTarget = target;
+  if (cargoTarget == BuildTarget.profile) {
+    cargoTarget = BuildTarget.release;
+  }
+
+  final binaryPath = 'embedder/target/${cargoTarget.name}/$targetExec';
   logger.info('Copy $binaryPath');
   await File(binaryPath).copy('$buildDirectory/$targetExec');
 
@@ -122,6 +135,13 @@ Future<void> packageBuild(
   logger.info('Copy $libFlutterEnginePath');
   await File(libFlutterEnginePath)
       .copy('$buildDirectory/lib/libflutter_engine.so');
+
+  if (target != BuildTarget.debug) {
+    final libAppPath =
+        'shell/build/linux/$arch/${target.name}/bundle/lib/libapp.so';
+    logger.info('Copy $libAppPath');
+    await File(libAppPath).copy('$buildDirectory/lib/libapp.so');
+  }
 
   await runProcess(
     'cp',

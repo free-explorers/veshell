@@ -176,7 +176,7 @@ pub fn run_drm_backend() {
 
     state.flutter_engine = Some(flutter_engine);
 
-    let mut baton = None;
+    let mut batons = vec![];
 
     // Initialize already present connectors.
     state.device_changed(primary_gpu);
@@ -220,12 +220,8 @@ pub fn run_drm_backend() {
 
     event_loop.handle().insert_source(rx_baton, move |baton, _, data| {
         if let Event::Msg(baton) = baton {
-            if data.state.is_next_flutter_frame_scheduled {
-                data.baton = Some(baton);
-                return;
-            }
-            data.state.flutter_engine().on_vsync(baton).unwrap();
-            data.state.is_next_flutter_frame_scheduled = true;
+            data.batons.push(baton);
+            data.state.update_crtc_planes();
         }
     }).unwrap();
 
@@ -247,7 +243,7 @@ pub fn run_drm_backend() {
         let mut calloop_data = CalloopData {
             state,
             tx_fbo,
-            baton,
+            batons,
         };
 
         let result = event_loop.dispatch(None, &mut calloop_data);
@@ -255,7 +251,7 @@ pub fn run_drm_backend() {
         CalloopData {
             state,
             tx_fbo,
-            baton,
+            batons,
         } = calloop_data;
 
         if result.is_err() {
@@ -292,7 +288,14 @@ impl ServerState<DrmBackend> {
         let slot = if let Some(slot) = last_rendered_slot.as_mut() {
             slot
         } else {
-            // Flutter hasn't rendered anything yet.
+            // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
+            surface.compositor.render_frame::<GlesRenderer, TextureRenderElement<GlesTexture>, GlesTexture>(
+                gles_renderer,
+                &[],
+                [0.0, 0.0, 0.0, 0.0],
+            ).unwrap();
+            surface.compositor.queue_frame(None).unwrap();
+            surface.compositor.reset_buffers();
             return;
         };
 
@@ -412,7 +415,7 @@ impl ServerState<DrmBackend> {
                         if let Some(surface) = data.state.backend_data.gpus.get_mut(&node).unwrap().surfaces.get_mut(&crtc) {
                             let _ = surface.compositor.frame_submitted();
                         }
-                        if let Some(baton) = data.baton.take() {
+                        for baton in data.batons.drain(..) {
                             data.state.flutter_engine().on_vsync(baton).unwrap();
                         }
                         let start_time = std::time::Instant::now();
@@ -422,7 +425,6 @@ impl ServerState<DrmBackend> {
                         for surface in data.state.xdg_popups.values() {
                             send_frames_surface_tree(surface.wl_surface(), start_time.elapsed().as_millis() as u32);
                         }
-                        data.state.is_next_flutter_frame_scheduled = false;
                     }
                     DrmEvent::Error(error) => {
                         error!("{:?}", error);

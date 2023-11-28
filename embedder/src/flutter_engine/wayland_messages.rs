@@ -148,69 +148,24 @@ impl SurfaceCommitMessage {
         ];
 
         if let Some(subsurface) = self.subsurface {
-            vec.extend([
-                (
-                    EncodableValue::String("hasSubsurface".to_string()),
-                    EncodableValue::Bool(true),
-                ),
-                (
+            vec.push((
                     EncodableValue::String("subsurface".to_string()),
                     subsurface.serialize(),
-                ),
-            ]);
-        } else {
-            vec.push((
-                EncodableValue::String("hasSubsurface".to_string()),
-                EncodableValue::Bool(false),
             ));
         }
 
         if let Some(xdg_surface) = self.xdg_surface {
-            vec.extend([
-                (
-                    EncodableValue::String("hasXdgSurface".to_string()),
-                    EncodableValue::Bool(true),
-                ),
-                (
-                    EncodableValue::String("xdgSurface".to_string()),
-                    xdg_surface.serialize(),
-                ),
-                (
-                    EncodableValue::String("hasToplevelDecoration".to_string()),
-                    EncodableValue::Bool(false),
-                ),
-                (
-                    EncodableValue::String("hasToplevelTitle".to_string()),
-                    EncodableValue::Bool(false),
-                ),
-                (
-                    EncodableValue::String("hasToplevelAppId".to_string()),
-                    EncodableValue::Bool(false),
-                ),
-            ]);
+            vec.push((
+                EncodableValue::String("xdgSurface".to_string()),
+                xdg_surface.serialize(),
+            ));
 
             if let Some(xdg_popup) = self.xdg_popup {
-                vec.extend([
-                    (
-                        EncodableValue::String("hasXdgPopup".to_string()),
-                        EncodableValue::Bool(true),
-                    ),
-                    (
-                        EncodableValue::String("xdgPopup".to_string()),
-                        xdg_popup.serialize(),
-                    ),
-                ]);
-            } else {
                 vec.push((
-                    EncodableValue::String("hasXdgPopup".to_string()),
-                    EncodableValue::Bool(false),
+                    EncodableValue::String("xdgPopup".to_string()),
+                    xdg_popup.serialize(),
                 ));
             }
-        } else {
-            vec.push((
-                EncodableValue::String("hasXdgSurface".to_string()),
-                EncodableValue::Bool(false),
-            ))
         }
 
         EncodableValue::Map(vec)

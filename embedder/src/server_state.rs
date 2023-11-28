@@ -228,7 +228,7 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
         });
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method("interactive_move", Some(Box::new(EncodableValue::Map(vec![
-            (EncodableValue::String("view_id".to_string()), EncodableValue::Int64(view_id as i64)),
+            (EncodableValue::String("viewId".to_string()), EncodableValue::Int64(view_id as i64)),
         ]))), None);
     }
 
@@ -238,7 +238,7 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
         });
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method("interactive_resize", Some(Box::new(EncodableValue::Map(vec![
-            (EncodableValue::String("view_id".to_string()), EncodableValue::Int64(view_id as i64)),
+            (EncodableValue::String("viewId".to_string()), EncodableValue::Int64(view_id as i64)),
             (EncodableValue::String("edge".to_string()), EncodableValue::Int64(edges as i64)),
         ]))), None);
     }
@@ -483,7 +483,7 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
 
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method("destroy_surface", Some(Box::new(EncodableValue::Map(vec![
-            (EncodableValue::String("view_id".to_string()), EncodableValue::Int64(view_id as i64)),
+            (EncodableValue::String("viewId".to_string()), EncodableValue::Int64(view_id as i64)),
         ]))), None);
     }
 }

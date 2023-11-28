@@ -72,7 +72,6 @@ class XdgSurface with _$XdgSurface {
 class XdgPopup with _$XdgPopup {
   /// Factory
   factory XdgPopup({
-    required int role,
     required int parentId,
     required int x,
     required int y,
@@ -104,12 +103,6 @@ class CommitSurfaceEvent with _$CommitSurfaceEvent {
   factory CommitSurfaceEvent({
     required int viewId,
     required SurfaceEvent surface,
-    required bool hasXdgSurface,
-    required bool hasXdgPopup,
-    required bool hasSubsurface,
-    required bool hasToplevelDecoration,
-    required bool hasToplevelTitle,
-    required bool hasToplevelAppId,
     XdgSurface? xdgSurface,
     XdgPopup? xdgPopup,
     Subsurface? subsurface,

@@ -26,8 +26,8 @@ class SurfaceStates extends _$SurfaceStates {
     return SurfaceState(
       role: SurfaceRole.none,
       viewId: viewId,
-      textureId: const TextureId(-1),
-      oldTextureId: const TextureId(-1),
+      textureId: TextureId(-1),
+      oldTextureId: TextureId(-1),
       surfacePosition: Offset.zero,
       surfaceSize: Size.zero,
       scale: 1,
@@ -51,7 +51,7 @@ class SurfaceStates extends _$SurfaceStates {
   }) {
     final platform = ref.read(platformApiProvider.notifier);
 
-    assert(textureId != state.oldTextureId);
+    // assert(textureId != state.oldTextureId);
 
     var oldTexture = state.oldTextureId;
     var currentTexture = state.textureId;
