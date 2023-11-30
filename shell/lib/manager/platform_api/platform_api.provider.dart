@@ -30,21 +30,21 @@ class WindowUnmappedStream extends _$WindowUnmappedStream {
 @Riverpod(keepAlive: true)
 Stream<dynamic> _textInputEventStreamById(
   _TextInputEventStreamByIdRef ref,
-  int viewId,
+  int surfaceId,
 ) {
   return ref
       .watch(platformApiProvider)
       .textInputEventsStream
-      .where((event) => event.viewId == viewId);
+      .where((event) => event.surfaceId == surfaceId);
 }
 
 @Riverpod(keepAlive: true)
 Future<TextInputEventType> textInputEventStream(
   TextInputEventStreamRef ref,
-  int viewId,
+  int surfaceId,
 ) async {
   final dynamic event =
-      await ref.watch(_textInputEventStreamByIdProvider(viewId).future);
+      await ref.watch(_textInputEventStreamByIdProvider(surfaceId).future);
   switch (event.runtimeType) {
     case EnableTextInputEvent:
       return TextInputEnable();
@@ -121,9 +121,9 @@ class PlatformApi extends _$PlatformApi {
     return state.platform.invokeMethod('startup_complete');
   }
 
-  Future<void> pointerHoversView(int viewId, Offset position) {
+  Future<void> pointerHoversView(int surfaceId, Offset position) {
     return state.platform.invokeMethod('pointer_hover', {
-      'view_id': viewId,
+      'surface_id': surfaceId,
       'x': position.dx,
       'y': position.dy,
     });
@@ -142,13 +142,14 @@ class PlatformApi extends _$PlatformApi {
     return state.platform.invokeMethod('pointer_exit');
   }
 
-  Future<void> activateWindow(int viewId, bool activate) {
-    return state.platform.invokeMethod('activate_window', [viewId, activate]);
+  Future<void> activateWindow(int surfaceId, bool activate) {
+    return state.platform
+        .invokeMethod('activate_window', [surfaceId, activate]);
   }
 
-  Future<void> changeWindowVisibility(int viewId, bool visible) {
+  Future<void> changeWindowVisibility(int surfaceId, bool visible) {
     return state.platform.invokeMethod('change_window_visibility', {
-      'view_id': viewId,
+      'surface_id': surfaceId,
       'visible': visible,
     });
   }
@@ -157,9 +158,9 @@ class PlatformApi extends _$PlatformApi {
     return state.platform.invokeMethod('unregister_view_texture', textureId);
   }
 
-  Future<void> touchDown(int viewId, int touchId, Offset position) {
+  Future<void> touchDown(int surfaceId, int touchId, Offset position) {
     return state.platform.invokeMethod('touch_down', {
-      'view_id': viewId,
+      'surface_id': surfaceId,
       'touch_id': touchId,
       'x': position.dx,
       'y': position.dy,
@@ -186,16 +187,16 @@ class PlatformApi extends _$PlatformApi {
     });
   }
 
-  Future<void> insertText(int viewId, String text) {
+  Future<void> insertText(int surfaceId, String text) {
     return state.platform.invokeMethod('insert_text', {
-      'view_id': viewId,
+      'surface_id': surfaceId,
       'text': text,
     });
   }
 
-  Future<void> emulateKeyCode(int viewId, int keyCode) {
+  Future<void> emulateKeyCode(int surfaceId, int keyCode) {
     return state.platform.invokeMethod('emulate_keycode', {
-      'view_id': viewId,
+      'surface_id': surfaceId,
       'keycode': keyCode,
     });
   }
@@ -211,24 +212,24 @@ class PlatformApi extends _$PlatformApi {
     });
   }
 
-  Future<void> maximizeWindow(int viewId, bool value) {
+  Future<void> maximizeWindow(int surfaceId, bool value) {
     return state.platform.invokeMethod('maximize_window', {
-      'view_id': viewId,
+      'surface_id': surfaceId,
       'value': value,
     });
   }
 
-  Future<void> resizeWindow(int viewId, int width, int height) {
+  Future<void> resizeWindow(int surfaceId, int width, int height) {
     return state.platform.invokeMethod('resize_window', {
-      'view_id': viewId,
+      'surface_id': surfaceId,
       'width': width,
       'height': height,
     });
   }
 
-  Stream<TextInputEventType> getTextInputEventsForViewId(int viewId) {
+  Stream<TextInputEventType> getTextInputEventsForViewId(int surfaceId) {
     return state.textInputEventsStream
-        .where((event) => event.viewId == viewId)
+        .where((event) => event.surfaceId == surfaceId)
         .map((event) {
       switch (event.runtimeType) {
         case EnableTextInputEvent:
@@ -247,9 +248,9 @@ class PlatformApi extends _$PlatformApi {
     });
   }
 
-  Future<void> closeView(int viewId) {
+  Future<void> closeView(int surfaceId) {
     return state.platform.invokeMethod('close_window', {
-      'view_id': viewId,
+      'surface_id': surfaceId,
     });
   }
 
@@ -276,7 +277,7 @@ class PlatformApi extends _$PlatformApi {
   void _commitSurface(CommitSurfaceEvent event) {
     ref
         .read(surfaceIdsProvider.notifier)
-        .update((state) => state.add(event.viewId));
+        .update((state) => state.add(event.surfaceId));
 
     // TODO: Don't remove the late keyword even if it still compiles !
     // If you remove it, it will run correctly in debug mode but not in release mode.
@@ -284,7 +285,7 @@ class PlatformApi extends _$PlatformApi {
     late TextureId textureId;
 
     final currentTextureId =
-        ref.read(surfaceStatesProvider(event.viewId)).textureId;
+        ref.read(surfaceStatesProvider(event.surfaceId)).textureId;
     if (event.surface.textureId == currentTextureId.value) {
       textureId = currentTextureId;
     } else {
@@ -300,14 +301,18 @@ class PlatformApi extends _$PlatformApi {
     );
 
     for (final id in event.surface.subsurfacesBelow) {
-      ref.read(subsurfaceStatesProvider(id).notifier).set_parent(event.viewId);
+      ref
+          .read(subsurfaceStatesProvider(id).notifier)
+          .set_parent(event.surfaceId);
     }
 
     for (final id in event.surface.subsurfacesAbove) {
-      ref.read(subsurfaceStatesProvider(id).notifier).set_parent(event.viewId);
+      ref
+          .read(subsurfaceStatesProvider(id).notifier)
+          .set_parent(event.surfaceId);
     }
 
-    ref.read(surfaceStatesProvider(event.viewId).notifier).commit(
+    ref.read(surfaceStatesProvider(event.surfaceId).notifier).commit(
           role: event.surface.role,
           textureId: textureId,
           surfacePosition:
@@ -324,7 +329,7 @@ class PlatformApi extends _$PlatformApi {
 
     if (event.xdgSurface != null) {
       final xdgSurface = event.xdgSurface!;
-      ref.read(xdgSurfaceStatesProvider(event.viewId).notifier).commit(
+      ref.read(xdgSurfaceStatesProvider(event.surfaceId).notifier).commit(
             role: xdgSurface.role,
             visibleBounds: Rect.fromLTWH(
               xdgSurface.x.toDouble(),
@@ -339,7 +344,7 @@ class PlatformApi extends _$PlatformApi {
 
         // TODO: What to do with the xdgPopup width & height?
 
-        ref.read(xdgPopupStatesProvider(event.viewId).notifier).commit(
+        ref.read(xdgPopupStatesProvider(event.surfaceId).notifier).commit(
               parentViewId: xdgPopup.parentId,
               position: Offset(xdgPopup.x.toDouble(), xdgPopup.y.toDouble()),
             );
@@ -349,26 +354,26 @@ class PlatformApi extends _$PlatformApi {
     if (event.subsurface != null) {
       final subsurface = event.subsurface!;
       final position = Offset(subsurface.x.toDouble(), subsurface.y.toDouble());
-      ref.read(subsurfaceStatesProvider(event.viewId).notifier).commit(
+      ref.read(subsurfaceStatesProvider(event.surfaceId).notifier).commit(
             position: position,
           );
     }
 
     if (event.toplevelDecoration != null) {
       ref
-          .read(xdgToplevelStatesProvider(event.viewId).notifier)
+          .read(xdgToplevelStatesProvider(event.surfaceId).notifier)
           .setDecoration(event.toplevelDecoration!);
     }
 
     if (event.toplevelTitle != null) {
       ref
-          .read(xdgToplevelStatesProvider(event.viewId).notifier)
+          .read(xdgToplevelStatesProvider(event.surfaceId).notifier)
           .setTitle(event.toplevelTitle!);
     }
 
     if (event.toplevelAppId != null) {
       ref
-          .read(xdgToplevelStatesProvider(event.viewId).notifier)
+          .read(xdgToplevelStatesProvider(event.surfaceId).notifier)
           .setAppId(event.toplevelAppId!);
     }
   }
@@ -379,50 +384,50 @@ class PlatformApi extends _$PlatformApi {
 
   void _interactiveMove(InteractiveMoveEvent event) {
     ref
-        .read(xdgToplevelStatesProvider(event.viewId).notifier)
+        .read(xdgToplevelStatesProvider(event.surfaceId).notifier)
         .requestInteractiveMove();
   }
 
   void _interactiveResize(InteractiveResizeEvent event) {
     final resizeEdge = ResizeEdge.fromInt(event.edge);
     ref
-        .read(xdgToplevelStatesProvider(event.viewId).notifier)
+        .read(xdgToplevelStatesProvider(event.surfaceId).notifier)
         .requestInteractiveResize(resizeEdge);
   }
 
   void _setTitle(SetTitleEvent event) {
     ref
-        .read(xdgToplevelStatesProvider(event.viewId).notifier)
+        .read(xdgToplevelStatesProvider(event.surfaceId).notifier)
         .setTitle(event.title);
   }
 
   void _setAppId(SetAppIdEvent event) {
     ref
-        .read(xdgToplevelStatesProvider(event.viewId).notifier)
+        .read(xdgToplevelStatesProvider(event.surfaceId).notifier)
         .setTitle(event.appId);
   }
 
   void _requestMaximize(RequestMaxmizeEvent event) {
     // Do not couple windowStateProvider here.
     ref
-        .read(xdgToplevelStatesProvider(event.viewId).notifier)
+        .read(xdgToplevelStatesProvider(event.surfaceId).notifier)
         .requestMaximize(event.maximize);
   }
 
   Future<void> _destroySurface(DestroySurfaceEvent event) async {
-    ref.read(surfaceStatesProvider(event.viewId).notifier).unmap();
+    ref.read(surfaceStatesProvider(event.surfaceId).notifier).unmap();
     // TODO: Find a better way. Maybe store subscriptions in a list.
     // 3 sec is more than enough for any close animations.
     await Future.delayed(const Duration(seconds: 3));
-    ref.read(surfaceStatesProvider(event.viewId).notifier).dispose();
+    ref.read(surfaceStatesProvider(event.surfaceId).notifier).dispose();
     ref
         .read(surfaceIdsProvider.notifier)
-        .update((state) => state.remove(event.viewId));
+        .update((state) => state.remove(event.surfaceId));
   }
 
-  Future<void> hideKeyboard(int viewId) {
+  Future<void> hideKeyboard(int surfaceId) {
     return state.platform.invokeMethod('hide_keyboard', {
-      'view_id': viewId,
+      'surface_id': surfaceId,
     });
   }
 }

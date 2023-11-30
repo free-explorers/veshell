@@ -5,17 +5,17 @@ import 'package:shell/shared/wayland/surface/surface.provider.dart';
 
 class ContainToInputRegion extends ConsumerWidget {
   const ContainToInputRegion({
-    required this.viewId,
+    required this.surfaceId,
     required this.child,
     super.key,
   });
-  final int viewId;
+  final int surfaceId;
   final Widget child;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final inputRegion =
-        ref.watch(surfaceStatesProvider(viewId).select((v) => v.inputRegion));
+    final inputRegion = ref
+        .watch(surfaceStatesProvider(surfaceId).select((v) => v.inputRegion));
 
     return CropOverflowBox(
       rect: inputRegion,

@@ -11,19 +11,19 @@ import 'package:shell/shared/wayland/surface/surface.provider.dart';
 /// forwarded to the appropriate surface.
 class ViewInputListener extends ConsumerWidget {
   const ViewInputListener({
-    required this.viewId,
+    required this.surfaceId,
     required this.child,
     super.key,
   });
-  final int viewId;
+  final int surfaceId;
   final Widget child;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pointerFocusManager = ref.read(pointerFocusManagerProvider);
 
-    final inputRegion =
-        ref.watch(surfaceStatesProvider(viewId).select((v) => v.inputRegion));
+    final inputRegion = ref
+        .watch(surfaceStatesProvider(surfaceId).select((v) => v.inputRegion));
 
     return Stack(
       clipBehavior: Clip.none,
@@ -90,7 +90,7 @@ class ViewInputListener extends ConsumerWidget {
     } else if (event.kind == PointerDeviceKind.touch) {
       await ref
           .read(platformApiProvider.notifier)
-          .touchDown(viewId, event.pointer, position);
+          .touchDown(surfaceId, event.pointer, position);
     }
   }
 
@@ -152,6 +152,6 @@ class ViewInputListener extends ConsumerWidget {
   Future<void> _pointerMoved(WidgetRef ref, Offset position) {
     return ref
         .read(platformApiProvider.notifier)
-        .pointerHoversView(viewId, position);
+        .pointerHoversView(surfaceId, position);
   }
 }

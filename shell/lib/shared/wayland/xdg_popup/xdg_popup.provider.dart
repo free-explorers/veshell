@@ -8,19 +8,19 @@ import 'package:shell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
 part 'xdg_popup.provider.g.dart';
 
 @Riverpod(keepAlive: true)
-Popup popupWidget(PopupWidgetRef ref, int viewId) {
+Popup popupWidget(PopupWidgetRef ref, int surfaceId) {
   return Popup(
     key: ref.watch(
-      xdgSurfaceStatesProvider(viewId).select((state) => state.widgetKey),
+      xdgSurfaceStatesProvider(surfaceId).select((state) => state.widgetKey),
     ),
-    viewId: viewId,
+    surfaceId: surfaceId,
   );
 }
 
 @Riverpod(keepAlive: true)
 class XdgPopupStates extends _$XdgPopupStates {
   @override
-  XdgPopupState build(int viewId) {
+  XdgPopupState build(int surfaceId) {
     return XdgPopupState(
       parentViewId: -1,
       position: Offset.zero,
@@ -59,8 +59,8 @@ class XdgPopupStates extends _$XdgPopupStates {
   }
 
   void dispose() {
-    ref.invalidate(popupWidgetProvider(viewId));
-    ref.invalidate(xdgPopupStatesProvider(viewId));
+    ref.invalidate(popupWidgetProvider(surfaceId));
+    ref.invalidate(xdgPopupStatesProvider(surfaceId));
   }
 }
 
@@ -74,7 +74,7 @@ class PopupStackChildren extends _$PopupStackChildren {
     return IList();
   }
 
-  void add(int viewId) => state = state.add(viewId);
+  void add(int surfaceId) => state = state.add(surfaceId);
 
-  void remove(int viewId) => state = state.remove(viewId);
+  void remove(int surfaceId) => state = state.remove(surfaceId);
 }

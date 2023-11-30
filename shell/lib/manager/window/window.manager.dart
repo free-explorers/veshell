@@ -45,8 +45,8 @@ class _WindowManagerState extends ConsumerState<WindowManager> {
                 clipBehavior: Clip.none,
                 key: ref.watch(windowStackGlobalKeyProvider),
                 children: [
-                  for (int viewId in tasks)
-                    ref.watch(windowWidgetProvider(viewId)),
+                  for (int surfaceId in tasks)
+                    ref.watch(windowWidgetProvider(surfaceId)),
                   const PopupStack(),
                 ],
               );
@@ -69,9 +69,9 @@ class WindowManager extends ConsumerStatefulWidget {
 }
 
 @Riverpod(keepAlive: true)
-Window windowWidget(WindowWidgetRef ref, int viewId) {
+Window windowWidget(WindowWidgetRef ref, int surfaceId) {
   return Window(
     key: GlobalKey(),
-    viewId: viewId,
+    surfaceId: surfaceId,
   );
 }

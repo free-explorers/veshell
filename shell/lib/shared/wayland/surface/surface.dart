@@ -9,31 +9,31 @@ import 'package:shell/shared/wayland/view_input_listener.dart';
 
 class SurfaceWidget extends ConsumerWidget {
   const SurfaceWidget({
-    required this.viewId,
+    required this.surfaceId,
     super.key,
   });
-  final int viewId;
+  final int surfaceId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return SurfaceSize(
-      viewId: viewId,
+      surfaceId: surfaceId,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           _Subsurfaces(
-            viewId: viewId,
+            surfaceId: surfaceId,
             layer: _SubsurfaceLayer.below,
           ),
           ViewInputListener(
-            viewId: viewId,
+            surfaceId: surfaceId,
             child: Consumer(
               builder: (BuildContext context, WidgetRef ref, Widget? child) {
                 final key = ref.watch(
-                  surfaceStatesProvider(viewId).select((v) => v.textureKey),
+                  surfaceStatesProvider(surfaceId).select((v) => v.textureKey),
                 );
                 final textureId = ref.watch(
-                  surfaceStatesProvider(viewId)
+                  surfaceStatesProvider(surfaceId)
                       .select((v) => v.textureId.value),
                 );
 
@@ -45,7 +45,7 @@ class SurfaceWidget extends ConsumerWidget {
             ),
           ),
           _Subsurfaces(
-            viewId: viewId,
+            surfaceId: surfaceId,
             layer: _SubsurfaceLayer.above,
           ),
         ],
@@ -56,10 +56,10 @@ class SurfaceWidget extends ConsumerWidget {
 
 class _Subsurfaces extends ConsumerWidget {
   const _Subsurfaces({
-    required this.viewId,
+    required this.surfaceId,
     required this.layer,
   });
-  final int viewId;
+  final int surfaceId;
   final _SubsurfaceLayer layer;
 
   @override
@@ -69,12 +69,12 @@ class _Subsurfaces extends ConsumerWidget {
         : (SurfaceState ss) => ss.subsurfacesAbove;
 
     List<Widget> subsurfaces = ref
-        .watch(surfaceStatesProvider(viewId).select(selector))
+        .watch(surfaceStatesProvider(surfaceId).select(selector))
         .where(
           (id) =>
               ref.watch(subsurfaceStatesProvider(id).select((ss) => ss.mapped)),
         )
-        .map((id) => SubsurfaceWidget(viewId: id))
+        .map((id) => SubsurfaceWidget(surfaceId: id))
         .toList();
 
     return Stack(

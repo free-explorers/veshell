@@ -8,26 +8,26 @@ import 'package:visibility_detector/visibility_detector.dart';
 class XdgToplevelSurface extends ConsumerWidget {
   const XdgToplevelSurface({
     required super.key,
-    required this.viewId,
+    required this.surfaceId,
   });
-  final int viewId;
+  final int surfaceId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return VisibilityDetector(
-      key: ValueKey(viewId),
+      key: ValueKey(surfaceId),
       onVisibilityChanged: (VisibilityInfo info) {
         final visible = info.visibleFraction > 0;
         if (ref.context.mounted) {
-          ref.read(xdgToplevelStatesProvider(viewId).notifier).visible =
+          ref.read(xdgToplevelStatesProvider(surfaceId).notifier).visible =
               visible;
         }
       },
       child: _SurfaceFocus(
-        viewId: viewId,
+        surfaceId: surfaceId,
         child: _PointerListener(
-          viewId: viewId,
-          child: ref.watch(surfaceWidgetProvider(viewId)),
+          surfaceId: surfaceId,
+          child: ref.watch(surfaceWidgetProvider(surfaceId)),
         ),
       ),
     );
@@ -36,10 +36,10 @@ class XdgToplevelSurface extends ConsumerWidget {
 
 class _SurfaceFocus extends ConsumerWidget {
   const _SurfaceFocus({
-    required this.viewId,
+    required this.surfaceId,
     required this.child,
   });
-  final int viewId;
+  final int surfaceId;
   final Widget child;
 
   @override
@@ -66,7 +66,7 @@ class _SurfaceFocus extends ConsumerWidget {
         child: Consumer(
           builder: (BuildContext context, WidgetRef ref, Widget? child) {
             final focusNode =
-                ref.watch(xdgToplevelStatesProvider(viewId)).focusNode;
+                ref.watch(xdgToplevelStatesProvider(surfaceId)).focusNode;
 
             return Focus(
               focusNode: focusNode,
@@ -82,17 +82,19 @@ class _SurfaceFocus extends ConsumerWidget {
 
 class _PointerListener extends ConsumerWidget {
   const _PointerListener({
-    required this.viewId,
+    required this.surfaceId,
     required this.child,
   });
-  final int viewId;
+  final int surfaceId;
   final Widget child;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Listener(
-      onPointerDown: (_) =>
-          ref.read(xdgToplevelStatesProvider(viewId)).focusNode.requestFocus(),
+      onPointerDown: (_) => ref
+          .read(xdgToplevelStatesProvider(surfaceId))
+          .focusNode
+          .requestFocus(),
       child: child,
     );
   }

@@ -10,27 +10,27 @@ part 'xdg_toplevel.provider.g.dart';
 @Riverpod(keepAlive: true)
 XdgToplevelSurface xdgToplevelSurfaceWidget(
   XdgToplevelSurfaceWidgetRef ref,
-  int viewId,
+  int surfaceId,
 ) {
   return XdgToplevelSurface(
     key: ref.watch(
-      xdgSurfaceStatesProvider(viewId).select((state) => state.widgetKey),
+      xdgSurfaceStatesProvider(surfaceId).select((state) => state.widgetKey),
     ),
-    viewId: viewId,
+    surfaceId: surfaceId,
   );
 }
 
 @Riverpod(keepAlive: true)
 class XdgToplevelStates extends _$XdgToplevelStates {
   @override
-  XdgToplevelState build(int viewId) {
+  XdgToplevelState build(int surfaceId) {
     final focusNode = FocusNode();
     focusNode.addListener(() {
       final platformApi = ref.read(platformApiProvider.notifier);
       if (focusNode.hasFocus) {
-        platformApi.activateWindow(viewId, true);
+        platformApi.activateWindow(surfaceId, true);
       } else {
-        platformApi.activateWindow(viewId, false);
+        platformApi.activateWindow(surfaceId, false);
       }
     });
 
@@ -53,7 +53,7 @@ class XdgToplevelStates extends _$XdgToplevelStates {
     if (value != state.visible) {
       ref
           .read(platformApiProvider.notifier)
-          .changeWindowVisibility(viewId, value);
+          .changeWindowVisibility(surfaceId, value);
       state = state.copyWith(visible: value);
     }
   }
@@ -65,11 +65,13 @@ class XdgToplevelStates extends _$XdgToplevelStates {
   }
 
   void maximize(bool value) {
-    ref.read(platformApiProvider.notifier).maximizeWindow(viewId, value);
+    ref.read(platformApiProvider.notifier).maximizeWindow(surfaceId, value);
   }
 
   void resize(int width, int height) {
-    ref.read(platformApiProvider.notifier).resizeWindow(viewId, width, height);
+    ref
+        .read(platformApiProvider.notifier)
+        .resizeWindow(surfaceId, width, height);
   }
 
   void requestInteractiveMove() {
@@ -103,7 +105,7 @@ class XdgToplevelStates extends _$XdgToplevelStates {
   }
 
   void dispose() {
-    ref.invalidate(xdgToplevelSurfaceWidgetProvider(viewId));
-    ref.invalidate(xdgToplevelStatesProvider(viewId));
+    ref.invalidate(xdgToplevelSurfaceWidgetProvider(surfaceId));
+    ref.invalidate(xdgToplevelStatesProvider(surfaceId));
   }
 }

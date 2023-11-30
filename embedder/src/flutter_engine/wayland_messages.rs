@@ -7,7 +7,7 @@ use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 
 #[derive(Debug)]
 pub struct SurfaceCommitMessage {
-    pub view_id: u64,
+    pub surface_id: u64,
     pub role: Option<&'static str>,
     pub texture_id: i64,
     pub buffer_delta: Option<Point<i32, Logical>>,
@@ -62,8 +62,8 @@ impl SurfaceCommitMessage {
 
         let mut vec = vec![
             (
-                EncodableValue::String("viewId".to_string()),
-                EncodableValue::Int64(self.view_id as i64),
+                EncodableValue::String("surfaceId".to_string()),
+                EncodableValue::Int64(self.surface_id as i64),
             ),
             (
                 EncodableValue::String("surface".to_string()),
@@ -149,8 +149,8 @@ impl SurfaceCommitMessage {
 
         if let Some(subsurface) = self.subsurface {
             vec.push((
-                    EncodableValue::String("subsurface".to_string()),
-                    subsurface.serialize(),
+                EncodableValue::String("subsurface".to_string()),
+                subsurface.serialize(),
             ));
         }
 

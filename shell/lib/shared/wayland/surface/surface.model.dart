@@ -9,7 +9,7 @@ part 'surface.model.freezed.dart';
 class SurfaceState with _$SurfaceState {
   const factory SurfaceState({
     required SurfaceRole role,
-    required int viewId,
+    required int surfaceId,
     required TextureId textureId,
     required TextureId oldTextureId,
     required Offset surfacePosition,

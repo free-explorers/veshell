@@ -45,11 +45,11 @@ class WindowStack extends _$WindowStack {
     );
   }
 
-  void remove(int viewId) {
-    assert(state.stack.contains(viewId));
+  void remove(int surfaceId) {
+    assert(state.stack.contains(surfaceId));
     state = state.copyWith(
-      stack: state.stack.remove(viewId),
-      animateClosing: state.animateClosing.remove(viewId),
+      stack: state.stack.remove(surfaceId),
+      animateClosing: state.animateClosing.remove(surfaceId),
     );
   }
 

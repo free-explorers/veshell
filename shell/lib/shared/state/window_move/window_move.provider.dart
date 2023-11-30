@@ -7,7 +7,7 @@ part 'window_move.provider.g.dart';
 @Riverpod(keepAlive: true)
 class WindowMove extends _$WindowMove {
   @override
-  WindowMoveState build(int viewId) {
+  WindowMoveState build(int surfaceId) {
     return const WindowMoveState(
       moving: false,
       startPosition: Offset.zero,

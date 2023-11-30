@@ -11,12 +11,12 @@ import 'package:shell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
 part 'subsurface.provider.g.dart';
 
 @Riverpod(keepAlive: true)
-SubsurfaceWidget subsurfaceWidget(SubsurfaceWidgetRef ref, int viewId) {
+SubsurfaceWidget subsurfaceWidget(SubsurfaceWidgetRef ref, int surfaceId) {
   return SubsurfaceWidget(
     key: ref.watch(
-      subsurfaceStatesProvider(viewId).select((state) => state.widgetKey),
+      subsurfaceStatesProvider(surfaceId).select((state) => state.widgetKey),
     ),
-    viewId: viewId,
+    surfaceId: surfaceId,
   );
 }
 
@@ -26,9 +26,9 @@ class SubsurfaceStates extends _$SubsurfaceStates {
   ProviderSubscription<bool>? parentMappedSub;
 
   @override
-  SubsurfaceState build(int viewId) {
+  SubsurfaceState build(int surfaceId) {
     ref.listen(
-      surfaceStatesProvider(viewId).select((state) => state.textureId),
+      surfaceStatesProvider(surfaceId).select((state) => state.textureId),
       (_, __) => _checkIfMapped(),
     );
     ref.listen(surfaceIdsProvider, (_, __) => _checkIfMapped());
@@ -57,7 +57,7 @@ class SubsurfaceStates extends _$SubsurfaceStates {
     }
 
     final mapped = parentMapped &&
-        ref.read(surfaceStatesProvider(viewId)).textureId.value != -1;
+        ref.read(surfaceStatesProvider(surfaceId)).textureId.value != -1;
 
     state = state.copyWith(
       mapped: mapped,
@@ -83,7 +83,7 @@ class SubsurfaceStates extends _$SubsurfaceStates {
     );
 
     parentMappedSub?.close();
-    // print("$viewId, parent: $parent");
+    // print("$surfaceId, parent: $parent");
     final role = ref.read(surfaceStatesProvider(parent)).role;
     switch (role) {
       case SurfaceRole.xdgSurface:
@@ -107,7 +107,7 @@ class SubsurfaceStates extends _$SubsurfaceStates {
   }
 
   void dispose() {
-    ref.invalidate(subsurfaceWidgetProvider(viewId));
-    ref.invalidate(subsurfaceStatesProvider(viewId));
+    ref.invalidate(subsurfaceWidgetProvider(surfaceId));
+    ref.invalidate(subsurfaceStatesProvider(surfaceId));
   }
 }

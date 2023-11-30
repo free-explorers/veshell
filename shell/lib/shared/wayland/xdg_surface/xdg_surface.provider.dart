@@ -13,9 +13,9 @@ part 'xdg_surface.provider.g.dart';
 @Riverpod(keepAlive: true)
 class XdgSurfaceStates extends _$XdgSurfaceStates {
   @override
-  XdgSurfaceState build(int viewId) {
+  XdgSurfaceState build(int surfaceId) {
     ref.listen(
-      surfaceStatesProvider(viewId)
+      surfaceStatesProvider(surfaceId)
           .select((state) => (state.textureId, state.role)),
       (_, __) => _checkIfMapped(),
     );
@@ -40,17 +40,17 @@ class XdgSurfaceStates extends _$XdgSurfaceStates {
     _checkIfMapped();
   }
 
-  void addPopup(int viewId) {
-    state = state.copyWith(popups: [...state.popups, viewId]);
-    ref.read(xdgPopupStatesProvider(viewId).notifier).parentViewId =
-        this.viewId;
+  void addPopup(int surfaceId) {
+    state = state.copyWith(popups: [...state.popups, surfaceId]);
+    ref.read(xdgPopupStatesProvider(surfaceId).notifier).parentViewId =
+        this.surfaceId;
   }
 
-  void removePopup(int viewId) {
+  void removePopup(int surfaceId) {
     state = state.copyWith(
       popups: [
         for (int id in state.popups)
-          if (id != viewId) id
+          if (id != surfaceId) id
       ],
     );
   }
@@ -58,19 +58,20 @@ class XdgSurfaceStates extends _$XdgSurfaceStates {
   void dispose() {
     switch (state.role) {
       case XdgSurfaceRole.toplevel:
-        ref.read(xdgToplevelStatesProvider(viewId).notifier).dispose();
+        ref.read(xdgToplevelStatesProvider(surfaceId).notifier).dispose();
       case XdgSurfaceRole.popup:
-        ref.read(xdgPopupStatesProvider(viewId).notifier).dispose();
+        ref.read(xdgPopupStatesProvider(surfaceId).notifier).dispose();
       case XdgSurfaceRole.none:
         break;
     }
-    ref.invalidate(xdgSurfaceStatesProvider(viewId));
+    ref.invalidate(xdgSurfaceStatesProvider(surfaceId));
   }
 
   void _checkIfMapped() {
     final mapped = state.role != XdgSurfaceRole.none &&
-        ref.read(surfaceStatesProvider(viewId)).textureId.value != -1 &&
-        ref.read(surfaceStatesProvider(viewId)).role == SurfaceRole.xdgSurface;
+        ref.read(surfaceStatesProvider(surfaceId)).textureId.value != -1 &&
+        ref.read(surfaceStatesProvider(surfaceId)).role ==
+            SurfaceRole.xdgSurface;
 
     final wasMapped = state.mapped;
     state = state.copyWith(
@@ -94,20 +95,20 @@ class XdgSurfaceStates extends _$XdgSurfaceStates {
         }
 
       case XdgSurfaceRole.toplevel:
-        ref.read(platformApiProvider).windowMappedSink.add(viewId);
+        ref.read(platformApiProvider).windowMappedSink.add(surfaceId);
 
       case XdgSurfaceRole.popup:
         final widgetExists = ref
-                .read(xdgPopupStatesProvider(viewId))
+                .read(xdgPopupStatesProvider(surfaceId))
                 .animationsKey
                 .currentWidget !=
             null;
         if (widgetExists) {
           ref
-              .read(xdgPopupStatesProvider(viewId).notifier)
+              .read(xdgPopupStatesProvider(surfaceId).notifier)
               .cancelClosingAnimation();
         } else {
-          ref.read(popupStackChildrenProvider.notifier).add(viewId);
+          ref.read(popupStackChildrenProvider.notifier).add(surfaceId);
         }
     }
   }
@@ -121,14 +122,14 @@ class XdgSurfaceStates extends _$XdgSurfaceStates {
         }
 
       case XdgSurfaceRole.toplevel:
-        ref.read(platformApiProvider).windowUnmappedSink.add(viewId);
+        ref.read(platformApiProvider).windowUnmappedSink.add(surfaceId);
 
       case XdgSurfaceRole.popup:
         // This future will never complete if the animation is canceled.
         await ref
-            .read(xdgPopupStatesProvider(viewId).notifier)
+            .read(xdgPopupStatesProvider(surfaceId).notifier)
             .animateClosing();
-        ref.read(popupStackChildrenProvider.notifier).remove(viewId);
+        ref.read(popupStackChildrenProvider.notifier).remove(surfaceId);
     }
   }
 }

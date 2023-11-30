@@ -6,29 +6,29 @@ import 'package:shell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
 
 class Popup extends StatelessWidget {
   const Popup({
-    required this.viewId,
+    required this.surfaceId,
     super.key,
   });
-  final int viewId;
+  final int surfaceId;
 
   @override
   Widget build(BuildContext context) {
     return _Positioner(
-      viewId: viewId,
+      surfaceId: surfaceId,
       child: Consumer(
         builder: (BuildContext context, WidgetRef ref, Widget? child) {
           final key = ref.watch(
-            xdgPopupStatesProvider(viewId).select((v) => v.animationsKey),
+            xdgPopupStatesProvider(surfaceId).select((v) => v.animationsKey),
           );
           return _Animations(
             key: key,
-            viewId: viewId,
+            surfaceId: surfaceId,
             child: child!,
           );
         },
         child: Consumer(
           builder: (_, WidgetRef ref, __) {
-            return ref.watch(surfaceWidgetProvider(viewId));
+            return ref.watch(surfaceWidgetProvider(surfaceId));
           },
         ),
       ),
@@ -38,23 +38,23 @@ class Popup extends StatelessWidget {
 
 class _Positioner extends ConsumerWidget {
   const _Positioner({
-    required this.viewId,
+    required this.surfaceId,
     required this.child,
   });
-  final int viewId;
+  final int surfaceId;
   final Widget child;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Consumer(
       builder: (_, WidgetRef ref, Widget? child) {
-        final position =
-            ref.watch(xdgPopupStatesProvider(viewId).select((v) => v.position));
+        final position = ref
+            .watch(xdgPopupStatesProvider(surfaceId).select((v) => v.position));
         final visibleBounds = ref.watch(
-          xdgSurfaceStatesProvider(viewId).select((v) => v.visibleBounds),
+          xdgSurfaceStatesProvider(surfaceId).select((v) => v.visibleBounds),
         );
         final parentId = ref.watch(
-          xdgPopupStatesProvider(viewId).select((v) => v.parentViewId),
+          xdgPopupStatesProvider(surfaceId).select((v) => v.parentViewId),
         );
         // FIXME: cannot use watch because the popup thinks the window is at 0,0 when these bounds change.
         final parentVisibleBounds = ref.read(
@@ -89,8 +89,8 @@ class _Positioner extends ConsumerWidget {
       },
       child: Consumer(
         builder: (_, WidgetRef ref, Widget? child) {
-          final isClosing = ref
-              .watch(xdgPopupStatesProvider(viewId).select((v) => v.isClosing));
+          final isClosing = ref.watch(
+              xdgPopupStatesProvider(surfaceId).select((v) => v.isClosing));
           return IgnorePointer(
             ignoring: isClosing,
             child: child,
@@ -104,11 +104,11 @@ class _Positioner extends ConsumerWidget {
 
 class _Animations extends ConsumerStatefulWidget {
   const _Animations({
-    required this.viewId,
+    required this.surfaceId,
     required this.child,
     super.key,
   });
-  final int viewId;
+  final int surfaceId;
   final Widget child;
 
   @override
@@ -138,7 +138,8 @@ class AnimationsState extends ConsumerState<_Animations>
   late final Animation<Offset> _offsetAnimation = Tween<Offset>(
     begin: Offset(
       0,
-      -10.0 / ref.read(surfaceStatesProvider(widget.viewId)).surfaceSize.height,
+      -10.0 /
+          ref.read(surfaceStatesProvider(widget.surfaceId)).surfaceSize.height,
     ),
     end: Offset.zero,
   ).animate(

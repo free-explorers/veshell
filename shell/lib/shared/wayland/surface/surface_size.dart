@@ -4,17 +4,17 @@ import 'package:shell/shared/wayland/surface/surface.provider.dart';
 
 class SurfaceSize extends ConsumerWidget {
   const SurfaceSize({
-    required this.viewId,
+    required this.surfaceId,
     required this.child,
     super.key,
   });
-  final int viewId;
+  final int surfaceId;
   final Widget child;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final surfaceSize =
-        ref.watch(surfaceStatesProvider(viewId).select((v) => v.surfaceSize));
+    final surfaceSize = ref
+        .watch(surfaceStatesProvider(surfaceId).select((v) => v.surfaceSize));
 
     return SizedBox(
       width: surfaceSize.width,

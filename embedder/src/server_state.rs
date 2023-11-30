@@ -1,42 +1,56 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env::{remove_var, set_var};
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
-use smithay::{delegate_compositor, delegate_data_device, delegate_dmabuf, delegate_output, delegate_seat, delegate_shm, delegate_xdg_shell};
 use smithay::backend::allocator::dmabuf::Dmabuf;
-use smithay::backend::renderer::{ImportAll, Texture};
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
-use smithay::input::{Seat, SeatHandler, SeatState};
+use smithay::backend::renderer::{ImportAll, Texture};
 use smithay::input::pointer::{CursorImageStatus, PointerHandle};
-use smithay::reexports::calloop::{Interest, LoopHandle, Mode, PostAction};
+use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::reexports::calloop::generic::Generic;
+use smithay::reexports::calloop::{Interest, LoopHandle, Mode, PostAction};
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge;
-use smithay::reexports::wayland_server::{Client, Display, DisplayHandle, Resource};
 use smithay::reexports::wayland_server::protocol::wl_buffer;
 use smithay::reexports::wayland_server::protocol::wl_seat::WlSeat;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
+use smithay::reexports::wayland_server::{Client, Display, DisplayHandle, Resource};
 use smithay::utils::{Buffer as BufferCoords, Clock, Monotonic, Rectangle, Serial, Size};
 use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor;
-use smithay::wayland::compositor::{BufferAssignment, CompositorClientState, CompositorHandler, CompositorState, SubsurfaceCachedState, SurfaceAttributes, TraversalAction, with_states, with_surface_tree_upward};
+use smithay::wayland::compositor::{
+    with_states, with_surface_tree_upward, BufferAssignment, CompositorClientState,
+    CompositorHandler, CompositorState, SubsurfaceCachedState, SurfaceAttributes, TraversalAction,
+};
 use smithay::wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportError};
-use smithay::wayland::selection::data_device::{ClientDndGrabHandler, DataDeviceHandler, DataDeviceState, ServerDndGrabHandler, set_data_device_focus};
+use smithay::wayland::selection::data_device::{
+    set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
+    ServerDndGrabHandler,
+};
 use smithay::wayland::selection::SelectionHandler;
 use smithay::wayland::shell::xdg;
-use smithay::wayland::shell::xdg::{PopupSurface, PositionerState, SurfaceCachedState, ToplevelSurface, XdgPopupSurfaceData, XdgShellHandler, XdgShellState, XdgToplevelSurfaceData};
+use smithay::wayland::shell::xdg::{
+    PopupSurface, PositionerState, SurfaceCachedState, ToplevelSurface, XdgPopupSurfaceData,
+    XdgShellHandler, XdgShellState, XdgToplevelSurfaceData,
+};
 use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::wayland::socket::ListeningSocketSource;
+use smithay::{
+    delegate_compositor, delegate_data_device, delegate_dmabuf, delegate_output, delegate_seat,
+    delegate_shm, delegate_xdg_shell,
+};
 use tracing::{info, warn};
 
-use crate::{Backend, CalloopData, ClientState};
-use crate::flutter_engine::FlutterEngine;
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
-use crate::flutter_engine::wayland_messages::{SubsurfaceCommitMessage, SurfaceCommitMessage, XdgPopupCommitMessage, XdgSurfaceCommitMessage};
+use crate::flutter_engine::wayland_messages::{
+    SubsurfaceCommitMessage, SurfaceCommitMessage, XdgPopupCommitMessage, XdgSurfaceCommitMessage,
+};
+use crate::flutter_engine::FlutterEngine;
 use crate::texture_swap_chain::TextureSwapChain;
+use crate::{Backend, CalloopData, ClientState};
 
 pub struct ServerState<BackendData: Backend + 'static> {
     pub running: Arc<AtomicBool>,
@@ -49,11 +63,11 @@ pub struct ServerState<BackendData: Backend + 'static> {
     pub pointer: PointerHandle<ServerState<BackendData>>,
     pub backend_data: Box<BackendData>,
     pub flutter_engine: Option<Box<FlutterEngine<BackendData>>>,
-    pub next_view_id: u64,
+    pub next_surface_id: u64,
     pub next_texture_id: i64,
 
     pub mouse_position: (f64, f64),
-    pub view_id_under_cursor: Option<u64>,
+    pub surface_id_under_cursor: Option<u64>,
     pub is_next_flutter_frame_scheduled: bool,
 
     pub compositor_state: CompositorState,
@@ -67,16 +81,16 @@ pub struct ServerState<BackendData: Backend + 'static> {
     pub surfaces: HashMap<u64, WlSurface>,
     pub xdg_toplevels: HashMap<u64, ToplevelSurface>,
     pub xdg_popups: HashMap<u64, PopupSurface>,
-    pub texture_ids_per_view_id: HashMap<u64, Vec<i64>>,
-    pub view_id_per_texture_id: HashMap<i64, u64>,
+    pub texture_ids_per_surface_id: HashMap<u64, Vec<i64>>,
+    pub surface_id_per_texture_id: HashMap<i64, u64>,
     pub texture_swapchains: HashMap<i64, TextureSwapChain>,
 }
 
 impl<BackendData: Backend + 'static> ServerState<BackendData> {
-    pub fn get_new_view_id(&mut self) -> u64 {
-        let view_id = self.next_view_id;
-        self.next_view_id += 1;
-        view_id
+    pub fn get_new_surface_id(&mut self) -> u64 {
+        let surface_id = self.next_surface_id;
+        self.next_surface_id += 1;
+        surface_id
     }
 
     pub fn get_new_texture_id(&mut self) -> i64 {
@@ -132,7 +146,8 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         loop_handle
             .insert_source(source, |client_stream, _, data| {
                 if let Err(err) = data
-                    .state.display_handle
+                    .state
+                    .display_handle
                     .insert_client(client_stream, Arc::new(ClientState::default()))
                 {
                     warn!("Error adding wayland client: {}", err);
@@ -169,7 +184,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             clock,
             backend_data: Box::new(backend_data),
             mouse_position: (0.0, 0.0),
-            view_id_under_cursor: None,
+            surface_id_under_cursor: None,
             is_next_flutter_frame_scheduled: false,
             compositor_state,
             xdg_shell_state,
@@ -180,7 +195,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             seat_state,
             data_device_state,
             pointer,
-            next_view_id: 1,
+            next_surface_id: 1,
             next_texture_id: 1,
             imported_dmabufs: Vec::new(),
             gles_renderer: None,
@@ -188,8 +203,8 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             surfaces: HashMap::new(),
             xdg_toplevels: HashMap::new(),
             xdg_popups: HashMap::new(),
-            texture_ids_per_view_id: HashMap::new(),
-            view_id_per_texture_id: HashMap::new(),
+            texture_ids_per_surface_id: HashMap::new(),
+            surface_id_per_texture_id: HashMap::new(),
             texture_swapchains: HashMap::new(),
         }
     }
@@ -205,10 +220,15 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
-        let view_id = with_states(surface.wl_surface(), |surface_data| {
-            surface_data.data_map.get::<RefCell<MySurfaceState>>().unwrap().borrow().view_id
+        let surface_id = with_states(surface.wl_surface(), |surface_data| {
+            surface_data
+                .data_map
+                .get::<RefCell<MySurfaceState>>()
+                .unwrap()
+                .borrow()
+                .surface_id
         });
-        self.xdg_toplevels.insert(view_id, surface.clone());
+        self.xdg_toplevels.insert(surface_id, surface.clone());
 
         surface.with_pending_state(|state| {
             state.states.set(xdg_toplevel::State::Activated);
@@ -216,51 +236,97 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
     }
 
     fn new_popup(&mut self, _surface: PopupSurface, _positioner: PositionerState) {
-        let view_id = with_states(_surface.wl_surface(), |surface_data| {
-            surface_data.data_map.get::<RefCell<MySurfaceState>>().unwrap().borrow().view_id
+        let surface_id = with_states(_surface.wl_surface(), |surface_data| {
+            surface_data
+                .data_map
+                .get::<RefCell<MySurfaceState>>()
+                .unwrap()
+                .borrow()
+                .surface_id
         });
-        self.xdg_popups.insert(view_id, _surface.clone());
+        self.xdg_popups.insert(surface_id, _surface.clone());
     }
 
     fn move_request(&mut self, surface: ToplevelSurface, _seat: WlSeat, _serial: Serial) {
-        let view_id = with_states(surface.wl_surface(), |surface_data| {
-            surface_data.data_map.get::<RefCell<MySurfaceState>>().unwrap().borrow().view_id
+        let surface_id = with_states(surface.wl_surface(), |surface_data| {
+            surface_data
+                .data_map
+                .get::<RefCell<MySurfaceState>>()
+                .unwrap()
+                .borrow()
+                .surface_id
         });
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-        platform_method_channel.invoke_method("interactive_move", Some(Box::new(EncodableValue::Map(vec![
-            (EncodableValue::String("viewId".to_string()), EncodableValue::Int64(view_id as i64)),
-        ]))), None);
+        platform_method_channel.invoke_method(
+            "interactive_move",
+            Some(Box::new(EncodableValue::Map(vec![(
+                EncodableValue::String("surfaceId".to_string()),
+                EncodableValue::Int64(surface_id as i64),
+            )]))),
+            None,
+        );
     }
 
-    fn resize_request(&mut self, surface: ToplevelSurface, _seat: WlSeat, _serial: Serial, edges: ResizeEdge) {
-        let view_id = with_states(surface.wl_surface(), |surface_data| {
-            surface_data.data_map.get::<RefCell<MySurfaceState>>().unwrap().borrow().view_id
+    fn resize_request(
+        &mut self,
+        surface: ToplevelSurface,
+        _seat: WlSeat,
+        _serial: Serial,
+        edges: ResizeEdge,
+    ) {
+        let surface_id = with_states(surface.wl_surface(), |surface_data| {
+            surface_data
+                .data_map
+                .get::<RefCell<MySurfaceState>>()
+                .unwrap()
+                .borrow()
+                .surface_id
         });
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-        platform_method_channel.invoke_method("interactive_resize", Some(Box::new(EncodableValue::Map(vec![
-            (EncodableValue::String("viewId".to_string()), EncodableValue::Int64(view_id as i64)),
-            (EncodableValue::String("edge".to_string()), EncodableValue::Int64(edges as i64)),
-        ]))), None);
+        platform_method_channel.invoke_method(
+            "interactive_resize",
+            Some(Box::new(EncodableValue::Map(vec![
+                (
+                    EncodableValue::String("surfaceId".to_string()),
+                    EncodableValue::Int64(surface_id as i64),
+                ),
+                (
+                    EncodableValue::String("edge".to_string()),
+                    EncodableValue::Int64(edges as i64),
+                ),
+            ]))),
+            None,
+        );
     }
 
     fn grab(&mut self, _surface: PopupSurface, _seat: WlSeat, _serial: Serial) {
         // Handle popup grab here
     }
 
-    fn reposition_request(&mut self, surface: PopupSurface, _positioner: PositionerState, token: u32) {
+    fn reposition_request(
+        &mut self,
+        surface: PopupSurface,
+        _positioner: PositionerState,
+        token: u32,
+    ) {
         surface.send_repositioned(token);
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
-        let view_id = with_states(surface.wl_surface(), |surface_data| {
-            surface_data.data_map.get::<RefCell<MySurfaceState>>().unwrap().borrow().view_id
+        let surface_id = with_states(surface.wl_surface(), |surface_data| {
+            surface_data
+                .data_map
+                .get::<RefCell<MySurfaceState>>()
+                .unwrap()
+                .borrow()
+                .surface_id
         });
-        self.xdg_toplevels.remove(&view_id);
+        self.xdg_toplevels.remove(&surface_id);
     }
 }
 
 pub struct MySurfaceState {
-    pub view_id: u64,
+    pub surface_id: u64,
     pub old_texture_size: Option<Size<i32, BufferCoords>>,
 }
 
@@ -274,21 +340,28 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
     }
 
     fn new_surface(&mut self, surface: &WlSurface) {
-        let view_id = self.get_new_view_id();
+        let surface_id = self.get_new_surface_id();
         with_states(surface, |surface_data| {
-            surface_data.data_map.insert_if_missing(|| RefCell::new(MySurfaceState {
-                view_id,
-                old_texture_size: None,
-            }));
+            surface_data.data_map.insert_if_missing(|| {
+                RefCell::new(MySurfaceState {
+                    surface_id,
+                    old_texture_size: None,
+                })
+            });
         });
-        self.surfaces.insert(view_id, surface.clone());
+        self.surfaces.insert(surface_id, surface.clone());
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        let view_id = with_states(surface, |states| {
-            states.data_map.get::<RefCell<MySurfaceState>>().unwrap().borrow().view_id
+        let surface_id = with_states(surface, |states| {
+            states
+                .data_map
+                .get::<RefCell<MySurfaceState>>()
+                .unwrap()
+                .borrow()
+                .surface_id
         });
-        if let Some(toplevel) = self.xdg_toplevels.get(&view_id) {
+        if let Some(toplevel) = self.xdg_toplevels.get(&surface_id) {
             let initial_configure_sent = with_states(surface, |states| {
                 states
                     .data_map
@@ -304,7 +377,7 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
             }
         }
 
-        if let Some(popup) = self.xdg_popups.get(&view_id) {
+        if let Some(popup) = self.xdg_popups.get(&surface_id) {
             let initial_configure_sent = with_states(surface, |states| {
                 states
                     .data_map
@@ -326,24 +399,33 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
             let role = surface_data.role;
 
             let state = surface_data.cached_state.current::<SurfaceAttributes>();
-            let my_state = surface_data.data_map.get::<RefCell<MySurfaceState>>().unwrap();
+            let my_state = surface_data
+                .data_map
+                .get::<RefCell<MySurfaceState>>()
+                .unwrap();
 
-            let (view_id, old_texture_size) = {
+            let (surface_id, old_texture_size) = {
                 let my_state = my_state.borrow();
-                (my_state.view_id, my_state.old_texture_size)
+                (my_state.surface_id, my_state.old_texture_size)
             };
 
-            let texture = state.buffer
+            let texture = state
+                .buffer
                 .as_ref()
                 .and_then(|assignment| match assignment {
-                    BufferAssignment::NewBuffer(buffer) => {
-                        self.gles_renderer.as_mut().unwrap().import_buffer(buffer, Some(surface_data), &[]).and_then(|t| t.ok())
-                    },
+                    BufferAssignment::NewBuffer(buffer) => self
+                        .gles_renderer
+                        .as_mut()
+                        .unwrap()
+                        .import_buffer(buffer, Some(surface_data), &[])
+                        .and_then(|t| t.ok()),
                     _ => None,
                 });
 
             let (texture_id, size) = if let Some(texture) = texture {
-                unsafe { self.gl.as_ref().unwrap().Finish(); }
+                unsafe {
+                    self.gl.as_ref().unwrap().Finish();
+                }
 
                 let size = texture.size();
 
@@ -356,25 +438,46 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
 
                 let texture_id = match size_changed {
                     true => None,
-                    false => self.texture_ids_per_view_id.get(&view_id).and_then(|v| v.last()).cloned(),
+                    false => self
+                        .texture_ids_per_surface_id
+                        .get(&surface_id)
+                        .and_then(|v| v.last())
+                        .cloned(),
                 };
 
                 let texture_id = texture_id.unwrap_or_else(|| {
                     let texture_id = self.get_new_texture_id();
-                    while self.texture_ids_per_view_id.entry(view_id).or_default().len() >= 2 {
-                        self.texture_ids_per_view_id.entry(view_id).or_default().remove(0);
+                    while self
+                        .texture_ids_per_surface_id
+                        .entry(surface_id)
+                        .or_default()
+                        .len()
+                        >= 2
+                    {
+                        self.texture_ids_per_surface_id
+                            .entry(surface_id)
+                            .or_default()
+                            .remove(0);
                     }
 
-                    self.texture_ids_per_view_id.entry(view_id).or_default().push(texture_id);
-                    self.view_id_per_texture_id.insert(texture_id, view_id);
-                    self.flutter_engine_mut().register_external_texture(texture_id).unwrap();
+                    self.texture_ids_per_surface_id
+                        .entry(surface_id)
+                        .or_default()
+                        .push(texture_id);
+                    self.surface_id_per_texture_id
+                        .insert(texture_id, surface_id);
+                    self.flutter_engine_mut()
+                        .register_external_texture(texture_id)
+                        .unwrap();
                     texture_id
                 });
 
                 let swapchain = self.texture_swapchains.entry(texture_id).or_default();
                 swapchain.commit(texture.clone());
 
-                self.flutter_engine_mut().mark_external_texture_frame_available(texture_id).unwrap();
+                self.flutter_engine_mut()
+                    .mark_external_texture_frame_available(texture_id)
+                    .unwrap();
 
                 (texture_id, Some(size))
             } else {
@@ -382,7 +485,7 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
             };
 
             SurfaceCommitMessage {
-                view_id,
+                surface_id,
                 role,
                 texture_id,
                 buffer_delta: state.buffer_delta,
@@ -409,17 +512,31 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                                 }),
                             },
                         })
-                    },
+                    }
                     _ => None,
                 },
                 xdg_popup: match role {
                     Some(xdg::XDG_POPUP_ROLE) => {
-                        let popup_data = surface_data.data_map.get::<XdgPopupSurfaceData>().unwrap().lock().unwrap();
-                        let parent_id = popup_data.parent.as_ref().map(|surface| {
-                            with_states(surface, |surface_data| {
-                                surface_data.data_map.get::<RefCell<MySurfaceState>>().unwrap().borrow().view_id
+                        let popup_data = surface_data
+                            .data_map
+                            .get::<XdgPopupSurfaceData>()
+                            .unwrap()
+                            .lock()
+                            .unwrap();
+                        let parent_id = popup_data
+                            .parent
+                            .as_ref()
+                            .map(|surface| {
+                                with_states(surface, |surface_data| {
+                                    surface_data
+                                        .data_map
+                                        .get::<RefCell<MySurfaceState>>()
+                                        .unwrap()
+                                        .borrow()
+                                        .surface_id
+                                })
                             })
-                        }).unwrap_or(0);
+                            .unwrap_or(0);
 
                         Some(XdgPopupCommitMessage {
                             parent_id,
@@ -429,11 +546,12 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                     _ => None,
                 },
                 subsurface: match role {
-                    Some(compositor::SUBSURFACE_ROLE) => {
-                        Some(SubsurfaceCommitMessage {
-                            location: surface_data.cached_state.current::<SubsurfaceCachedState>().location,
-                        })
-                    }
+                    Some(compositor::SUBSURFACE_ROLE) => Some(SubsurfaceCommitMessage {
+                        location: surface_data
+                            .cached_state
+                            .current::<SubsurfaceCachedState>()
+                            .location,
+                    }),
                     _ => None,
                 },
                 subsurfaces_below: vec![],
@@ -445,26 +563,37 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
         let mut subsurfaces_above = vec![];
         let mut above = false;
 
-        with_surface_tree_upward(surface, (), |child_surface, _, ()| {
-            // Only traverse the direct children of the surface
-            if child_surface == surface {
-                TraversalAction::DoChildren(())
-            } else {
-                TraversalAction::SkipChildren
-            }
-        }, |child_surface, surface_data, ()| {
-            if child_surface == surface {
-                above = true;
-                return;
-            }
+        with_surface_tree_upward(
+            surface,
+            (),
+            |child_surface, _, ()| {
+                // Only traverse the direct children of the surface
+                if child_surface == surface {
+                    TraversalAction::DoChildren(())
+                } else {
+                    TraversalAction::SkipChildren
+                }
+            },
+            |child_surface, surface_data, ()| {
+                if child_surface == surface {
+                    above = true;
+                    return;
+                }
 
-            let view_id = surface_data.data_map.get::<RefCell<MySurfaceState>>().unwrap().borrow().view_id;
-            if above {
-                subsurfaces_above.push(view_id);
-            } else {
-                subsurfaces_below.push(view_id);
-            }
-        }, |_, _, _| true);
+                let surface_id = surface_data
+                    .data_map
+                    .get::<RefCell<MySurfaceState>>()
+                    .unwrap()
+                    .borrow()
+                    .surface_id;
+                if above {
+                    subsurfaces_above.push(surface_id);
+                } else {
+                    subsurfaces_below.push(surface_id);
+                }
+            },
+            |_, _, _| true,
+        );
 
         commit_message.subsurfaces_below = subsurfaces_below;
         commit_message.subsurfaces_above = subsurfaces_above;
@@ -472,19 +601,33 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
         let commit_message = commit_message.serialize();
 
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-        platform_method_channel.invoke_method("commit_surface", Some(Box::new(commit_message)), None);
+        platform_method_channel.invoke_method(
+            "commit_surface",
+            Some(Box::new(commit_message)),
+            None,
+        );
     }
 
     fn destroyed(&mut self, _surface: &WlSurface) {
-        let view_id = with_states(_surface, |surface_data| {
-            surface_data.data_map.get::<RefCell<MySurfaceState>>().unwrap().borrow().view_id
+        let surface_id = with_states(_surface, |surface_data| {
+            surface_data
+                .data_map
+                .get::<RefCell<MySurfaceState>>()
+                .unwrap()
+                .borrow()
+                .surface_id
         });
-        self.surfaces.remove(&view_id);
+        self.surfaces.remove(&surface_id);
 
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-        platform_method_channel.invoke_method("destroy_surface", Some(Box::new(EncodableValue::Map(vec![
-            (EncodableValue::String("viewId".to_string()), EncodableValue::Int64(view_id as i64)),
-        ]))), None);
+        platform_method_channel.invoke_method(
+            "destroy_surface",
+            Some(Box::new(EncodableValue::Map(vec![(
+                EncodableValue::String("surfaceId".to_string()),
+                EncodableValue::Int64(surface_id as i64),
+            )]))),
+            None,
+        );
     }
 }
 
@@ -499,7 +642,11 @@ impl<BackendData: Backend> DmabufHandler for ServerState<BackendData> {
         self.dmabuf_state.as_mut().unwrap()
     }
 
-    fn dmabuf_imported(&mut self, _global: &DmabufGlobal, _dmabuf: Dmabuf) -> Result<(), ImportError> {
+    fn dmabuf_imported(
+        &mut self,
+        _global: &DmabufGlobal,
+        _dmabuf: Dmabuf,
+    ) -> Result<(), ImportError> {
         self.imported_dmabufs.push(_dmabuf);
         Ok(())
     }
@@ -533,9 +680,7 @@ impl<BackendData: Backend> SeatHandler for ServerState<BackendData> {
         set_data_device_focus(dh, seat, client);
     }
 
-    fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {
-
-    }
+    fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {}
 }
 
 impl<BackendData: Backend> SelectionHandler for ServerState<BackendData> {

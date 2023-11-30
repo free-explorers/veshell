@@ -101,7 +101,7 @@ class Subsurface with _$Subsurface {
 class CommitSurfaceEvent with _$CommitSurfaceEvent {
   /// Factory
   factory CommitSurfaceEvent({
-    required int viewId,
+    required int surfaceId,
     required SurfaceEvent surface,
     XdgSurface? xdgSurface,
     XdgPopup? xdgPopup,
@@ -121,13 +121,16 @@ class TextInputEvent with _$TextInputEvent {
   TextInputEvent._();
 
   /// Factory for EnableTextInputEvent
-  factory TextInputEvent.enable({required int viewId}) = EnableTextInputEvent;
+  factory TextInputEvent.enable({required int surfaceId}) =
+      EnableTextInputEvent;
 
   /// Factory for DisableTextInputEvent
-  factory TextInputEvent.disable({required int viewId}) = DisableTextInputEvent;
+  factory TextInputEvent.disable({required int surfaceId}) =
+      DisableTextInputEvent;
 
   /// Factory for CommitTextInputEvent
-  factory TextInputEvent.commit({required int viewId}) = CommitTextInputEvent;
+  factory TextInputEvent.commit({required int surfaceId}) =
+      CommitTextInputEvent;
 
   factory TextInputEvent.fromJson(Map<String, dynamic> json) =>
       _$TextInputEventFromJson(json);
@@ -138,7 +141,7 @@ class TextInputEvent with _$TextInputEvent {
 class InteractiveMoveEvent with _$InteractiveMoveEvent {
   /// Factory
   factory InteractiveMoveEvent({
-    required int viewId,
+    required int surfaceId,
   }) = _InteractiveMoveEvent;
 
   factory InteractiveMoveEvent.fromJson(Map<String, dynamic> json) =>
@@ -150,7 +153,7 @@ class InteractiveMoveEvent with _$InteractiveMoveEvent {
 class InteractiveResizeEvent with _$InteractiveResizeEvent {
   /// Factory
   factory InteractiveResizeEvent({
-    required int viewId,
+    required int surfaceId,
     required int edge,
   }) = _InteractiveResizeEvent;
 
@@ -163,7 +166,7 @@ class InteractiveResizeEvent with _$InteractiveResizeEvent {
 class SetTitleEvent with _$SetTitleEvent {
   /// Factory
   factory SetTitleEvent({
-    required int viewId,
+    required int surfaceId,
     required String title,
   }) = _SetTitleEvent;
 
@@ -176,7 +179,7 @@ class SetTitleEvent with _$SetTitleEvent {
 class SetAppIdEvent with _$SetAppIdEvent {
   /// Factory
   factory SetAppIdEvent({
-    required int viewId,
+    required int surfaceId,
     required String appId,
   }) = _SetAppIdEvent;
 
@@ -189,7 +192,7 @@ class SetAppIdEvent with _$SetAppIdEvent {
 class RequestMaxmizeEvent with _$RequestMaxmizeEvent {
   /// Factory
   factory RequestMaxmizeEvent({
-    required int viewId,
+    required int surfaceId,
     required bool maximize,
   }) = _RequestMaxmizeEvent;
 
@@ -202,7 +205,7 @@ class RequestMaxmizeEvent with _$RequestMaxmizeEvent {
 class DestroySurfaceEvent with _$DestroySurfaceEvent {
   /// Factory
   factory DestroySurfaceEvent({
-    required int viewId,
+    required int surfaceId,
   }) = _DestroySurfaceEvent;
 
   factory DestroySurfaceEvent.fromJson(Map<String, dynamic> json) =>

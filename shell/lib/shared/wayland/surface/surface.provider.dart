@@ -10,22 +10,22 @@ import 'package:shell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
 part 'surface.provider.g.dart';
 
 @Riverpod(keepAlive: true)
-SurfaceWidget surfaceWidget(SurfaceWidgetRef ref, int viewId) {
+SurfaceWidget surfaceWidget(SurfaceWidgetRef ref, int surfaceId) {
   return SurfaceWidget(
     key: ref.watch(
-      surfaceStatesProvider(viewId).select((state) => state.widgetKey),
+      surfaceStatesProvider(surfaceId).select((state) => state.widgetKey),
     ),
-    viewId: viewId,
+    surfaceId: surfaceId,
   );
 }
 
 @Riverpod(keepAlive: true)
 class SurfaceStates extends _$SurfaceStates {
   @override
-  SurfaceState build(int viewId) {
+  SurfaceState build(int surfaceId) {
     return SurfaceState(
       role: SurfaceRole.none,
-      viewId: viewId,
+      surfaceId: surfaceId,
       textureId: TextureId(-1),
       oldTextureId: TextureId(-1),
       surfacePosition: Offset.zero,
@@ -87,19 +87,19 @@ class SurfaceStates extends _$SurfaceStates {
     // Cascading dispose of all surface roles.
     switch (state.role) {
       case SurfaceRole.xdgSurface:
-        ref.read(xdgSurfaceStatesProvider(viewId).notifier).dispose();
+        ref.read(xdgSurfaceStatesProvider(surfaceId).notifier).dispose();
       case SurfaceRole.subsurface:
-        ref.read(subsurfaceStatesProvider(viewId).notifier).dispose();
+        ref.read(subsurfaceStatesProvider(surfaceId).notifier).dispose();
       case SurfaceRole.none:
         break;
     }
 
-    ref.invalidate(surfaceWidgetProvider(viewId));
+    ref.invalidate(surfaceWidgetProvider(surfaceId));
 
     // This refresh seems very redundant but it's actually needed.
     // Without refresh, the state persists in memory and if a Finalizer attaches to an object
     // inside the state, it will never call its finalization callback.
-    final _ = ref.refresh(surfaceStatesProvider(viewId));
-    ref.invalidate(surfaceStatesProvider(viewId));
+    final _ = ref.refresh(surfaceStatesProvider(surfaceId));
+    ref.invalidate(surfaceStatesProvider(surfaceId));
   }
 }

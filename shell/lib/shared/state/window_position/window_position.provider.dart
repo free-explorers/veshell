@@ -7,7 +7,7 @@ part 'window_position.provider.g.dart';
 @Riverpod(keepAlive: true)
 class WindowPosition extends _$WindowPosition {
   @override
-  Offset build(int viewId) => Offset.zero;
+  Offset build(int surfaceId) => Offset.zero;
 
   @override
   set state(Offset value) {

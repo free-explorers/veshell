@@ -13,22 +13,26 @@ class Tasks extends _$Tasks {
   TasksState build() {
     ref
       ..listen(windowMappedStreamProvider, (_, next) {
-        next.whenData((int viewId) {
+        next.whenData((int surfaceId) {
           state = state.copyWith(
-            tasks: state.tasks.add(viewId),
-            diff: [AddDiffOperation(endOfCollection<int>, viewId)].lockUnsafe,
+            tasks: state.tasks.add(surfaceId),
+            diff:
+                [AddDiffOperation(endOfCollection<int>, surfaceId)].lockUnsafe,
           );
-          ref.read(xdgToplevelStatesProvider(viewId)).focusNode.requestFocus();
+          ref
+              .read(xdgToplevelStatesProvider(surfaceId))
+              .focusNode
+              .requestFocus();
         });
       })
       ..listen(windowUnmappedStreamProvider, (_, next) {
-        next.whenData((int viewId) {
+        next.whenData((int surfaceId) {
           state = state.copyWith(
-            tasks: state.tasks.remove(viewId),
-            diff: [RemoveDiffOperation(viewId)].lockUnsafe,
+            tasks: state.tasks.remove(surfaceId),
+            diff: [RemoveDiffOperation(surfaceId)].lockUnsafe,
           );
           ref
-              .read(xdgToplevelStatesProvider(viewId))
+              .read(xdgToplevelStatesProvider(surfaceId))
               .focusNode
               .unfocus(disposition: UnfocusDisposition.previouslyFocusedChild);
         });
@@ -40,10 +44,10 @@ class Tasks extends _$Tasks {
     );
   }
 
-  void putInFront(int viewId) {
+  void putInFront(int surfaceId) {
     state = state.copyWith(
-      tasks: state.tasks.remove(viewId).add(viewId),
-      diff: [ReorderDiffOperation(endOfCollection<int>, viewId)].lockUnsafe,
+      tasks: state.tasks.remove(surfaceId).add(surfaceId),
+      diff: [ReorderDiffOperation(endOfCollection<int>, surfaceId)].lockUnsafe,
     );
   }
 }

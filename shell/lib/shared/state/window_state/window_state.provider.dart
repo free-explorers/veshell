@@ -10,8 +10,8 @@ part 'window_state.provider.g.dart';
 @Riverpod(keepAlive: true)
 class WindowState extends _$WindowState {
   @override
-  WindowProviderState build(int viewId) {
-    // ref.listen(surfaceStatesProvider(viewId), (previous, next) {
+  WindowProviderState build(int surfaceId) {
+    // ref.listen(surfaceStatesProvider(surfaceId), (previous, next) {
     //   if (state.tilingRequested == null) {
     //     return;
     //   }

@@ -10,8 +10,8 @@ class PopupStack extends ConsumerWidget {
     return Stack(
       key: ref.watch(popupStackGlobalKeyProvider),
       children: [
-        for (int viewId in ref.watch(popupStackChildrenProvider))
-          ref.watch(popupWidgetProvider(viewId)),
+        for (int surfaceId in ref.watch(popupStackChildrenProvider))
+          ref.watch(popupWidgetProvider(surfaceId)),
       ],
     );
   }

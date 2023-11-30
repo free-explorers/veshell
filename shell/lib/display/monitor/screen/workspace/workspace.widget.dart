@@ -17,10 +17,10 @@ class WorkspaceWidget extends HookConsumerWidget {
       const PersistentApplicationLauncher(),
     ];
 
-    for (final viewdId in windowStackList) {
+    for (final surfaceId in windowStackList) {
       tileableList.add(
         PersistentWindowTileable(
-          viewId: viewdId,
+          surfaceId: surfaceId,
         ),
       );
     }

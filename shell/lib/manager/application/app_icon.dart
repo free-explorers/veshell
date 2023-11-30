@@ -108,15 +108,15 @@ class AppIconById extends ConsumerWidget {
 
 class AppIconByViewId extends ConsumerWidget {
   const AppIconByViewId({
-    required this.viewId,
+    required this.surfaceId,
     super.key,
   });
-  final int viewId;
+  final int surfaceId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appId =
-        ref.watch(xdgToplevelStatesProvider(viewId).select((v) => v.appId));
+        ref.watch(xdgToplevelStatesProvider(surfaceId).select((v) => v.appId));
     return AppIconById(id: appId);
   }
 }

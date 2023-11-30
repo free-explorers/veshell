@@ -11,7 +11,7 @@ part 'window_resize.provider.g.dart';
 @Riverpod(keepAlive: true)
 class WindowResize extends _$WindowResize {
   @override
-  ResizerState build(int viewId) {
+  ResizerState build(int surfaceId) {
     return const ResizerState(
       resizing: false,
       resizeEdge: null,
@@ -60,7 +60,7 @@ class WindowResize extends _$WindowResize {
       final int height = max(1, state.wantedSize.height.toInt());
 
       ref.read(platformApiProvider.notifier).resizeWindow(
-            viewId,
+            surfaceId,
             width,
             height,
           );
@@ -93,7 +93,7 @@ class WindowResize extends _$WindowResize {
     final int height = max(1, state.wantedSize.height.toInt());
 
     ref.read(platformApiProvider.notifier).resizeWindow(
-          viewId,
+          surfaceId,
           width,
           height,
         );

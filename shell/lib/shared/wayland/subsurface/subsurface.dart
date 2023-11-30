@@ -5,18 +5,18 @@ import 'package:shell/shared/wayland/surface/surface.provider.dart';
 
 class SubsurfaceWidget extends StatelessWidget {
   const SubsurfaceWidget({
-    required this.viewId,
+    required this.surfaceId,
     super.key,
   });
-  final int viewId;
+  final int surfaceId;
 
   @override
   Widget build(BuildContext context) {
     return _Positioner(
-      viewId: viewId,
+      surfaceId: surfaceId,
       child: Consumer(
         builder: (BuildContext context, WidgetRef ref, Widget? child) {
-          return ref.watch(surfaceWidgetProvider(viewId));
+          return ref.watch(surfaceWidgetProvider(surfaceId));
         },
       ),
     );
@@ -25,16 +25,16 @@ class SubsurfaceWidget extends StatelessWidget {
 
 class _Positioner extends ConsumerWidget {
   const _Positioner({
-    required this.viewId,
+    required this.surfaceId,
     required this.child,
   });
-  final int viewId;
+  final int surfaceId;
   final Widget child;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final position =
-        ref.watch(subsurfaceStatesProvider(viewId).select((v) => v.position));
+    final position = ref
+        .watch(subsurfaceStatesProvider(surfaceId).select((v) => v.position));
 
     return Positioned(
       left: position.dx,
