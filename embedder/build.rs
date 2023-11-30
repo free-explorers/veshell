@@ -145,7 +145,11 @@ fn link_libflutter_engine(flutter_engine_build: FlutterEngineBuild) {
     println!("cargo:rustc-link-search={libflutter_engine_dir}");
     println!("cargo:rustc-link-lib={FLUTTER_ENGINE_LINK_NAME}");
 
-    let rpath = "$ORIGIN/lib";
+    let rpath = if option_env!("BUNDLE").is_some() {
+        "$ORIGIN/lib"
+    } else {
+        &libflutter_engine_dir
+    };
     println!("cargo:rustc-link-arg=-Wl,-rpath={rpath}");
 }
 

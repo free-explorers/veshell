@@ -125,11 +125,15 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             panic!("Unsupported architecture");
         };
 
-        let executable_path = std::fs::canonicalize("/proc/self/exe")?;
-        let bundle_root = executable_path.parent().unwrap().display().to_string();
-
         // Default build is debug if not specified.
         let flutter_engine_build = option_env!("FLUTTER_ENGINE_BUILD").unwrap_or("debug");
+
+        let executable_path = std::fs::canonicalize("/proc/self/exe")?;
+        let bundle_root = if option_env!("BUNDLE").is_some() {
+            executable_path.parent().unwrap().display().to_string()
+        } else {
+            format!("../shell/build/linux/{arch}/{flutter_engine_build}/bundle")
+        };
 
         let assets_path = CString::new(format!("{bundle_root}/data/flutter_assets"))?;
         let icu_data_path = CString::new(format!("{bundle_root}/data/icudtl.dat"))?;
