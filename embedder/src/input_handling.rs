@@ -75,7 +75,7 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
                             event.amount(Axis::Horizontal)
                                 .unwrap_or(event.amount_discrete(Axis::Horizontal)
                                     .unwrap_or(0.0) * DISCRETE_SCROLL_MULTIPLIER),
-                            event.amount(Axis::Vertical)
+                            -event.amount(Axis::Vertical)
                                 .unwrap_or(event.amount_discrete(Axis::Vertical)
                                     .unwrap_or(0.0) * DISCRETE_SCROLL_MULTIPLIER),
                         )
@@ -89,7 +89,7 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
                         } else {
                             Some((
                                 (horizontal.unwrap_or(0.0) * DISCRETE_SCROLL_MULTIPLIER) as i32,
-                                (vertical.unwrap_or(0.0) * DISCRETE_SCROLL_MULTIPLIER) as i32,
+                                -(vertical.unwrap_or(0.0) * DISCRETE_SCROLL_MULTIPLIER) as i32,
                             ))
                         }
                     },
@@ -116,7 +116,7 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
                             .unwrap_or(0.0) * DISCRETE_SCROLL_MULTIPLIER)
                 },
                 scroll_delta_y: {
-                    event.amount(Axis::Vertical)
+                    -event.amount(Axis::Vertical)
                         .unwrap_or(event.amount_discrete(Axis::Vertical)
                             .unwrap_or(0.0) * DISCRETE_SCROLL_MULTIPLIER)
                 },
