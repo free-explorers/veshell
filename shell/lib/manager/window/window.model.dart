@@ -21,6 +21,8 @@ abstract class Window with _$Window {
 
   /// Dialog
   const factory Window.dialog({
+    required String appId,
+    required String title,
     required int surfaceId,
     required int parentSurfaceId,
   }) = DialogWindow;
