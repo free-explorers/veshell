@@ -63,33 +63,31 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
         InputEvent::PointerAxis { event } => {
             const DISCRETE_SCROLL_MULTIPLIER: f64 = 5.0;
 
+            let horizontal_discrete = event.amount_discrete(Axis::Horizontal)
+                .map(|v| v * DISCRETE_SCROLL_MULTIPLIER);
+            let vertical_discrete = event.amount_discrete(Axis::Vertical)
+                .map(|v| v * DISCRETE_SCROLL_MULTIPLIER);
+
+            let horizontal = event.amount(Axis::Horizontal)
+                // Fall back on discrete scroll if continuous scroll is not available.
+                .or(horizontal_discrete).unwrap_or(0.0);
+            let vertical = event.amount(Axis::Vertical)
+                .or(vertical_discrete).unwrap_or(0.0);
+
             let pointer = data.state.pointer.clone();
             pointer.axis(
                 &mut data.state,
                 AxisFrame {
                     source: Some(event.source()),
-                    time: (event.time() / 1000) as u32,
-                    axis: {
-                        (
-                            // Fall back on discrete scroll if continuous scroll is not available.
-                            event.amount(Axis::Horizontal)
-                                .unwrap_or(event.amount_discrete(Axis::Horizontal)
-                                    .unwrap_or(0.0) * DISCRETE_SCROLL_MULTIPLIER),
-                            -event.amount(Axis::Vertical)
-                                .unwrap_or(event.amount_discrete(Axis::Vertical)
-                                    .unwrap_or(0.0) * DISCRETE_SCROLL_MULTIPLIER),
-                        )
-                    },
+                    time: (event.time() / 1000) as u32, // us to ms
+                    axis: (horizontal, vertical),
                     discrete: {
-                        let horizontal = event.amount_discrete(Axis::Horizontal);
-                        let vertical = event.amount_discrete(Axis::Vertical);
-
-                        if let (None, None) = (horizontal, vertical) {
+                        if let (None, None) = (horizontal_discrete, vertical_discrete) {
                             None
                         } else {
                             Some((
-                                (horizontal.unwrap_or(0.0) * DISCRETE_SCROLL_MULTIPLIER) as i32,
-                                -(vertical.unwrap_or(0.0) * DISCRETE_SCROLL_MULTIPLIER) as i32,
+                                horizontal_discrete.unwrap_or(0.0) as i32,
+                                vertical_discrete.unwrap_or(0.0) as i32,
                             ))
                         }
                     },
@@ -110,16 +108,8 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
                 y: data.state.mouse_position.1,
                 device: 0,
                 signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
-                scroll_delta_x: {
-                    event.amount(Axis::Horizontal)
-                        .unwrap_or(event.amount_discrete(Axis::Horizontal)
-                            .unwrap_or(0.0) * DISCRETE_SCROLL_MULTIPLIER)
-                },
-                scroll_delta_y: {
-                    -event.amount(Axis::Vertical)
-                        .unwrap_or(event.amount_discrete(Axis::Vertical)
-                            .unwrap_or(0.0) * DISCRETE_SCROLL_MULTIPLIER)
-                },
+                scroll_delta_x: horizontal,
+                scroll_delta_y: vertical,
                 device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
                 buttons: data.state.flutter_engine().mouse_button_tracker.get_flutter_button_bitmask(),
                 pan_x: 0.0,
