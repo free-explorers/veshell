@@ -55,7 +55,7 @@ Future<void> buildEmbedder(
     'cargo',
     cargoArgs,
     workingDirectory: 'embedder',
-    environment: {'FLUTTER_ENGINE_BUILD': target.name},
+    environment: {'BUNDLE': 'true', 'FLUTTER_ENGINE_BUILD': target.name},
   );
   if (exitCode != 0) {
     exit(exitCode);
