@@ -5,4 +5,4 @@ embedder/third_party/flutter_engine/profile/*.so
 embedder/third_party/flutter_engine/release/*.so
 embedder/third_party/flutter_engine/.flutter_engine_revision
 .dart_tool/
-.cargo/config
+.cargo/config.toml
