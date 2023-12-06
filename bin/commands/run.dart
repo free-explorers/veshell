@@ -41,6 +41,10 @@ class RunCommand extends Command<int> {
       );
     }
 
+    // Write the PID to a file
+    final pidFile = File('process.pid');
+    await pidFile.writeAsString(process.pid.toString());
+
     return process.exitCode;
   }
 }

@@ -53,7 +53,46 @@
 				"cwd": "${workspaceFolder}/shell"
 			},
 			"isBackground": true,
-			"dependsOn": "build veshell"
+			"dependsOn": "build veshell",
+			"presentation": {
+				"echo": true,
+				"reveal": "silent",
+				"focus": false,
+				"panel": "shared",
+				"showReuseMessage": true,
+				"clear": false
+			}
+		},
+		{
+			"label": "clean debug session",
+			"command": "kill $(cat ${workspaceFolder}/process.pid) || true",
+			"type": "shell",
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "never",
+				"showReuseMessage": false,
+				"echo": false,
+				"close": true
+			},
+		},
+		{
+			"label": "Terminate All Tasks",
+			"command": "echo ${input:terminate}",
+			"type": "shell",
+			"problemMatcher": [],
+			"dependsOn": "clean debug session",
+			"presentation": {
+				"reveal": "silent",
+				"showReuseMessage": false,
+			}
+		}
+	],
+	"inputs": [
+		{
+			"id": "terminate",
+			"type": "command",
+			"command": "workbench.action.tasks.terminate",
+			"args": "terminateAll"
 		}
 	]
 }
