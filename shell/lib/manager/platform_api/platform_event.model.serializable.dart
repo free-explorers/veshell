@@ -87,7 +87,12 @@ class Subsurface with _$Subsurface {
 /// Model for CommitSurfaceEvent
 @Freezed(unionKey: 'role', unionValueCase: FreezedUnionCase.snake)
 class CommitSurfaceEvent with _$CommitSurfaceEvent {
-  CommitSurfaceEvent._();
+  /// Factory for xdgToplevel
+  factory CommitSurfaceEvent({
+    required int surfaceId,
+    required SurfaceMessage surface,
+    required SurfaceRole role,
+  }) = SimpleCommitSurfaceEvent;
 
   /// Factory for xdgToplevel
   factory CommitSurfaceEvent.xdgToplevel({
