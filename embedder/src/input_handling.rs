@@ -2,8 +2,8 @@ use std::mem::size_of;
 use std::sync::atomic::Ordering;
 
 use input_linux::sys::KEY_ESC;
-use smithay::backend::input;
-use smithay::backend::input::{AbsolutePositionEvent, ButtonState, InputBackend, InputEvent, KeyboardKeyEvent, KeyState, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent};
+use smithay::backend::input::{AbsolutePositionEvent, Axis, ButtonState, Event, InputBackend, InputEvent, KeyboardKeyEvent, KeyState, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent};
+use smithay::input::pointer::AxisFrame;
 
 use crate::{Backend, CalloopData};
 use crate::flutter_engine::embedder::{FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse, FlutterPointerEvent, FlutterPointerPhase_kDown, FlutterPointerPhase_kHover, FlutterPointerPhase_kMove, FlutterPointerPhase_kUp, FlutterPointerSignalKind_kFlutterPointerSignalKindNone, FlutterPointerSignalKind_kFlutterPointerSignalKindScroll};
@@ -61,6 +61,41 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
             }).unwrap();
         }
         InputEvent::PointerAxis { event } => {
+            const DISCRETE_SCROLL_MULTIPLIER: f64 = 5.0;
+
+            let horizontal_discrete = event.amount_discrete(Axis::Horizontal)
+                .map(|v| v * DISCRETE_SCROLL_MULTIPLIER);
+            let vertical_discrete = event.amount_discrete(Axis::Vertical)
+                .map(|v| v * DISCRETE_SCROLL_MULTIPLIER);
+
+            let horizontal = event.amount(Axis::Horizontal)
+                // Fall back on discrete scroll if continuous scroll is not available.
+                .or(horizontal_discrete).unwrap_or(0.0);
+            let vertical = event.amount(Axis::Vertical)
+                .or(vertical_discrete).unwrap_or(0.0);
+
+            let pointer = data.state.pointer.clone();
+            pointer.axis(
+                &mut data.state,
+                AxisFrame {
+                    source: Some(event.source()),
+                    time: (event.time() / 1000) as u32, // us to ms
+                    axis: (horizontal, vertical),
+                    discrete: {
+                        if let (None, None) = (horizontal_discrete, vertical_discrete) {
+                            None
+                        } else {
+                            Some((
+                                horizontal_discrete.unwrap_or(0.0) as i32,
+                                vertical_discrete.unwrap_or(0.0) as i32,
+                            ))
+                        }
+                    },
+                    stop: (false, false),
+                },
+            );
+            pointer.frame(&mut data.state);
+
             data.state.flutter_engine().send_pointer_event(FlutterPointerEvent {
                 struct_size: size_of::<FlutterPointerEvent>(),
                 phase: if data.state.flutter_engine().mouse_button_tracker.are_any_buttons_pressed() {
@@ -73,8 +108,8 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
                 y: data.state.mouse_position.1,
                 device: 0,
                 signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
-                scroll_delta_x: event.amount_discrete(input::Axis::Horizontal).unwrap_or(0.0) * 10.0,
-                scroll_delta_y: event.amount_discrete(input::Axis::Vertical).unwrap_or(0.0) * 10.0,
+                scroll_delta_x: horizontal,
+                scroll_delta_y: vertical,
                 device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
                 buttons: data.state.flutter_engine().mouse_button_tracker.get_flutter_button_bitmask(),
                 pan_x: 0.0,
