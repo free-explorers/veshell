@@ -293,13 +293,6 @@ class PlatformApi extends _$PlatformApi {
       textureFinalizer.attach(textureId, textureId.value, detach: textureId);
     }
 
-    final inputRegionRect = Rect.fromLTRB(
-      event.surface.inputRegion.x1.toDouble(),
-      event.surface.inputRegion.y1.toDouble(),
-      event.surface.inputRegion.x2.toDouble(),
-      event.surface.inputRegion.y2.toDouble(),
-    );
-
     for (final id in event.surface.subsurfacesBelow) {
       ref
           .read(subsurfaceStatesProvider(id).notifier)
@@ -315,66 +308,73 @@ class PlatformApi extends _$PlatformApi {
     ref.read(surfaceStatesProvider(event.surfaceId).notifier).commit(
           role: event.surface.role,
           textureId: textureId,
-          surfacePosition:
-              Offset(event.surface.x.toDouble(), event.surface.y.toDouble()),
+          surfacePosition: Offset(
+            event.surface.bufferDelta?.dx ?? 0.0,
+            event.surface.bufferDelta?.dy ?? 0.0,
+          ),
           surfaceSize: Size(
-            event.surface.width.toDouble(),
-            event.surface.height.toDouble(),
+            event.surface.bufferSize?.width ?? 0.0,
+            event.surface.bufferSize?.height ?? 0.0,
           ),
           scale: event.surface.scale.toDouble(),
           subsurfacesBelow: event.surface.subsurfacesBelow,
           subsurfacesAbove: event.surface.subsurfacesAbove,
-          inputRegion: inputRegionRect,
+          inputRegion: event.surface.inputRegion,
         );
 
-    if (event.xdgSurface != null) {
-      final xdgSurface = event.xdgSurface!;
+    if (event is XdgToplevelCommitSurfaceEvent) {
       ref.read(xdgSurfaceStatesProvider(event.surfaceId).notifier).commit(
-            role: xdgSurface.role,
-            visibleBounds: Rect.fromLTWH(
-              xdgSurface.x.toDouble(),
-              xdgSurface.y.toDouble(),
-              xdgSurface.width.toDouble(),
-              xdgSurface.height.toDouble(),
-            ),
+            role: event.role,
+            visibleBounds: event.geometry ??
+                Rect.fromLTWH(
+                  event.surface.bufferDelta?.dx ?? 0.0,
+                  event.surface.bufferDelta?.dy ?? 0.0,
+                  event.surface.bufferSize?.width ?? 0.0,
+                  event.surface.bufferSize?.height ?? 0.0,
+                ),
           );
 
-      if (event.xdgPopup != null) {
-        final xdgPopup = event.xdgPopup!;
-
-        // TODO: What to do with the xdgPopup width & height?
-
-        ref.read(xdgPopupStatesProvider(event.surfaceId).notifier).commit(
-              parentViewId: xdgPopup.parentId,
-              position: Offset(xdgPopup.x.toDouble(), xdgPopup.y.toDouble()),
-            );
+      if (event.title != null) {
+        ref
+            .read(xdgToplevelStatesProvider(event.surfaceId).notifier)
+            .setTitle(event.title!);
       }
-    }
 
-    if (event.subsurface != null) {
-      final subsurface = event.subsurface!;
-      final position = Offset(subsurface.x.toDouble(), subsurface.y.toDouble());
-      ref.read(subsurfaceStatesProvider(event.surfaceId).notifier).commit(
-            position: position,
-          );
-    }
-
-    if (event.toplevelDecoration != null) {
+      if (event.appId != null) {
+        ref
+            .read(xdgToplevelStatesProvider(event.surfaceId).notifier)
+            .setAppId(event.appId!);
+      }
+      /* if (event.toplevelDecoration != null) {
       ref
           .read(xdgToplevelStatesProvider(event.surfaceId).notifier)
           .setDecoration(event.toplevelDecoration!);
+    } */
     }
 
-    if (event.toplevelTitle != null) {
-      ref
-          .read(xdgToplevelStatesProvider(event.surfaceId).notifier)
-          .setTitle(event.toplevelTitle!);
+    if (event is XdgPopupCommitSurfaceEvent) {
+      ref.read(xdgSurfaceStatesProvider(event.surfaceId).notifier).commit(
+            role: event.role,
+            visibleBounds: event.geometry ??
+                Rect.fromLTWH(
+                  event.surface.bufferDelta?.dx ?? 0.0,
+                  event.surface.bufferDelta?.dy ?? 0.0,
+                  event.surface.bufferSize?.width ?? 0.0,
+                  event.surface.bufferSize?.height ?? 0.0,
+                ),
+          );
+      // TODO: What to do with the xdgPopup width & height?
+
+      ref.read(xdgPopupStatesProvider(event.surfaceId).notifier).commit(
+            parentViewId: event.parentSurfaceId,
+            position: event.geometry?.topLeft ?? Offset.zero,
+          );
     }
 
-    if (event.toplevelAppId != null) {
-      ref
-          .read(xdgToplevelStatesProvider(event.surfaceId).notifier)
-          .setAppId(event.toplevelAppId!);
+    if (event is SubsurfaceCommitSurfaceEvent) {
+      ref.read(subsurfaceStatesProvider(event.surfaceId).notifier).commit(
+            position: event.position,
+          );
     }
   }
 

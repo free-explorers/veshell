@@ -46,7 +46,8 @@ class SubsurfaceStates extends _$SubsurfaceStates {
     if (ref.read(surfaceIdsProvider).contains(state.parent)) {
       final role = ref.read(surfaceStatesProvider(state.parent)).role;
       switch (role) {
-        case SurfaceRole.xdgSurface:
+        case SurfaceRole.xdgTopLevel:
+        case SurfaceRole.xdgPopup:
           parentMapped =
               ref.read(xdgSurfaceStatesProvider(state.parent)).mapped;
         case SurfaceRole.subsurface:
@@ -86,7 +87,8 @@ class SubsurfaceStates extends _$SubsurfaceStates {
     // print("$surfaceId, parent: $parent");
     final role = ref.read(surfaceStatesProvider(parent)).role;
     switch (role) {
-      case SurfaceRole.xdgSurface:
+      case SurfaceRole.xdgTopLevel:
+      case SurfaceRole.xdgPopup:
         parentMappedSub = ref.listen(
           xdgSurfaceStatesProvider(parent).select((state) => state.mapped),
           (_, __) => _checkIfMapped(),

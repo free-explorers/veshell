@@ -26,8 +26,8 @@ class SurfaceStates extends _$SurfaceStates {
     return SurfaceState(
       role: SurfaceRole.none,
       surfaceId: surfaceId,
-      textureId: TextureId(-1),
-      oldTextureId: TextureId(-1),
+      textureId: const TextureId(-1),
+      oldTextureId: const TextureId(-1),
       surfacePosition: Offset.zero,
       surfaceSize: Size.zero,
       scale: 1,
@@ -86,7 +86,8 @@ class SurfaceStates extends _$SurfaceStates {
   void dispose() {
     // Cascading dispose of all surface roles.
     switch (state.role) {
-      case SurfaceRole.xdgSurface:
+      case SurfaceRole.xdgTopLevel:
+      case SurfaceRole.xdgPopup:
         ref.read(xdgSurfaceStatesProvider(surfaceId).notifier).dispose();
       case SurfaceRole.subsurface:
         ref.read(subsurfaceStatesProvider(surfaceId).notifier).dispose();

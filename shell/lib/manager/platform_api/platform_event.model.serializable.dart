@@ -1,54 +1,42 @@
+import 'dart:ui';
+
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/shared/wayland/xdg_surface/xdg_surface.model.dart';
-import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.model.dart';
+import 'package:shell/shared/util/json_converter/offset.dart';
+import 'package:shell/shared/util/json_converter/rect.dart';
+import 'package:shell/shared/util/json_converter/size.dart';
 
 part 'platform_event.model.serializable.freezed.dart';
 part 'platform_event.model.serializable.g.dart';
 
-/// Model for InputRegion
-@freezed
-class InputRegion with _$InputRegion {
-  /// Factory
-  factory InputRegion({
-    required int x1,
-    required int x2,
-    required int y1,
-    required int y2,
-    required,
-  }) = _InputRegion;
-
-  factory InputRegion.fromJson(Map<String, dynamic> json) =>
-      _$InputRegionFromJson(json);
-}
-
 enum SurfaceRole {
   @JsonValue(0)
   none,
-  @JsonValue(1)
-  xdgSurface,
-  @JsonValue(2)
+  @JsonValue('xdg_toplevel')
+  xdgTopLevel,
+  @JsonValue('xdg_popup')
+  xdgPopup,
+  @JsonValue('subsurface')
   subsurface,
 }
 
 /// Model for Surface
 @freezed
-class SurfaceEvent with _$SurfaceEvent {
+class SurfaceMessage with _$SurfaceMessage {
   /// Factory
-  factory SurfaceEvent({
+  factory SurfaceMessage({
+    required int surfaceId,
     required SurfaceRole role,
     required int textureId,
-    required int x,
-    required int y,
-    required int width,
-    required int height,
     required int scale,
-    required InputRegion inputRegion,
+    @RectConverter() required Rect inputRegion,
     required List<int> subsurfacesBelow,
     required List<int> subsurfacesAbove,
-  }) = _SurfaceEvent;
+    @OffsetConverter() Offset? bufferDelta,
+    @SizeConverter() Size? bufferSize,
+  }) = _SurfaceMessage;
 
-  factory SurfaceEvent.fromJson(Map<String, dynamic> json) =>
-      _$SurfaceEventFromJson(json);
+  factory SurfaceMessage.fromJson(Map<String, dynamic> json) =>
+      _$SurfaceMessageFromJson(json);
 }
 
 /// Model for XdgSurface
@@ -56,7 +44,7 @@ class SurfaceEvent with _$SurfaceEvent {
 class XdgSurface with _$XdgSurface {
   /// Factory
   factory XdgSurface({
-    required XdgSurfaceRole role,
+    required SurfaceRole role,
     required int x,
     required int y,
     required int width,
@@ -97,19 +85,38 @@ class Subsurface with _$Subsurface {
 }
 
 /// Model for CommitSurfaceEvent
-@freezed
+@Freezed(unionKey: 'role', unionValueCase: FreezedUnionCase.snake)
 class CommitSurfaceEvent with _$CommitSurfaceEvent {
-  /// Factory
-  factory CommitSurfaceEvent({
+  CommitSurfaceEvent._();
+
+  /// Factory for xdgToplevel
+  factory CommitSurfaceEvent.xdgToplevel({
     required int surfaceId,
-    required SurfaceEvent surface,
-    XdgSurface? xdgSurface,
-    XdgPopup? xdgPopup,
-    Subsurface? subsurface,
-    ToplevelDecoration? toplevelDecoration,
-    String? toplevelTitle,
-    String? toplevelAppId,
-  }) = _CommitSurfaceEvent;
+    required SurfaceMessage surface,
+    required SurfaceRole role,
+    String? appId,
+    String? title,
+    int? parentSurfaceId,
+    @RectConverter() Rect? geometry,
+  }) = XdgToplevelCommitSurfaceEvent;
+
+  /// Factory for xdgPopup
+  factory CommitSurfaceEvent.xdgPopup({
+    required int surfaceId,
+    required SurfaceMessage surface,
+    required SurfaceRole role,
+    required int parentSurfaceId,
+    @RectConverter() Rect? geometry,
+  }) = XdgPopupCommitSurfaceEvent;
+
+  /// Factory for Subsurface
+  factory CommitSurfaceEvent.subsurface({
+    required int surfaceId,
+    required SurfaceMessage surface,
+    required SurfaceRole role,
+    required int parentSurfaceId,
+    @OffsetConverter() required Offset position,
+  }) = SubsurfaceCommitSurfaceEvent;
 
   factory CommitSurfaceEvent.fromJson(Map<String, dynamic> json) =>
       _$CommitSurfaceEventFromJson(json);
