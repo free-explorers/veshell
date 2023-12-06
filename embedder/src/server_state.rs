@@ -353,64 +353,95 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        let surface_id = with_states(surface, |states| {
-            states
-                .data_map
-                .get::<RefCell<MySurfaceState>>()
-                .unwrap()
-                .borrow()
-                .surface_id
-        });
+        println!("commit");
 
-        if let Some(toplevel) = self.xdg_toplevels.get(&surface_id) {
-            let initial_configure_sent = with_states(surface, |states| {
-                states
+        let mut subsurfaces_below = vec![];
+        let mut subsurfaces_above = vec![];
+        let mut above = false;
+
+        with_surface_tree_upward(
+            surface,
+            (),
+            |child_surface, _, ()| {
+                // Only traverse the direct children of the surface
+                if child_surface == surface {
+                    TraversalAction::DoChildren(())
+                } else {
+                    TraversalAction::SkipChildren
+                }
+            },
+            |child_surface, child_surface_data, ()| {
+                if child_surface == surface {
+                    above = true;
+                    return;
+                }
+
+                let surface_id = child_surface_data
                     .data_map
-                    .get::<XdgToplevelSurfaceData>()
+                    .get::<RefCell<MySurfaceState>>()
                     .unwrap()
-                    .lock()
-                    .unwrap()
-                    .initial_configure_sent
-            });
+                    .borrow()
+                    .surface_id;
+                if above {
+                    subsurfaces_above.push(surface_id);
+                } else {
+                    subsurfaces_below.push(surface_id);
+                }
+            },
+            |_, _, _| true,
+        );
 
-            if !initial_configure_sent {
-                toplevel.send_configure();
-            }
-        }
+        println!("commit 2");
 
-        if let Some(popup) = self.xdg_popups.get(&surface_id) {
-            let initial_configure_sent = with_states(surface, |states| {
-                states
-                    .data_map
-                    .get::<XdgPopupSurfaceData>()
-                    .unwrap()
-                    .lock()
-                    .unwrap()
-                    .initial_configure_sent
-            });
-
-            if !initial_configure_sent {
-                // NOTE: This should never fail as the initial configure is always
-                // allowed.
-                popup.send_configure().expect("initial configure failed");
-            }
-        }
-
-        let mut surface_message = with_states(surface, |surface_data| {
-            let role = surface_data.role;
-
-            let state = surface_data.cached_state.current::<SurfaceAttributes>();
-            let my_state = surface_data
+        let message_to_sent = with_states(surface, |surface_data| {
+            println!("commit 2_1");
+            let my_surface_state_ref = surface_data
                 .data_map
                 .get::<RefCell<MySurfaceState>>()
                 .unwrap();
 
             let (surface_id, old_texture_size) = {
-                let my_state = my_state.borrow();
+                let my_state = my_surface_state_ref.borrow();
                 (my_state.surface_id, my_state.old_texture_size)
             };
+            println!("commit 2_2");
+            if let Some(toplevel) = self.xdg_toplevels.get(&surface_id) {
+                let initial_configure_sent = surface_data
+                    .data_map
+                    .get::<XdgToplevelSurfaceData>()
+                    .unwrap()
+                    .lock()
+                    .unwrap()
+                    .initial_configure_sent;
+                println!("commit 2_2_1");
+                if !initial_configure_sent {
+                    toplevel.send_configure();
+                }
+                println!("commit 2_2_2");
+            }
+            println!("commit 2_2_2");
 
-            let texture = state
+            if let Some(popup) = self.xdg_popups.get(&surface_id) {
+                let initial_configure_sent = surface_data
+                    .data_map
+                    .get::<XdgPopupSurfaceData>()
+                    .unwrap()
+                    .lock()
+                    .unwrap()
+                    .initial_configure_sent;
+
+                if !initial_configure_sent {
+                    // NOTE: This should never fail as the initial configure is always
+                    // allowed.
+                    popup.send_configure().expect("initial configure failed");
+                }
+            }
+
+            let role = surface_data.role;
+
+            let attributes = surface_data.cached_state.current::<SurfaceAttributes>();
+
+            let texture = attributes
                 .buffer
                 .as_ref()
                 .and_then(|assignment| match assignment {
@@ -435,7 +466,7 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                     None => true,
                 };
 
-                my_state.borrow_mut().old_texture_size = Some(size);
+                my_surface_state_ref.borrow_mut().old_texture_size = Some(size);
 
                 let texture_id = match size_changed {
                     true => None,
@@ -484,86 +515,42 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
             } else {
                 (-1, None)
             };
+            println!("commit 2_3");
 
-            SurfaceMessage {
+            let surface_message = SurfaceMessage {
                 surface_id,
                 role,
                 texture_id,
-                buffer_delta: state.buffer_delta,
+                buffer_delta: attributes.buffer_delta,
                 buffer_size: size,
-                scale: state.buffer_scale,
-                input_region: state.input_region.clone(),
-                subsurfaces_below: vec![],
-                subsurfaces_above: vec![],
-            }
-        });
+                scale: attributes.buffer_scale,
+                input_region: attributes.input_region.clone(),
+                subsurfaces_below,
+                subsurfaces_above,
+            };
+            println!("commit 3");
 
-        let mut subsurfaces_below = vec![];
-        let mut subsurfaces_above = vec![];
-        let mut above = false;
-
-        with_surface_tree_upward(
-            surface,
-            (),
-            |child_surface, _, ()| {
-                // Only traverse the direct children of the surface
-                if child_surface == surface {
-                    TraversalAction::DoChildren(())
-                } else {
-                    TraversalAction::SkipChildren
-                }
-            },
-            |child_surface, surface_data, ()| {
-                if child_surface == surface {
-                    above = true;
-                    return;
-                }
-
-                let surface_id = surface_data
+            let parent = match surface_message.role {
+                Some(xdg::XDG_TOPLEVEL_ROLE) => surface_data
                     .data_map
-                    .get::<RefCell<MySurfaceState>>()
+                    .get::<XdgToplevelSurfaceData>()
                     .unwrap()
-                    .borrow()
-                    .surface_id;
-                if above {
-                    subsurfaces_above.push(surface_id);
-                } else {
-                    subsurfaces_below.push(surface_id);
-                }
-            },
-            |_, _, _| true,
-        );
+                    .lock()
+                    .unwrap()
+                    .parent
+                    .clone(),
+                Some(xdg::XDG_POPUP_ROLE) => surface_data
+                    .data_map
+                    .get::<XdgPopupSurfaceData>()
+                    .unwrap()
+                    .lock()
+                    .unwrap()
+                    .parent
+                    .clone(),
+                Some(compositor::SUBSURFACE_ROLE) => get_parent(surface),
+                _ => None,
+            };
 
-        surface_message.subsurfaces_below = subsurfaces_below;
-        surface_message.subsurfaces_above = subsurfaces_above;
-
-        let parent =
-            with_states(
-                surface,
-                |surface_data: &compositor::SurfaceData| match surface_message.role {
-                    Some(xdg::XDG_TOPLEVEL_ROLE) => surface_data
-                        .data_map
-                        .get::<XdgToplevelSurfaceData>()
-                        .unwrap()
-                        .lock()
-                        .unwrap()
-                        .parent
-                        .clone(),
-                    Some(xdg::XDG_POPUP_ROLE) => surface_data
-                        .data_map
-                        .get::<XdgPopupSurfaceData>()
-                        .unwrap()
-                        .lock()
-                        .unwrap()
-                        .parent
-                        .clone(),
-                    Some(compositor::SUBSURFACE_ROLE) => get_parent(surface),
-                    _ => None,
-                },
-            );
-
-        let message_to_sent = with_states(surface, |surface_data: &compositor::SurfaceData| {
-            let message: EncodableValue;
             let parent_id = parent.as_ref().and_then(|parent| {
                 Some(with_states(
                     parent,
@@ -578,7 +565,7 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                 ))
             });
             // depending of the role create an appropriate message for TopLevel PopUp or Subsurface
-            message = match surface_message.role {
+            match surface_message.role {
                 None => surface_message.serialize(),
                 Some(xdg::XDG_TOPLEVEL_ROLE) => {
                     let toplevel_state = surface_data
@@ -625,9 +612,9 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                 }
                 .serialize(),
                 _ => surface_message.serialize(),
-            };
-            return message;
+            }
         });
+        println!("commit 4");
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "commit_surface",
