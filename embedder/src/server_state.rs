@@ -330,6 +330,17 @@ pub struct MySurfaceState {
     pub old_texture_size: Option<Size<i32, BufferCoords>>,
 }
 
+fn get_surface_id(surface: &WlSurface) -> u64 {
+    with_states(surface, |surface_data| {
+        surface_data
+            .data_map
+            .get::<RefCell<MySurfaceState>>()
+            .unwrap()
+            .borrow()
+            .surface_id
+    })
+}
+
 impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
     fn compositor_state(&mut self) -> &mut CompositorState {
         &mut self.compositor_state
@@ -353,8 +364,6 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        println!("commit");
-
         let mut subsurfaces_below = vec![];
         let mut subsurfaces_above = vec![];
         let mut above = false;
@@ -391,37 +400,173 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
             |_, _, _| true,
         );
 
-        println!("commit 2");
+        let (surface_id, role, texture_id, size, buffer_delta, buffer_scale, input_region) =
+            with_states(surface, |surface_data| {
+                let (surface_id, old_texture_size) = {
+                    let my_state = surface_data
+                        .data_map
+                        .get::<RefCell<MySurfaceState>>()
+                        .unwrap()
+                        .borrow();
+                    (my_state.surface_id, my_state.old_texture_size)
+                };
 
-        let message_to_sent = with_states(surface, |surface_data| {
-            println!("commit 2_1");
-            let my_surface_state_ref = surface_data
-                .data_map
-                .get::<RefCell<MySurfaceState>>()
-                .unwrap();
+                let attributes = surface_data.cached_state.current::<SurfaceAttributes>();
 
-            let (surface_id, old_texture_size) = {
-                let my_state = my_surface_state_ref.borrow();
-                (my_state.surface_id, my_state.old_texture_size)
-            };
-            println!("commit 2_2");
-            if let Some(toplevel) = self.xdg_toplevels.get(&surface_id) {
-                let initial_configure_sent = surface_data
+                let texture = attributes
+                    .buffer
+                    .as_ref()
+                    .and_then(|assignment| match assignment {
+                        BufferAssignment::NewBuffer(buffer) => self
+                            .gles_renderer
+                            .as_mut()
+                            .unwrap()
+                            .import_buffer(buffer, Some(surface_data), &[])
+                            .and_then(|t| t.ok()),
+                        _ => None,
+                    });
+
+                let (texture_id, size) = if let Some(texture) = texture {
+                    unsafe {
+                        self.gl.as_ref().unwrap().Finish();
+                    }
+
+                    let size = texture.size();
+
+                    let size_changed = match old_texture_size {
+                        Some(old_size) => old_size != size,
+                        None => true,
+                    };
+
+                    surface_data
+                        .data_map
+                        .get::<RefCell<MySurfaceState>>()
+                        .unwrap()
+                        .borrow_mut()
+                        .old_texture_size = Some(size);
+
+                    let texture_id = match size_changed {
+                        true => None,
+                        false => self
+                            .texture_ids_per_surface_id
+                            .get(&surface_id)
+                            .and_then(|v| v.last())
+                            .cloned(),
+                    };
+
+                    let texture_id = texture_id.unwrap_or_else(|| {
+                        let texture_id = self.get_new_texture_id();
+                        while self
+                            .texture_ids_per_surface_id
+                            .entry(surface_id)
+                            .or_default()
+                            .len()
+                            >= 2
+                        {
+                            self.texture_ids_per_surface_id
+                                .entry(surface_id)
+                                .or_default()
+                                .remove(0);
+                        }
+
+                        self.texture_ids_per_surface_id
+                            .entry(surface_id)
+                            .or_default()
+                            .push(texture_id);
+                        self.surface_id_per_texture_id
+                            .insert(texture_id, surface_id);
+                        self.flutter_engine_mut()
+                            .register_external_texture(texture_id)
+                            .unwrap();
+                        texture_id
+                    });
+
+                    let swapchain = self.texture_swapchains.entry(texture_id).or_default();
+                    swapchain.commit(texture.clone());
+
+                    self.flutter_engine_mut()
+                        .mark_external_texture_frame_available(texture_id)
+                        .unwrap();
+
+                    (texture_id, Some(size))
+                } else {
+                    (-1, None)
+                };
+
+                (
+                    surface_id,
+                    surface_data.role,
+                    texture_id,
+                    size,
+                    attributes.buffer_delta,
+                    attributes.buffer_scale,
+                    attributes.input_region.clone(),
+                )
+            });
+
+        let surface_message = SurfaceMessage {
+            surface_id,
+            role,
+            texture_id,
+            buffer_delta: buffer_delta,
+            buffer_size: size,
+            scale: buffer_scale,
+            input_region: input_region.clone(),
+            subsurfaces_below,
+            subsurfaces_above,
+        };
+
+        // depending of the role create an appropriate message for TopLevel PopUp or Subsurface
+        let message_to_sent = with_states(surface, |surface_data| match surface_message.role {
+            None => surface_message.serialize(),
+            Some(xdg::XDG_TOPLEVEL_ROLE) => {
+                let toplevel = self
+                    .xdg_toplevels
+                    .get(&surface_id)
+                    .expect("Missing toplevel");
+
+                let toplevel_state = surface_data
                     .data_map
                     .get::<XdgToplevelSurfaceData>()
                     .unwrap()
                     .lock()
-                    .unwrap()
-                    .initial_configure_sent;
-                println!("commit 2_2_1");
+                    .unwrap();
+
+                let initial_configure_sent = toplevel_state.initial_configure_sent;
+
                 if !initial_configure_sent {
                     toplevel.send_configure();
                 }
-                println!("commit 2_2_2");
-            }
-            println!("commit 2_2_2");
 
-            if let Some(popup) = self.xdg_popups.get(&surface_id) {
+                let parent_id = if let Some(ref parent) = toplevel_state.parent {
+                    Some(get_surface_id(&parent))
+                } else {
+                    None
+                };
+
+                ToplevelMessage {
+                    surface_id: surface_message.surface_id,
+                    role: xdg::XDG_TOPLEVEL_ROLE,
+                    surface: surface_message,
+                    app_id: toplevel_state.app_id.clone().unwrap_or_default(),
+                    title: toplevel_state.title.clone().unwrap_or_default(),
+                    geometry: surface_data
+                        .cached_state
+                        .current::<SurfaceCachedState>()
+                        .geometry,
+                    parent_surface_id: parent_id,
+                }
+                .serialize()
+            }
+            Some(xdg::XDG_POPUP_ROLE) => {
+                let popup = self.xdg_popups.get(&surface_id).expect("Missing popup");
+                let popup_state = surface_data
+                    .data_map
+                    .get::<XdgPopupSurfaceData>()
+                    .unwrap()
+                    .lock()
+                    .unwrap();
+
                 let initial_configure_sent = surface_data
                     .data_map
                     .get::<XdgPopupSurfaceData>()
@@ -435,161 +580,8 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                     // allowed.
                     popup.send_configure().expect("initial configure failed");
                 }
-            }
 
-            let role = surface_data.role;
-
-            let attributes = surface_data.cached_state.current::<SurfaceAttributes>();
-
-            let texture = attributes
-                .buffer
-                .as_ref()
-                .and_then(|assignment| match assignment {
-                    BufferAssignment::NewBuffer(buffer) => self
-                        .gles_renderer
-                        .as_mut()
-                        .unwrap()
-                        .import_buffer(buffer, Some(surface_data), &[])
-                        .and_then(|t| t.ok()),
-                    _ => None,
-                });
-
-            let (texture_id, size) = if let Some(texture) = texture {
-                unsafe {
-                    self.gl.as_ref().unwrap().Finish();
-                }
-
-                let size = texture.size();
-
-                let size_changed = match old_texture_size {
-                    Some(old_size) => old_size != size,
-                    None => true,
-                };
-
-                my_surface_state_ref.borrow_mut().old_texture_size = Some(size);
-
-                let texture_id = match size_changed {
-                    true => None,
-                    false => self
-                        .texture_ids_per_surface_id
-                        .get(&surface_id)
-                        .and_then(|v| v.last())
-                        .cloned(),
-                };
-
-                let texture_id = texture_id.unwrap_or_else(|| {
-                    let texture_id = self.get_new_texture_id();
-                    while self
-                        .texture_ids_per_surface_id
-                        .entry(surface_id)
-                        .or_default()
-                        .len()
-                        >= 2
-                    {
-                        self.texture_ids_per_surface_id
-                            .entry(surface_id)
-                            .or_default()
-                            .remove(0);
-                    }
-
-                    self.texture_ids_per_surface_id
-                        .entry(surface_id)
-                        .or_default()
-                        .push(texture_id);
-                    self.surface_id_per_texture_id
-                        .insert(texture_id, surface_id);
-                    self.flutter_engine_mut()
-                        .register_external_texture(texture_id)
-                        .unwrap();
-                    texture_id
-                });
-
-                let swapchain = self.texture_swapchains.entry(texture_id).or_default();
-                swapchain.commit(texture.clone());
-
-                self.flutter_engine_mut()
-                    .mark_external_texture_frame_available(texture_id)
-                    .unwrap();
-
-                (texture_id, Some(size))
-            } else {
-                (-1, None)
-            };
-            println!("commit 2_3");
-
-            let surface_message = SurfaceMessage {
-                surface_id,
-                role,
-                texture_id,
-                buffer_delta: attributes.buffer_delta,
-                buffer_size: size,
-                scale: attributes.buffer_scale,
-                input_region: attributes.input_region.clone(),
-                subsurfaces_below,
-                subsurfaces_above,
-            };
-            println!("commit 3");
-
-            let parent = match surface_message.role {
-                Some(xdg::XDG_TOPLEVEL_ROLE) => surface_data
-                    .data_map
-                    .get::<XdgToplevelSurfaceData>()
-                    .unwrap()
-                    .lock()
-                    .unwrap()
-                    .parent
-                    .clone(),
-                Some(xdg::XDG_POPUP_ROLE) => surface_data
-                    .data_map
-                    .get::<XdgPopupSurfaceData>()
-                    .unwrap()
-                    .lock()
-                    .unwrap()
-                    .parent
-                    .clone(),
-                Some(compositor::SUBSURFACE_ROLE) => get_parent(surface),
-                _ => None,
-            };
-
-            let parent_id = parent.as_ref().and_then(|parent| {
-                Some(with_states(
-                    parent,
-                    |surface_data: &compositor::SurfaceData| {
-                        surface_data
-                            .data_map
-                            .get::<RefCell<MySurfaceState>>()
-                            .unwrap()
-                            .borrow()
-                            .surface_id
-                    },
-                ))
-            });
-            // depending of the role create an appropriate message for TopLevel PopUp or Subsurface
-            match surface_message.role {
-                None => surface_message.serialize(),
-                Some(xdg::XDG_TOPLEVEL_ROLE) => {
-                    let toplevel_state = surface_data
-                        .data_map
-                        .get::<XdgToplevelSurfaceData>()
-                        .unwrap()
-                        .lock()
-                        .unwrap();
-
-                    ToplevelMessage {
-                        surface_id: surface_message.surface_id,
-                        role: xdg::XDG_TOPLEVEL_ROLE,
-                        surface: surface_message,
-                        app_id: toplevel_state.app_id.clone().unwrap_or_default(),
-                        title: toplevel_state.title.clone().unwrap_or_default(),
-                        geometry: surface_data
-                            .cached_state
-                            .current::<SurfaceCachedState>()
-                            .geometry,
-                        parent_surface_id: parent_id,
-                    }
-                    .serialize()
-                }
-                Some(xdg::XDG_POPUP_ROLE) => PopupMessage {
+                PopupMessage {
                     surface_id: surface_message.surface_id,
                     role: xdg::XDG_TOPLEVEL_ROLE,
                     surface: surface_message,
@@ -597,24 +589,23 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                         .cached_state
                         .current::<SurfaceCachedState>()
                         .geometry,
-                    parent_surface_id: parent_id.expect("Missing parent surface id for Popup"),
+                    parent_surface_id: get_surface_id(&popup_state.parent.as_ref().unwrap()),
                 }
-                .serialize(),
-                Some(compositor::SUBSURFACE_ROLE) => SubsurfaceMessage {
-                    surface_id: surface_message.surface_id,
-                    role: compositor::SUBSURFACE_ROLE,
-                    surface: surface_message,
-                    position: surface_data
-                        .cached_state
-                        .current::<SubsurfaceCachedState>()
-                        .location,
-                    parent_surface_id: parent_id.expect("Missing parent surface id for Subsurface"),
-                }
-                .serialize(),
-                _ => surface_message.serialize(),
             }
+            .serialize(),
+            Some(compositor::SUBSURFACE_ROLE) => SubsurfaceMessage {
+                surface_id: surface_message.surface_id,
+                role: compositor::SUBSURFACE_ROLE,
+                surface: surface_message,
+                position: surface_data
+                    .cached_state
+                    .current::<SubsurfaceCachedState>()
+                    .location,
+                parent_surface_id: get_surface_id(&get_parent(surface).unwrap()),
+            }
+            .serialize(),
+            _ => surface_message.serialize(),
         });
-        println!("commit 4");
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "commit_surface",
