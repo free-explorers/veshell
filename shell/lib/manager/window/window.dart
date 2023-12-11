@@ -2,16 +2,16 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/manager/surface/surface/surface.provider.dart';
+import 'package:shell/manager/surface/xdg_surface/xdg_surface.provider.dart';
+import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.model.dart';
+import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.provider.dart';
 import 'package:shell/shared/state/cursor_position/cursor_position.provider.dart';
 import 'package:shell/shared/state/window_move/window_move.provider.dart';
 import 'package:shell/shared/state/window_position/window_position.provider.dart';
 import 'package:shell/shared/state/window_resize/window_resize.provider.dart';
 import 'package:shell/shared/state/window_stack/window_stack.provider.dart';
 import 'package:shell/shared/state/window_state/window_state.provider.dart';
-import 'package:shell/shared/wayland/surface/surface.provider.dart';
-import 'package:shell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
-import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.model.dart';
-import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.provider.dart';
 
 const duration = Duration(milliseconds: 300);
 
@@ -151,7 +151,7 @@ class _OpenCloseAnimationsState extends ConsumerState<_OpenCloseAnimations> {
           ignoring: ref
               .watch(windowStackProvider.select((v) => v.animateClosing))
               .contains(widget.surfaceId),
-          child: child!,
+          child: child,
         );
       },
       child: TweenAnimationBuilder(

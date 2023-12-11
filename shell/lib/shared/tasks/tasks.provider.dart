@@ -2,8 +2,8 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/manager/platform_api/platform_api.provider.dart';
+import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.provider.dart';
 import 'package:shell/shared/tasks/tasks.model.dart';
-import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.provider.dart';
 
 part 'tasks.provider.g.dart';
 

@@ -2,8 +2,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.model.dart';
 import 'package:shell/shared/state/window_state/window_state.model.dart';
-import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.model.dart';
 
 part 'window_state.provider.g.dart';
 

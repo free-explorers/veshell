@@ -6,7 +6,7 @@ import 'package:shell/display/monitor/screen/workspace/tileable/persistent_windo
 import 'package:shell/display/monitor/screen/workspace/tileable/tileable.widget.dart';
 import 'package:shell/display/monitor/screen/workspace/workspace_panel.widget.dart';
 import 'package:shell/shared/state/window_stack/window_stack.provider.dart';
-import 'package:shell/shared/wayland/xdg_popup/popup_stack.dart';
+import 'package:shell/shared/widget/sliding_container.widget.dart';
 
 class WorkspaceWidget extends HookConsumerWidget {
   const WorkspaceWidget({super.key});
@@ -24,9 +24,20 @@ class WorkspaceWidget extends HookConsumerWidget {
         ),
       );
     }
+    final tabIndex = useState(0);
     final tabController = useTabController(
       initialLength: tileableList.length,
       keys: [windowStackList],
+    );
+
+    useEffect(
+      () {
+        tabController.addListener(() {
+          tabIndex.value = tabController.index;
+        });
+        return null;
+      },
+      [tabController],
     );
 
     return Column(
@@ -37,12 +48,9 @@ class WorkspaceWidget extends HookConsumerWidget {
           tabController: tabController,
         ),
         Expanded(
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              for (final tileable in tileableList) tileable,
-              const PopupStack(),
-            ],
+          child: SlidingContainer(
+            index: tabController.index,
+            children: tileableList,
           ),
         ),
       ],

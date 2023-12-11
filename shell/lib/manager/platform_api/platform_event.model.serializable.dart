@@ -1,9 +1,4 @@
-import 'dart:ui';
-
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/shared/util/json_converter/offset.dart';
-import 'package:shell/shared/util/json_converter/rect.dart';
-import 'package:shell/shared/util/json_converter/size.dart';
 
 part 'platform_event.model.serializable.freezed.dart';
 part 'platform_event.model.serializable.g.dart';
@@ -17,26 +12,6 @@ enum SurfaceRole {
   xdgPopup,
   @JsonValue('subsurface')
   subsurface,
-}
-
-/// Model for Surface
-@freezed
-class SurfaceMessage with _$SurfaceMessage {
-  /// Factory
-  factory SurfaceMessage({
-    required int surfaceId,
-    required SurfaceRole role,
-    required int textureId,
-    required int scale,
-    @RectConverter() required Rect inputRegion,
-    required List<int> subsurfacesBelow,
-    required List<int> subsurfacesAbove,
-    @OffsetConverter() Offset? bufferDelta,
-    @SizeConverter() Size? bufferSize,
-  }) = _SurfaceMessage;
-
-  factory SurfaceMessage.fromJson(Map<String, dynamic> json) =>
-      _$SurfaceMessageFromJson(json);
 }
 
 /// Model for XdgSurface
@@ -84,49 +59,6 @@ class Subsurface with _$Subsurface {
       _$SubsurfaceFromJson(json);
 }
 
-/// Model for CommitSurfaceEvent
-@Freezed(unionKey: 'role', unionValueCase: FreezedUnionCase.snake)
-class CommitSurfaceEvent with _$CommitSurfaceEvent {
-  /// Factory for xdgToplevel
-  factory CommitSurfaceEvent({
-    required int surfaceId,
-    required SurfaceMessage surface,
-    required SurfaceRole role,
-  }) = SimpleCommitSurfaceEvent;
-
-  /// Factory for xdgToplevel
-  factory CommitSurfaceEvent.xdgToplevel({
-    required int surfaceId,
-    required SurfaceMessage surface,
-    required SurfaceRole role,
-    String? appId,
-    String? title,
-    int? parentSurfaceId,
-    @RectConverter() Rect? geometry,
-  }) = XdgToplevelCommitSurfaceEvent;
-
-  /// Factory for xdgPopup
-  factory CommitSurfaceEvent.xdgPopup({
-    required int surfaceId,
-    required SurfaceMessage surface,
-    required SurfaceRole role,
-    required int parentSurfaceId,
-    @RectConverter() Rect? geometry,
-  }) = XdgPopupCommitSurfaceEvent;
-
-  /// Factory for Subsurface
-  factory CommitSurfaceEvent.subsurface({
-    required int surfaceId,
-    required SurfaceMessage surface,
-    required SurfaceRole role,
-    required int parentSurfaceId,
-    @OffsetConverter() required Offset position,
-  }) = SubsurfaceCommitSurfaceEvent;
-
-  factory CommitSurfaceEvent.fromJson(Map<String, dynamic> json) =>
-      _$CommitSurfaceEventFromJson(json);
-}
-
 /// Model for TextInputEvent
 @Freezed(unionKey: 'type', unionValueCase: FreezedUnionCase.snake)
 class TextInputEvent with _$TextInputEvent {
@@ -146,31 +78,6 @@ class TextInputEvent with _$TextInputEvent {
 
   factory TextInputEvent.fromJson(Map<String, dynamic> json) =>
       _$TextInputEventFromJson(json);
-}
-
-/// Model for InteractiveMoveEvent
-@freezed
-class InteractiveMoveEvent with _$InteractiveMoveEvent {
-  /// Factory
-  factory InteractiveMoveEvent({
-    required int surfaceId,
-  }) = _InteractiveMoveEvent;
-
-  factory InteractiveMoveEvent.fromJson(Map<String, dynamic> json) =>
-      _$InteractiveMoveEventFromJson(json);
-}
-
-/// Model for InteractiveResizeEvent
-@freezed
-class InteractiveResizeEvent with _$InteractiveResizeEvent {
-  /// Factory
-  factory InteractiveResizeEvent({
-    required int surfaceId,
-    required int edge,
-  }) = _InteractiveResizeEvent;
-
-  factory InteractiveResizeEvent.fromJson(Map<String, dynamic> json) =>
-      _$InteractiveResizeEventFromJson(json);
 }
 
 /// Model for SetTitleEvent
@@ -210,16 +117,4 @@ class RequestMaxmizeEvent with _$RequestMaxmizeEvent {
 
   factory RequestMaxmizeEvent.fromJson(Map<String, dynamic> json) =>
       _$RequestMaxmizeEventFromJson(json);
-}
-
-/// Model for DestroySurfaceEvent
-@freezed
-class DestroySurfaceEvent with _$DestroySurfaceEvent {
-  /// Factory
-  factory DestroySurfaceEvent({
-    required int surfaceId,
-  }) = _DestroySurfaceEvent;
-
-  factory DestroySurfaceEvent.fromJson(Map<String, dynamic> json) =>
-      _$DestroySurfaceEventFromJson(json);
 }

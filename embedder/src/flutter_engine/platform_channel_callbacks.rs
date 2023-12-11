@@ -62,7 +62,7 @@ pub fn pointer_hover<BackendData: Backend + 'static>(
     data: &mut CalloopData<BackendData>,
 ) {
     let args = method_call.arguments().unwrap();
-    let surface_id = get(args, "surface_id").long_value().unwrap();
+    let surface_id = get(args, "surfaceId").long_value().unwrap();
     let x = *extract!(get(args, "x"), EncodableValue::Double);
     let y = *extract!(get(args, "y"), EncodableValue::Double);
 
@@ -151,9 +151,8 @@ pub fn activate_window<BackendData: Backend + 'static>(
     data: &mut CalloopData<BackendData>,
 ) {
     let args = method_call.arguments().unwrap();
-    let args = extract!(args, EncodableValue::List);
-    let surface_id = args[0].long_value().unwrap();
-    let activate = extract!(args[1], EncodableValue::Bool);
+    let surface_id = get(args, "surfaceId").long_value().unwrap();
+    let activate = *extract!(get(args, "activate"), EncodableValue::Bool);
 
     let pointer = data.state.seat.get_pointer().unwrap();
     let keyboard = data.state.seat.get_keyboard().unwrap();
@@ -192,7 +191,7 @@ pub fn resize_window<BackendData: Backend + 'static>(
     data: &mut CalloopData<BackendData>,
 ) {
     let args = method_call.arguments().unwrap();
-    let surface_id = get(args, "surface_id").long_value().unwrap();
+    let surface_id = get(args, "surfaceId").long_value().unwrap();
     let width = get(args, "width").long_value().unwrap();
     let height = get(args, "height").long_value().unwrap();
 

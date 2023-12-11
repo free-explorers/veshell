@@ -18,6 +18,11 @@ class PersistentApplicationLauncher extends Tileable {
 
   @override
   Widget buildPanelWidget(BuildContext context, WidgetRef ref) {
-    return Tab(child: Icon(MdiIcons.plus));
+    return Tab(
+      child: Icon(
+        MdiIcons.plus,
+        color: Colors.white,
+      ),
+    );
   }
 }

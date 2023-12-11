@@ -2,7 +2,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.model.dart';
+import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.model.dart';
 
 part 'window_state.model.freezed.dart';
 

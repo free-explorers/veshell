@@ -3,7 +3,7 @@ import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:jovial_svg/jovial_svg.dart';
 import 'package:shell/manager/application/desktop_entries.provider.dart';
-import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.provider.dart';
+import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.provider.dart';
 
 class AppIconByPath extends StatelessWidget {
   const AppIconByPath({

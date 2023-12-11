@@ -2,9 +2,10 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/manager/platform_api/platform_api.provider.dart';
+import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.model.dart';
+import 'package:shell/manager/wayland/request/resize_window/resize_window.model.serializable.dart';
+import 'package:shell/manager/wayland/wayland.manager.dart';
 import 'package:shell/shared/state/window_resize/window_resize.model.dart';
-import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.model.dart';
 
 part 'window_resize.provider.g.dart';
 
@@ -59,10 +60,14 @@ class WindowResize extends _$WindowResize {
       final int width = max(1, state.wantedSize.width.toInt());
       final int height = max(1, state.wantedSize.height.toInt());
 
-      ref.read(platformApiProvider.notifier).resizeWindow(
-            surfaceId,
-            width,
-            height,
+      ref.read(waylandManagerProvider.notifier).request(
+            ResizeWindowRequest(
+              message: ResizeWindowMessage(
+                surfaceId: surfaceId,
+                width: width,
+                height: height,
+              ),
+            ),
           );
     }
   }
@@ -92,10 +97,14 @@ class WindowResize extends _$WindowResize {
     final int width = max(1, state.wantedSize.width.toInt());
     final int height = max(1, state.wantedSize.height.toInt());
 
-    ref.read(platformApiProvider.notifier).resizeWindow(
-          surfaceId,
-          width,
-          height,
+    ref.read(waylandManagerProvider.notifier).request(
+          ResizeWindowRequest(
+            message: ResizeWindowMessage(
+              surfaceId: surfaceId,
+              width: width,
+              height: height,
+            ),
+          ),
         );
   }
 
