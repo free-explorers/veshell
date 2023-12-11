@@ -4,8 +4,8 @@ import 'package:args/command_runner.dart';
 import 'package:mason_logger/mason_logger.dart';
 
 import '../util.dart';
-import 'dependency/check_depencies.dart' as dependencies;
 import '../veshell.dart';
+import 'dependency/check_depencies.dart' as dependencies;
 
 const targetExec = 'veshell';
 
@@ -68,7 +68,7 @@ Future<void> buildShell(
   required BuildTarget target,
 }) async {
   logger.info('Building the shell in ${target.name}...\n');
-  var exitCode = await runProcess(
+  var exitCode = await (await Process.start(
     'dart',
     [
       'run',
@@ -77,14 +77,15 @@ Future<void> buildShell(
       '--delete-conflicting-outputs',
     ],
     workingDirectory: 'shell',
-    environment: {'FORCE_COLOR': 'true'},
-  );
+    mode: ProcessStartMode.inheritStdio,
+  ))
+      .exitCode;
 
   if (exitCode != 0) {
     exit(exitCode);
   }
 
-  exitCode = await runProcess(
+  exitCode = await (await Process.start(
     'flutter',
     [
       'build',
@@ -92,12 +93,13 @@ Future<void> buildShell(
       '--${target.name}',
     ],
     workingDirectory: 'shell',
-    environment: {'FORCE_COLOR': 'true'},
-  );
+    mode: ProcessStartMode.inheritStdio,
+  ))
+      .exitCode;
   if (exitCode != 0) {
     exit(exitCode);
   }
-  logger.success('Build completed\n');
+  logger.success('\nBuild completed\n');
 }
 
 Future<void> packageBuild(
@@ -127,7 +129,25 @@ Future<void> packageBuild(
 
   final binaryPath = 'embedder/target/${cargoTarget.name}/$targetExec';
   logger.info('Copy $binaryPath');
-  await File(binaryPath).copy('$buildDirectory/$targetExec');
+
+  final targetPath = '$buildDirectory/$targetExec';
+
+  // handle (OS Error: Text file busy, errno = 26)
+  try {
+    await File(binaryPath).copy(targetPath);
+  } on FileSystemException catch (e) {
+    if (e.osError?.errorCode == 26) {
+      final result = Process.runSync('lsof', ['-t', binaryPath]);
+      logger.info('kill running process ${result.stdout}');
+      final pid = int.tryParse((result.stdout as String).trim());
+      if (pid != null) {
+        Process.runSync('kill', ['-9', pid.toString()]);
+        await File(binaryPath).copy(targetPath); // Retry the copy operation
+      }
+    } else {
+      rethrow; // If it's another error, rethrow it
+    }
+  }
 
   final libFlutterEnginePath =
       'embedder/third_party/flutter_engine/${target.name}/libflutter_engine.so';

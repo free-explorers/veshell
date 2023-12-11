@@ -14,7 +14,7 @@
             },
             "deviceId": "veshell",
             "preLaunchTask": "build_runner watch",
-            "postDebugTask": "Terminate All Tasks"
+            //"postDebugTask": "Terminate All Tasks"
         },
     ]
 }

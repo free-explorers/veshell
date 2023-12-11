@@ -2,6 +2,7 @@
     "recommendations": [
         "dart-code.flutter",
         "robert-brunhage.flutter-riverpod-snippets",
-        "localizely.flutter-intl"
+        "localizely.flutter-intl",
+        "vadimcn.vscode-lldb"
     ]
 }
