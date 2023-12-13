@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:args/command_runner.dart';
 import 'package:mason_logger/mason_logger.dart';
 
+import '../util.dart';
 import '../veshell.dart';
 import 'build.dart';
 
@@ -40,6 +41,8 @@ class RunCommand extends Command<int> {
         mode: ProcessStartMode.inheritStdio,
       );
     }
+
+    processSet.add(process);
 
     // Write the PID to a file
     final pidFile = File('process.pid');
