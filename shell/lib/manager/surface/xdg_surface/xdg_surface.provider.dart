@@ -63,6 +63,7 @@ class XdgSurfaceStates extends _$XdgSurfaceStates {
         ref.read(xdgPopupStatesProvider(surfaceId).notifier).dispose();
       case SurfaceRole.subsurface:
       case SurfaceRole.none:
+      case SurfaceRole.cursorImage:
         break;
     }
     ref.invalidate(xdgSurfaceStatesProvider(surfaceId));
@@ -111,6 +112,7 @@ class XdgSurfaceStates extends _$XdgSurfaceStates {
 
       case SurfaceRole.subsurface:
       case SurfaceRole.none:
+      case SurfaceRole.cursorImage:
         if (kDebugMode) {
           assert(false);
         }
@@ -122,6 +124,7 @@ class XdgSurfaceStates extends _$XdgSurfaceStates {
     switch (role) {
       case SurfaceRole.subsurface:
       case SurfaceRole.none:
+      case SurfaceRole.cursorImage:
         if (kDebugMode) {
           assert(false);
         }
