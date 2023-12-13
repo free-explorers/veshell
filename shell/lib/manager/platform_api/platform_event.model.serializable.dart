@@ -12,6 +12,8 @@ enum SurfaceRole {
   xdgPopup,
   @JsonValue('subsurface')
   subsurface,
+  @JsonValue('cursor_image')
+  cursorImage
 }
 
 /// Model for XdgSurface

@@ -54,6 +54,7 @@ class SubsurfaceStates extends _$SubsurfaceStates {
           parentMapped =
               ref.read(subsurfaceStatesProvider(state.parent)).mapped;
         case SurfaceRole.none:
+        case SurfaceRole.cursorImage:
       }
     }
 
@@ -99,6 +100,7 @@ class SubsurfaceStates extends _$SubsurfaceStates {
           (_, __) => _checkIfMapped(),
         );
       case SurfaceRole.none:
+      case SurfaceRole.cursorImage:
     }
   }
 

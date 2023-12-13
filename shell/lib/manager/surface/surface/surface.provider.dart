@@ -93,6 +93,7 @@ class SurfaceStates extends _$SurfaceStates {
       case SurfaceRole.subsurface:
         ref.read(subsurfaceStatesProvider(surfaceId).notifier).dispose();
       case SurfaceRole.none:
+      case SurfaceRole.cursorImage:
         break;
     }
 
