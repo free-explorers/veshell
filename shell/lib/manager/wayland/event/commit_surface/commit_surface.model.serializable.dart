@@ -42,8 +42,8 @@ class CommitSurfaceMessage
   /// Factory for xdgToplevel
   const factory CommitSurfaceMessage.simple({
     required int surfaceId,
-    required SurfaceMessage surface,
     required SurfaceRole role,
+    SurfaceMessage? surface,
   }) = SimpleCommitSurfaceMessage;
 
   /// Factory for xdgToplevel

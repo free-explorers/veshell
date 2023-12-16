@@ -124,7 +124,7 @@ pub fn mouse_button_event<BackendData: Backend + 'static>(
 
     let args = method_call.arguments().unwrap();
     let button = get(args, "button").long_value().unwrap();
-    let is_pressed = *extract!(get(args, "is_pressed"), EncodableValue::Bool);
+    let is_pressed = *extract!(get(args, "isPressed"), EncodableValue::Bool);
 
     pointer.button(
         &mut data.state,

@@ -1,8 +1,8 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
-import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/manager/platform_api/platform_api.provider.dart';
-import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.provider.dart';
+import 'package:shell/manager/wayland/request/activate_window/activate_window.model.serializable.dart';
+import 'package:shell/manager/wayland/wayland.manager.dart';
 import 'package:shell/shared/tasks/tasks.model.dart';
 
 part 'tasks.provider.g.dart';
@@ -19,10 +19,15 @@ class Tasks extends _$Tasks {
             diff:
                 [AddDiffOperation(endOfCollection<int>, surfaceId)].lockUnsafe,
           );
-          ref
-              .read(xdgToplevelStatesProvider(surfaceId))
-              .focusNode
-              .requestFocus();
+
+          ref.read(waylandManagerProvider.notifier).request(
+                ActivateWindowRequest(
+                  message: ActivateWindowMessage(
+                    surfaceId: surfaceId,
+                    activate: true,
+                  ),
+                ),
+              );
         });
       })
       ..listen(windowUnmappedStreamProvider, (_, next) {
@@ -31,10 +36,10 @@ class Tasks extends _$Tasks {
             tasks: state.tasks.remove(surfaceId),
             diff: [RemoveDiffOperation(surfaceId)].lockUnsafe,
           );
-          ref
+          /* ref
               .read(xdgToplevelStatesProvider(surfaceId))
               .focusNode
-              .unfocus(disposition: UnfocusDisposition.previouslyFocusedChild);
+              .unfocus(disposition: UnfocusDisposition.previouslyFocusedChild); */
         });
       });
 
