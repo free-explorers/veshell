@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/display/display.widget.dart';
 import 'package:shell/manager/surface/surface.manager.dart';
 import 'package:shell/manager/wayland/wayland.manager.dart';
+import 'package:shell/manager/window/window.manager.dart';
 import 'package:shell/shared/util/root_overlay.provider.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
@@ -19,7 +20,8 @@ void main() {
 
   container
     ..read(waylandManagerProvider)
-    ..read(surfaceManagerProvider);
+    ..read(surfaceManagerProvider)
+    ..read(windowManagerProvider);
   VisibilityDetectorController.instance.updateInterval = Duration.zero;
 
   runApp(

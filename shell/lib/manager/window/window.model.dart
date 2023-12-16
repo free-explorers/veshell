@@ -10,6 +10,7 @@ abstract class Window with _$Window {
     required String appId,
     required String title,
     int? surfaceId,
+    @Default(false) bool isWaitingForSurface,
   }) = PersistentWindow;
 
   /// Ephemeral

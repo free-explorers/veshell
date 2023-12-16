@@ -1,19 +1,83 @@
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/manager/surface/surface.manager.dart';
+import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.provider.dart';
+import 'package:shell/manager/window/window.model.dart';
+import 'package:uuid/uuid.dart';
 
 part 'window.manager.g.dart';
 
-class WindowManagerState {
-  const WindowManagerState({required this.toplevelList});
-  final List<num> toplevelList;
-}
+/// Typedef for WindowId
+typedef WindowId = String;
 
+/// Window manager
 @Riverpod(keepAlive: true)
 class WindowManager extends _$WindowManager {
+  final _uuidGenerator = const Uuid();
   @override
-  WindowManagerState build() {
-    /* final api = ref.watch(platformApiProvider);
-    api. */
-    return const WindowManagerState(toplevelList: []);
+  IMap<WindowId, Window> build() {
+    ref.listen(
+      newXdgToplevelSurfaceProvider,
+      (_, next) async {
+        if (next case AsyncData(value: final int surfaceId)) {
+          onNewToplevel(surfaceId);
+        }
+      },
+    );
+    return <WindowId, Window>{}.lock;
+  }
+
+  /// Create persistent window for desktop entry
+  WindowId createPersistentWindowForDesktopEntry(
+    LocalizedDesktopEntry entry,
+  ) {
+    final persistentWindow = PersistentWindow(
+      appId: entry.desktopEntry.id ?? '',
+      title: '',
+      isWaitingForSurface: true,
+    );
+    final windowId = _uuidGenerator.v4();
+    state = state.add(windowId, persistentWindow);
+    return windowId;
+  }
+
+  /// new toplevel handler
+  ///
+  /// This is called when a new toplevel surface is created
+  /// it first search for a waiting persistent window
+  onNewToplevel(int surfaceId) {
+    final toplevelState = ref.read(xdgToplevelStatesProvider(surfaceId));
+
+    for (final entry in state.toEntryIList()) {
+      if (entry case MapEntry(value: final PersistentWindow window)) {
+        if (window.appId == toplevelState.appId && window.isWaitingForSurface) {
+          state = state.update(
+            entry.key,
+            (value) => window.copyWith(
+              title: toplevelState.title,
+              surfaceId: surfaceId,
+              isWaitingForSurface: false,
+            ),
+          );
+        }
+      }
+    }
+  }
+}
+
+/// Workspace provider
+@riverpod
+class WindowState extends _$WindowState {
+  late WindowId _windowId;
+  @override
+  Window build(WindowId windowId) {
+    final window = ref.watch(windowManagerProvider).get(windowId);
+    if (window == null) {
+      throw Exception('Workspace $windowId not found');
+    }
+    _windowId = windowId;
+    return window;
   }
 }
 

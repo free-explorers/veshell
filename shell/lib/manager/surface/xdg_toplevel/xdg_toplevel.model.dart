@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'xdg_toplevel.model.freezed.dart';
@@ -7,14 +6,10 @@ part 'xdg_toplevel.model.freezed.dart';
 class XdgToplevelState with _$XdgToplevelState {
   const factory XdgToplevelState({
     required bool visible,
-    required Key virtualKeyboardKey,
-    required FocusNode focusNode,
-    required Object interactiveMoveRequested,
-    required ResizeEdgeObject interactiveResizeRequested,
-    required ToplevelDecoration decoration,
     required String title,
     required String appId,
     required Tiling? tilingRequested,
+    int? parentSurfaceId,
   }) = _XdgToplevelState;
 }
 

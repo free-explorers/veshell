@@ -1,10 +1,9 @@
-import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/manager/platform_api/platform_api.provider.dart';
 import 'package:shell/manager/surface/xdg_surface/xdg_surface.provider.dart';
 import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.model.dart';
 import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel_surface.dart';
-import 'package:shell/manager/wayland/request/activate_window/activate_window.model.serializable.dart';
+import 'package:shell/manager/wayland/event/commit_surface/commit_surface.model.serializable.dart';
 import 'package:shell/manager/wayland/request/maximize_window/maximize_window.model.serializable.dart';
 import 'package:shell/manager/wayland/request/resize_window/resize_window.model.serializable.dart';
 import 'package:shell/manager/wayland/wayland.manager.dart';
@@ -28,30 +27,20 @@ XdgToplevelSurface xdgToplevelSurfaceWidget(
 class XdgToplevelStates extends _$XdgToplevelStates {
   @override
   XdgToplevelState build(int surfaceId) {
-    final focusNode = FocusNode();
-    focusNode.addListener(() {
-      ref.read(waylandManagerProvider.notifier).request(
-            ActivateWindowRequest(
-              message: ActivateWindowMessage(
-                surfaceId: surfaceId,
-                activate: focusNode.hasFocus,
-              ),
-            ),
-          );
-    });
-
-    ref.onDispose(focusNode.dispose);
-
-    return XdgToplevelState(
+    return const XdgToplevelState(
       visible: true,
-      virtualKeyboardKey: GlobalKey(),
-      focusNode: focusNode,
-      interactiveMoveRequested: Object(),
-      interactiveResizeRequested: ResizeEdgeObject(ResizeEdge.top),
-      decoration: ToplevelDecoration.none,
       title: '',
       appId: '',
       tilingRequested: null,
+    );
+  }
+
+  /// Update state from surface commit
+  void onCommit(XdgToplevelCommitSurfaceMessage message) {
+    state = state.copyWith(
+      title: message.title ?? '',
+      appId: message.appId ?? '',
+      parentSurfaceId: message.parentSurfaceId,
     );
   }
 
@@ -94,21 +83,21 @@ class XdgToplevelStates extends _$XdgToplevelStates {
   }
 
   void requestInteractiveMove() {
-    state = state.copyWith(
+    /* state = state.copyWith(
       interactiveMoveRequested: Object(),
-    );
+    ); */
   }
 
   void requestInteractiveResize(ResizeEdge edge) {
-    state = state.copyWith(
+    /* state = state.copyWith(
       interactiveResizeRequested: ResizeEdgeObject(edge),
-    );
+    ); */
   }
 
   void setDecoration(ToplevelDecoration decoration) {
-    state = state.copyWith(
+    /* state = state.copyWith(
       decoration: decoration,
-    );
+    ); */
   }
 
   void setTitle(String title) {

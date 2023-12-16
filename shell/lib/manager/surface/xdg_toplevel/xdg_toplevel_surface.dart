@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/manager/surface/surface/surface.provider.dart';
 import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.provider.dart';
+import 'package:shell/manager/wayland/request/activate_window/activate_window.model.serializable.dart';
+import 'package:shell/manager/wayland/wayland.manager.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
 class XdgToplevelSurface extends ConsumerWidget {
@@ -34,7 +37,7 @@ class XdgToplevelSurface extends ConsumerWidget {
   }
 }
 
-class _SurfaceFocus extends ConsumerWidget {
+class _SurfaceFocus extends HookConsumerWidget {
   const _SurfaceFocus({
     required this.surfaceId,
     required this.child,
@@ -44,6 +47,24 @@ class _SurfaceFocus extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final focusNode = useFocusNode();
+    useEffect(
+      () {
+        focusNode.addListener(() {
+          ref.read(waylandManagerProvider.notifier).request(
+                ActivateWindowRequest(
+                  message: ActivateWindowMessage(
+                    surfaceId: surfaceId,
+                    activate: focusNode.hasFocus,
+                  ),
+                ),
+              );
+        });
+        return null;
+      },
+      [focusNode],
+    );
+
     return Shortcuts(
       shortcuts: {
         const SingleActivator(LogicalKeyboardKey.tab):
@@ -63,16 +84,8 @@ class _SurfaceFocus extends ConsumerWidget {
         actions: {
           DisableFocusTraversalIntent: DisableFocusTraversalAction(),
         },
-        child: Consumer(
-          builder: (BuildContext context, WidgetRef ref, Widget? child) {
-            final focusNode =
-                ref.watch(xdgToplevelStatesProvider(surfaceId)).focusNode;
-
-            return Focus(
-              focusNode: focusNode,
-              child: child!,
-            );
-          },
+        child: Focus(
+          focusNode: focusNode,
           child: child,
         ),
       ),
@@ -91,10 +104,14 @@ class _PointerListener extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Listener(
-      onPointerDown: (_) => ref
-          .read(xdgToplevelStatesProvider(surfaceId))
-          .focusNode
-          .requestFocus(),
+      onPointerDown: (_) => ref.read(waylandManagerProvider.notifier).request(
+            ActivateWindowRequest(
+              message: ActivateWindowMessage(
+                surfaceId: surfaceId,
+                activate: true,
+              ),
+            ),
+          ),
       child: child,
     );
   }

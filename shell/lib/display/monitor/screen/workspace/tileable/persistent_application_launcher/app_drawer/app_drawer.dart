@@ -4,11 +4,18 @@ import 'package:shell/display/monitor/screen/workspace/tileable/persistent_appli
 import 'package:shell/manager/application/app_drawer.provider.dart';
 
 class AppDrawer extends HookConsumerWidget {
-  const AppDrawer({super.key});
+  const AppDrawer({required this.onSelect, super.key});
+  final DesktopEntrySelectedCallback onSelect;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return SizedBox(width: 600, height: 600, child: AppGrid());
+    return SizedBox(
+      width: 600,
+      height: 600,
+      child: AppGrid(
+        onSelect: onSelect,
+      ),
+    );
   }
 }
 
