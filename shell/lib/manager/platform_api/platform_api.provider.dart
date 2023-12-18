@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ffi' show Finalizable;
 
 import 'package:flutter/services.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -228,19 +227,4 @@ class AuthenticationResponse {
 
   bool success;
   String message;
-}
-
-class TextureId implements Finalizable {
-  const TextureId(this.value);
-  final int value;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is TextureId &&
-          runtimeType == other.runtimeType &&
-          value == other.value);
-
-  @override
-  int get hashCode => value.hashCode;
 }

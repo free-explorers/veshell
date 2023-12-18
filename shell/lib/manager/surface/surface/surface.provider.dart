@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/manager/platform_api/platform_api.provider.dart';
 import 'package:shell/manager/platform_api/platform_event.model.serializable.dart';
 import 'package:shell/manager/surface/subsurface/subsurface.provider.dart';
-import 'package:shell/manager/surface/surface.manager.dart';
 import 'package:shell/manager/surface/surface/surface.dart';
 import 'package:shell/manager/surface/surface/surface.model.dart';
 import 'package:shell/manager/surface/xdg_surface/xdg_surface.provider.dart';
@@ -27,8 +25,8 @@ class SurfaceStates extends _$SurfaceStates {
     return SurfaceState(
       role: SurfaceRole.none,
       surfaceId: surfaceId,
-      textureId: const TextureId(-1),
-      oldTextureId: const TextureId(-1),
+      textureId: -1,
+      oldTextureId: -1,
       surfacePosition: Offset.zero,
       surfaceSize: Size.zero,
       scale: 1,
@@ -50,17 +48,12 @@ class SurfaceStates extends _$SurfaceStates {
     required List<int> subsurfacesAbove,
     required Rect inputRegion,
   }) {
-    final platform = ref.read(surfaceManagerProvider.notifier);
-
     // assert(textureId != state.oldTextureId);
 
     var oldTexture = state.oldTextureId;
     var currentTexture = state.textureId;
 
     if (textureId != currentTexture) {
-      if (oldTexture.value != -1) {
-        platform.textureFinalizer.detach(oldTexture);
-      }
       oldTexture = currentTexture;
       currentTexture = textureId;
     }
@@ -97,12 +90,8 @@ class SurfaceStates extends _$SurfaceStates {
         break;
     }
 
-    ref.invalidate(surfaceWidgetProvider(surfaceId));
-
-    // This refresh seems very redundant but it's actually needed.
-    // Without refresh, the state persists in memory and if a Finalizer attaches to an object
-    // inside the state, it will never call its finalization callback.
-    final _ = ref.refresh(surfaceStatesProvider(surfaceId));
-    ref.invalidate(surfaceStatesProvider(surfaceId));
+    ref
+      ..invalidate(surfaceWidgetProvider(surfaceId))
+      ..invalidateSelf();
   }
 }

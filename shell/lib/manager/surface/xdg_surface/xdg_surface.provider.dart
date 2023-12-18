@@ -71,7 +71,7 @@ class XdgSurfaceStates extends _$XdgSurfaceStates {
 
   void _checkIfMapped() {
     final mapped = state.role != SurfaceRole.none &&
-            ref.read(surfaceStatesProvider(surfaceId)).textureId.value != -1 &&
+            ref.read(surfaceStatesProvider(surfaceId)).textureId != -1 &&
             ref.read(surfaceStatesProvider(surfaceId)).role ==
                 SurfaceRole.xdgPopup ||
         ref.read(surfaceStatesProvider(surfaceId)).role ==

@@ -3,14 +3,15 @@ import 'dart:ui';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/manager/platform_api/platform_api.provider.dart';
 import 'package:shell/manager/surface/subsurface/subsurface.provider.dart';
+import 'package:shell/manager/surface/surface/surface.model.dart';
 import 'package:shell/manager/surface/surface/surface.provider.dart';
 import 'package:shell/manager/surface/surface_ids.provider.dart';
 import 'package:shell/manager/surface/xdg_popup/xdg_popup.provider.dart';
 import 'package:shell/manager/surface/xdg_surface/xdg_surface.provider.dart';
 import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.provider.dart';
 import 'package:shell/manager/wayland/event/commit_surface/commit_surface.model.serializable.dart';
+import 'package:shell/manager/wayland/event/destroy_surface/destroy_surface.model.serializable.dart';
 import 'package:shell/manager/wayland/event/wayland_event.model.serializable.dart';
 import 'package:shell/manager/wayland/request/unregister_view_texture/unregister_view_texture.model.serializable.dart';
 import 'package:shell/manager/wayland/wayland.manager.dart';
@@ -19,20 +20,14 @@ part 'surface.manager.g.dart';
 
 @Riverpod(keepAlive: true)
 class SurfaceManager extends _$SurfaceManager {
-  ///
-  late final textureFinalizer = Finalizer((int textureId) async {
-    // It's possible for a render pass to be late and to use a texture id, even if the object
-    // is no longer in memory. Give a generous interval of time for any renders using this texture
-    // to finalize.
-    await Future<void>.delayed(const Duration(seconds: 1));
-    await unregisterViewTexture(textureId);
-  });
-
   @override
   ISet<int> build() {
     ref.listen(waylandManagerProvider, (_, next) {
       if (next case AsyncData(value: final CommitSurfaceEvent event)) {
         _commitSurface(event.message);
+      }
+      if (next case AsyncData(value: final DestroySurfaceEvent event)) {
+        _destroySurface(event.message);
       }
     });
     return ISet<int>();
@@ -63,11 +58,10 @@ class SurfaceManager extends _$SurfaceManager {
 
       final currentTextureId =
           ref.read(surfaceStatesProvider(message.surfaceId)).textureId;
-      if (surface.textureId == currentTextureId.value) {
+      if (surface.textureId == currentTextureId) {
         textureId = currentTextureId;
       } else {
-        textureId = TextureId(surface.textureId);
-        textureFinalizer.attach(textureId, textureId.value, detach: textureId);
+        textureId = surface.textureId;
       }
 
       for (final id in surface.subsurfacesBelow) {
@@ -152,6 +146,17 @@ class SurfaceManager extends _$SurfaceManager {
             position: message.position,
           );
     }
+  }
+
+  Future<void> _destroySurface(DestroySurfaceMessage message) async {
+    ref.read(surfaceStatesProvider(message.surfaceId).notifier).unmap();
+    // TODO: Find a better way. Maybe store subscriptions in a list.
+    // 3 sec is more than enough for any close animations.
+    await Future.delayed(const Duration(seconds: 3));
+    ref.read(surfaceStatesProvider(message.surfaceId).notifier).dispose();
+    ref
+        .read(surfaceIdsProvider.notifier)
+        .update((state) => state.remove(message.surfaceId));
   }
 }
 

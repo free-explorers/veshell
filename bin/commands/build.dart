@@ -165,7 +165,11 @@ Future<void> packageBuild(
 
   await runProcess(
     'cp',
-    ['-r', 'shell/build/linux/$arch/debug/bundle/data', buildDirectory],
+    [
+      '-r',
+      'shell/build/linux/$arch/${target.name}/bundle/data',
+      buildDirectory,
+    ],
   );
 
   logger.success('\nPackaging completed\n');

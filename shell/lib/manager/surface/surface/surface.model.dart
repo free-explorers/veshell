@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/manager/platform_api/platform_api.provider.dart';
 import 'package:shell/manager/platform_api/platform_event.model.serializable.dart';
 
 part 'surface.model.freezed.dart';
+
+typedef TextureId = int;
 
 @freezed
 class SurfaceState with _$SurfaceState {

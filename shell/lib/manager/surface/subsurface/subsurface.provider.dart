@@ -59,7 +59,7 @@ class SubsurfaceStates extends _$SubsurfaceStates {
     }
 
     final mapped = parentMapped &&
-        ref.read(surfaceStatesProvider(surfaceId)).textureId.value != -1;
+        ref.read(surfaceStatesProvider(surfaceId)).textureId != -1;
 
     state = state.copyWith(
       mapped: mapped,

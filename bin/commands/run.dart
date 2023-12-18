@@ -25,8 +25,11 @@ class RunCommand extends Command<int> {
     final binary = File('${Directory.current.path}/$binaryPath');
 
     if (!binary.existsSync()) {
-      await buildAll(logger, target: target);
+      await buildEmbedder(logger, target: target);
+      await buildShell(logger, target: target);
     }
+    await packageBuild(logger, target: target);
+
     Process process;
     if (Platform.environment['container'] != null) {
       process = await Process.start(
@@ -35,6 +38,7 @@ class RunCommand extends Command<int> {
         mode: ProcessStartMode.inheritStdio,
       );
     } else {
+      logger.alert('Running ${binary.absolute.path}');
       process = await Process.start(
         binary.path,
         [],

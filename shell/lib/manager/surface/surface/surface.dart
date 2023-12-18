@@ -33,8 +33,7 @@ class SurfaceWidget extends ConsumerWidget {
                   surfaceStatesProvider(surfaceId).select((v) => v.textureKey),
                 );
                 final textureId = ref.watch(
-                  surfaceStatesProvider(surfaceId)
-                      .select((v) => v.textureId.value),
+                  surfaceStatesProvider(surfaceId).select((v) => v.textureId),
                 );
 
                 return Texture(
