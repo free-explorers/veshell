@@ -607,7 +607,7 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
 
                 PopupMessage {
                     surface_id: surface_message.surface_id,
-                    role: xdg::XDG_TOPLEVEL_ROLE,
+                    role: xdg::XDG_POPUP_ROLE,
                     surface: surface_message,
                     geometry: geometry,
                     parent_surface_id: get_surface_id(&parent),
