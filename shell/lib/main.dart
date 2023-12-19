@@ -3,6 +3,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/display/display.widget.dart';
 import 'package:shell/manager/surface/surface.manager.dart';
+import 'package:shell/manager/theme/theme.manager.dart';
 import 'package:shell/manager/wayland/wayland.manager.dart';
 import 'package:shell/manager/window/window.manager.dart';
 import 'package:shell/shared/util/root_overlay.provider.dart';
@@ -37,7 +38,9 @@ class Veshell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
     return MaterialApp(
+      theme: theme,
       home: Scaffold(
         body: Consumer(
           builder: (
