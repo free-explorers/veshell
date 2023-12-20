@@ -1,13 +1,14 @@
 import 'dart:ui';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
 
 part 'window_position.provider.g.dart';
 
 @Riverpod(keepAlive: true)
 class WindowPosition extends _$WindowPosition {
   @override
-  Offset build(int surfaceId) => Offset.zero;
+  Offset build(SurfaceId surfaceId) => Offset.zero;
 
   @override
   set state(Offset value) {

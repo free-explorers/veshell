@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
 import 'package:shell/shared/state/window_stack/window_stack.model.dart';
 import 'package:shell/shared/tasks/tasks.provider.dart';
 
@@ -45,7 +46,7 @@ class WindowStack extends _$WindowStack {
     );
   }
 
-  void remove(int surfaceId) {
+  void remove(SurfaceId surfaceId) {
     assert(state.stack.contains(surfaceId));
     state = state.copyWith(
       stack: state.stack.remove(surfaceId),

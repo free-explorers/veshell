@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
+/* import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.model.dart';
+import 'package:shell/manager/wayland/surface/xdg_toplevel/xdg_toplevel.model.dart';
 
 part 'window_resize.model.freezed.dart';
 
@@ -14,3 +14,4 @@ class ResizerState with _$ResizerState {
     required Offset delta,
   }) = _ResizerState;
 }
+ */

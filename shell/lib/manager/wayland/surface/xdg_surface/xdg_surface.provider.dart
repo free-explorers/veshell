@@ -1,21 +1,14 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/manager/platform_api/platform_api.provider.dart';
-import 'package:shell/manager/platform_api/platform_event.model.serializable.dart';
-import 'package:shell/manager/surface/surface/surface.provider.dart';
-import 'package:shell/manager/surface/xdg_popup/xdg_popup.provider.dart';
-import 'package:shell/manager/surface/xdg_surface/xdg_surface.model.dart';
-import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.provider.dart';
+/* import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/manager/wayland/surface/xdg_surface/xdg_surface.model.dart';
 
 part 'xdg_surface.provider.g.dart';
 
 @Riverpod(keepAlive: true)
 class XdgSurfaceStates extends _$XdgSurfaceStates {
   @override
-  XdgSurfaceState build(int surfaceId) {
+  XdgSurfaceState build(SurfaceId surfaceId) {
     ref.listen(
-      surfaceStatesProvider(surfaceId)
+      wlSurfaceStateProvider(surfaceId)
           .select((state) => (state.textureId, state.role)),
       (_, __) => _checkIfMapped(),
     );
@@ -40,13 +33,13 @@ class XdgSurfaceStates extends _$XdgSurfaceStates {
     _checkIfMapped();
   }
 
-  void addPopup(int surfaceId) {
+  void addPopup(SurfaceId surfaceId) {
     state = state.copyWith(popups: [...state.popups, surfaceId]);
-    ref.read(xdgPopupStatesProvider(surfaceId).notifier).parentViewId =
+    ref.read(xdgPopupStatesProvider(surfaceId).notifier).parentSurfaceId =
         this.surfaceId;
   }
 
-  void removePopup(int surfaceId) {
+  void removePopup(SurfaceId surfaceId) {
     state = state.copyWith(
       popups: [
         for (final int id in state.popups)
@@ -71,10 +64,10 @@ class XdgSurfaceStates extends _$XdgSurfaceStates {
 
   void _checkIfMapped() {
     final mapped = state.role != SurfaceRole.none &&
-            ref.read(surfaceStatesProvider(surfaceId)).textureId != -1 &&
-            ref.read(surfaceStatesProvider(surfaceId)).role ==
+            ref.read(wlSurfaceStateProvider(surfaceId)).textureId != -1 &&
+            ref.read(wlSurfaceStateProvider(surfaceId)).role ==
                 SurfaceRole.xdgPopup ||
-        ref.read(surfaceStatesProvider(surfaceId)).role ==
+        ref.read(wlSurfaceStateProvider(surfaceId)).role ==
             SurfaceRole.xdgTopLevel;
 
     final wasMapped = state.mapped;
@@ -141,3 +134,4 @@ class XdgSurfaceStates extends _$XdgSurfaceStates {
     }
   }
 }
+ */

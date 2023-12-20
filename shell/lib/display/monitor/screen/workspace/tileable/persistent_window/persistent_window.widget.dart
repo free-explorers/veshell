@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/display/monitor/screen/workspace/tileable/tileable.widget.dart';
-import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel_surface.dart';
 import 'package:shell/manager/wayland/request/resize_window/resize_window.model.serializable.dart';
+import 'package:shell/manager/wayland/surface/xdg_toplevel/xdg_toplevel_surface.dart';
 import 'package:shell/manager/wayland/wayland.manager.dart';
 import 'package:shell/manager/window/window.manager.dart';
 import 'package:shell/manager/window/window.model.dart';
@@ -44,7 +44,7 @@ class PersistentWindowTileable extends Tileable {
                 },
                 [constraints],
               );
-              return XdgToplevelSurface(
+              return XdgToplevelSurfaceWidget(
                 surfaceId: window.surfaceId!,
               );
             },

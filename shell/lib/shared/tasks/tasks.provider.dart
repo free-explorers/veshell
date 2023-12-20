@@ -1,8 +1,6 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/manager/platform_api/platform_api.provider.dart';
-import 'package:shell/manager/wayland/request/activate_window/activate_window.model.serializable.dart';
-import 'package:shell/manager/wayland/wayland.manager.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
 import 'package:shell/shared/tasks/tasks.model.dart';
 
 part 'tasks.provider.g.dart';
@@ -11,9 +9,9 @@ part 'tasks.provider.g.dart';
 class Tasks extends _$Tasks {
   @override
   TasksState build() {
-    ref
+    /*  ref
       ..listen(windowMappedStreamProvider, (_, next) {
-        next.whenData((int surfaceId) {
+        next.whenData((SurfaceId surfaceId) {
           state = state.copyWith(
             tasks: state.tasks.add(surfaceId),
             diff:
@@ -31,7 +29,7 @@ class Tasks extends _$Tasks {
         });
       })
       ..listen(windowUnmappedStreamProvider, (_, next) {
-        next.whenData((int surfaceId) {
+        next.whenData((SurfaceId surfaceId) {
           state = state.copyWith(
             tasks: state.tasks.remove(surfaceId),
             diff: [RemoveDiffOperation(surfaceId)].lockUnsafe,
@@ -41,7 +39,7 @@ class Tasks extends _$Tasks {
               .focusNode
               .unfocus(disposition: UnfocusDisposition.previouslyFocusedChild); */
         });
-      });
+      }); */
 
     return TasksState(
       tasks: IList<int>(),
@@ -49,7 +47,7 @@ class Tasks extends _$Tasks {
     );
   }
 
-  void putInFront(int surfaceId) {
+  void putInFront(SurfaceId surfaceId) {
     state = state.copyWith(
       tasks: state.tasks.remove(surfaceId).add(surfaceId),
       diff: [ReorderDiffOperation(endOfCollection<int>, surfaceId)].lockUnsafe,

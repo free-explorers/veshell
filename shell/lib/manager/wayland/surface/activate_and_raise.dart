@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/manager/wayland/request/activate_window/activate_window.model.serializable.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
 import 'package:shell/manager/wayland/wayland.manager.dart';
 import 'package:shell/shared/tasks/tasks.provider.dart';
 
@@ -10,7 +11,7 @@ class ActivateAndRaise extends ConsumerWidget {
     required this.child,
     super.key,
   });
-  final int surfaceId;
+  final SurfaceId surfaceId;
   final Widget child;
 
   @override

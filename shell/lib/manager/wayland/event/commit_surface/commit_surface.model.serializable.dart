@@ -1,7 +1,7 @@
 import 'dart:ui';
 
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/manager/platform_api/platform_event.model.serializable.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
 import 'package:shell/manager/wayland/wayland.manager.dart';
 import 'package:shell/shared/util/json_converter/offset.dart';
 import 'package:shell/shared/util/json_converter/rect.dart';
@@ -15,9 +15,9 @@ part 'commit_surface.model.serializable.g.dart';
 class SurfaceMessage with _$SurfaceMessage {
   /// Factory
   factory SurfaceMessage({
-    required int surfaceId,
+    required SurfaceId surfaceId,
     required SurfaceRole role,
-    required int textureId,
+    required TextureId textureId,
     required int scale,
     @RectConverter() required Rect inputRegion,
     required List<int> subsurfacesBelow,
@@ -41,37 +41,37 @@ class CommitSurfaceMessage
     implements WaylandMessage {
   /// Factory for xdgToplevel
   const factory CommitSurfaceMessage.simple({
-    required int surfaceId,
+    required SurfaceId surfaceId,
     required SurfaceRole role,
     SurfaceMessage? surface,
   }) = SimpleCommitSurfaceMessage;
 
   /// Factory for xdgToplevel
   const factory CommitSurfaceMessage.xdgToplevel({
-    required int surfaceId,
+    required SurfaceId surfaceId,
     required SurfaceMessage surface,
     required SurfaceRole role,
     String? appId,
     String? title,
-    int? parentSurfaceId,
+    SurfaceId? parentSurfaceId,
     @RectConverter() Rect? geometry,
   }) = XdgToplevelCommitSurfaceMessage;
 
   /// Factory for xdgPopup
   const factory CommitSurfaceMessage.xdgPopup({
-    required int surfaceId,
+    required SurfaceId surfaceId,
     required SurfaceMessage surface,
     required SurfaceRole role,
-    required int parentSurfaceId,
+    required SurfaceId parentSurfaceId,
     @RectConverter() Rect? geometry,
   }) = XdgPopupCommitSurfaceMessage;
 
   /// Factory for Subsurface
   const factory CommitSurfaceMessage.subsurface({
-    required int surfaceId,
+    required SurfaceId surfaceId,
     required SurfaceMessage surface,
     required SurfaceRole role,
-    required int parentSurfaceId,
+    required SurfaceId parentSurfaceId,
     @OffsetConverter() required Offset position,
   }) = SubsurfaceCommitSurfaceMessage;
 

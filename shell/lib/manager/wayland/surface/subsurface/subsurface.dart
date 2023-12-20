@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/manager/surface/subsurface/subsurface.provider.dart';
-import 'package:shell/manager/surface/surface/surface.provider.dart';
+import 'package:shell/manager/wayland/surface/subsurface/subsurface.provider.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/surface.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
 
 class SubsurfaceWidget extends StatelessWidget {
   const SubsurfaceWidget({
     required this.surfaceId,
     super.key,
   });
-  final int surfaceId;
+  final SurfaceId surfaceId;
 
   @override
   Widget build(BuildContext context) {
@@ -16,7 +17,9 @@ class SubsurfaceWidget extends StatelessWidget {
       surfaceId: surfaceId,
       child: Consumer(
         builder: (BuildContext context, WidgetRef ref, Widget? child) {
-          return ref.watch(surfaceWidgetProvider(surfaceId));
+          return SurfaceWidget(
+            surfaceId: surfaceId,
+          );
         },
       ),
     );
@@ -28,7 +31,7 @@ class _Positioner extends ConsumerWidget {
     required this.surfaceId,
     required this.child,
   });
-  final int surfaceId;
+  final SurfaceId surfaceId;
   final Widget child;
 
   @override

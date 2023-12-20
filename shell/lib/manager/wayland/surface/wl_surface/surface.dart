@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/manager/surface/subsurface/subsurface.dart';
-import 'package:shell/manager/surface/subsurface/subsurface.provider.dart';
-import 'package:shell/manager/surface/surface/surface.model.dart';
-import 'package:shell/manager/surface/surface/surface.provider.dart';
-import 'package:shell/manager/surface/surface/surface_size.dart';
-import 'package:shell/manager/surface/view_input_listener.dart';
+import 'package:shell/manager/wayland/surface/subsurface/subsurface.dart';
+import 'package:shell/manager/wayland/surface/subsurface/subsurface.provider.dart';
+import 'package:shell/manager/wayland/surface/view_input_listener.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/surface_size.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.provider.dart';
 
 class SurfaceWidget extends ConsumerWidget {
   const SurfaceWidget({
     required this.surfaceId,
     super.key,
   });
-  final int surfaceId;
+  final SurfaceId surfaceId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -29,15 +29,11 @@ class SurfaceWidget extends ConsumerWidget {
             surfaceId: surfaceId,
             child: Consumer(
               builder: (BuildContext context, WidgetRef ref, Widget? child) {
-                final key = ref.watch(
-                  surfaceStatesProvider(surfaceId).select((v) => v.textureKey),
-                );
                 final textureId = ref.watch(
-                  surfaceStatesProvider(surfaceId).select((v) => v.textureId),
+                  wlSurfaceStateProvider(surfaceId).select((v) => v.textureId),
                 );
 
                 return Texture(
-                  key: key,
                   textureId: textureId,
                 );
               },
@@ -58,17 +54,17 @@ class _Subsurfaces extends ConsumerWidget {
     required this.surfaceId,
     required this.layer,
   });
-  final int surfaceId;
+  final SurfaceId surfaceId;
   final _SubsurfaceLayer layer;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selector = layer == _SubsurfaceLayer.below
-        ? (SurfaceState ss) => ss.subsurfacesBelow
-        : (SurfaceState ss) => ss.subsurfacesAbove;
+        ? (WlSurface ss) => ss.subsurfacesBelow
+        : (WlSurface ss) => ss.subsurfacesAbove;
 
     final List<Widget> subsurfaces = ref
-        .watch(surfaceStatesProvider(surfaceId).select(selector))
+        .watch(wlSurfaceStateProvider(surfaceId).select(selector))
         .where(
           (id) =>
               ref.watch(subsurfaceStatesProvider(id).select((ss) => ss.mapped)),

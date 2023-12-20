@@ -1,11 +1,12 @@
-import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+/* import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/manager/surface/surface/surface.provider.dart';
-import 'package:shell/manager/surface/xdg_surface/xdg_surface.provider.dart';
-import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.model.dart';
-import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.provider.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.provider.dart';
+import 'package:shell/manager/wayland/surface/xdg_surface/xdg_surface.provider.dart';
+import 'package:shell/manager/wayland/surface/xdg_toplevel/xdg_toplevel.model.dart';
+import 'package:shell/manager/wayland/surface/xdg_toplevel/xdg_toplevel.provider.dart';
 import 'package:shell/shared/state/cursor_position/cursor_position.provider.dart';
 import 'package:shell/shared/state/window_move/window_move.provider.dart';
 import 'package:shell/shared/state/window_position/window_position.provider.dart';
@@ -20,7 +21,7 @@ class Window extends ConsumerStatefulWidget {
     required this.surfaceId,
     super.key,
   });
-  final int surfaceId;
+  final SurfaceId surfaceId;
 
   @override
   ConsumerState<Window> createState() => _WindowState();
@@ -121,7 +122,7 @@ class _OpenCloseAnimations extends ConsumerStatefulWidget {
     required this.surfaceId,
     required this.child,
   });
-  final int surfaceId;
+  final SurfaceId surfaceId;
   final Widget child;
 
   @override
@@ -193,7 +194,7 @@ class _TilingAnimations extends ConsumerStatefulWidget {
     required this.surfaceId,
     required this.child,
   });
-  final int surfaceId;
+  final SurfaceId surfaceId;
   final Widget child;
 
   @override
@@ -237,17 +238,17 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
     final surfaceId = widget.surfaceId;
 
     final surfaceSize = ref
-        .watch(surfaceStatesProvider(surfaceId).select((v) => v.surfaceSize));
+        .watch(wlSurfaceStateProvider(surfaceId).select((v) => v.surfaceSize));
 
     ref
-      ..listen(surfaceStatesProvider(surfaceId).select((v) => v.surfaceSize),
+      ..listen(wlSurfaceStateProvider(surfaceId).select((v) => v.surfaceSize),
           (previous, next) {
         oldSurfaceSize = previous ?? next;
       })
 
       // print(size);
 
-      // ref.listen(surfaceStatesProvider(surfaceId).select((v) => v.surfaceSize), (previous, next) {
+      // ref.listen(wlSurfaceStateProvider(surfaceId).select((v) => v.surfaceSize), (previous, next) {
       //   sizeTween.begin = previous ?? next;
       //   sizeTween.end = next;
       //
@@ -420,7 +421,7 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 // part 'window.g.dart';
 //
 // @Riverpod(keepAlive: true)
-// Window windowWidget(WindowWidgetRef ref, int surfaceId) {
+// Window windowWidget(WindowWidgetRef ref, SurfaceId surfaceId) {
 //   return Window(
 //     key: GlobalKey(),
 //     surfaceId: surfaceId,
@@ -428,7 +429,7 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 // }
 //
 // class Window extends ConsumerStatefulWidget {
-//   final int surfaceId;
+//   final SurfaceId surfaceId;
 //
 //   const Window({
 //     super.key,
@@ -449,7 +450,7 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 //   void spawnWindowAtCursor() {
 //     Future.microtask(() {
 //       Offset center = ref.read(cursorPositionProvider);
-//       Size surfaceSize = ref.read(surfaceStatesProvider(widget.surfaceId)).surfaceSize;
+//       Size surfaceSize = ref.read(wlSurfaceStateProvider(widget.surfaceId)).surfaceSize;
 //       Rect windowRect = Rect.fromCenter(
 //         center: center,
 //         width: surfaceSize.width,
@@ -518,7 +519,7 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 // }
 //
 // class _OpenCloseAnimations extends ConsumerStatefulWidget {
-//   final int surfaceId;
+//   final SurfaceId surfaceId;
 //   final Widget child;
 //
 //   const _OpenCloseAnimations({
@@ -602,7 +603,7 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 // }
 //
 // class _TilingAnimations extends ConsumerStatefulWidget {
-//   final int surfaceId;
+//   final SurfaceId surfaceId;
 //   final Widget child;
 //
 //   const _TilingAnimations({
@@ -645,11 +646,11 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 //
 //   @override
 //   Widget build(BuildContext context) {
-//     final int surfaceId = widget.surfaceId;
+//     final SurfaceId surfaceId = widget.surfaceId;
 //
-//     Size surfaceSize = ref.watch(surfaceStatesProvider(surfaceId).select((v) => v.surfaceSize));
+//     Size surfaceSize = ref.watch(wlSurfaceStateProvider(surfaceId).select((v) => v.surfaceSize));
 //
-//     ref.listen(surfaceStatesProvider(surfaceId).select((v) => v.surfaceSize), (previous, next) {
+//     ref.listen(wlSurfaceStateProvider(surfaceId).select((v) => v.surfaceSize), (previous, next) {
 //       sizeTween.begin = previous ?? next;
 //       sizeTween.end = next;
 //
@@ -725,3 +726,4 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 //     );
 //   }
 // }
+ */

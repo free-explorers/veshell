@@ -6,7 +6,6 @@ import 'package:shell/display/monitor/screen/workspace/tileable/persistent_windo
 import 'package:shell/display/monitor/screen/workspace/tileable/tileable.widget.dart';
 import 'package:shell/display/monitor/screen/workspace/workspace.provider.dart';
 import 'package:shell/display/monitor/screen/workspace/workspace_panel.widget.dart';
-import 'package:shell/manager/surface/xdg_popup/popup_stack.dart';
 import 'package:shell/manager/window/window.manager.dart';
 import 'package:shell/shared/util/app_launch.dart';
 import 'package:shell/shared/widget/sliding_container.widget.dart';
@@ -65,15 +64,9 @@ class WorkspaceWidget extends HookConsumerWidget {
           tabController: tabController,
         ),
         Expanded(
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              SlidingContainer(
-                index: tabController.index,
-                children: tileableList,
-              ),
-              const PopupStack(),
-            ],
+          child: SlidingContainer(
+            index: tabController.index,
+            children: tileableList,
           ),
         ),
       ],

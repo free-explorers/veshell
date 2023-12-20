@@ -2,35 +2,48 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/manager/surface/surface/surface.provider.dart';
-import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.provider.dart';
 import 'package:shell/manager/wayland/request/activate_window/activate_window.model.serializable.dart';
+import 'package:shell/manager/wayland/surface/surface.manager.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/surface.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
+import 'package:shell/manager/wayland/surface/xdg_popup/popup.dart';
 import 'package:shell/manager/wayland/wayland.manager.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
-class XdgToplevelSurface extends ConsumerWidget {
-  const XdgToplevelSurface({
+class XdgToplevelSurfaceWidget extends ConsumerWidget {
+  const XdgToplevelSurfaceWidget({
     required this.surfaceId,
     super.key,
   });
-  final int surfaceId;
+  final SurfaceId surfaceId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final popupList = ref.watch(
+      popupListForSurfaceProvider.select((value) => value.get(surfaceId)),
+    );
     return VisibilityDetector(
       key: ValueKey(surfaceId),
       onVisibilityChanged: (VisibilityInfo info) {
         final visible = info.visibleFraction > 0;
         if (ref.context.mounted) {
-          ref.read(xdgToplevelStatesProvider(surfaceId).notifier).visible =
-              visible;
+          /* ref.read(xdgToplevelStateProvider(surfaceId).notifier).visible =
+              visible; */
         }
       },
       child: _SurfaceFocus(
         surfaceId: surfaceId,
-        child: _PointerListener(
-          surfaceId: surfaceId,
-          child: ref.watch(surfaceWidgetProvider(surfaceId)),
+        child: Stack(
+          children: [
+            _PointerListener(
+              surfaceId: surfaceId,
+              child: SurfaceWidget(
+                surfaceId: surfaceId,
+              ),
+            ),
+            for (final popupSurfaceId in popupList)
+              PopupWidget(surfaceId: popupSurfaceId),
+          ],
         ),
       ),
     );
@@ -42,7 +55,7 @@ class _SurfaceFocus extends HookConsumerWidget {
     required this.surfaceId,
     required this.child,
   });
-  final int surfaceId;
+  final SurfaceId surfaceId;
   final Widget child;
 
   @override
@@ -98,7 +111,7 @@ class _PointerListener extends ConsumerWidget {
     required this.surfaceId,
     required this.child,
   });
-  final int surfaceId;
+  final SurfaceId surfaceId;
   final Widget child;
 
   @override

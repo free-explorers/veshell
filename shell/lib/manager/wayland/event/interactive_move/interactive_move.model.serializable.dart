@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
 import 'package:shell/manager/wayland/wayland.manager.dart';
 
 part 'interactive_move.model.serializable.freezed.dart';
@@ -11,7 +12,7 @@ class InteractiveMoveMessage
     implements WaylandMessage {
   /// Factory
   factory InteractiveMoveMessage({
-    required int surfaceId,
+    required SurfaceId surfaceId,
   }) = _InteractiveMoveMessage;
 
   factory InteractiveMoveMessage.fromJson(Map<String, dynamic> json) =>

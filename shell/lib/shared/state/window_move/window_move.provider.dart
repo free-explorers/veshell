@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
 import 'package:shell/shared/state/window_move/window_move.model.dart';
 
 part 'window_move.provider.g.dart';
@@ -7,7 +8,7 @@ part 'window_move.provider.g.dart';
 @Riverpod(keepAlive: true)
 class WindowMove extends _$WindowMove {
   @override
-  WindowMoveState build(int surfaceId) {
+  WindowMoveState build(SurfaceId surfaceId) {
     return const WindowMoveState(
       moving: false,
       startPosition: Offset.zero,

@@ -1,5 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/manager/wayland/request/wayland_request.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
 import 'package:shell/manager/wayland/wayland.manager.dart';
 
 part 'resize_window.model.serializable.freezed.dart';
@@ -19,7 +20,7 @@ class ResizeWindowRequest extends WaylandRequest {
 class ResizeWindowMessage with _$ResizeWindowMessage implements WaylandMessage {
   /// Factory
   factory ResizeWindowMessage({
-    required int surfaceId,
+    required SurfaceId surfaceId,
     required int width,
     required int height,
   }) = _ResizeWindowMessage;

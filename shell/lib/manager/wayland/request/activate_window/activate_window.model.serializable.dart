@@ -1,5 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/manager/wayland/request/wayland_request.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
 import 'package:shell/manager/wayland/wayland.manager.dart';
 
 part 'activate_window.model.serializable.freezed.dart';
@@ -21,7 +22,7 @@ class ActivateWindowMessage
     implements WaylandMessage {
   /// Factory
   factory ActivateWindowMessage({
-    required int surfaceId,
+    required SurfaceId surfaceId,
     required bool activate,
   }) = _ActivateWindowMessage;
 

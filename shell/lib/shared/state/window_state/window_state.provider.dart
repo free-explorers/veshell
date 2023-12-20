@@ -1,8 +1,9 @@
-import 'dart:ui' as ui;
+/* import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.model.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
+import 'package:shell/manager/wayland/surface/xdg_toplevel/xdg_toplevel.model.dart';
 import 'package:shell/shared/state/window_state/window_state.model.dart';
 
 part 'window_state.provider.g.dart';
@@ -10,8 +11,8 @@ part 'window_state.provider.g.dart';
 @Riverpod(keepAlive: true)
 class WindowState extends _$WindowState {
   @override
-  WindowProviderState build(int surfaceId) {
-    // ref.listen(surfaceStatesProvider(surfaceId), (previous, next) {
+  WindowProviderState build(SurfaceId surfaceId) {
+    // ref.listen(wlSurfaceStateProvider(surfaceId), (previous, next) {
     //   if (state.tilingRequested == null) {
     //     return;
     //   }
@@ -40,3 +41,4 @@ class WindowState extends _$WindowState {
     );
   }
 }
+ */

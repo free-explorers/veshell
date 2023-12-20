@@ -1,8 +1,10 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/manager/surface/surface.manager.dart';
-import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.provider.dart';
+import 'package:shell/manager/wayland/surface/surface.manager.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
+import 'package:shell/manager/wayland/surface/xdg_surface/xdg_popup.provider.dart';
+import 'package:shell/manager/wayland/surface/xdg_surface/xdg_toplevel.provider.dart';
 import 'package:shell/manager/window/window.model.dart';
 import 'package:uuid/uuid.dart';
 
@@ -15,16 +17,27 @@ typedef WindowId = String;
 @Riverpod(keepAlive: true)
 class WindowManager extends _$WindowManager {
   final _uuidGenerator = const Uuid();
+  final IMap<SurfaceId, WindowId> _surfaceWindowMap = IMap();
+
   @override
   IMap<WindowId, Window> build() {
-    ref.listen(
-      newXdgToplevelSurfaceProvider,
-      (_, next) async {
-        if (next case AsyncData(value: final int surfaceId)) {
-          onNewToplevel(surfaceId);
-        }
-      },
-    );
+    ref
+      ..listen(
+        newXdgToplevelSurfaceProvider,
+        (_, next) async {
+          if (next case AsyncData(value: final SurfaceId surfaceId)) {
+            onNewToplevel(surfaceId);
+          }
+        },
+      )
+      ..listen(
+        newXdgPopupSurfaceProvider,
+        (_, next) async {
+          if (next case AsyncData(value: final SurfaceId surfaceId)) {
+            onNewPopup(surfaceId);
+          }
+        },
+      );
     return <WindowId, Window>{}.lock;
   }
 
@@ -46,8 +59,8 @@ class WindowManager extends _$WindowManager {
   ///
   /// This is called when a new toplevel surface is created
   /// it first search for a waiting persistent window
-  onNewToplevel(int surfaceId) {
-    final toplevelState = ref.read(xdgToplevelStatesProvider(surfaceId));
+  onNewToplevel(SurfaceId surfaceId) {
+    final toplevelState = ref.read(xdgToplevelStateProvider(surfaceId));
 
     for (final entry in state.toEntryIList()) {
       if (entry case MapEntry(value: final PersistentWindow window)) {
@@ -64,6 +77,10 @@ class WindowManager extends _$WindowManager {
       }
     }
   }
+
+  onNewPopup(SurfaceId surfaceId) {
+    final popupState = ref.read(xdgPopupStateProvider(surfaceId));
+  }
 }
 
 /// Workspace provider
@@ -72,9 +89,10 @@ class WindowState extends _$WindowState {
   late WindowId _windowId;
   @override
   Window build(WindowId windowId) {
-    final window = ref.watch(windowManagerProvider).get(windowId);
+    final window =
+        ref.watch(windowManagerProvider.select((value) => value.get(windowId)));
     if (window == null) {
-      throw Exception('Workspace $windowId not found');
+      throw Exception('Window $windowId not found');
     }
     _windowId = windowId;
     return window;

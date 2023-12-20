@@ -1,37 +1,56 @@
+import 'dart:ui';
+
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/manager/platform_api/platform_api.provider.dart';
-import 'package:shell/manager/surface/xdg_surface/xdg_surface.provider.dart';
-import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel.model.dart';
-import 'package:shell/manager/surface/xdg_toplevel/xdg_toplevel_surface.dart';
 import 'package:shell/manager/wayland/event/commit_surface/commit_surface.model.serializable.dart';
 import 'package:shell/manager/wayland/request/maximize_window/maximize_window.model.serializable.dart';
 import 'package:shell/manager/wayland/request/resize_window/resize_window.model.serializable.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
+import 'package:shell/manager/wayland/surface/xdg_surface/xdg_surface.model.dart';
 import 'package:shell/manager/wayland/wayland.manager.dart';
 
 part 'xdg_toplevel.provider.g.dart';
 
-@Riverpod(keepAlive: true)
-XdgToplevelSurface xdgToplevelSurfaceWidget(
+/* @Riverpod(keepAlive: true)
+XdgToplevelSurfaceWidget xdgToplevelSurfaceWidget(
   XdgToplevelSurfaceWidgetRef ref,
-  int surfaceId,
+  SurfaceId surfaceId,
 ) {
-  return XdgToplevelSurface(
+  return XdgToplevelSurfaceWidget(
     key: ref.watch(
       xdgSurfaceStatesProvider(surfaceId).select((state) => state.widgetKey),
     ),
     surfaceId: surfaceId,
   );
-}
+} */
 
-@Riverpod(keepAlive: true)
-class XdgToplevelStates extends _$XdgToplevelStates {
+@riverpod
+class XdgToplevelState extends _$XdgToplevelState {
+  late final KeepAliveLink _keepAliveLink;
+
   @override
-  XdgToplevelState build(int surfaceId) {
-    return const XdgToplevelState(
-      visible: true,
-      title: '',
-      appId: '',
-      tilingRequested: null,
+  XdgToplevelSurface build(SurfaceId surfaceId) {
+    throw Exception('XdgToplevelSurface state was not initialized');
+  }
+
+  void initialize(XdgToplevelCommitSurfaceMessage message) {
+    _keepAliveLink = ref.keepAlive();
+    ref.onDispose(() {
+      print('disposing XdgToplevelStateProvider $surfaceId');
+    });
+
+    state = XdgToplevelSurface(
+      surfaceId: message.surfaceId,
+      appId: message.appId ?? '',
+      title: message.title ?? '',
+      parentSurfaceId: message.parentSurfaceId,
+      geometry: message.geometry ??
+          Rect.fromLTWH(
+            message.surface.bufferDelta?.dx ?? 0.0,
+            message.surface.bufferDelta?.dy ?? 0.0,
+            message.surface.bufferSize?.width ?? 0.0,
+            message.surface.bufferSize?.height ?? 0.0,
+          ),
     );
   }
 
@@ -41,21 +60,13 @@ class XdgToplevelStates extends _$XdgToplevelStates {
       title: message.title ?? '',
       appId: message.appId ?? '',
       parentSurfaceId: message.parentSurfaceId,
-    );
-  }
-
-  set visible(bool value) {
-    if (value != state.visible) {
-      ref
-          .read(platformApiProvider.notifier)
-          .changeWindowVisibility(surfaceId, value);
-      state = state.copyWith(visible: value);
-    }
-  }
-
-  void requestMaximize(bool maximize) {
-    state = state.copyWith(
-      tilingRequested: maximize ? Tiling.maximized : Tiling.none,
+      geometry: message.geometry ??
+          Rect.fromLTWH(
+            message.surface.bufferDelta?.dx ?? 0.0,
+            message.surface.bufferDelta?.dy ?? 0.0,
+            message.surface.bufferSize?.width ?? 0.0,
+            message.surface.bufferSize?.height ?? 0.0,
+          ),
     );
   }
 
@@ -82,24 +93,6 @@ class XdgToplevelStates extends _$XdgToplevelStates {
         );
   }
 
-  void requestInteractiveMove() {
-    /* state = state.copyWith(
-      interactiveMoveRequested: Object(),
-    ); */
-  }
-
-  void requestInteractiveResize(ResizeEdge edge) {
-    /* state = state.copyWith(
-      interactiveResizeRequested: ResizeEdgeObject(edge),
-    ); */
-  }
-
-  void setDecoration(ToplevelDecoration decoration) {
-    /* state = state.copyWith(
-      decoration: decoration,
-    ); */
-  }
-
   void setTitle(String title) {
     state = state.copyWith(
       title: title,
@@ -113,7 +106,6 @@ class XdgToplevelStates extends _$XdgToplevelStates {
   }
 
   void dispose() {
-    ref.invalidate(xdgToplevelSurfaceWidgetProvider(surfaceId));
-    ref.invalidate(xdgToplevelStatesProvider(surfaceId));
+    _keepAliveLink.close();
   }
 }

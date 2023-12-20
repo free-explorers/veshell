@@ -3,10 +3,11 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/manager/pointer/pointer_focus.manager.dart';
-import 'package:shell/manager/surface/surface/surface.provider.dart';
 import 'package:shell/manager/wayland/request/mouse_button_event/mouse_button_event.model.serializable.dart';
 import 'package:shell/manager/wayland/request/pointer_hover/pointer_hover.model.serializable.dart';
 import 'package:shell/manager/wayland/request/touch/touch.model.serializable.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.provider.dart';
 import 'package:shell/manager/wayland/wayland.manager.dart';
 import 'package:shell/shared/util/mouse_button_tracker.provider.dart';
 
@@ -18,7 +19,7 @@ class ViewInputListener extends ConsumerWidget {
     required this.child,
     super.key,
   });
-  final int surfaceId;
+  final SurfaceId surfaceId;
   final Widget child;
 
   @override
@@ -26,7 +27,7 @@ class ViewInputListener extends ConsumerWidget {
     final pointerFocusManager = ref.read(pointerFocusManagerProvider);
 
     final inputRegion = ref
-        .watch(surfaceStatesProvider(surfaceId).select((v) => v.inputRegion));
+        .watch(wlSurfaceStateProvider(surfaceId).select((v) => v.inputRegion));
 
     return Stack(
       clipBehavior: Clip.none,

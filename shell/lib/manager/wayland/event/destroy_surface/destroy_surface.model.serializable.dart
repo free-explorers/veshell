@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
 import 'package:shell/manager/wayland/wayland.manager.dart';
 
 part 'destroy_surface.model.serializable.freezed.dart';
@@ -11,7 +12,7 @@ class DestroySurfaceMessage
     implements WaylandMessage {
   /// Factory
   factory DestroySurfaceMessage({
-    required int surfaceId,
+    required SurfaceId surfaceId,
   }) = _DestroySurfaceMessage;
 
   factory DestroySurfaceMessage.fromJson(Map<String, dynamic> json) =>

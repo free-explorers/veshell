@@ -236,6 +236,10 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
     }
 
     fn new_popup(&mut self, _surface: PopupSurface, _positioner: PositionerState) {
+        _surface.with_pending_state(|state| {
+            state.geometry = _positioner.get_geometry();
+            state.positioner = _positioner;
+        });
         let surface_id = with_states(_surface.wl_surface(), |surface_data| {
             surface_data
                 .data_map
@@ -579,23 +583,18 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
             Some(xdg::XDG_POPUP_ROLE) => {
                 let popup = self.xdg_popups.get(&surface_id).expect("Missing popup");
 
-                let (initial_configure_sent, parent, geometry) =
-                    with_states(surface, |surface_data| {
-                        let surface_state = surface_data
-                            .data_map
-                            .get::<XdgPopupSurfaceData>()
-                            .unwrap()
-                            .lock()
-                            .unwrap();
-                        (
-                            surface_state.initial_configure_sent,
-                            surface_state.parent.clone().unwrap(),
-                            surface_data
-                                .cached_state
-                                .current::<SurfaceCachedState>()
-                                .geometry,
-                        )
-                    });
+                let (initial_configure_sent, parent) = with_states(surface, |surface_data| {
+                    let surface_state = surface_data
+                        .data_map
+                        .get::<XdgPopupSurfaceData>()
+                        .unwrap()
+                        .lock()
+                        .unwrap();
+                    (
+                        surface_state.initial_configure_sent,
+                        surface_state.parent.clone().unwrap(),
+                    )
+                });
 
                 let initial_configure_sent = initial_configure_sent;
 
@@ -609,7 +608,7 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                     surface_id: surface_message.surface_id,
                     role: xdg::XDG_POPUP_ROLE,
                     surface: surface_message,
-                    geometry: geometry,
+                    geometry: popup.with_pending_state(|state| state.positioner.get_geometry()),
                     parent_surface_id: get_surface_id(&parent),
                 }
             }

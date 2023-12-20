@@ -215,7 +215,7 @@ impl ToplevelMessage {
 pub struct PopupMessage {
     pub surface_id: u64,
     pub role: &'static str,
-    pub geometry: Option<Rectangle<i32, Logical>>,
+    pub geometry: Rectangle<i32, Logical>,
     pub surface: SurfaceMessage,
     pub parent_surface_id: u64,
 }
@@ -239,31 +239,28 @@ impl PopupMessage {
                 EncodableValue::String("parentSurfaceId".to_string()),
                 EncodableValue::Int64(self.parent_surface_id as i64),
             ),
-        ];
-
-        map.extend(self.geometry.map(|geometry| {
             (
                 EncodableValue::String("geometry".to_string()),
                 EncodableValue::Map(vec![
                     (
                         EncodableValue::String("x".to_string()),
-                        EncodableValue::Int64(geometry.loc.x as i64),
+                        EncodableValue::Int64(self.geometry.loc.x as i64),
                     ),
                     (
                         EncodableValue::String("y".to_string()),
-                        EncodableValue::Int64(geometry.loc.y as i64),
+                        EncodableValue::Int64(self.geometry.loc.y as i64),
                     ),
                     (
                         EncodableValue::String("width".to_string()),
-                        EncodableValue::Int64(geometry.size.w as i64),
+                        EncodableValue::Int64(self.geometry.size.w as i64),
                     ),
                     (
                         EncodableValue::String("height".to_string()),
-                        EncodableValue::Int64(geometry.size.h as i64),
+                        EncodableValue::Int64(self.geometry.size.h as i64),
                     ),
                 ]),
-            )
-        }));
+            ),
+        ];
 
         EncodableValue::Map(map)
     }

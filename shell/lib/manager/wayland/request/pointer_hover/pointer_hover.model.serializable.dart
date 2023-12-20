@@ -1,5 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/manager/wayland/request/wayland_request.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
 import 'package:shell/manager/wayland/wayland.manager.dart';
 
 part 'pointer_hover.model.serializable.freezed.dart';
@@ -19,7 +20,7 @@ class PointerHoverRequest extends WaylandRequest {
 class PointerHoverMessage with _$PointerHoverMessage implements WaylandMessage {
   /// Factory
   factory PointerHoverMessage({
-    required int surfaceId,
+    required SurfaceId surfaceId,
     required double x,
     required double y,
   }) = _PointerHoverMessage;
