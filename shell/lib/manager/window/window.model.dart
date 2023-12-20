@@ -1,4 +1,3 @@
-import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
 
@@ -29,10 +28,4 @@ abstract class Window with _$Window {
     required SurfaceId surfaceId,
     required int parentSurfaceId,
   }) = DialogWindow;
-
-  /// Popup
-  const factory Window.popup({
-    required SurfaceId surfaceId,
-    required int parentSurfaceId,
-  }) = PopupWindow;
 }
