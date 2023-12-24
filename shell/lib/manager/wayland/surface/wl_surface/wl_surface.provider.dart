@@ -11,7 +11,7 @@ class WlSurfaceState extends _$WlSurfaceState {
   late final KeepAliveLink _keepAliveLink;
   @override
   WlSurface build(SurfaceId surfaceId) {
-    throw Exception('WlSurface not yet initialized');
+    throw Exception('WlSurface $surfaceId not yet initialized');
   }
 
   void initialize(CommitSurfaceMessage message) {

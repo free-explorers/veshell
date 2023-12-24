@@ -19,7 +19,15 @@ class PersistentWindowTileable extends Tileable {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final window = ref.watch(windowStateProvider(windowId)) as PersistentWindow;
-
+    final dialogWindowIdSet = ref.watch(
+      dialogListForWindowProvider.select((value) => value.get(windowId)),
+    );
+    final dialogWindowList = <DialogWindow>[];
+    for (final windowId in dialogWindowIdSet) {
+      final dialogWindow =
+          ref.read(windowStateProvider(windowId)) as DialogWindow;
+      dialogWindowList.add(dialogWindow);
+    }
     if (window.surfaceId != null) {
       return LayoutBuilder(
         builder: (context, constraints) {
@@ -44,8 +52,18 @@ class PersistentWindowTileable extends Tileable {
                 },
                 [constraints],
               );
-              return XdgToplevelSurfaceWidget(
-                surfaceId: window.surfaceId!,
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  XdgToplevelSurfaceWidget(
+                    surfaceId: window.surfaceId!,
+                  ),
+                  if (dialogWindowList.isNotEmpty)
+                    for (final dialog in dialogWindowList)
+                      XdgToplevelSurfaceWidget(
+                        surfaceId: dialog.surfaceId,
+                      ),
+                ],
               );
             },
           );

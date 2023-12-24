@@ -30,7 +30,7 @@ class XdgToplevelState extends _$XdgToplevelState {
 
   @override
   XdgToplevelSurface build(SurfaceId surfaceId) {
-    throw Exception('XdgToplevelSurface state was not initialized');
+    throw Exception('XdgToplevelSurface $surfaceId state was not initialized');
   }
 
   void initialize(XdgToplevelCommitSurfaceMessage message) {
@@ -41,8 +41,8 @@ class XdgToplevelState extends _$XdgToplevelState {
 
     state = XdgToplevelSurface(
       surfaceId: message.surfaceId,
-      appId: message.appId ?? '',
-      title: message.title ?? '',
+      appId: message.appId ?? 'unkown',
+      title: message.title ?? 'Unkown',
       parentSurfaceId: message.parentSurfaceId,
       geometry: message.geometry ??
           Rect.fromLTWH(

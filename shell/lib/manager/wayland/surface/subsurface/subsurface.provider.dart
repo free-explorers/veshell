@@ -1,25 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/manager/wayland/surface/subsurface/subsurface.dart';
 import 'package:shell/manager/wayland/surface/subsurface/subsurface.model.dart';
 import 'package:shell/manager/wayland/surface/surface.manager.dart';
 import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
 
 part 'subsurface.provider.g.dart';
-
-@Riverpod(keepAlive: true)
-SubsurfaceWidget subsurfaceWidget(
-  SubsurfaceWidgetRef ref,
-  SurfaceId surfaceId,
-) {
-  return SubsurfaceWidget(
-    key: ref.watch(
-      subsurfaceStatesProvider(surfaceId).select((state) => state.widgetKey),
-    ),
-    surfaceId: surfaceId,
-  );
-}
 
 @Riverpod(keepAlive: true)
 class SubsurfaceStates extends _$SubsurfaceStates {
@@ -112,7 +98,6 @@ class SubsurfaceStates extends _$SubsurfaceStates {
   }
 
   void dispose() {
-    ref.invalidate(subsurfaceWidgetProvider(surfaceId));
-    ref.invalidate(subsurfaceStatesProvider(surfaceId));
+    ref.invalidateSelf();
   }
 }

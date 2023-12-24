@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/display/display.widget.dart';
+import 'package:shell/display/monitor/screen/screen.provider.dart';
 import 'package:shell/manager/theme/theme.manager.dart';
 import 'package:shell/manager/wayland/surface/surface.manager.dart';
 import 'package:shell/manager/wayland/wayland.manager.dart';
@@ -22,7 +23,9 @@ void main() {
   container
     ..read(waylandManagerProvider)
     ..read(surfaceManagerProvider)
+    ..read(screenListProvider.notifier).createNewScreen()
     ..read(windowManagerProvider);
+
   VisibilityDetectorController.instance.updateInterval = Duration.zero;
 
   runApp(

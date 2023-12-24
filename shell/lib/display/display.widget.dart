@@ -15,7 +15,9 @@ class DisplayWidget extends HookConsumerWidget {
       children: [
         for (final monitor in monitorList)
           ProviderScope(
-            overrides: [currentMonitorProvider.overrideWith((ref) => monitor)],
+            overrides: [
+              currentMonitorProvider.overrideWith((ref) => monitor.monitorId),
+            ],
             child: const MonitorWidget(),
           ),
       ],

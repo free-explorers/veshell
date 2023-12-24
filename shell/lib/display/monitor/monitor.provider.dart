@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/display/display.provider.dart';
 import 'package:shell/display/monitor/monitor.model.dart';
+import 'package:uuid/uuid.dart';
 
 part 'monitor.provider.g.dart';
 
 /// Provide the current Monitor to all his childrens
 @Riverpod(dependencies: [])
-Monitor currentMonitor(CurrentMonitorRef ref) {
+MonitorId currentMonitor(CurrentMonitorRef ref) {
   // This provider is instentatied in Children Scope
   throw Exception('Provider was not initialized');
 }
@@ -16,5 +17,17 @@ Monitor currentMonitor(CurrentMonitorRef ref) {
 @riverpod
 List<Monitor> monitorList(MonitorListRef ref) {
   final display = ref.watch(currentDisplayProvider);
-  return [Monitor(surface: Offset.zero & display.size)];
+  return [
+    Monitor(monitorId: const Uuid().v4(), surface: Offset.zero & display.size),
+  ];
+}
+
+/// Monitor provider
+@riverpod
+class MonitorState extends _$MonitorState {
+  @override
+  Monitor build(MonitorId monitorId) {
+    final list = ref.watch(monitorListProvider);
+    return list.firstWhere((element) => monitorId == element.monitorId);
+  }
 }

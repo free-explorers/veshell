@@ -24,7 +24,7 @@ class XdgPopupState extends _$XdgPopupState {
 
   @override
   XdgPopupSurface build(SurfaceId surfaceId) {
-    throw Exception('XdgPopupSurface state was not initialized');
+    throw Exception('XdgPopupSurface $surfaceId state was not initialized');
   }
 
   void initialize(XdgPopupCommitSurfaceMessage message) {
@@ -43,6 +43,7 @@ class XdgPopupState extends _$XdgPopupState {
             message.surface.bufferSize?.height ?? 0.0,
           ),
     );
+
     ref.read(popupListForSurfaceProvider.notifier).add(
           message.parentSurfaceId,
           message.surfaceId,

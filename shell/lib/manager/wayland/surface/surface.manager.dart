@@ -99,14 +99,16 @@ class SurfaceManager extends _$SurfaceManager {
     }
   }
 
-  _onNewSurface(CommitSurfaceMessage message) {
-    print('New surface: ${message.surfaceId}');
-    state = state.add(message.surfaceId);
-    if (message.surface != null) {
-      ref.read(wlSurfaceStateProvider(message.surfaceId).notifier).initialize(
-            message,
-          );
+  void _onNewSurface(CommitSurfaceMessage message) {
+    print('New surface: ${message.surfaceId} ${message.role}');
+    if (message.surface == null) {
+      return;
     }
+    state = state.add(message.surfaceId);
+    ref.read(wlSurfaceStateProvider(message.surfaceId).notifier).initialize(
+          message,
+        );
+
     if (message is XdgToplevelCommitSurfaceMessage) {
       ref.read(xdgToplevelStateProvider(message.surfaceId).notifier).initialize(
             message,
@@ -120,10 +122,6 @@ class SurfaceManager extends _$SurfaceManager {
     if (message is XdgPopupCommitSurfaceMessage) {
       ref.read(xdgPopupStateProvider(message.surfaceId).notifier).initialize(
             message,
-          );
-
-      ref.read(newXdgPopupSurfaceProvider.notifier).notify(
-            message.surfaceId,
           );
     }
   }
@@ -171,21 +169,6 @@ class NewXdgToplevelSurface extends _$NewXdgToplevelSurface {
 }
 
 @Riverpod(keepAlive: true)
-class NewXdgPopupSurface extends _$NewXdgPopupSurface {
-  final _streamController = StreamController<int>();
-
-  /// Build the stream of [int]
-  @override
-  Stream<int> build() {
-    return _streamController.stream;
-  }
-
-  void notify(SurfaceId surfaceId) {
-    _streamController.sink.add(surfaceId);
-  }
-}
-
-@Riverpod(keepAlive: true)
 class PopupListForSurface extends _$PopupListForSurface {
   @override
   IMapOfSets<SurfaceId, SurfaceId> build() {
@@ -193,10 +176,14 @@ class PopupListForSurface extends _$PopupListForSurface {
   }
 
   void add(SurfaceId parentSurfaceId, SurfaceId surfaceId) {
-    state = state.add(parentSurfaceId, surfaceId);
+    final rootParent =
+        state.getKeyWithValue(parentSurfaceId) ?? parentSurfaceId;
+    state = state.add(rootParent, surfaceId);
   }
 
   void remove(SurfaceId parentSurfaceId, SurfaceId surfaceId) {
-    state = state.remove(parentSurfaceId, surfaceId);
+    final rootParent =
+        state.getKeyWithValue(parentSurfaceId) ?? parentSurfaceId;
+    state = state.remove(rootParent, surfaceId);
   }
 }

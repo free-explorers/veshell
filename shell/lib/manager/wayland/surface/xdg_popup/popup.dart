@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/manager/wayland/surface/surface.manager.dart';
 import 'package:shell/manager/wayland/surface/wl_surface/surface.dart';
 import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
 import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.provider.dart';
@@ -23,7 +24,7 @@ class PopupWidget extends StatelessWidget {
   }
 }
 
-class _Positioner extends ConsumerWidget {
+class _Positioner extends HookConsumerWidget {
   const _Positioner({
     required this.surfaceId,
     required this.child,
@@ -33,24 +34,25 @@ class _Positioner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Consumer(
-      builder: (_, WidgetRef ref, Widget? child) {
-        final position = ref.watch(
-          xdgPopupStateProvider(surfaceId).select((v) => v.geometry.topLeft),
-        );
+    final position = ref.watch(
+      xdgPopupStateProvider(surfaceId).select((v) => v.geometry.topLeft),
+    );
 
-        final parentId = ref.watch(
-          xdgPopupStateProvider(surfaceId).select((v) => v.parentSurfaceId),
-        );
+    final parentId = ref.watch(
+      xdgPopupStateProvider(surfaceId).select((v) => v.parentSurfaceId),
+    );
+    var parentPosition = Offset.zero;
+    if (ref.read(popupListForSurfaceProvider).containsValue(parentId)) {
+      parentPosition = ref.read(
+        xdgPopupStateProvider(parentId).select((v) => v.geometry.topLeft),
+      );
+    }
 
-        final offset = position;
+    final offset = parentPosition + position;
 
-        return Positioned(
-          left: offset.dx,
-          top: offset.dy,
-          child: child!,
-        );
-      },
+    return Positioned(
+      left: offset.dx,
+      top: offset.dy,
       child: child,
     );
   }

@@ -18,6 +18,8 @@ class WorkspaceWidget extends HookConsumerWidget {
     final currentWorkspaceId = ref.watch(currentWorkspaceIdProvider);
     final workspaceState =
         ref.watch(workspaceStateProvider(currentWorkspaceId));
+    final workspaceStateNotifier =
+        ref.watch(workspaceStateProvider(currentWorkspaceId).notifier);
     final appLauncher = PersistentApplicationSelector(
       onSelect: (entry) {
         print('start ${entry.desktopEntry.id}');
@@ -40,16 +42,18 @@ class WorkspaceWidget extends HookConsumerWidget {
     }
     tileableList.add(appLauncher);
 
-    final tabIndex = useState(0);
     final tabController = useTabController(
+      initialIndex: workspaceState.focusedIndex,
       initialLength: tileableList.length,
-      keys: [workspaceState],
+      keys: [workspaceState.tileableWindowList.length],
     );
 
     useEffect(
       () {
         tabController.addListener(() {
-          tabIndex.value = tabController.index;
+          ref
+              .read(workspaceStateProvider(currentWorkspaceId).notifier)
+              .setFocusedIndex(tabController.index);
         });
         return null;
       },
