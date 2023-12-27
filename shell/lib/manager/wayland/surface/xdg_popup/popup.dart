@@ -38,17 +38,20 @@ class _Positioner extends HookConsumerWidget {
       xdgPopupStateProvider(surfaceId).select((v) => v.geometry.topLeft),
     );
 
-    final parentId = ref.watch(
+    final firstParentId = ref.watch(
       xdgPopupStateProvider(surfaceId).select((v) => v.parentSurfaceId),
     );
-    var parentPosition = Offset.zero;
-    if (ref.read(popupListForSurfaceProvider).containsValue(parentId)) {
-      parentPosition = ref.read(
-        xdgPopupStateProvider(parentId).select((v) => v.geometry.topLeft),
-      );
-    }
+    var offset = position;
+    var parentId = firstParentId;
 
-    final offset = parentPosition + position;
+    // Sum recursively parent position until we reach the toplevel
+    while (ref.read(popupListForSurfaceProvider).containsValue(parentId)) {
+      final parent = ref.read(
+        xdgPopupStateProvider(parentId),
+      );
+      offset += parent.geometry.topLeft;
+      parentId = parent.parentSurfaceId;
+    }
 
     return Positioned(
       left: offset.dx,
