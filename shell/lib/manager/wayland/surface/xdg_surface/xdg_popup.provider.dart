@@ -34,7 +34,7 @@ class XdgPopupState extends _$XdgPopupState {
     });
     state = XdgPopupSurface(
       surfaceId: message.surfaceId,
-      parentSurfaceId: message.parentSurfaceId,
+      parentSurfaceId: message.parentSurfaceId!,
       geometry: message.geometry ??
           Rect.fromLTWH(
             message.surface.bufferDelta?.dx ?? 0.0,
@@ -45,14 +45,14 @@ class XdgPopupState extends _$XdgPopupState {
     );
 
     ref.read(popupListForSurfaceProvider.notifier).add(
-          message.parentSurfaceId,
+          message.parentSurfaceId!,
           message.surfaceId,
         );
   }
 
   void onCommit(XdgPopupCommitSurfaceMessage message) {
     state = state.copyWith(
-      parentSurfaceId: message.parentSurfaceId,
+      parentSurfaceId: message.parentSurfaceId ?? state.parentSurfaceId,
       geometry: message.geometry ??
           Rect.fromLTWH(
             message.surface.bufferDelta?.dx ?? 0.0,

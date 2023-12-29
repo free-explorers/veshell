@@ -217,7 +217,7 @@ pub struct PopupMessage {
     pub role: &'static str,
     pub geometry: Rectangle<i32, Logical>,
     pub surface: SurfaceMessage,
-    pub parent_surface_id: u64,
+    pub parent_surface_id: Option<u64>,
 }
 
 impl PopupMessage {
@@ -234,10 +234,6 @@ impl PopupMessage {
             (
                 EncodableValue::String("surface".to_string()),
                 self.surface.serialize(),
-            ),
-            (
-                EncodableValue::String("parentSurfaceId".to_string()),
-                EncodableValue::Int64(self.parent_surface_id as i64),
             ),
             (
                 EncodableValue::String("geometry".to_string()),
@@ -261,6 +257,13 @@ impl PopupMessage {
                 ]),
             ),
         ];
+
+        if let Some(parent_surface_id) = self.parent_surface_id {
+            map.push((
+                EncodableValue::String("parentSurfaceId".to_string()),
+                EncodableValue::Int64(parent_surface_id as i64),
+            ));
+        }
 
         EncodableValue::Map(map)
     }

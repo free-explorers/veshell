@@ -39,7 +39,7 @@ class SurfaceMessage with _$SurfaceMessage {
 class CommitSurfaceMessage
     with _$CommitSurfaceMessage
     implements WaylandMessage {
-  /// Factory for xdgToplevel
+  /// Factory for Simple
   const factory CommitSurfaceMessage.simple({
     required SurfaceId surfaceId,
     required SurfaceRole role,
@@ -62,7 +62,7 @@ class CommitSurfaceMessage
     required SurfaceId surfaceId,
     required SurfaceMessage surface,
     required SurfaceRole role,
-    required SurfaceId parentSurfaceId,
+    SurfaceId? parentSurfaceId,
     @RectConverter() Rect? geometry,
   }) = XdgPopupCommitSurfaceMessage;
 

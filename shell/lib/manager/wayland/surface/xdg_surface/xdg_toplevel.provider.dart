@@ -38,7 +38,7 @@ class XdgToplevelState extends _$XdgToplevelState {
     ref.onDispose(() {
       print('disposing XdgToplevelStateProvider $surfaceId');
     });
-
+    print('initializing XdgToplevelStateProvider $surfaceId ${message.appId}');
     state = XdgToplevelSurface(
       surfaceId: message.surfaceId,
       appId: message.appId ?? 'unkown',

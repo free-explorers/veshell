@@ -592,7 +592,7 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                         .unwrap();
                     (
                         surface_state.initial_configure_sent,
-                        surface_state.parent.clone().unwrap(),
+                        surface_state.parent.clone(),
                     )
                 });
 
@@ -604,12 +604,18 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                     popup.send_configure().expect("initial configure failed");
                 }
 
+                let parent_id = if let Some(ref parent) = parent {
+                    Some(get_surface_id(&parent))
+                } else {
+                    None
+                };
+
                 PopupMessage {
                     surface_id: surface_message.surface_id,
                     role: xdg::XDG_POPUP_ROLE,
                     surface: surface_message,
                     geometry: popup.with_pending_state(|state| state.positioner.get_geometry()),
-                    parent_surface_id: get_surface_id(&parent),
+                    parent_surface_id: parent_id,
                 }
             }
             .serialize(),

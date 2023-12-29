@@ -120,6 +120,11 @@ class SurfaceManager extends _$SurfaceManager {
     }
 
     if (message is XdgPopupCommitSurfaceMessage) {
+      if (message.parentSurfaceId == null) {
+        print('Parent surface is null: ${message.surfaceId} ${message.role}');
+
+        return;
+      }
       ref.read(xdgPopupStateProvider(message.surfaceId).notifier).initialize(
             message,
           );
