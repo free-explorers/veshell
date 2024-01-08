@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/display/display.widget.dart';
-import 'package:shell/manager/platform_api/platform_api.provider.dart';
+import 'package:shell/display/monitor/screen/screen.provider.dart';
+import 'package:shell/manager/theme/theme.manager.dart';
+import 'package:shell/manager/wayland/surface/surface.manager.dart';
+import 'package:shell/manager/wayland/wayland.manager.dart';
+import 'package:shell/manager/window/window.manager.dart';
 import 'package:shell/shared/util/root_overlay.provider.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
@@ -12,13 +16,15 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   final container = ProviderContainer();
 
-  final platformApi = container.read(platformApiProvider.notifier);
-
   SchedulerBinding.instance.addPostFrameCallback((_) {
     //platformApi.startupComplete();
   });
 
-  container.read(platformApiProvider.notifier).init();
+  container
+    ..read(waylandManagerProvider)
+    ..read(surfaceManagerProvider)
+    ..read(screenListProvider.notifier).createNewScreen()
+    ..read(windowManagerProvider);
 
   VisibilityDetectorController.instance.updateInterval = Duration.zero;
 
@@ -35,7 +41,9 @@ class Veshell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(themeProvider);
     return MaterialApp(
+      theme: theme,
       home: Scaffold(
         body: Consumer(
           builder: (

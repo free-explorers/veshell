@@ -1,26 +1,27 @@
-import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+/* import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.provider.dart';
+import 'package:shell/manager/wayland/surface/xdg_surface/xdg_surface.provider.dart';
+import 'package:shell/manager/wayland/surface/xdg_toplevel/xdg_toplevel.model.dart';
+import 'package:shell/manager/wayland/surface/xdg_toplevel/xdg_toplevel.provider.dart';
 import 'package:shell/shared/state/cursor_position/cursor_position.provider.dart';
 import 'package:shell/shared/state/window_move/window_move.provider.dart';
 import 'package:shell/shared/state/window_position/window_position.provider.dart';
 import 'package:shell/shared/state/window_resize/window_resize.provider.dart';
 import 'package:shell/shared/state/window_stack/window_stack.provider.dart';
 import 'package:shell/shared/state/window_state/window_state.provider.dart';
-import 'package:shell/shared/wayland/surface/surface.provider.dart';
-import 'package:shell/shared/wayland/xdg_surface/xdg_surface.provider.dart';
-import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.model.dart';
-import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.provider.dart';
 
 const duration = Duration(milliseconds: 300);
 
 class Window extends ConsumerStatefulWidget {
   const Window({
-    required this.viewId,
+    required this.surfaceId,
     super.key,
   });
-  final int viewId;
+  final SurfaceId surfaceId;
 
   @override
   ConsumerState<Window> createState() => _WindowState();
@@ -37,8 +38,10 @@ class _WindowState extends ConsumerState<Window>
   void spawnWindowAtCursor() {
     Future.microtask(() {
       final center = ref.read(cursorPositionProvider);
-      final visibleBounds =
-          ref.read(xdgSurfaceStatesProvider(widget.viewId)).visibleBounds.size;
+      final visibleBounds = ref
+          .read(xdgSurfaceStatesProvider(widget.surfaceId))
+          .visibleBounds
+          .size;
       var windowRect = Rect.fromCenter(
         center: center,
         width: visibleBounds.width,
@@ -47,7 +50,7 @@ class _WindowState extends ConsumerState<Window>
 
       final desktopSize = ref
           .read(windowStackProvider)
-          .desktopSize; // Offset windowPosition = ref.read(windowPositionProvider(widget.viewId));
+          .desktopSize; // Offset windowPosition = ref.read(windowPositionProvider(widget.surfaceId));
       final desktopRect = Offset.zero & desktopSize;
 
       var dx = windowRect.right.clamp(desktopRect.left, desktopRect.right) -
@@ -62,7 +65,7 @@ class _WindowState extends ConsumerState<Window>
           windowRect.top;
       windowRect = windowRect.translate(dx, dy);
 
-      ref.read(windowPositionProvider(widget.viewId).notifier).state =
+      ref.read(windowPositionProvider(widget.surfaceId).notifier).state =
           windowRect.topLeft;
     });
   }
@@ -71,26 +74,27 @@ class _WindowState extends ConsumerState<Window>
   Widget build(BuildContext context) {
     ref
       ..listen(
-          xdgSurfaceStatesProvider(widget.viewId)
+          xdgSurfaceStatesProvider(widget.surfaceId)
               .select((v) => v.visibleBounds), (Rect? previous, Rect next) {
         if (previous != null) {
           final offset = ref
-              .read(windowResizeProvider(widget.viewId).notifier)
+              .read(windowResizeProvider(widget.surfaceId).notifier)
               .computeWindowOffset(previous.size, next.size);
           ref
-              .read(windowPositionProvider(widget.viewId).notifier)
+              .read(windowPositionProvider(widget.surfaceId).notifier)
               .update((state) => state + offset);
         }
       })
-      ..listen(windowMoveProvider(widget.viewId).select((v) => v.movedPosition),
+      ..listen(
+          windowMoveProvider(widget.surfaceId).select((v) => v.movedPosition),
           (_, Offset position) {
-        ref.read(windowPositionProvider(widget.viewId).notifier).state =
+        ref.read(windowPositionProvider(widget.surfaceId).notifier).state =
             position;
       });
 
     return Consumer(
       builder: (BuildContext context, WidgetRef ref, Widget? child) {
-        final position = ref.watch(windowPositionProvider(widget.viewId));
+        final position = ref.watch(windowPositionProvider(widget.surfaceId));
         const offset = Offset.zero;
 
         return Positioned(
@@ -100,13 +104,13 @@ class _WindowState extends ConsumerState<Window>
         );
       },
       child: _OpenCloseAnimations(
-        viewId: widget.viewId,
+        surfaceId: widget.surfaceId,
         child: RepaintBoundary(
           key: ref.watch(
-            windowStateProvider(widget.viewId)
+            windowStateProvider(widget.surfaceId)
                 .select((value) => value.repaintBoundaryKey),
           ),
-          child: ref.watch(xdgToplevelSurfaceWidgetProvider(widget.viewId)),
+          child: ref.watch(xdgToplevelSurfaceWidgetProvider(widget.surfaceId)),
         ),
       ),
     );
@@ -115,10 +119,10 @@ class _WindowState extends ConsumerState<Window>
 
 class _OpenCloseAnimations extends ConsumerStatefulWidget {
   const _OpenCloseAnimations({
-    required this.viewId,
+    required this.surfaceId,
     required this.child,
   });
-  final int viewId;
+  final SurfaceId surfaceId;
   final Widget child;
 
   @override
@@ -134,7 +138,8 @@ class _OpenCloseAnimationsState extends ConsumerState<_OpenCloseAnimations> {
     ref.listen(windowStackProvider.select((v) => v.animateClosing),
         (ISet<int>? previous, ISet<int> next) async {
       previous ??= ISet();
-      if (!previous.contains(widget.viewId) && next.contains(widget.viewId)) {
+      if (!previous.contains(widget.surfaceId) &&
+          next.contains(widget.surfaceId)) {
         setState(() {
           forward = false;
         });
@@ -146,8 +151,8 @@ class _OpenCloseAnimationsState extends ConsumerState<_OpenCloseAnimations> {
         return IgnorePointer(
           ignoring: ref
               .watch(windowStackProvider.select((v) => v.animateClosing))
-              .contains(widget.viewId),
-          child: child!,
+              .contains(widget.surfaceId),
+          child: child,
         );
       },
       child: TweenAnimationBuilder(
@@ -175,7 +180,7 @@ class _OpenCloseAnimationsState extends ConsumerState<_OpenCloseAnimations> {
           child: widget.child,
           onEnd: () {
             if (!forward) {
-              ref.read(windowStackProvider.notifier).remove(widget.viewId);
+              ref.read(windowStackProvider.notifier).remove(widget.surfaceId);
             }
           },
         ),
@@ -186,10 +191,10 @@ class _OpenCloseAnimationsState extends ConsumerState<_OpenCloseAnimations> {
 
 class _TilingAnimations extends ConsumerStatefulWidget {
   const _TilingAnimations({
-    required this.viewId,
+    required this.surfaceId,
     required this.child,
   });
-  final int viewId;
+  final SurfaceId surfaceId;
   final Widget child;
 
   @override
@@ -205,7 +210,7 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
   //   duration: const Duration(milliseconds: 200),
   // )..addStatusListener((status) {
   //     if (status == AnimationStatus.completed) {
-  //       ref.read(windowStateProvider(widget.viewId).notifier).setSnapshot(null);
+  //       ref.read(windowStateProvider(widget.surfaceId).notifier).setSnapshot(null);
   //     }
   //   });
 
@@ -230,20 +235,20 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 
   @override
   Widget build(BuildContext context) {
-    final viewId = widget.viewId;
+    final surfaceId = widget.surfaceId;
 
-    final surfaceSize =
-        ref.watch(surfaceStatesProvider(viewId).select((v) => v.surfaceSize));
+    final surfaceSize = ref
+        .watch(wlSurfaceStateProvider(surfaceId).select((v) => v.surfaceSize));
 
     ref
-      ..listen(surfaceStatesProvider(viewId).select((v) => v.surfaceSize),
+      ..listen(wlSurfaceStateProvider(surfaceId).select((v) => v.surfaceSize),
           (previous, next) {
         oldSurfaceSize = previous ?? next;
       })
 
       // print(size);
 
-      // ref.listen(surfaceStatesProvider(viewId).select((v) => v.surfaceSize), (previous, next) {
+      // ref.listen(wlSurfaceStateProvider(surfaceId).select((v) => v.surfaceSize), (previous, next) {
       //   sizeTween.begin = previous ?? next;
       //   sizeTween.end = next;
       //
@@ -252,7 +257,7 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
       //     ..forward();
       // });
       ..listen(
-          xdgToplevelStatesProvider(viewId)
+          xdgToplevelStatesProvider(surfaceId)
               .select((value) => value.tilingRequested),
           (previous, next) async {
         if (previous == next) {
@@ -260,14 +265,15 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
         }
 
         if (next == Tiling.maximized) {
-          ref.read(windowPositionProvider(viewId).notifier).state = Offset.zero;
+          ref.read(windowPositionProvider(surfaceId).notifier).state =
+              Offset.zero;
         } else {
-          ref.read(windowPositionProvider(viewId).notifier).state =
+          ref.read(windowPositionProvider(surfaceId).notifier).state =
               const Offset(500, 500);
         }
 
         final renderObjectKey =
-            ref.read(windowStateProvider(viewId)).repaintBoundaryKey;
+            ref.read(windowStateProvider(surfaceId)).repaintBoundaryKey;
         final boundary = renderObjectKey.currentContext?.findRenderObject()
             as RenderRepaintBoundary?;
         if (boundary == null) {
@@ -275,10 +281,10 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
         }
 
         final image = boundary.toImageSync();
-        ref.read(windowStateProvider(viewId).notifier).setSnapshot(image);
+        ref.read(windowStateProvider(surfaceId).notifier).setSnapshot(image);
       });
 
-    final snapshot = ref.read(windowStateProvider(viewId)).snapshot;
+    final snapshot = ref.read(windowStateProvider(surfaceId)).snapshot;
 
     if (snapshot == null) {
       print('snapshot not ready');
@@ -358,7 +364,7 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
             ),
             onEnd: () {
               ref
-                  .read(windowStateProvider(widget.viewId).notifier)
+                  .read(windowStateProvider(widget.surfaceId).notifier)
                   .setSnapshot(null);
             },
           ),
@@ -415,19 +421,19 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 // part 'window.g.dart';
 //
 // @Riverpod(keepAlive: true)
-// Window windowWidget(WindowWidgetRef ref, int viewId) {
+// Window windowWidget(WindowWidgetRef ref, SurfaceId surfaceId) {
 //   return Window(
 //     key: GlobalKey(),
-//     viewId: viewId,
+//     surfaceId: surfaceId,
 //   );
 // }
 //
 // class Window extends ConsumerStatefulWidget {
-//   final int viewId;
+//   final SurfaceId surfaceId;
 //
 //   const Window({
 //     super.key,
-//     required this.viewId,
+//     required this.surfaceId,
 //   });
 //
 //   @override
@@ -444,14 +450,14 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 //   void spawnWindowAtCursor() {
 //     Future.microtask(() {
 //       Offset center = ref.read(cursorPositionProvider);
-//       Size surfaceSize = ref.read(surfaceStatesProvider(widget.viewId)).surfaceSize;
+//       Size surfaceSize = ref.read(wlSurfaceStateProvider(widget.surfaceId)).surfaceSize;
 //       Rect windowRect = Rect.fromCenter(
 //         center: center,
 //         width: surfaceSize.width,
 //         height: surfaceSize.height,
 //       );
 //
-//       Size desktopSize = ref.read(windowStackProvider).desktopSize;// Offset windowPosition = ref.read(windowPositionProvider(widget.viewId));
+//       Size desktopSize = ref.read(windowStackProvider).desktopSize;// Offset windowPosition = ref.read(windowPositionProvider(widget.surfaceId));
 //       Rect desktopRect = Offset.zero & desktopSize;
 //
 //       double dx = windowRect.right.clamp(desktopRect.left, desktopRect.right) - windowRect.right;
@@ -462,30 +468,30 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 //       dy = windowRect.top.clamp(desktopRect.top, desktopRect.bottom) - windowRect.top;
 //       windowRect = windowRect.translate(dx, dy);
 //
-//       ref.read(windowPositionProvider(widget.viewId).notifier).state = windowRect.topLeft;
+//       ref.read(windowPositionProvider(widget.surfaceId).notifier).state = windowRect.topLeft;
 //     });
 //   }
 //
 //   @override
 //   Widget build(BuildContext context) {
-//     ref.listen(xdgSurfaceStatesProvider(widget.viewId).select((v) => v.visibleBounds), (Rect? previous, Rect next) {
+//     ref.listen(xdgSurfaceStatesProvider(widget.surfaceId).select((v) => v.visibleBounds), (Rect? previous, Rect next) {
 //       if (previous != null) {
 //         Offset offset =
-//             ref.read(windowResizeProvider(widget.viewId).notifier).computeWindowOffset(previous.size, next.size);
-//         ref.read(windowPositionProvider(widget.viewId).notifier).update((state) => state + offset);
+//             ref.read(windowResizeProvider(widget.surfaceId).notifier).computeWindowOffset(previous.size, next.size);
+//         ref.read(windowPositionProvider(widget.surfaceId).notifier).update((state) => state + offset);
 //       }
 //     });
 //
-//     ref.listen(windowMoveProvider(widget.viewId).select((v) => v.movedPosition), (_, Offset position) {
-//       ref.read(windowPositionProvider(widget.viewId).notifier).state = position;
+//     ref.listen(windowMoveProvider(widget.surfaceId).select((v) => v.movedPosition), (_, Offset position) {
+//       ref.read(windowPositionProvider(widget.surfaceId).notifier).state = position;
 //     });
 //
 //     // Initialize the provider because it listens to events from other providers.
-//     ref.read(virtualKeyboardStateNotifierProvider(widget.viewId));
+//     ref.read(virtualKeyboardStateNotifierProvider(widget.surfaceId));
 //
 //     return Consumer(
 //       builder: (BuildContext context, WidgetRef ref, Widget? child) {
-//         final offset = ref.watch(windowPositionProvider(widget.viewId));
+//         final offset = ref.watch(windowPositionProvider(widget.surfaceId));
 //         return Positioned(
 //           left: offset.dx,
 //           top: offset.dy,
@@ -493,16 +499,16 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 //         );
 //       },
 //       child: _OpenCloseAnimations(
-//         viewId: widget.viewId,
+//         surfaceId: widget.surfaceId,
 //         child: _TilingAnimations(
-//           viewId: widget.viewId,
+//           surfaceId: widget.surfaceId,
 //           child: RepaintBoundary(
-//             key: ref.watch(windowStateProvider(widget.viewId).select((value) => value.repaintBoundaryKey)),
+//             key: ref.watch(windowStateProvider(widget.surfaceId).select((value) => value.repaintBoundaryKey)),
 //             child: WithDecorations(
-//               viewId: widget.viewId,
+//               surfaceId: widget.surfaceId,
 //               child: InteractiveMoveAndResizeListener(
-//                 viewId: widget.viewId,
-//                 child: ref.watch(xdgToplevelSurfaceWidgetProvider(widget.viewId)),
+//                 surfaceId: widget.surfaceId,
+//                 child: ref.watch(xdgToplevelSurfaceWidgetProvider(widget.surfaceId)),
 //               ),
 //             ),
 //           ),
@@ -513,11 +519,11 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 // }
 //
 // class _OpenCloseAnimations extends ConsumerStatefulWidget {
-//   final int viewId;
+//   final SurfaceId surfaceId;
 //   final Widget child;
 //
 //   const _OpenCloseAnimations({
-//     required this.viewId,
+//     required this.surfaceId,
 //     required this.child,
 //   });
 //
@@ -558,16 +564,16 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 //   Widget build(BuildContext context) {
 //     ref.listen(windowStackProvider.select((v) => v.animateClosing), (ISet<int>? previous, ISet<int> next) async {
 //       previous ??= ISet();
-//       if (!previous.contains(widget.viewId) && next.contains(widget.viewId)) {
+//       if (!previous.contains(widget.surfaceId) && next.contains(widget.surfaceId)) {
 //         await controller.reverse().orCancel;
-//         ref.read(windowStackProvider.notifier).remove(widget.viewId);
+//         ref.read(windowStackProvider.notifier).remove(widget.surfaceId);
 //       }
 //     });
 //
 //     return Consumer(
 //       builder: (context, ref, child) {
 //         return IgnorePointer(
-//           ignoring: ref.watch(windowStackProvider.select((v) => v.animateClosing)).contains(widget.viewId),
+//           ignoring: ref.watch(windowStackProvider.select((v) => v.animateClosing)).contains(widget.surfaceId),
 //           child: child!,
 //         );
 //       },
@@ -597,11 +603,11 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 // }
 //
 // class _TilingAnimations extends ConsumerStatefulWidget {
-//   final int viewId;
+//   final SurfaceId surfaceId;
 //   final Widget child;
 //
 //   const _TilingAnimations({
-//     required this.viewId,
+//     required this.surfaceId,
 //     required this.child,
 //   });
 //
@@ -615,7 +621,7 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 //     duration: const Duration(milliseconds: 1000),
 //   )..addStatusListener((status) {
 //       if (status == AnimationStatus.completed) {
-//         ref.read(windowStateProvider(widget.viewId).notifier).setSnapshot(null);
+//         ref.read(windowStateProvider(widget.surfaceId).notifier).setSnapshot(null);
 //       }
 //     });
 //
@@ -640,11 +646,11 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 //
 //   @override
 //   Widget build(BuildContext context) {
-//     final int viewId = widget.viewId;
+//     final SurfaceId surfaceId = widget.surfaceId;
 //
-//     Size surfaceSize = ref.watch(surfaceStatesProvider(viewId).select((v) => v.surfaceSize));
+//     Size surfaceSize = ref.watch(wlSurfaceStateProvider(surfaceId).select((v) => v.surfaceSize));
 //
-//     ref.listen(surfaceStatesProvider(viewId).select((v) => v.surfaceSize), (previous, next) {
+//     ref.listen(wlSurfaceStateProvider(surfaceId).select((v) => v.surfaceSize), (previous, next) {
 //       sizeTween.begin = previous ?? next;
 //       sizeTween.end = next;
 //
@@ -653,22 +659,22 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 //         ..forward();
 //     });
 //
-//     ref.listen(xdgToplevelStatesProvider(viewId).select((value) => value.tilingRequested), (previous, next) async {
+//     ref.listen(xdgToplevelStatesProvider(surfaceId).select((value) => value.tilingRequested), (previous, next) async {
 //       if (previous == next) {
 //         return;
 //       }
 //
-//       final renderObjectKey = ref.read(windowStateProvider(viewId)).repaintBoundaryKey;
+//       final renderObjectKey = ref.read(windowStateProvider(surfaceId)).repaintBoundaryKey;
 //       RenderRepaintBoundary? boundary = renderObjectKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
 //       if (boundary == null) {
 //         return;
 //       }
 //
 //       final image = boundary.toImageSync();
-//       ref.read(windowStateProvider(viewId).notifier).setSnapshot(image);
+//       ref.read(windowStateProvider(surfaceId).notifier).setSnapshot(image);
 //     });
 //
-//     ui.Image? snapshot = ref.read(windowStateProvider(viewId)).snapshot;
+//     ui.Image? snapshot = ref.read(windowStateProvider(surfaceId)).snapshot;
 //
 //     if (snapshot == null) {
 //       print("snapshot not ready");
@@ -720,3 +726,4 @@ class _TilingAnimationsState extends ConsumerState<_TilingAnimations>
 //     );
 //   }
 // }
+ */

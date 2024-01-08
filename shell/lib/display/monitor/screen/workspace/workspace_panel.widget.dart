@@ -13,8 +13,11 @@ class WorkspacePanel extends HookConsumerWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
     return Material(
-      color: const Color.fromARGB(255, 25, 25, 25),
+      color: theme.colorScheme.brightness == Brightness.dark
+          ? theme.colorScheme.surface
+          : theme.colorScheme.primary,
       child: SizedBox(
         height: 48,
         child: TabBar.secondary(

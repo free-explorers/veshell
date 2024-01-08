@@ -19,8 +19,6 @@ void main(List<String> arguments) async {
     Directory.current = Directory.current.parent;
   }
 
-  await _flushThenExit(await VeshellCommandRunner().run(arguments));
-
   // Listen for termination signal
   ProcessSignal.sigterm.watch().listen((_) {
     for (final process in processSet) {
@@ -28,6 +26,8 @@ void main(List<String> arguments) async {
     }
     exit(0);
   });
+
+  await _flushThenExit(await VeshellCommandRunner().run(arguments));
 }
 
 /// Flushes the stdout and stderr streams, then exits the program with the given

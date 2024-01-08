@@ -1,22 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/display/monitor/screen/workspace/tileable/persistent_application_launcher/app_drawer/app_drawer.provider.dart';
+import 'package:shell/manager/application/app_drawer.provider.dart';
 import 'package:shell/manager/application/app_icon.dart';
-import 'package:shell/shared/util/app_launch.dart';
 
-class AppGrid extends ConsumerStatefulWidget {
-  const AppGrid({super.key});
+/// Desktop entry selected callback
+typedef DesktopEntrySelectedCallback = void Function(
+  LocalizedDesktopEntry desktopEntry,
+);
+
+/// Application grid
+class AppGrid extends HookConsumerWidget {
+  /// Const constructor
+  const AppGrid({required this.onSelect, super.key});
+
+  /// Desktop entry selected callback
+  final DesktopEntrySelectedCallback onSelect;
 
   @override
-  ConsumerState<AppGrid> createState() => _AppGridState();
-}
-
-class _AppGridState extends ConsumerState<AppGrid> {
-  @override
-  Widget build(BuildContext context) {
-    final widgets = ref.watch(appEntryWidgetProvider);
-
+  Widget build(BuildContext context, WidgetRef ref) {
+    final desktopEntries = ref.watch(appDrawerFilteredDesktopEntriesProvider);
+    final widgets = desktopEntries.maybeWhen(
+      skipLoadingOnReload: true,
+      data: (List<LocalizedDesktopEntry> desktopEntries) => desktopEntries
+          .map(
+            (desktopEntry) => AppEntry(
+              desktopEntry: desktopEntry,
+              onLaunch: onSelect,
+            ),
+          )
+          .toList(),
+      orElse: () => <Widget>[],
+    );
     return Material(
       color: Colors.transparent,
       child: GridView.builder(
@@ -32,20 +47,26 @@ class _AppGridState extends ConsumerState<AppGrid> {
   }
 }
 
+/// Application entry
 class AppEntry extends ConsumerWidget {
+  /// Const constructor
   const AppEntry({
     required this.desktopEntry,
+    required this.onLaunch,
     super.key,
   });
+
+  /// Desktop entry
   final LocalizedDesktopEntry desktopEntry;
 
+  /// Desktop entry selected callback
+  final DesktopEntrySelectedCallback onLaunch;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return InkWell(
       onTap: () async {
-        if (await launchDesktopEntry(desktopEntry.desktopEntry)) {
-          ref.read(appDrawerVisibleProvider.notifier).state = false;
-        }
+        //await launchDesktopEntry(desktopEntry.desktopEntry)
+        onLaunch(desktopEntry);
       },
       child: Column(
         children: [

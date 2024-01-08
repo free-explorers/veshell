@@ -1,8 +1,10 @@
-import 'dart:ui';
-
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:shell/display/monitor/screen/workspace/workspace.provider.dart';
 
 part 'screen.model.freezed.dart';
+
+typedef ScreenId = String;
 
 /// a Screen represent a portion of a Monitor where we want to render Veshell.
 /// Monitor usually contain a single Screen but for ultra-wide monitor
@@ -10,5 +12,9 @@ part 'screen.model.freezed.dart';
 @freezed
 class Screen with _$Screen {
   /// Factory
-  const factory Screen({required Rect surface}) = _Screen;
+  const factory Screen({
+    required ScreenId screenId,
+    required IList<WorkspaceId> workspaceList,
+    required int selectedIndex,
+  }) = _Screen;
 }

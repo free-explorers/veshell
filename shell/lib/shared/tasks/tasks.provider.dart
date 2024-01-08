@@ -1,9 +1,7 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
-import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/manager/platform_api/platform_api.provider.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
 import 'package:shell/shared/tasks/tasks.model.dart';
-import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.provider.dart';
 
 part 'tasks.provider.g.dart';
 
@@ -11,28 +9,37 @@ part 'tasks.provider.g.dart';
 class Tasks extends _$Tasks {
   @override
   TasksState build() {
-    ref
+    /*  ref
       ..listen(windowMappedStreamProvider, (_, next) {
-        next.whenData((int viewId) {
+        next.whenData((SurfaceId surfaceId) {
           state = state.copyWith(
-            tasks: state.tasks.add(viewId),
-            diff: [AddDiffOperation(endOfCollection<int>, viewId)].lockUnsafe,
+            tasks: state.tasks.add(surfaceId),
+            diff:
+                [AddDiffOperation(endOfCollection<int>, surfaceId)].lockUnsafe,
           );
-          ref.read(xdgToplevelStatesProvider(viewId)).focusNode.requestFocus();
+
+          ref.read(waylandManagerProvider.notifier).request(
+                ActivateWindowRequest(
+                  message: ActivateWindowMessage(
+                    surfaceId: surfaceId,
+                    activate: true,
+                  ),
+                ),
+              );
         });
       })
       ..listen(windowUnmappedStreamProvider, (_, next) {
-        next.whenData((int viewId) {
+        next.whenData((SurfaceId surfaceId) {
           state = state.copyWith(
-            tasks: state.tasks.remove(viewId),
-            diff: [RemoveDiffOperation(viewId)].lockUnsafe,
+            tasks: state.tasks.remove(surfaceId),
+            diff: [RemoveDiffOperation(surfaceId)].lockUnsafe,
           );
-          ref
-              .read(xdgToplevelStatesProvider(viewId))
+          /* ref
+              .read(xdgToplevelStatesProvider(surfaceId))
               .focusNode
-              .unfocus(disposition: UnfocusDisposition.previouslyFocusedChild);
+              .unfocus(disposition: UnfocusDisposition.previouslyFocusedChild); */
         });
-      });
+      }); */
 
     return TasksState(
       tasks: IList<int>(),
@@ -40,10 +47,10 @@ class Tasks extends _$Tasks {
     );
   }
 
-  void putInFront(int viewId) {
+  void putInFront(SurfaceId surfaceId) {
     state = state.copyWith(
-      tasks: state.tasks.remove(viewId).add(viewId),
-      diff: [ReorderDiffOperation(endOfCollection<int>, viewId)].lockUnsafe,
+      tasks: state.tasks.remove(surfaceId).add(surfaceId),
+      diff: [ReorderDiffOperation(endOfCollection<int>, surfaceId)].lockUnsafe,
     );
   }
 }

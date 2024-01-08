@@ -3,5 +3,9 @@
         "source.organizeImports": "always",
         "source.fixAll": "always"
     },
-    "editor.formatOnSave": true
+    "editor.formatOnSave": true,
+    "lldb.displayFormat": "auto",
+    "lldb.showDisassembly": "auto",
+    "lldb.dereferencePointers": true,
+    "lldb.consoleMode": "evaluate"
 }

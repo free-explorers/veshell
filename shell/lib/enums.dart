@@ -2,12 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-enum XdgSurfaceRole {
-  none,
-  toplevel,
-  popup,
-}
-
 enum Edges {
   none,
   top,

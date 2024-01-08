@@ -2,7 +2,8 @@ import 'dart:async';
 
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/manager/platform_api/platform_api.provider.dart';
+import 'package:shell/manager/wayland/request/pointer_exit/pointer_exit.model.serializable.dart';
+import 'package:shell/manager/wayland/wayland.manager.dart';
 
 part 'pointer_focus.manager.g.dart';
 
@@ -54,7 +55,9 @@ class PointerFocusManager {
   void _scheduleExitEvent() {
     _pointerExitTimer = Timer(
       Duration.zero,
-      () => _ref.read(platformApiProvider.notifier).pointerExitsView(),
+      () => _ref
+          .read(waylandManagerProvider.notifier)
+          .request(const PointerExitRequest()),
     );
   }
 }

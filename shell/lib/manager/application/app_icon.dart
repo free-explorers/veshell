@@ -3,7 +3,8 @@ import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:jovial_svg/jovial_svg.dart';
 import 'package:shell/manager/application/desktop_entries.provider.dart';
-import 'package:shell/shared/wayland/xdg_toplevel/xdg_toplevel.provider.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
+import 'package:shell/manager/wayland/surface/xdg_surface/xdg_toplevel.provider.dart';
 
 class AppIconByPath extends StatelessWidget {
   const AppIconByPath({
@@ -108,15 +109,15 @@ class AppIconById extends ConsumerWidget {
 
 class AppIconByViewId extends ConsumerWidget {
   const AppIconByViewId({
-    required this.viewId,
+    required this.surfaceId,
     super.key,
   });
-  final int viewId;
+  final SurfaceId surfaceId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appId =
-        ref.watch(xdgToplevelStatesProvider(viewId).select((v) => v.appId));
+        ref.watch(xdgToplevelStateProvider(surfaceId).select((v) => v.appId));
     return AppIconById(id: appId);
   }
 }
