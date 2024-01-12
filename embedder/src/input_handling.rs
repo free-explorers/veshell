@@ -5,7 +5,7 @@ use input_linux::sys::KEY_ESC;
 use smithay::backend::input::{AbsolutePositionEvent, Axis, ButtonState, Event, InputBackend, InputEvent, KeyboardKeyEvent, KeyState, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent};
 use smithay::input::pointer::AxisFrame;
 
-use crate::{Backend, CalloopData};
+use crate::{Backend, CalloopData, keyboard};
 use crate::flutter_engine::embedder::{FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse, FlutterPointerEvent, FlutterPointerPhase_kDown, FlutterPointerPhase_kHover, FlutterPointerPhase_kMove, FlutterPointerPhase_kUp, FlutterPointerSignalKind_kFlutterPointerSignalKindNone, FlutterPointerSignalKind_kFlutterPointerSignalKindScroll};
 use crate::flutter_engine::FlutterEngine;
 
@@ -119,6 +119,18 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
             }).unwrap();
         }
         InputEvent::Keyboard { event } => {
+            let keyscancode = keyboard::get_glfw_keycode(event.key_code());
+
+            data.state.flutter_engine().key_event_channel.send(&serde_json::json!({
+                "keymap": "linux",
+                "toolkit": "glfw",
+                "type": if event.state() == KeyState::Pressed { "keydown" } else { "keyup" },
+                "keyCode": keyscancode,
+                "scanCode": keyscancode,
+                "modifiers": serde_json::Value::Null,
+                "specifiedLogicalKey": serde_json::Value::Null,
+            }), None);
+
             if event.state() != KeyState::Pressed {
                 return;
             }

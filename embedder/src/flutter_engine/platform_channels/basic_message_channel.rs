@@ -40,7 +40,7 @@ impl<T: 'static> BasicMessageChannel<T> {
         let codec = self.codec.clone();
         let channel_name = self.name.clone();
 
-        let binary_handler: BinaryMessageHandler = Some(Box::new(move |message: &[u8], reply: BinaryReply| {
+        let binary_handler: BinaryMessageHandler = Some(Box::new(move |message: &[u8], mut reply: BinaryReply| {
             let message = codec.decode_message(message);
             let message = if let Some(message) = message {
                 message
@@ -50,14 +50,16 @@ impl<T: 'static> BasicMessageChannel<T> {
                 return;
             };
 
+            let codec = codec.clone();
+
             let unencoded_reply: MessageReply<T> = Some(Box::new(move |response: Option<T>| {
                 let response = codec.encode_message(&response.unwrap());
-                reply.unwrap()(Some(&response));
+                reply.as_mut().unwrap()(Some(&response));
             }));
 
             handler(Some(message), unencoded_reply);
         }));
 
-        self.messenger.borrow_mut().set_message_handler(&channel_name, binary_handler);
+        self.messenger.borrow_mut().set_message_handler(&self.name, binary_handler);
     }
 }

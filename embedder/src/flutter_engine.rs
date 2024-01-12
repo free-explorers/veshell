@@ -83,6 +83,7 @@ pub struct FlutterEngine<BackendData: Backend + 'static> {
     pub(crate) mouse_button_tracker: MouseButtonTracker,
     pub binary_messenger: Rc<RefCell<BinaryMessengerImpl>>,
     pub platform_method_channel: MethodChannel,
+    pub key_event_channel: BasicMessageChannel<serde_json::Value>,
     rx_request_external_texture_name_registration_token: calloop::RegistrationToken,
 }
 
@@ -284,7 +285,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         ).unwrap();
 
         let codec = Rc::new(JsonMessageCodec::new());
-        let mut key_event_channel = BasicMessageChannel::<serde_json::Value>::new(
+        let key_event_channel = BasicMessageChannel::<serde_json::Value>::new(
             binary_messenger.clone(),
             "flutter/keyevent".to_string(),
             codec,
@@ -331,6 +332,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             mouse_button_tracker: MouseButtonTracker::new(),
             binary_messenger: binary_messenger.clone(),
             platform_method_channel,
+            key_event_channel,
             rx_request_external_texture_name_registration_token,
         });
 

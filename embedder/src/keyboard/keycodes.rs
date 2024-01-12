@@ -1,6 +1,8 @@
 #![allow(non_upper_case_globals)]
+#![allow(dead_code)]
 
 use std::collections::HashMap;
+
 use input_linux::sys::*;
 use lazy_static::lazy_static;
 
