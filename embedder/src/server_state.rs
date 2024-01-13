@@ -25,7 +25,7 @@ use smithay::wayland::compositor::{
     with_states, with_surface_tree_upward, BufferAssignment, CompositorClientState,
     CompositorHandler, CompositorState, SubsurfaceCachedState, SurfaceAttributes, TraversalAction,
 };
-use smithay::wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportError};
+use smithay::wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier};
 use smithay::wayland::selection::data_device::{
     set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
     ServerDndGrabHandler,
@@ -683,9 +683,11 @@ impl<BackendData: Backend> DmabufHandler for ServerState<BackendData> {
         &mut self,
         _global: &DmabufGlobal,
         _dmabuf: Dmabuf,
-    ) -> Result<(), ImportError> {
+        notifier: ImportNotifier
+    ) {
+        // TODO
         self.imported_dmabufs.push(_dmabuf);
-        Ok(())
+        let _ = notifier.successful::<ServerState<BackendData>>();
     }
 }
 
