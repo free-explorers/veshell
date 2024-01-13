@@ -4,10 +4,14 @@ use std::sync::atomic::Ordering;
 use input_linux::sys::KEY_ESC;
 use smithay::backend::input::{AbsolutePositionEvent, Axis, AxisRelativeDirection, ButtonState, Event, InputBackend, InputEvent, KeyboardKeyEvent, KeyState, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent};
 use smithay::input::pointer::AxisFrame;
+use smithay::utils::SERIAL_COUNTER;
 
 use crate::{Backend, CalloopData, keyboard};
 use crate::flutter_engine::embedder::{FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse, FlutterPointerEvent, FlutterPointerPhase_kDown, FlutterPointerPhase_kHover, FlutterPointerPhase_kMove, FlutterPointerPhase_kUp, FlutterPointerSignalKind_kFlutterPointerSignalKindNone, FlutterPointerSignalKind_kFlutterPointerSignalKindScroll};
 use crate::flutter_engine::FlutterEngine;
+use crate::flutter_engine::platform_channels::binary_messenger::BinaryReply;
+use crate::flutter_engine::platform_channels::json_message_codec::JsonMessageCodec;
+use crate::flutter_engine::platform_channels::message_codec::MessageCodec;
 
 pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &mut CalloopData<BackendData>)
     where BackendData: Backend + 'static
@@ -116,23 +120,41 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
             }).unwrap();
         }
         InputEvent::Keyboard { event } => {
-            let keyscancode = keyboard::get_glfw_keycode(event.key_code());
+            let glfw_keycode = keyboard::get_glfw_keycode(event.key_code());
+
+            let keyboard = data.state.keyboard.clone();
+            let ((mods, utf32_codepoint), mods_changed) = keyboard.intercept::<_, _>(
+                &mut data.state,
+                event.key_code(),
+                event.state(),
+                |_, mods, keysym_handle| {
+                    let utf32_codepoint = keysym_handle.modified_sym().key_char().map(|c| c as u32);
+                    (*mods, utf32_codepoint)
+                },
+            );
+
+            let tx = data.state.tx_flutter_handled_key_event.clone();
+            let (key_code, state, time) = (event.key_code(), event.state(), event.time_msec());
+
+            let reply: BinaryReply = Some(Box::new(move |response: Option<&[u8]>| {
+                let response = response.unwrap();
+                let message = JsonMessageCodec::new().decode_message(response).unwrap();
+                let handled = message["handled"].as_bool().unwrap();
+                dbg!(handled);
+                tx.send((key_code, state, time, mods_changed, handled)).unwrap();
+            }));
 
             data.state.flutter_engine().key_event_channel.send(&serde_json::json!({
                 "keymap": "linux",
                 "toolkit": "glfw",
+                "keyCode": glfw_keycode,
+                "scanCode": event.key_code() + 8,
+                "modifiers": keyboard::get_glfw_modifiers(mods),
+                "unicodeScalarValues": utf32_codepoint,
                 "type": if event.state() == KeyState::Pressed { "keydown" } else { "keyup" },
-                "keyCode": keyscancode,
-                "scanCode": keyscancode,
-                "modifiers": serde_json::Value::Null,
-                "specifiedLogicalKey": serde_json::Value::Null,
-            }), None);
+            }), reply);
 
-            if event.state() != KeyState::Pressed {
-                return;
-            }
-
-            if event.key_code() == KEY_ESC as u32 {
+            if event.key_code() == KEY_ESC as u32 && event.state() == KeyState::Pressed {
                 data.state.running.store(false, Ordering::SeqCst);
             }
         }

@@ -7,11 +7,11 @@ use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 use smithay::utils::SERIAL_COUNTER;
 
+use crate::{Backend, CalloopData};
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::mouse_button_tracker::FLUTTER_TO_LINUX_MOUSE_BUTTONS;
-use crate::{Backend, CalloopData};
 
 pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
     event: Event<(MethodCall, Box<dyn MethodResult>)>,

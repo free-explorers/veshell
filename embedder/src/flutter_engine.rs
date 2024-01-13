@@ -20,6 +20,7 @@ use smithay::{
     reexports::calloop::channel,
     utils::{Physical, Size},
 };
+use smithay::backend::input::{InputBackend, KeyboardKeyEvent};
 use smithay::backend::renderer::gles::ffi::RGBA8;
 use smithay::reexports::calloop;
 use smithay::reexports::calloop::{Dispatcher, LoopHandle};

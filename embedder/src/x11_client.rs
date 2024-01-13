@@ -38,6 +38,7 @@ use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::output::{Output, PhysicalProperties, Subpixel};
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::wayland_server::protocol::wl_shm;
+use smithay::reexports::x11rb::protocol::xproto::{AutoRepeatMode, ChangeKeyboardControlAux, ConnectionExt};
 use smithay::wayland::dmabuf::DmabufState;
 
 use crate::{Backend, CalloopData, flutter_engine::EmbedderChannels, send_frames_surface_tree, ServerState};
@@ -51,6 +52,10 @@ pub fn run_x11_client() {
 
     let x11_backend = x11::X11Backend::new().expect("Failed to initilize X11 backend");
     let x11_handle = x11_backend.handle();
+
+    // Don't let X.Org send us repeated down and up events when a key is held down.
+    // Wayland clients are expected to handle key repeats by themselves.
+    x11_handle.connection().change_keyboard_control(&ChangeKeyboardControlAux::new().auto_repeat_mode(AutoRepeatMode::OFF)).unwrap();
 
     let (node, fd) = x11_handle.drm_node().expect("Could not get DRM node used by X server");
 

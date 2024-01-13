@@ -1,34 +1,41 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env::{remove_var, set_var};
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
+use smithay::{
+    delegate_compositor, delegate_data_device, delegate_dmabuf, delegate_output, delegate_seat,
+    delegate_shm, delegate_xdg_shell,
+};
 use smithay::backend::allocator::dmabuf::Dmabuf;
+use smithay::backend::input::{InputBackend, KeyState};
+use smithay::backend::renderer::{ImportAll, Texture};
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
-use smithay::backend::renderer::{ImportAll, Texture};
-use smithay::input::pointer::{CursorImageStatus, PointerHandle};
 use smithay::input::{Seat, SeatHandler, SeatState};
+use smithay::input::keyboard::KeyboardHandle;
+use smithay::input::pointer::{CursorImageStatus, PointerHandle};
+use smithay::reexports::calloop::{channel, Interest, LoopHandle, Mode, PostAction};
+use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::calloop::generic::Generic;
-use smithay::reexports::calloop::{Interest, LoopHandle, Mode, PostAction};
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge;
+use smithay::reexports::wayland_server::{Client, Display, DisplayHandle, Resource};
 use smithay::reexports::wayland_server::protocol::wl_buffer;
 use smithay::reexports::wayland_server::protocol::wl_seat::WlSeat;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::reexports::wayland_server::{Client, Display, DisplayHandle, Resource};
-use smithay::utils::{Buffer as BufferCoords, Clock, Monotonic, Rectangle, Serial, Size};
+use smithay::utils::{Buffer as BufferCoords, Clock, Monotonic, Serial, SERIAL_COUNTER, Size};
 use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor::{self, get_parent};
 use smithay::wayland::compositor::{
-    with_states, with_surface_tree_upward, BufferAssignment, CompositorClientState,
-    CompositorHandler, CompositorState, SubsurfaceCachedState, SurfaceAttributes, TraversalAction,
+    BufferAssignment, CompositorClientState, CompositorHandler, CompositorState,
+    SubsurfaceCachedState, SurfaceAttributes, TraversalAction, with_states, with_surface_tree_upward,
 };
 use smithay::wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier};
 use smithay::wayland::selection::data_device::{
-    set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
-    ServerDndGrabHandler,
+    ClientDndGrabHandler, DataDeviceHandler, DataDeviceState, ServerDndGrabHandler,
+    set_data_device_focus,
 };
 use smithay::wayland::selection::SelectionHandler;
 use smithay::wayland::shell::xdg;
@@ -38,19 +45,15 @@ use smithay::wayland::shell::xdg::{
 };
 use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::wayland::socket::ListeningSocketSource;
-use smithay::{
-    delegate_compositor, delegate_data_device, delegate_dmabuf, delegate_output, delegate_seat,
-    delegate_shm, delegate_xdg_shell,
-};
 use tracing::{info, warn};
 
+use crate::{Backend, CalloopData, ClientState};
+use crate::flutter_engine::FlutterEngine;
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 use crate::flutter_engine::wayland_messages::{
     PopupMessage, SubsurfaceMessage, SurfaceMessage, ToplevelMessage,
 };
-use crate::flutter_engine::FlutterEngine;
 use crate::texture_swap_chain::TextureSwapChain;
-use crate::{Backend, CalloopData, ClientState};
 
 pub struct ServerState<BackendData: Backend + 'static> {
     pub running: Arc<AtomicBool>,
@@ -61,6 +64,9 @@ pub struct ServerState<BackendData: Backend + 'static> {
     pub seat_state: SeatState<ServerState<BackendData>>,
     pub data_device_state: DataDeviceState,
     pub pointer: PointerHandle<ServerState<BackendData>>,
+    pub keyboard: KeyboardHandle<ServerState<BackendData>>,
+    pub tx_flutter_handled_key_event: channel::Sender<(u32, KeyState, u32, bool, bool)>,
+
     pub backend_data: Box<BackendData>,
     pub flutter_engine: Option<Box<FlutterEngine<BackendData>>>,
     pub next_surface_id: u64,
@@ -135,7 +141,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         let mut seat_state = SeatState::new();
         let seat_name = backend_data.seat_name();
         let mut seat = seat_state.new_wl_seat(&display_handle, seat_name.clone());
-        seat.add_keyboard(Default::default(), 200, 200).unwrap();
+        let keyboard = seat.add_keyboard(Default::default(), 200, 25).unwrap();
         let pointer = seat.add_pointer();
 
         let data_device_state = DataDeviceState::new::<Self>(&display_handle);
@@ -177,6 +183,28 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             )
             .expect("Failed to init wayland server source");
 
+        let (tx_flutter_handled_key_event, rx_flutter_handled_key_event) = channel::channel::<(u32, KeyState, u32, bool, bool)>();
+
+        loop_handle.insert_source(rx_flutter_handled_key_event, move |event, _, data: &mut CalloopData<BackendData>| {
+            if let Msg((key_code, state, time, mods_changed, handled)) = event {
+                if handled {
+                    // Flutter consumed this event, don't forward it to the client.
+                    return;
+                }
+
+                let keyboard = data.state.keyboard.clone();
+                keyboard.forward(
+                    &mut data.state,
+                    key_code,
+                    state,
+                    SERIAL_COUNTER.next_serial(),
+                    time,
+                    mods_changed,
+                );
+            }
+        }).unwrap();
+
+
         Self {
             running: Arc::new(AtomicBool::new(true)),
             display_handle,
@@ -195,6 +223,8 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             seat_state,
             data_device_state,
             pointer,
+            keyboard,
+            tx_flutter_handled_key_event,
             next_surface_id: 1,
             next_texture_id: 1,
             imported_dmabufs: Vec::new(),

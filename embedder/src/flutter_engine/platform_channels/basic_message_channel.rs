@@ -5,7 +5,7 @@ use crate::flutter_engine::platform_channels::binary_messenger::{BinaryMessageHa
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 use crate::flutter_engine::platform_channels::message_codec::MessageCodec;
 
-type MessageReply<T> = Option<Box<dyn FnMut(Option<T>)>>;
+pub type MessageReply<T> = Option<Box<dyn FnMut(Option<T>)>>;
 
 type MessageHandler<T> = Option<Box<dyn FnMut(Option<T>, MessageReply<T>)>>;
 

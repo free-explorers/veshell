@@ -5,6 +5,8 @@ use std::collections::HashMap;
 
 use input_linux::sys::*;
 use lazy_static::lazy_static;
+use smithay::input::keyboard::ModifiersState;
+use smithay::input::keyboard::xkb::{Keymap, MOD_NAME_ALT, MOD_NAME_CAPS, MOD_NAME_CTRL, MOD_NAME_LOGO, MOD_NAME_NUM, MOD_NAME_SHIFT, ModMask};
 
 const kGlfwModifierShift: u32 = 0x0001;
 const kGlfwModifierControl: u32 = 0x0002;
@@ -264,4 +266,30 @@ lazy_static! {
 
 pub fn get_glfw_keycode(xkb_keycode: u32) -> u32 {
     keycode_to_glfwkey_map.get(&xkb_keycode).copied().unwrap_or(xkb_keycode)
+}
+
+// pub fn get_glfw_modifiers(keymap: &Keymap, mod_mask: ModMask) -> u32 {
+pub fn get_glfw_modifiers(mods_state: ModifiersState) -> u32 {
+    let mut mods = 0;
+
+    if mods_state.shift {
+        mods |= kGlfwModifierShift;
+    }
+    if mods_state.ctrl {
+        mods |= kGlfwModifierControl;
+    }
+    if mods_state.alt {
+        mods |= kGlfwModifierAlt;
+    }
+    if mods_state.logo {
+        mods |= kGlfwModifierSuper;
+    }
+    if mods_state.caps_lock {
+        mods |= kGlfwModifierCapsLock;
+    }
+    if mods_state.num_lock {
+        mods |= kGlfwModifierNumLock;
+    }
+
+    mods
 }
