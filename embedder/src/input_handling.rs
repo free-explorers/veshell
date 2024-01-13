@@ -2,7 +2,7 @@ use std::mem::size_of;
 use std::sync::atomic::Ordering;
 
 use input_linux::sys::KEY_ESC;
-use smithay::backend::input::{AbsolutePositionEvent, Axis, ButtonState, Event, InputBackend, InputEvent, KeyboardKeyEvent, KeyState, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent};
+use smithay::backend::input::{AbsolutePositionEvent, Axis, AxisRelativeDirection, ButtonState, Event, InputBackend, InputEvent, KeyboardKeyEvent, KeyState, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent};
 use smithay::input::pointer::AxisFrame;
 
 use crate::{Backend, CalloopData, keyboard};
@@ -61,12 +61,8 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
             }).unwrap();
         }
         InputEvent::PointerAxis { event } => {
-            const DISCRETE_SCROLL_MULTIPLIER: f64 = 5.0;
-
-            let horizontal_discrete = event.amount_discrete(Axis::Horizontal)
-                .map(|v| v * DISCRETE_SCROLL_MULTIPLIER);
-            let vertical_discrete = event.amount_discrete(Axis::Vertical)
-                .map(|v| v * DISCRETE_SCROLL_MULTIPLIER);
+            let horizontal_discrete = event.amount_v120(Axis::Horizontal);
+            let vertical_discrete = event.amount_v120(Axis::Vertical);
 
             let horizontal = event.amount(Axis::Horizontal)
                 // Fall back on discrete scroll if continuous scroll is not available.
@@ -79,9 +75,10 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
                 &mut data.state,
                 AxisFrame {
                     source: Some(event.source()),
+                    relative_direction: (AxisRelativeDirection::Identical, AxisRelativeDirection::Identical),
                     time: (event.time() / 1000) as u32, // us to ms
                     axis: (horizontal, vertical),
-                    discrete: {
+                    v120: {
                         if let (None, None) = (horizontal_discrete, vertical_discrete) {
                             None
                         } else {
