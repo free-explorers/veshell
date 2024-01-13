@@ -1935,7 +1935,7 @@ checksum = "942b4a808e05215192e39f4ab80813e599068285906cc91aa64f923db842bd5a"
 [[package]]
 name = "smithay"
 version = "0.3.0"
-source = "git+https://github.com/Smithay/smithay?rev=fbe8ef2#fbe8ef20613d6417fc1c738bc32799aeee640d4e"
+source = "git+https://github.com/roscale/smithay?branch=feature/asynchronous-input-filtering#e8166a8e712f6e74595cb982aed06e2f53c756e9"
 dependencies = [
  "appendlist",
  "ash",
