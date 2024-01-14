@@ -193,7 +193,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
                 }
 
                 let keyboard = data.state.keyboard.clone();
-                keyboard.forward(
+                keyboard.input_forward(
                     &mut data.state,
                     key_code,
                     state,

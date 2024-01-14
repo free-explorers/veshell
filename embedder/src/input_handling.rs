@@ -122,7 +122,7 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
             let glfw_keycode = keyboard::get_glfw_keycode(event.key_code());
 
             let keyboard = data.state.keyboard.clone();
-            let ((mods, utf32_codepoint), mods_changed) = keyboard.intercept::<_, _>(
+            let ((mods, utf32_codepoint), mods_changed) = keyboard.input_intercept::<_, _>(
                 &mut data.state,
                 event.key_code(),
                 event.state(),
