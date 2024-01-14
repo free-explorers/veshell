@@ -4,7 +4,6 @@ use std::sync::atomic::Ordering;
 use input_linux::sys::KEY_ESC;
 use smithay::backend::input::{AbsolutePositionEvent, Axis, AxisRelativeDirection, ButtonState, Event, InputBackend, InputEvent, KeyboardKeyEvent, KeyState, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent};
 use smithay::input::pointer::AxisFrame;
-use smithay::utils::SERIAL_COUNTER;
 
 use crate::{Backend, CalloopData, keyboard};
 use crate::flutter_engine::embedder::{FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse, FlutterPointerEvent, FlutterPointerPhase_kDown, FlutterPointerPhase_kHover, FlutterPointerPhase_kMove, FlutterPointerPhase_kUp, FlutterPointerSignalKind_kFlutterPointerSignalKindNone, FlutterPointerSignalKind_kFlutterPointerSignalKindScroll};
@@ -140,7 +139,6 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
                 let response = response.unwrap();
                 let message = JsonMessageCodec::new().decode_message(response).unwrap();
                 let handled = message["handled"].as_bool().unwrap();
-                dbg!(handled);
                 tx.send((key_code, state, time, mods_changed, handled)).unwrap();
             }));
 
