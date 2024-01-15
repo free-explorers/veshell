@@ -192,6 +192,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
                     return;
                 }
 
+                // Forward the event to the focused Wayland client.
                 let keyboard = data.state.keyboard.clone();
                 keyboard.input_forward(
                     &mut data.state,
@@ -203,7 +204,6 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
                 );
             }
         }).unwrap();
-
 
         Self {
             running: Arc::new(AtomicBool::new(true)),
