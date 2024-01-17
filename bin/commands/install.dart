@@ -18,7 +18,12 @@ class InstallCommand extends Command<int> {
   // [run] may also return a Future.
   @override
   Future<int> run() async {
-    await BuildCommand(logger: logger).run();
+    /* final buildCommand = BuildCommand(logger: logger);
+    
+    await buildCommand.run(); */
+    final buildCommandArgs = ['build', ...argResults!.arguments];
+    await runner!.runCommand(runner!.parse(buildCommandArgs));
+
     await createSession(logger);
 
     logger.success(
