@@ -8,7 +8,15 @@ import '../veshell.dart';
 import 'build.dart';
 
 class InstallCommand extends Command<int> {
-  InstallCommand({required this.logger});
+  InstallCommand({required this.logger}) {
+    argParser.addOption(
+      'target',
+      abbr: 't',
+      help: 'Specify the build target',
+      allowed: BuildTarget.values.map((e) => e.name),
+      defaultsTo: BuildTarget.release.name,
+    );
+  }
   final Logger logger;
   @override
   final name = 'install';
