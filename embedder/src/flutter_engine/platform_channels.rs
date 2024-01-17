@@ -18,3 +18,4 @@ pub mod method_result_functions;
 pub mod method_result_mpsc_channel;
 pub mod basic_message_channel;
 pub mod text_range;
+pub mod text_input_model;
