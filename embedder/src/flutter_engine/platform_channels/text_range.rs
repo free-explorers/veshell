@@ -1,6 +1,6 @@
 use tracing::error;
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Default)]
 pub struct TextRange {
     base: usize,
     extent: usize,
