@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/display/display.widget.dart';
-import 'package:shell/display/monitor/screen/screen.provider.dart';
-import 'package:shell/manager/theme/theme.manager.dart';
-import 'package:shell/manager/wayland/surface/surface.manager.dart';
-import 'package:shell/manager/wayland/wayland.manager.dart';
-import 'package:shell/manager/window/window.manager.dart';
+import 'package:shell/screen/screen.provider.dart';
 import 'package:shell/shared/util/root_overlay.provider.dart';
+import 'package:shell/theme/theme.manager.dart';
+import 'package:shell/wayland/surface/surface.manager.dart';
+import 'package:shell/wayland/wayland.manager.dart';
+import 'package:shell/window/window.manager.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
 void main() {

@@ -1,7 +1,7 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
 import 'package:shell/shared/tasks/tasks.model.dart';
+import 'package:shell/wayland/surface/wl_surface/wl_surface.model.dart';
 
 part 'tasks.provider.g.dart';
 
