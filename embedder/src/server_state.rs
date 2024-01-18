@@ -14,7 +14,7 @@ use smithay::backend::renderer::{ImportAll, Texture};
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::input::{Seat, SeatHandler, SeatState};
-use smithay::input::keyboard::KeyboardHandle;
+use smithay::input::keyboard::{KeyboardHandle, ModifiersState};
 use smithay::input::pointer::{CursorImageStatus, PointerHandle};
 use smithay::reexports::calloop::{channel, Interest, LoopHandle, Mode, PostAction};
 use smithay::reexports::calloop::channel::Event::Msg;
@@ -65,7 +65,7 @@ pub struct ServerState<BackendData: Backend + 'static> {
     pub data_device_state: DataDeviceState,
     pub pointer: PointerHandle<ServerState<BackendData>>,
     pub keyboard: KeyboardHandle<ServerState<BackendData>>,
-    pub tx_flutter_handled_key_event: channel::Sender<(u32, KeyState, u32, bool, bool)>,
+    pub tx_flutter_handled_key_event: channel::Sender<(u32, Option<char>, KeyState, u32, ModifiersState, bool, bool)>,
 
     pub backend_data: Box<BackendData>,
     pub flutter_engine: Option<Box<FlutterEngine<BackendData>>>,
@@ -183,16 +183,27 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             )
             .expect("Failed to init wayland server source");
 
-        let (tx_flutter_handled_key_event, rx_flutter_handled_key_event) = channel::channel::<(u32, KeyState, u32, bool, bool)>();
+        let (tx_flutter_handled_key_event, rx_flutter_handled_key_event) = channel::channel::<(u32, Option<char>, KeyState, u32, ModifiersState, bool, bool)>();
 
         loop_handle.insert_source(rx_flutter_handled_key_event, move |event, _, data: &mut CalloopData<BackendData>| {
-            if let Msg((key_code, state, time, mods_changed, handled)) = event {
+            if let Msg((key_code, utf32_codepoint, state, time, mods, mods_changed, handled)) = event {
                 if handled {
-                    // Flutter consumed this event, don't forward it to the client.
+                    // Flutter consumed this event. Probably a keyboard shortcut.
                     return;
                 }
 
-                // Forward the event to the focused Wayland client.
+                let text_input = &mut data.state.flutter_engine_mut().text_input;
+                if text_input.is_active() {
+                    if state == KeyState::Pressed && !mods.ctrl && !mods.alt {
+                        text_input.press_key(key_code, utf32_codepoint);
+                    }
+                    // It doesn't matter if the text field captured the key event or not.
+                    // As long as it stays active, don't forward events to the Wayland client.
+                    return;
+                }
+
+                // The compositor was not interested in this event,
+                // so we forward it to the Wayland client in focus if there is one.
                 let keyboard = data.state.keyboard.clone();
                 keyboard.input_forward(
                     &mut data.state,
