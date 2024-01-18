@@ -132,7 +132,7 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
                 |_, mods, keysym_handle| {
                     // After updating the keyboard state,
                     // we get the state of the modifiers and the character that was typed.
-                    let utf32_codepoint = keysym_handle.modified_sym().key_char().map(|c| c as u32);
+                    let utf32_codepoint = keysym_handle.modified_sym().key_char();
                     (*mods, utf32_codepoint)
                 },
             );
@@ -147,9 +147,9 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
                 "keymap": "linux",
                 "toolkit": "glfw",
                 "keyCode": glfw_keycode,
-                "scanCode": event.key_code() + 8,
+                "scanCode": key_code + 8,
                 "modifiers": keyboard::get_glfw_modifiers(mods),
-                "unicodeScalarValues": utf32_codepoint,
+                "unicodeScalarValues": utf32_codepoint.map(|c| c as u32),
                 "type": if event.state() == KeyState::Pressed { "keydown" } else { "keyup" },
             }), Some(Box::new(move |response: Option<&[u8]>| {
                 // This is the callback that will be called when Flutter replies.
@@ -164,7 +164,7 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
                 // The receiver `rx_flutter_handled_key_event` is registered to the event loop with a callback
                 // that will continue processing the event.
                 // This callback is defined in the constructor of `ServerState`.
-                tx.send((key_code, state, time, mods_changed, handled)).unwrap();
+                tx.send((key_code, utf32_codepoint, state, time, mods, mods_changed, handled)).unwrap();
             })));
 
             if event.key_code() == KEY_ESC as u32 && event.state() == KeyState::Pressed {

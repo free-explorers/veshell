@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::flutter_engine::platform_channels::text_range::TextRange;
 
 fn is_leading_surrogate(code_point: u32) -> bool {
@@ -8,6 +10,7 @@ fn is_trailing_surrogate(code_point: u32) -> bool {
     (code_point & 0xfffffc00) == 0xdc00
 }
 
+#[derive(Default)]
 pub struct TextInputModel {
     text: Vec<u16>,
     selection: TextRange,
@@ -61,7 +64,7 @@ impl TextInputModel {
         } else {
             &self.composing_range
         };
-        self.text = self.text.splice(range_to_delete.start()..range_to_delete.end(), text.iter().cloned()).collect();
+        self.text.splice(range_to_delete.start()..range_to_delete.end(), text.iter().cloned());
         self.composing_range.set_end(self.composing_range.start() + text.len());
         self.selection = TextRange::new(selection.start() + self.composing_range.start(),
                                         selection.extent() + self.composing_range.start());
@@ -93,7 +96,7 @@ impl TextInputModel {
             return false;
         }
         let start = self.selection.start();
-        self.text = self.text.splice(start..self.selection.end(), Vec::new().iter().cloned()).collect();
+        self.text.splice(start..self.selection.end(), Vec::new().iter().cloned());
         self.selection = TextRange::new_position(start);
         if self.composing {
             self.composing_range = self.selection;
@@ -116,12 +119,12 @@ impl TextInputModel {
     pub fn add_text(&mut self, text: &Vec<u16>) {
         self.delete_selected();
         if self.composing {
-            self.text = self.text.splice(self.composing_range.start()..self.composing_range.end(), text.iter().cloned()).collect();
+            self.text.splice(self.composing_range.start()..self.composing_range.end(), text.iter().cloned());
             self.selection = TextRange::new_position(self.composing_range.start());
             self.composing_range.set_end(self.composing_range.start() + text.len());
         }
         let position = self.selection.position();
-        self.text = self.text.splice(position..position, text.iter().cloned()).collect();
+        self.text.splice(position..position, text.iter().cloned());
         self.selection = TextRange::new_position(position + text.len());
     }
 
@@ -132,7 +135,7 @@ impl TextInputModel {
         let position = self.selection.position();
         if position != self.editable_range().start() {
             let count = if is_trailing_surrogate(self.text[position - 1] as u32) { 2 } else { 1 };
-            self.text = self.text.splice(position - count..position, Vec::new().iter().cloned()).collect();
+            self.text.splice(position - count..position, Vec::new().iter().cloned());
             self.selection = TextRange::new_position(position - count);
             if self.composing {
                 self.composing_range.set_end(self.composing_range.end() - count);
@@ -149,7 +152,7 @@ impl TextInputModel {
         let position = self.selection.position();
         if position < self.editable_range().end() {
             let count = if is_leading_surrogate(self.text[position] as u32) { 2 } else { 1 };
-            self.text = self.text.splice(position..position + count, Vec::new().iter().cloned()).collect();
+            self.text.splice(position..position + count, Vec::new().iter().cloned());
             if self.composing {
                 self.composing_range.set_end(self.composing_range.end() - count);
             }
@@ -191,7 +194,7 @@ impl TextInputModel {
         }
 
         let deleted_length = end - start;
-        self.text = self.text.splice(start..end, Vec::new().iter().cloned()).collect();
+        self.text.splice(start..end, Vec::new().iter().cloned());
 
         self.selection = TextRange::new_position(if offset_from_cursor <= 0 { start } else { self.selection.start() });
 

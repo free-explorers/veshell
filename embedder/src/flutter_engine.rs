@@ -57,11 +57,13 @@ use crate::flutter_engine::platform_channels::basic_message_channel::BasicMessag
 use crate::flutter_engine::platform_channels::binary_messenger_impl::BinaryMessengerImpl;
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 use crate::flutter_engine::platform_channels::json_message_codec::JsonMessageCodec;
+use crate::flutter_engine::platform_channels::json_method_codec::JsonMethodCodec;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::flutter_engine::platform_channels::standard_method_codec::StandardMethodCodec;
 use crate::flutter_engine::task_runner::TaskRunner;
+use crate::flutter_engine::text_input::{text_input_channel_method_call_handler, TextInput};
 use crate::gles_framebuffer_importer::GlesFramebufferImporter;
 use crate::mouse_button_tracker::MouseButtonTracker;
 
@@ -71,6 +73,7 @@ pub mod platform_channels;
 pub mod task_runner;
 pub mod wayland_messages;
 pub mod platform_channel_callbacks;
+mod text_input;
 
 /// Wrap the handle for various safety reasons:
 /// - Clone & Copy is willingly not implemented to avoid using the engine after being shut down.
@@ -85,6 +88,7 @@ pub struct FlutterEngine<BackendData: Backend + 'static> {
     pub binary_messenger: Rc<RefCell<BinaryMessengerImpl>>,
     pub platform_method_channel: MethodChannel,
     pub key_event_channel: BasicMessageChannel<serde_json::Value>,
+    pub text_input: TextInput,
     rx_request_external_texture_name_registration_token: calloop::RegistrationToken,
 }
 
@@ -292,6 +296,25 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             codec,
         );
 
+        let codec = Rc::new(JsonMethodCodec::new());
+        let mut text_input_channel = MethodChannel::<serde_json::Value>::new(
+            binary_messenger.clone(),
+            "flutter/textinput".to_string(),
+            codec,
+        );
+
+        let (tx_text_input_message, rx_text_input_message)
+            = channel::channel::<(MethodCall<serde_json::Value>, Box<dyn MethodResult<serde_json::Value>>)>();
+
+        text_input_channel.set_method_call_handler(Some(Box::new(move |method_call, result| {
+            tx_text_input_message.send((method_call, result)).unwrap();
+        })));
+
+        server_state.loop_handle.insert_source(
+            rx_text_input_message,
+            text_input_channel_method_call_handler,
+        ).unwrap();
+
         let task_runner_timer_dispatcher = Dispatcher::new(Timer::immediate(), move |deadline, _, data: &mut CalloopData<BackendData>| {
             let duration = data.state.flutter_engine_mut().task_runner.execute_expired_tasks(move |task| {
                 unsafe { FlutterEngineRunTask(flutter_engine, task as *const _) };
@@ -334,6 +357,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             binary_messenger: binary_messenger.clone(),
             platform_method_channel,
             key_event_channel,
+            text_input: TextInput::new(text_input_channel),
             rx_request_external_texture_name_registration_token,
         });
 
