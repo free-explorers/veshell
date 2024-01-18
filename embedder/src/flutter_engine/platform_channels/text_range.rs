@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use tracing::error;
 
 #[derive(Copy, Clone, Eq, PartialEq, Default)]
