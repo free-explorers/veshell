@@ -8,15 +8,7 @@ import '../veshell.dart';
 import 'build.dart';
 
 class InstallCommand extends Command<int> {
-  InstallCommand({required this.logger}) {
-    argParser.addOption(
-      'target',
-      abbr: 't',
-      help: 'Specify the build target',
-      allowed: BuildTarget.values.map((e) => e.name),
-      defaultsTo: BuildTarget.release.name,
-    );
-  }
+  InstallCommand({required this.logger});
   final Logger logger;
   @override
   final name = 'install';
@@ -31,8 +23,9 @@ class InstallCommand extends Command<int> {
     await buildCommand.run(); */
     final buildCommandArgs = ['build', ...argResults!.arguments];
     await runner!.runCommand(runner!.parse(buildCommandArgs));
-
-    await createSession(logger);
+    final target =
+        BuildTarget.values.byName(globalResults?['target'] as String);
+    await createSession(logger, target: target);
 
     logger.success(
       'Congratulation Veshell is succesfully installed, you can now logout and select the veshell session in your login manager!\n',

@@ -21,7 +21,6 @@ class BuildCommand extends Command<int> {
   // [run] may also return a Future.
   @override
   Future<int> run() async {
-    print(globalResults);
     final target =
         BuildTarget.values.byName(globalResults?['target'] as String);
     await dependencies.check(logger);
