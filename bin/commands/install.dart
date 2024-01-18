@@ -18,8 +18,14 @@ class InstallCommand extends Command<int> {
   // [run] may also return a Future.
   @override
   Future<int> run() async {
-    await BuildCommand(logger: logger).run();
-    await createSession(logger);
+    /* final buildCommand = BuildCommand(logger: logger);
+    
+    await buildCommand.run(); */
+    final buildCommandArgs = ['build', ...argResults!.arguments];
+    await runner!.runCommand(runner!.parse(buildCommandArgs));
+    final target =
+        BuildTarget.values.byName(globalResults?['target'] as String);
+    await createSession(logger, target: target);
 
     logger.success(
       'Congratulation Veshell is succesfully installed, you can now logout and select the veshell session in your login manager!\n',

@@ -20,6 +20,7 @@ use smithay::{
     reexports::calloop::channel,
     utils::{Physical, Size},
 };
+use smithay::backend::input::{InputBackend, KeyboardKeyEvent};
 use smithay::backend::renderer::gles::ffi::RGBA8;
 use smithay::reexports::calloop;
 use smithay::reexports::calloop::{Dispatcher, LoopHandle};
@@ -52,8 +53,10 @@ use crate::{Backend, CalloopData, flutter_engine::{
 use crate::flutter_engine::callbacks::{gl_external_texture_frame_callback, platform_message_callback, populate_existing_damage, post_task_callback, runs_task_on_current_thread_callback, vsync_callback};
 use crate::flutter_engine::embedder::{FlutterCustomTaskRunners, FlutterEngineAOTData, FlutterEngineAOTDataSource, FlutterEngineAOTDataSource__bindgen_ty_1, FlutterEngineAOTDataSourceType_kFlutterEngineAOTDataSourceTypeElfPath, FlutterEngineCreateAOTData, FlutterEngineInitialize, FlutterEngineMarkExternalTextureFrameAvailable, FlutterEngineRegisterExternalTexture, FlutterEngineRunInitialized, FlutterEngineRunTask, FlutterEngineSendPointerEvent, FlutterPointerEvent, FlutterTaskRunnerDescription};
 use crate::flutter_engine::platform_channel_callbacks::platform_channel_method_handler;
+use crate::flutter_engine::platform_channels::basic_message_channel::BasicMessageChannel;
 use crate::flutter_engine::platform_channels::binary_messenger_impl::BinaryMessengerImpl;
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
+use crate::flutter_engine::platform_channels::json_message_codec::JsonMessageCodec;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
@@ -81,6 +84,7 @@ pub struct FlutterEngine<BackendData: Backend + 'static> {
     pub(crate) mouse_button_tracker: MouseButtonTracker,
     pub binary_messenger: Rc<RefCell<BinaryMessengerImpl>>,
     pub platform_method_channel: MethodChannel,
+    pub key_event_channel: BasicMessageChannel<serde_json::Value>,
     rx_request_external_texture_name_registration_token: calloop::RegistrationToken,
 }
 
@@ -281,6 +285,13 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             platform_channel_method_handler,
         ).unwrap();
 
+        let codec = Rc::new(JsonMessageCodec::new());
+        let key_event_channel = BasicMessageChannel::<serde_json::Value>::new(
+            binary_messenger.clone(),
+            "flutter/keyevent".to_string(),
+            codec,
+        );
+
         let task_runner_timer_dispatcher = Dispatcher::new(Timer::immediate(), move |deadline, _, data: &mut CalloopData<BackendData>| {
             let duration = data.state.flutter_engine_mut().task_runner.execute_expired_tasks(move |task| {
                 unsafe { FlutterEngineRunTask(flutter_engine, task as *const _) };
@@ -322,6 +333,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             mouse_button_tracker: MouseButtonTracker::new(),
             binary_messenger: binary_messenger.clone(),
             platform_method_channel,
+            key_event_channel,
             rx_request_external_texture_name_registration_token,
         });
 
