@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/application/provider/app_drawer.provider.dart';
+import 'package:shell/application/provider/app_drawer.dart';
 import 'package:shell/application/widget/app_icon.dart';
 
 /// Desktop entry selected callback

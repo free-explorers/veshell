@@ -1,6 +1,6 @@
 import 'package:dbus/dbus.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/shared/dbus/dbus.provider.dart';
+import 'package:shell/shared/dbus/dbus.dart';
 
 DBusRemoteObject _getLoginDbusObject(WidgetRef ref) {
   return DBusRemoteObject(
@@ -11,14 +11,14 @@ DBusRemoteObject _getLoginDbusObject(WidgetRef ref) {
 }
 
 Future<void> powerOff(WidgetRef ref) {
-  var object = _getLoginDbusObject(ref);
+  final object = _getLoginDbusObject(ref);
   const interactive = DBusBoolean(false);
   return object
       .callMethod('org.freedesktop.login1.Manager', 'PowerOff', [interactive]);
 }
 
 Future<void> reboot(WidgetRef ref) {
-  var object = _getLoginDbusObject(ref);
+  final object = _getLoginDbusObject(ref);
   const interactive = DBusBoolean(false);
   return object
       .callMethod('org.freedesktop.login1.Manager', 'Reboot', [interactive]);

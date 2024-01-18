@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/wayland/model/wl_surface.model.dart';
+import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
-import 'package:shell/wayland/provider/wl_surface.provider.dart';
-import 'package:shell/wayland/provider/xdg_popup.provider.dart';
+import 'package:shell/wayland/provider/wl_surface.dart';
+import 'package:shell/wayland/provider/xdg_popup.dart';
 import 'package:shell/wayland/widget/surface.dart';
 
 class PopupWidget extends StatelessWidget {

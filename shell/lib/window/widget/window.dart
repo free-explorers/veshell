@@ -2,17 +2,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
-import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.provider.dart';
-import 'package:shell/manager/wayland/surface/xdg_surface/xdg_surface.provider.dart';
-import 'package:shell/manager/wayland/surface/xdg_toplevel/xdg_toplevel.model.dart';
-import 'package:shell/manager/wayland/surface/xdg_toplevel/xdg_toplevel.provider.dart';
-import 'package:shell/shared/state/cursor_position/cursor_position.provider.dart';
-import 'package:shell/shared/state/window_move/window_move.provider.dart';
-import 'package:shell/shared/state/window_position/window_position.provider.dart';
-import 'package:shell/shared/state/window_resize/window_resize.provider.dart';
-import 'package:shell/shared/state/window_stack/window_stack.provider.dart';
-import 'package:shell/shared/state/window_state/window_state.provider.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.dart';
+import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.dart';
+import 'package:shell/manager/wayland/surface/xdg_surface/xdg_surface.dart';
+import 'package:shell/manager/wayland/surface/xdg_toplevel/xdg_toplevel.dart';
+import 'package:shell/manager/wayland/surface/xdg_toplevel/xdg_toplevel.dart';
+import 'package:shell/shared/state/cursor_position/cursor_position.dart';
+import 'package:shell/shared/state/window_move/window_move.dart';
+import 'package:shell/shared/state/window_position/window_position.dart';
+import 'package:shell/shared/state/window_resize/window_resize.dart';
+import 'package:shell/shared/state/window_stack/window_stack.dart';
+import 'package:shell/shared/state/window_state/window_state.dart';
 
 const duration = Duration(milliseconds: 300);
 

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/wayland/model/wl_surface.model.dart';
-import 'package:shell/wayland/provider/subsurface.provider.dart';
-import 'package:shell/wayland/provider/wl_surface.provider.dart';
+import 'package:shell/wayland/model/wl_surface.dart';
+import 'package:shell/wayland/provider/subsurface.dart';
+import 'package:shell/wayland/provider/wl_surface.dart';
 import 'package:shell/wayland/widget/subsurface.dart';
 import 'package:shell/wayland/widget/surface/view_input_listener.dart';
 import 'package:shell/wayland/widget/surface_size.dart';

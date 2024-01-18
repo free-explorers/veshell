@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/application/provider/app_drawer.provider.dart';
+import 'package:shell/application/provider/app_drawer.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/app_drawer/app_grid.dart';
 
 class AppDrawer extends HookConsumerWidget {

@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/wayland/provider/event/wayland_event.model.serializable.dart';
+import 'package:shell/wayland/provider/event/wayland_event.serializable.dart';
 import 'package:shell/wayland/provider/request/wayland_request.dart';
 
 part 'wayland.manager.g.dart';

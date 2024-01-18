@@ -3,16 +3,16 @@ import 'dart:ui';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/wayland/model/wl_surface.model.dart';
-import 'package:shell/wayland/provider/event/commit_surface/commit_surface.model.serializable.dart';
-import 'package:shell/wayland/provider/event/destroy_surface/destroy_surface.model.serializable.dart';
-import 'package:shell/wayland/provider/event/wayland_event.model.serializable.dart';
-import 'package:shell/wayland/provider/request/unregister_view_texture/unregister_view_texture.model.serializable.dart';
-import 'package:shell/wayland/provider/subsurface.provider.dart';
+import 'package:shell/wayland/model/wl_surface.dart';
+import 'package:shell/wayland/provider/event/commit_surface/commit_surface.serializable.dart';
+import 'package:shell/wayland/provider/event/destroy_surface/destroy_surface.serializable.dart';
+import 'package:shell/wayland/provider/event/wayland_event.serializable.dart';
+import 'package:shell/wayland/provider/request/unregister_view_texture/unregister_view_texture.serializable.dart';
+import 'package:shell/wayland/provider/subsurface.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
-import 'package:shell/wayland/provider/wl_surface.provider.dart';
-import 'package:shell/wayland/provider/xdg_popup.provider.dart';
-import 'package:shell/wayland/provider/xdg_toplevel.provider.dart';
+import 'package:shell/wayland/provider/wl_surface.dart';
+import 'package:shell/wayland/provider/xdg_popup.dart';
+import 'package:shell/wayland/provider/xdg_toplevel.dart';
 
 part 'surface.manager.g.dart';
 
