@@ -5,7 +5,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/manager/wayland/request/resize_window/resize_window.model.serializable.dart';
 import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.model.dart';
 import 'package:shell/manager/wayland/surface/xdg_toplevel/xdg_toplevel.model.dart';
-import 'package:shell/manager/wayland/wayland.manager.dart';
+import 'package:shell/manager/wayland/provider/wayland.manager.dart';
 import 'package:shell/shared/state/window_resize/window_resize.model.dart';
 
 part 'window_resize.provider.g.dart';

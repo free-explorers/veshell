@@ -1,7 +1,7 @@
 import 'dart:ui';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/wayland/surface/wl_surface/wl_surface.model.dart';
+import 'package:shell/wayland/model/wl_surface.model.dart';
 
 part 'window_position.provider.g.dart';
 

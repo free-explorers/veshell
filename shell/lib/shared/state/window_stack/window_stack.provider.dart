@@ -4,7 +4,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/shared/state/window_stack/window_stack.model.dart';
 import 'package:shell/shared/tasks/tasks.provider.dart';
-import 'package:shell/wayland/surface/wl_surface/wl_surface.model.dart';
+import 'package:shell/wayland/model/wl_surface.model.dart';
 
 part 'window_stack.provider.g.dart';
 

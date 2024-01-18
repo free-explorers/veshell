@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/shared/state/window_move/window_move.model.dart';
-import 'package:shell/wayland/surface/wl_surface/wl_surface.model.dart';
+import 'package:shell/wayland/model/wl_surface.model.dart';
 
 part 'window_move.provider.g.dart';
 
