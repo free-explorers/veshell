@@ -2,9 +2,9 @@ import 'dart:ui';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/shared/state/window_stack/model/window_stack.dart';
 import 'package:shell/shared/tasks/provider/tasks.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
+import 'package:shell/window/model/window_stack.dart';
 
 part 'window_stack.g.dart';
 

@@ -1,6 +1,6 @@
 import 'package:dbus/dbus.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/shared/dbus/dbus.dart';
+import 'package:shell/shared/provider/dbus.dart';
 
 DBusRemoteObject _getLoginDbusObject(WidgetRef ref) {
   return DBusRemoteObject(
