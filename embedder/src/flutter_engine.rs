@@ -279,10 +279,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         );
 
         let (tx_platform_message, rx_platform_message) = channel::channel::<(MethodCall, Box<dyn MethodResult>)>();
-        // TODO: Provide a way to specify a channel directly, without registering a callback.
-        platform_method_channel.set_method_call_handler(Some(Box::new(move |method_call, result| {
-            tx_platform_message.send((method_call, result)).unwrap();
-        })));
+        platform_method_channel.set_method_call_mpsc_channel(Some(tx_platform_message));
 
         server_state.loop_handle.insert_source(
             rx_platform_message,
@@ -306,9 +303,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         let (tx_text_input_message, rx_text_input_message)
             = channel::channel::<(MethodCall<serde_json::Value>, Box<dyn MethodResult<serde_json::Value>>)>();
 
-        text_input_channel.set_method_call_handler(Some(Box::new(move |method_call, result| {
-            tx_text_input_message.send((method_call, result)).unwrap();
-        })));
+        text_input_channel.set_method_call_mpsc_channel(Some(tx_text_input_message));
 
         server_state.loop_handle.insert_source(
             rx_text_input_message,

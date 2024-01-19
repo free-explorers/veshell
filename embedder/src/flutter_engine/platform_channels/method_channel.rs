@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use smithay::reexports::calloop::channel;
 
 use crate::flutter_engine::platform_channels::binary_messenger::{BinaryMessageHandler, BinaryMessenger, BinaryReply};
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
@@ -73,5 +74,14 @@ impl<T: 'static> MethodChannel<T> {
             }
         }));
         self.messenger.borrow_mut().set_message_handler(&self.name, binary_handler);
+    }
+
+    pub fn set_method_call_mpsc_channel(&mut self, channel: Option<channel::Sender<(MethodCall<T>, Box<dyn MethodResult<T>>)>>) {
+        let handler: MethodCallHandler<T> = channel.map(|channel| {
+            Box::new(move |method_call, result| {
+                channel.send((method_call, result)).unwrap();
+            }) as Box<dyn FnMut(MethodCall<T>, Box<dyn MethodResult<T>>)>
+        });
+        self.set_method_call_handler(handler);
     }
 }

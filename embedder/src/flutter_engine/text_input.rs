@@ -1,7 +1,8 @@
+//! https://api.flutter.dev/flutter/services/SystemChannels/textInput-constant.html
+
 use input_linux::sys::{KEY_BACKSPACE, KEY_DELETE, KEY_ENTER};
 use serde_json::json;
 use smithay::reexports::calloop::channel::Event;
-use tracing::warn;
 use crate::{Backend, CalloopData};
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
@@ -150,12 +151,8 @@ pub fn text_input_channel_method_call_handler<BackendData: Backend + 'static>(
                     TextRange::new(composing_base as usize, composing_extent as usize),
                 );
             }
-            // These are useful for implementing a virtual keyboard, which we don't support.
-            "TextInput.show" => {}
-            "TextInput.hide" => {}
-            _ => {
-                warn!("Unknown method call: {}", method_call.method());
-            }
+            // There are other methods that we don't implement.
+            _ => {}
         }
         result.success(None);
     }
