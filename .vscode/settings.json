@@ -9,7 +9,7 @@
     "lldb.dereferencePointers": true,
     "lldb.consoleMode": "evaluate",
     "files.exclude": {
-        //"**/*.freezed.dart": true,
-        //"**/*.g.dart": true
+        "**/*.freezed.dart": true,
+        "**/*.g.dart": true
     }
 }
