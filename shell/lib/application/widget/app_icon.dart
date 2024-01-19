@@ -4,7 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:jovial_svg/jovial_svg.dart';
 import 'package:shell/application/provider/desktop_entries.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
-import 'package:shell/wayland/provider/xdg_toplevel.dart';
+import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
 
 class AppIconByPath extends StatelessWidget {
   const AppIconByPath({

@@ -6,6 +6,7 @@ import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/shared/util/app_launch.dart';
 import 'package:shell/window/model/window.dart';
 import 'package:shell/window/provider/window.manager.dart';
+import 'package:shell/window/provider/window_state.dart';
 
 class WindowPlaceholder extends HookConsumerWidget {
   const WindowPlaceholder({required this.windowId, super.key});

@@ -1,7 +1,7 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/window/provider/window.manager.dart';
-import 'package:shell/workspace/provider/workspace.dart';
+import 'package:shell/workspace/provider/workspace_state.dart';
 
 part 'workspace.freezed.dart';
 

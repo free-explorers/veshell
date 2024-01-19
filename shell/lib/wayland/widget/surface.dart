@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
-import 'package:shell/wayland/provider/subsurface.dart';
-import 'package:shell/wayland/provider/wl_surface.dart';
+import 'package:shell/wayland/provider/subsurface_state.dart';
+import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/wayland/widget/subsurface.dart';
 import 'package:shell/wayland/widget/surface/view_input_listener.dart';
 import 'package:shell/wayland/widget/surface_size.dart';
@@ -67,7 +67,7 @@ class _Subsurfaces extends ConsumerWidget {
         .watch(wlSurfaceStateProvider(surfaceId).select(selector))
         .where(
           (id) =>
-              ref.watch(subsurfaceStatesProvider(id).select((ss) => ss.mapped)),
+              ref.watch(subsurfaceStateProvider(id).select((ss) => ss.mapped)),
         )
         .map((id) => SubsurfaceWidget(surfaceId: id))
         .toList();

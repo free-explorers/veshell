@@ -3,16 +3,16 @@ import 'dart:ui';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/wayland/model/event/commit_surface/commit_surface.serializable.dart';
+import 'package:shell/wayland/model/event/destroy_surface/destroy_surface.serializable.dart';
+import 'package:shell/wayland/model/event/wayland_event.serializable.dart';
+import 'package:shell/wayland/model/request/unregister_view_texture/unregister_view_texture.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
-import 'package:shell/wayland/provider/event/commit_surface/commit_surface.serializable.dart';
-import 'package:shell/wayland/provider/event/destroy_surface/destroy_surface.serializable.dart';
-import 'package:shell/wayland/provider/event/wayland_event.serializable.dart';
-import 'package:shell/wayland/provider/request/unregister_view_texture/unregister_view_texture.serializable.dart';
-import 'package:shell/wayland/provider/subsurface.dart';
+import 'package:shell/wayland/provider/subsurface_state.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
-import 'package:shell/wayland/provider/wl_surface.dart';
-import 'package:shell/wayland/provider/xdg_popup.dart';
-import 'package:shell/wayland/provider/xdg_toplevel.dart';
+import 'package:shell/wayland/provider/wl_surface_state.dart';
+import 'package:shell/wayland/provider/xdg_popup_state.dart';
+import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
 
 part 'surface.manager.g.dart';
 
@@ -52,13 +52,13 @@ class SurfaceManager extends _$SurfaceManager {
 
       for (final id in surface.subsurfacesBelow) {
         ref
-            .read(subsurfaceStatesProvider(id).notifier)
+            .read(subsurfaceStateProvider(id).notifier)
             .set_parent(message.surfaceId);
       }
 
       for (final id in surface.subsurfacesAbove) {
         ref
-            .read(subsurfaceStatesProvider(id).notifier)
+            .read(subsurfaceStateProvider(id).notifier)
             .set_parent(message.surfaceId);
       }
 
@@ -93,7 +93,7 @@ class SurfaceManager extends _$SurfaceManager {
     }
 
     if (message is SubsurfaceCommitSurfaceMessage) {
-      ref.read(subsurfaceStatesProvider(message.surfaceId).notifier).commit(
+      ref.read(subsurfaceStateProvider(message.surfaceId).notifier).commit(
             position: message.position,
           );
     }
@@ -147,9 +147,7 @@ class SurfaceManager extends _$SurfaceManager {
       case SurfaceRole.xdgPopup:
         ref.read(xdgPopupStateProvider(message.surfaceId).notifier).dispose();
       case SurfaceRole.subsurface:
-        ref
-            .read(subsurfaceStatesProvider(message.surfaceId).notifier)
-            .dispose();
+        ref.read(subsurfaceStateProvider(message.surfaceId).notifier).dispose();
       case SurfaceRole.none:
       case SurfaceRole.cursorImage:
         break;

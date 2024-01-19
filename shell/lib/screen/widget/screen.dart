@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/screen/model/screen.dart';
-import 'package:shell/screen/provider/screen.dart';
-import 'package:shell/workspace/provider/workspace.dart';
+import 'package:shell/screen/provider/screen_state.dart';
+import 'package:shell/workspace/provider/current_workspace_id.dart';
 import 'package:shell/workspace/widget/workspace.dart';
 
 /// Widget that represent the Screen in the widget tree

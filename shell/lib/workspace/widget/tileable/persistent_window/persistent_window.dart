@@ -3,12 +3,14 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/application/widget/app_icon.dart';
-import 'package:shell/wayland/provider/request/close_window/close_window.serializable.dart';
-import 'package:shell/wayland/provider/request/resize_window/resize_window.serializable.dart';
+import 'package:shell/wayland/model/request/close_window/close_window.serializable.dart';
+import 'package:shell/wayland/model/request/resize_window/resize_window.serializable.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/wayland/widget/xdg_toplevel_surface.dart';
 import 'package:shell/window/model/window.dart';
+import 'package:shell/window/provider/dialog_list_for_window.dart';
 import 'package:shell/window/provider/window.manager.dart';
+import 'package:shell/window/provider/window_state.dart';
 import 'package:shell/workspace/widget/tileable/persistent_window/window_placeholder.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
 

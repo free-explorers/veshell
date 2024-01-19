@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
-import 'package:shell/wayland/provider/subsurface.dart';
+import 'package:shell/wayland/provider/subsurface_state.dart';
 import 'package:shell/wayland/widget/surface.dart';
 
 class SubsurfaceWidget extends StatelessWidget {
@@ -36,8 +36,8 @@ class _Positioner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final position = ref
-        .watch(subsurfaceStatesProvider(surfaceId).select((v) => v.position));
+    final position =
+        ref.watch(subsurfaceStateProvider(surfaceId).select((v) => v.position));
 
     return Positioned(
       left: position.dx,

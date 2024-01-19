@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/wayland/provider/request/pointer_exit/pointer_exit.serializable.dart';
+import 'package:shell/wayland/model/request/pointer_exit/pointer_exit.serializable.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
 part 'pointer_focus.manager.g.dart';

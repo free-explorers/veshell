@@ -4,8 +4,8 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'subsurface.freezed.dart';
 
 @freezed
-class SubsurfaceState with _$SubsurfaceState {
-  const factory SubsurfaceState({
+class Subsurface with _$Subsurface {
+  const factory Subsurface({
     required bool mapped,
     required int parent,
     required Offset position, // relative to the parent

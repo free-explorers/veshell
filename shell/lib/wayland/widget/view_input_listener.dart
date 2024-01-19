@@ -5,11 +5,11 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/pointer/provider/pointer_focus.manager.dart';
 import 'package:shell/shared/util/mouse_button_tracker.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
-import 'package:shell/wayland/provider/request/mouse_button_event/mouse_button_event.serializable.dart';
-import 'package:shell/wayland/provider/request/pointer_hover/pointer_hover.serializable.dart';
-import 'package:shell/wayland/provider/request/touch/touch.serializable.dart';
+import 'package:shell/wayland/model/request/mouse_button_event/mouse_button_event.serializable.dart';
+import 'package:shell/wayland/model/request/pointer_hover/pointer_hover.serializable.dart';
+import 'package:shell/wayland/model/request/touch/touch.serializable.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
-import 'package:shell/wayland/provider/wl_surface.dart';
+import 'package:shell/wayland/provider/wl_surface_state.dart';
 
 /// Handles all input events for a given window or popup, and redirects them to the platform which will then be
 /// forwarded to the appropriate surface.

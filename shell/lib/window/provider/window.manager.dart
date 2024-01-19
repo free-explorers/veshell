@@ -1,17 +1,20 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/screen/provider/screen.dart';
+import 'package:shell/screen/provider/focused_screen.dart';
+import 'package:shell/screen/provider/screen_state.dart';
+import 'package:shell/wayland/model/event/destroy_surface/destroy_surface.serializable.dart';
+import 'package:shell/wayland/model/event/wayland_event.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/model/xdg_surface.dart';
-import 'package:shell/wayland/provider/event/destroy_surface/destroy_surface.serializable.dart';
-import 'package:shell/wayland/provider/event/wayland_event.serializable.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
-import 'package:shell/wayland/provider/xdg_toplevel.dart';
+import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
 import 'package:shell/window/model/window.dart';
-import 'package:shell/workspace/provider/workspace.dart';
+import 'package:shell/window/provider/dialog_list_for_window.dart';
+import 'package:shell/window/provider/surface_window_map.dart';
+import 'package:shell/window/provider/window_state.dart';
+import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:uuid/uuid.dart';
 
 part 'window.manager.g.dart';
@@ -164,90 +167,5 @@ class WindowManager extends _$WindowManager {
         state = state.remove(windowId);
       }
     }
-  }
-}
-
-/// Workspace provider
-@riverpod
-class WindowState extends _$WindowState {
-  ProviderSubscription<XdgToplevelSurface>? _surfaceSubscription;
-  KeepAliveLink? _keepAliveLink;
-
-  @override
-  Window build(WindowId windowId) {
-    throw Exception('WindowState $windowId not yet initialized');
-  }
-
-  void initialize(Window window) {
-    _keepAliveLink?.close();
-    _keepAliveLink = ref.keepAlive();
-
-    state = window;
-    if (state.surfaceId != null) {
-      ref.read(surfaceWindowMapProvider.notifier).add(
-            state.surfaceId!,
-            state.windowId,
-          );
-      _listenForSurfaceChanges();
-    }
-  }
-
-  void _listenForSurfaceChanges() {
-    if (state.surfaceId == null) {
-      return;
-    }
-    if (_surfaceSubscription != null) {
-      _surfaceSubscription?.close();
-    }
-    _surfaceSubscription =
-        ref.listen(xdgToplevelStateProvider(state.surfaceId!), (_, next) {
-      state = state.copyWith(appId: next.appId, title: next.title);
-    });
-  }
-
-  void onSurfaceIsDestroyed() {
-    _surfaceSubscription?.close();
-    ref.read(surfaceWindowMapProvider.notifier).remove(state.surfaceId!);
-    if (state case final PersistentWindow persistentWindow) {
-      state = persistentWindow.copyWith(surfaceId: null);
-    } else {
-      _keepAliveLink?.close();
-    }
-  }
-
-  void update(Window window) {
-    state = window;
-  }
-}
-
-@Riverpod(keepAlive: true)
-class SurfaceWindowMap extends _$SurfaceWindowMap {
-  @override
-  IMap<SurfaceId, WindowId> build() {
-    return IMap();
-  }
-
-  void add(SurfaceId surfaceId, WindowId windowId) {
-    state = state.add(surfaceId, windowId);
-  }
-
-  void remove(SurfaceId surfaceId) {
-    state = state.remove(surfaceId);
-  }
-}
-
-@Riverpod(keepAlive: true)
-class DialogListForWindow extends _$DialogListForWindow {
-  @override
-  IMapOfSets<WindowId, WindowId> build() {
-    return IMapOfSets();
-  }
-
-  void add(WindowId parentWindowId, WindowId windowId) {
-    state = state.add(parentWindowId, windowId);
-  }
-
-  void remove(WindowId parentWindowId, WindowId windowId) {
-    state = state.remove(parentWindowId, windowId);
   }
 }

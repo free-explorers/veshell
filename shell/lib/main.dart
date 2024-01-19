@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/display/widget/display.dart';
-import 'package:shell/screen/provider/screen.dart';
+import 'package:shell/screen/provider/screen_list.dart';
 import 'package:shell/shared/util/root_overlay.dart';
 import 'package:shell/theme/provider/theme.manager.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
