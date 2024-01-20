@@ -2,13 +2,9 @@ use std::env;
 
 use smithay::{
     backend::allocator::dmabuf::Dmabuf,
-    reexports::{
-        wayland_server::{
-            backend::{ClientData, ClientId, DisconnectReason},
-            protocol::{
-                wl_surface::{self},
-            },
-        },
+    reexports::wayland_server::{
+        backend::{ClientData, ClientId, DisconnectReason},
+        protocol::wl_surface::{self},
     },
     wayland::{
         buffer::BufferHandler,
@@ -37,7 +33,7 @@ mod input_handling;
 mod cursor;
 mod server_state;
 mod texture_swap_chain;
-mod key_repeater;
+mod keyboard;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Ok(env_filter) = tracing_subscriber::EnvFilter::try_from_default_env() {

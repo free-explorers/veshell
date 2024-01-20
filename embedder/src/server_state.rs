@@ -54,7 +54,8 @@ use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 use crate::flutter_engine::wayland_messages::{
     PopupMessage, SubsurfaceMessage, SurfaceMessage, ToplevelMessage,
 };
-use crate::key_repeater::KeyRepeater;
+use crate::keyboard::KeyEvent;
+use crate::keyboard::key_repeater::KeyRepeater;
 use crate::texture_swap_chain::TextureSwapChain;
 
 pub struct ServerState<BackendData: Backend + 'static> {
@@ -67,7 +68,7 @@ pub struct ServerState<BackendData: Backend + 'static> {
     pub data_device_state: DataDeviceState,
     pub pointer: PointerHandle<ServerState<BackendData>>,
     pub keyboard: KeyboardHandle<ServerState<BackendData>>,
-    pub tx_flutter_handled_key_event: channel::Sender<(u32, Option<char>, KeyState, u32, ModifiersState, bool, bool)>,
+    pub tx_flutter_handled_key_event: channel::Sender<(KeyEvent, bool)>,
     pub key_repeater: KeyRepeater<BackendData>,
 
     pub backend_data: Box<BackendData>,
@@ -186,30 +187,19 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             )
             .expect("Failed to init wayland server source");
 
-        let (tx_flutter_handled_key_event, rx_flutter_handled_key_event) = channel::channel::<(u32, Option<char>, KeyState, u32, ModifiersState, bool, bool)>();
+        let (tx_flutter_handled_key_event, rx_flutter_handled_key_event) = channel::channel::<(KeyEvent, bool)>();
 
         loop_handle.insert_source(rx_flutter_handled_key_event, move |event, _, data: &mut CalloopData<BackendData>| {
-            if let Msg((key_code, utf32_codepoint, state, time, mods, mods_changed, handled)) = event {
-                data.state.key_repeater.up();
-
-                let text_input = &mut data.state.flutter_engine.as_mut().unwrap().text_input;
-                if text_input.is_active() && state == KeyState::Pressed {
-                    data.state.key_repeater.down(
-                        key_code,
-                        utf32_codepoint,
-                        std::time::Duration::from_millis(200),
-                        std::time::Duration::from_millis(50),
-                    );
-                }
-
+            if let Msg((key_event, handled)) = event {
                 if handled {
-                    // Flutter consumed this event. Probably a glfw_key_codes shortcut.
+                    // Flutter consumed this event. Probably a keyboard shortcut.
                     return;
                 }
 
+                let text_input = &mut data.state.flutter_engine.as_mut().unwrap().text_input;
                 if text_input.is_active() {
-                    if state == KeyState::Pressed && !mods.ctrl && !mods.alt {
-                        text_input.press_key(key_code, utf32_codepoint);
+                    if key_event.state == KeyState::Pressed && !key_event.mods.ctrl && !key_event.mods.alt {
+                        text_input.press_key(key_event.key_code, key_event.codepoint);
                     }
                     // It doesn't matter if the text field captured the key event or not.
                     // As long as it stays active, don't forward events to the Wayland client.
@@ -221,28 +211,31 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
                 let keyboard = data.state.keyboard.clone();
                 keyboard.input_forward(
                     &mut data.state,
-                    key_code,
-                    state,
+                    key_event.key_code,
+                    key_event.state,
                     SERIAL_COUNTER.next_serial(),
-                    time,
-                    mods_changed,
+                    key_event.time,
+                    key_event.mods_changed,
                 );
             }
         }).unwrap();
 
-        let key_repeater = KeyRepeater::new(loop_handle.clone(), |key_code, code_point, instant, data: &mut CalloopData<BackendData>| {
+        let key_repeater = KeyRepeater::new(loop_handle.clone(), |key_code, code_point, data: &mut CalloopData<BackendData>| {
             let keyboard = data.state.keyboard.clone();
 
             let text_input = &mut data.state.flutter_engine_mut().text_input;
             if text_input.is_active() {
                 let mods = keyboard.modifier_state();
-                // if !mods.ctrl && !mods.alt {
-                text_input.press_key(key_code, code_point);
-                // data.state.key_repeater.down(key_code, std::time::Duration::from_millis(500), std::time::Duration::from_millis(50));
-                // }
-                // It doesn't matter if the text field captured the key event or not.
-                // As long as it stays active, don't forward events to the Wayland client.
-                // return;
+                data.state.flutter_engine.as_mut().unwrap().send_key_event(
+                    data.state.tx_flutter_handled_key_event.clone(),
+                    KeyEvent {
+                        key_code,
+                        codepoint: code_point,
+                        state: KeyState::Pressed,
+                        time: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis() as u32,
+                        mods,
+                        mods_changed: false,
+                    });
             }
         });
 
