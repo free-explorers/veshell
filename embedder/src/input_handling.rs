@@ -5,7 +5,7 @@ use input_linux::sys::KEY_ESC;
 use smithay::backend::input::{AbsolutePositionEvent, Axis, AxisRelativeDirection, ButtonState, Event, InputBackend, InputEvent, KeyboardKeyEvent, KeyState, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent};
 use smithay::input::pointer::AxisFrame;
 
-use crate::{Backend, CalloopData, keyboard};
+use crate::{Backend, CalloopData, glfw_key_codes};
 use crate::flutter_engine::embedder::{FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse, FlutterPointerEvent, FlutterPointerPhase_kDown, FlutterPointerPhase_kHover, FlutterPointerPhase_kMove, FlutterPointerPhase_kUp, FlutterPointerSignalKind_kFlutterPointerSignalKindNone, FlutterPointerSignalKind_kFlutterPointerSignalKindScroll};
 use crate::flutter_engine::FlutterEngine;
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryReply;
@@ -120,17 +120,17 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
         }
         InputEvent::Keyboard { event } => {
             // Convert XKB key codes into GLFW ones because Flutter can only accept those.
-            let glfw_keycode = keyboard::get_glfw_keycode(event.key_code());
+            let glfw_keycode = glfw_key_codes::get_glfw_keycode(event.key_code());
 
-            // Update the state of the keyboard.
-            // Every key event must be passed through `keyboard.input_intercept` so that Smithay knows what keys are pressed.
+            // Update the state of the glfw_key_codes.
+            // Every key event must be passed through `glfw_key_codes.input_intercept` so that Smithay knows what keys are pressed.
             let keyboard = data.state.keyboard.clone();
             let ((mods, utf32_codepoint), mods_changed) = keyboard.input_intercept::<_, _>(
                 &mut data.state,
                 event.key_code(),
                 event.state(),
                 |_, mods, keysym_handle| {
-                    // After updating the keyboard state,
+                    // After updating the glfw_key_codes state,
                     // we get the state of the modifiers and the character that was typed.
                     let utf32_codepoint = keysym_handle.modified_sym().key_char();
                     (*mods, utf32_codepoint)
@@ -154,11 +154,11 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
             }), Some(Box::new(move |response: Option<&[u8]>| {
                 // This is the callback that will be called when Flutter replies.
                 // Flutter always replies with a single `handled` boolean.
-                // If its value is true, some widget listening to keyboard shortcuts probably handled this event.
+                // If its value is true, some widget listening to glfw_key_codes shortcuts probably handled this event.
                 let response = response.unwrap();
                 let message = JsonMessageCodec::new().decode_message(response).unwrap();
                 let handled = message["handled"].as_bool().unwrap();
-                // We would normally call `keyboard.input_forward` here to forward the event to a Wayland client,
+                // We would normally call `glfw_key_codes.input_forward` here to forward the event to a Wayland client,
                 // but we need `data.state` and we can't just capture it by reference.
                 // Send key event info and Flutter's response over an MPSC channel.
                 // The receiver `rx_flutter_handled_key_event` is registered to the event loop with a callback

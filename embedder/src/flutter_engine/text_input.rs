@@ -41,8 +41,8 @@ impl TextInput {
 
         let changed = match keycode as i32 {
             // Arrow keys and home/end are handled by the Flutter, but the following keys are not.
-            KEY_BACKSPACE => model.backspace(),
-            KEY_DELETE => model.delete(),
+            // KEY_BACKSPACE => model.backspace(),
+            // KEY_DELETE => model.delete(),
             KEY_ENTER => {
                 self.press_enter();
                 false

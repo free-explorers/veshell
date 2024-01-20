@@ -3,13 +3,14 @@ use std::collections::HashMap;
 use std::env::{remove_var, set_var};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::time::SystemTime;
 
 use smithay::{
     delegate_compositor, delegate_data_device, delegate_dmabuf, delegate_output, delegate_seat,
     delegate_shm, delegate_xdg_shell,
 };
 use smithay::backend::allocator::dmabuf::Dmabuf;
-use smithay::backend::input::{InputBackend, KeyState};
+use smithay::backend::input::KeyState;
 use smithay::backend::renderer::{ImportAll, Texture};
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
@@ -53,6 +54,7 @@ use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 use crate::flutter_engine::wayland_messages::{
     PopupMessage, SubsurfaceMessage, SurfaceMessage, ToplevelMessage,
 };
+use crate::key_repeater::KeyRepeater;
 use crate::texture_swap_chain::TextureSwapChain;
 
 pub struct ServerState<BackendData: Backend + 'static> {
@@ -66,6 +68,7 @@ pub struct ServerState<BackendData: Backend + 'static> {
     pub pointer: PointerHandle<ServerState<BackendData>>,
     pub keyboard: KeyboardHandle<ServerState<BackendData>>,
     pub tx_flutter_handled_key_event: channel::Sender<(u32, Option<char>, KeyState, u32, ModifiersState, bool, bool)>,
+    pub key_repeater: KeyRepeater<BackendData>,
 
     pub backend_data: Box<BackendData>,
     pub flutter_engine: Option<Box<FlutterEngine<BackendData>>>,
@@ -187,12 +190,23 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
 
         loop_handle.insert_source(rx_flutter_handled_key_event, move |event, _, data: &mut CalloopData<BackendData>| {
             if let Msg((key_code, utf32_codepoint, state, time, mods, mods_changed, handled)) = event {
+                data.state.key_repeater.up();
+
+                let text_input = &mut data.state.flutter_engine.as_mut().unwrap().text_input;
+                if text_input.is_active() && state == KeyState::Pressed {
+                    data.state.key_repeater.down(
+                        key_code,
+                        utf32_codepoint,
+                        std::time::Duration::from_millis(200),
+                        std::time::Duration::from_millis(50),
+                    );
+                }
+
                 if handled {
-                    // Flutter consumed this event. Probably a keyboard shortcut.
+                    // Flutter consumed this event. Probably a glfw_key_codes shortcut.
                     return;
                 }
 
-                let text_input = &mut data.state.flutter_engine_mut().text_input;
                 if text_input.is_active() {
                     if state == KeyState::Pressed && !mods.ctrl && !mods.alt {
                         text_input.press_key(key_code, utf32_codepoint);
@@ -216,6 +230,22 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             }
         }).unwrap();
 
+        let key_repeater = KeyRepeater::new(loop_handle.clone(), |key_code, code_point, instant, data: &mut CalloopData<BackendData>| {
+            let keyboard = data.state.keyboard.clone();
+
+            let text_input = &mut data.state.flutter_engine_mut().text_input;
+            if text_input.is_active() {
+                let mods = keyboard.modifier_state();
+                // if !mods.ctrl && !mods.alt {
+                text_input.press_key(key_code, code_point);
+                // data.state.key_repeater.down(key_code, std::time::Duration::from_millis(500), std::time::Duration::from_millis(50));
+                // }
+                // It doesn't matter if the text field captured the key event or not.
+                // As long as it stays active, don't forward events to the Wayland client.
+                // return;
+            }
+        });
+
         Self {
             running: Arc::new(AtomicBool::new(true)),
             display_handle,
@@ -236,6 +266,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             pointer,
             keyboard,
             tx_flutter_handled_key_event,
+            key_repeater,
             next_surface_id: 1,
             next_texture_id: 1,
             imported_dmabufs: Vec::new(),
