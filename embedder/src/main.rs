@@ -37,7 +37,7 @@ mod input_handling;
 mod cursor;
 mod server_state;
 mod texture_swap_chain;
-mod keyboard;
+mod key_repeater;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Ok(env_filter) = tracing_subscriber::EnvFilter::try_from_default_env() {
