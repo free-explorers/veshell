@@ -20,8 +20,9 @@ use smithay::{
     reexports::calloop::channel,
     utils::{Physical, Size},
 };
-use smithay::backend::input::{InputBackend, KeyboardKeyEvent};
+use smithay::backend::input::{InputBackend, KeyboardKeyEvent, KeyState};
 use smithay::backend::renderer::gles::ffi::RGBA8;
+use smithay::input::keyboard::ModifiersState;
 use smithay::reexports::calloop;
 use smithay::reexports::calloop::{Dispatcher, LoopHandle};
 use smithay::reexports::calloop::channel::Event::Msg;
@@ -58,6 +59,7 @@ use crate::flutter_engine::platform_channels::binary_messenger_impl::BinaryMesse
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 use crate::flutter_engine::platform_channels::json_message_codec::JsonMessageCodec;
 use crate::flutter_engine::platform_channels::json_method_codec::JsonMethodCodec;
+use crate::flutter_engine::platform_channels::message_codec::MessageCodec;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
@@ -65,6 +67,8 @@ use crate::flutter_engine::platform_channels::standard_method_codec::StandardMet
 use crate::flutter_engine::task_runner::TaskRunner;
 use crate::flutter_engine::text_input::{text_input_channel_method_call_handler, TextInput};
 use crate::gles_framebuffer_importer::GlesFramebufferImporter;
+use crate::keyboard::KeyEvent;
+use crate::keyboard::glfw_key_codes::{get_glfw_keycode, get_glfw_modifiers};
 use crate::mouse_button_tracker::MouseButtonTracker;
 
 mod callbacks;
@@ -417,6 +421,49 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             return Err(format!("Could not send pointer event, error {result}").into());
         }
         Ok(())
+    }
+
+    pub fn send_key_event(
+        &self,
+        // TODO: This channel shouldn't be passed as an argument.
+        // The FlutterEngine struct should own it.
+        // Some refactoring is needed to make this possible.
+        tx: channel::Sender<(KeyEvent, bool)>,
+        key_event: KeyEvent,
+    ) {
+        // Send the key event to Flutter.
+        // It will propagate the event to widgets and will determine if the event was handled or not.
+        // It will respond back and will call the reply handler.
+        self.key_event_channel.send(&serde_json::json!({
+            "keymap": "linux",
+            "toolkit": "glfw",
+            "keyCode": get_glfw_keycode(key_event.key_code),
+            "scanCode": key_event.key_code + 8,
+            "modifiers": get_glfw_modifiers(key_event.mods),
+            "unicodeScalarValues": key_event.codepoint.map(|c| c as u32),
+            "type": if key_event.state == KeyState::Pressed { "keydown" } else { "keyup" },
+        }), Some(Box::new(move |response: Option<&[u8]>| {
+            // This is the callback that will be called when Flutter replies.
+            // Flutter always replies with a single `handled` boolean.
+            // If its value is true, some widget listening to glfw_key_codes shortcuts probably handled this event.
+            let response = match response {
+                Some(response) => response,
+                None => return,
+            };
+
+            let message = JsonMessageCodec::new().decode_message(response).unwrap();
+            let handled = message["handled"].as_bool().unwrap();
+            // We would normally call `glfw_key_codes.input_forward` here to forward the event to a Wayland client,
+            // but we need `data.state` and we can't just capture it by reference.
+            // Send key event info and Flutter's response over an MPSC channel.
+            // The receiver `rx_flutter_handled_key_event` is registered to the event loop with a callback
+            // that will continue processing the event.
+            // This callback is defined in the constructor of `ServerState`.
+            tx.send((
+                key_event,
+                handled
+            )).unwrap();
+        })));
     }
 
     pub fn register_external_texture(&self, texture_id: i64) -> Result<(), Box<dyn std::error::Error>> {

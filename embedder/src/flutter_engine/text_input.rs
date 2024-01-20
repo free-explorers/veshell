@@ -1,8 +1,9 @@
 //! https://api.flutter.dev/flutter/services/SystemChannels/textInput-constant.html
 
-use input_linux::sys::{KEY_BACKSPACE, KEY_DELETE, KEY_ENTER};
+use input_linux::sys::KEY_ENTER;
 use serde_json::json;
 use smithay::reexports::calloop::channel::Event;
+
 use crate::{Backend, CalloopData};
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
@@ -41,8 +42,6 @@ impl TextInput {
 
         let changed = match keycode as i32 {
             // Arrow keys and home/end are handled by the Flutter, but the following keys are not.
-            // KEY_BACKSPACE => model.backspace(),
-            // KEY_DELETE => model.delete(),
             KEY_ENTER => {
                 self.press_enter();
                 false
