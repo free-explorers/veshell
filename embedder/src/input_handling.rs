@@ -1,5 +1,6 @@
 use std::mem::size_of;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use input_linux::sys::KEY_ESC;
 use smithay::backend::input::{AbsolutePositionEvent, Axis, AxisRelativeDirection, ButtonState, Event, InputBackend, InputEvent, KeyboardKeyEvent, KeyState, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent};
@@ -8,10 +9,7 @@ use smithay::input::pointer::AxisFrame;
 use crate::{Backend, CalloopData};
 use crate::flutter_engine::embedder::{FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse, FlutterPointerEvent, FlutterPointerPhase_kDown, FlutterPointerPhase_kHover, FlutterPointerPhase_kMove, FlutterPointerPhase_kUp, FlutterPointerSignalKind_kFlutterPointerSignalKindNone, FlutterPointerSignalKind_kFlutterPointerSignalKindScroll};
 use crate::flutter_engine::FlutterEngine;
-use crate::flutter_engine::platform_channels::json_message_codec::JsonMessageCodec;
-use crate::flutter_engine::platform_channels::message_codec::MessageCodec;
 use crate::keyboard::KeyEvent;
-use crate::keyboard::glfw_key_codes::{get_glfw_keycode, get_glfw_modifiers};
 
 pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &mut CalloopData<BackendData>)
     where BackendData: Backend + 'static
@@ -152,9 +150,9 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
                     data.state.key_repeater.down(
                         event.key_code(),
                         utf32_codepoint,
-                        data.state.keyboard.
-                        std::time::Duration::from_millis(200),
-                        std::time::Duration::from_millis(50),
+                        // TODO: Use the same values as configured for Wayland clients.
+                        Duration::from_millis(200),
+                        Duration::from_millis(50),
                     );
                 }
                 KeyState::Released => {
