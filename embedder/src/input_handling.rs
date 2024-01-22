@@ -150,9 +150,8 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
                     data.state.key_repeater.down(
                         event.key_code(),
                         utf32_codepoint,
-                        // TODO: Use the same values as configured for Wayland clients.
-                        Duration::from_millis(200),
-                        Duration::from_millis(50),
+                        Duration::from_millis(data.state.repeat_delay),
+                        Duration::from_millis(data.state.repeat_rate),
                     );
                 }
                 KeyState::Released => {

@@ -68,6 +68,8 @@ pub struct ServerState<BackendData: Backend + 'static> {
     pub data_device_state: DataDeviceState,
     pub pointer: PointerHandle<ServerState<BackendData>>,
     pub keyboard: KeyboardHandle<ServerState<BackendData>>,
+    pub repeat_delay: u64,
+    pub repeat_rate: u64,
     pub tx_flutter_handled_key_event: channel::Sender<(KeyEvent, bool)>,
     pub key_repeater: KeyRepeater<BackendData>,
 
@@ -145,7 +147,15 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         let mut seat_state = SeatState::new();
         let seat_name = backend_data.seat_name();
         let mut seat = seat_state.new_wl_seat(&display_handle, seat_name.clone());
-        let keyboard = seat.add_keyboard(Default::default(), 200, 25).unwrap();
+
+        let repeat_delay: u64 = 200;
+        let repeat_rate: u64 = 25;
+        let keyboard = seat.add_keyboard(
+            Default::default(),
+            repeat_delay as i32,
+            repeat_rate as i32,
+        ).unwrap();
+
         let pointer = seat.add_pointer();
 
         let data_device_state = DataDeviceState::new::<Self>(&display_handle);
@@ -258,6 +268,8 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             data_device_state,
             pointer,
             keyboard,
+            repeat_delay,
+            repeat_rate,
             tx_flutter_handled_key_event,
             key_repeater,
             next_surface_id: 1,
@@ -272,6 +284,12 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             surface_id_per_texture_id: HashMap::new(),
             texture_swapchains: HashMap::new(),
         }
+    }
+
+    pub fn change_keyboard_repeat_info(&mut self, repeat_delay: u64, repeat_rate: u64) {
+        self.repeat_delay = repeat_delay;
+        self.repeat_rate = repeat_rate;
+        self.keyboard.change_repeat_info(repeat_delay as i32, repeat_rate as i32);
     }
 }
 
