@@ -41,7 +41,7 @@ impl TextInput {
         };
 
         let changed = match keycode as i32 {
-            // Arrow keys and home/end are handled by the Flutter, but the following keys are not.
+            // Navigation keys like arrow keys are handled by Flutter, but the following keys are not.
             KEY_ENTER => {
                 self.press_enter();
                 false
