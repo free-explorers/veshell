@@ -127,7 +127,7 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
                 event.key_code(),
                 event.state(),
                 |_, mods, keysym_handle| {
-                    // After updating the glfw_key_codes state,
+                    // After updating the keyboard state,
                     // we get the state of the modifiers and the character that was typed.
                     let utf32_codepoint = keysym_handle.modified_sym().key_char();
                     (*mods, utf32_codepoint)

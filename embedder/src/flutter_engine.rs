@@ -445,7 +445,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         }), Some(Box::new(move |response: Option<&[u8]>| {
             // This is the callback that will be called when Flutter replies.
             // Flutter always replies with a single `handled` boolean.
-            // If its value is true, some widget listening to glfw_key_codes shortcuts probably handled this event.
+            // If its value is true, some widget listening to keyboard shortcuts probably handled this event.
             let response = match response {
                 Some(response) => response,
                 None => return,
