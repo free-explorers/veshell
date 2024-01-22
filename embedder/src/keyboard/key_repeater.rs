@@ -23,17 +23,17 @@ impl<BackendData: Backend + 'static> KeyRepeater<BackendData> {
         }
     }
 
-    pub fn down(&mut self, key_code: u32, char_point: Option<char>, delay: Duration, interval: Duration) {
+    pub fn down(&mut self, key_code: u32, char_point: Option<char>, repeat_delay: Duration, repeat_rate: Duration) {
         // Cancel any existing key repeat, we don't want to repeat multiple keys at once.
         self.cancel();
         self.repeating_key = Some(key_code);
 
-        let timer = Timer::from_duration(delay);
+        let timer = Timer::from_duration(repeat_delay);
 
         let callback = self.callback.clone();
         let token = self.loop_handle.insert_source(timer, move |_, _, data| {
             callback(key_code, char_point, data);
-            TimeoutAction::ToDuration(interval)
+            TimeoutAction::ToDuration(repeat_rate)
         }).unwrap();
 
         self.timer_token = Some(token);
