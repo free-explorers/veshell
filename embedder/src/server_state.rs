@@ -149,7 +149,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         let mut seat = seat_state.new_wl_seat(&display_handle, seat_name.clone());
 
         let repeat_delay: u64 = 200;
-        let repeat_rate: u64 = 25;
+        let repeat_rate: u64 = 50;
         let keyboard = seat.add_keyboard(
             Default::default(),
             repeat_delay as i32,
@@ -233,20 +233,17 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         let key_repeater = KeyRepeater::new(loop_handle.clone(), |key_code, code_point, data: &mut CalloopData<BackendData>| {
             let keyboard = data.state.keyboard.clone();
 
-            let text_input = &mut data.state.flutter_engine_mut().text_input;
-            if text_input.is_active() {
-                let mods = keyboard.modifier_state();
-                data.state.flutter_engine.as_mut().unwrap().send_key_event(
-                    data.state.tx_flutter_handled_key_event.clone(),
-                    KeyEvent {
-                        key_code,
-                        codepoint: code_point,
-                        state: KeyState::Pressed,
-                        time: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis() as u32,
-                        mods,
-                        mods_changed: false,
-                    });
-            }
+            let mods = keyboard.modifier_state();
+            data.state.flutter_engine.as_mut().unwrap().send_key_event(
+                data.state.tx_flutter_handled_key_event.clone(),
+                KeyEvent {
+                    key_code,
+                    codepoint: code_point,
+                    state: KeyState::Pressed,
+                    time: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis() as u32,
+                    mods,
+                    mods_changed: false,
+                });
         });
 
         Self {

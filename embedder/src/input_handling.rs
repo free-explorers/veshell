@@ -119,7 +119,8 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
         }
         InputEvent::Keyboard { event } => {
             // Update the state of the keyboard.
-            // Every key event must be passed through `glfw_key_codes.input_intercept` so that Smithay knows what keys are pressed.
+            // Every key event must be passed through `glfw_key_codes.input_intercept`
+            // so that Smithay knows what keys are pressed.
             let keyboard = data.state.keyboard.clone();
             let ((mods, utf32_codepoint), mods_changed) = keyboard.input_intercept::<_, _>(
                 &mut data.state,
@@ -133,6 +134,7 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
                 },
             );
 
+            // Forward the key event to Flutter.
             data.state.flutter_engine.as_mut().unwrap().send_key_event(
                 data.state.tx_flutter_handled_key_event.clone(),
                 KeyEvent {
@@ -145,17 +147,23 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
                 });
 
             // Initiate key repeat.
-            match event.state() {
-                KeyState::Pressed => {
-                    data.state.key_repeater.down(
-                        event.key_code(),
-                        utf32_codepoint,
-                        Duration::from_millis(data.state.repeat_delay),
-                        Duration::from_millis(data.state.repeat_rate),
-                    );
-                }
-                KeyState::Released => {
-                    data.state.key_repeater.up(event.key_code());
+            // The callback that gets called repeatedly is defined in the constructor of `ServerState`.
+            // Modifier keys do nothing on their own, so it doesn't make sense to repeat them.
+            // TODO: It would be nice to be able to define the callback here next to this block of code
+            // because asynchronous flows like this one are difficult to follow.
+            if !mods_changed {
+                match event.state() {
+                    KeyState::Pressed => {
+                        data.state.key_repeater.down(
+                            event.key_code(),
+                            utf32_codepoint,
+                            Duration::from_millis(data.state.repeat_delay),
+                            Duration::from_millis(data.state.repeat_rate),
+                        );
+                    }
+                    KeyState::Released => {
+                        data.state.key_repeater.up(event.key_code());
+                    }
                 }
             }
 

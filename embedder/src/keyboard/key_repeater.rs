@@ -33,6 +33,7 @@ impl<BackendData: Backend + 'static> KeyRepeater<BackendData> {
         let callback = self.callback.clone();
         let token = self.loop_handle.insert_source(timer, move |_, _, data| {
             callback(key_code, char_point, data);
+            // Reschedule the timer over and over.
             TimeoutAction::ToDuration(repeat_rate)
         }).unwrap();
 
@@ -44,6 +45,7 @@ impl<BackendData: Backend + 'static> KeyRepeater<BackendData> {
             Some(repeating_key) => repeating_key,
             None => return,
         };
+        // Only stop the key repeat if the user releases the same key that caused the repeat.
         if repeating_key == key_code {
             self.cancel();
         }
