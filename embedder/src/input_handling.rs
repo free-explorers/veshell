@@ -1,6 +1,5 @@
 use std::mem::size_of;
 use std::sync::atomic::Ordering;
-use std::time::Duration;
 
 use input_linux::sys::KEY_ESC;
 use smithay::backend::input::{AbsolutePositionEvent, Axis, AxisRelativeDirection, ButtonState, Event, InputBackend, InputEvent, KeyboardKeyEvent, KeyState, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent};
@@ -9,7 +8,6 @@ use smithay::input::pointer::AxisFrame;
 use crate::{Backend, CalloopData};
 use crate::flutter_engine::embedder::{FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse, FlutterPointerEvent, FlutterPointerPhase_kDown, FlutterPointerPhase_kHover, FlutterPointerPhase_kMove, FlutterPointerPhase_kUp, FlutterPointerSignalKind_kFlutterPointerSignalKindNone, FlutterPointerSignalKind_kFlutterPointerSignalKindScroll};
 use crate::flutter_engine::FlutterEngine;
-use crate::keyboard::KeyEvent;
 
 pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &mut CalloopData<BackendData>)
     where BackendData: Backend + 'static
@@ -118,58 +116,12 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
             }).unwrap();
         }
         InputEvent::Keyboard { event } => {
-            // Update the state of the keyboard.
-            // Every key event must be passed through `glfw_key_codes.input_intercept`
-            // so that Smithay knows what keys are pressed.
-            let keyboard = data.state.keyboard.clone();
-            let ((mods, utf32_codepoint), mods_changed) = keyboard.input_intercept::<_, _>(
-                &mut data.state,
-                event.key_code(),
-                event.state(),
-                |_, mods, keysym_handle| {
-                    // After updating the keyboard state,
-                    // we get the state of the modifiers and the character that was typed.
-                    let utf32_codepoint = keysym_handle.modified_sym().key_char();
-                    (*mods, utf32_codepoint)
-                },
-            );
-
-            // Forward the key event to Flutter.
-            data.state.flutter_engine.as_mut().unwrap().send_key_event(
-                data.state.tx_flutter_handled_key_event.clone(),
-                KeyEvent {
-                    key_code: event.key_code(),
-                    codepoint: utf32_codepoint,
-                    state: event.state(),
-                    time: event.time_msec(),
-                    mods,
-                    mods_changed,
-                });
-
-            // Initiate key repeat.
-            // The callback that gets called repeatedly is defined in the constructor of `ServerState`.
-            // Modifier keys do nothing on their own, so it doesn't make sense to repeat them.
-            // TODO: It would be nice to be able to define the callback here next to this block of code
-            // because asynchronous flows like this one are difficult to follow.
-            if !mods_changed {
-                match event.state() {
-                    KeyState::Pressed => {
-                        data.state.key_repeater.down(
-                            event.key_code(),
-                            utf32_codepoint,
-                            Duration::from_millis(data.state.repeat_delay),
-                            Duration::from_millis(data.state.repeat_rate),
-                        );
-                    }
-                    KeyState::Released => {
-                        data.state.key_repeater.up(event.key_code());
-                    }
-                }
-            }
-
             if event.key_code() == KEY_ESC as u32 && event.state() == KeyState::Pressed {
                 data.state.running.store(false, Ordering::SeqCst);
+                return;
             }
+
+            data.state.handle_key_event(event.key_code(), event.state(), event.time_msec());
         }
         InputEvent::GestureSwipeBegin { .. } => {}
         InputEvent::GestureSwipeUpdate { .. } => {}
@@ -189,6 +141,7 @@ pub fn handle_input<BackendData>(event: &InputEvent<impl InputBackend>, data: &m
         InputEvent::TabletToolTip { .. } => {}
         InputEvent::TabletToolButton { .. } => {}
         InputEvent::Special(_) => {}
+        InputEvent::SwitchToggle { .. } => {}
     }
 }
 

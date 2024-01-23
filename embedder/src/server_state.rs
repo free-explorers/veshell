@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::env::{remove_var, set_var};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use smithay::{
     delegate_compositor, delegate_data_device, delegate_dmabuf, delegate_output, delegate_seat,
@@ -15,7 +15,7 @@ use smithay::backend::renderer::{ImportAll, Texture};
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::input::{Seat, SeatHandler, SeatState};
-use smithay::input::keyboard::{KeyboardHandle, ModifiersState};
+use smithay::input::keyboard::KeyboardHandle;
 use smithay::input::pointer::{CursorImageStatus, PointerHandle};
 use smithay::reexports::calloop::{channel, Interest, LoopHandle, Mode, PostAction};
 use smithay::reexports::calloop::channel::Event::Msg;
@@ -54,8 +54,8 @@ use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 use crate::flutter_engine::wayland_messages::{
     PopupMessage, SubsurfaceMessage, SurfaceMessage, ToplevelMessage,
 };
-use crate::keyboard::KeyEvent;
 use crate::keyboard::key_repeater::KeyRepeater;
+use crate::keyboard::KeyEvent;
 use crate::texture_swap_chain::TextureSwapChain;
 
 pub struct ServerState<BackendData: Backend + 'static> {
@@ -109,6 +109,64 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         let texture_id = self.next_texture_id;
         self.next_texture_id += 1;
         texture_id
+    }
+
+    pub fn handle_key_event(&mut self, key_code: u32, state: KeyState, time: u32) {
+        // Update the state of the keyboard.
+        // Every key event must be passed through `glfw_key_codes.input_intercept`
+        // so that Smithay knows what keys are pressed.
+        let keyboard = self.keyboard.clone();
+        let ((mods, utf32_codepoint), mods_changed) = keyboard.input_intercept::<_, _>(
+            self,
+            key_code,
+            state,
+            |_, mods, keysym_handle| {
+                // After updating the keyboard state,
+                // we get the state of the modifiers and the character that was typed.
+                let utf32_codepoint = keysym_handle.modified_sym().key_char();
+                (*mods, utf32_codepoint)
+            },
+        );
+
+        // Forward the key event to Flutter.
+        self.flutter_engine.as_mut().unwrap().send_key_event(
+            self.tx_flutter_handled_key_event.clone(),
+            KeyEvent {
+                key_code,
+                codepoint: utf32_codepoint,
+                state,
+                time,
+                mods,
+                mods_changed,
+            });
+
+        // Initiate key repeat.
+        // The callback that gets called repeatedly is defined in the constructor of `ServerState`.
+        // Modifier keys do nothing on their own, so it doesn't make sense to repeat them.
+        // TODO: It would be nice to be able to define the callback here next to this block of code
+        // because asynchronous flows like this one are difficult to follow.
+        if !mods_changed {
+            match state {
+                KeyState::Pressed => {
+                    self.key_repeater.down(
+                        key_code,
+                        utf32_codepoint,
+                        Duration::from_millis(self.repeat_delay),
+                        Duration::from_millis(self.repeat_rate),
+                    );
+                }
+                KeyState::Released => {
+                    self.key_repeater.up(key_code);
+                }
+            }
+        }
+    }
+
+    pub fn release_all_keys(&mut self) {
+        let keyboard = self.keyboard.clone();
+        for key_code in keyboard.pressed_keys() {
+            self.handle_key_event(key_code.raw(), KeyState::Released, 0);
+        }
     }
 }
 
