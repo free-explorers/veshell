@@ -33,6 +33,7 @@ use smithay::{
     },
     utils::DeviceFd,
 };
+use smithay::backend::input::Event;
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::output::{Output, PhysicalProperties, Subpixel};
@@ -234,6 +235,8 @@ pub fn run_x11_client() {
                 }
             }
             X11Event::Input(event) => handle_input::<X11Data>(&event, data),
+            X11Event::Focus(false) => data.state.release_all_keys(),
+            _ => {},
         })
         .expect("Failed to insert X11 Backend into event loop");
 
