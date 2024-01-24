@@ -2,13 +2,9 @@ use std::env;
 
 use smithay::{
     backend::allocator::dmabuf::Dmabuf,
-    reexports::{
-        wayland_server::{
-            backend::{ClientData, ClientId, DisconnectReason},
-            protocol::{
-                wl_surface::{self},
-            },
-        },
+    reexports::wayland_server::{
+        backend::{ClientData, ClientId, DisconnectReason},
+        protocol::wl_surface::{self},
     },
     wayland::{
         buffer::BufferHandler,

@@ -289,7 +289,7 @@ impl ServerState<DrmBackend> {
             slot
         } else {
             // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
-            surface.compositor.render_frame::<GlesRenderer, TextureRenderElement<GlesTexture>, GlesTexture>(
+            surface.compositor.render_frame::<GlesRenderer, TextureRenderElement<GlesTexture>>(
                 gles_renderer,
                 &[],
                 [0.0, 0.0, 0.0, 0.0],
@@ -350,7 +350,7 @@ impl ServerState<DrmBackend> {
             Kind::Cursor,
         );
 
-        surface.compositor.render_frame::<GlesRenderer, TextureRenderElement<GlesTexture>, GlesTexture>(
+        surface.compositor.render_frame::<GlesRenderer, TextureRenderElement<GlesTexture>>(
             gles_renderer,
             &[flutter_texture_element, cursor_element],
             [0.0, 0.0, 0.0, 0.0],
@@ -434,7 +434,7 @@ impl ServerState<DrmBackend> {
             .unwrap();
 
         let gbm_device = GbmDevice::new(fd.clone()).map_err(DeviceAddError::GbmDevice)?;
-        let egl_display = EGLDisplay::new(gbm_device.clone()).expect("Failed to create EGLDisplay");
+        let egl_display = unsafe { EGLDisplay::new(gbm_device.clone()) }.expect("Failed to create EGLDisplay");
         let render_node = EGLDevice::device_for_display(&egl_display)
             .ok()
             .and_then(|x| x.try_get_render_node().ok().flatten())
@@ -607,7 +607,7 @@ impl ServerState<DrmBackend> {
         // Start first frame with a solid color. This will trigger the first VBLank event.
         surface
             .compositor
-            .render_frame::<_, TextureRenderElement<_>, GlesTexture>(
+            .render_frame::<_, TextureRenderElement<_>>(
                 self.gles_renderer.as_mut().unwrap(),
                 &[],
                 [0.0, 0.0, 0.0, 0.0])

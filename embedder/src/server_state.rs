@@ -3,13 +3,14 @@ use std::collections::HashMap;
 use std::env::{remove_var, set_var};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::time::{Duration, SystemTime};
 
 use smithay::{
     delegate_compositor, delegate_data_device, delegate_dmabuf, delegate_output, delegate_seat,
     delegate_shm, delegate_xdg_shell,
 };
 use smithay::backend::allocator::dmabuf::Dmabuf;
-use smithay::backend::input::{InputBackend, KeyState};
+use smithay::backend::input::KeyState;
 use smithay::backend::renderer::{ImportAll, Texture};
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
@@ -53,6 +54,8 @@ use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 use crate::flutter_engine::wayland_messages::{
     PopupMessage, SubsurfaceMessage, SurfaceMessage, ToplevelMessage,
 };
+use crate::keyboard::key_repeater::KeyRepeater;
+use crate::keyboard::KeyEvent;
 use crate::texture_swap_chain::TextureSwapChain;
 
 pub struct ServerState<BackendData: Backend + 'static> {
@@ -65,7 +68,10 @@ pub struct ServerState<BackendData: Backend + 'static> {
     pub data_device_state: DataDeviceState,
     pub pointer: PointerHandle<ServerState<BackendData>>,
     pub keyboard: KeyboardHandle<ServerState<BackendData>>,
-    pub tx_flutter_handled_key_event: channel::Sender<(u32, KeyState, u32, bool, bool)>,
+    pub repeat_delay: u64,
+    pub repeat_rate: u64,
+    pub tx_flutter_handled_key_event: channel::Sender<(KeyEvent, bool)>,
+    pub key_repeater: KeyRepeater<BackendData>,
 
     pub backend_data: Box<BackendData>,
     pub flutter_engine: Option<Box<FlutterEngine<BackendData>>>,
@@ -104,6 +110,64 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         self.next_texture_id += 1;
         texture_id
     }
+
+    pub fn handle_key_event(&mut self, key_code: u32, state: KeyState, time: u32) {
+        // Update the state of the keyboard.
+        // Every key event must be passed through `glfw_key_codes.input_intercept`
+        // so that Smithay knows what keys are pressed.
+        let keyboard = self.keyboard.clone();
+        let ((mods, utf32_codepoint), mods_changed) = keyboard.input_intercept::<_, _>(
+            self,
+            key_code,
+            state,
+            |_, mods, keysym_handle| {
+                // After updating the keyboard state,
+                // we get the state of the modifiers and the character that was typed.
+                let utf32_codepoint = keysym_handle.modified_sym().key_char();
+                (*mods, utf32_codepoint)
+            },
+        );
+
+        // Forward the key event to Flutter.
+        self.flutter_engine.as_mut().unwrap().send_key_event(
+            self.tx_flutter_handled_key_event.clone(),
+            KeyEvent {
+                key_code,
+                codepoint: utf32_codepoint,
+                state,
+                time,
+                mods,
+                mods_changed,
+            });
+
+        // Initiate key repeat.
+        // The callback that gets called repeatedly is defined in the constructor of `ServerState`.
+        // Modifier keys do nothing on their own, so it doesn't make sense to repeat them.
+        // TODO: It would be nice to be able to define the callback here next to this block of code
+        // because asynchronous flows like this one are difficult to follow.
+        if !mods_changed {
+            match state {
+                KeyState::Pressed => {
+                    self.key_repeater.down(
+                        key_code,
+                        utf32_codepoint,
+                        Duration::from_millis(self.repeat_delay),
+                        Duration::from_millis(self.repeat_rate),
+                    );
+                }
+                KeyState::Released => {
+                    self.key_repeater.up(key_code);
+                }
+            }
+        }
+    }
+
+    pub fn release_all_keys(&mut self) {
+        let keyboard = self.keyboard.clone();
+        for key_code in keyboard.pressed_keys() {
+            self.handle_key_event(key_code.raw(), KeyState::Released, 0);
+        }
+    }
 }
 
 impl<BackendData: Backend + 'static> ServerState<BackendData> {
@@ -141,7 +205,15 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         let mut seat_state = SeatState::new();
         let seat_name = backend_data.seat_name();
         let mut seat = seat_state.new_wl_seat(&display_handle, seat_name.clone());
-        let keyboard = seat.add_keyboard(Default::default(), 200, 25).unwrap();
+
+        let repeat_delay: u64 = 200;
+        let repeat_rate: u64 = 50;
+        let keyboard = seat.add_keyboard(
+            Default::default(),
+            repeat_delay as i32,
+            repeat_rate as i32,
+        ).unwrap();
+
         let pointer = seat.add_pointer();
 
         let data_device_state = DataDeviceState::new::<Self>(&display_handle);
@@ -183,27 +255,54 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             )
             .expect("Failed to init wayland server source");
 
-        let (tx_flutter_handled_key_event, rx_flutter_handled_key_event) = channel::channel::<(u32, KeyState, u32, bool, bool)>();
+        let (tx_flutter_handled_key_event, rx_flutter_handled_key_event) = channel::channel::<(KeyEvent, bool)>();
 
         loop_handle.insert_source(rx_flutter_handled_key_event, move |event, _, data: &mut CalloopData<BackendData>| {
-            if let Msg((key_code, state, time, mods_changed, handled)) = event {
+            if let Msg((key_event, handled)) = event {
                 if handled {
-                    // Flutter consumed this event, don't forward it to the client.
+                    // Flutter consumed this event. Probably a keyboard shortcut.
                     return;
                 }
 
-                // Forward the event to the focused Wayland client.
+                let text_input = &mut data.state.flutter_engine.as_mut().unwrap().text_input;
+                if text_input.is_active() {
+                    if key_event.state == KeyState::Pressed && !key_event.mods.ctrl && !key_event.mods.alt {
+                        text_input.press_key(key_event.key_code, key_event.codepoint);
+                    }
+                    // It doesn't matter if the text field captured the key event or not.
+                    // As long as it stays active, don't forward events to the Wayland client.
+                    return;
+                }
+
+                // The compositor was not interested in this event,
+                // so we forward it to the Wayland client in focus if there is one.
                 let keyboard = data.state.keyboard.clone();
                 keyboard.input_forward(
                     &mut data.state,
-                    key_code,
-                    state,
+                    key_event.key_code,
+                    key_event.state,
                     SERIAL_COUNTER.next_serial(),
-                    time,
-                    mods_changed,
+                    key_event.time,
+                    key_event.mods_changed,
                 );
             }
         }).unwrap();
+
+        let key_repeater = KeyRepeater::new(loop_handle.clone(), |key_code, code_point, data: &mut CalloopData<BackendData>| {
+            let keyboard = data.state.keyboard.clone();
+
+            let mods = keyboard.modifier_state();
+            data.state.flutter_engine.as_mut().unwrap().send_key_event(
+                data.state.tx_flutter_handled_key_event.clone(),
+                KeyEvent {
+                    key_code,
+                    codepoint: code_point,
+                    state: KeyState::Pressed,
+                    time: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis() as u32,
+                    mods,
+                    mods_changed: false,
+                });
+        });
 
         Self {
             running: Arc::new(AtomicBool::new(true)),
@@ -224,7 +323,10 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             data_device_state,
             pointer,
             keyboard,
+            repeat_delay,
+            repeat_rate,
             tx_flutter_handled_key_event,
+            key_repeater,
             next_surface_id: 1,
             next_texture_id: 1,
             imported_dmabufs: Vec::new(),
@@ -237,6 +339,12 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             surface_id_per_texture_id: HashMap::new(),
             texture_swapchains: HashMap::new(),
         }
+    }
+
+    pub fn change_keyboard_repeat_info(&mut self, repeat_delay: u64, repeat_rate: u64) {
+        self.repeat_delay = repeat_delay;
+        self.repeat_rate = repeat_rate;
+        self.keyboard.change_repeat_info(repeat_delay as i32, repeat_rate as i32);
     }
 }
 

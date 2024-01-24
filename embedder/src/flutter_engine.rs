@@ -20,8 +20,9 @@ use smithay::{
     reexports::calloop::channel,
     utils::{Physical, Size},
 };
-use smithay::backend::input::{InputBackend, KeyboardKeyEvent};
+use smithay::backend::input::{InputBackend, KeyboardKeyEvent, KeyState};
 use smithay::backend::renderer::gles::ffi::RGBA8;
+use smithay::input::keyboard::ModifiersState;
 use smithay::reexports::calloop;
 use smithay::reexports::calloop::{Dispatcher, LoopHandle};
 use smithay::reexports::calloop::channel::Event::Msg;
@@ -57,12 +58,17 @@ use crate::flutter_engine::platform_channels::basic_message_channel::BasicMessag
 use crate::flutter_engine::platform_channels::binary_messenger_impl::BinaryMessengerImpl;
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 use crate::flutter_engine::platform_channels::json_message_codec::JsonMessageCodec;
+use crate::flutter_engine::platform_channels::json_method_codec::JsonMethodCodec;
+use crate::flutter_engine::platform_channels::message_codec::MessageCodec;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::flutter_engine::platform_channels::standard_method_codec::StandardMethodCodec;
 use crate::flutter_engine::task_runner::TaskRunner;
+use crate::flutter_engine::text_input::{text_input_channel_method_call_handler, TextInput};
 use crate::gles_framebuffer_importer::GlesFramebufferImporter;
+use crate::keyboard::KeyEvent;
+use crate::keyboard::glfw_key_codes::{get_glfw_keycode, get_glfw_modifiers};
 use crate::mouse_button_tracker::MouseButtonTracker;
 
 mod callbacks;
@@ -71,6 +77,7 @@ pub mod platform_channels;
 pub mod task_runner;
 pub mod wayland_messages;
 pub mod platform_channel_callbacks;
+mod text_input;
 
 /// Wrap the handle for various safety reasons:
 /// - Clone & Copy is willingly not implemented to avoid using the engine after being shut down.
@@ -85,6 +92,7 @@ pub struct FlutterEngine<BackendData: Backend + 'static> {
     pub binary_messenger: Rc<RefCell<BinaryMessengerImpl>>,
     pub platform_method_channel: MethodChannel,
     pub key_event_channel: BasicMessageChannel<serde_json::Value>,
+    pub text_input: TextInput,
     rx_request_external_texture_name_registration_token: calloop::RegistrationToken,
 }
 
@@ -275,10 +283,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         );
 
         let (tx_platform_message, rx_platform_message) = channel::channel::<(MethodCall, Box<dyn MethodResult>)>();
-        // TODO: Provide a way to specify a channel directly, without registering a callback.
-        platform_method_channel.set_method_call_handler(Some(Box::new(move |method_call, result| {
-            tx_platform_message.send((method_call, result)).unwrap();
-        })));
+        platform_method_channel.set_method_call_mpsc_channel(Some(tx_platform_message));
 
         server_state.loop_handle.insert_source(
             rx_platform_message,
@@ -291,6 +296,23 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             "flutter/keyevent".to_string(),
             codec,
         );
+
+        let codec = Rc::new(JsonMethodCodec::new());
+        let mut text_input_channel = MethodChannel::<serde_json::Value>::new(
+            binary_messenger.clone(),
+            "flutter/textinput".to_string(),
+            codec,
+        );
+
+        let (tx_text_input_message, rx_text_input_message)
+            = channel::channel::<(MethodCall<serde_json::Value>, Box<dyn MethodResult<serde_json::Value>>)>();
+
+        text_input_channel.set_method_call_mpsc_channel(Some(tx_text_input_message));
+
+        server_state.loop_handle.insert_source(
+            rx_text_input_message,
+            text_input_channel_method_call_handler,
+        ).unwrap();
 
         let task_runner_timer_dispatcher = Dispatcher::new(Timer::immediate(), move |deadline, _, data: &mut CalloopData<BackendData>| {
             let duration = data.state.flutter_engine_mut().task_runner.execute_expired_tasks(move |task| {
@@ -334,6 +356,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             binary_messenger: binary_messenger.clone(),
             platform_method_channel,
             key_event_channel,
+            text_input: TextInput::new(text_input_channel),
             rx_request_external_texture_name_registration_token,
         });
 
@@ -398,6 +421,49 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             return Err(format!("Could not send pointer event, error {result}").into());
         }
         Ok(())
+    }
+
+    pub fn send_key_event(
+        &self,
+        // TODO: This channel shouldn't be passed as an argument.
+        // The FlutterEngine struct should own it.
+        // Some refactoring is needed to make this possible.
+        tx: channel::Sender<(KeyEvent, bool)>,
+        key_event: KeyEvent,
+    ) {
+        // Send the key event to Flutter.
+        // It will propagate the event to widgets and will determine if the event was handled or not.
+        // It will respond back and will call the reply handler.
+        self.key_event_channel.send(&serde_json::json!({
+            "keymap": "linux",
+            "toolkit": "glfw",
+            "keyCode": get_glfw_keycode(key_event.key_code),
+            "scanCode": key_event.key_code + 8,
+            "modifiers": get_glfw_modifiers(key_event.mods),
+            "unicodeScalarValues": key_event.codepoint.map(|c| c as u32),
+            "type": if key_event.state == KeyState::Pressed { "keydown" } else { "keyup" },
+        }), Some(Box::new(move |response: Option<&[u8]>| {
+            // This is the callback that will be called when Flutter replies.
+            // Flutter always replies with a single `handled` boolean.
+            // If its value is true, some widget listening to keyboard shortcuts probably handled this event.
+            let response = match response {
+                Some(response) => response,
+                None => return,
+            };
+
+            let message = JsonMessageCodec::new().decode_message(response).unwrap();
+            let handled = message["handled"].as_bool().unwrap();
+            // We would normally call `glfw_key_codes.input_forward` here to forward the event to a Wayland client,
+            // but we need `data.state` and we can't just capture it by reference.
+            // Send key event info and Flutter's response over an MPSC channel.
+            // The receiver `rx_flutter_handled_key_event` is registered to the event loop with a callback
+            // that will continue processing the event.
+            // This callback is defined in the constructor of `ServerState`.
+            tx.send((
+                key_event,
+                handled
+            )).unwrap();
+        })));
     }
 
     pub fn register_external_texture(&self, texture_id: i64) -> Result<(), Box<dyn std::error::Error>> {
