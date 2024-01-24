@@ -61,7 +61,7 @@ pub fn run_x11_client() {
     let (node, fd) = x11_handle.drm_node().expect("Could not get DRM node used by X server");
 
     let gbm_device = gbm::Device::new(DeviceFd::from(fd)).expect("Failed to create gbm device");
-    let egl_display = egl::EGLDisplay::new(gbm_device.clone()).expect("Failed to create EGLDisplay");
+    let egl_display = unsafe { egl::EGLDisplay::new(gbm_device.clone()) }.expect("Failed to create EGLDisplay");
     let egl_context = egl::EGLContext::new(&egl_display).expect("Failed to create EGLContext");
 
     let window = x11::WindowBuilder::new()
