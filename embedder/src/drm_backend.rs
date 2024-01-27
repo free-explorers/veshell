@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::mem::MaybeUninit;
 use std::path::Path;
 use std::sync::atomic::Ordering;
 
@@ -24,6 +23,7 @@ use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{libseat, Session};
 use smithay::backend::udev::{all_gpus, primary_gpu, UdevBackend, UdevEvent};
 use smithay::desktop::utils::OutputPresentationFeedback;
+use smithay::desktop::{Space, Window};
 use smithay::output::Mode;
 use smithay::output::{Output, PhysicalProperties, Subpixel};
 use smithay::reexports::calloop::channel::Event;
@@ -36,7 +36,7 @@ use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::DisplayHandle;
-use smithay::utils::{DeviceFd, Point, Transform};
+use smithay::utils::{DeviceFd, Point, Rectangle, Size, Transform};
 use smithay::wayland::dmabuf::{DmabufFeedbackBuilder, DmabufState};
 use smithay::wayland::drm_lease::DrmLease;
 use tracing::{error, info, warn};
@@ -52,6 +52,7 @@ use crate::{
 };
 
 pub struct DrmBackend {
+    pub space: Space<Window>,
     pub session: LibSeatSession,
     gpus: HashMap<DrmNode, GpuData>,
     primary_gpu: DrmNode,
@@ -73,6 +74,12 @@ impl DrmBackend {
     fn get_gpu_data_mut(&mut self) -> &mut GpuData {
         self.gpus.get_mut(&self.primary_gpu).unwrap()
     }
+}
+
+#[derive(Debug, PartialEq)]
+struct UdevOutputId {
+    device_id: DrmNode,
+    crtc: crtc::Handle,
 }
 
 // we cannot simply pick the first supported format of the intersection of *all* formats, because:
@@ -140,6 +147,7 @@ pub fn run_drm_backend() {
         display,
         event_loop.handle(),
         DrmBackend {
+            space: Space::default(),
             session,
             gpus: HashMap::new(),
             primary_gpu,
@@ -293,106 +301,119 @@ impl ServerState<DrmBackend> {
             return;
         };
 
-        let (gles_renderer, surface, last_rendered_slot, swapchain) = (
-            self.gles_renderer.as_mut().unwrap(),
-            if let Some(surface) = gpu_data.surfaces.values_mut().next() {
-                surface
-            } else {
-                return;
-            },
-            &mut gpu_data.last_rendered_slot,
-            &mut gpu_data.swapchain,
-        );
+        let gles_renderer = self.gles_renderer.as_mut().unwrap();
+        let last_rendered_slot = gpu_data.last_rendered_slot.as_mut();
+        let swapchain = &mut gpu_data.swapchain;
 
-        let slot = if let Some(slot) = last_rendered_slot.as_mut() {
-            slot
-        } else {
-            // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
+        for surface in gpu_data.surfaces.values_mut() {
+            let slot = if let Some(ref slot) = last_rendered_slot {
+                slot
+            } else {
+                // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
+                surface
+                    .compositor
+                    .render_frame::<GlesRenderer, TextureRenderElement<GlesTexture>>(
+                        gles_renderer,
+                        &[],
+                        [0.0, 0.0, 0.0, 0.0],
+                    )
+                    .unwrap();
+                surface.compositor.queue_frame(None).unwrap();
+                surface.compositor.reset_buffers();
+                return;
+            };
+
+            let geometry = self
+                .backend_data
+                .space
+                .outputs()
+                .find(|output| {
+                    output
+                        .user_data()
+                        .get::<UdevOutputId>()
+                        .map(|id| id.device_id == surface.device_id)
+                        .unwrap_or(false)
+                })
+                .map(|output| self.backend_data.space.output_geometry(output).unwrap())
+                .unwrap();
+            let geometry = geometry.to_f64();
+
+            let flutter_texture = gles_renderer
+                .import_dmabuf(&slot.export().unwrap(), None)
+                .unwrap();
+            let flutter_texture_buffer = TextureBuffer::from_texture(
+                gles_renderer,
+                flutter_texture,
+                1,
+                Transform::Flipped180,
+                None,
+            );
+            let flutter_texture_element = TextureRenderElement::from_texture_buffer(
+                Point::from((0.0, 0.0)),
+                &flutter_texture_buffer,
+                None,
+                Some(geometry),
+                None,
+                Kind::Unspecified,
+            );
+
+            let pointer_frame = self
+                .backend_data
+                .pointer_image
+                .get_image(1, self.clock.now().into());
+
+            let cursor_position = Point::from(self.mouse_position)
+                - Point::from((pointer_frame.xhot as f64, pointer_frame.yhot as f64));
+
+            let pointer_images = &mut self.backend_data.pointer_images;
+            let pointer_image = pointer_images
+                .iter()
+                .find_map(|(image, texture)| {
+                    if image == &pointer_frame {
+                        Some(texture.clone())
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or_else(|| {
+                    let texture = TextureBuffer::from_memory(
+                        gles_renderer,
+                        &pointer_frame.pixels_rgba,
+                        Fourcc::Abgr8888,
+                        (pointer_frame.width as i32, pointer_frame.height as i32),
+                        false,
+                        1,
+                        Transform::Normal,
+                        None,
+                    )
+                    .expect("Failed to import cursor bitmap");
+                    pointer_images.push((pointer_frame, texture.clone()));
+                    texture
+                });
+
+            let cursor_element = TextureRenderElement::from_texture_buffer(
+                cursor_position,
+                &pointer_image,
+                None,
+                None,
+                None,
+                Kind::Cursor,
+            );
+
             surface
                 .compositor
                 .render_frame::<GlesRenderer, TextureRenderElement<GlesTexture>>(
                     gles_renderer,
-                    &[],
+                    &[cursor_element, flutter_texture_element],
                     [0.0, 0.0, 0.0, 0.0],
                 )
                 .unwrap();
             surface.compositor.queue_frame(None).unwrap();
-            surface.compositor.reset_buffers();
-            return;
-        };
+        }
 
-        let flutter_texture = gles_renderer
-            .import_dmabuf(&slot.export().unwrap(), None)
-            .unwrap();
-        let flutter_texture_buffer = TextureBuffer::from_texture(
-            gles_renderer,
-            flutter_texture,
-            1,
-            Transform::Flipped180,
-            None,
-        );
-        let flutter_texture_element = TextureRenderElement::from_texture_buffer(
-            Point::from((0.0, 0.0)),
-            &flutter_texture_buffer,
-            None,
-            None,
-            None,
-            Kind::Unspecified,
-        );
-
-        let pointer_frame = self
-            .backend_data
-            .pointer_image
-            .get_image(1, self.clock.now().try_into().unwrap());
-
-        let cursor_position = Point::from(self.mouse_position)
-            - Point::from((pointer_frame.xhot as f64, pointer_frame.yhot as f64));
-
-        let pointer_images = &mut self.backend_data.pointer_images;
-        let pointer_image = pointer_images
-            .iter()
-            .find_map(|(image, texture)| {
-                if image == &pointer_frame {
-                    Some(texture.clone())
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_else(|| {
-                let texture = TextureBuffer::from_memory(
-                    gles_renderer,
-                    &pointer_frame.pixels_rgba,
-                    Fourcc::Abgr8888,
-                    (pointer_frame.width as i32, pointer_frame.height as i32),
-                    false,
-                    1,
-                    Transform::Normal,
-                    None,
-                )
-                .expect("Failed to import cursor bitmap");
-                pointer_images.push((pointer_frame, texture.clone()));
-                texture
-            });
-
-        let cursor_element = TextureRenderElement::from_texture_buffer(
-            cursor_position,
-            &pointer_image,
-            None,
-            None,
-            None,
-            Kind::Cursor,
-        );
-
-        surface
-            .compositor
-            .render_frame::<GlesRenderer, TextureRenderElement<GlesTexture>>(
-                gles_renderer,
-                &[flutter_texture_element, cursor_element],
-                [0.0, 0.0, 0.0, 0.0],
-            )
-            .unwrap();
-        surface.compositor.queue_frame(None).unwrap();
-        swapchain.submitted(slot);
+        if let Some(slot) = last_rendered_slot {
+            swapchain.submitted(slot);
+        }
     }
 }
 
@@ -624,8 +645,20 @@ impl ServerState<DrmBackend> {
         );
         let global = output.create_global::<ServerState<DrmBackend>>(&self.display_handle);
 
+        // Put the new output at the right of the last one.
+        let x = self.backend_data.space.outputs().fold(0, |acc, o| {
+            acc + self.backend_data.space.output_geometry(o).unwrap().size.w
+        });
+        let position = (x, 0).into();
+
         output.set_preferred(wl_mode);
-        output.change_current_state(Some(wl_mode), None, None, Some((0, 0).into()));
+        output.change_current_state(Some(wl_mode), None, None, Some(position));
+        self.backend_data.space.map_output(&output, position);
+
+        output.user_data().insert_if_missing(|| UdevOutputId {
+            crtc,
+            device_id: node,
+        });
 
         let color_formats = if std::env::var("ANVIL_DISABLE_10BIT").is_ok() {
             SUPPORTED_FORMATS_8BIT_ONLY
@@ -706,11 +739,19 @@ impl ServerState<DrmBackend> {
 
         device.surfaces.insert(crtc, surface);
 
+        let bounding_box = self
+            .backend_data
+            .space
+            .outputs()
+            .map(|output| self.backend_data.space.output_geometry(output).unwrap())
+            .reduce(|first, second| first.merge(second))
+            .unwrap();
+
         device
             .swapchain
-            .resize(wl_mode.size.w as u32, wl_mode.size.h as u32);
+            .resize(bounding_box.size.w as u32, bounding_box.size.h as u32);
         self.flutter_engine()
-            .send_window_metrics((wl_mode.size.w as u32, wl_mode.size.h as u32).into())
+            .send_window_metrics((bounding_box.size.w as u32, bounding_box.size.h as u32).into())
             .unwrap();
     }
 
@@ -735,6 +776,37 @@ impl ServerState<DrmBackend> {
         } else {
             device.surfaces.remove(&crtc);
         }
+
+        let output = self
+            .backend_data
+            .space
+            .outputs()
+            .find(|o| {
+                o.user_data()
+                    .get::<UdevOutputId>()
+                    .map(|id| id.device_id == node && id.crtc == crtc)
+                    .unwrap_or(false)
+            })
+            .cloned();
+
+        if let Some(output) = output {
+            self.backend_data.space.unmap_output(&output);
+        }
+
+        let bounding_box = self
+            .backend_data
+            .space
+            .outputs()
+            .map(|output| self.backend_data.space.output_geometry(output).unwrap())
+            .reduce(|first, second| first.merge(second))
+            .unwrap_or(Rectangle::default());
+
+        device
+            .swapchain
+            .resize(bounding_box.size.w as u32, bounding_box.size.h as u32);
+        self.flutter_engine()
+            .send_window_metrics((bounding_box.size.w as u32, bounding_box.size.h as u32).into())
+            .unwrap();
     }
 
     fn device_changed(&mut self, node: DrmNode) {
