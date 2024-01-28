@@ -212,10 +212,6 @@ pub fn run_drm_backend() {
         .insert_source(libinput_backend, move |event, _, data| {
             let _dh = data.state.display_handle.clone();
             handle_input::<DrmBackend>(&event, data);
-            // TODO: When the cursor moves, the cursor CRTC plane has to be updated.
-            // However, we should call this only when the cursor actually moves, and not on every
-            // input event.
-            data.state.update_crtc_planes();
         })
         .unwrap();
 
@@ -241,7 +237,6 @@ pub fn run_drm_backend() {
         .insert_source(rx_baton, move |baton, _, data| {
             if let Event::Msg(baton) = baton {
                 data.batons.push(baton);
-                data.state.update_crtc_planes();
             }
         })
         .unwrap();
@@ -262,7 +257,11 @@ pub fn run_drm_backend() {
         .insert_source(rx_present, move |_, _, data| {
             let gpu_data = data.state.backend_data.get_gpu_data_mut();
             gpu_data.last_rendered_slot = gpu_data.current_slot.take();
-            data.state.update_crtc_planes();
+
+            let gpu_data = data.state.backend_data.get_gpu_data_mut();
+            if let Some(ref slot) = gpu_data.last_rendered_slot {
+                gpu_data.swapchain.submitted(slot);
+            }
         })
         .unwrap();
 
@@ -293,133 +292,132 @@ pub fn run_drm_backend() {
 }
 
 impl ServerState<DrmBackend> {
-    pub fn update_crtc_planes(&mut self) {
+    // TODO: I don't think this method should not be here. It should probably be in GpuData or SurfaceData.
+    pub fn update_crtc_planes(&mut self, crtc: crtc::Handle) {
+        // TODO: Ideally, there shouldn't be a "primary gpu" and we should handle multi-gpu setups.
         let primary_gpu = self.backend_data.primary_gpu;
-        let gpu_data = if let Some(gpu_data) = self.backend_data.gpus.get_mut(&primary_gpu) {
+        let gpu_data = self.backend_data.gpus.get_mut(&primary_gpu);
+        let gpu_data = if let Some(gpu_data) = gpu_data {
             gpu_data
         } else {
             return;
         };
 
+        let surface = match gpu_data.surfaces.get_mut(&crtc) {
+            Some(surface) => surface,
+            None => return,
+        };
+
         let gles_renderer = self.gles_renderer.as_mut().unwrap();
         let last_rendered_slot = gpu_data.last_rendered_slot.as_mut();
-        let swapchain = &mut gpu_data.swapchain;
 
-        dbg!("sdfdsafadsf");
-
-        for surface in gpu_data.surfaces.values_mut() {
-            let slot = if let Some(ref slot) = last_rendered_slot {
-                slot
-            } else {
-                // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
-                surface
-                    .compositor
-                    .render_frame::<GlesRenderer, TextureRenderElement<GlesTexture>>(
-                        gles_renderer,
-                        &[],
-                        [0.0, 0.0, 0.0, 0.0],
-                    )
-                    .unwrap();
-                surface.compositor.queue_frame(None).unwrap();
-                surface.compositor.reset_buffers();
-                return;
-            };
-
-            let geometry = self
-                .backend_data
-                .space
-                .outputs()
-                .find(|output| {
-                    output
-                        .user_data()
-                        .get::<UdevOutputId>()
-                        .map(|id| id.device_id == surface.device_id && id.crtc == surface.crtc)
-                        .unwrap_or(false)
-                })
-                .map(|output| self.backend_data.space.output_geometry(output).unwrap())
-                .unwrap();
-            let geometry = geometry.to_f64();
-
-            let flutter_texture = gles_renderer
-                .import_dmabuf(&slot.export().unwrap(), None)
-                .unwrap();
-            let flutter_texture_buffer = TextureBuffer::from_texture(
-                gles_renderer,
-                flutter_texture,
-                1,
-                Transform::Flipped180,
-                None,
-            );
-            let flutter_texture_element = TextureRenderElement::from_texture_buffer(
-                Point::from((0.0, 0.0)),
-                &flutter_texture_buffer,
-                None,
-                // TODO: I don't know why it has to be like this instead of just `geometry`.
-                Some(Rectangle::from_loc_and_size(
-                    (geometry.loc.x, geometry.size.h - geometry.loc.y),
-                    geometry.size,
-                )),
-                None,
-                Kind::Unspecified,
-            );
-
-            let pointer_frame = self
-                .backend_data
-                .pointer_image
-                .get_image(1, self.clock.now().into());
-
-            let cursor_position = Point::from(self.mouse_position)
-                - Point::from((pointer_frame.xhot as f64, pointer_frame.yhot as f64));
-
-            let pointer_images = &mut self.backend_data.pointer_images;
-            let pointer_image = pointer_images
-                .iter()
-                .find_map(|(image, texture)| {
-                    if image == &pointer_frame {
-                        Some(texture.clone())
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or_else(|| {
-                    let texture = TextureBuffer::from_memory(
-                        gles_renderer,
-                        &pointer_frame.pixels_rgba,
-                        Fourcc::Abgr8888,
-                        (pointer_frame.width as i32, pointer_frame.height as i32),
-                        false,
-                        1,
-                        Transform::Normal,
-                        None,
-                    )
-                    .expect("Failed to import cursor bitmap");
-                    pointer_images.push((pointer_frame, texture.clone()));
-                    texture
-                });
-
-            let cursor_element = TextureRenderElement::from_texture_buffer(
-                cursor_position,
-                &pointer_image,
-                None,
-                None,
-                None,
-                Kind::Cursor,
-            );
-
+        let slot = if let Some(ref slot) = last_rendered_slot {
+            slot
+        } else {
+            // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
             surface
                 .compositor
                 .render_frame::<GlesRenderer, TextureRenderElement<GlesTexture>>(
                     gles_renderer,
-                    &[cursor_element, flutter_texture_element],
+                    &[],
                     [0.0, 0.0, 0.0, 0.0],
                 )
                 .unwrap();
             surface.compositor.queue_frame(None).unwrap();
-        }
+            surface.compositor.reset_buffers();
+            return;
+        };
 
-        if let Some(slot) = last_rendered_slot {
-            swapchain.submitted(slot);
-        }
+        let geometry = self
+            .backend_data
+            .space
+            .outputs()
+            .find(|output| {
+                output
+                    .user_data()
+                    .get::<UdevOutputId>()
+                    .map(|id| id.device_id == surface.device_id && id.crtc == surface.crtc)
+                    .unwrap_or(false)
+            })
+            .map(|output| self.backend_data.space.output_geometry(output).unwrap())
+            .unwrap();
+        let geometry = geometry.to_f64();
+
+        let flutter_texture = gles_renderer
+            .import_dmabuf(&slot.export().unwrap(), None)
+            .unwrap();
+        let flutter_texture_buffer = TextureBuffer::from_texture(
+            gles_renderer,
+            flutter_texture,
+            1,
+            Transform::Flipped180,
+            None,
+        );
+        let flutter_texture_element = TextureRenderElement::from_texture_buffer(
+            Point::from((0.0, 0.0)),
+            &flutter_texture_buffer,
+            None,
+            // TODO: I don't know why it has to be like this instead of just `geometry`.
+            Some(Rectangle::from_loc_and_size(
+                (geometry.loc.x, geometry.size.h - geometry.loc.y),
+                geometry.size,
+            )),
+            None,
+            Kind::Unspecified,
+        );
+
+        let pointer_frame = self
+            .backend_data
+            .pointer_image
+            .get_image(1, self.clock.now().into());
+
+        let cursor_position = Point::from(self.mouse_position)
+            - Point::from((pointer_frame.xhot as f64, pointer_frame.yhot as f64));
+
+        let pointer_images = &mut self.backend_data.pointer_images;
+        let pointer_image = pointer_images
+            .iter()
+            .find_map(|(image, texture)| {
+                if image == &pointer_frame {
+                    Some(texture.clone())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| {
+                let texture = TextureBuffer::from_memory(
+                    gles_renderer,
+                    &pointer_frame.pixels_rgba,
+                    Fourcc::Abgr8888,
+                    (pointer_frame.width as i32, pointer_frame.height as i32),
+                    false,
+                    1,
+                    Transform::Normal,
+                    None,
+                )
+                .expect("Failed to import cursor bitmap");
+                pointer_images.push((pointer_frame, texture.clone()));
+                texture
+            });
+
+        let cursor_element = TextureRenderElement::from_texture_buffer(
+            cursor_position,
+            &pointer_image,
+            None,
+            None,
+            None,
+            Kind::Cursor,
+        );
+
+        surface
+            .compositor
+            .render_frame::<GlesRenderer, TextureRenderElement<GlesTexture>>(
+                gles_renderer,
+                &[cursor_element, flutter_texture_element],
+                [0.0, 0.0, 0.0, 0.0],
+            )
+            .unwrap();
+        surface.compositor.queue_frame(None).unwrap();
     }
 }
 
@@ -476,6 +474,8 @@ impl ServerState<DrmBackend> {
                 notifier,
                 move |event, _metadata, data: &mut CalloopData<_>| match event {
                     DrmEvent::VBlank(crtc) => {
+                        data.state.update_crtc_planes(crtc);
+
                         if let Some(surface) = data
                             .state
                             .backend_data
@@ -487,6 +487,14 @@ impl ServerState<DrmBackend> {
                         {
                             let _ = surface.compositor.frame_submitted();
                         }
+
+                        if let Some(first_output) = data.state.backend_data.space.outputs().next() {
+                            if first_output.user_data().get::<UdevOutputId>().unwrap().crtc != crtc
+                            {
+                                return;
+                            }
+                        }
+
                         for baton in data.batons.drain(..) {
                             data.state.flutter_engine().on_vsync(baton).unwrap();
                         }
