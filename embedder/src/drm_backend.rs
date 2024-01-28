@@ -305,6 +305,8 @@ impl ServerState<DrmBackend> {
         let last_rendered_slot = gpu_data.last_rendered_slot.as_mut();
         let swapchain = &mut gpu_data.swapchain;
 
+        dbg!("sdfdsafadsf");
+
         for surface in gpu_data.surfaces.values_mut() {
             let slot = if let Some(ref slot) = last_rendered_slot {
                 slot
@@ -331,7 +333,7 @@ impl ServerState<DrmBackend> {
                     output
                         .user_data()
                         .get::<UdevOutputId>()
-                        .map(|id| id.device_id == surface.device_id)
+                        .map(|id| id.device_id == surface.device_id && id.crtc == surface.crtc)
                         .unwrap_or(false)
                 })
                 .map(|output| self.backend_data.space.output_geometry(output).unwrap())
@@ -352,7 +354,11 @@ impl ServerState<DrmBackend> {
                 Point::from((0.0, 0.0)),
                 &flutter_texture_buffer,
                 None,
-                Some(geometry),
+                // TODO: I don't know why it has to be like this instead of just `geometry`.
+                Some(Rectangle::from_loc_and_size(
+                    (geometry.loc.x, geometry.size.h - geometry.loc.y),
+                    geometry.size,
+                )),
                 None,
                 Kind::Unspecified,
             );
@@ -720,6 +726,7 @@ impl ServerState<DrmBackend> {
         let mut surface = SurfaceData {
             dh: self.display_handle.clone(),
             device_id: node,
+            crtc,
             render_node: device.render_node,
             global: Some(global),
             compositor,
@@ -836,6 +843,7 @@ impl ServerState<DrmBackend> {
 struct SurfaceData {
     dh: DisplayHandle,
     device_id: DrmNode,
+    crtc: crtc::Handle,
     render_node: DrmNode,
     global: Option<GlobalId>,
     compositor: GbmDrmCompositor,
