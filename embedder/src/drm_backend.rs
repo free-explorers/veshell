@@ -22,7 +22,6 @@ use smithay::backend::renderer::ImportDma;
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{libseat, Session};
 use smithay::backend::udev::{all_gpus, primary_gpu, UdevBackend, UdevEvent};
-use smithay::desktop::space::SpaceElement;
 use smithay::desktop::utils::OutputPresentationFeedback;
 use smithay::desktop::{Space, Window};
 use smithay::output::Mode;
@@ -30,7 +29,6 @@ use smithay::output::{Output, PhysicalProperties, Subpixel};
 use smithay::reexports::calloop::channel::Event;
 use smithay::reexports::calloop::EventLoop;
 use smithay::reexports::calloop::RegistrationToken;
-use smithay::reexports::drm::control::crtc::Handle;
 use smithay::reexports::drm::control::{connector, crtc, Device, ModeTypeFlags};
 use smithay::reexports::drm::Device as _;
 use smithay::reexports::input::Libinput;
@@ -442,6 +440,20 @@ impl ServerState<DrmBackend> {
             .unwrap();
         surface.compositor.queue_frame(None).unwrap();
     }
+
+    fn output_layout_changed(&mut self) {
+        let outputs = self.backend_data.space.outputs().filter_map(|output| {
+            self.backend_data
+                .space
+                .output_geometry(output)
+                .map(|geometry| (output.name(), geometry))
+        });
+
+        self.flutter_engine
+            .as_mut()
+            .unwrap()
+            .output_layout_changed(outputs);
+    }
 }
 
 #[allow(dead_code)]
@@ -795,6 +807,7 @@ impl ServerState<DrmBackend> {
             .unwrap();
 
         self.backend_data.determine_highest_hz_crtc();
+        self.output_layout_changed();
     }
 
     fn connector_disconnected(
@@ -851,6 +864,7 @@ impl ServerState<DrmBackend> {
             .unwrap();
 
         self.backend_data.determine_highest_hz_crtc();
+        self.output_layout_changed();
     }
 
     fn device_changed(&mut self, node: DrmNode) {

@@ -7,13 +7,13 @@ use std::ptr::{null, null_mut};
 use std::rc::Rc;
 use std::time::Duration;
 
-use smithay::backend::input::{InputBackend, KeyState, KeyboardKeyEvent};
+use smithay::backend::input::{InputBackend, KeyboardKeyEvent};
 use smithay::backend::renderer::gles::ffi::RGBA8;
-use smithay::input::keyboard::ModifiersState;
 use smithay::reexports::calloop;
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::calloop::{Dispatcher, LoopHandle};
+use smithay::utils::{Logical, Rectangle};
 use smithay::{
     backend::{
         allocator::dmabuf::Dmabuf,
@@ -54,7 +54,6 @@ use crate::flutter_engine::platform_channels::standard_method_codec::StandardMet
 use crate::flutter_engine::task_runner::TaskRunner;
 use crate::flutter_engine::text_input::{text_input_channel_method_call_handler, TextInput};
 use crate::gles_framebuffer_importer::GlesFramebufferImporter;
-use crate::keyboard::glfw_key_codes::{get_glfw_keycode, get_glfw_modifiers};
 use crate::keyboard::KeyEvent;
 use crate::mouse_button_tracker::MouseButtonTracker;
 use crate::{
@@ -535,6 +534,44 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             );
         }
         Ok(())
+    }
+
+    pub fn output_layout_changed(
+        &mut self,
+        outputs: impl Iterator<Item = (String, Rectangle<i32, Logical>)>,
+    ) {
+        self.platform_method_channel.invoke_method(
+            "output_layout_changed",
+            Some(Box::new(EncodableValue::List(
+                outputs
+                    .map(|(name, output)| {
+                        EncodableValue::Map(vec![
+                            (
+                                EncodableValue::String("name".to_string()),
+                                EncodableValue::String(name),
+                            ),
+                            (
+                                EncodableValue::String("x".to_string()),
+                                EncodableValue::Int32(output.loc.x),
+                            ),
+                            (
+                                EncodableValue::String("y".to_string()),
+                                EncodableValue::Int32(output.loc.y),
+                            ),
+                            (
+                                EncodableValue::String("w".to_string()),
+                                EncodableValue::Int32(output.size.w),
+                            ),
+                            (
+                                EncodableValue::String("h".to_string()),
+                                EncodableValue::Int32(output.size.h),
+                            ),
+                        ])
+                    })
+                    .collect::<_>(),
+            ))),
+            None,
+        );
     }
 }
 
