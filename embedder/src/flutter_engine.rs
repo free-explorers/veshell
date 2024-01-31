@@ -7,8 +7,9 @@ use std::ptr::{null, null_mut};
 use std::rc::Rc;
 use std::time::Duration;
 
-use smithay::backend::input::{InputBackend, KeyboardKeyEvent};
+use smithay::backend::input::{InputBackend, KeyState, KeyboardKeyEvent};
 use smithay::backend::renderer::gles::ffi::RGBA8;
+use smithay::input::keyboard::ModifiersState;
 use smithay::reexports::calloop;
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
@@ -54,6 +55,7 @@ use crate::flutter_engine::platform_channels::standard_method_codec::StandardMet
 use crate::flutter_engine::task_runner::TaskRunner;
 use crate::flutter_engine::text_input::{text_input_channel_method_call_handler, TextInput};
 use crate::gles_framebuffer_importer::GlesFramebufferImporter;
+use crate::keyboard::glfw_key_codes::{get_glfw_keycode, get_glfw_modifiers};
 use crate::keyboard::KeyEvent;
 use crate::mouse_button_tracker::MouseButtonTracker;
 use crate::{
