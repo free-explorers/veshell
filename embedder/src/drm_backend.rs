@@ -328,20 +328,25 @@ impl ServerState<DrmBackend> {
             return;
         };
 
-        let geometry = self
-            .backend_data
-            .space
-            .outputs()
-            .find(|output| {
-                output
-                    .user_data()
-                    .get::<UdevOutputId>()
-                    .map(|id| id.device_id == surface.device_id && id.crtc == surface.crtc)
-                    .unwrap_or(false)
-            })
-            .map(|output| self.backend_data.space.output_geometry(output).unwrap())
-            .unwrap();
-        let geometry = geometry.to_f64();
+        let output = self.backend_data.space.outputs().find(|output| {
+            output
+                .user_data()
+                .get::<UdevOutputId>()
+                .map(|id| id.device_id == surface.device_id && id.crtc == surface.crtc)
+                .unwrap_or(false)
+        });
+
+        let output = match output {
+            Some(output) => output,
+            None => return,
+        };
+
+        let geometry = match self.backend_data.space.output_geometry(output) {
+            Some(geometry) => geometry.to_f64(),
+            None => return,
+        };
+
+        let scale = output.current_scale();
 
         let flutter_texture = gles_renderer
             .import_dmabuf(&slot.export().unwrap(), None)
@@ -372,7 +377,8 @@ impl ServerState<DrmBackend> {
             .get_image(1, self.clock.now().into());
 
         let cursor_position = Point::from(self.mouse_position)
-            - Point::from((pointer_frame.xhot as f64, pointer_frame.yhot as f64));
+            - Point::from((pointer_frame.xhot as f64, pointer_frame.yhot as f64))
+            - geometry.loc.to_physical(scale.fractional_scale());
 
         let pointer_images = &mut self.backend_data.pointer_images;
         let pointer_image = pointer_images
