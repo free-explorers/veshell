@@ -22,6 +22,7 @@ use smithay::backend::renderer::ImportDma;
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{libseat, Session};
 use smithay::backend::udev::{all_gpus, primary_gpu, UdevBackend, UdevEvent};
+use smithay::desktop::space::SpaceElement;
 use smithay::desktop::utils::OutputPresentationFeedback;
 use smithay::desktop::{Space, Window};
 use smithay::output::Mode;
@@ -29,6 +30,7 @@ use smithay::output::{Output, PhysicalProperties, Subpixel};
 use smithay::reexports::calloop::channel::Event;
 use smithay::reexports::calloop::EventLoop;
 use smithay::reexports::calloop::RegistrationToken;
+use smithay::reexports::drm::control::crtc::Handle;
 use smithay::reexports::drm::control::{connector, crtc, Device, ModeTypeFlags};
 use smithay::reexports::drm::Device as _;
 use smithay::reexports::input::Libinput;
@@ -36,7 +38,7 @@ use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::DisplayHandle;
-use smithay::utils::{DeviceFd, Point, Rectangle, Size, Transform};
+use smithay::utils::{Coordinate, DeviceFd, Point, Rectangle, Size, Transform};
 use smithay::wayland::dmabuf::{DmabufFeedbackBuilder, DmabufState};
 use smithay::wayland::drm_lease::DrmLease;
 use tracing::{error, info, warn};
@@ -58,6 +60,20 @@ pub struct DrmBackend {
     primary_gpu: DrmNode,
     pointer_images: Vec<(xcursor::parser::Image, TextureBuffer<GlesTexture>)>,
     pointer_image: crate::cursor::Cursor,
+    highest_hz_crtc: Option<crtc::Handle>,
+}
+
+impl DrmBackend {
+    fn determine_highest_hz_crtc(&mut self) {
+        self.highest_hz_crtc = self
+            .space
+            .outputs()
+            // Ignore outputs that don't have a mode.
+            .filter_map(|output| output.current_mode().map(|mode| (mode.refresh, output)))
+            // Take the one with the highest refresh rate.
+            .max_by_key(|(refresh, output)| *refresh)
+            .map(|(refresh, output)| output.user_data().get::<UdevOutputId>().unwrap().crtc);
+    }
 }
 
 impl Backend for DrmBackend {
@@ -153,6 +169,7 @@ pub fn run_drm_backend() {
             primary_gpu,
             pointer_images: vec![],
             pointer_image: crate::cursor::Cursor::load(),
+            highest_hz_crtc: None,
         },
         None,
     );
@@ -494,11 +511,13 @@ impl ServerState<DrmBackend> {
                             let _ = surface.compositor.frame_submitted();
                         }
 
-                        if let Some(first_output) = data.state.backend_data.space.outputs().next() {
-                            if first_output.user_data().get::<UdevOutputId>().unwrap().crtc != crtc
-                            {
-                                return;
-                            }
+                        let highest_hz_crtc = match data.state.backend_data.highest_hz_crtc {
+                            Some(highest_hz_crtc) => highest_hz_crtc,
+                            None => return,
+                        };
+
+                        if highest_hz_crtc != crtc {
+                            return;
                         }
 
                         for baton in data.batons.drain(..) {
@@ -774,6 +793,8 @@ impl ServerState<DrmBackend> {
         self.flutter_engine()
             .send_window_metrics((bounding_box.size.w as u32, bounding_box.size.h as u32).into())
             .unwrap();
+
+        self.backend_data.determine_highest_hz_crtc();
     }
 
     fn connector_disconnected(
@@ -828,6 +849,8 @@ impl ServerState<DrmBackend> {
         self.flutter_engine()
             .send_window_metrics((bounding_box.size.w as u32, bounding_box.size.h as u32).into())
             .unwrap();
+
+        self.backend_data.determine_highest_hz_crtc();
     }
 
     fn device_changed(&mut self, node: DrmNode) {
