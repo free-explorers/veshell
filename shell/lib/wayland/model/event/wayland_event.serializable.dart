@@ -3,6 +3,7 @@ import 'package:shell/wayland/model/event/commit_surface/commit_surface.serializ
 import 'package:shell/wayland/model/event/destroy_surface/destroy_surface.serializable.dart';
 import 'package:shell/wayland/model/event/interactive_move/interactive_move.serializable.dart';
 import 'package:shell/wayland/model/event/interactive_resize/interactive_resize.serializable.dart';
+import 'package:shell/wayland/model/event/output_layout_changed/output_layout_changed.serializable.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
 part 'wayland_event.serializable.freezed.dart';
@@ -41,6 +42,13 @@ class WaylandEvent with _$WaylandEvent implements WaylandInteraction {
     required String method,
     required InteractiveResizeMessage message,
   }) = InteractiveResizeEvent;
+
+  /// Interactive Resize Event
+  /// This event is sent when the user starts an interactive resize
+  const factory WaylandEvent.outputLayoutChanged({
+    required String method,
+    required OutputLayoutChangedMessage message,
+  }) = OutputLayoutChangedEvent;
 
   /// Creates a new [WaylandEvent] instance from a map.
   ///

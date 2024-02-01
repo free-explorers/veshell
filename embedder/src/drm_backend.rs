@@ -46,6 +46,7 @@ use smithay_drm_extras::edid::EdidInfo;
 
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::flutter_engine::FlutterEngine;
+use crate::flutter_engine::Monitor;
 use crate::input_handling::handle_input;
 use crate::{
     flutter_engine::EmbedderChannels, send_frames_surface_tree, Backend, CalloopData, ServerState,
@@ -446,7 +447,15 @@ impl ServerState<DrmBackend> {
             self.backend_data
                 .space
                 .output_geometry(output)
-                .map(|geometry| (output.name(), geometry))
+                .map(|geometry| {
+                    dbg!(&geometry);
+
+                    Monitor {
+                        name: output.name(),
+                        description: output.description(),
+                        geometry,
+                    }
+                })
         });
 
         self.flutter_engine

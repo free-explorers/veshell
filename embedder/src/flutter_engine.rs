@@ -538,43 +538,58 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         Ok(())
     }
 
-    pub fn output_layout_changed(
-        &mut self,
-        outputs: impl Iterator<Item = (String, Rectangle<i32, Logical>)>,
-    ) {
+    pub fn output_layout_changed(&mut self, outputs: impl Iterator<Item = Monitor>) {
         self.platform_method_channel.invoke_method(
             "output_layout_changed",
-            Some(Box::new(EncodableValue::List(
-                outputs
-                    .map(|(name, output)| {
-                        EncodableValue::Map(vec![
-                            (
-                                EncodableValue::String("name".to_string()),
-                                EncodableValue::String(name),
-                            ),
-                            (
-                                EncodableValue::String("x".to_string()),
-                                EncodableValue::Int32(output.loc.x),
-                            ),
-                            (
-                                EncodableValue::String("y".to_string()),
-                                EncodableValue::Int32(output.loc.y),
-                            ),
-                            (
-                                EncodableValue::String("w".to_string()),
-                                EncodableValue::Int32(output.size.w),
-                            ),
-                            (
-                                EncodableValue::String("h".to_string()),
-                                EncodableValue::Int32(output.size.h),
-                            ),
-                        ])
-                    })
-                    .collect::<_>(),
-            ))),
+            Some(Box::new(EncodableValue::Map(vec![(
+                EncodableValue::String("outputs".to_string()),
+                EncodableValue::List(
+                    outputs
+                        .map(|monitor| {
+                            EncodableValue::Map(vec![
+                                (
+                                    EncodableValue::String("name".to_string()),
+                                    EncodableValue::String(monitor.name),
+                                ),
+                                (
+                                    EncodableValue::String("description".to_string()),
+                                    EncodableValue::String(monitor.description),
+                                ),
+                                (
+                                    EncodableValue::String("geometry".to_string()),
+                                    EncodableValue::Map(vec![
+                                        (
+                                            EncodableValue::String("x".to_string()),
+                                            EncodableValue::Int32(monitor.geometry.loc.x),
+                                        ),
+                                        (
+                                            EncodableValue::String("y".to_string()),
+                                            EncodableValue::Int32(monitor.geometry.loc.y),
+                                        ),
+                                        (
+                                            EncodableValue::String("width".to_string()),
+                                            EncodableValue::Int32(monitor.geometry.size.w),
+                                        ),
+                                        (
+                                            EncodableValue::String("height".to_string()),
+                                            EncodableValue::Int32(monitor.geometry.size.h),
+                                        ),
+                                    ]),
+                                ),
+                            ])
+                        })
+                        .collect::<_>(),
+                ),
+            )]))),
             None,
         );
     }
+}
+
+pub struct Monitor {
+    pub name: String,
+    pub description: String,
+    pub geometry: Rectangle<i32, Logical>,
 }
 
 impl<BackendData: Backend + 'static> Drop for FlutterEngine<BackendData> {

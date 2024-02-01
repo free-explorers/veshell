@@ -15,11 +15,16 @@ class DisplayWidget extends HookConsumerWidget {
     return Stack(
       children: [
         for (final monitor in monitorList)
-          ProviderScope(
-            overrides: [
-              currentMonitorProvider.overrideWith((ref) => monitor.monitorId),
-            ],
-            child: const MonitorWidget(),
+          Positioned.fromRect(
+            rect: monitor.surface,
+            child: ProviderScope(
+              overrides: [
+                currentMonitorProvider.overrideWith((ref) => monitor.monitorId),
+              ],
+              child: MonitorWidget(
+                key: Key(monitor.monitorId),
+              ),
+            ),
           ),
       ],
     );
