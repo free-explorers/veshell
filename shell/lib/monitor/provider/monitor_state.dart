@@ -4,6 +4,7 @@ import 'package:shell/display/provider/display.dart';
 import 'package:shell/monitor/model/monitor.dart';
 import 'package:shell/monitor/provider/current_monitor.dart';
 import 'package:shell/monitor/provider/monitor_list.dart';
+import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:uuid/uuid.dart';
 
 part 'monitor_state.g.dart';
