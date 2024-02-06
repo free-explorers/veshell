@@ -16,13 +16,13 @@ class DisplayWidget extends HookConsumerWidget {
       children: [
         for (final monitor in monitorList)
           Positioned.fromRect(
-            rect: monitor.surface,
+            rect: monitor.geometry,
             child: ProviderScope(
               overrides: [
-                currentMonitorProvider.overrideWith((ref) => monitor.monitorId),
+                currentMonitorProvider.overrideWith((ref) => monitor.name),
               ],
               child: MonitorWidget(
-                key: Key(monitor.monitorId),
+                key: Key(monitor.name),
               ),
             ),
           ),
