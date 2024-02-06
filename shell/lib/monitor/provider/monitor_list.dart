@@ -1,5 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/monitor/model/monitor.dart';
+import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/wayland/model/event/wayland_event.serializable.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
@@ -13,12 +13,13 @@ class MonitorList extends _$MonitorList {
     ref.listen(
       waylandManagerProvider,
       (_, next) {
-        if (next case AsyncData(value: final OutputLayoutChangedEvent event)) {
-          state = event.message.outputs
+        if (next case AsyncData(value: final MonitorLayoutChangedEvent event)) {
+          state = event.message.monitors
               .map(
                 (monitor) => Monitor(
-                  monitorId: monitor.name,
-                  surface: monitor.geometry,
+                  name: monitor.name,
+                  description: monitor.description,
+                  geometry: monitor.geometry,
                 ),
               )
               .toList();
