@@ -747,8 +747,6 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                     )
                 });
 
-                let initial_configure_sent = initial_configure_sent;
-
                 if !initial_configure_sent {
                     // NOTE: This should never fail as the initial configure is always
                     // allowed.

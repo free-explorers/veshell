@@ -26,6 +26,7 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             "activate_window" => activate_window(method_call, result, data),
             "resize_window" => resize_window(method_call, result, data),
             "close_window" => close_window(method_call, result, data),
+            "get_monitor_layout" => get_monitor_layout(method_call, result, data),
             _ => result.error(
                 "method_not_found".to_string(),
                 format!("Method {} not found", method_call.method()),
@@ -231,4 +232,16 @@ pub fn close_window<BackendData: Backend + 'static>(
             None,
         ),
     };
+}
+
+pub fn get_monitor_layout<BackendData: Backend + 'static>(
+    _method_call: MethodCall,
+    mut result: Box<dyn MethodResult>,
+    data: &mut CalloopData<BackendData>,
+) {
+    let monitors = data.state.backend_data.get_monitor_layout();
+    data.state
+        .flutter_engine_mut()
+        .monitor_layout_changed(monitors);
+    result.success(None);
 }
