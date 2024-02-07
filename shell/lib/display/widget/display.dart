@@ -11,12 +11,17 @@ class DisplayWidget extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final monitorList = ref.watch(monitorListProvider);
+    final monitorList = ref
+        .watch(monitorListProvider)
+        // Ignore monitors that are connected but not yet configured
+        // with a resolution.
+        .where((element) => element.currentMode != null);
+
     return Stack(
       children: [
         for (final monitor in monitorList)
           Positioned.fromRect(
-            rect: monitor.geometry,
+            rect: monitor.location & monitor.currentMode!.size,
             child: ProviderScope(
               overrides: [
                 currentMonitorProvider.overrideWith((ref) => monitor.name),

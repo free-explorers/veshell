@@ -10,11 +10,12 @@ use std::time::Duration;
 use smithay::backend::input::{InputBackend, KeyState, KeyboardKeyEvent};
 use smithay::backend::renderer::gles::ffi::RGBA8;
 use smithay::input::keyboard::ModifiersState;
+use smithay::output::Output;
 use smithay::reexports::calloop;
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::calloop::{Dispatcher, LoopHandle};
-use smithay::utils::{Logical, Rectangle};
+use smithay::utils::{Logical, Point, Rectangle};
 use smithay::{
     backend::{
         allocator::dmabuf::Dmabuf,
@@ -54,6 +55,7 @@ use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::flutter_engine::platform_channels::standard_method_codec::StandardMethodCodec;
 use crate::flutter_engine::task_runner::TaskRunner;
 use crate::flutter_engine::text_input::{text_input_channel_method_call_handler, TextInput};
+use crate::flutter_engine::wayland_messages::MonitorsMessage;
 use crate::gles_framebuffer_importer::GlesFramebufferImporter;
 use crate::keyboard::glfw_key_codes::{get_glfw_keycode, get_glfw_modifiers};
 use crate::keyboard::KeyEvent;
@@ -538,58 +540,13 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         Ok(())
     }
 
-    pub fn monitor_layout_changed(&mut self, outputs: impl Iterator<Item = Monitor>) {
+    pub fn monitor_layout_changed(&mut self, outputs: Vec<Output>) {
         self.platform_method_channel.invoke_method(
             "monitor_layout_changed",
-            Some(Box::new(EncodableValue::Map(vec![(
-                EncodableValue::String("monitors".to_string()),
-                EncodableValue::List(
-                    outputs
-                        .map(|monitor| {
-                            EncodableValue::Map(vec![
-                                (
-                                    EncodableValue::String("name".to_string()),
-                                    EncodableValue::String(monitor.name),
-                                ),
-                                (
-                                    EncodableValue::String("description".to_string()),
-                                    EncodableValue::String(monitor.description),
-                                ),
-                                (
-                                    EncodableValue::String("geometry".to_string()),
-                                    EncodableValue::Map(vec![
-                                        (
-                                            EncodableValue::String("x".to_string()),
-                                            EncodableValue::Int32(monitor.geometry.loc.x),
-                                        ),
-                                        (
-                                            EncodableValue::String("y".to_string()),
-                                            EncodableValue::Int32(monitor.geometry.loc.y),
-                                        ),
-                                        (
-                                            EncodableValue::String("width".to_string()),
-                                            EncodableValue::Int32(monitor.geometry.size.w),
-                                        ),
-                                        (
-                                            EncodableValue::String("height".to_string()),
-                                            EncodableValue::Int32(monitor.geometry.size.h),
-                                        ),
-                                    ]),
-                                ),
-                            ])
-                        })
-                        .collect::<_>(),
-                ),
-            )]))),
+            Some(Box::new(MonitorsMessage { monitors: outputs }.into())),
             None,
         );
     }
-}
-
-pub struct Monitor {
-    pub name: String,
-    pub description: String,
-    pub geometry: Rectangle<i32, Logical>,
 }
 
 impl<BackendData: Backend + 'static> Drop for FlutterEngine<BackendData> {

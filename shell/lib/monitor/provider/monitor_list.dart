@@ -14,15 +14,7 @@ class MonitorList extends _$MonitorList {
       waylandManagerProvider,
       (_, next) {
         if (next case AsyncData(value: final MonitorLayoutChangedEvent event)) {
-          state = event.message.monitors
-              .map(
-                (monitor) => Monitor(
-                  name: monitor.name,
-                  description: monitor.description,
-                  geometry: monitor.geometry,
-                ),
-              )
-              .toList();
+          state = event.message.monitors;
         }
       },
       fireImmediately: true,
