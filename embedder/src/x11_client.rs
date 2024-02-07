@@ -115,7 +115,7 @@ pub fn run_x11_client() {
                     &physical_device,
                     ImageUsageFlags::COLOR_ATTACHMENT | ImageUsageFlags::SAMPLED,
                 )
-                .ok()
+                    .ok()
             })
     } else {
         None

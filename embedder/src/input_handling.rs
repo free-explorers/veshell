@@ -202,8 +202,8 @@ pub fn handle_input<BackendData>(
 }
 
 fn send_motion_event<BackendData>(data: &mut CalloopData<BackendData>)
-where
-    BackendData: Backend + 'static,
+    where
+        BackendData: Backend + 'static,
 {
     data.state
         .flutter_engine()

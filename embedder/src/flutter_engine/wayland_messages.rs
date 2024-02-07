@@ -369,8 +369,8 @@ impl From<Output> for EncodableValue {
 }
 
 impl<T> From<Vec<T>> for EncodableValue
-where
-    T: Into<EncodableValue>,
+    where
+        T: Into<EncodableValue>,
 {
     fn from(vec: Vec<T>) -> EncodableValue {
         EncodableValue::List(vec.into_iter().map(|item| item.into()).collect())
@@ -378,8 +378,8 @@ where
 }
 
 impl<T> From<Option<T>> for EncodableValue
-where
-    T: Into<EncodableValue>,
+    where
+        T: Into<EncodableValue>,
 {
     fn from(option: Option<T>) -> EncodableValue {
         match option {

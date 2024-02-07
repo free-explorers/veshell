@@ -729,7 +729,7 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                     geometry: geometry,
                     parent_surface_id: parent_id,
                 }
-                .serialize()
+                    .serialize()
             }
             Some(xdg::XDG_POPUP_ROLE) => {
                 let popup = self.xdg_popups.get(&surface_id).expect("Missing popup");
@@ -767,7 +767,7 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                     parent_surface_id: parent_id,
                 }
             }
-            .serialize(),
+                .serialize(),
             Some(compositor::SUBSURFACE_ROLE) => {
                 let location = with_states(surface, |surface_data| {
                     surface_data
@@ -782,7 +782,7 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                     position: location,
                     parent_surface_id: get_surface_id(&get_parent(surface).unwrap()),
                 }
-                .serialize()
+                    .serialize()
             }
             _ => surface_message.serialize(),
         };
