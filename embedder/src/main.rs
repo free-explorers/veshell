@@ -1,5 +1,6 @@
 use std::env;
 
+use smithay::output::Output;
 use smithay::reexports::calloop::{channel, EventSource};
 use smithay::{
     backend::allocator::dmabuf::Dmabuf,
@@ -20,7 +21,7 @@ use smithay::{
 };
 
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
-use crate::flutter_engine::{FlutterEngine, Monitor};
+use crate::flutter_engine::FlutterEngine;
 use crate::mouse_button_tracker::MouseButtonTracker;
 use crate::server_state::ServerState;
 
@@ -54,7 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 pub trait Backend {
     fn seat_name(&self) -> String;
 
-    fn get_monitor_layout(&self) -> Box<dyn Iterator<Item = Monitor>>;
+    fn get_monitor_layout(&self) -> Vec<Output>;
 }
 
 pub struct FlutterState<BackendData: Backend + 'static> {

@@ -1,4 +1,3 @@
-use std::slice::Iter;
 use std::sync::atomic::Ordering;
 
 use log::{error, warn};
@@ -11,7 +10,6 @@ use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::x11rb::protocol::xproto::{
     AutoRepeatMode, ChangeKeyboardControlAux, ConnectionExt,
 };
-use smithay::utils::Rectangle;
 use smithay::wayland::dmabuf::DmabufState;
 use smithay::{
     backend::{
@@ -34,7 +32,7 @@ use smithay::{
     utils::DeviceFd,
 };
 
-use crate::flutter_engine::{FlutterEngine, Monitor};
+use crate::flutter_engine::FlutterEngine;
 use crate::input_handling::handle_input;
 use crate::{
     flutter_engine::EmbedderChannels, send_frames_surface_tree, Backend, CalloopData, ServerState,
@@ -169,13 +167,7 @@ pub fn run_x11_client() {
         event_loop.handle(),
         X11Data {
             x11_surface,
-            mode: Mode {
-                size: {
-                    let s = window.size();
-                    (s.w as i32, s.h as i32).into()
-                },
-                refresh: 144_000,
-            },
+            output,
         },
         Some(dmabuf_state),
     );
@@ -224,36 +216,33 @@ pub fn run_x11_client() {
                 X11Event::CloseRequested { .. } => {
                     data.state.running.store(false, Ordering::SeqCst);
                 }
+
                 X11Event::Resized { new_size, .. } => {
                     let size = { (new_size.w as i32, new_size.h as i32).into() };
 
-                    data.state.backend_data.mode = Mode {
-                        size,
-                        refresh: 144_000,
-                    };
-
-                    output.change_current_state(
-                        Some(data.state.backend_data.mode),
+                    data.state.backend_data.output.change_current_state(
+                        Some(Mode {
+                            size,
+                            refresh: 144_000,
+                        }),
                         None,
                         None,
                         Some((0, 0).into()),
                     );
-                    output.set_preferred(mode);
+                    data.state.backend_data.output.set_preferred(mode);
 
                     let _ = tx_output_height.send(new_size.h);
                     data.state
                         .flutter_engine()
                         .send_window_metrics((size.w as u32, size.h as u32).into())
                         .unwrap();
-                    data.state.flutter_engine_mut().monitor_layout_changed(
-                        [Monitor {
-                            name: output.name(),
-                            description: output.description(),
-                            geometry: Rectangle::from_loc_and_size((0, 0), (size.w, size.h)),
-                        }]
-                        .into_iter(),
-                    );
+
+                    let monitors = data.state.backend_data.get_monitor_layout();
+                    data.state
+                        .flutter_engine_mut()
+                        .monitor_layout_changed(monitors);
                 }
+
                 X11Event::PresentCompleted { .. } | X11Event::Refresh { .. } => {
                     data.state.is_next_flutter_frame_scheduled = false;
                     for baton in data.batons.drain(..) {
@@ -273,6 +262,7 @@ pub fn run_x11_client() {
                         );
                     }
                 }
+
                 X11Event::Input(event) => handle_input::<X11Data>(&event, data),
                 X11Event::Focus(false) => data.state.release_all_keys(),
                 _ => {}
@@ -347,7 +337,7 @@ pub fn run_x11_client() {
 
 pub struct X11Data {
     pub x11_surface: X11Surface,
-    pub mode: Mode,
+    pub output: Output,
 }
 
 impl Backend for X11Data {
@@ -355,14 +345,7 @@ impl Backend for X11Data {
         "x11".to_string()
     }
 
-    fn get_monitor_layout(&self) -> Box<dyn Iterator<Item = Monitor>> {
-        Box::new(
-            [Monitor {
-                name: "x11".to_string(),
-                description: "x11".to_string(),
-                geometry: Rectangle::from_loc_and_size((0, 0), self.mode.size.to_logical(1)),
-            }]
-            .into_iter(),
-        )
+    fn get_monitor_layout(&self) -> Vec<Output> {
+        vec![self.output.clone()]
     }
 }

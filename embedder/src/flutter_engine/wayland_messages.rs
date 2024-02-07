@@ -1,3 +1,4 @@
+use smithay::output::{Mode, Output, PhysicalProperties};
 use smithay::utils::{Buffer as BufferCoords, Logical, Point, Rectangle, Size};
 use smithay::wayland::compositor;
 use smithay::wayland::compositor::{RectangleKind, RegionAttributes};
@@ -312,5 +313,139 @@ impl SubsurfaceMessage {
             ),
         ];
         EncodableValue::Map(map)
+    }
+}
+
+pub struct MonitorsMessage {
+    pub monitors: Vec<Output>,
+}
+
+impl From<MonitorsMessage> for EncodableValue {
+    fn from(message: MonitorsMessage) -> EncodableValue {
+        EncodableValue::Map(vec![(
+            EncodableValue::String("monitors".to_string()),
+            message.monitors.into(),
+        )])
+    }
+}
+
+impl From<Output> for EncodableValue {
+    fn from(output: Output) -> EncodableValue {
+        EncodableValue::Map(vec![
+            (
+                EncodableValue::String("name".to_string()),
+                EncodableValue::String(output.name()),
+            ),
+            (
+                EncodableValue::String("description".to_string()),
+                EncodableValue::String(output.description()),
+            ),
+            (
+                EncodableValue::String("physicalProperties".to_string()),
+                output.physical_properties().into(),
+            ),
+            (
+                EncodableValue::String("scale".to_string()),
+                EncodableValue::Double(output.current_scale().fractional_scale()),
+            ),
+            (
+                EncodableValue::String("location".to_string()),
+                output.current_location().into(),
+            ),
+            (
+                EncodableValue::String("currentMode".to_string()),
+                output.current_mode().into(),
+            ),
+            (
+                EncodableValue::String("preferredMode".to_string()),
+                output.preferred_mode().into(),
+            ),
+            (
+                EncodableValue::String("modes".to_string()),
+                output.modes().into(),
+            ),
+        ])
+    }
+}
+
+impl<T> From<Vec<T>> for EncodableValue
+where
+    T: Into<EncodableValue>,
+{
+    fn from(vec: Vec<T>) -> EncodableValue {
+        EncodableValue::List(vec.into_iter().map(|item| item.into()).collect())
+    }
+}
+
+impl<T> From<Option<T>> for EncodableValue
+where
+    T: Into<EncodableValue>,
+{
+    fn from(option: Option<T>) -> EncodableValue {
+        match option {
+            Some(value) => value.into(),
+            None => EncodableValue::Null,
+        }
+    }
+}
+
+impl From<Mode> for EncodableValue {
+    fn from(mode: Mode) -> EncodableValue {
+        EncodableValue::Map(vec![
+            (EncodableValue::String("size".to_string()), mode.size.into()),
+            (
+                EncodableValue::String("refreshRate".to_string()),
+                EncodableValue::Int32(mode.refresh),
+            ),
+        ])
+    }
+}
+
+impl From<PhysicalProperties> for EncodableValue {
+    fn from(properties: PhysicalProperties) -> EncodableValue {
+        EncodableValue::Map(vec![
+            (
+                EncodableValue::String("size".to_string()),
+                properties.size.into(),
+            ),
+            (
+                EncodableValue::String("make".to_string()),
+                EncodableValue::String(properties.make),
+            ),
+            (
+                EncodableValue::String("model".to_string()),
+                EncodableValue::String(properties.model),
+            ),
+        ])
+    }
+}
+
+impl<T> From<Point<i32, T>> for EncodableValue {
+    fn from(point: Point<i32, T>) -> EncodableValue {
+        EncodableValue::Map(vec![
+            (
+                EncodableValue::String("x".to_string()),
+                EncodableValue::Int32(point.x),
+            ),
+            (
+                EncodableValue::String("y".to_string()),
+                EncodableValue::Int32(point.y),
+            ),
+        ])
+    }
+}
+
+impl<T> From<Size<i32, T>> for EncodableValue {
+    fn from(size: Size<i32, T>) -> EncodableValue {
+        EncodableValue::Map(vec![
+            (
+                EncodableValue::String("width".to_string()),
+                EncodableValue::Int32(size.w),
+            ),
+            (
+                EncodableValue::String("height".to_string()),
+                EncodableValue::Int32(size.h),
+            ),
+        ])
     }
 }

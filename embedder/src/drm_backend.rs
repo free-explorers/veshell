@@ -46,7 +46,6 @@ use smithay_drm_extras::edid::EdidInfo;
 
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::flutter_engine::FlutterEngine;
-use crate::flutter_engine::Monitor;
 use crate::input_handling::handle_input;
 use crate::{
     flutter_engine::EmbedderChannels, send_frames_surface_tree, Backend, CalloopData, ServerState,
@@ -80,19 +79,8 @@ impl Backend for DrmBackend {
         self.session.seat()
     }
 
-    fn get_monitor_layout(&self) -> Box<dyn Iterator<Item = Monitor>> {
-        let outputs = self
-            .space
-            .outputs()
-            .filter_map(|output| {
-                self.space.output_geometry(output).map(|geometry| Monitor {
-                    name: output.name(),
-                    description: output.description(),
-                    geometry,
-                })
-            })
-            .collect::<Vec<_>>();
-        Box::new(outputs.into_iter())
+    fn get_monitor_layout(&self) -> Vec<Output> {
+        self.space.outputs().cloned().collect::<Vec<_>>()
     }
 }
 
@@ -458,8 +446,8 @@ impl ServerState<DrmBackend> {
     }
 
     fn monitor_layout_changed(&mut self) {
-        let outputs = self.backend_data.get_monitor_layout();
-        self.flutter_engine_mut().monitor_layout_changed(outputs);
+        let monitors = self.backend_data.get_monitor_layout();
+        self.flutter_engine_mut().monitor_layout_changed(monitors);
     }
 }
 

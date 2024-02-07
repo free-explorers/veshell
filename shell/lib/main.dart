@@ -23,13 +23,13 @@ void main() {
     ..read(screenListProvider.notifier).createNewScreen()
     ..read(windowManagerProvider);
 
-  VisibilityDetectorController.instance.updateInterval = Duration.zero;
-
   SchedulerBinding.instance.addPostFrameCallback((_) {
     container
         .read(waylandManagerProvider.notifier)
         .request(GetMonitorLayoutRequest(message: GetMonitorLayoutMessage()));
   });
+
+  VisibilityDetectorController.instance.updateInterval = Duration.zero;
 
   runApp(
     UncontrolledProviderScope(
