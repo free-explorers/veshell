@@ -16,7 +16,7 @@ pub trait CrtcMapper {
     fn map<'a>(
         &mut self,
         drm: &impl ControlDevice,
-        connectors: impl Iterator<Item = &'a connector::Info> + Clone,
+        connectors: impl Iterator<Item=&'a connector::Info> + Clone,
     );
 
     /// Query CRTC mapped to supplied connector
@@ -84,7 +84,7 @@ impl super::CrtcMapper for SimpleCrtcMapper {
     fn map<'a>(
         &mut self,
         drm: &impl ControlDevice,
-        connectors: impl Iterator<Item = &'a connector::Info> + Clone,
+        connectors: impl Iterator<Item=&'a connector::Info> + Clone,
     ) {
         for connector in connectors
             .clone()

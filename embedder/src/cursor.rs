@@ -12,6 +12,7 @@ pub struct Cursor {
     icons: Vec<Image>,
     size: u32,
 }
+
 impl Cursor {
     pub fn load() -> Cursor {
         let name = std::env::var("XCURSOR_THEME")
@@ -47,7 +48,7 @@ impl Cursor {
     }
 }
 
-fn nearest_images(size: u32, images: &[Image]) -> impl Iterator<Item = &Image> {
+fn nearest_images(size: u32, images: &[Image]) -> impl Iterator<Item=&Image> {
     // Follow the nominal size of the cursor to choose the nearest
     let nearest_image = images
         .iter()

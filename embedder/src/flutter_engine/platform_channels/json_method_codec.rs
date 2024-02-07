@@ -94,6 +94,6 @@ impl MethodCodec<serde_json::Value> for JsonMethodCodec {
                 _ => None,
             }
         })()
-        .is_some()
+            .is_some()
     }
 }

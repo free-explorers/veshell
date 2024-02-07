@@ -101,7 +101,7 @@ impl ConnectorScanResult {
     /// Creates event iterator for this result
     ///
     /// Internally this clones the data so it is equivalent to [`IntoIterator`]
-    pub fn iter(&self) -> impl Iterator<Item = ConnectorScanEvent> {
+    pub fn iter(&self) -> impl Iterator<Item=ConnectorScanEvent> {
         self.clone().into_iter()
     }
 }

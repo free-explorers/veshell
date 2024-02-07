@@ -65,7 +65,7 @@ fn should_download_flutter_engine_library(
     if Path::new(&format!(
         "{FLUTTER_ENGINE_LIBS_DIR}/{flutter_engine_build}/{FLUTTER_ENGINE_LIB_NAME}"
     ))
-    .exists()
+        .exists()
     {
         return false;
     }
