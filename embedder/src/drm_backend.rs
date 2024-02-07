@@ -420,7 +420,7 @@ impl ServerState<DrmBackend> {
                     Transform::Normal,
                     None,
                 )
-                    .expect("Failed to import cursor bitmap");
+                .expect("Failed to import cursor bitmap");
                 pointer_images.push((pointer_frame, texture.clone()));
                 texture
             });
@@ -462,7 +462,7 @@ struct GpuData {
     drm_scanner: DrmScanner,
     render_node: DrmNode,
     registration_token: RegistrationToken,
-    swapchain: Swapchain<Box<dyn Allocator<Buffer=Dmabuf, Error=AnyError> + 'static>>,
+    swapchain: Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>>,
     current_slot: Option<Slot<Dmabuf>>,
     last_rendered_slot: Option<Slot<Dmabuf>>,
 }
@@ -568,7 +568,7 @@ impl ServerState<DrmBackend> {
             unsafe { GlesRenderer::new(EGLContext::new(&egl_display).unwrap()) }.unwrap();
 
         let swapchain = {
-            let dmabuf_allocator: Box<dyn Allocator<Buffer=Dmabuf, Error=AnyError>> = {
+            let dmabuf_allocator: Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>> = {
                 let gbm_allocator =
                     GbmAllocator::new(gbm_device.clone(), GbmBufferFlags::RENDERING);
                 Box::new(DmabufAllocator(gbm_allocator))
@@ -737,10 +737,10 @@ impl ServerState<DrmBackend> {
             .to_lowercase()
             .contains("nvidia")
             || driver
-            .description()
-            .to_string_lossy()
-            .to_lowercase()
-            .contains("nvidia")
+                .description()
+                .to_string_lossy()
+                .to_lowercase()
+                .contains("nvidia")
         {
             planes.overlay = vec![];
         }

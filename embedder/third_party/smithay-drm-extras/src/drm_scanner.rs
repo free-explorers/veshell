@@ -40,16 +40,16 @@ pub use crtc_mapper::{CrtcMapper, SimpleCrtcMapper};
 /// Wrapper over [`ConnectorScanner`] and [`CrtcMapper`]
 #[derive(Debug, Default)]
 pub struct DrmScanner<Mapper = SimpleCrtcMapper>
-    where
-        Mapper: CrtcMapper,
+where
+    Mapper: CrtcMapper,
 {
     connectors: ConnectorScanner,
     crtc_mapper: Mapper,
 }
 
 impl<M> DrmScanner<M>
-    where
-        M: CrtcMapper + Default,
+where
+    M: CrtcMapper + Default,
 {
     /// Create new DrmScanner with default CRTC mapper.
     pub fn new() -> Self {
@@ -58,8 +58,8 @@ impl<M> DrmScanner<M>
 }
 
 impl<M> DrmScanner<M>
-    where
-        M: CrtcMapper,
+where
+    M: CrtcMapper,
 {
     /// Create new DrmScanner with custom CRTC mapper
     pub fn new_with_mapper(mapper: M) -> Self {
@@ -151,7 +151,7 @@ impl<M> DrmScanner<M>
     }
 
     /// Get iterator over all `connector -> CRTC` mappings
-    pub fn crtcs(&self) -> impl Iterator<Item=(&connector::Info, crtc::Handle)> {
+    pub fn crtcs(&self) -> impl Iterator<Item = (&connector::Info, crtc::Handle)> {
         self.connectors()
             .iter()
             .filter_map(|(handle, info)| Some((info, self.crtc_for_connector(handle)?)))
@@ -177,7 +177,7 @@ impl DrmScanResult {
     /// Creates event iterator for this result
     ///
     /// Internally this clones the data so it is equivalent to [`IntoIterator`]
-    pub fn iter(&self) -> impl Iterator<Item=DrmScanEvent> {
+    pub fn iter(&self) -> impl Iterator<Item = DrmScanEvent> {
         self.clone().into_iter()
     }
 }

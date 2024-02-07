@@ -17,8 +17,8 @@ use drm::control::{connector, Device as ControlDevice};
 ///
 /// for event in scanner.scan(&drm_device) {
 ///     match event {
-///         ConnectorScanEvent::Connected(conn) => {},
-///         ConnectorScanEvent::Disconnected(conn) => {},
+///         ConnectorScanEvent::Connected(conn) => {}
+///         ConnectorScanEvent::Disconnected(conn) => {}
 ///     }
 /// }
 #[derive(Debug, Default)]
@@ -101,7 +101,7 @@ impl ConnectorScanResult {
     /// Creates event iterator for this result
     ///
     /// Internally this clones the data so it is equivalent to [`IntoIterator`]
-    pub fn iter(&self) -> impl Iterator<Item=ConnectorScanEvent> {
+    pub fn iter(&self) -> impl Iterator<Item = ConnectorScanEvent> {
         self.clone().into_iter()
     }
 }

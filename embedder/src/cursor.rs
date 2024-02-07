@@ -48,7 +48,7 @@ impl Cursor {
     }
 }
 
-fn nearest_images(size: u32, images: &[Image]) -> impl Iterator<Item=&Image> {
+fn nearest_images(size: u32, images: &[Image]) -> impl Iterator<Item = &Image> {
     // Follow the nominal size of the cursor to choose the nearest
     let nearest_image = images
         .iter()
