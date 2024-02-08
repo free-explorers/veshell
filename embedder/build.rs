@@ -1,9 +1,9 @@
-use std::{env, io};
 use std::fmt::{Display, Formatter};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
+use std::{env, io};
 
 use lazy_static::lazy_static;
 

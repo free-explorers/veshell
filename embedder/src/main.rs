@@ -1,5 +1,6 @@
 use std::env;
 
+use smithay::reexports::calloop::{channel, EventSource};
 use smithay::{
     backend::allocator::dmabuf::Dmabuf,
     reexports::wayland_server::{
@@ -9,31 +10,30 @@ use smithay::{
     wayland::{
         buffer::BufferHandler,
         compositor::{
-            CompositorClientState, CompositorHandler, SurfaceAttributes,
-            TraversalAction, with_surface_tree_downward,
+            with_surface_tree_downward, CompositorClientState, CompositorHandler,
+            SurfaceAttributes, TraversalAction,
         },
         dmabuf::DmabufHandler,
         shell::xdg::XdgShellHandler,
         shm::ShmHandler,
     },
 };
-use smithay::reexports::calloop::{channel, EventSource};
 
-use crate::flutter_engine::FlutterEngine;
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
+use crate::flutter_engine::FlutterEngine;
 use crate::mouse_button_tracker::MouseButtonTracker;
 use crate::server_state::ServerState;
 
-mod flutter_engine;
-mod x11_client;
-mod gles_framebuffer_importer;
-mod mouse_button_tracker;
-mod drm_backend;
-mod input_handling;
 mod cursor;
+mod drm_backend;
+mod flutter_engine;
+mod gles_framebuffer_importer;
+mod input_handling;
+mod keyboard;
+mod mouse_button_tracker;
 mod server_state;
 mod texture_swap_chain;
-mod keyboard;
+mod x11_client;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Ok(env_filter) = tracing_subscriber::EnvFilter::try_from_default_env() {

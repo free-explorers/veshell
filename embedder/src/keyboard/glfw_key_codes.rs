@@ -8,7 +8,10 @@ use lazy_static::lazy_static;
 use smithay::input::keyboard::ModifiersState;
 
 pub fn get_glfw_keycode(xkb_keycode: u32) -> u32 {
-    keycode_to_glfwkey_map.get(&xkb_keycode).copied().unwrap_or(xkb_keycode)
+    keycode_to_glfwkey_map
+        .get(&xkb_keycode)
+        .copied()
+        .unwrap_or(xkb_keycode)
 }
 
 pub fn get_glfw_modifiers(mods_state: ModifiersState) -> u32 {
@@ -46,10 +49,10 @@ const kGlfwModifierNumLock: u32 = 0x0020;
 // Printable keys
 const kGlfwKeySpace: u32 = 32;
 const kGlfwKeyApostrophe: u32 = 39; /* ' */
-const kGlfwKeyComma: u32 = 44;      /* , */
-const kGlfwKeyMinus: u32 = 45;      /* - */
-const kGlfwKeyPeriod: u32 = 46;     /* . */
-const kGlfwKeySlash: u32 = 47;      /* / */
+const kGlfwKeyComma: u32 = 44; /* , */
+const kGlfwKeyMinus: u32 = 45; /* - */
+const kGlfwKeyPeriod: u32 = 46; /* . */
+const kGlfwKeySlash: u32 = 47; /* / */
 const kGlfwKey0: u32 = 48;
 const kGlfwKey1: u32 = 49;
 const kGlfwKey2: u32 = 50;
@@ -61,7 +64,7 @@ const kGlfwKey7: u32 = 55;
 const kGlfwKey8: u32 = 56;
 const kGlfwKey9: u32 = 57;
 const kGlfwKeySemicolon: u32 = 59; /* ; */
-const kGlfwKeyEqual: u32 = 61;     /* = */
+const kGlfwKeyEqual: u32 = 61; /* = */
 const kGlfwKeyA: u32 = 65;
 const kGlfwKeyB: u32 = 66;
 const kGlfwKeyC: u32 = 67;
@@ -88,13 +91,12 @@ const kGlfwKeyW: u32 = 87;
 const kGlfwKeyX: u32 = 88;
 const kGlfwKeyY: u32 = 89;
 const kGlfwKeyZ: u32 = 90;
-const kGlfwKeyLeftBracket: u32 = 91;  /* [ */
-const kGlfwKeyBackslash: u32 = 92;    /* \ */
+const kGlfwKeyLeftBracket: u32 = 91; /* [ */
+const kGlfwKeyBackslash: u32 = 92; /* \ */
 const kGlfwKeyRightBracket: u32 = 93; /* ] */
-const kGlfwKeyGraveAccent: u32 = 96;  /* ` */
+const kGlfwKeyGraveAccent: u32 = 96; /* ` */
 // const kGlfwKeyWorld1: u32 = 161;      /* non-US #1 */
 // const kGlfwKeyWorld2: u32 = 162;      /* non-US #2 */
-
 // Function keys
 const kGlfwKeyEscape: u32 = 256;
 const kGlfwKeyEnter: u32 = 257;
@@ -166,7 +168,6 @@ const kGlfwKeyRightControl: u32 = 345;
 const kGlfwKeyRightAlt: u32 = 346;
 const kGlfwKeyRightSuper: u32 = 347;
 const kGlfwKeyMenu: u32 = 348;
-
 
 lazy_static! {
     static ref keycode_to_glfwkey_map: HashMap<u32, u32> = {
