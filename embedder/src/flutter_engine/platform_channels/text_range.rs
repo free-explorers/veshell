@@ -14,7 +14,10 @@ impl TextRange {
     }
 
     pub fn new_position(position: usize) -> Self {
-        Self { base: position, extent: position }
+        Self {
+            base: position,
+            extent: position,
+        }
     }
 
     pub fn base(&self) -> usize {

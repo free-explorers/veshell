@@ -26,7 +26,10 @@ impl Ord for Task {
         // Smaller target times have higher priority.
         // In case of a tie we compare the task ID.
         // This step is necessary to make implementations of `PartialEq` and `Ord` consistent.
-        other.1.cmp(&self.1).then_with(|| self.0.task.cmp(&other.0.task))
+        other
+            .1
+            .cmp(&self.1)
+            .then_with(|| self.0.task.cmp(&other.0.task))
     }
 }
 

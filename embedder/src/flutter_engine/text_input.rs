@@ -4,12 +4,12 @@ use input_linux::sys::KEY_ENTER;
 use serde_json::json;
 use smithay::reexports::calloop::channel::Event;
 
-use crate::{Backend, CalloopData};
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::flutter_engine::platform_channels::text_input_model::TextInputModel;
 use crate::flutter_engine::platform_channels::text_range::TextRange;
+use crate::{Backend, CalloopData};
 
 pub struct TextInput {
     channel: MethodChannel<serde_json::Value>,
@@ -87,10 +87,11 @@ impl TextInput {
             "composingExtent": model.composing_range().extent(),
         });
 
-        self.channel.invoke_method("TextInputClient.updateEditingState", Some(Box::new(json!([
-            self.client_id,
-            state,
-        ]))), None);
+        self.channel.invoke_method(
+            "TextInputClient.updateEditingState",
+            Some(Box::new(json!([self.client_id, state,]))),
+            None,
+        );
     }
 
     fn press_enter(&mut self) {
@@ -98,15 +99,19 @@ impl TextInput {
             self.active_model.as_mut().unwrap().add_char_point('\n');
             self.send_state_update();
         }
-        self.channel.invoke_method("TextInputClient.performAction", Some(Box::new(json!([
-            self.client_id,
-            self.input_action,
-        ]))), None);
+        self.channel.invoke_method(
+            "TextInputClient.performAction",
+            Some(Box::new(json!([self.client_id, self.input_action,]))),
+            None,
+        );
     }
 }
 
 pub fn text_input_channel_method_call_handler<BackendData: Backend + 'static>(
-    event: Event<(MethodCall<serde_json::Value>, Box<dyn MethodResult<serde_json::Value>>)>,
+    event: Event<(
+        MethodCall<serde_json::Value>,
+        Box<dyn MethodResult<serde_json::Value>>,
+    )>,
     _: &mut (),
     data: &mut CalloopData<BackendData>,
 ) {
@@ -119,7 +124,13 @@ pub fn text_input_channel_method_call_handler<BackendData: Backend + 'static>(
                 let client_id = arguments.unwrap().get(0).unwrap().as_u64().unwrap();
                 let config = arguments.unwrap().get(1).unwrap().as_object().unwrap();
 
-                let input_type = config.get("inputType").unwrap().get("name").unwrap().as_str().unwrap();
+                let input_type = config
+                    .get("inputType")
+                    .unwrap()
+                    .get("name")
+                    .unwrap()
+                    .as_str()
+                    .unwrap();
                 let input_action = config.get("inputAction").unwrap().as_str().unwrap();
 
                 text_input.set_client(client_id, input_type, input_action);

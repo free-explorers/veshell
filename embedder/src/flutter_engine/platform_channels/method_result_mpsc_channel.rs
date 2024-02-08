@@ -25,9 +25,7 @@ pub struct MethodResultMpscChannel<T = EncodableValue> {
 
 impl<T> MethodResultMpscChannel<T> {
     pub fn new(tx_channel: channel::Sender<MethodResultEnum<T>>) -> Self {
-        Self {
-            tx_channel,
-        }
+        Self { tx_channel }
     }
 }
 

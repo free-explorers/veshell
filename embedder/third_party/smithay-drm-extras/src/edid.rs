@@ -30,7 +30,10 @@ pub struct EdidInfo {
 
 impl EdidInfo {
     /// Get EDID info from supplied connector
-    pub fn for_connector(device: &impl ControlDevice, connector: connector::Handle) -> Option<EdidInfo> {
+    pub fn for_connector(
+        device: &impl ControlDevice,
+        connector: connector::Handle,
+    ) -> Option<EdidInfo> {
         device
             .get_properties(connector)
             .ok()
