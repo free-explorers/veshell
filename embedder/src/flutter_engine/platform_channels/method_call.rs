@@ -8,10 +8,7 @@ pub struct MethodCall<T = EncodableValue> {
 
 impl<T> MethodCall<T> {
     pub(crate) fn new(method: String, arguments: Option<Box<T>>) -> Self {
-        Self {
-            method,
-            arguments,
-        }
+        Self { method, arguments }
     }
 
     pub fn method(&self) -> &str {

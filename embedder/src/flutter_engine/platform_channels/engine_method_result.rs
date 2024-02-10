@@ -11,24 +11,26 @@ struct ReplyManager {
 
 impl ReplyManager {
     pub fn new(reply_handler: BinaryReply) -> Self {
-        Self {
-            reply_handler,
-        }
+        Self { reply_handler }
     }
 
     pub fn send_response_data(&mut self, data: Option<&Vec<u8>>) {
         let mut reply_handler = if let Some(reply_handler) = self.reply_handler.take() {
             reply_handler
         } else {
-            eprintln!("Error: Only one of Success, Error, or NotImplemented can be called, \
-            and it can be called exactly once. Ignoring duplicate result.");
+            eprintln!(
+                "Error: Only one of Success, Error, or NotImplemented can be called, \
+            and it can be called exactly once. Ignoring duplicate result."
+            );
             return;
         };
 
-        reply_handler(data.and_then(|v| if v.is_empty() {
-            None
-        } else {
-            Some(v.as_slice())
+        reply_handler(data.and_then(|v| {
+            if v.is_empty() {
+                None
+            } else {
+                Some(v.as_slice())
+            }
         }));
     }
 }
@@ -62,7 +64,9 @@ impl<T> MethodResult<T> for EngineMethodResult<T> {
     }
 
     fn error_internal(&mut self, code: String, message: String, details: Option<T>) {
-        let data = self.codec.encode_error_envelope(code.as_str(), message.as_str(), details.as_ref());
+        let data =
+            self.codec
+                .encode_error_envelope(code.as_str(), message.as_str(), details.as_ref());
         self.reply_manager.send_response_data(Some(&data));
     }
 

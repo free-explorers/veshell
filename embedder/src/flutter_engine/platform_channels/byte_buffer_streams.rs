@@ -48,9 +48,7 @@ pub struct ByteBufferStreamWriter<'b> {
 
 impl<'b> ByteBufferStreamWriter<'b> {
     pub fn new(buffer: &'b mut Vec<u8>) -> Self {
-        Self {
-            buffer,
-        }
+        Self { buffer }
     }
 }
 

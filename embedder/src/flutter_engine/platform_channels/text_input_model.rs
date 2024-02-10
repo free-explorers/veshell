@@ -19,9 +19,16 @@ pub struct TextInputModel {
 }
 
 impl TextInputModel {
-    pub fn set_text(&mut self, text: &str, selection: TextRange, composing_range: TextRange) -> bool {
+    pub fn set_text(
+        &mut self,
+        text: &str,
+        selection: TextRange,
+        composing_range: TextRange,
+    ) -> bool {
         self.text = text.encode_utf16().collect();
-        if !self.text_range().contains_range(&selection) || !self.text_range().contains_range(&composing_range) {
+        if !self.text_range().contains_range(&selection)
+            || !self.text_range().contains_range(&composing_range)
+        {
             return false;
         }
         self.selection = selection;
@@ -41,7 +48,11 @@ impl TextInputModel {
         true
     }
 
-    pub fn set_composing_range(&mut self, composing_range: TextRange, cursor_offset: usize) -> bool {
+    pub fn set_composing_range(
+        &mut self,
+        composing_range: TextRange,
+        cursor_offset: usize,
+    ) -> bool {
         if !self.composing || !self.text_range().contains_range(&composing_range) {
             return false;
         }
@@ -64,10 +75,16 @@ impl TextInputModel {
         } else {
             &self.composing_range
         };
-        self.text.splice(range_to_delete.start()..range_to_delete.end(), text.iter().cloned());
-        self.composing_range.set_end(self.composing_range.start() + text.len());
-        self.selection = TextRange::new(selection.start() + self.composing_range.start(),
-                                        selection.extent() + self.composing_range.start());
+        self.text.splice(
+            range_to_delete.start()..range_to_delete.end(),
+            text.iter().cloned(),
+        );
+        self.composing_range
+            .set_end(self.composing_range.start() + text.len());
+        self.selection = TextRange::new(
+            selection.start() + self.composing_range.start(),
+            selection.extent() + self.composing_range.start(),
+        );
     }
 
     pub fn update_composing_text(&mut self, text: &Vec<u16>) {
@@ -96,7 +113,8 @@ impl TextInputModel {
             return false;
         }
         let start = self.selection.start();
-        self.text.splice(start..self.selection.end(), Vec::new().iter().cloned());
+        self.text
+            .splice(start..self.selection.end(), Vec::new().iter().cloned());
         self.selection = TextRange::new_position(start);
         if self.composing {
             self.composing_range = self.selection;
@@ -119,9 +137,13 @@ impl TextInputModel {
     pub fn add_text(&mut self, text: &Vec<u16>) {
         self.delete_selected();
         if self.composing {
-            self.text.splice(self.composing_range.start()..self.composing_range.end(), text.iter().cloned());
+            self.text.splice(
+                self.composing_range.start()..self.composing_range.end(),
+                text.iter().cloned(),
+            );
             self.selection = TextRange::new_position(self.composing_range.start());
-            self.composing_range.set_end(self.composing_range.start() + text.len());
+            self.composing_range
+                .set_end(self.composing_range.start() + text.len());
         }
         let position = self.selection.position();
         self.text.splice(position..position, text.iter().cloned());
@@ -134,11 +156,17 @@ impl TextInputModel {
         }
         let position = self.selection.position();
         if position != self.editable_range().start() {
-            let count = if is_trailing_surrogate(self.text[position - 1] as u32) { 2 } else { 1 };
-            self.text.splice(position - count..position, Vec::new().iter().cloned());
+            let count = if is_trailing_surrogate(self.text[position - 1] as u32) {
+                2
+            } else {
+                1
+            };
+            self.text
+                .splice(position - count..position, Vec::new().iter().cloned());
             self.selection = TextRange::new_position(position - count);
             if self.composing {
-                self.composing_range.set_end(self.composing_range.end() - count);
+                self.composing_range
+                    .set_end(self.composing_range.end() - count);
             }
             return true;
         }
@@ -151,10 +179,16 @@ impl TextInputModel {
         }
         let position = self.selection.position();
         if position < self.editable_range().end() {
-            let count = if is_leading_surrogate(self.text[position] as u32) { 2 } else { 1 };
-            self.text.splice(position..position + count, Vec::new().iter().cloned());
+            let count = if is_leading_surrogate(self.text[position] as u32) {
+                2
+            } else {
+                1
+            };
+            self.text
+                .splice(position..position + count, Vec::new().iter().cloned());
             if self.composing {
-                self.composing_range.set_end(self.composing_range.end() - count);
+                self.composing_range
+                    .set_end(self.composing_range.end() - count);
             }
             return true;
         }
@@ -170,14 +204,22 @@ impl TextInputModel {
                     count = i;
                     break;
                 }
-                start -= if is_leading_surrogate(self.text[start - 1] as u32) { 2 } else { 1 };
+                start -= if is_leading_surrogate(self.text[start - 1] as u32) {
+                    2
+                } else {
+                    1
+                };
             }
         } else {
             for _ in 0..offset_from_cursor {
                 if start == max_pos {
                     break;
                 }
-                start += if is_leading_surrogate(self.text[start] as u32) { 2 } else { 1 };
+                start += if is_leading_surrogate(self.text[start] as u32) {
+                    2
+                } else {
+                    1
+                };
             }
         }
 
@@ -186,7 +228,11 @@ impl TextInputModel {
             if end == max_pos {
                 break;
             }
-            end += if is_leading_surrogate(self.text[start] as u32) { 2 } else { 1 };
+            end += if is_leading_surrogate(self.text[start] as u32) {
+                2
+            } else {
+                1
+            };
         }
 
         if start == end {
@@ -196,10 +242,15 @@ impl TextInputModel {
         let deleted_length = end - start;
         self.text.splice(start..end, Vec::new().iter().cloned());
 
-        self.selection = TextRange::new_position(if offset_from_cursor <= 0 { start } else { self.selection.start() });
+        self.selection = TextRange::new_position(if offset_from_cursor <= 0 {
+            start
+        } else {
+            self.selection.start()
+        });
 
         if self.composing {
-            self.composing_range.set_end(self.composing_range.end() - deleted_length);
+            self.composing_range
+                .set_end(self.composing_range.end() - deleted_length);
         }
         return true;
     }
@@ -247,7 +298,11 @@ impl TextInputModel {
         }
         let position = self.selection.position();
         if position != self.editable_range().end() {
-            let count = if is_leading_surrogate(self.text[position] as u32) { 2 } else { 1 };
+            let count = if is_leading_surrogate(self.text[position] as u32) {
+                2
+            } else {
+                1
+            };
             self.selection = TextRange::new_position(position + count);
             return true;
         }
@@ -261,7 +316,11 @@ impl TextInputModel {
         }
         let position = self.selection.position();
         if position != self.editable_range().start() {
-            let count = if is_trailing_surrogate(self.text[position - 1] as u32) { 2 } else { 1 };
+            let count = if is_trailing_surrogate(self.text[position - 1] as u32) {
+                2
+            } else {
+                1
+            };
             self.selection = TextRange::new_position(position - count);
             return true;
         }

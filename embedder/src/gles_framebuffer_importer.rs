@@ -12,22 +12,16 @@
 
 use core::ffi::{c_char, CStr};
 
-use smithay::{
-    backend::{
-        allocator::dmabuf::{Dmabuf, WeakDmabuf},
-        egl::{
-            self,
-            EGLContext,
-            ffi::egl::{
-                self as ffi_egl,
-                types::EGLImage,
-            },
-            MakeCurrentError,
-        },
-        renderer::gles::{ffi, GlesError},
-    },
-};
 use smithay::backend::egl::EGLDisplay;
+use smithay::backend::{
+    allocator::dmabuf::{Dmabuf, WeakDmabuf},
+    egl::{
+        self,
+        ffi::egl::{self as ffi_egl, types::EGLImage},
+        EGLContext, MakeCurrentError,
+    },
+    renderer::gles::{ffi, GlesError},
+};
 use tracing::{info, trace};
 
 pub struct GlesFramebufferImporter {
@@ -52,16 +46,16 @@ impl GlesFramebufferImporter {
 
         info!("Initializing OpenGL ES buffer importer");
         info!(
-                "GL Version: {:?}",
-                CStr::from_ptr(gl.GetString(ffi::VERSION) as *const c_char),
+            "GL Version: {:?}",
+            CStr::from_ptr(gl.GetString(ffi::VERSION) as *const c_char),
         );
         info!(
-                "GL Vendor: {:?}",
-                CStr::from_ptr(gl.GetString(ffi::VENDOR) as *const c_char),
+            "GL Vendor: {:?}",
+            CStr::from_ptr(gl.GetString(ffi::VENDOR) as *const c_char),
         );
         info!(
-                "GL Renderer: {:?}",
-                CStr::from_ptr(gl.GetString(ffi::RENDERER) as *const c_char),
+            "GL Renderer: {:?}",
+            CStr::from_ptr(gl.GetString(ffi::RENDERER) as *const c_char),
         );
 
         Ok(Self {
@@ -71,7 +65,11 @@ impl GlesFramebufferImporter {
         })
     }
 
-    pub fn import_framebuffer(&mut self, egl_context: &EGLContext, dmabuf: Dmabuf) -> Result<u32, GlesError> {
+    pub fn import_framebuffer(
+        &mut self,
+        egl_context: &EGLContext,
+        dmabuf: Dmabuf,
+    ) -> Result<u32, GlesError> {
         self.make_current(egl_context)?;
 
         let fbo = self
@@ -96,7 +94,8 @@ impl GlesFramebufferImporter {
                     let mut rbo = 0;
                     self.gl.GenRenderbuffers(1, &mut rbo as *mut _);
                     self.gl.BindRenderbuffer(ffi::RENDERBUFFER, rbo);
-                    self.gl.EGLImageTargetRenderbufferStorageOES(ffi::RENDERBUFFER, image);
+                    self.gl
+                        .EGLImageTargetRenderbufferStorageOES(ffi::RENDERBUFFER, image);
                     self.gl.BindRenderbuffer(ffi::RENDERBUFFER, 0);
 
                     let mut fbo = 0;

@@ -1,42 +1,38 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env::{remove_var, set_var};
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use smithay::{
-    delegate_compositor, delegate_data_device, delegate_dmabuf, delegate_output, delegate_seat,
-    delegate_shm, delegate_xdg_shell,
-};
 use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::backend::input::KeyState;
-use smithay::backend::renderer::{ImportAll, Texture};
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
-use smithay::input::{Seat, SeatHandler, SeatState};
+use smithay::backend::renderer::{ImportAll, Texture};
 use smithay::input::keyboard::KeyboardHandle;
 use smithay::input::pointer::{CursorImageStatus, PointerHandle};
-use smithay::reexports::calloop::{channel, Interest, LoopHandle, Mode, PostAction};
+use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::calloop::generic::Generic;
+use smithay::reexports::calloop::{channel, Interest, LoopHandle, Mode, PostAction};
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge;
-use smithay::reexports::wayland_server::{Client, Display, DisplayHandle, Resource};
 use smithay::reexports::wayland_server::protocol::wl_buffer;
 use smithay::reexports::wayland_server::protocol::wl_seat::WlSeat;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::utils::{Buffer as BufferCoords, Clock, Monotonic, Serial, SERIAL_COUNTER, Size};
+use smithay::reexports::wayland_server::{Client, Display, DisplayHandle, Resource};
+use smithay::utils::{Buffer as BufferCoords, Clock, Monotonic, Serial, Size, SERIAL_COUNTER};
 use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor::{self, get_parent};
 use smithay::wayland::compositor::{
-    BufferAssignment, CompositorClientState, CompositorHandler, CompositorState,
-    SubsurfaceCachedState, SurfaceAttributes, TraversalAction, with_states, with_surface_tree_upward,
+    with_states, with_surface_tree_upward, BufferAssignment, CompositorClientState,
+    CompositorHandler, CompositorState, SubsurfaceCachedState, SurfaceAttributes, TraversalAction,
 };
 use smithay::wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier};
 use smithay::wayland::selection::data_device::{
-    ClientDndGrabHandler, DataDeviceHandler, DataDeviceState, ServerDndGrabHandler,
-    set_data_device_focus,
+    set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
+    ServerDndGrabHandler,
 };
 use smithay::wayland::selection::SelectionHandler;
 use smithay::wayland::shell::xdg;
@@ -46,17 +42,21 @@ use smithay::wayland::shell::xdg::{
 };
 use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::wayland::socket::ListeningSocketSource;
+use smithay::{
+    delegate_compositor, delegate_data_device, delegate_dmabuf, delegate_output, delegate_seat,
+    delegate_shm, delegate_xdg_shell,
+};
 use tracing::{info, warn};
 
-use crate::{Backend, CalloopData, ClientState};
-use crate::flutter_engine::FlutterEngine;
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 use crate::flutter_engine::wayland_messages::{
     PopupMessage, SubsurfaceMessage, SurfaceMessage, ToplevelMessage,
 };
+use crate::flutter_engine::FlutterEngine;
 use crate::keyboard::key_repeater::KeyRepeater;
 use crate::keyboard::KeyEvent;
 use crate::texture_swap_chain::TextureSwapChain;
+use crate::{Backend, CalloopData, ClientState};
 
 pub struct ServerState<BackendData: Backend + 'static> {
     pub running: Arc<AtomicBool>,
@@ -116,17 +116,13 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         // Every key event must be passed through `glfw_key_codes.input_intercept`
         // so that Smithay knows what keys are pressed.
         let keyboard = self.keyboard.clone();
-        let ((mods, utf32_codepoint), mods_changed) = keyboard.input_intercept::<_, _>(
-            self,
-            key_code,
-            state,
-            |_, mods, keysym_handle| {
+        let ((mods, utf32_codepoint), mods_changed) =
+            keyboard.input_intercept::<_, _>(self, key_code, state, |_, mods, keysym_handle| {
                 // After updating the keyboard state,
                 // we get the state of the modifiers and the character that was typed.
                 let utf32_codepoint = keysym_handle.modified_sym().key_char();
                 (*mods, utf32_codepoint)
-            },
-        );
+            });
 
         // Forward the key event to Flutter.
         self.flutter_engine.as_mut().unwrap().send_key_event(
@@ -138,7 +134,8 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
                 time,
                 mods,
                 mods_changed,
-            });
+            },
+        );
 
         // Initiate key repeat.
         // The callback that gets called repeatedly is defined in the constructor of `ServerState`.
@@ -208,11 +205,9 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
 
         let repeat_delay: u64 = 200;
         let repeat_rate: u64 = 50;
-        let keyboard = seat.add_keyboard(
-            Default::default(),
-            repeat_delay as i32,
-            repeat_rate as i32,
-        ).unwrap();
+        let keyboard = seat
+            .add_keyboard(Default::default(), repeat_delay as i32, repeat_rate as i32)
+            .unwrap();
 
         let pointer = seat.add_pointer();
 
@@ -255,54 +250,71 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             )
             .expect("Failed to init wayland server source");
 
-        let (tx_flutter_handled_key_event, rx_flutter_handled_key_event) = channel::channel::<(KeyEvent, bool)>();
+        let (tx_flutter_handled_key_event, rx_flutter_handled_key_event) =
+            channel::channel::<(KeyEvent, bool)>();
 
-        loop_handle.insert_source(rx_flutter_handled_key_event, move |event, _, data: &mut CalloopData<BackendData>| {
-            if let Msg((key_event, handled)) = event {
-                if handled {
-                    // Flutter consumed this event. Probably a keyboard shortcut.
-                    return;
-                }
+        loop_handle
+            .insert_source(
+                rx_flutter_handled_key_event,
+                move |event, _, data: &mut CalloopData<BackendData>| {
+                    if let Msg((key_event, handled)) = event {
+                        if handled {
+                            // Flutter consumed this event. Probably a keyboard shortcut.
+                            return;
+                        }
 
-                let text_input = &mut data.state.flutter_engine.as_mut().unwrap().text_input;
-                if text_input.is_active() {
-                    if key_event.state == KeyState::Pressed && !key_event.mods.ctrl && !key_event.mods.alt {
-                        text_input.press_key(key_event.key_code, key_event.codepoint);
+                        let text_input =
+                            &mut data.state.flutter_engine.as_mut().unwrap().text_input;
+                        if text_input.is_active() {
+                            if key_event.state == KeyState::Pressed
+                                && !key_event.mods.ctrl
+                                && !key_event.mods.alt
+                            {
+                                text_input.press_key(key_event.key_code, key_event.codepoint);
+                            }
+                            // It doesn't matter if the text field captured the key event or not.
+                            // As long as it stays active, don't forward events to the Wayland client.
+                            return;
+                        }
+
+                        // The compositor was not interested in this event,
+                        // so we forward it to the Wayland client in focus if there is one.
+                        let keyboard = data.state.keyboard.clone();
+                        keyboard.input_forward(
+                            &mut data.state,
+                            key_event.key_code,
+                            key_event.state,
+                            SERIAL_COUNTER.next_serial(),
+                            key_event.time,
+                            key_event.mods_changed,
+                        );
                     }
-                    // It doesn't matter if the text field captured the key event or not.
-                    // As long as it stays active, don't forward events to the Wayland client.
-                    return;
-                }
+                },
+            )
+            .unwrap();
 
-                // The compositor was not interested in this event,
-                // so we forward it to the Wayland client in focus if there is one.
+        let key_repeater = KeyRepeater::new(
+            loop_handle.clone(),
+            |key_code, code_point, data: &mut CalloopData<BackendData>| {
                 let keyboard = data.state.keyboard.clone();
-                keyboard.input_forward(
-                    &mut data.state,
-                    key_event.key_code,
-                    key_event.state,
-                    SERIAL_COUNTER.next_serial(),
-                    key_event.time,
-                    key_event.mods_changed,
+
+                let mods = keyboard.modifier_state();
+                data.state.flutter_engine.as_mut().unwrap().send_key_event(
+                    data.state.tx_flutter_handled_key_event.clone(),
+                    KeyEvent {
+                        key_code,
+                        codepoint: code_point,
+                        state: KeyState::Pressed,
+                        time: SystemTime::now()
+                            .duration_since(SystemTime::UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis() as u32,
+                        mods,
+                        mods_changed: false,
+                    },
                 );
-            }
-        }).unwrap();
-
-        let key_repeater = KeyRepeater::new(loop_handle.clone(), |key_code, code_point, data: &mut CalloopData<BackendData>| {
-            let keyboard = data.state.keyboard.clone();
-
-            let mods = keyboard.modifier_state();
-            data.state.flutter_engine.as_mut().unwrap().send_key_event(
-                data.state.tx_flutter_handled_key_event.clone(),
-                KeyEvent {
-                    key_code,
-                    codepoint: code_point,
-                    state: KeyState::Pressed,
-                    time: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis() as u32,
-                    mods,
-                    mods_changed: false,
-                });
-        });
+            },
+        );
 
         Self {
             running: Arc::new(AtomicBool::new(true)),
@@ -344,7 +356,8 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
     pub fn change_keyboard_repeat_info(&mut self, repeat_delay: u64, repeat_rate: u64) {
         self.repeat_delay = repeat_delay;
         self.repeat_rate = repeat_rate;
-        self.keyboard.change_repeat_info(repeat_delay as i32, repeat_rate as i32);
+        self.keyboard
+            .change_repeat_info(repeat_delay as i32, repeat_rate as i32);
     }
 }
 
@@ -821,7 +834,7 @@ impl<BackendData: Backend> DmabufHandler for ServerState<BackendData> {
         &mut self,
         _global: &DmabufGlobal,
         _dmabuf: Dmabuf,
-        notifier: ImportNotifier
+        notifier: ImportNotifier,
     ) {
         // TODO
         self.imported_dmabufs.push(_dmabuf);

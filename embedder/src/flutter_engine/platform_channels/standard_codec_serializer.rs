@@ -125,8 +125,10 @@ impl StandardCodecSerializer {
                 }
             }
             EncodableValue::Custom(_) => {
-                eprintln!("Unhandled custom type in StandardCodecSerializer::WriteValue.\
-                Custom types require codec extensions.");
+                eprintln!(
+                    "Unhandled custom type in StandardCodecSerializer::WriteValue.\
+                Custom types require codec extensions."
+                );
             }
             EncodableValue::FloatList(value) => self.write_vector(value.clone(), stream),
         }
@@ -233,7 +235,10 @@ impl StandardCodecSerializer {
         }
         let vector_ptr = vector.as_ptr() as *const u8;
         unsafe {
-            stream.write_bytes(std::slice::from_raw_parts(vector_ptr, count * type_size), count * type_size);
+            stream.write_bytes(
+                std::slice::from_raw_parts(vector_ptr, count * type_size),
+                count * type_size,
+            );
         }
     }
 }

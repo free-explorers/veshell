@@ -1,4 +1,6 @@
-use crate::flutter_engine::platform_channels::byte_buffer_streams::{ByteBufferStreamReader, ByteBufferStreamWriter};
+use crate::flutter_engine::platform_channels::byte_buffer_streams::{
+    ByteBufferStreamReader, ByteBufferStreamWriter,
+};
 use crate::flutter_engine::platform_channels::byte_streams::{ByteStreamReader, ByteStreamWriter};
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
@@ -33,11 +35,15 @@ impl MethodCodec<EncodableValue> for StandardMethodCodec {
     fn encode_method_call_internal(&self, method_call: &MethodCall<EncodableValue>) -> Vec<u8> {
         let mut encoded = Vec::new();
         let mut stream = ByteBufferStreamWriter::new(&mut encoded);
-        self.serializer.write_value(&EncodableValue::String(method_call.method().to_string()), &mut stream);
+        self.serializer.write_value(
+            &EncodableValue::String(method_call.method().to_string()),
+            &mut stream,
+        );
         if let Some(arguments) = method_call.arguments() {
             self.serializer.write_value(arguments, &mut stream);
         } else {
-            self.serializer.write_value(&EncodableValue::Null, &mut stream);
+            self.serializer
+                .write_value(&EncodableValue::Null, &mut stream);
         }
         encoded
     }
@@ -49,30 +55,44 @@ impl MethodCodec<EncodableValue> for StandardMethodCodec {
         if let Some(result) = result {
             self.serializer.write_value(result, &mut stream);
         } else {
-            self.serializer.write_value(&EncodableValue::Null, &mut stream);
+            self.serializer
+                .write_value(&EncodableValue::Null, &mut stream);
         }
         encoded
     }
 
-    fn encode_error_envelope_internal(&self, code: &str, message: &str, details: Option<&EncodableValue>) -> Vec<u8> {
+    fn encode_error_envelope_internal(
+        &self,
+        code: &str,
+        message: &str,
+        details: Option<&EncodableValue>,
+    ) -> Vec<u8> {
         let mut encoded = Vec::new();
         let mut stream = ByteBufferStreamWriter::new(&mut encoded);
         stream.write_byte(1);
-        self.serializer.write_value(&EncodableValue::String(code.to_string()), &mut stream);
+        self.serializer
+            .write_value(&EncodableValue::String(code.to_string()), &mut stream);
         if message.is_empty() {
-            self.serializer.write_value(&EncodableValue::Null, &mut stream);
+            self.serializer
+                .write_value(&EncodableValue::Null, &mut stream);
         } else {
-            self.serializer.write_value(&EncodableValue::String(message.to_string()), &mut stream);
+            self.serializer
+                .write_value(&EncodableValue::String(message.to_string()), &mut stream);
         }
         if let Some(details) = details {
             self.serializer.write_value(details, &mut stream);
         } else {
-            self.serializer.write_value(&EncodableValue::Null, &mut stream);
+            self.serializer
+                .write_value(&EncodableValue::Null, &mut stream);
         }
         encoded
     }
 
-    fn decode_and_process_response_envelope_internal(&self, response: &[u8], result: &mut dyn MethodResult<EncodableValue>) -> bool {
+    fn decode_and_process_response_envelope_internal(
+        &self,
+        response: &[u8],
+        result: &mut dyn MethodResult<EncodableValue>,
+    ) -> bool {
         let mut stream = ByteBufferStreamReader::new(response);
         let flag = stream.read_byte();
         if flag == 0 {

@@ -22,7 +22,11 @@ pub trait MethodCodec<T> {
         self.encode_error_envelope_internal(code, message, details)
     }
 
-    fn decode_and_process_response_envelope(&self, response: &[u8], result: &mut dyn MethodResult<T>) -> bool {
+    fn decode_and_process_response_envelope(
+        &self,
+        response: &[u8],
+        result: &mut dyn MethodResult<T>,
+    ) -> bool {
         self.decode_and_process_response_envelope_internal(response, result)
     }
 
@@ -32,7 +36,16 @@ pub trait MethodCodec<T> {
 
     fn encode_success_envelope_internal(&self, result: Option<&T>) -> Vec<u8>;
 
-    fn encode_error_envelope_internal(&self, code: &str, message: &str, details: Option<&T>) -> Vec<u8>;
+    fn encode_error_envelope_internal(
+        &self,
+        code: &str,
+        message: &str,
+        details: Option<&T>,
+    ) -> Vec<u8>;
 
-    fn decode_and_process_response_envelope_internal(&self, response: &[u8], result: &mut dyn MethodResult<T>) -> bool;
+    fn decode_and_process_response_envelope_internal(
+        &self,
+        response: &[u8],
+        result: &mut dyn MethodResult<T>,
+    ) -> bool;
 }

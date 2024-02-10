@@ -1,12 +1,19 @@
 use std::cell::RefCell;
 use std::ffi::{c_int, CString};
-use std::mem::{MaybeUninit, size_of};
+use std::mem::{size_of, MaybeUninit};
 use std::ops::DerefMut;
 use std::os::unix::ffi::OsStrExt;
 use std::ptr::{null, null_mut};
 use std::rc::Rc;
 use std::time::Duration;
 
+use smithay::backend::input::{InputBackend, KeyState, KeyboardKeyEvent};
+use smithay::backend::renderer::gles::ffi::RGBA8;
+use smithay::input::keyboard::ModifiersState;
+use smithay::reexports::calloop;
+use smithay::reexports::calloop::channel::Event::Msg;
+use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
+use smithay::reexports::calloop::{Dispatcher, LoopHandle};
 use smithay::{
     backend::{
         allocator::dmabuf::Dmabuf,
@@ -20,39 +27,19 @@ use smithay::{
     reexports::calloop::channel,
     utils::{Physical, Size},
 };
-use smithay::backend::input::{InputBackend, KeyboardKeyEvent, KeyState};
-use smithay::backend::renderer::gles::ffi::RGBA8;
-use smithay::input::keyboard::ModifiersState;
-use smithay::reexports::calloop;
-use smithay::reexports::calloop::{Dispatcher, LoopHandle};
-use smithay::reexports::calloop::channel::Event::Msg;
-use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 
-use crate::{Backend, CalloopData, flutter_engine::{
-    callbacks::{
-        clear_current,
-        fbo_callback,
-        make_current,
-        make_resource_current,
-        present_with_info,
-        surface_transformation,
-    },
-    embedder::{
-        FLUTTER_ENGINE_VERSION,
-        FlutterEngine as FlutterEngineHandle,
-        FlutterEngineGetCurrentTime,
-        FlutterEngineOnVsync,
-        FlutterEngineSendWindowMetricsEvent,
-        FlutterEngineShutdown,
-        FlutterOpenGLRendererConfig,
-        FlutterProjectArgs,
-        FlutterRendererConfig,
-        FlutterRendererConfig__bindgen_ty_1,
-        FlutterWindowMetricsEvent,
-    },
-}, ServerState};
-use crate::flutter_engine::callbacks::{gl_external_texture_frame_callback, platform_message_callback, populate_existing_damage, post_task_callback, runs_task_on_current_thread_callback, vsync_callback};
-use crate::flutter_engine::embedder::{FlutterCustomTaskRunners, FlutterEngineAOTData, FlutterEngineAOTDataSource, FlutterEngineAOTDataSource__bindgen_ty_1, FlutterEngineAOTDataSourceType_kFlutterEngineAOTDataSourceTypeElfPath, FlutterEngineCreateAOTData, FlutterEngineInitialize, FlutterEngineMarkExternalTextureFrameAvailable, FlutterEngineRegisterExternalTexture, FlutterEngineRunInitialized, FlutterEngineRunTask, FlutterEngineSendPointerEvent, FlutterPointerEvent, FlutterTaskRunnerDescription};
+use crate::flutter_engine::callbacks::{
+    gl_external_texture_frame_callback, platform_message_callback, populate_existing_damage,
+    post_task_callback, runs_task_on_current_thread_callback, vsync_callback,
+};
+use crate::flutter_engine::embedder::{
+    FlutterCustomTaskRunners, FlutterEngineAOTData, FlutterEngineAOTDataSource,
+    FlutterEngineAOTDataSourceType_kFlutterEngineAOTDataSourceTypeElfPath,
+    FlutterEngineAOTDataSource__bindgen_ty_1, FlutterEngineCreateAOTData, FlutterEngineInitialize,
+    FlutterEngineMarkExternalTextureFrameAvailable, FlutterEngineRegisterExternalTexture,
+    FlutterEngineRunInitialized, FlutterEngineRunTask, FlutterEngineSendPointerEvent,
+    FlutterPointerEvent, FlutterTaskRunnerDescription,
+};
 use crate::flutter_engine::platform_channel_callbacks::platform_channel_method_handler;
 use crate::flutter_engine::platform_channels::basic_message_channel::BasicMessageChannel;
 use crate::flutter_engine::platform_channels::binary_messenger_impl::BinaryMessengerImpl;
@@ -67,17 +54,32 @@ use crate::flutter_engine::platform_channels::standard_method_codec::StandardMet
 use crate::flutter_engine::task_runner::TaskRunner;
 use crate::flutter_engine::text_input::{text_input_channel_method_call_handler, TextInput};
 use crate::gles_framebuffer_importer::GlesFramebufferImporter;
-use crate::keyboard::KeyEvent;
 use crate::keyboard::glfw_key_codes::{get_glfw_keycode, get_glfw_modifiers};
+use crate::keyboard::KeyEvent;
 use crate::mouse_button_tracker::MouseButtonTracker;
+use crate::{
+    flutter_engine::{
+        callbacks::{
+            clear_current, fbo_callback, make_current, make_resource_current, present_with_info,
+            surface_transformation,
+        },
+        embedder::{
+            FlutterEngine as FlutterEngineHandle, FlutterEngineGetCurrentTime,
+            FlutterEngineOnVsync, FlutterEngineSendWindowMetricsEvent, FlutterEngineShutdown,
+            FlutterOpenGLRendererConfig, FlutterProjectArgs, FlutterRendererConfig,
+            FlutterRendererConfig__bindgen_ty_1, FlutterWindowMetricsEvent, FLUTTER_ENGINE_VERSION,
+        },
+    },
+    Backend, CalloopData, ServerState,
+};
 
 mod callbacks;
 pub mod embedder;
+pub mod platform_channel_callbacks;
 pub mod platform_channels;
 pub mod task_runner;
-pub mod wayland_messages;
-pub mod platform_channel_callbacks;
 mod text_input;
+pub mod wayland_messages;
 
 /// Wrap the handle for various safety reasons:
 /// - Clone & Copy is willingly not implemented to avoid using the engine after being shut down.
@@ -101,14 +103,18 @@ pub struct FlutterEngine<BackendData: Backend + 'static> {
 pub struct Baton(isize);
 
 impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
-    pub fn new(server_state: &mut ServerState<BackendData>) -> Result<(Box<Self>, EmbedderChannels), Box<dyn std::error::Error>> {
+    pub fn new(
+        server_state: &mut ServerState<BackendData>,
+    ) -> Result<(Box<Self>, EmbedderChannels), Box<dyn std::error::Error>> {
         let (tx_present, rx_present) = channel::channel::<()>();
         let (tx_request_fbo, rx_request_fbo) = channel::channel::<()>();
         let (tx_fbo, rx_fbo) = channel::channel::<Option<Dmabuf>>();
         let (tx_output_height, rx_output_height) = channel::channel::<u16>();
         let (tx_baton, rx_baton) = channel::channel::<Baton>();
-        let (tx_reschedule_task_runner_timer, rx_reschedule_task_runner_timer) = channel::channel::<Duration>();
-        let (tx_request_external_texture_name, rx_request_external_texture_name) = channel::channel::<i64>();
+        let (tx_reschedule_task_runner_timer, rx_reschedule_task_runner_timer) =
+            channel::channel::<Duration>();
+        let (tx_request_external_texture_name, rx_request_external_texture_name) =
+            channel::channel::<i64>();
         let (tx_external_texture_name, rx_external_texture_name) = channel::channel::<(u32, u32)>();
 
         let flutter_engine_channels = FlutterEngineChannels {
@@ -169,7 +175,9 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     elf_path: elf_path.as_ptr(),
                 },
             };
-            let result = unsafe { FlutterEngineCreateAOTData(&aot_data_source as *const _, &mut aot_data as *mut _) };
+            let result = unsafe {
+                FlutterEngineCreateAOTData(&aot_data_source as *const _, &mut aot_data as *mut _)
+            };
             if result != 0 {
                 return Err(format!("Could not create AOT data, error {result}").into());
             }
@@ -184,7 +192,9 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         let task_runner_description = FlutterTaskRunnerDescription {
             struct_size: size_of::<FlutterTaskRunnerDescription>(),
             user_data: this.deref_mut() as *const _ as *mut _,
-            runs_task_on_current_thread_callback: Some(runs_task_on_current_thread_callback::<BackendData>),
+            runs_task_on_current_thread_callback: Some(
+                runs_task_on_current_thread_callback::<BackendData>,
+            ),
             post_task_callback: Some(post_task_callback::<BackendData>),
             identifier: 1,
         };
@@ -251,11 +261,13 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     fbo_reset_after_present: true,
                     surface_transformation: Some(surface_transformation::<BackendData>),
                     gl_proc_resolver: None,
-                    gl_external_texture_frame_callback: Some(gl_external_texture_frame_callback::<BackendData>),
+                    gl_external_texture_frame_callback: Some(
+                        gl_external_texture_frame_callback::<BackendData>,
+                    ),
                     fbo_with_frame_info_callback: None,
                     present_with_info: Some(present_with_info::<BackendData>),
                     populate_existing_damage: Some(populate_existing_damage::<BackendData>),
-                }
+                },
             },
         };
 
@@ -282,13 +294,14 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             codec,
         );
 
-        let (tx_platform_message, rx_platform_message) = channel::channel::<(MethodCall, Box<dyn MethodResult>)>();
+        let (tx_platform_message, rx_platform_message) =
+            channel::channel::<(MethodCall, Box<dyn MethodResult>)>();
         platform_method_channel.set_method_call_mpsc_channel(Some(tx_platform_message));
 
-        server_state.loop_handle.insert_source(
-            rx_platform_message,
-            platform_channel_method_handler,
-        ).unwrap();
+        server_state
+            .loop_handle
+            .insert_source(rx_platform_message, platform_channel_method_handler)
+            .unwrap();
 
         let codec = Rc::new(JsonMessageCodec::new());
         let key_event_channel = BasicMessageChannel::<serde_json::Value>::new(
@@ -304,47 +317,73 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             codec,
         );
 
-        let (tx_text_input_message, rx_text_input_message)
-            = channel::channel::<(MethodCall<serde_json::Value>, Box<dyn MethodResult<serde_json::Value>>)>();
+        let (tx_text_input_message, rx_text_input_message) = channel::channel::<(
+            MethodCall<serde_json::Value>,
+            Box<dyn MethodResult<serde_json::Value>>,
+        )>();
 
         text_input_channel.set_method_call_mpsc_channel(Some(tx_text_input_message));
 
-        server_state.loop_handle.insert_source(
-            rx_text_input_message,
-            text_input_channel_method_call_handler,
-        ).unwrap();
+        server_state
+            .loop_handle
+            .insert_source(
+                rx_text_input_message,
+                text_input_channel_method_call_handler,
+            )
+            .unwrap();
 
-        let task_runner_timer_dispatcher = Dispatcher::new(Timer::immediate(), move |deadline, _, data: &mut CalloopData<BackendData>| {
-            let duration = data.state.flutter_engine_mut().task_runner.execute_expired_tasks(move |task| {
-                unsafe { FlutterEngineRunTask(flutter_engine, task as *const _) };
-            });
-            TimeoutAction::ToDuration(duration)
-        });
-        let task_runner_timer_registration_token = server_state.loop_handle.register_dispatcher(task_runner_timer_dispatcher.clone()).unwrap();
+        let task_runner_timer_dispatcher = Dispatcher::new(
+            Timer::immediate(),
+            move |deadline, _, data: &mut CalloopData<BackendData>| {
+                let duration = data
+                    .state
+                    .flutter_engine_mut()
+                    .task_runner
+                    .execute_expired_tasks(move |task| {
+                        unsafe { FlutterEngineRunTask(flutter_engine, task as *const _) };
+                    });
+                TimeoutAction::ToDuration(duration)
+            },
+        );
+        let task_runner_timer_registration_token = server_state
+            .loop_handle
+            .register_dispatcher(task_runner_timer_dispatcher.clone())
+            .unwrap();
 
-        server_state.loop_handle.insert_source(rx_reschedule_task_runner_timer, move |event, _, data: &mut CalloopData<BackendData>| {
-            if let Msg(duration) = event {
-                task_runner_timer_dispatcher.as_source_mut().set_duration(duration);
-                data.state.loop_handle.update(&task_runner_timer_registration_token).unwrap();
-            }
-        }).unwrap();
-
-        let rx_request_external_texture_name_registration_token =
-            server_state.loop_handle.insert_source(
-                rx_request_external_texture_name,
-                move |event, _, data| {
-                    if let Msg(texture_id) = event {
-                        let texture_swap_chain = data.state.texture_swapchains.get_mut(&texture_id);
-                        let texture_id = match texture_swap_chain {
-                            Some(texture) => {
-                                let texture = texture.start_read();
-                                texture.tex_id()
-                            }
-                            None => 0,
-                        };
-                        let _ = tx_external_texture_name.send((texture_id, RGBA8));
+        server_state
+            .loop_handle
+            .insert_source(
+                rx_reschedule_task_runner_timer,
+                move |event, _, data: &mut CalloopData<BackendData>| {
+                    if let Msg(duration) = event {
+                        task_runner_timer_dispatcher
+                            .as_source_mut()
+                            .set_duration(duration);
+                        data.state
+                            .loop_handle
+                            .update(&task_runner_timer_registration_token)
+                            .unwrap();
                     }
-                }).unwrap();
+                },
+            )
+            .unwrap();
+
+        let rx_request_external_texture_name_registration_token = server_state
+            .loop_handle
+            .insert_source(rx_request_external_texture_name, move |event, _, data| {
+                if let Msg(texture_id) = event {
+                    let texture_swap_chain = data.state.texture_swapchains.get_mut(&texture_id);
+                    let texture_id = match texture_swap_chain {
+                        Some(texture) => {
+                            let texture = texture.start_read();
+                            texture.tex_id()
+                        }
+                        None => 0,
+                    };
+                    let _ = tx_external_texture_name.send((texture_id, RGBA8));
+                }
+            })
+            .unwrap();
 
         this.write(Self {
             loop_handle: server_state.loop_handle.clone(),
@@ -383,7 +422,10 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         unsafe { FlutterEngineGetCurrentTime() / 1000 }
     }
 
-    pub fn send_window_metrics(&self, size: Size<u32, Physical>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn send_window_metrics(
+        &self,
+        size: Size<u32, Physical>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let event = FlutterWindowMetricsEvent {
             struct_size: size_of::<FlutterWindowMetricsEvent>(),
             width: size.w as usize,
@@ -398,7 +440,8 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             display_id: 0,
         };
 
-        let result = unsafe { FlutterEngineSendWindowMetricsEvent(self.handle, &event as *const _) };
+        let result =
+            unsafe { FlutterEngineSendWindowMetricsEvent(self.handle, &event as *const _) };
         if result != 0 {
             return Err(format!("Could not send window metrics event, error {result}").into());
         }
@@ -415,7 +458,10 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         Ok(())
     }
 
-    pub fn send_pointer_event(&self, event: FlutterPointerEvent) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn send_pointer_event(
+        &self,
+        event: FlutterPointerEvent,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let result = unsafe { FlutterEngineSendPointerEvent(self.handle, &event as *const _, 1) };
         if result != 0 {
             return Err(format!("Could not send pointer event, error {result}").into());
@@ -434,39 +480,42 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         // Send the key event to Flutter.
         // It will propagate the event to widgets and will determine if the event was handled or not.
         // It will respond back and will call the reply handler.
-        self.key_event_channel.send(&serde_json::json!({
-            "keymap": "linux",
-            "toolkit": "glfw",
-            "keyCode": get_glfw_keycode(key_event.key_code),
-            "scanCode": key_event.key_code + 8,
-            "modifiers": get_glfw_modifiers(key_event.mods),
-            "unicodeScalarValues": key_event.codepoint.map(|c| c as u32),
-            "type": if key_event.state == KeyState::Pressed { "keydown" } else { "keyup" },
-        }), Some(Box::new(move |response: Option<&[u8]>| {
-            // This is the callback that will be called when Flutter replies.
-            // Flutter always replies with a single `handled` boolean.
-            // If its value is true, some widget listening to keyboard shortcuts probably handled this event.
-            let response = match response {
-                Some(response) => response,
-                None => return,
-            };
+        self.key_event_channel.send(
+            &serde_json::json!({
+                "keymap": "linux",
+                "toolkit": "glfw",
+                "keyCode": get_glfw_keycode(key_event.key_code),
+                "scanCode": key_event.key_code + 8,
+                "modifiers": get_glfw_modifiers(key_event.mods),
+                "unicodeScalarValues": key_event.codepoint.map(|c| c as u32),
+                "type": if key_event.state == KeyState::Pressed { "keydown" } else { "keyup" },
+            }),
+            Some(Box::new(move |response: Option<&[u8]>| {
+                // This is the callback that will be called when Flutter replies.
+                // Flutter always replies with a single `handled` boolean.
+                // If its value is true, some widget listening to keyboard shortcuts probably handled this event.
+                let response = match response {
+                    Some(response) => response,
+                    None => return,
+                };
 
-            let message = JsonMessageCodec::new().decode_message(response).unwrap();
-            let handled = message["handled"].as_bool().unwrap();
-            // We would normally call `glfw_key_codes.input_forward` here to forward the event to a Wayland client,
-            // but we need `data.state` and we can't just capture it by reference.
-            // Send key event info and Flutter's response over an MPSC channel.
-            // The receiver `rx_flutter_handled_key_event` is registered to the event loop with a callback
-            // that will continue processing the event.
-            // This callback is defined in the constructor of `ServerState`.
-            tx.send((
-                key_event,
-                handled
-            )).unwrap();
-        })));
+                let message = JsonMessageCodec::new().decode_message(response).unwrap();
+                let handled = message["handled"].as_bool().unwrap();
+                // We would normally call `glfw_key_codes.input_forward` here to forward the event to a Wayland client,
+                // but we need `data.state` and we can't just capture it by reference.
+                // Send key event info and Flutter's response over an MPSC channel.
+                // The receiver `rx_flutter_handled_key_event` is registered to the event loop with a callback
+                // that will continue processing the event.
+                // This callback is defined in the constructor of `ServerState`.
+                tx.send((key_event, handled)).unwrap();
+            })),
+        );
     }
 
-    pub fn register_external_texture(&self, texture_id: i64) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn register_external_texture(
+        &self,
+        texture_id: i64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let result = unsafe { FlutterEngineRegisterExternalTexture(self.handle, texture_id) };
         if result != 0 {
             return Err(format!("Could not register external texture, error {result}").into());
@@ -474,10 +523,16 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         Ok(())
     }
 
-    pub fn mark_external_texture_frame_available(&self, texture_id: i64) -> Result<(), Box<dyn std::error::Error>> {
-        let result = unsafe { FlutterEngineMarkExternalTextureFrameAvailable(self.handle, texture_id) };
+    pub fn mark_external_texture_frame_available(
+        &self,
+        texture_id: i64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let result =
+            unsafe { FlutterEngineMarkExternalTextureFrameAvailable(self.handle, texture_id) };
         if result != 0 {
-            return Err(format!("Could not mark external texture frame available, error {result}").into());
+            return Err(
+                format!("Could not mark external texture frame available, error {result}").into(),
+            );
         }
         Ok(())
     }
@@ -509,7 +564,10 @@ struct FlutterEngineData {
 unsafe impl Send for FlutterEngineData {}
 
 impl FlutterEngineData {
-    fn new(root_egl_context: &EGLContext, channels: FlutterEngineChannels) -> Result<Self, Box<dyn std::error::Error>> {
+    fn new(
+        root_egl_context: &EGLContext,
+        channels: FlutterEngineChannels,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         unsafe { root_egl_context.make_current()? };
 
         let egl_display = root_egl_context.display();
@@ -523,8 +581,18 @@ impl FlutterEngineData {
 
         Ok(Self {
             gl: Gles2::load_with(|s| unsafe { egl::get_proc_address(s) } as *const _),
-            main_egl_context: EGLContext::new_shared_with_config(&egl_display, &root_egl_context, gl_attributes, pixel_format_requirements)?,
-            resource_egl_context: EGLContext::new_shared_with_config(&egl_display, &root_egl_context, gl_attributes, pixel_format_requirements)?,
+            main_egl_context: EGLContext::new_shared_with_config(
+                &egl_display,
+                &root_egl_context,
+                gl_attributes,
+                pixel_format_requirements,
+            )?,
+            resource_egl_context: EGLContext::new_shared_with_config(
+                &egl_display,
+                &root_egl_context,
+                gl_attributes,
+                pixel_format_requirements,
+            )?,
             output_height: None,
             channels,
             framebuffer_importer: unsafe { GlesFramebufferImporter::new(egl_display.clone())? },
