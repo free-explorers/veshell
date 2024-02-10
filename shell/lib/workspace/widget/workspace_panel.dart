@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
+import 'package:shell/workspace/widget/tileable_list.dart';
 
 class WorkspacePanel extends HookConsumerWidget implements PreferredSizeWidget {
   const WorkspacePanel({
     required this.tileableList,
-    required this.tabController,
     super.key,
   });
   final List<Tileable> tileableList;
-  final TabController tabController;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -20,7 +19,10 @@ class WorkspacePanel extends HookConsumerWidget implements PreferredSizeWidget {
           : theme.colorScheme.primary,
       child: SizedBox(
         height: 48,
-        child: TabBar.secondary(
+        child: TileableListView(
+          tileableList: tileableList,
+        ),
+        /* child: TabBar.secondary(
           isScrollable: true,
           tabAlignment: TabAlignment.start,
           controller: tabController,
@@ -28,7 +30,7 @@ class WorkspacePanel extends HookConsumerWidget implements PreferredSizeWidget {
             for (final tileable in tileableList)
               tileable.buildPanelWidget(context, ref),
           ],
-        ),
+        ), */
       ),
     );
   }

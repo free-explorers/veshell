@@ -21,9 +21,7 @@ class MonitorWidget extends HookConsumerWidget {
       overrides: [
         currentScreenIdProvider.overrideWith((ref) => screen.screenId),
       ],
-      child: ScreenWidget(
-        screenId: screen.screenId,
-      ),
+      child: const ScreenWidget(),
     );
   }
 }

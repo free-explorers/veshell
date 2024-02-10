@@ -3,7 +3,6 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/application/widget/app_icon.dart';
-import 'package:shell/wayland/model/request/close_window/close_window.serializable.dart';
 import 'package:shell/wayland/model/request/resize_window/resize_window.serializable.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/wayland/widget/xdg_toplevel_surface.dart';
@@ -11,6 +10,8 @@ import 'package:shell/window/model/window.dart';
 import 'package:shell/window/provider/dialog_list_for_window.dart';
 import 'package:shell/window/provider/window.manager.dart';
 import 'package:shell/window/provider/window_state.dart';
+import 'package:shell/workspace/provider/current_workspace_id.dart';
+import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/tileable/persistent_window/window_placeholder.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
 
@@ -87,7 +88,8 @@ class PersistentWindowTileable extends Tileable {
     final window = ref.watch(windowStateProvider(windowId)) as PersistentWindow;
 
     final title = window.title;
-    return Tab(
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, right: 8),
       child: Row(
         children: [
           SizedBox(height: 24, width: 24, child: AppIconById(id: window.appId)),
@@ -102,13 +104,12 @@ class PersistentWindowTileable extends Tileable {
             visualDensity: VisualDensity.compact,
             iconSize: 16,
             onPressed: () {
-              ref.read(waylandManagerProvider.notifier).request(
-                    CloseWindowRequest(
-                      message: CloseWindowMessage(
-                        surfaceId: window.surfaceId!,
-                      ),
-                    ),
-                  );
+              ref
+                  .read(
+                    workspaceStateProvider(ref.read(currentWorkspaceIdProvider))
+                        .notifier,
+                  )
+                  .closeWindow(window);
             },
             icon: Icon(MdiIcons.close),
           ),

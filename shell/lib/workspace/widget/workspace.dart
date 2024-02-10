@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/shared/util/app_launch.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
 import 'package:shell/window/provider/window.manager.dart';
+import 'package:shell/workspace/model/workspace_shortcuts.dart';
 import 'package:shell/workspace/provider/current_workspace_id.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/persistent_application_launcher.dart';
@@ -19,8 +20,7 @@ class WorkspaceWidget extends HookConsumerWidget {
     final currentWorkspaceId = ref.watch(currentWorkspaceIdProvider);
     final workspaceState =
         ref.watch(workspaceStateProvider(currentWorkspaceId));
-    final workspaceStateNotifier =
-        ref.watch(workspaceStateProvider(currentWorkspaceId).notifier);
+
     final appLauncher = PersistentApplicationSelector(
       onSelect: (entry) {
         print('start ${entry.desktopEntry.id}');
@@ -43,38 +43,56 @@ class WorkspaceWidget extends HookConsumerWidget {
     }
     tileableList.add(appLauncher);
 
-    final tabController = useTabController(
-      initialIndex: workspaceState.focusedIndex,
-      initialLength: tileableList.length,
-      keys: [workspaceState.tileableWindowList.length],
-    );
-
-    useEffect(
-      () {
-        tabController.addListener(() {
-          ref
-              .read(workspaceStateProvider(currentWorkspaceId).notifier)
-              .setFocusedIndex(tabController.index);
-        });
-        return null;
+    return Shortcuts(
+      shortcuts: <LogicalKeySet, Intent>{
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyA):
+            const FocusLeftTileableIntent(),
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyD):
+            const FocusRightTileableIntent(),
       },
-      [tabController],
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        WorkspacePanel(
-          tileableList: tileableList,
-          tabController: tabController,
-        ),
-        Expanded(
-          child: SlidingContainer(
-            index: tabController.index,
-            children: tileableList,
+      child: Actions(
+        actions: {
+          FocusLeftTileableIntent: CallbackAction<FocusLeftTileableIntent>(
+            onInvoke: (_) {
+              final nextIndex = workspaceState.focusedIndex - 1;
+              if (nextIndex >= 0) {
+                ref
+                    .read(workspaceStateProvider(currentWorkspaceId).notifier)
+                    .setFocusedIndex(nextIndex);
+              }
+              return null;
+            },
+          ),
+          FocusRightTileableIntent: CallbackAction<FocusRightTileableIntent>(
+            onInvoke: (_) {
+              final nextIndex = workspaceState.focusedIndex + 1;
+              if (nextIndex < tileableList.length) {
+                ref
+                    .read(workspaceStateProvider(currentWorkspaceId).notifier)
+                    .setFocusedIndex(nextIndex);
+              }
+              return null;
+            },
+          ),
+        },
+        child: Focus(
+          autofocus: true,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              WorkspacePanel(
+                tileableList: tileableList,
+              ),
+              Expanded(
+                child: SlidingContainer(
+                  index: workspaceState.focusedIndex,
+                  children: tileableList,
+                ),
+              ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
