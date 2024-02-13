@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/shared/util/app_launch.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
+import 'package:shell/window/model/window.dart';
 import 'package:shell/window/provider/window.manager.dart';
+import 'package:shell/window/provider/window_state.dart';
 import 'package:shell/workspace/model/workspace_shortcuts.dart';
 import 'package:shell/workspace/provider/current_workspace_id.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
@@ -49,6 +51,8 @@ class WorkspaceWidget extends HookConsumerWidget {
             const FocusLeftTileableIntent(),
         LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyD):
             const FocusRightTileableIntent(),
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyQ):
+            const CloseTileableIntent(),
       },
       child: Actions(
         actions: {
@@ -71,6 +75,23 @@ class WorkspaceWidget extends HookConsumerWidget {
                     .read(workspaceStateProvider(currentWorkspaceId).notifier)
                     .setFocusedIndex(nextIndex);
               }
+              return null;
+            },
+          ),
+          CloseTileableIntent: CallbackAction<CloseTileableIntent>(
+            onInvoke: (_) {
+              final tileable = tileableList[workspaceState.focusedIndex];
+              if (tileable is PersistentWindowTileable) {
+                final persistentWindow =
+                    ref.read(windowStateProvider(tileable.windowId))
+                        as PersistentWindow;
+                ref
+                    .read(workspaceStateProvider(currentWorkspaceId).notifier)
+                    .closeWindow(
+                      persistentWindow,
+                    );
+              }
+
               return null;
             },
           ),

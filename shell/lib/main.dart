@@ -53,7 +53,7 @@ class Veshell extends ConsumerWidget {
           ) {
             return Stack(
               children: [
-                const DisplayWidget(),
+                const Positioned.fill(child: DisplayWidget()),
                 Overlay(
                   key: ref.watch(rootOverlayKeyProvider),
                 ),

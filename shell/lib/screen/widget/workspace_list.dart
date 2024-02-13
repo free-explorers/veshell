@@ -12,6 +12,7 @@ import 'package:shell/screen/provider/workspace_display_mode.dart';
 import 'package:shell/shared/widget/cross_reorderable_list.dart';
 import 'package:shell/window/provider/window_state.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
+import 'package:shell/workspace/widget/tileable/persistent_window/persistent_window.dart';
 
 class WorkspaceListView extends HookConsumerWidget {
   const WorkspaceListView({super.key});
@@ -58,7 +59,16 @@ class WorkspaceListView extends HookConsumerWidget {
         },
         dataList: screenState.workspaceList.toList(),
         onListChanged: (workspaceList) {
-          if (workspaceList.length > screenState.workspaceList.length) {
+          if (workspaceList.length < screenState.workspaceList.length) {
+            final removedWorkspaceList = screenState.workspaceList
+                .where((element) => !workspaceList.contains(element))
+                .toList();
+            for (final workspaceId in removedWorkspaceList) {
+              ref
+                  .read(screenStateProvider(screenId).notifier)
+                  .removeWorkspace(workspaceId);
+            }
+          } else if (workspaceList.length > screenState.workspaceList.length) {
             final addedWorkspaceList = workspaceList
                 .where(
                   (element) => !screenState.workspaceList.contains(element),
@@ -69,15 +79,6 @@ class WorkspaceListView extends HookConsumerWidget {
                     workspaceId,
                     workspaceList.indexOf(workspaceId),
                   );
-            }
-          } else if (workspaceList.length < screenState.workspaceList.length) {
-            final removedWorkspaceList = screenState.workspaceList
-                .where((element) => !workspaceList.contains(element))
-                .toList();
-            for (final workspaceId in removedWorkspaceList) {
-              ref
-                  .read(screenStateProvider(screenId).notifier)
-                  .removeWorkspace(workspaceId);
             }
           } else {
             ref
@@ -219,21 +220,45 @@ class WorkspaceListButton extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final screenState = ref.watch(screenStateProvider(screenId));
 
-    return AspectRatio(
-      aspectRatio: 1,
-      child: IconButton(
-        style: ButtonStyle(
-          shape: MaterialStateProperty.all(
-            const RoundedRectangleBorder(),
+    return DragTarget<PersistentWindowTileable>(
+      onWillAccept: (data) => data is PersistentWindowTileable,
+      onAccept: (data) {
+        ref
+            .read(WorkspaceStateProvider(workspaceId).notifier)
+            .addWindow(data.windowId);
+      },
+      builder: (
+        context,
+        candidateData,
+        rejectedData,
+      ) {
+        return AspectRatio(
+          aspectRatio: 1,
+          child: IconButton(
+            style: ButtonStyle(
+              backgroundColor: MaterialStatePropertyAll(
+                candidateData.isNotEmpty
+                    ? Theme.of(context).colorScheme.primary
+                    : null,
+              ),
+              foregroundColor: MaterialStatePropertyAll(
+                candidateData.isNotEmpty
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : null,
+              ),
+              shape: MaterialStateProperty.all(
+                const RoundedRectangleBorder(),
+              ),
+            ),
+            onPressed: () {
+              ref.read(screenStateProvider(screenId).notifier).selectWorkspace(
+                    screenState.workspaceList.indexOf(workspaceId),
+                  );
+            },
+            icon: WorkspaceIcon(workspaceId: workspaceId),
           ),
-        ),
-        onPressed: () {
-          ref.read(screenStateProvider(screenId).notifier).selectWorkspace(
-                screenState.workspaceList.indexOf(workspaceId),
-              );
-        },
-        icon: WorkspaceIcon(workspaceId: workspaceId),
-      ),
+        );
+      },
     );
   }
 }
@@ -351,35 +376,3 @@ class CategoryIcon extends StatelessWidget {
     }
   }
 }
-
-/* class NewWorkspaceButton extends HookConsumerWidget {
-  const NewWorkspaceButton({super.key});
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final screenId = ref.watch(currentScreenIdProvider);
-    final screenState = ref.watch(screenStateProvider(screenId));
-
-    return IconButton(
-      color: Theme.of(context).colorScheme.onPrimary,
-      style: ButtonStyle(
-        shape: MaterialStateProperty.all(
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(0),
-          ),
-        ),
-      ),
-      onPressed: () {
-        //if last workspace is empty ignore
-        if (ref
-            .read(workspaceStateProvider(screenState.workspaceList.last))
-            .tileableWindowList
-            .isEmpty) return;
-        ref.read(screenStateProvider(screenId).notifier).createNewWorkspace();
-        ref.read(screenStateProvider(screenId).notifier).selectWorkspace(
-              screenState.workspaceList.length,
-            );
-      },
-      icon: Icon(MdiIcons.plus),
-    );
-  }
-} */

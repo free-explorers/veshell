@@ -3,7 +3,6 @@
 import 'package:collection/collection.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/window/model/window.dart';
@@ -41,15 +40,12 @@ enum MeaningfulApplicationCategory { IDE, WebBrowser, Player }
 /// Workspace provider
 @riverpod
 class WorkspaceState extends _$WorkspaceState {
-  late final KeepAliveLink _keepAliveLink;
-
   @override
   Workspace build(WorkspaceId workspaceId) {
     throw Exception('Workspace $workspaceId not found');
   }
 
   void initialize(Workspace workspace) {
-    _keepAliveLink = ref.keepAlive();
     state = workspace;
   }
 
@@ -69,20 +65,7 @@ class WorkspaceState extends _$WorkspaceState {
   }
 
   Future<void> addWindow(WindowId windowId) async {
-    final windowWorkspaceMap = ref.read(windowWorkspaceMapProvider);
-    if (windowWorkspaceMap.containsKey(windowId)) {
-      await ref
-          .read(workspaceStateProvider(windowWorkspaceMap[windowId]!).notifier)
-          .removeWindow(windowId);
-    }
-    final newWindowList = state.tileableWindowList.add(windowId);
-    state = state.copyWith(
-      tileableWindowList: newWindowList,
-      category: state.forcedCategory ?? await _determineCategory(newWindowList),
-    );
-    ref
-        .read(windowWorkspaceMapProvider.notifier)
-        .set(windowId, state.workspaceId);
+    return insertWindow(windowId, state.tileableWindowList.length);
   }
 
   Future<void> insertWindow(WindowId windowId, int index) async {

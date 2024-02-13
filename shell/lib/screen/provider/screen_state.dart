@@ -26,7 +26,6 @@ class ScreenState extends _$ScreenState {
 
     // When the last workspace got a new window open in it
     // we create a new blank workspace
-    ProviderSubscription<Workspace>? lastWorkspaceListenerSubscription;
     ref.listenSelf((prev, next) {
       final newWorkspaceList = prev == null
           ? next.workspaceList
@@ -62,8 +61,7 @@ class ScreenState extends _$ScreenState {
       final isLast = state.workspaceList.last == workspaceId;
       final isBeforeLast = state.workspaceList.length > 1 &&
           state.workspaceList[state.workspaceList.length - 2] == workspaceId;
-      final isFocused =
-          state.selectedIndex == state.workspaceList.indexOf(workspaceId);
+
       // If the last workspace got a new window open in it
       // we create a new blank workspace
       if (isLast && workspace.tileableWindowList.isNotEmpty) {
@@ -76,7 +74,17 @@ class ScreenState extends _$ScreenState {
       if (isBeforeLast &&
           workspace.tileableWindowList.isEmpty &&
           state.selectedIndex != state.workspaceList.length - 1) {
-        removeWorkspace(state.workspaceList.last);
+        // Just delay the remove call to ensure that
+        // a window is not being transfered
+        final workspaceIdToCheck = state.workspaceList.last;
+        Future.delayed(Duration.zero, () {
+          if (ref
+              .read(WorkspaceStateProvider(workspaceIdToCheck))
+              .tileableWindowList
+              .isEmpty) {
+            removeWorkspace(workspaceIdToCheck);
+          }
+        });
       }
     });
     _workspaceListenerMap[workspaceId] = workspaceListener;
@@ -93,6 +101,7 @@ class ScreenState extends _$ScreenState {
   }
 
   void removeWorkspace(WorkspaceId workspaceId) {
+    if (!state.workspaceList.contains(workspaceId)) return;
     final removedIndex = state.workspaceList.indexOf(workspaceId);
     final newSelectedIndex = state.selectedIndex > removedIndex
         ? state.selectedIndex - 1

@@ -11,3 +11,9 @@ class FocusRightTileableIntent extends Intent {
   ///
   const FocusRightTileableIntent();
 }
+
+/// An intent to close the current tileable.
+class CloseTileableIntent extends Intent {
+  ///
+  const CloseTileableIntent();
+}

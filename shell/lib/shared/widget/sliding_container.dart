@@ -16,8 +16,11 @@ class SlidingContainer extends HookConsumerWidget {
   final int visible;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final pageController =
-        usePageController(initialPage: index, viewportFraction: 1.0 / visible);
+    final pageController = usePageController(
+      initialPage: index,
+      viewportFraction: 1.0 / visible,
+    );
+
     useEffect(
       () {
         if (pageController.hasClients) {
@@ -29,12 +32,16 @@ class SlidingContainer extends HookConsumerWidget {
         }
         return null;
       },
-      [index],
+      [index, children],
     );
-    return PageView(
+
+    return PageView.builder(
       controller: pageController,
       scrollDirection: direction,
-      children: children,
+      itemCount: children.length,
+      itemBuilder: (context, index) {
+        return children[index];
+      },
     );
   }
 }

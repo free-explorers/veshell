@@ -79,6 +79,9 @@ class TileableListView extends HookConsumerWidget {
         onDropInProgress: (dropInProgress) =>
             dropInProgressState.value = dropInProgress,
         itemBuilder: (context, tileable) {
+          // if dropInProgress the tileable could not be in the list
+          // so we don't try to record it offset and display a normal item
+          if (dropInProgressState.value) return buildItem(context, tileable);
           final index = tileableList.indexOf(tileable);
           return LayoutBuilder(
             key: tileableKeyList[index],
@@ -250,7 +253,6 @@ class TileableIndicatorPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (disabled) return;
-    print('paint $disabled');
     _needsPaint = false;
     _painter ??= indicator.createBoxPainter(markNeedsPaint);
     final listBox = listKey.currentContext!.findRenderObject()! as RenderBox;
@@ -265,9 +267,12 @@ class TileableIndicatorPainter extends CustomPainter {
 
     // from
     final fromKey = tileableKeyList[from];
-    final fromBox = fromKey.currentContext?.mounted ?? false
-        ? fromKey.currentContext?.findRenderObject() as RenderBox?
-        : null;
+    RenderBox? fromBox;
+    try {
+      fromBox = fromKey.currentContext?.findRenderObject() as RenderBox?;
+    } catch (e) {
+      fromBox = null;
+    }
     final fromRelativeOffset = (offsetMap.get(fromKey) ??
             fromBox?.localToGlobal(Offset.zero) ??
             Offset.zero) -
@@ -281,9 +286,12 @@ class TileableIndicatorPainter extends CustomPainter {
 
     // to
     final toKey = tileableKeyList[to];
-    final toBox = toKey.currentContext?.mounted ?? false
-        ? toKey.currentContext?.findRenderObject() as RenderBox?
-        : null;
+    RenderBox? toBox;
+    try {
+      toBox = toKey.currentContext?.findRenderObject() as RenderBox?;
+    } catch (e) {
+      toBox = null;
+    }
     final toRelativeOffset = (offsetMap.get(toKey) ??
             toBox?.localToGlobal(Offset.zero) ??
             Offset.zero) -
