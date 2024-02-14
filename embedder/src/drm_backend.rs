@@ -36,7 +36,7 @@ use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::DisplayHandle;
-use smithay::utils::{Coordinate, DeviceFd, Point, Rectangle, Size, Transform};
+use smithay::utils::{Coordinate, DeviceFd, Point, Rectangle, Transform};
 use smithay::wayland::dmabuf::{DmabufFeedbackBuilder, DmabufState};
 use smithay::wayland::drm_lease::DrmLease;
 use tracing::{error, info, warn};
@@ -58,7 +58,7 @@ pub struct DrmBackend {
     primary_gpu: DrmNode,
     pointer_images: Vec<(xcursor::parser::Image, TextureBuffer<GlesTexture>)>,
     pointer_image: crate::cursor::Cursor,
-    highest_hz_crtc: Option<crtc::Handle>,
+    highest_hz_crtc: Option<(i32, crtc::Handle)>,
 }
 
 impl DrmBackend {
@@ -70,7 +70,12 @@ impl DrmBackend {
             .filter_map(|output| output.current_mode().map(|mode| (mode.refresh, output)))
             // Take the one with the highest refresh rate.
             .max_by_key(|(refresh, output)| *refresh)
-            .map(|(refresh, output)| output.user_data().get::<UdevOutputId>().unwrap().crtc);
+            .map(|(refresh, output)| {
+                (
+                    refresh,
+                    output.user_data().get::<UdevOutputId>().unwrap().crtc,
+                )
+            });
     }
 }
 
@@ -504,21 +509,13 @@ impl ServerState<DrmBackend> {
                 notifier,
                 move |event, _metadata, data: &mut CalloopData<_>| match event {
                     DrmEvent::VBlank(crtc) => {
-                        data.state.update_crtc_planes(crtc);
+                        let gpu_data = data.state.backend_data.gpus.get_mut(&node).unwrap();
 
-                        if let Some(surface) = data
-                            .state
-                            .backend_data
-                            .gpus
-                            .get_mut(&node)
-                            .unwrap()
-                            .surfaces
-                            .get_mut(&crtc)
-                        {
+                        if let Some(surface) = gpu_data.surfaces.get_mut(&crtc) {
                             let _ = surface.compositor.frame_submitted();
                         }
 
-                        let highest_hz_crtc = match data.state.backend_data.highest_hz_crtc {
+                        let (mhz, highest_hz_crtc) = match data.state.backend_data.highest_hz_crtc {
                             Some(highest_hz_crtc) => highest_hz_crtc,
                             None => return,
                         };
@@ -527,8 +524,16 @@ impl ServerState<DrmBackend> {
                             return;
                         }
 
+                        let crtcs = gpu_data.surfaces.keys().cloned().collect::<Vec<_>>();
+                        for crtc in crtcs {
+                            data.state.update_crtc_planes(crtc);
+                        }
+
                         for baton in data.batons.drain(..) {
-                            data.state.flutter_engine().on_vsync(baton).unwrap();
+                            data.state
+                                .flutter_engine()
+                                .on_vsync(baton, mhz as u32)
+                                .unwrap();
                         }
                         let start_time = std::time::Instant::now();
                         for surface in data.state.xdg_shell_state.toplevel_surfaces() {

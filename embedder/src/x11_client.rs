@@ -246,7 +246,10 @@ pub fn run_x11_client() {
                 X11Event::PresentCompleted { .. } | X11Event::Refresh { .. } => {
                     data.state.is_next_flutter_frame_scheduled = false;
                     for baton in data.batons.drain(..) {
-                        data.state.flutter_engine().on_vsync(baton).unwrap();
+                        data.state
+                            .flutter_engine()
+                            .on_vsync(baton, 144_000)
+                            .unwrap();
                     }
                     let start_time = std::time::Instant::now();
                     for surface in data.state.xdg_shell_state.toplevel_surfaces() {
@@ -278,7 +281,10 @@ pub fn run_x11_client() {
                     data.batons.push(baton);
                     return;
                 }
-                data.state.flutter_engine().on_vsync(baton).unwrap();
+                data.state
+                    .flutter_engine()
+                    .on_vsync(baton, 144_000)
+                    .unwrap();
             }
         })
         .unwrap();
