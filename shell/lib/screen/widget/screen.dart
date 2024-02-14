@@ -1,5 +1,7 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/screen/model/screen_shortcuts.dart';
 import 'package:shell/screen/provider/current_screen_id.dart';
@@ -18,6 +20,7 @@ class ScreenWidget extends HookConsumerWidget {
     final screenId = ref.watch(currentScreenIdProvider);
     final screenState = ref.watch(screenStateProvider(screenId));
 
+    final screenFocusNode = useFocusNode(debugLabel: 'ScreenFocusNode');
     return Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
         LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyW):
@@ -51,7 +54,7 @@ class ScreenWidget extends HookConsumerWidget {
           ),
         },
         child: Focus(
-          autofocus: true,
+          focusNode: screenFocusNode,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -62,14 +65,16 @@ class ScreenWidget extends HookConsumerWidget {
                   direction: Axis.vertical,
                   index: screenState.selectedIndex,
                   children: screenState.workspaceList
-                      .map(
-                        (workspaceId) => ProviderScope(
+                      .mapIndexed(
+                        (index, workspaceId) => ProviderScope(
                           key: Key(workspaceId),
                           overrides: [
                             currentWorkspaceIdProvider
                                 .overrideWith((ref) => workspaceId),
                           ],
-                          child: const WorkspaceWidget(),
+                          child: WorkspaceWidget(
+                            isSelected: screenState.selectedIndex == index,
+                          ),
                         ),
                       )
                       .toList(),

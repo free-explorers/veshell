@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/display/widget/display.dart';
-import 'package:shell/screen/provider/screen_list.dart';
 import 'package:shell/shared/provider/root_overlay.dart';
 import 'package:shell/theme/provider/theme.manager.dart';
 import 'package:shell/wayland/model/request/get_monitor_layout/get_monitor_layout.serializable.dart';
@@ -20,7 +19,6 @@ void main() {
   container
     ..read(waylandManagerProvider)
     ..read(surfaceManagerProvider)
-    ..read(screenListProvider.notifier).createNewScreen()
     ..read(windowManagerProvider);
 
   SchedulerBinding.instance.addPostFrameCallback((_) {

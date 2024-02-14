@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/shared/util/app_launch.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
@@ -15,15 +16,35 @@ import 'package:shell/workspace/widget/tileable/tileable.dart';
 import 'package:shell/workspace/widget/workspace_panel.dart';
 
 class WorkspaceWidget extends HookConsumerWidget {
-  const WorkspaceWidget({super.key});
+  const WorkspaceWidget({required this.isSelected, super.key});
+
+  final bool isSelected;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final workspaceFocusScopeNode = useFocusScopeNode(
+      debugLabel: 'WorkspaceScope',
+      canRequestFocus: isSelected,
+    );
+
+    useEffect(
+      () {
+        if (isSelected) {
+          workspaceFocusScopeNode
+            ..canRequestFocus = isSelected
+            ..requestFocus();
+        }
+        return null;
+      },
+      [isSelected],
+    );
     final windowManager = ref.watch(windowManagerProvider.notifier);
     final currentWorkspaceId = ref.watch(currentWorkspaceIdProvider);
     final workspaceState =
         ref.watch(workspaceStateProvider(currentWorkspaceId));
 
     final appLauncher = PersistentApplicationSelector(
+      isFocused: workspaceState.focusedIndex ==
+          workspaceState.tileableWindowList.length,
       onSelect: (entry) {
         print('start ${entry.desktopEntry.id}');
         final newWindowId =
@@ -36,15 +57,15 @@ class WorkspaceWidget extends HookConsumerWidget {
     );
 
     final tileableList = <Tileable>[];
-    for (final windowId in workspaceState.tileableWindowList) {
+    for (final (index, windowId) in workspaceState.tileableWindowList.indexed) {
       tileableList.add(
         PersistentWindowTileable(
           windowId: windowId,
+          isFocused: workspaceState.focusedIndex == index,
         ),
       );
     }
     tileableList.add(appLauncher);
-
     return Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
         LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyA):
@@ -96,8 +117,9 @@ class WorkspaceWidget extends HookConsumerWidget {
             },
           ),
         },
-        child: Focus(
-          autofocus: true,
+        child: FocusScope(
+          node: workspaceFocusScopeNode,
+          onFocusChange: (value) {},
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

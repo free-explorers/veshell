@@ -42,11 +42,11 @@ enum MeaningfulApplicationCategory { IDE, WebBrowser, Player }
 class WorkspaceState extends _$WorkspaceState {
   @override
   Workspace build(WorkspaceId workspaceId) {
-    throw Exception('Workspace $workspaceId not found');
-  }
-
-  void initialize(Workspace workspace) {
-    state = workspace;
+    return Workspace(
+      workspaceId: workspaceId,
+      tileableWindowList: <String>[].lock,
+      focusedIndex: 0,
+    );
   }
 
   void reorderWindowList(IList<String> newWindowList) {

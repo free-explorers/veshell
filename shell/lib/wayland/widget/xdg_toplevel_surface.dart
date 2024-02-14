@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/wayland/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
@@ -31,26 +29,23 @@ class XdgToplevelSurfaceWidget extends ConsumerWidget {
               visible; */
         }
       },
-      child: _SurfaceFocus(
-        surfaceId: surfaceId,
-        child: Stack(
-          children: [
-            _PointerListener(
+      child: Stack(
+        children: [
+          _PointerListener(
+            surfaceId: surfaceId,
+            child: SurfaceWidget(
               surfaceId: surfaceId,
-              child: SurfaceWidget(
-                surfaceId: surfaceId,
-              ),
             ),
-            for (final popupSurfaceId in popupList)
-              PopupWidget(surfaceId: popupSurfaceId),
-          ],
-        ),
+          ),
+          for (final popupSurfaceId in popupList)
+            PopupWidget(surfaceId: popupSurfaceId),
+        ],
       ),
     );
   }
 }
 
-class _SurfaceFocus extends HookConsumerWidget {
+/* class _SurfaceFocus extends HookConsumerWidget {
   const _SurfaceFocus({
     required this.surfaceId,
     required this.child,
@@ -60,7 +55,7 @@ class _SurfaceFocus extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final focusNode = useFocusNode();
+    final focusNode = useFocusNode(debugLabel: 'SurfaceFocus');
     useEffect(
       () {
         focusNode.addListener(() {
@@ -104,7 +99,7 @@ class _SurfaceFocus extends HookConsumerWidget {
       ),
     );
   }
-}
+} */
 
 class _PointerListener extends ConsumerWidget {
   const _PointerListener({

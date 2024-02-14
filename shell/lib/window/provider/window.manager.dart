@@ -1,7 +1,8 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/screen/provider/focused_screen.dart';
+import 'package:shell/monitor/provider/monitor_list.dart';
+import 'package:shell/screen/provider/screen_list.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/wayland/model/event/destroy_surface/destroy_surface.serializable.dart';
 import 'package:shell/wayland/model/event/wayland_event.serializable.dart';
@@ -114,9 +115,10 @@ class WindowManager extends _$WindowManager {
         .initialize(persistentWindow);
 
     state = state.add(windowId);
-
-    final currentScreenId = ref.read(focusedScreenProvider);
-    final screenState = ref.read(screenStateProvider(currentScreenId!));
+    final monitorName = ref.read(monitorListProvider).first.name;
+    final screenList = ref.read(screenListProvider(monitorName));
+    final currentScreenId = screenList.first;
+    final screenState = ref.read(screenStateProvider(currentScreenId));
 
     ref
         .read(

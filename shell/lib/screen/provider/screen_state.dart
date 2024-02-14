@@ -17,12 +17,12 @@ class ScreenState extends _$ScreenState {
       <WorkspaceId, ProviderSubscription<Workspace>>{};
   @override
   Screen build(ScreenId screenId) {
-    throw Exception('Screen $screenId not found');
-  }
-
-  void initialize(Screen screen) {
     _keepAliveLink = ref.keepAlive();
-    state = screen;
+    final screen = Screen(
+      screenId: screenId,
+      workspaceList: IList([_uuidGenerator.v4()]),
+      selectedIndex: 0,
+    );
 
     // When the last workspace got a new window open in it
     // we create a new blank workspace
@@ -48,6 +48,7 @@ class ScreenState extends _$ScreenState {
         _workspaceListenerMap.remove(workspaceId);
       }
     });
+    return screen;
   }
 
   /// Listen to workspace changes in order to always have a blank workspace
@@ -123,14 +124,6 @@ class ScreenState extends _$ScreenState {
 
   WorkspaceId createNewWorkspace() {
     final workspaceId = _uuidGenerator.v4();
-
-    ref.read(workspaceStateProvider(workspaceId).notifier).initialize(
-          Workspace(
-            workspaceId: workspaceId,
-            tileableWindowList: <String>[].lock,
-            focusedIndex: 0,
-          ),
-        );
     state = state.copyWith(workspaceList: state.workspaceList.add(workspaceId));
     return workspaceId;
   }
