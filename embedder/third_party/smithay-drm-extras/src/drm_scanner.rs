@@ -28,9 +28,11 @@ use std::{
 use drm::control::{connector, crtc, Device as ControlDevice};
 
 mod connector_scanner;
+
 pub use connector_scanner::{ConnectorScanEvent, ConnectorScanResult, ConnectorScanner};
 
 mod crtc_mapper;
+
 pub use crtc_mapper::{CrtcMapper, SimpleCrtcMapper};
 
 /// Drm Scanner

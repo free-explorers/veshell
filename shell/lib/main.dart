@@ -5,6 +5,7 @@ import 'package:shell/display/widget/display.dart';
 import 'package:shell/screen/provider/screen_list.dart';
 import 'package:shell/shared/provider/root_overlay.dart';
 import 'package:shell/theme/provider/theme.manager.dart';
+import 'package:shell/wayland/model/request/get_monitor_layout/get_monitor_layout.serializable.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/window/provider/window.manager.dart';
@@ -16,15 +17,17 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   final container = ProviderContainer();
 
-  SchedulerBinding.instance.addPostFrameCallback((_) {
-    //platformApi.startupComplete();
-  });
-
   container
     ..read(waylandManagerProvider)
     ..read(surfaceManagerProvider)
     ..read(screenListProvider.notifier).createNewScreen()
     ..read(windowManagerProvider);
+
+  SchedulerBinding.instance.addPostFrameCallback((_) {
+    container
+        .read(waylandManagerProvider.notifier)
+        .request(GetMonitorLayoutRequest(message: GetMonitorLayoutMessage()));
+  });
 
   VisibilityDetectorController.instance.updateInterval = Duration.zero;
 

@@ -10,10 +10,12 @@ use std::time::Duration;
 use smithay::backend::input::{InputBackend, KeyState, KeyboardKeyEvent};
 use smithay::backend::renderer::gles::ffi::RGBA8;
 use smithay::input::keyboard::ModifiersState;
+use smithay::output::Output;
 use smithay::reexports::calloop;
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::calloop::{Dispatcher, LoopHandle};
+use smithay::utils::{Logical, Point, Rectangle};
 use smithay::{
     backend::{
         allocator::dmabuf::Dmabuf,
@@ -53,6 +55,7 @@ use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::flutter_engine::platform_channels::standard_method_codec::StandardMethodCodec;
 use crate::flutter_engine::task_runner::TaskRunner;
 use crate::flutter_engine::text_input::{text_input_channel_method_call_handler, TextInput};
+use crate::flutter_engine::wayland_messages::MonitorsMessage;
 use crate::gles_framebuffer_importer::GlesFramebufferImporter;
 use crate::keyboard::glfw_key_codes::{get_glfw_keycode, get_glfw_modifiers};
 use crate::keyboard::KeyEvent;
@@ -448,9 +451,10 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         Ok(())
     }
 
-    pub fn on_vsync(&self, baton: Baton) -> Result<(), Box<dyn std::error::Error>> {
+    /// mhz == millihertz
+    pub fn on_vsync(&self, baton: Baton, mhz: u32) -> Result<(), Box<dyn std::error::Error>> {
         let now = unsafe { FlutterEngineGetCurrentTime() };
-        let next_frame = now + (1_000_000_000 / 144);
+        let next_frame = now + ((1_000_000.0 / mhz as f64) * 1_000_000.0) as u64;
         let result = unsafe { FlutterEngineOnVsync(self.handle, baton.0, now, next_frame) };
         if result != 0 {
             return Err(format!("Could not send vsync baton, error {result}").into());
@@ -535,6 +539,14 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             );
         }
         Ok(())
+    }
+
+    pub fn monitor_layout_changed(&mut self, outputs: Vec<Output>) {
+        self.platform_method_channel.invoke_method(
+            "monitor_layout_changed",
+            Some(Box::new(MonitorsMessage { monitors: outputs }.into())),
+            None,
+        );
     }
 }
 

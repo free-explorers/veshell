@@ -3,6 +3,7 @@ import 'package:shell/wayland/model/event/commit_surface/commit_surface.serializ
 import 'package:shell/wayland/model/event/destroy_surface/destroy_surface.serializable.dart';
 import 'package:shell/wayland/model/event/interactive_move/interactive_move.serializable.dart';
 import 'package:shell/wayland/model/event/interactive_resize/interactive_resize.serializable.dart';
+import 'package:shell/wayland/model/event/monitor_layout_changed/monitor_layout_changed.serializable.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
 part 'wayland_event.serializable.freezed.dart';
@@ -41,6 +42,13 @@ class WaylandEvent with _$WaylandEvent implements WaylandInteraction {
     required String method,
     required InteractiveResizeMessage message,
   }) = InteractiveResizeEvent;
+
+  /// Monitor Layout Changed Event
+  /// This event is sent when the the user plugs or unplugs a monitor.
+  const factory WaylandEvent.monitorLayoutChanged({
+    required String method,
+    required MonitorLayoutChangedMessage message,
+  }) = MonitorLayoutChangedEvent;
 
   /// Creates a new [WaylandEvent] instance from a map.
   ///

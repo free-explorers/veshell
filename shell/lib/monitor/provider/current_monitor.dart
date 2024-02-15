@@ -1,6 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/monitor/model/monitor.dart';
-import 'package:shell/monitor/provider/monitor_state.dart';
+import 'package:shell/monitor/model/monitor.serializable.dart';
 
 part 'current_monitor.g.dart';
 

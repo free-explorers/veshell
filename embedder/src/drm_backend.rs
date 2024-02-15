@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::mem::MaybeUninit;
 use std::path::Path;
 use std::sync::atomic::Ordering;
 
@@ -24,6 +23,7 @@ use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{libseat, Session};
 use smithay::backend::udev::{all_gpus, primary_gpu, UdevBackend, UdevEvent};
 use smithay::desktop::utils::OutputPresentationFeedback;
+use smithay::desktop::{Space, Window};
 use smithay::output::Mode;
 use smithay::output::{Output, PhysicalProperties, Subpixel};
 use smithay::reexports::calloop::channel::Event;
@@ -36,7 +36,7 @@ use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::DisplayHandle;
-use smithay::utils::{DeviceFd, Point, Transform};
+use smithay::utils::{Coordinate, DeviceFd, Point, Rectangle, Transform};
 use smithay::wayland::dmabuf::{DmabufFeedbackBuilder, DmabufState};
 use smithay::wayland::drm_lease::DrmLease;
 use tracing::{error, info, warn};
@@ -52,16 +52,40 @@ use crate::{
 };
 
 pub struct DrmBackend {
+    pub space: Space<Window>,
     pub session: LibSeatSession,
     gpus: HashMap<DrmNode, GpuData>,
     primary_gpu: DrmNode,
     pointer_images: Vec<(xcursor::parser::Image, TextureBuffer<GlesTexture>)>,
     pointer_image: crate::cursor::Cursor,
+    highest_hz_crtc: Option<(i32, crtc::Handle)>,
+}
+
+impl DrmBackend {
+    fn determine_highest_hz_crtc(&mut self) {
+        self.highest_hz_crtc = self
+            .space
+            .outputs()
+            // Ignore outputs that don't have a mode.
+            .filter_map(|output| output.current_mode().map(|mode| (mode.refresh, output)))
+            // Take the one with the highest refresh rate.
+            .max_by_key(|(refresh, output)| *refresh)
+            .map(|(refresh, output)| {
+                (
+                    refresh,
+                    output.user_data().get::<UdevOutputId>().unwrap().crtc,
+                )
+            });
+    }
 }
 
 impl Backend for DrmBackend {
     fn seat_name(&self) -> String {
         self.session.seat()
+    }
+
+    fn get_monitor_layout(&self) -> Vec<Output> {
+        self.space.outputs().cloned().collect::<Vec<_>>()
     }
 }
 
@@ -73,6 +97,12 @@ impl DrmBackend {
     fn get_gpu_data_mut(&mut self) -> &mut GpuData {
         self.gpus.get_mut(&self.primary_gpu).unwrap()
     }
+}
+
+#[derive(Debug, PartialEq)]
+struct UdevOutputId {
+    device_id: DrmNode,
+    crtc: crtc::Handle,
 }
 
 // we cannot simply pick the first supported format of the intersection of *all* formats, because:
@@ -140,11 +170,13 @@ pub fn run_drm_backend() {
         display,
         event_loop.handle(),
         DrmBackend {
+            space: Space::default(),
             session,
             gpus: HashMap::new(),
             primary_gpu,
             pointer_images: vec![],
             pointer_image: crate::cursor::Cursor::load(),
+            highest_hz_crtc: None,
         },
         None,
     );
@@ -204,10 +236,6 @@ pub fn run_drm_backend() {
         .insert_source(libinput_backend, move |event, _, data| {
             let _dh = data.state.display_handle.clone();
             handle_input::<DrmBackend>(&event, data);
-            // TODO: When the cursor moves, the cursor CRTC plane has to be updated.
-            // However, we should call this only when the cursor actually moves, and not on every
-            // input event.
-            data.state.update_crtc_planes();
         })
         .unwrap();
 
@@ -233,7 +261,6 @@ pub fn run_drm_backend() {
         .insert_source(rx_baton, move |baton, _, data| {
             if let Event::Msg(baton) = baton {
                 data.batons.push(baton);
-                data.state.update_crtc_planes();
             }
         })
         .unwrap();
@@ -254,7 +281,11 @@ pub fn run_drm_backend() {
         .insert_source(rx_present, move |_, _, data| {
             let gpu_data = data.state.backend_data.get_gpu_data_mut();
             gpu_data.last_rendered_slot = gpu_data.current_slot.take();
-            data.state.update_crtc_planes();
+
+            let gpu_data = data.state.backend_data.get_gpu_data_mut();
+            if let Some(ref slot) = gpu_data.last_rendered_slot {
+                gpu_data.swapchain.submitted(slot);
+            }
         })
         .unwrap();
 
@@ -285,26 +316,26 @@ pub fn run_drm_backend() {
 }
 
 impl ServerState<DrmBackend> {
-    pub fn update_crtc_planes(&mut self) {
+    // TODO: I don't think this method should not be here. It should probably be in GpuData or SurfaceData.
+    pub fn update_crtc_planes(&mut self, crtc: crtc::Handle) {
+        // TODO: Ideally, there shouldn't be a "primary gpu" and we should handle multi-gpu setups.
         let primary_gpu = self.backend_data.primary_gpu;
-        let gpu_data = if let Some(gpu_data) = self.backend_data.gpus.get_mut(&primary_gpu) {
+        let gpu_data = self.backend_data.gpus.get_mut(&primary_gpu);
+        let gpu_data = if let Some(gpu_data) = gpu_data {
             gpu_data
         } else {
             return;
         };
 
-        let (gles_renderer, surface, last_rendered_slot, swapchain) = (
-            self.gles_renderer.as_mut().unwrap(),
-            if let Some(surface) = gpu_data.surfaces.values_mut().next() {
-                surface
-            } else {
-                return;
-            },
-            &mut gpu_data.last_rendered_slot,
-            &mut gpu_data.swapchain,
-        );
+        let surface = match gpu_data.surfaces.get_mut(&crtc) {
+            Some(surface) => surface,
+            None => return,
+        };
 
-        let slot = if let Some(slot) = last_rendered_slot.as_mut() {
+        let gles_renderer = self.gles_renderer.as_mut().unwrap();
+        let last_rendered_slot = gpu_data.last_rendered_slot.as_mut();
+
+        let slot = if let Some(ref slot) = last_rendered_slot {
             slot
         } else {
             // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
@@ -321,6 +352,26 @@ impl ServerState<DrmBackend> {
             return;
         };
 
+        let output = self.backend_data.space.outputs().find(|output| {
+            output
+                .user_data()
+                .get::<UdevOutputId>()
+                .map(|id| id.device_id == surface.device_id && id.crtc == surface.crtc)
+                .unwrap_or(false)
+        });
+
+        let output = match output {
+            Some(output) => output,
+            None => return,
+        };
+
+        let geometry = match self.backend_data.space.output_geometry(output) {
+            Some(geometry) => geometry.to_f64(),
+            None => return,
+        };
+
+        let scale = output.current_scale();
+
         let flutter_texture = gles_renderer
             .import_dmabuf(&slot.export().unwrap(), None)
             .unwrap();
@@ -335,7 +386,11 @@ impl ServerState<DrmBackend> {
             Point::from((0.0, 0.0)),
             &flutter_texture_buffer,
             None,
-            None,
+            // TODO: I don't know why it has to be like this instead of just `geometry`.
+            Some(Rectangle::from_loc_and_size(
+                (geometry.loc.x, geometry.size.h - geometry.loc.y),
+                geometry.size,
+            )),
             None,
             Kind::Unspecified,
         );
@@ -343,10 +398,11 @@ impl ServerState<DrmBackend> {
         let pointer_frame = self
             .backend_data
             .pointer_image
-            .get_image(1, self.clock.now().try_into().unwrap());
+            .get_image(1, self.clock.now().into());
 
         let cursor_position = Point::from(self.mouse_position)
-            - Point::from((pointer_frame.xhot as f64, pointer_frame.yhot as f64));
+            - Point::from((pointer_frame.xhot as f64, pointer_frame.yhot as f64))
+            - geometry.loc.to_physical(scale.fractional_scale());
 
         let pointer_images = &mut self.backend_data.pointer_images;
         let pointer_image = pointer_images
@@ -387,12 +443,16 @@ impl ServerState<DrmBackend> {
             .compositor
             .render_frame::<GlesRenderer, TextureRenderElement<GlesTexture>>(
                 gles_renderer,
-                &[flutter_texture_element, cursor_element],
+                &[cursor_element, flutter_texture_element],
                 [0.0, 0.0, 0.0, 0.0],
             )
             .unwrap();
         surface.compositor.queue_frame(None).unwrap();
-        swapchain.submitted(slot);
+    }
+
+    fn monitor_layout_changed(&mut self) {
+        let monitors = self.backend_data.get_monitor_layout();
+        self.flutter_engine_mut().monitor_layout_changed(monitors);
     }
 }
 
@@ -449,19 +509,31 @@ impl ServerState<DrmBackend> {
                 notifier,
                 move |event, _metadata, data: &mut CalloopData<_>| match event {
                     DrmEvent::VBlank(crtc) => {
-                        if let Some(surface) = data
-                            .state
-                            .backend_data
-                            .gpus
-                            .get_mut(&node)
-                            .unwrap()
-                            .surfaces
-                            .get_mut(&crtc)
-                        {
+                        let gpu_data = data.state.backend_data.gpus.get_mut(&node).unwrap();
+
+                        if let Some(surface) = gpu_data.surfaces.get_mut(&crtc) {
                             let _ = surface.compositor.frame_submitted();
                         }
+
+                        let (mhz, highest_hz_crtc) = match data.state.backend_data.highest_hz_crtc {
+                            Some(highest_hz_crtc) => highest_hz_crtc,
+                            None => return,
+                        };
+
+                        if highest_hz_crtc != crtc {
+                            return;
+                        }
+
+                        let crtcs = gpu_data.surfaces.keys().cloned().collect::<Vec<_>>();
+                        for crtc in crtcs {
+                            data.state.update_crtc_planes(crtc);
+                        }
+
                         for baton in data.batons.drain(..) {
-                            data.state.flutter_engine().on_vsync(baton).unwrap();
+                            data.state
+                                .flutter_engine()
+                                .on_vsync(baton, mhz as u32)
+                                .unwrap();
                         }
                         let start_time = std::time::Instant::now();
                         for surface in data.state.xdg_shell_state.toplevel_surfaces() {
@@ -624,8 +696,20 @@ impl ServerState<DrmBackend> {
         );
         let global = output.create_global::<ServerState<DrmBackend>>(&self.display_handle);
 
+        // Put the new output at the right of the last one.
+        let x = self.backend_data.space.outputs().fold(0, |acc, o| {
+            acc + self.backend_data.space.output_geometry(o).unwrap().size.w
+        });
+        let position = (x, 0).into();
+
         output.set_preferred(wl_mode);
-        output.change_current_state(Some(wl_mode), None, None, Some((0, 0).into()));
+        output.change_current_state(Some(wl_mode), None, None, Some(position));
+        self.backend_data.space.map_output(&output, position);
+
+        output.user_data().insert_if_missing(|| UdevOutputId {
+            crtc,
+            device_id: node,
+        });
 
         let color_formats = if std::env::var("ANVIL_DISABLE_10BIT").is_ok() {
             SUPPORTED_FORMATS_8BIT_ONLY
@@ -687,6 +771,7 @@ impl ServerState<DrmBackend> {
         let mut surface = SurfaceData {
             dh: self.display_handle.clone(),
             device_id: node,
+            crtc,
             render_node: device.render_node,
             global: Some(global),
             compositor,
@@ -706,12 +791,23 @@ impl ServerState<DrmBackend> {
 
         device.surfaces.insert(crtc, surface);
 
+        let bounding_box = self
+            .backend_data
+            .space
+            .outputs()
+            .map(|output| self.backend_data.space.output_geometry(output).unwrap())
+            .reduce(|first, second| first.merge(second))
+            .unwrap();
+
         device
             .swapchain
-            .resize(wl_mode.size.w as u32, wl_mode.size.h as u32);
+            .resize(bounding_box.size.w as u32, bounding_box.size.h as u32);
         self.flutter_engine()
-            .send_window_metrics((wl_mode.size.w as u32, wl_mode.size.h as u32).into())
+            .send_window_metrics((bounding_box.size.w as u32, bounding_box.size.h as u32).into())
             .unwrap();
+
+        self.backend_data.determine_highest_hz_crtc();
+        self.monitor_layout_changed();
     }
 
     fn connector_disconnected(
@@ -735,6 +831,40 @@ impl ServerState<DrmBackend> {
         } else {
             device.surfaces.remove(&crtc);
         }
+
+        let output = self
+            .backend_data
+            .space
+            .outputs()
+            .find(|o| {
+                o.user_data()
+                    .get::<UdevOutputId>()
+                    .map(|id| id.device_id == node && id.crtc == crtc)
+                    .unwrap_or(false)
+            })
+            .cloned();
+
+        if let Some(output) = output {
+            self.backend_data.space.unmap_output(&output);
+        }
+
+        let bounding_box = self
+            .backend_data
+            .space
+            .outputs()
+            .map(|output| self.backend_data.space.output_geometry(output).unwrap())
+            .reduce(|first, second| first.merge(second))
+            .unwrap_or(Rectangle::default());
+
+        device
+            .swapchain
+            .resize(bounding_box.size.w as u32, bounding_box.size.h as u32);
+        self.flutter_engine()
+            .send_window_metrics((bounding_box.size.w as u32, bounding_box.size.h as u32).into())
+            .unwrap();
+
+        self.backend_data.determine_highest_hz_crtc();
+        self.monitor_layout_changed();
     }
 
     fn device_changed(&mut self, node: DrmNode) {
@@ -764,6 +894,7 @@ impl ServerState<DrmBackend> {
 struct SurfaceData {
     dh: DisplayHandle,
     device_id: DrmNode,
+    crtc: crtc::Handle,
     render_node: DrmNode,
     global: Option<GlobalId>,
     compositor: GbmDrmCompositor,

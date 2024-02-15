@@ -17,8 +17,8 @@ use drm::control::{connector, Device as ControlDevice};
 ///
 /// for event in scanner.scan(&drm_device) {
 ///     match event {
-///         ConnectorScanEvent::Connected(conn) => {},
-///         ConnectorScanEvent::Disconnected(conn) => {},
+///         ConnectorScanEvent::Connected(conn) => {}
+///         ConnectorScanEvent::Disconnected(conn) => {}
 ///     }
 /// }
 #[derive(Debug, Default)]

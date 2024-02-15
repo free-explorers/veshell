@@ -1,5 +1,6 @@
 use std::env;
 
+use smithay::output::Output;
 use smithay::reexports::calloop::{channel, EventSource};
 use smithay::{
     backend::allocator::dmabuf::Dmabuf,
@@ -53,6 +54,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 pub trait Backend {
     fn seat_name(&self) -> String;
+
+    fn get_monitor_layout(&self) -> Vec<Output>;
 }
 
 pub struct FlutterState<BackendData: Backend + 'static> {

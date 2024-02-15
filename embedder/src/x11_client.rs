@@ -167,13 +167,7 @@ pub fn run_x11_client() {
         event_loop.handle(),
         X11Data {
             x11_surface,
-            mode: Mode {
-                size: {
-                    let s = window.size();
-                    (s.w as i32, s.h as i32).into()
-                },
-                refresh: 144_000,
-            },
+            output,
         },
         Some(dmabuf_state),
     );
@@ -222,32 +216,40 @@ pub fn run_x11_client() {
                 X11Event::CloseRequested { .. } => {
                     data.state.running.store(false, Ordering::SeqCst);
                 }
+
                 X11Event::Resized { new_size, .. } => {
                     let size = { (new_size.w as i32, new_size.h as i32).into() };
 
-                    data.state.backend_data.mode = Mode {
-                        size,
-                        refresh: 144_000,
-                    };
-
-                    output.change_current_state(
-                        Some(data.state.backend_data.mode),
+                    data.state.backend_data.output.change_current_state(
+                        Some(Mode {
+                            size,
+                            refresh: 144_000,
+                        }),
                         None,
                         None,
                         Some((0, 0).into()),
                     );
-                    output.set_preferred(mode);
+                    data.state.backend_data.output.set_preferred(mode);
 
                     let _ = tx_output_height.send(new_size.h);
                     data.state
                         .flutter_engine()
                         .send_window_metrics((size.w as u32, size.h as u32).into())
                         .unwrap();
+
+                    let monitors = data.state.backend_data.get_monitor_layout();
+                    data.state
+                        .flutter_engine_mut()
+                        .monitor_layout_changed(monitors);
                 }
+
                 X11Event::PresentCompleted { .. } | X11Event::Refresh { .. } => {
                     data.state.is_next_flutter_frame_scheduled = false;
                     for baton in data.batons.drain(..) {
-                        data.state.flutter_engine().on_vsync(baton).unwrap();
+                        data.state
+                            .flutter_engine()
+                            .on_vsync(baton, 144_000)
+                            .unwrap();
                     }
                     let start_time = std::time::Instant::now();
                     for surface in data.state.xdg_shell_state.toplevel_surfaces() {
@@ -263,6 +265,7 @@ pub fn run_x11_client() {
                         );
                     }
                 }
+
                 X11Event::Input(event) => handle_input::<X11Data>(&event, data),
                 X11Event::Focus(false) => data.state.release_all_keys(),
                 _ => {}
@@ -278,7 +281,10 @@ pub fn run_x11_client() {
                     data.batons.push(baton);
                     return;
                 }
-                data.state.flutter_engine().on_vsync(baton).unwrap();
+                data.state
+                    .flutter_engine()
+                    .on_vsync(baton, 144_000)
+                    .unwrap();
             }
         })
         .unwrap();
@@ -337,11 +343,15 @@ pub fn run_x11_client() {
 
 pub struct X11Data {
     pub x11_surface: X11Surface,
-    pub mode: Mode,
+    pub output: Output,
 }
 
 impl Backend for X11Data {
     fn seat_name(&self) -> String {
         "x11".to_string()
+    }
+
+    fn get_monitor_layout(&self) -> Vec<Output> {
+        vec![self.output.clone()]
     }
 }
