@@ -39,6 +39,7 @@ dependencies:
   tuple: ^2.0.2
   freedesktop_desktop_entry: ^0.6.0
   jovial_svg: ^1.1.15
+  flutter_svg: ^2.0.9
   dbus: ^0.7.8
   visibility_detector: ^0.4.0+2
   flutter_portal: ^1.1.4
@@ -76,7 +77,8 @@ flutter:
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
-  # assets:
+  assets:
+    - assets/
   
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware.

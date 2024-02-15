@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/screen/widget/workspace_list.dart';
 
@@ -13,9 +14,22 @@ class ScreenPanel extends HookConsumerWidget implements PreferredSizeWidget {
     return Material(
       color: theme.colorScheme.surface,
       textStyle: TextStyle(color: theme.colorScheme.onSurface),
-      child: const SizedBox(
+      child: SizedBox(
         width: 48,
-        child: WorkspaceListView(),
+        child: Column(
+          children: [
+            IconButton.filled(
+              style: ButtonStyle(
+                shape: MaterialStateProperty.all(
+                  const RoundedRectangleBorder(),
+                ),
+              ),
+              onPressed: () {},
+              icon: SvgPicture.asset('assets/ship_vector.svg', width: 30),
+            ),
+            const Expanded(child: WorkspaceListView()),
+          ],
+        ),
       ),
     );
   }
