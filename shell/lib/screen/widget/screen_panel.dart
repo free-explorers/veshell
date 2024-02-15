@@ -19,7 +19,14 @@ class ScreenPanel extends HookConsumerWidget implements PreferredSizeWidget {
         child: Column(
           children: [
             IconButton.filled(
+              constraints: const BoxConstraints(
+                minWidth: 48,
+                minHeight: 48,
+              ),
               style: ButtonStyle(
+                backgroundColor: MaterialStateProperty.all(
+                  theme.colorScheme.primaryContainer,
+                ),
                 shape: MaterialStateProperty.all(
                   const RoundedRectangleBorder(),
                 ),
