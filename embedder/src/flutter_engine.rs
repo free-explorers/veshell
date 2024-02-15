@@ -451,9 +451,10 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         Ok(())
     }
 
-    pub fn on_vsync(&self, baton: Baton) -> Result<(), Box<dyn std::error::Error>> {
+    /// mhz == millihertz
+    pub fn on_vsync(&self, baton: Baton, mhz: u32) -> Result<(), Box<dyn std::error::Error>> {
         let now = unsafe { FlutterEngineGetCurrentTime() };
-        let next_frame = now + (1_000_000_000 / 144);
+        let next_frame = now + ((1_000_000.0 / mhz as f64) * 1_000_000.0) as u64;
         let result = unsafe { FlutterEngineOnVsync(self.handle, baton.0, now, next_frame) };
         if result != 0 {
             return Err(format!("Could not send vsync baton, error {result}").into());
