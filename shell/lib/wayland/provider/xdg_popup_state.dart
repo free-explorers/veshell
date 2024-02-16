@@ -23,8 +23,8 @@ class XdgPopupState extends _$XdgPopupState {
   late final KeepAliveLink _keepAliveLink;
 
   @override
-  XdgPopupSurface build(SurfaceId surfaceId) {
-    throw Exception('XdgPopupSurface $surfaceId state was not initialized');
+  XdgPopup build(SurfaceId surfaceId) {
+    throw Exception('XdgPopup $surfaceId state was not initialized');
   }
 
   void initialize(XdgPopupCommitSurfaceMessage message) {
@@ -32,7 +32,7 @@ class XdgPopupState extends _$XdgPopupState {
     ref.onDispose(() {
       print('disposing XdgPopupStateProvider $surfaceId');
     });
-    state = XdgPopupSurface(
+    state = XdgPopup(
       surfaceId: message.surfaceId,
       parentSurfaceId: message.parentSurfaceId!,
       geometry: message.geometry ??

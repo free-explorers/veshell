@@ -1,3 +1,4 @@
+use serde_json::json;
 use std::cell::RefCell;
 use std::ffi::{c_int, CString};
 use std::mem::{size_of, MaybeUninit};
@@ -7,15 +8,13 @@ use std::ptr::{null, null_mut};
 use std::rc::Rc;
 use std::time::Duration;
 
-use smithay::backend::input::{InputBackend, KeyState, KeyboardKeyEvent};
+use smithay::backend::input::{InputBackend, KeyboardKeyEvent};
 use smithay::backend::renderer::gles::ffi::RGBA8;
-use smithay::input::keyboard::ModifiersState;
 use smithay::output::Output;
 use smithay::reexports::calloop;
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::calloop::{Dispatcher, LoopHandle};
-use smithay::utils::{Logical, Point, Rectangle};
 use smithay::{
     backend::{
         allocator::dmabuf::Dmabuf,
@@ -45,19 +44,16 @@ use crate::flutter_engine::embedder::{
 use crate::flutter_engine::platform_channel_callbacks::platform_channel_method_handler;
 use crate::flutter_engine::platform_channels::basic_message_channel::BasicMessageChannel;
 use crate::flutter_engine::platform_channels::binary_messenger_impl::BinaryMessengerImpl;
-use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 use crate::flutter_engine::platform_channels::json_message_codec::JsonMessageCodec;
 use crate::flutter_engine::platform_channels::json_method_codec::JsonMethodCodec;
 use crate::flutter_engine::platform_channels::message_codec::MessageCodec;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
-use crate::flutter_engine::platform_channels::standard_method_codec::StandardMethodCodec;
 use crate::flutter_engine::task_runner::TaskRunner;
 use crate::flutter_engine::text_input::{text_input_channel_method_call_handler, TextInput};
-use crate::flutter_engine::wayland_messages::MonitorsMessage;
+use crate::flutter_engine::wayland_messages::{MonitorsMessage, MyOutput};
 use crate::gles_framebuffer_importer::GlesFramebufferImporter;
-use crate::keyboard::glfw_key_codes::{get_glfw_keycode, get_glfw_modifiers};
 use crate::keyboard::KeyEvent;
 use crate::mouse_button_tracker::MouseButtonTracker;
 use crate::{
@@ -74,6 +70,11 @@ use crate::{
         },
     },
     Backend, CalloopData, ServerState,
+};
+
+use {
+    crate::keyboard::glfw_key_codes::{get_glfw_keycode, get_glfw_modifiers},
+    smithay::backend::input::KeyState,
 };
 
 mod callbacks;
@@ -95,7 +96,7 @@ pub struct FlutterEngine<BackendData: Backend + 'static> {
     current_thread_id: std::thread::ThreadId,
     pub(crate) mouse_button_tracker: MouseButtonTracker,
     pub binary_messenger: Rc<RefCell<BinaryMessengerImpl>>,
-    pub platform_method_channel: MethodChannel,
+    pub platform_method_channel: MethodChannel<serde_json::Value>,
     pub key_event_channel: BasicMessageChannel<serde_json::Value>,
     pub text_input: TextInput,
     rx_request_external_texture_name_registration_token: calloop::RegistrationToken,
@@ -290,15 +291,17 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
 
         let binary_messenger = Rc::new(RefCell::new(BinaryMessengerImpl::new(flutter_engine)));
 
-        let codec = Rc::new(StandardMethodCodec::new());
-        let mut platform_method_channel = MethodChannel::<EncodableValue>::new(
+        let codec = Rc::new(JsonMethodCodec::new());
+        let mut platform_method_channel = MethodChannel::<serde_json::Value>::new(
             binary_messenger.clone(),
             "platform".to_string(),
             codec,
         );
 
-        let (tx_platform_message, rx_platform_message) =
-            channel::channel::<(MethodCall, Box<dyn MethodResult>)>();
+        let (tx_platform_message, rx_platform_message) = channel::channel::<(
+            MethodCall<serde_json::Value>,
+            Box<dyn MethodResult<serde_json::Value>>,
+        )>();
         platform_method_channel.set_method_call_mpsc_channel(Some(tx_platform_message));
 
         server_state
@@ -485,7 +488,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         // It will propagate the event to widgets and will determine if the event was handled or not.
         // It will respond back and will call the reply handler.
         self.key_event_channel.send(
-            &serde_json::json!({
+            &json!({
                 "keymap": "linux",
                 "toolkit": "glfw",
                 "keyCode": get_glfw_keycode(key_event.key_code),
@@ -544,7 +547,9 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
     pub fn monitor_layout_changed(&mut self, outputs: Vec<Output>) {
         self.platform_method_channel.invoke_method(
             "monitor_layout_changed",
-            Some(Box::new(MonitorsMessage { monitors: outputs }.into())),
+            Some(Box::new(json!(MonitorsMessage {
+                monitors: outputs.into_iter().map(|output| MyOutput(output)).collect()
+            }))),
             None,
         );
     }

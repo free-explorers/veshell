@@ -13,7 +13,7 @@ part 'wayland.manager.g.dart';
 /// and a method to send [WaylandRequest]
 @Riverpod(keepAlive: true)
 class WaylandManager extends _$WaylandManager {
-  final _channel = const MethodChannel('platform');
+  final _channel = const MethodChannel('platform', JSONMethodCodec());
   final _streamController = StreamController<WaylandEvent>();
 
   /// Build the stream of [WaylandEvent]

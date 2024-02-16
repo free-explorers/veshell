@@ -14,7 +14,10 @@ use crate::mouse_button_tracker::FLUTTER_TO_LINUX_MOUSE_BUTTONS;
 use crate::{Backend, CalloopData};
 
 pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
-    event: Event<(MethodCall, Box<dyn MethodResult>)>,
+    event: Event<(
+        MethodCall<serde_json::Value>,
+        Box<dyn MethodResult<serde_json::Value>>,
+    )>,
     _: &mut (),
     data: &mut CalloopData<BackendData>,
 ) {
@@ -58,19 +61,25 @@ fn get<'a>(map: &'a EncodableValue, key: &str) -> &'a EncodableValue {
     panic!("Key {} not found in map", key);
 }
 
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PointerHoverPayload {
+    surface_id: u64,
+    x: f64,
+    y: f64,
+}
+
 pub fn pointer_hover<BackendData: Backend + 'static>(
-    method_call: MethodCall,
-    mut result: Box<dyn MethodResult>,
+    method_call: MethodCall<serde_json::Value>,
+    mut result: Box<dyn MethodResult<serde_json::Value>>,
     data: &mut CalloopData<BackendData>,
 ) {
-    let args = method_call.arguments().unwrap();
-    let surface_id = get(args, "surfaceId").long_value().unwrap();
-    let x = *extract!(get(args, "x"), EncodableValue::Double);
-    let y = *extract!(get(args, "y"), EncodableValue::Double);
+    let args = method_call.arguments().unwrap().clone();
+    let payload: PointerHoverPayload = serde_json::from_value(args).unwrap();
 
-    data.state.surface_id_under_cursor = Some(surface_id as u64);
+    data.state.surface_id_under_cursor = Some(payload.surface_id);
 
-    if let Some(surface) = data.state.surfaces.get(&(surface_id as u64)).cloned() {
+    if let Some(surface) = data.state.surfaces.get(&payload.surface_id).cloned() {
         let now = Duration::from(data.state.clock.now()).as_millis() as u32;
         let pointer = data.state.pointer.clone();
 
@@ -78,7 +87,7 @@ pub fn pointer_hover<BackendData: Backend + 'static>(
             &mut data.state,
             Some((surface.clone(), (0, 0).into())),
             &MotionEvent {
-                location: (x, y).into(),
+                location: (payload.x, payload.y).into(),
                 serial: SERIAL_COUNTER.next_serial(),
                 time: now,
             },
@@ -88,15 +97,15 @@ pub fn pointer_hover<BackendData: Backend + 'static>(
     } else {
         result.error(
             "surface_doesnt_exist".to_string(),
-            format!("Surface {surface_id} doesn't exist"),
+            format!("Surface {} doesn't exist", payload.surface_id),
             None,
         );
     }
 }
 
 pub fn pointer_exit<BackendData: Backend + 'static>(
-    method_call: MethodCall,
-    mut result: Box<dyn MethodResult>,
+    _method_call: MethodCall<serde_json::Value>,
+    mut result: Box<dyn MethodResult<serde_json::Value>>,
     data: &mut CalloopData<BackendData>,
 ) {
     let now = Duration::from(data.state.clock.now()).as_millis() as u32;
@@ -116,27 +125,31 @@ pub fn pointer_exit<BackendData: Backend + 'static>(
     result.success(None);
 }
 
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MouseButtonPayload {
+    button: u32,
+    is_pressed: bool,
+}
+
 pub fn mouse_button_event<BackendData: Backend + 'static>(
-    method_call: MethodCall,
-    mut result: Box<dyn MethodResult>,
+    method_call: MethodCall<serde_json::Value>,
+    mut result: Box<dyn MethodResult<serde_json::Value>>,
     data: &mut CalloopData<BackendData>,
 ) {
     let now = Duration::from(data.state.clock.now()).as_millis() as u32;
     let pointer = data.state.pointer.clone();
 
-    let args = method_call.arguments().unwrap();
-    let button = get(args, "button").long_value().unwrap();
-    let is_pressed = *extract!(get(args, "isPressed"), EncodableValue::Bool);
+    let args = method_call.arguments().unwrap().clone();
+    let payload: MouseButtonPayload = serde_json::from_value(args).unwrap();
 
     pointer.button(
         &mut data.state,
         &ButtonEvent {
             serial: SERIAL_COUNTER.next_serial(),
             time: now,
-            button: *FLUTTER_TO_LINUX_MOUSE_BUTTONS
-                .get(&(button as u32))
-                .unwrap() as u32,
-            state: if is_pressed {
+            button: *FLUTTER_TO_LINUX_MOUSE_BUTTONS.get(&payload.button).unwrap() as u32,
+            state: if payload.is_pressed {
                 ButtonState::Pressed
             } else {
                 ButtonState::Released
@@ -147,14 +160,20 @@ pub fn mouse_button_event<BackendData: Backend + 'static>(
     result.success(None);
 }
 
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ActivateWindowPayload {
+    surface_id: u64,
+    activate: bool,
+}
+
 pub fn activate_window<BackendData: Backend + 'static>(
-    method_call: MethodCall,
-    mut result: Box<dyn MethodResult>,
+    method_call: MethodCall<serde_json::Value>,
+    mut result: Box<dyn MethodResult<serde_json::Value>>,
     data: &mut CalloopData<BackendData>,
 ) {
-    let args = method_call.arguments().unwrap();
-    let surface_id = get(args, "surfaceId").long_value().unwrap();
-    let activate = *extract!(get(args, "activate"), EncodableValue::Bool);
+    let args = method_call.arguments().unwrap().clone();
+    let payload: ActivateWindowPayload = serde_json::from_value(args).unwrap();
 
     let pointer = data.state.seat.get_pointer().unwrap();
     let keyboard = data.state.seat.get_keyboard().unwrap();
@@ -162,10 +181,14 @@ pub fn activate_window<BackendData: Backend + 'static>(
     let serial = SERIAL_COUNTER.next_serial();
 
     if !pointer.is_grabbed() {
-        let toplevel = data.state.xdg_toplevels.get(&(surface_id as u64)).cloned();
+        let toplevel = data
+            .state
+            .xdg_toplevels
+            .get(&(payload.surface_id as u64))
+            .cloned();
         if let Some(toplevel) = toplevel {
             toplevel.with_pending_state(|state| {
-                if activate {
+                if payload.activate {
                     state.states.set(xdg_toplevel::State::Activated);
                 } else {
                     state.states.unset(xdg_toplevel::State::Activated);
@@ -180,63 +203,80 @@ pub fn activate_window<BackendData: Backend + 'static>(
         } else {
             result.error(
                 "surface_doesnt_exist".to_string(),
-                format!("Surface {surface_id} doesn't exist"),
+                format!("Surface {} doesn't exist", payload.surface_id),
                 None,
             );
         }
     }
 }
 
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ResizeWindowPayload {
+    surface_id: u64,
+    width: i32,
+    height: i32,
+}
+
 pub fn resize_window<BackendData: Backend + 'static>(
-    method_call: MethodCall,
-    mut result: Box<dyn MethodResult>,
+    method_call: MethodCall<serde_json::Value>,
+    mut result: Box<dyn MethodResult<serde_json::Value>>,
     data: &mut CalloopData<BackendData>,
 ) {
-    let args = method_call.arguments().unwrap();
-    let surface_id = get(args, "surfaceId").long_value().unwrap();
-    let width = get(args, "width").long_value().unwrap();
-    let height = get(args, "height").long_value().unwrap();
+    let args = method_call.arguments().unwrap().clone();
+    let payload: ResizeWindowPayload = serde_json::from_value(args).unwrap();
 
-    match data.state.xdg_toplevels.get(&(surface_id as u64)).cloned() {
+    match data
+        .state
+        .xdg_toplevels
+        .get(&(payload.surface_id as u64))
+        .cloned()
+    {
         Some(toplevel) => {
             toplevel.with_pending_state(|state| {
-                state.size = Some((width as i32, height as i32).into());
+                state.size = Some((payload.width as i32, payload.height as i32).into());
             });
             toplevel.send_pending_configure();
             result.success(None);
         }
         None => result.error(
             "surface_doesnt_exist".to_string(),
-            format!("Surface {surface_id} doesn't exist"),
+            format!("Surface {} doesn't exist", payload.surface_id),
             None,
         ),
     };
 }
 
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CloseWindowPayload {
+    surface_id: u64,
+}
+
 pub fn close_window<BackendData: Backend + 'static>(
-    method_call: MethodCall,
-    mut result: Box<dyn MethodResult>,
+    method_call: MethodCall<serde_json::Value>,
+    mut result: Box<dyn MethodResult<serde_json::Value>>,
     data: &mut CalloopData<BackendData>,
 ) {
-    let args = method_call.arguments().unwrap();
-    let surface_id = get(args, "surfaceId").long_value().unwrap();
+    let args = method_call.arguments().unwrap().clone();
+    let payload: CloseWindowPayload = serde_json::from_value(args).unwrap();
 
-    match data.state.xdg_toplevels.get(&(surface_id as u64)).cloned() {
+    match data.state.xdg_toplevels.get(&payload.surface_id).cloned() {
         Some(toplevel) => {
             toplevel.send_close();
             result.success(None);
         }
         None => result.error(
             "surface_doesnt_exist".to_string(),
-            format!("Surface {surface_id} doesn't exist"),
+            format!("Surface {} doesn't exist", payload.surface_id),
             None,
         ),
     };
 }
 
 pub fn get_monitor_layout<BackendData: Backend + 'static>(
-    _method_call: MethodCall,
-    mut result: Box<dyn MethodResult>,
+    _method_call: MethodCall<serde_json::Value>,
+    mut result: Box<dyn MethodResult<serde_json::Value>>,
     data: &mut CalloopData<BackendData>,
 ) {
     let monitors = data.state.backend_data.get_monitor_layout();

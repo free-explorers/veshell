@@ -1,451 +1,237 @@
+use serde::ser::SerializeStruct;
+use serde::Serialize;
 use smithay::output::{Mode, Output, PhysicalProperties};
 use smithay::utils::{Buffer as BufferCoords, Logical, Point, Rectangle, Size};
-use smithay::wayland::compositor;
-use smithay::wayland::compositor::{RectangleKind, RegionAttributes};
-use smithay::wayland::shell::xdg;
 
-use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
-
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SurfaceMessage {
     pub surface_id: u64,
-    pub role: Option<&'static str>,
+    pub role: Option<SurfaceRole>,
     pub texture_id: i64,
-    pub buffer_delta: Option<Point<i32, Logical>>,
-    pub buffer_size: Option<Size<i32, BufferCoords>>,
+    pub buffer_delta: Option<MyPoint<i32, Logical>>,
+    pub buffer_size: Option<MySize<i32, BufferCoords>>,
     pub scale: i32,
-    pub input_region: Option<RegionAttributes>,
+    pub input_region: Vec<MyRectangle<i32, Logical>>,
     pub subsurfaces_below: Vec<u64>,
     pub subsurfaces_above: Vec<u64>,
 }
 
-impl SurfaceMessage {
-    pub fn serialize(self) -> EncodableValue {
-        // TODO: Serialize all the rectangles instead of merging them into one.
-        let input_region = if let Some(input_region) = self.input_region {
-            let mut acc: Option<Rectangle<i32, Logical>> = None;
-            for (kind, rect) in input_region.rects {
-                if let RectangleKind::Add = kind {
-                    if let Some(acc_) = acc {
-                        acc = Some(acc_.merge(rect));
-                    } else {
-                        acc = Some(rect);
-                    }
-                }
-            }
-            acc.unwrap_or_default()
-        } else {
-            // TODO: Account for DPI scaling.
-            self.buffer_size
-                .map(|size| Rectangle::from_loc_and_size((0, 0), (size.w, size.h)))
-                .unwrap_or_default()
-        };
-
-        let mut vec = vec![
-            (
-                EncodableValue::String("surfaceId".to_string()),
-                EncodableValue::Int64(self.surface_id as i64),
-            ),
-            (
-                EncodableValue::String("role".to_string()),
-                EncodableValue::String(
-                    self.role
-                        .map(|role| role.to_string())
-                        .unwrap_or("".to_string()),
-                ),
-            ),
-            (
-                EncodableValue::String("textureId".to_string()),
-                EncodableValue::Int64(self.texture_id),
-            ),
-            (
-                EncodableValue::String("bufferDelta".to_string()),
-                self.buffer_delta
-                    .map(|delta| {
-                        EncodableValue::Map(vec![
-                            (
-                                EncodableValue::String("x".to_string()),
-                                EncodableValue::Int64(delta.x as i64),
-                            ),
-                            (
-                                EncodableValue::String("y".to_string()),
-                                EncodableValue::Int64(delta.y as i64),
-                            ),
-                        ])
-                    })
-                    .unwrap_or(EncodableValue::Null),
-            ),
-            (
-                EncodableValue::String("bufferSize".to_string()),
-                self.buffer_size
-                    .map(|size| {
-                        EncodableValue::Map(vec![
-                            (
-                                EncodableValue::String("width".to_string()),
-                                EncodableValue::Int64(size.w as i64),
-                            ),
-                            (
-                                EncodableValue::String("height".to_string()),
-                                EncodableValue::Int64(size.h as i64),
-                            ),
-                        ])
-                    })
-                    .unwrap_or(EncodableValue::Null),
-            ),
-            (
-                EncodableValue::String("scale".to_string()),
-                EncodableValue::Int32(self.scale),
-            ),
-            (
-                EncodableValue::String("subsurfacesBelow".to_string()),
-                EncodableValue::List(
-                    self.subsurfaces_below
-                        .into_iter()
-                        .map(|id| EncodableValue::Int64(id as i64))
-                        .collect(),
-                ),
-            ),
-            (
-                EncodableValue::String("subsurfacesAbove".to_string()),
-                EncodableValue::List(
-                    self.subsurfaces_above
-                        .into_iter()
-                        .map(|id| EncodableValue::Int64(id as i64))
-                        .collect(),
-                ),
-            ),
-            (
-                EncodableValue::String("inputRegion".to_string()),
-                EncodableValue::Map(vec![
-                    (
-                        EncodableValue::String("x".to_string()),
-                        EncodableValue::Int32(input_region.loc.x),
-                    ),
-                    (
-                        EncodableValue::String("y".to_string()),
-                        EncodableValue::Int32(input_region.loc.y),
-                    ),
-                    (
-                        EncodableValue::String("width".to_string()),
-                        EncodableValue::Int32(input_region.size.w),
-                    ),
-                    (
-                        EncodableValue::String("height".to_string()),
-                        EncodableValue::Int32(input_region.size.h),
-                    ),
-                ]),
-            ),
-        ];
-
-        EncodableValue::Map(vec)
-    }
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(tag = "type")]
+pub enum SurfaceRole {
+    XdgSurface(XdgSurfaceMessage),
+    Subsurface(SubsurfaceMessage),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct XdgSurfaceMessage {
+    pub geometry: Option<MyRectangle<i32, Logical>>,
+    pub role: Option<XdgSurfaceRole>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubsurfaceMessage {
+    pub position: MyPoint<i32, Logical>,
+    pub parent: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(tag = "type")]
+pub enum XdgSurfaceRole {
+    Toplevel(ToplevelMessage),
+    Popup(PopupMessage),
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ToplevelMessage {
-    pub surface_id: u64,
-    pub role: &'static str,
     pub app_id: String,
     pub title: String,
-    pub geometry: Option<Rectangle<i32, Logical>>,
-    pub surface: SurfaceMessage,
     pub parent_surface_id: Option<u64>,
 }
 
-impl ToplevelMessage {
-    pub fn serialize(self) -> EncodableValue {
-        let mut map = vec![
-            (
-                EncodableValue::String("surfaceId".to_string()),
-                EncodableValue::Int64(self.surface_id as i64),
-            ),
-            (
-                EncodableValue::String("role".to_string()),
-                EncodableValue::String(self.role.to_string()),
-            ),
-            (
-                EncodableValue::String("appId".to_string()),
-                EncodableValue::String(self.app_id),
-            ),
-            (
-                EncodableValue::String("title".to_string()),
-                EncodableValue::String(self.title),
-            ),
-            (
-                EncodableValue::String("surface".to_string()),
-                self.surface.serialize(),
-            ),
-        ];
-
-        map.extend(self.geometry.map(|geometry| {
-            (
-                EncodableValue::String("geometry".to_string()),
-                EncodableValue::Map(vec![
-                    (
-                        EncodableValue::String("x".to_string()),
-                        EncodableValue::Int64(geometry.loc.x as i64),
-                    ),
-                    (
-                        EncodableValue::String("y".to_string()),
-                        EncodableValue::Int64(geometry.loc.y as i64),
-                    ),
-                    (
-                        EncodableValue::String("width".to_string()),
-                        EncodableValue::Int64(geometry.size.w as i64),
-                    ),
-                    (
-                        EncodableValue::String("height".to_string()),
-                        EncodableValue::Int64(geometry.size.h as i64),
-                    ),
-                ]),
-            )
-        }));
-
-        if let Some(parent_surface_id) = self.parent_surface_id {
-            map.push((
-                EncodableValue::String("parentSurfaceId".to_string()),
-                EncodableValue::Int64(parent_surface_id as i64),
-            ));
-        }
-
-        EncodableValue::Map(map)
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PopupMessage {
-    pub surface_id: u64,
-    pub role: &'static str,
-    pub geometry: Rectangle<i32, Logical>,
-    pub surface: SurfaceMessage,
-    pub parent_surface_id: Option<u64>,
+    pub parent: Option<u64>,
 }
 
-impl PopupMessage {
-    pub fn serialize(self) -> EncodableValue {
-        let mut map = vec![
-            (
-                EncodableValue::String("surfaceId".to_string()),
-                EncodableValue::Int64(self.surface_id as i64),
-            ),
-            (
-                EncodableValue::String("role".to_string()),
-                EncodableValue::String(self.role.to_string()),
-            ),
-            (
-                EncodableValue::String("surface".to_string()),
-                self.surface.serialize(),
-            ),
-            (
-                EncodableValue::String("geometry".to_string()),
-                EncodableValue::Map(vec![
-                    (
-                        EncodableValue::String("x".to_string()),
-                        EncodableValue::Int64(self.geometry.loc.x as i64),
-                    ),
-                    (
-                        EncodableValue::String("y".to_string()),
-                        EncodableValue::Int64(self.geometry.loc.y as i64),
-                    ),
-                    (
-                        EncodableValue::String("width".to_string()),
-                        EncodableValue::Int64(self.geometry.size.w as i64),
-                    ),
-                    (
-                        EncodableValue::String("height".to_string()),
-                        EncodableValue::Int64(self.geometry.size.h as i64),
-                    ),
-                ]),
-            ),
-        ];
-
-        if let Some(parent_surface_id) = self.parent_surface_id {
-            map.push((
-                EncodableValue::String("parentSurfaceId".to_string()),
-                EncodableValue::Int64(parent_surface_id as i64),
-            ));
-        }
-
-        EncodableValue::Map(map)
-    }
-}
-
-#[derive(Debug)]
-pub struct SubsurfaceMessage {
-    pub surface_id: u64,
-    pub role: &'static str,
-    pub position: Point<i32, Logical>,
-    pub surface: SurfaceMessage,
-    pub parent_surface_id: u64,
-}
-
-impl SubsurfaceMessage {
-    pub fn serialize(self) -> EncodableValue {
-        let mut map = vec![
-            (
-                EncodableValue::String("surfaceId".to_string()),
-                EncodableValue::Int64(self.surface_id as i64),
-            ),
-            (
-                EncodableValue::String("role".to_string()),
-                EncodableValue::String(self.role.to_string()),
-            ),
-            (
-                EncodableValue::String("position".to_string()),
-                EncodableValue::Map(vec![
-                    (
-                        EncodableValue::String("x".to_string()),
-                        EncodableValue::Int64(self.position.x as i64),
-                    ),
-                    (
-                        EncodableValue::String("y".to_string()),
-                        EncodableValue::Int64(self.position.y as i64),
-                    ),
-                ]),
-            ),
-            (
-                EncodableValue::String("surface".to_string()),
-                self.surface.serialize(),
-            ),
-            (
-                EncodableValue::String("parentSurfaceId".to_string()),
-                EncodableValue::Int64(self.parent_surface_id as i64),
-            ),
-        ];
-        EncodableValue::Map(map)
-    }
-}
-
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MonitorsMessage {
-    pub monitors: Vec<Output>,
+    pub monitors: Vec<MyOutput>,
 }
 
-impl From<MonitorsMessage> for EncodableValue {
-    fn from(message: MonitorsMessage) -> EncodableValue {
-        EncodableValue::Map(vec![(
-            EncodableValue::String("monitors".to_string()),
-            message.monitors.into(),
-        )])
+#[repr(transparent)]
+#[derive(Debug)]
+pub struct MyPoint<N, Kind>(pub Point<N, Kind>);
+
+impl<N, Kind> From<Point<N, Kind>> for MyPoint<N, Kind> {
+    fn from(point: Point<N, Kind>) -> Self {
+        MyPoint(point)
     }
 }
 
-impl From<Output> for EncodableValue {
-    fn from(output: Output) -> EncodableValue {
-        EncodableValue::Map(vec![
-            (
-                EncodableValue::String("name".to_string()),
-                EncodableValue::String(output.name()),
-            ),
-            (
-                EncodableValue::String("description".to_string()),
-                EncodableValue::String(output.description()),
-            ),
-            (
-                EncodableValue::String("physicalProperties".to_string()),
-                output.physical_properties().into(),
-            ),
-            (
-                EncodableValue::String("scale".to_string()),
-                EncodableValue::Double(output.current_scale().fractional_scale()),
-            ),
-            (
-                EncodableValue::String("location".to_string()),
-                output.current_location().into(),
-            ),
-            (
-                EncodableValue::String("currentMode".to_string()),
-                output.current_mode().into(),
-            ),
-            (
-                EncodableValue::String("preferredMode".to_string()),
-                output.preferred_mode().into(),
-            ),
-            (
-                EncodableValue::String("modes".to_string()),
-                output.modes().into(),
-            ),
-        ])
-    }
-}
-
-impl<T> From<Vec<T>> for EncodableValue
+impl<N, Kind> Serialize for MyPoint<N, Kind>
 where
-    T: Into<EncodableValue>,
+    N: Serialize,
 {
-    fn from(vec: Vec<T>) -> EncodableValue {
-        EncodableValue::List(vec.into_iter().map(|item| item.into()).collect())
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state = serializer.serialize_struct("Point", 2)?;
+        state.serialize_field("x", &self.0.x)?;
+        state.serialize_field("y", &self.0.y)?;
+        state.end()
     }
 }
 
-impl<T> From<Option<T>> for EncodableValue
+#[repr(transparent)]
+#[derive(Debug)]
+pub struct MySize<N, Kind>(pub Size<N, Kind>);
+
+impl<N, Kind> From<Size<N, Kind>> for MySize<N, Kind> {
+    fn from(size: Size<N, Kind>) -> Self {
+        MySize(size)
+    }
+}
+
+impl<N, Kind> Serialize for MySize<N, Kind>
 where
-    T: Into<EncodableValue>,
+    N: Serialize,
 {
-    fn from(option: Option<T>) -> EncodableValue {
-        match option {
-            Some(value) => value.into(),
-            None => EncodableValue::Null,
-        }
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state = serializer.serialize_struct("Size", 2)?;
+        state.serialize_field("width", &self.0.w)?;
+        state.serialize_field("height", &self.0.h)?;
+        state.end()
     }
 }
 
-impl From<Mode> for EncodableValue {
-    fn from(mode: Mode) -> EncodableValue {
-        EncodableValue::Map(vec![
-            (EncodableValue::String("size".to_string()), mode.size.into()),
-            (
-                EncodableValue::String("refreshRate".to_string()),
-                EncodableValue::Int32(mode.refresh),
-            ),
-        ])
+#[repr(transparent)]
+#[derive(Debug)]
+pub struct MyRectangle<N, Kind>(pub Rectangle<N, Kind>);
+
+impl<N, Kind> From<Rectangle<N, Kind>> for MyRectangle<N, Kind> {
+    fn from(rectangle: Rectangle<N, Kind>) -> Self {
+        MyRectangle(rectangle)
     }
 }
 
-impl From<PhysicalProperties> for EncodableValue {
-    fn from(properties: PhysicalProperties) -> EncodableValue {
-        EncodableValue::Map(vec![
-            (
-                EncodableValue::String("size".to_string()),
-                properties.size.into(),
-            ),
-            (
-                EncodableValue::String("make".to_string()),
-                EncodableValue::String(properties.make),
-            ),
-            (
-                EncodableValue::String("model".to_string()),
-                EncodableValue::String(properties.model),
-            ),
-        ])
+impl<N, Kind> Serialize for MyRectangle<N, Kind>
+where
+    N: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state = serializer.serialize_struct("Rectangle", 4)?;
+        state.serialize_field("x", &self.0.loc.x)?;
+        state.serialize_field("y", &self.0.loc.y)?;
+        state.serialize_field("width", &self.0.size.w)?;
+        state.serialize_field("height", &self.0.size.h)?;
+        state.end()
     }
 }
 
-impl<T> From<Point<i32, T>> for EncodableValue {
-    fn from(point: Point<i32, T>) -> EncodableValue {
-        EncodableValue::Map(vec![
-            (
-                EncodableValue::String("x".to_string()),
-                EncodableValue::Int32(point.x),
-            ),
-            (
-                EncodableValue::String("y".to_string()),
-                EncodableValue::Int32(point.y),
-            ),
-        ])
+#[repr(transparent)]
+#[derive(Debug)]
+pub struct MyOutput(pub Output);
+
+impl From<Output> for MyOutput {
+    fn from(output: Output) -> Self {
+        MyOutput(output)
     }
 }
 
-impl<T> From<Size<i32, T>> for EncodableValue {
-    fn from(size: Size<i32, T>) -> EncodableValue {
-        EncodableValue::Map(vec![
-            (
-                EncodableValue::String("width".to_string()),
-                EncodableValue::Int32(size.w),
-            ),
-            (
-                EncodableValue::String("height".to_string()),
-                EncodableValue::Int32(size.h),
-            ),
-        ])
+impl Serialize for MyOutput {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let output = &self.0;
+        let mut state = serializer.serialize_struct("Output", 7)?;
+        state.serialize_field("name", &output.name())?;
+        state.serialize_field("description", &output.description())?;
+        state.serialize_field(
+            "physicalProperties",
+            &MyPhysicalProperties(output.physical_properties()),
+        )?;
+        state.serialize_field("scale", &output.current_scale().fractional_scale())?;
+        state.serialize_field("location", &MyPoint(output.current_location()))?;
+        state.serialize_field(
+            "currentMode",
+            &output.current_mode().map(|mode| MyMode(mode)),
+        )?;
+        state.serialize_field(
+            "preferredMode",
+            &output.preferred_mode().map(|mode| MyMode(mode)),
+        )?;
+        state.serialize_field(
+            "modes",
+            &output
+                .modes()
+                .into_iter()
+                .map(|mode| MyMode(mode))
+                .collect::<Vec<_>>(),
+        )?;
+        state.end()
+    }
+}
+
+#[repr(transparent)]
+#[derive(Debug)]
+pub struct MyMode(pub Mode);
+
+impl From<Mode> for MyMode {
+    fn from(mode: Mode) -> Self {
+        MyMode(mode)
+    }
+}
+
+impl Serialize for MyMode {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mode = &self.0;
+        let mut state = serializer.serialize_struct("Mode", 2)?;
+        state.serialize_field("size", &MySize(mode.size))?;
+        state.serialize_field("refreshRate", &mode.refresh)?;
+        state.end()
+    }
+}
+
+#[repr(transparent)]
+#[derive(Debug)]
+struct MyPhysicalProperties(PhysicalProperties);
+
+impl From<PhysicalProperties> for MyPhysicalProperties {
+    fn from(physical_properties: PhysicalProperties) -> Self {
+        MyPhysicalProperties(physical_properties)
+    }
+}
+
+impl Serialize for MyPhysicalProperties {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let properties = &self.0;
+        let mut state = serializer.serialize_struct("PhysicalProperties", 3)?;
+        state.serialize_field("size", &MySize(properties.size))?;
+        state.serialize_field("make", &properties.make)?;
+        state.serialize_field("model", &properties.model)?;
+        state.end()
     }
 }

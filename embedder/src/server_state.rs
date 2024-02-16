@@ -1,3 +1,4 @@
+use serde_json::json;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env::{remove_var, set_var};
@@ -22,9 +23,11 @@ use smithay::reexports::wayland_server::protocol::wl_buffer;
 use smithay::reexports::wayland_server::protocol::wl_seat::WlSeat;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::{Client, Display, DisplayHandle, Resource};
-use smithay::utils::{Buffer as BufferCoords, Clock, Monotonic, Serial, Size, SERIAL_COUNTER};
+use smithay::utils::{
+    Buffer as BufferCoords, Clock, Logical, Monotonic, Rectangle, Serial, Size, SERIAL_COUNTER,
+};
 use smithay::wayland::buffer::BufferHandler;
-use smithay::wayland::compositor::{self, get_parent};
+use smithay::wayland::compositor::{self, get_parent, RectangleKind};
 use smithay::wayland::compositor::{
     with_states, with_surface_tree_upward, BufferAssignment, CompositorClientState,
     CompositorHandler, CompositorState, SubsurfaceCachedState, SurfaceAttributes, TraversalAction,
@@ -50,7 +53,8 @@ use tracing::{info, warn};
 
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 use crate::flutter_engine::wayland_messages::{
-    PopupMessage, SubsurfaceMessage, SurfaceMessage, ToplevelMessage,
+    MyPoint, PopupMessage, SubsurfaceMessage, SurfaceMessage, SurfaceRole, ToplevelMessage,
+    XdgSurfaceMessage, XdgSurfaceRole,
 };
 use crate::flutter_engine::FlutterEngine;
 use crate::keyboard::key_repeater::KeyRepeater;
@@ -414,10 +418,9 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "interactive_move",
-            Some(Box::new(EncodableValue::Map(vec![(
-                EncodableValue::String("surfaceId".to_string()),
-                EncodableValue::Int64(surface_id as i64),
-            )]))),
+            Some(Box::new(json!({
+                    "surfaceId": surface_id,
+            }))),
             None,
         );
     }
@@ -440,16 +443,10 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "interactive_resize",
-            Some(Box::new(EncodableValue::Map(vec![
-                (
-                    EncodableValue::String("surfaceId".to_string()),
-                    EncodableValue::Int64(surface_id as i64),
-                ),
-                (
-                    EncodableValue::String("edge".to_string()),
-                    EncodableValue::Int64(edges as i64),
-                ),
-            ]))),
+            Some(Box::new(json!({
+                    "surfaceId": surface_id,
+                    "edge": edges as i64,
+            }))),
             None,
         );
     }
@@ -659,115 +656,132 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                 )
             });
 
-        let surface_message = SurfaceMessage {
-            surface_id,
-            role,
-            texture_id,
-            buffer_delta: buffer_delta,
-            buffer_size: size,
-            scale: buffer_scale,
-            input_region: input_region.clone(),
-            subsurfaces_below,
-            subsurfaces_above,
+        // TODO: Serialize all the rectangles instead of merging them into one.
+        let input_region = if let Some(input_region) = input_region {
+            let mut acc: Option<Rectangle<i32, Logical>> = None;
+            for (kind, rect) in input_region.rects {
+                if let RectangleKind::Add = kind {
+                    if let Some(acc_) = acc {
+                        acc = Some(acc_.merge(rect));
+                    } else {
+                        acc = Some(rect);
+                    }
+                }
+            }
+            acc.unwrap_or_default()
+        } else {
+            // TODO: Account for DPI scaling.
+            size.map(|size| Rectangle::from_loc_and_size((0, 0), (size.w, size.h)))
+                .unwrap_or_default()
         };
 
         // depending of the role create an appropriate message for TopLevel PopUp or Subsurface
-        let message_to_sent = match surface_message.role {
-            None => surface_message.serialize(),
-            Some(xdg::XDG_TOPLEVEL_ROLE) => {
-                let toplevel = self
-                    .xdg_toplevels
-                    .get(&surface_id)
-                    .expect("Missing toplevel");
-
-                let (initial_configure_sent, parent) = with_states(surface, |surface_data| {
-                    let surface_state = surface_data
-                        .data_map
-                        .get::<XdgToplevelSurfaceData>()
-                        .unwrap()
-                        .lock()
-                        .unwrap();
-                    (
-                        surface_state.initial_configure_sent,
-                        surface_state.parent.clone(),
-                    )
+        let role = match role {
+            Some(role @ (xdg::XDG_TOPLEVEL_ROLE | xdg::XDG_POPUP_ROLE)) => {
+                let geometry = with_states(surface, |surface_data| {
+                    surface_data
+                        .cached_state
+                        .current::<SurfaceCachedState>()
+                        .geometry
                 });
 
-                if !initial_configure_sent {
-                    toplevel.send_configure();
-                }
+                let role = match role {
+                    xdg::XDG_TOPLEVEL_ROLE => {
+                        let toplevel = self
+                            .xdg_toplevels
+                            .get(&surface_id)
+                            .expect("Missing toplevel");
 
-                let parent_id = if let Some(ref parent) = parent {
-                    Some(get_surface_id(&parent))
-                } else {
-                    None
+                        let (initial_configure_sent, parent) =
+                            with_states(surface, |surface_data| {
+                                let surface_state = surface_data
+                                    .data_map
+                                    .get::<XdgToplevelSurfaceData>()
+                                    .unwrap()
+                                    .lock()
+                                    .unwrap();
+                                (
+                                    surface_state.initial_configure_sent,
+                                    surface_state.parent.clone(),
+                                )
+                            });
+
+                        if !initial_configure_sent {
+                            toplevel.send_configure();
+                        }
+
+                        let parent_id = if let Some(ref parent) = parent {
+                            Some(get_surface_id(&parent))
+                        } else {
+                            None
+                        };
+
+                        let (app_id, title, geometry) = with_states(surface, |surface_data| {
+                            let surface_state = surface_data
+                                .data_map
+                                .get::<XdgToplevelSurfaceData>()
+                                .unwrap()
+                                .lock()
+                                .unwrap();
+                            (
+                                surface_state.app_id.clone().unwrap_or_default(),
+                                surface_state.title.clone().unwrap_or_default(),
+                                surface_data
+                                    .cached_state
+                                    .current::<SurfaceCachedState>()
+                                    .geometry,
+                            )
+                        });
+
+                        SurfaceRole::XdgSurface(XdgSurfaceMessage {
+                            geometry: geometry.map(|geometry| geometry.into()),
+                            role: Some(XdgSurfaceRole::Toplevel(ToplevelMessage {
+                                app_id,
+                                title,
+                                parent_surface_id: parent_id,
+                            })),
+                        })
+                    }
+                    xdg::XDG_POPUP_ROLE => {
+                        let popup = self.xdg_popups.get(&surface_id).expect("Missing popup");
+
+                        let (initial_configure_sent, parent) =
+                            with_states(surface, |surface_data| {
+                                let surface_state = surface_data
+                                    .data_map
+                                    .get::<XdgPopupSurfaceData>()
+                                    .unwrap()
+                                    .lock()
+                                    .unwrap();
+                                (
+                                    surface_state.initial_configure_sent,
+                                    surface_state.parent.clone(),
+                                )
+                            });
+
+                        if !initial_configure_sent {
+                            // NOTE: This should never fail as the initial configure is always
+                            // allowed.
+                            popup.send_configure().expect("initial configure failed");
+                        }
+
+                        let parent_id = if let Some(ref parent) = parent {
+                            Some(get_surface_id(&parent))
+                        } else {
+                            None
+                        };
+
+                        SurfaceRole::XdgSurface(XdgSurfaceMessage {
+                            geometry: Some(popup.with_pending_state(|state| {
+                                state.positioner.get_geometry().into()
+                            })),
+                            role: Some(XdgSurfaceRole::Popup(PopupMessage { parent: parent_id })),
+                        })
+                    }
+                    _ => unreachable!(),
                 };
-
-                let (app_id, title, geometry) = with_states(surface, |surface_data| {
-                    let surface_state = surface_data
-                        .data_map
-                        .get::<XdgToplevelSurfaceData>()
-                        .unwrap()
-                        .lock()
-                        .unwrap();
-                    (
-                        surface_state.app_id.clone().unwrap_or_default(),
-                        surface_state.title.clone().unwrap_or_default(),
-                        surface_data
-                            .cached_state
-                            .current::<SurfaceCachedState>()
-                            .geometry,
-                    )
-                });
-
-                ToplevelMessage {
-                    surface_id: surface_message.surface_id,
-                    role: xdg::XDG_TOPLEVEL_ROLE,
-                    surface: surface_message,
-                    app_id,
-                    title,
-                    geometry: geometry,
-                    parent_surface_id: parent_id,
-                }
-                .serialize()
+                Some(role)
             }
-            Some(xdg::XDG_POPUP_ROLE) => {
-                let popup = self.xdg_popups.get(&surface_id).expect("Missing popup");
-
-                let (initial_configure_sent, parent) = with_states(surface, |surface_data| {
-                    let surface_state = surface_data
-                        .data_map
-                        .get::<XdgPopupSurfaceData>()
-                        .unwrap()
-                        .lock()
-                        .unwrap();
-                    (
-                        surface_state.initial_configure_sent,
-                        surface_state.parent.clone(),
-                    )
-                });
-
-                if !initial_configure_sent {
-                    // NOTE: This should never fail as the initial configure is always
-                    // allowed.
-                    popup.send_configure().expect("initial configure failed");
-                }
-
-                let parent_id = if let Some(ref parent) = parent {
-                    Some(get_surface_id(&parent))
-                } else {
-                    None
-                };
-
-                PopupMessage {
-                    surface_id: surface_message.surface_id,
-                    role: xdg::XDG_POPUP_ROLE,
-                    surface: surface_message,
-                    geometry: popup.with_pending_state(|state| state.positioner.get_geometry()),
-                    parent_surface_id: parent_id,
-                }
-            }
-            .serialize(),
             Some(compositor::SUBSURFACE_ROLE) => {
                 let location = with_states(surface, |surface_data| {
                     surface_data
@@ -775,21 +789,30 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                         .current::<SubsurfaceCachedState>()
                         .location
                 });
-                SubsurfaceMessage {
-                    surface_id: surface_message.surface_id,
-                    role: compositor::SUBSURFACE_ROLE,
-                    surface: surface_message,
-                    position: location,
-                    parent_surface_id: get_surface_id(&get_parent(surface).unwrap()),
-                }
-                .serialize()
+                Some(SurfaceRole::Subsurface(SubsurfaceMessage {
+                    position: location.into(),
+                    parent: get_surface_id(&get_parent(surface).unwrap()),
+                }))
             }
-            _ => surface_message.serialize(),
+            _ => None,
         };
+
+        let surface_message = SurfaceMessage {
+            surface_id,
+            role,
+            texture_id,
+            buffer_delta: buffer_delta.map(|delta| delta.into()),
+            buffer_size: size.map(|size| size.into()),
+            scale: buffer_scale,
+            input_region: vec![input_region.into()],
+            subsurfaces_below,
+            subsurfaces_above,
+        };
+
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "commit_surface",
-            Some(Box::new(message_to_sent)),
+            Some(Box::new(json!(surface_message))),
             None,
         );
     }
@@ -808,10 +831,9 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "destroy_surface",
-            Some(Box::new(EncodableValue::Map(vec![(
-                EncodableValue::String("surfaceId".to_string()),
-                EncodableValue::Int64(surface_id as i64),
-            )]))),
+            Some(Box::new(json!({
+                "surfaceId": surface_id,
+            }))),
             None,
         );
     }
