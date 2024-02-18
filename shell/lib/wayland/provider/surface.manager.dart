@@ -8,6 +8,7 @@ import 'package:shell/wayland/model/event/destroy_surface/destroy_surface.serial
 import 'package:shell/wayland/model/event/wayland_event.serializable.dart';
 import 'package:shell/wayland/model/request/unregister_view_texture/unregister_view_texture.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
+import 'package:shell/wayland/provider/popup_stack_state.dart';
 import 'package:shell/wayland/provider/subsurface_state.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
@@ -171,9 +172,24 @@ class SurfaceManager extends _$SurfaceManager {
                   position: role.position,
                 );
 
+            // TODO: Implement proper popup hierarchy.
+            // Don't just attach them to the nearest toplevel.
+            var parentToplevel = role.parent;
+            while (ref.read(wlSurfaceStateProvider(parentToplevel)).role ==
+                SurfaceRole.xdgPopup) {
+              parentToplevel =
+                  ref.read(xdgPopupStateProvider(parentToplevel)).parent;
+            }
+
             ref
-                .read(xdgSurfaceStateProvider(role.parent).notifier)
+                .read(xdgSurfaceStateProvider(parentToplevel).notifier)
                 .addPopup(message.surfaceId);
+
+            ref
+                .read(xdgPopupStateProvider(message.surfaceId).notifier)
+                .setParent(parentToplevel);
+
+            ref.read(popupStackStateProvider.notifier).add(message.surfaceId);
         }
 
       case SubsurfaceRoleMessage():
@@ -196,8 +212,19 @@ class SurfaceManager extends _$SurfaceManager {
             .dispose();
       case SurfaceRole.xdgPopup:
         final popup = ref.read(xdgPopupStateProvider(message.surfaceId));
+        ref.read(popupStackStateProvider.notifier).remove(message.surfaceId);
+
+        // TODO: Implement proper popup hierarchy.
+        // Don't just attach them to the nearest toplevel.
+        var parentToplevel = popup.parent;
+        while (ref.read(wlSurfaceStateProvider(parentToplevel)).role ==
+            SurfaceRole.xdgPopup) {
+          parentToplevel =
+              ref.read(xdgPopupStateProvider(parentToplevel)).parent;
+        }
+
         ref
-            .read(xdgSurfaceStateProvider(popup.parent).notifier)
+            .read(xdgSurfaceStateProvider(parentToplevel).notifier)
             .removePopup(message.surfaceId);
         ref.read(xdgPopupStateProvider(message.surfaceId).notifier).dispose();
       case SurfaceRole.subsurface:

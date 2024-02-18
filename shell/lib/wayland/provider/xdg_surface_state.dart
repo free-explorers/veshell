@@ -1,10 +1,10 @@
 import 'dart:ui';
 
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/model/xdg_surface.dart';
-import 'package:shell/wayland/provider/xdg_popup_state.dart';
 
 part 'xdg_surface_state.g.dart';
 
@@ -26,7 +26,7 @@ class XdgSurfaceState extends _$XdgSurfaceState {
     });
     state = XdgSurface(
       geometry: geometry,
-      popups: [],
+      popups: IList(),
     );
   }
 
@@ -40,16 +40,14 @@ class XdgSurfaceState extends _$XdgSurfaceState {
   }
 
   void addPopup(SurfaceId surfaceId) {
-    state = state.copyWith(popups: [...state.popups, surfaceId]);
-    ref.read(xdgPopupStateProvider(surfaceId).notifier).setParent(surfaceId);
+    state = state.copyWith(
+      popups: state.popups.add(surfaceId),
+    );
   }
 
   void removePopup(SurfaceId surfaceId) {
     state = state.copyWith(
-      popups: [
-        for (final int id in state.popups)
-          if (id != surfaceId) id,
-      ],
+      popups: state.popups.remove(surfaceId),
     );
   }
 
