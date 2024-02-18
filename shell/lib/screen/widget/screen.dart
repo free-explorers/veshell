@@ -5,6 +5,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/screen/model/screen_shortcuts.dart';
 import 'package:shell/screen/provider/current_screen_id.dart';
+import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/screen/widget/screen_panel.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
@@ -20,7 +21,24 @@ class ScreenWidget extends HookConsumerWidget {
     final screenId = ref.watch(currentScreenIdProvider);
     final screenState = ref.watch(screenStateProvider(screenId));
 
-    final screenFocusNode = useFocusNode(debugLabel: 'ScreenFocusNode');
+    final screenFocusScopeNode =
+        useFocusScopeNode(debugLabel: 'ScreenFocusNode');
+
+    /* useEffect(
+      () {
+        onFocusChange() {
+          if (screenFocusScopeNode.hasFocus) {
+            screenFocusScopeNode.requestFocus();
+          }
+        }
+
+        FocusManager.instance.addListener(onFocusChange);
+        return () {
+          FocusManager.instance.removeListener(onFocusChange);
+        };
+      },
+      [],
+    ); */
     return Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
         LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyW):
@@ -53,34 +71,44 @@ class ScreenWidget extends HookConsumerWidget {
             },
           ),
         },
-        child: Focus(
-          focusNode: screenFocusNode,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const ScreenPanel(),
-              Expanded(
-                child: SlidingContainer(
-                  direction: Axis.vertical,
-                  index: screenState.selectedIndex,
-                  children: screenState.workspaceList
-                      .mapIndexed(
-                        (index, workspaceId) => ProviderScope(
-                          key: Key(workspaceId),
-                          overrides: [
-                            currentWorkspaceIdProvider
-                                .overrideWith((ref) => workspaceId),
-                          ],
-                          child: WorkspaceWidget(
-                            isSelected: screenState.selectedIndex == index,
+        child: MouseRegion(
+          onEnter: (event) => screenFocusScopeNode.requestFocus(),
+          child: FocusScope(
+            node: screenFocusScopeNode,
+            onFocusChange: (value) {
+              if (value) {
+                ref
+                    .read(focusedScreenProvider.notifier)
+                    .setFocusedScreen(screenId);
+              }
+            },
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const ScreenPanel(),
+                Expanded(
+                  child: SlidingContainer(
+                    direction: Axis.vertical,
+                    index: screenState.selectedIndex,
+                    children: screenState.workspaceList
+                        .mapIndexed(
+                          (index, workspaceId) => ProviderScope(
+                            key: Key(workspaceId),
+                            overrides: [
+                              currentWorkspaceIdProvider
+                                  .overrideWith((ref) => workspaceId),
+                            ],
+                            child: WorkspaceWidget(
+                              isSelected: screenState.selectedIndex == index,
+                            ),
                           ),
-                        ),
-                      )
-                      .toList(),
+                        )
+                        .toList(),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

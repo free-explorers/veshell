@@ -5,8 +5,13 @@ part 'focused_screen.g.dart';
 
 /// Provide the current Focused screen
 @riverpod
-ScreenId? focusedScreen(FocusedScreenRef ref) {
-  return null;
+class FocusedScreen extends _$FocusedScreen {
+  @override
+  ScreenId? build() {
+    return null;
+  }
 
-  //return ref.watch(screenListProvider).first;
+  setFocusedScreen(ScreenId? screenId) {
+    state = screenId;
+  }
 }

@@ -6,6 +6,8 @@ import 'package:uuid/uuid.dart';
 
 part 'screen_list.g.dart';
 
+const initialScreenLength = 2;
+
 /// ScreenList provider
 @Riverpod(keepAlive: true)
 class ScreenList extends _$ScreenList {
@@ -13,7 +15,9 @@ class ScreenList extends _$ScreenList {
 
   @override
   ISet<ScreenId> build(MonitorId monitorName) {
-    return <ScreenId>{_uuidGenerator.v4()}.lock;
+    return <ScreenId>{
+      for (var i = 0; i < initialScreenLength; i++) _uuidGenerator.v4(),
+    }.lock;
   }
 
   ScreenId createNewScreen() {

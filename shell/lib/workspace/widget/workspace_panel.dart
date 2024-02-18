@@ -22,15 +22,6 @@ class WorkspacePanel extends HookConsumerWidget implements PreferredSizeWidget {
         child: TileableListView(
           tileableList: tileableList,
         ),
-        /* child: TabBar.secondary(
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          controller: tabController,
-          tabs: [
-            for (final tileable in tileableList)
-              tileable.buildPanelWidget(context, ref),
-          ],
-        ), */
       ),
     );
   }
