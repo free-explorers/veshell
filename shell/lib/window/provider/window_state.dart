@@ -1,6 +1,6 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/wayland/model/xdg_surface.dart';
+import 'package:shell/wayland/model/xdg_toplevel.dart';
 import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
 import 'package:shell/window/model/window.dart';
 import 'package:shell/window/provider/surface_window_map.dart';
@@ -11,7 +11,7 @@ part 'window_state.g.dart';
 /// Workspace provider
 @riverpod
 class WindowState extends _$WindowState {
-  ProviderSubscription<XdgToplevelSurface>? _surfaceSubscription;
+  ProviderSubscription<XdgToplevel>? _surfaceSubscription;
   KeepAliveLink? _keepAliveLink;
 
   @override
@@ -42,7 +42,10 @@ class WindowState extends _$WindowState {
     }
     _surfaceSubscription =
         ref.listen(xdgToplevelStateProvider(state.surfaceId!), (_, next) {
-      state = state.copyWith(appId: next.appId, title: next.title);
+      state = state.copyWith(
+        appId: next.appId ?? state.appId,
+        title: next.title ?? state.title,
+      );
     });
   }
 

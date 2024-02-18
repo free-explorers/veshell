@@ -40,8 +40,8 @@ use smithay::wayland::selection::data_device::{
 use smithay::wayland::selection::SelectionHandler;
 use smithay::wayland::shell::xdg;
 use smithay::wayland::shell::xdg::{
-    PopupSurface, PositionerState, SurfaceCachedState, ToplevelSurface, XdgPopupSurfaceData,
-    XdgShellHandler, XdgShellState, XdgToplevelSurfaceData,
+    PopupState, PopupSurface, PositionerState, SurfaceCachedState, ToplevelSurface,
+    XdgPopupSurfaceData, XdgShellHandler, XdgShellState, XdgToplevelSurfaceData,
 };
 use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::wayland::socket::ListeningSocketSource;
@@ -53,8 +53,8 @@ use tracing::{info, warn};
 
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 use crate::flutter_engine::wayland_messages::{
-    MyPoint, PopupMessage, SubsurfaceMessage, SurfaceMessage, SurfaceRole, ToplevelMessage,
-    XdgSurfaceMessage, XdgSurfaceRole,
+    MyPoint, MyRectangle, PopupMessage, SubsurfaceMessage, SurfaceMessage, SurfaceRole,
+    ToplevelMessage, XdgSurfaceMessage, XdgSurfaceRole,
 };
 use crate::flutter_engine::FlutterEngine;
 use crate::keyboard::key_repeater::KeyRepeater;
@@ -683,6 +683,7 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                         .cached_state
                         .current::<SurfaceCachedState>()
                         .geometry
+                        .map(|geometry| geometry.into())
                 });
 
                 let role = match role {
@@ -716,7 +717,7 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                             None
                         };
 
-                        let (app_id, title, geometry) = with_states(surface, |surface_data| {
+                        let (app_id, title) = with_states(surface, |surface_data| {
                             let surface_state = surface_data
                                 .data_map
                                 .get::<XdgToplevelSurfaceData>()
@@ -726,16 +727,12 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                             (
                                 surface_state.app_id.clone().unwrap_or_default(),
                                 surface_state.title.clone().unwrap_or_default(),
-                                surface_data
-                                    .cached_state
-                                    .current::<SurfaceCachedState>()
-                                    .geometry,
                             )
                         });
 
                         SurfaceRole::XdgSurface(XdgSurfaceMessage {
-                            geometry: geometry.map(|geometry| geometry.into()),
-                            role: Some(XdgSurfaceRole::Toplevel(ToplevelMessage {
+                            geometry,
+                            role: Some(XdgSurfaceRole::XdgToplevel(ToplevelMessage {
                                 app_id,
                                 title,
                                 parent_surface_id: parent_id,
@@ -745,7 +742,7 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                     xdg::XDG_POPUP_ROLE => {
                         let popup = self.xdg_popups.get(&surface_id).expect("Missing popup");
 
-                        let (initial_configure_sent, parent) =
+                        let (initial_configure_sent, parent, position) =
                             with_states(surface, |surface_data| {
                                 let surface_state = surface_data
                                     .data_map
@@ -753,9 +750,11 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                                     .unwrap()
                                     .lock()
                                     .unwrap();
+
                                 (
                                     surface_state.initial_configure_sent,
                                     surface_state.parent.clone(),
+                                    surface_state.current.geometry.loc.into(),
                                 )
                             });
 
@@ -771,14 +770,24 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                             None
                         };
 
+                        // TODO: Probably do this earlier?
+                        let parent_id = match parent_id {
+                            Some(parent_id) => parent_id,
+                            None => return,
+                        };
+
                         SurfaceRole::XdgSurface(XdgSurfaceMessage {
-                            geometry: Some(popup.with_pending_state(|state| {
-                                state.positioner.get_geometry().into()
+                            geometry,
+                            role: Some(XdgSurfaceRole::XdgPopup(PopupMessage {
+                                parent: parent_id,
+                                position,
                             })),
-                            role: Some(XdgSurfaceRole::Popup(PopupMessage { parent: parent_id })),
                         })
                     }
-                    _ => unreachable!(),
+                    _ => {
+                        // TODO: Handle other types?
+                        return;
+                    }
                 };
                 Some(role)
             }
@@ -797,6 +806,12 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
             _ => None,
         };
 
+        // TODO: Should probably do this earlier.
+        let role = match role {
+            Some(role) => role,
+            None => return,
+        };
+
         let surface_message = SurfaceMessage {
             surface_id,
             role,
@@ -804,7 +819,7 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
             buffer_delta: buffer_delta.map(|delta| delta.into()),
             buffer_size: size.map(|size| size.into()),
             scale: buffer_scale,
-            input_region: vec![input_region.into()],
+            input_region: input_region.into(),
             subsurfaces_below,
             subsurfaces_above,
         };

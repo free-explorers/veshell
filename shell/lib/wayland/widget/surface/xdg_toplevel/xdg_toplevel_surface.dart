@@ -6,6 +6,7 @@ import 'package:shell/wayland/model/request/activate_window/activate_window.seri
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
+import 'package:shell/wayland/provider/xdg_surface_state.dart';
 import 'package:shell/wayland/widget/surface.dart';
 import 'package:shell/wayland/widget/surface/xdg_popup/popup.dart';
 import 'package:visibility_detector/visibility_detector.dart';
@@ -15,13 +16,13 @@ class XdgToplevelSurfaceWidget extends ConsumerWidget {
     required this.surfaceId,
     super.key,
   });
+
   final SurfaceId surfaceId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final popupList = ref.watch(
-      popupListForSurfaceProvider.select((value) => value.get(surfaceId)),
-    );
+    final popupList =
+        ref.watch(xdgSurfaceStateProvider(surfaceId).select((v) => v.popups));
     return VisibilityDetector(
       key: ValueKey(surfaceId),
       onVisibilityChanged: (VisibilityInfo info) {
@@ -55,6 +56,7 @@ class _SurfaceFocus extends HookConsumerWidget {
     required this.surfaceId,
     required this.child,
   });
+
   final SurfaceId surfaceId;
   final Widget child;
 
@@ -111,6 +113,7 @@ class _PointerListener extends ConsumerWidget {
     required this.surfaceId,
     required this.child,
   });
+
   final SurfaceId surfaceId;
   final Widget child;
 

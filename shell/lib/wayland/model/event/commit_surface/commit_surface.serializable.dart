@@ -8,15 +8,18 @@ import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
 part 'commit_surface.serializable.freezed.dart';
+
 part 'commit_surface.serializable.g.dart';
 
-/// Model for Surface
+/// Model for CommitSurfaceMessage
 @freezed
-class SurfaceMessage with _$SurfaceMessage {
+sealed class CommitSurfaceMessage
+    with _$CommitSurfaceMessage
+    implements WaylandMessage {
   /// Factory
-  factory SurfaceMessage({
+  factory CommitSurfaceMessage({
     required SurfaceId surfaceId,
-    required SurfaceRole role,
+    required SurfaceRoleMessage role,
     required TextureId textureId,
     required int scale,
     @RectConverter() required Rect inputRegion,
@@ -24,57 +27,42 @@ class SurfaceMessage with _$SurfaceMessage {
     required List<int> subsurfacesAbove,
     @OffsetConverter() Offset? bufferDelta,
     @SizeConverter() Size? bufferSize,
-  }) = _SurfaceMessage;
-
-  factory SurfaceMessage.fromJson(Map<String, dynamic> json) =>
-      _$SurfaceMessageFromJson(json);
-}
-
-/// Model for CommitSurfaceEvent
-@Freezed(
-  unionKey: 'role',
-  unionValueCase: FreezedUnionCase.snake,
-  fallbackUnion: 'simple',
-)
-class CommitSurfaceMessage
-    with _$CommitSurfaceMessage
-    implements WaylandMessage {
-  /// Factory for Simple
-  const factory CommitSurfaceMessage.simple({
-    required SurfaceId surfaceId,
-    required SurfaceRole role,
-    SurfaceMessage? surface,
-  }) = SimpleCommitSurfaceMessage;
-
-  /// Factory for xdgToplevel
-  const factory CommitSurfaceMessage.xdgToplevel({
-    required SurfaceId surfaceId,
-    required SurfaceMessage surface,
-    required SurfaceRole role,
-    String? appId,
-    String? title,
-    SurfaceId? parentSurfaceId,
-    @RectConverter() Rect? geometry,
-  }) = XdgToplevelCommitSurfaceMessage;
-
-  /// Factory for xdgPopup
-  const factory CommitSurfaceMessage.xdgPopup({
-    required SurfaceId surfaceId,
-    required SurfaceMessage surface,
-    required SurfaceRole role,
-    SurfaceId? parentSurfaceId,
-    @RectConverter() Rect? geometry,
-  }) = XdgPopupCommitSurfaceMessage;
-
-  /// Factory for Subsurface
-  const factory CommitSurfaceMessage.subsurface({
-    required SurfaceId surfaceId,
-    required SurfaceMessage surface,
-    required SurfaceRole role,
-    required SurfaceId parentSurfaceId,
-    @OffsetConverter() required Offset position,
-  }) = SubsurfaceCommitSurfaceMessage;
+  }) = _CommitSurfaceMessage;
 
   factory CommitSurfaceMessage.fromJson(Map<String, dynamic> json) =>
       _$CommitSurfaceMessageFromJson(json);
+}
+
+@Freezed(unionKey: 'type')
+sealed class SurfaceRoleMessage with _$SurfaceRoleMessage {
+
+  const factory SurfaceRoleMessage.xdgSurface({
+    @RectConverter() required Rect? geometry,
+    required XdgSurfaceMessage role,
+  }) = XdgSurfaceRoleMessage;
+
+  const factory SurfaceRoleMessage.subsurface({
+    @OffsetConverter() required Offset position,
+  }) = SubsurfaceRoleMessage;
+
+  factory SurfaceRoleMessage.fromJson(Map<String, dynamic> json) =>
+      _$SurfaceRoleMessageFromJson(json);
+}
+
+@Freezed(unionKey: 'type')
+sealed class XdgSurfaceMessage with _$XdgSurfaceMessage {
+
+  const factory XdgSurfaceMessage.xdgToplevel({
+    required SurfaceId? parent,
+    required String? appId,
+    required String? title,
+  }) = XdgToplevelMessage;
+
+  const factory XdgSurfaceMessage.xdgPopup({
+    required SurfaceId parent,
+    @OffsetConverter() required Offset position,
+  }) = XdgPopupMessage;
+
+  factory XdgSurfaceMessage.fromJson(Map<String, dynamic> json) =>
+      _$XdgSurfaceMessageFromJson(json);
 }

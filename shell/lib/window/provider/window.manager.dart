@@ -7,6 +7,7 @@ import 'package:shell/wayland/model/event/destroy_surface/destroy_surface.serial
 import 'package:shell/wayland/model/event/wayland_event.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/model/xdg_surface.dart';
+import 'package:shell/wayland/model/xdg_toplevel.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
@@ -80,7 +81,7 @@ class WindowManager extends _$WindowManager {
         if (window.appId == toplevelState.appId && window.isWaitingForSurface) {
           ref.read(windowStateProvider(windowId).notifier).initialize(
                 window.copyWith(
-                  title: toplevelState.title,
+                  title: toplevelState.title ?? window.title,
                   surfaceId: surfaceId,
                   isWaitingForSurface: false,
                 ),
@@ -89,23 +90,26 @@ class WindowManager extends _$WindowManager {
         }
       }
     }
-    if (toplevelState.parentSurfaceId != null) {
-      _createDialogWindowForSurface(toplevelState);
+    if (toplevelState.parent != null) {
+      _createDialogWindowForSurface(surfaceId, toplevelState);
       return;
     }
     // create a new window
-    _createPersistentWindowForSurface(toplevelState);
+    _createPersistentWindowForSurface(surfaceId, toplevelState);
   }
 
-  _createPersistentWindowForSurface(XdgToplevelSurface toplevelState) {
+  _createPersistentWindowForSurface(
+    SurfaceId surfaceId,
+    XdgToplevel toplevelState,
+  ) {
     // create a new window
     final windowId = _uuidGenerator.v4();
 
     final persistentWindow = PersistentWindow(
       windowId: windowId,
-      appId: toplevelState.appId,
-      title: toplevelState.title,
-      surfaceId: toplevelState.surfaceId,
+      appId: toplevelState.appId ?? 'unknown',
+      title: toplevelState.title ?? 'unknown',
+      surfaceId: surfaceId,
     );
 
     ref
@@ -126,16 +130,17 @@ class WindowManager extends _$WindowManager {
         .addWindow(windowId);
   }
 
-  _createDialogWindowForSurface(XdgToplevelSurface toplevelState) {
+  _createDialogWindowForSurface(
+      SurfaceId surfaceId, XdgToplevel toplevelState) {
     // create a new window
     final windowId = _uuidGenerator.v4();
 
     final dialogWindow = DialogWindow(
       windowId: windowId,
-      appId: toplevelState.appId,
-      title: toplevelState.title,
-      surfaceId: toplevelState.surfaceId,
-      parentSurfaceId: toplevelState.parentSurfaceId!,
+      appId: toplevelState.appId ?? 'unknown',
+      title: toplevelState.title ?? 'unknown',
+      surfaceId: surfaceId,
+      parentSurfaceId: toplevelState.parent!,
     );
 
     ref.read(windowStateProvider(windowId).notifier).initialize(dialogWindow);
@@ -143,7 +148,7 @@ class WindowManager extends _$WindowManager {
     state = state.add(windowId);
 
     final parentWindowId =
-        ref.read(surfaceWindowMapProvider).get(toplevelState.parentSurfaceId!)!;
+        ref.read(surfaceWindowMapProvider).get(toplevelState.parent!)!;
 
     ref.read(dialogListForWindowProvider.notifier).add(
           parentWindowId,

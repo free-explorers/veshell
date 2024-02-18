@@ -4,6 +4,7 @@ import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/wayland/provider/xdg_popup_state.dart';
+import 'package:shell/wayland/provider/xdg_surface_state.dart';
 import 'package:shell/wayland/widget/surface.dart';
 
 class PopupWidget extends StatelessWidget {
@@ -11,6 +12,7 @@ class PopupWidget extends StatelessWidget {
     required this.surfaceId,
     super.key,
   });
+
   final SurfaceId surfaceId;
 
   @override
@@ -29,28 +31,32 @@ class _Positioner extends HookConsumerWidget {
     required this.surfaceId,
     required this.child,
   });
+
   final SurfaceId surfaceId;
   final Widget child;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final position = ref.watch(
-      xdgPopupStateProvider(surfaceId).select((v) => v.geometry.topLeft),
+      xdgPopupStateProvider(surfaceId).select((v) => v.position),
     );
 
     final firstParentId = ref.watch(
-      xdgPopupStateProvider(surfaceId).select((v) => v.parentSurfaceId),
+      xdgPopupStateProvider(surfaceId).select((v) => v.parent),
     );
     var offset = position;
     var parentId = firstParentId;
 
     // Sum recursively parent position until we reach the toplevel
-    while (ref.read(popupListForSurfaceProvider).containsValue(parentId)) {
+    while (ref
+        .read(xdgSurfaceStateProvider(surfaceId))
+        .popups
+        .contains(parentId)) {
       final parent = ref.read(
         xdgPopupStateProvider(parentId),
       );
-      offset += parent.geometry.topLeft;
-      parentId = parent.parentSurfaceId;
+      offset += parent.position;
+      parentId = parent.parent;
     }
 
     return Positioned(
@@ -67,6 +73,7 @@ class _Animations extends ConsumerStatefulWidget {
     required this.child,
     super.key,
   });
+
   final SurfaceId surfaceId;
   final Widget child;
 

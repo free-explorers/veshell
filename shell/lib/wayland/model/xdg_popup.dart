@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 
@@ -7,6 +9,7 @@ part 'xdg_popup.freezed.dart';
 class XdgPopup with _$XdgPopup {
   /// Factory for XdgPopup
   const factory XdgPopup({
-    SurfaceId? parent,
+    required SurfaceId parent,
+    required Offset position,
   }) = _XdgPopup;
 }

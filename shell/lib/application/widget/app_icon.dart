@@ -11,6 +11,7 @@ class AppIconByPath extends StatelessWidget {
     required this.path,
     super.key,
   });
+
   final String? path;
 
   @override
@@ -86,22 +87,30 @@ class AppIconById extends ConsumerWidget {
     required this.id,
     super.key,
   });
-  final String id;
+
+  final String? id;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return ref.watch(localizedDesktopEntriesProvider).maybeWhen(
           data: (Map<String, LocalizedDesktopEntry> desktopEntries) {
+            if (id == null) {
+              // TODO(roscale): Return a default icon for unknown apps.
+              return const SizedBox();
+            }
             final entry = desktopEntries[id];
             if (entry == null) {
+              // TODO(roscale): Return a default icon for unknown apps.
               return const SizedBox();
             }
             final iconPath = entry.entries[DesktopEntryKey.icon.string];
             if (iconPath == null) {
+              // TODO(roscale): Return a default icon for unknown apps.
               return const SizedBox();
             }
             return AppIconByPath(path: iconPath);
           },
+          // TODO(roscale): Return a default icon for unknown apps.
           orElse: () => const SizedBox(),
         );
   }
@@ -112,12 +121,14 @@ class AppIconByViewId extends ConsumerWidget {
     required this.surfaceId,
     super.key,
   });
+
   final SurfaceId surfaceId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appId =
         ref.watch(xdgToplevelStateProvider(surfaceId).select((v) => v.appId));
+    // TODO: Return an default icon for unknown apps.
     return AppIconById(id: appId);
   }
 }

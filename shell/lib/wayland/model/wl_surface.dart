@@ -7,16 +7,9 @@ typedef TextureId = int;
 typedef SurfaceId = int;
 
 enum SurfaceRole {
-  @JsonValue(0)
-  none,
-  @JsonValue('xdg_toplevel')
-  xdgTopLevel,
-  @JsonValue('xdg_popup')
+  xdgToplevel,
   xdgPopup,
-  @JsonValue('subsurface')
   subsurface,
-  @JsonValue('cursor_image')
-  cursorImage
 }
 
 @freezed

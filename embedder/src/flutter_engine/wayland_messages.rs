@@ -7,12 +7,12 @@ use smithay::utils::{Buffer as BufferCoords, Logical, Point, Rectangle, Size};
 #[serde(rename_all = "camelCase")]
 pub struct SurfaceMessage {
     pub surface_id: u64,
-    pub role: Option<SurfaceRole>,
+    pub role: SurfaceRole,
     pub texture_id: i64,
     pub buffer_delta: Option<MyPoint<i32, Logical>>,
     pub buffer_size: Option<MySize<i32, BufferCoords>>,
     pub scale: i32,
-    pub input_region: Vec<MyRectangle<i32, Logical>>,
+    pub input_region: MyRectangle<i32, Logical>,
     pub subsurfaces_below: Vec<u64>,
     pub subsurfaces_above: Vec<u64>,
 }
@@ -43,8 +43,8 @@ pub struct SubsurfaceMessage {
 #[serde(rename_all = "camelCase")]
 #[serde(tag = "type")]
 pub enum XdgSurfaceRole {
-    Toplevel(ToplevelMessage),
-    Popup(PopupMessage),
+    XdgToplevel(ToplevelMessage),
+    XdgPopup(PopupMessage),
 }
 
 #[derive(Debug, Serialize)]
@@ -58,7 +58,8 @@ pub struct ToplevelMessage {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PopupMessage {
-    pub parent: Option<u64>,
+    pub parent: u64,
+    pub position: MyPoint<i32, Logical>,
 }
 
 #[derive(Debug, Serialize)]

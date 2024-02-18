@@ -9,33 +9,44 @@ part 'wl_surface_state.g.dart';
 @riverpod
 class WlSurfaceState extends _$WlSurfaceState {
   late final KeepAliveLink _keepAliveLink;
+
   @override
   WlSurface build(SurfaceId surfaceId) {
     throw Exception('WlSurface $surfaceId not yet initialized');
   }
 
-  void initialize(CommitSurfaceMessage message) {
+  void initialize({
+    required SurfaceId surfaceId,
+    required SurfaceRole role,
+    required TextureId textureId,
+    required int scale,
+    required Rect inputRegion,
+    required List<int> subsurfacesBelow,
+    required List<int> subsurfacesAbove,
+    required Offset? bufferDelta,
+    required Size? bufferSize,
+  }) {
     _keepAliveLink = ref.keepAlive();
     ref.onDispose(() {
       print('disposing WlSurfaceStateProvider $surfaceId');
     });
-    final surface = message.surface!;
+
     state = WlSurface(
-      role: message.role,
-      textureId: surface.textureId,
+      role: role,
+      textureId: textureId,
       surfacePosition: Offset(
-        surface.bufferDelta?.dx ?? 0.0,
-        surface.bufferDelta?.dy ?? 0.0,
+        bufferDelta?.dx ?? 0.0,
+        bufferDelta?.dy ?? 0.0,
       ),
       surfaceSize: Size(
-        surface.bufferSize?.width ?? 0.0,
-        surface.bufferSize?.height ?? 0.0,
+        bufferSize?.width ?? 0.0,
+        bufferSize?.height ?? 0.0,
       ),
-      scale: surface.scale,
-      subsurfacesBelow: surface.subsurfacesBelow,
-      subsurfacesAbove: surface.subsurfacesAbove,
-      inputRegion: surface.inputRegion,
-      surfaceId: message.surfaceId,
+      scale: scale,
+      subsurfacesBelow: subsurfacesBelow,
+      subsurfacesAbove: subsurfacesAbove,
+      inputRegion: inputRegion,
+      surfaceId: surfaceId,
     );
   }
 
@@ -49,8 +60,6 @@ class WlSurfaceState extends _$WlSurfaceState {
     required List<int> subsurfacesAbove,
     required Rect inputRegion,
   }) {
-    // assert(textureId != state.oldTextureId);
-
     state = state.copyWith(
       role: role,
       textureId: textureId,

@@ -7,8 +7,8 @@ part 'xdg_toplevel.freezed.dart';
 class XdgToplevel with _$XdgToplevel {
   /// Factory for XdgToplevel
   const factory XdgToplevel({
-    required String appId,
-    required String title,
-    SurfaceId? parent,
+    required String? appId,
+    required String? title,
+    required SurfaceId? parent,
   }) = _XdgToplevel;
 }
