@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/wayland/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
@@ -29,49 +31,33 @@ class XdgToplevelSurfaceWidget extends ConsumerWidget {
               visible; */
         }
       },
-      child: Stack(
-        children: [
-          _PointerListener(
-            surfaceId: surfaceId,
-            child: SurfaceWidget(
+      child: _SurfaceFocus(
+        child: Stack(
+          children: [
+            _PointerListener(
               surfaceId: surfaceId,
+              child: SurfaceWidget(
+                surfaceId: surfaceId,
+              ),
             ),
-          ),
-          for (final popupSurfaceId in popupList)
-            PopupWidget(surfaceId: popupSurfaceId),
-        ],
+            for (final popupSurfaceId in popupList)
+              PopupWidget(surfaceId: popupSurfaceId),
+          ],
+        ),
       ),
     );
   }
 }
 
-/* class _SurfaceFocus extends HookConsumerWidget {
+class _SurfaceFocus extends HookConsumerWidget {
   const _SurfaceFocus({
-    required this.surfaceId,
     required this.child,
   });
-  final SurfaceId surfaceId;
   final Widget child;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final focusNode = useFocusNode(debugLabel: 'SurfaceFocus');
-    useEffect(
-      () {
-        focusNode.addListener(() {
-          ref.read(waylandManagerProvider.notifier).request(
-                ActivateWindowRequest(
-                  message: ActivateWindowMessage(
-                    surfaceId: surfaceId,
-                    activate: focusNode.hasFocus,
-                  ),
-                ),
-              );
-        });
-        return null;
-      },
-      [focusNode],
-    );
 
     return Shortcuts(
       shortcuts: {
@@ -99,7 +85,7 @@ class XdgToplevelSurfaceWidget extends ConsumerWidget {
       ),
     );
   }
-} */
+}
 
 class _PointerListener extends ConsumerWidget {
   const _PointerListener({
