@@ -25,6 +25,8 @@ class XdgSurfaceState extends _$XdgSurfaceState {
       print('disposing XdgSurfaceStateProvider $surfaceId');
     });
     state = XdgSurface(
+      // TODO(roscale)
+      mapped: true,
       geometry: geometry,
       popups: IList(),
     );

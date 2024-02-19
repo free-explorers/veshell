@@ -4,7 +4,6 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/model/xdg_popup.dart';
-import 'package:shell/wayland/provider/xdg_surface_state.dart';
 
 part 'xdg_popup_state.g.dart';
 

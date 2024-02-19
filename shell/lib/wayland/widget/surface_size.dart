@@ -9,6 +9,7 @@ class SurfaceSize extends ConsumerWidget {
     required this.child,
     super.key,
   });
+
   final SurfaceId surfaceId;
   final Widget child;
 

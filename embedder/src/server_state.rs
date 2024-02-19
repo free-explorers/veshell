@@ -552,6 +552,15 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
             |_, _, _| true,
         );
 
+        // Make sure Flutter knows about subsurfaces
+        // because Wayland clients have the option to never commit them.
+        // In Wayland, when the parent surface is committed,
+        // subsurfaces are also committed recursively.
+        for surface_id in subsurfaces_below.iter().chain(subsurfaces_above.iter()) {
+            let surface = self.surfaces.get(surface_id).unwrap().clone();
+            self.commit(&surface);
+        }
+
         let (surface_id, role, texture_id, size, buffer_delta, buffer_scale, input_region) =
             with_states(surface, |surface_data| {
                 let (surface_id, old_texture_size) = {

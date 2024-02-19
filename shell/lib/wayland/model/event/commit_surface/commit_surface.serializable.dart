@@ -42,6 +42,7 @@ sealed class SurfaceRoleMessage with _$SurfaceRoleMessage {
   }) = XdgSurfaceRoleMessage;
 
   const factory SurfaceRoleMessage.subsurface({
+    required SurfaceId parent,
     @OffsetConverter() required Offset position,
   }) = SubsurfaceRoleMessage;
 

@@ -9,6 +9,7 @@ part 'xdg_surface.freezed.dart';
 class XdgSurface with _$XdgSurface {
   /// Factory for xdgPopup
   const factory XdgSurface({
+    required bool mapped,
     required Rect? geometry,
     required IList<SurfaceId> popups,
   }) = _XdgSurface;

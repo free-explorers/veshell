@@ -52,13 +52,13 @@ class SurfaceManager extends _$SurfaceManager {
     for (final id in message.subsurfacesBelow) {
       ref
           .read(subsurfaceStateProvider(id).notifier)
-          .set_parent(message.surfaceId);
+          .setParent(message.surfaceId);
     }
 
     for (final id in message.subsurfacesAbove) {
       ref
           .read(subsurfaceStateProvider(id).notifier)
-          .set_parent(message.surfaceId);
+          .setParent(message.surfaceId);
     }
 
     final role = switch (message.role) {
@@ -180,6 +180,8 @@ class SurfaceManager extends _$SurfaceManager {
               parentToplevel =
                   ref.read(xdgPopupStateProvider(parentToplevel)).parent;
             }
+            assert(ref.read(wlSurfaceStateProvider(parentToplevel)).role ==
+                SurfaceRole.xdgToplevel);
 
             ref
                 .read(xdgSurfaceStateProvider(parentToplevel).notifier)
@@ -193,7 +195,12 @@ class SurfaceManager extends _$SurfaceManager {
         }
 
       case SubsurfaceRoleMessage():
-      // TODO: implement subsurface
+        ref
+            .read(subsurfaceStateProvider(message.surfaceId).notifier)
+            .initialize(
+              parent: surfaceRole.parent,
+              position: surfaceRole.position,
+            );
     }
   }
 
@@ -222,6 +229,8 @@ class SurfaceManager extends _$SurfaceManager {
           parentToplevel =
               ref.read(xdgPopupStateProvider(parentToplevel)).parent;
         }
+        assert(ref.read(wlSurfaceStateProvider(parentToplevel)).role ==
+            SurfaceRole.xdgToplevel);
 
         ref
             .read(xdgSurfaceStateProvider(parentToplevel).notifier)
