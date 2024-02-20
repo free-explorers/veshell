@@ -6,7 +6,8 @@ import 'package:uuid/uuid.dart';
 
 part 'screen_list.g.dart';
 
-const initialScreenLength = 2;
+// Currently for testing purposes, we can change the number of screen per monitor
+const initialScreenLength = 1;
 
 /// ScreenList provider
 @Riverpod(keepAlive: true)
