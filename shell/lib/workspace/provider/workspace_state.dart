@@ -5,10 +5,10 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
-import 'package:shell/window/model/window.dart';
-import 'package:shell/window/provider/window.manager.dart';
-import 'package:shell/window/provider/window_state.dart';
-import 'package:shell/workspace/model/workspace.dart';
+import 'package:shell/shared/persistence/persistable_provider.mixin.dart';
+import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/provider/persistant_window_state.dart';
+import 'package:shell/workspace/model/workspace.serializable.dart';
 import 'package:shell/workspace/provider/window_workspace_map.dart';
 
 part 'workspace_state.g.dart';
@@ -39,17 +39,28 @@ enum MeaningfulApplicationCategory { IDE, WebBrowser, Player }
 
 /// Workspace provider
 @riverpod
-class WorkspaceState extends _$WorkspaceState {
+class WorkspaceState extends _$WorkspaceState
+    with
+        PersistableProvider<Workspace,
+            AutoDisposeNotifierProviderRef<Workspace>> {
+  @override
+  String getPersistentFolder() => 'Workspace';
+
+  @override
+  String getPersistentId() => workspaceId;
   @override
   Workspace build(WorkspaceId workspaceId) {
-    return Workspace(
-      workspaceId: workspaceId,
-      tileableWindowList: <String>[].lock,
-      focusedIndex: 0,
-    );
+    persistChanges();
+
+    return getPersisted(Workspace.fromJson) ??
+        Workspace(
+          workspaceId: workspaceId,
+          tileableWindowList: <PersistentWindowId>[].lock,
+          focusedIndex: 0,
+        );
   }
 
-  void reorderWindowList(IList<String> newWindowList) {
+  void reorderWindowList(IList<PersistentWindowId> newWindowList) {
     // first check if the list contain the same elements
     // then check if the elements are in different order
     if (!state.tileableWindowList.equalItems(newWindowList) &&
@@ -64,11 +75,11 @@ class WorkspaceState extends _$WorkspaceState {
     }
   }
 
-  Future<void> addWindow(WindowId windowId) async {
+  Future<void> addWindow(PersistentWindowId windowId) async {
     return insertWindow(windowId, state.tileableWindowList.length);
   }
 
-  Future<void> insertWindow(WindowId windowId, int index) async {
+  Future<void> insertWindow(PersistentWindowId windowId, int index) async {
     final windowWorkspaceMap = ref.read(windowWorkspaceMapProvider);
     if (windowWorkspaceMap.containsKey(windowId)) {
       await ref
@@ -85,19 +96,25 @@ class WorkspaceState extends _$WorkspaceState {
         .set(windowId, state.workspaceId);
   }
 
-  Future<void> removeWindow(WindowId windowId) async {
+  Future<void> removeWindow(PersistentWindowId windowId) async {
+    final removedIndex = state.tileableWindowList.indexOf(windowId);
     final newWindowList = state.tileableWindowList.remove(windowId);
+    final isCurrentyFocused = state.focusedIndex < newWindowList.length &&
+        windowId == state.tileableWindowList[state.focusedIndex];
+
     state = state.copyWith(
       tileableWindowList: newWindowList,
       category: state.forcedCategory ?? await _determineCategory(newWindowList),
+      focusedIndex: isCurrentyFocused
+          ? newWindowList.indexOf(state.tileableWindowList[state.focusedIndex])
+          : state.focusedIndex > removedIndex
+              ? state.focusedIndex - 1
+              : state.focusedIndex,
     );
-  }
 
-  void closeWindow(PersistentWindow window) {
-    if (window.surfaceId != null) {
-      ref.read(windowManagerProvider.notifier).closeWindow(window.windowId);
-    } else {
-      removeWindow(window.windowId);
+    final workspaceId = ref.read(windowWorkspaceMapProvider).get(windowId);
+    if (workspaceId != null && workspaceId == state.workspaceId) {
+      ref.read(windowWorkspaceMapProvider.notifier).remove(windowId);
     }
   }
 
@@ -108,12 +125,13 @@ class WorkspaceState extends _$WorkspaceState {
   }
 
   Future<WorkspaceCategory?> _determineCategory(
-    IList<String> tileableWindowList,
+    IList<PersistentWindowId> tileableWindowList,
   ) async {
     final appIdList = tileableWindowList
         .map(
           (windowId) => ref.read(
-            windowStateProvider(windowId).select((value) => value.appId),
+            persistentWindowStateProvider(windowId)
+                .select((value) => value.appId),
           ),
         )
         .toList();

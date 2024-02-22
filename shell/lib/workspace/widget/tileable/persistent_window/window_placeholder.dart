@@ -4,17 +4,16 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/shared/util/app_launch.dart';
-import 'package:shell/window/model/window.dart';
-import 'package:shell/window/provider/window.manager.dart';
-import 'package:shell/window/provider/window_state.dart';
+import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/provider/persistant_window_state.dart';
 
 class WindowPlaceholder extends HookConsumerWidget {
   const WindowPlaceholder({required this.windowId, super.key});
-  final WindowId windowId;
+  final PersistentWindowId windowId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final window = ref.watch(windowStateProvider(windowId)) as PersistentWindow;
+    final window = ref.watch(persistentWindowStateProvider(windowId));
     final entry = ref
         .watch(
           localizedDesktopEntryForIdProvider(window.appId),
@@ -25,7 +24,7 @@ class WindowPlaceholder extends HookConsumerWidget {
         onTap: entry != null
             ? () {
                 ref
-                    .read(windowStateProvider(windowId).notifier)
+                    .read(persistentWindowStateProvider(windowId).notifier)
                     .update(window.copyWith(isWaitingForSurface: true));
                 launchDesktopEntry(entry.desktopEntry);
               }
