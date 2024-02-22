@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:jovial_svg/jovial_svg.dart';
-import 'package:shell/application/provider/desktop_entries.dart';
+import 'package:shell/application/provider/file_to_scalable_image.dart';
+import 'package:shell/application/provider/icon.dart';
+import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
 

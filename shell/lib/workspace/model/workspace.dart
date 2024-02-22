@@ -11,5 +11,7 @@ class Workspace with _$Workspace {
     required WorkspaceId workspaceId,
     required IList<WindowId> tileableWindowList,
     required int focusedIndex,
+    WorkspaceCategory? category,
+    WorkspaceCategory? forcedCategory,
   }) = _Workspace;
 }
