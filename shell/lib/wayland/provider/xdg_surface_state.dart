@@ -41,7 +41,6 @@ class XdgSurfaceState extends _$XdgSurfaceState {
     state = state.copyWith(
       geometry: geometry,
     );
-    // _checkIfMapped();
   }
 
   void addPopup(SurfaceId surfaceId) {

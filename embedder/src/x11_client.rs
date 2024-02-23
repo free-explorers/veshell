@@ -10,7 +10,7 @@ use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::x11rb::protocol::xproto::{
     AutoRepeatMode, ChangeKeyboardControlAux, ConnectionExt,
 };
-use smithay::wayland::dmabuf::DmabufState;
+use smithay::wayland::dmabuf::{DmabufFeedbackBuilder, DmabufState};
 use smithay::{
     backend::{
         allocator::{
@@ -32,6 +32,7 @@ use smithay::{
     utils::DeviceFd,
 };
 
+use crate::drm_backend::DrmBackend;
 use crate::flutter_engine::FlutterEngine;
 use crate::input_handling::handle_input;
 use crate::{
@@ -149,18 +150,19 @@ pub fn run_x11_client() {
         }
     };
 
-    // let dmabuf_formats = egl_context.dmabuf_texture_formats()
-    //     .iter()
-    //     .copied()
-    //     .collect::<Vec<_>>();
-    // let dmabuf_default_feedback = DmabufFeedbackBuilder::new(node.dev_id(), dmabuf_formats)
-    //     .build()
-    //     .unwrap();
-    let dmabuf_state = DmabufState::new();
-    // let _dmabuf_global = dmabuf_state.create_global_with_default_feedback::<ServerState<X11Data>>(
-    //     &display.handle(),
-    //     &dmabuf_default_feedback,
-    // );
+    let dmabuf_formats = egl_context
+        .dmabuf_texture_formats()
+        .iter()
+        .copied()
+        .collect::<Vec<_>>();
+    let dmabuf_default_feedback = DmabufFeedbackBuilder::new(node.dev_id(), dmabuf_formats)
+        .build()
+        .unwrap();
+    let mut dmabuf_state = DmabufState::new();
+    let _dmabuf_global = dmabuf_state.create_global_with_default_feedback::<ServerState<X11Data>>(
+        &display.handle(),
+        &dmabuf_default_feedback,
+    );
 
     let mut state = ServerState::new(
         display,
