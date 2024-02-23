@@ -5,6 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/model/xdg_surface.dart';
+import 'package:shell/wayland/provider/wl_surface_state.dart';
 
 part 'xdg_surface_state.g.dart';
 
@@ -18,9 +19,17 @@ class XdgSurfaceState extends _$XdgSurfaceState {
     ref.onDispose(() {
       print('disposing XdgSurfaceStateProvider $surfaceId');
     });
+
+    // 1. Is a texture attached?
+    // 2. Does it have a role?
+    ref.listen(
+      wlSurfaceStateProvider(surfaceId)
+          .select((value) => (value.texture, value.role)),
+      (_, __) => _checkIfMapped(),
+    );
+
     return XdgSurface(
-      // TODO(roscale)
-      mapped: true,
+      mapped: false,
       geometry: Rect.zero,
       popups: IList(),
     );
@@ -47,89 +56,18 @@ class XdgSurfaceState extends _$XdgSurfaceState {
     );
   }
 
-// void dispose() {
-//   switch (state.role) {
-//     case SurfaceRole.xdgTopLevel:
-//       ref.read(xdgToplevelStatesProvider(surfaceId).notifier).dispose();
-//     case SurfaceRole.xdgPopup:
-//       ref.read(xdgPopupStatesProvider(surfaceId).notifier).dispose();
-//     case SurfaceRole.subsurface:
-//     case SurfaceRole.none:
-//     case SurfaceRole.cursorImage:
-//       break;
-//   }
-//   ref.invalidate(xdgSurfaceStatesProvider(surfaceId));
-// }
-//
-// void _checkIfMapped() {
-//   final mapped = state.role != SurfaceRole.none &&
-//           ref.read(wlSurfaceStateProvider(surfaceId)).textureId != -1 &&
-//           ref.read(wlSurfaceStateProvider(surfaceId)).role ==
-//               SurfaceRole.xdgPopup ||
-//       ref.read(wlSurfaceStateProvider(surfaceId)).role ==
-//           SurfaceRole.xdgTopLevel;
-//
-//   final wasMapped = state.mapped;
-//   state = state.copyWith(
-//     mapped: mapped,
-//   );
-//
-//   if (!wasMapped && mapped) {
-//     _map();
-//   } else if (wasMapped && !mapped) {
-//     _unmap();
-//   }
-// }
-//
-// void _map() {
-//   final role = state.role;
-//
-//   switch (role) {
-//     case SurfaceRole.xdgTopLevel:
-//       ref.read(platformApiProvider).windowMappedSink.add(surfaceId);
-//
-//     case SurfaceRole.xdgPopup:
-//       final widgetExists = ref
-//               .read(xdgPopupStatesProvider(surfaceId))
-//               .animationsKey
-//               .currentWidget !=
-//           null;
-//       if (widgetExists) {
-//         ref
-//             .read(xdgPopupStatesProvider(surfaceId).notifier)
-//             .cancelClosingAnimation();
-//       } else {
-//         ref.read(popupStackChildrenProvider.notifier).add(surfaceId);
-//       }
-//
-//     case SurfaceRole.subsurface:
-//     case SurfaceRole.none:
-//     case SurfaceRole.cursorImage:
-//       if (kDebugMode) {
-//         assert(false);
-//       }
-//   }
-// }
-//
-// Future<void> _unmap() async {
-//   final role = state.role;
-//   switch (role) {
-//     case SurfaceRole.subsurface:
-//     case SurfaceRole.none:
-//     case SurfaceRole.cursorImage:
-//       if (kDebugMode) {
-//         assert(false);
-//       }
-//
-//     case SurfaceRole.xdgTopLevel:
-//       ref.read(platformApiProvider).windowUnmappedSink.add(surfaceId);
-//
-//     case SurfaceRole.xdgPopup:
-//       // This future will never complete if the animation is canceled.
-//       await ref
-//           .read(xdgPopupStatesProvider(surfaceId).notifier)
-//           .animateClosing();
-//       ref.read(popupStackChildrenProvider.notifier).remove(surfaceId);
-//   }
-// }
+  void _checkIfMapped() {
+    final hasTexture =
+        ref.read(wlSurfaceStateProvider(surfaceId)).texture != null;
+
+    final hasRole = ref.read(wlSurfaceStateProvider(surfaceId)).role != null;
+
+    state = state.copyWith(
+      mapped: hasTexture && hasRole,
+    );
+  }
+
+  void dispose() {
+    _keepAliveLink.close();
+  }
 }

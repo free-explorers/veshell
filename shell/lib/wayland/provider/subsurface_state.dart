@@ -12,7 +12,7 @@ part 'subsurface_state.g.dart';
 class SubsurfaceState extends _$SubsurfaceState {
   late final KeepAliveLink _keepAliveLink;
 
-  ProviderSubscription<SurfaceRole>? parentRoleSub;
+  ProviderSubscription<SurfaceRole?>? parentRoleSub;
   ProviderSubscription<bool>? parentMappedSub;
 
   @override
@@ -34,19 +34,45 @@ class SubsurfaceState extends _$SubsurfaceState {
       position: Offset.zero,
     );
 
-    ref
-      ..listen(
-        wlSurfaceStateProvider(surfaceId).select((state) => state.texture),
-        (_, __) => _checkIfMapped(),
-      )
-      ..listen(
-        wlSurfaceStateProvider(state.parent),
-        (_, __) => _checkIfMapped(),
-      );
+    // 1. Is a texture attached?
+    ref.listen(
+      wlSurfaceStateProvider(surfaceId).select((state) => state.texture),
+      (_, __) => _checkIfMapped(),
+    );
+
+    // 2. Is the parent mapped?
+    // For this, we have to listen to changes in parent's role
+    // and its mapped state.
+    _subscribeToParentRole();
+  }
+
+  void _subscribeToParentRole() {
+    parentRoleSub?.close();
+    parentRoleSub = ref.listen(
+      wlSurfaceStateProvider(state.parent).select((value) => value.role),
+      (_, __) => _subscribeToParentMappedProperty(),
+    );
+    _checkIfMapped();
+  }
+
+  void _subscribeToParentMappedProperty() {
+    parentMappedSub?.close();
+    parentMappedSub =
+        switch (ref.read(wlSurfaceStateProvider(state.parent)).role) {
+      SurfaceRole.xdgToplevel || SurfaceRole.xdgPopup => ref.listen(
+          xdgSurfaceStateProvider(state.parent).select((state) => state.mapped),
+          (_, __) => _checkIfMapped(),
+        ),
+      SurfaceRole.subsurface => ref.listen(
+          subsurfaceStateProvider(state.parent).select((state) => state.mapped),
+          (_, __) => _checkIfMapped(),
+        ),
+      null => null,
+    };
+    _checkIfMapped();
   }
 
   void _checkIfMapped() {
-    // TODO(roscale): Make textureId nullable instead of -1.
     final hasTexture =
         ref.read(wlSurfaceStateProvider(surfaceId)).texture != null;
 
@@ -69,38 +95,7 @@ class SubsurfaceState extends _$SubsurfaceState {
     state = state.copyWith(
       parent: parent,
     );
-    _checkIfMapped();
-
-    // if (!ref.read(surfaceManagerProvider).contains(parent)) {
-    //   parentRoleSub?.close();
-    //   parentMappedSub?.close();
-    //   return;
-    // }
-    //
-    // parentRoleSub?.close();
-    /* parentRoleSub = ref.listen(
-      wlSurfaceStateProvider(parent).select((value) => value.role),
-      (_, __) => _checkIfMapped(),
-    ); */
-
-    // parentMappedSub?.close();
-    // print("$surfaceId, parent: $parent");
-    /*final role = ref.read(wlSurfaceStateProvider(parent)).role;
-     switch (role) {
-      case SurfaceRole.xdgTopLevel:
-      case SurfaceRole.xdgPopup:
-        parentMappedSub = ref.listen(
-          xdgSurfaceStatesProvider(parent).select((state) => state.mapped),
-          (_, __) => _checkIfMapped(),
-        );
-      case SurfaceRole.subsurface:
-        parentMappedSub = ref.listen(
-          subsurfaceStatesProvider(parent).select((state) => state.mapped),
-          (_, __) => _checkIfMapped(),
-        );
-      case SurfaceRole.none:
-      case SurfaceRole.cursorImage:
-    } */
+    _subscribeToParentRole();
   }
 
   void commit({required Offset position}) {
@@ -110,6 +105,8 @@ class SubsurfaceState extends _$SubsurfaceState {
   }
 
   void dispose() {
+    parentRoleSub?.close();
+    parentMappedSub?.close();
     _keepAliveLink.close();
   }
 }

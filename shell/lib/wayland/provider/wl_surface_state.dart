@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
+import 'package:shell/wayland/provider/subsurface_state.dart';
+import 'package:shell/wayland/provider/xdg_surface_state.dart';
 
 part 'wl_surface_state.g.dart';
 
@@ -59,6 +61,17 @@ class WlSurfaceState extends _$WlSurfaceState {
       subsurfacesBelow: state.subsurfacesBelow.remove(subsurface),
       subsurfacesAbove: state.subsurfacesAbove.remove(subsurface),
     );
+  }
+
+  bool mapped() {
+    switch (state.role) {
+      case SurfaceRole.xdgToplevel || SurfaceRole.xdgPopup:
+        return ref.read(xdgSurfaceStateProvider(surfaceId)).mapped;
+      case SurfaceRole.subsurface:
+        return ref.read(subsurfaceStateProvider(surfaceId)).mapped;
+      case null:
+        return false;
+    }
   }
 
   void dispose() {
