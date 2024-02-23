@@ -14,20 +14,14 @@ class XdgSurfaceState extends _$XdgSurfaceState {
 
   @override
   XdgSurface build(SurfaceId surfaceId) {
-    throw Exception('XdgSurface $surfaceId state was not initialized');
-  }
-
-  void initialize({
-    required Rect? geometry,
-  }) {
     _keepAliveLink = ref.keepAlive();
     ref.onDispose(() {
       print('disposing XdgSurfaceStateProvider $surfaceId');
     });
-    state = XdgSurface(
+    return XdgSurface(
       // TODO(roscale)
       mapped: true,
-      geometry: geometry,
+      geometry: Rect.zero,
       popups: IList(),
     );
   }

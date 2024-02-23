@@ -48,5 +48,6 @@ class PhysicalProperties with _$PhysicalProperties {
     required String model,
   }) = _PhysicalProperties;
 
-  factory PhysicalProperties.fromJson(Map<String, dynamic> json) => _$PhysicalPropertiesFromJson(json);
+  factory PhysicalProperties.fromJson(Map<String, dynamic> json) =>
+      _$PhysicalPropertiesFromJson(json);
 }

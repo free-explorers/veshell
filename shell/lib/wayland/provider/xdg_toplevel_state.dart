@@ -4,6 +4,7 @@ import 'package:shell/wayland/model/request/maximize_window/maximize_window.seri
 import 'package:shell/wayland/model/request/resize_window/resize_window.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/model/xdg_toplevel.dart';
+import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
 part 'xdg_toplevel_state.g.dart';
@@ -17,21 +18,18 @@ class XdgToplevelState extends _$XdgToplevelState {
     throw Exception('XdgToplevel $surfaceId state was not initialized');
   }
 
-  void initialize({
-    required int? parent,
-    required String? appId,
-    required String? title,
-  }) {
+  void initialize() {
     _keepAliveLink = ref.keepAlive();
     ref.onDispose(() {
       print('disposing XdgToplevelStateProvider $surfaceId');
     });
-    print('initializing XdgToplevelStateProvider $surfaceId ${appId}');
 
-    state = XdgToplevel(
-      appId: appId,
-      title: title,
-      parent: parent,
+    ref.read(newXdgToplevelSurfaceProvider.notifier).notify(surfaceId);
+
+    state = const XdgToplevel(
+      appId: null,
+      title: null,
+      parent: null,
     );
   }
 

@@ -22,7 +22,6 @@ class SubsurfaceState extends _$SubsurfaceState {
 
   void initialize({
     required SurfaceId parent,
-    required Offset position,
   }) {
     _keepAliveLink = ref.keepAlive();
     ref.onDispose(() {
@@ -32,12 +31,12 @@ class SubsurfaceState extends _$SubsurfaceState {
     state = Subsurface(
       mapped: false,
       parent: parent,
-      position: position,
+      position: Offset.zero,
     );
 
     ref
       ..listen(
-        wlSurfaceStateProvider(surfaceId).select((state) => state.textureId),
+        wlSurfaceStateProvider(surfaceId).select((state) => state.texture),
         (_, __) => _checkIfMapped(),
       )
       ..listen(
@@ -49,7 +48,7 @@ class SubsurfaceState extends _$SubsurfaceState {
   void _checkIfMapped() {
     // TODO(roscale): Make textureId nullable instead of -1.
     final hasTexture =
-        ref.read(wlSurfaceStateProvider(surfaceId)).textureId != -1;
+        ref.read(wlSurfaceStateProvider(surfaceId)).texture != null;
 
     final parentMapped =
         switch (ref.read(wlSurfaceStateProvider(state.parent)).role) {
@@ -58,6 +57,7 @@ class SubsurfaceState extends _$SubsurfaceState {
         ref.read(xdgSurfaceStateProvider(state.parent)).mapped,
       SurfaceRole.subsurface =>
         ref.read(subsurfaceStateProvider(state.parent)).mapped,
+      null => false,
     };
 
     state = state.copyWith(
@@ -110,6 +110,6 @@ class SubsurfaceState extends _$SubsurfaceState {
   }
 
   void dispose() {
-    ref.invalidateSelf();
+    _keepAliveLink.close();
   }
 }

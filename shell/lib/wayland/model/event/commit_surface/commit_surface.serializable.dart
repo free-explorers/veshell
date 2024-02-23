@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/shared/util/json_converter/offset.dart';
 import 'package:shell/shared/util/json_converter/rect.dart';
@@ -19,12 +20,12 @@ sealed class CommitSurfaceMessage
   /// Factory
   factory CommitSurfaceMessage({
     required SurfaceId surfaceId,
-    required SurfaceRoleMessage role,
+    required SurfaceRoleMessage? role,
     required TextureId textureId,
     required int scale,
     @RectConverter() required Rect inputRegion,
-    required List<int> subsurfacesBelow,
-    required List<int> subsurfacesAbove,
+    required IList<int> subsurfacesBelow,
+    required IList<int> subsurfacesAbove,
     @OffsetConverter() Offset? bufferDelta,
     @SizeConverter() Size? bufferSize,
   }) = _CommitSurfaceMessage;
@@ -35,7 +36,6 @@ sealed class CommitSurfaceMessage
 
 @Freezed(unionKey: 'type')
 sealed class SurfaceRoleMessage with _$SurfaceRoleMessage {
-
   const factory SurfaceRoleMessage.xdgSurface({
     @RectConverter() required Rect? geometry,
     required XdgSurfaceMessage role,
@@ -52,7 +52,6 @@ sealed class SurfaceRoleMessage with _$SurfaceRoleMessage {
 
 @Freezed(unionKey: 'type')
 sealed class XdgSurfaceMessage with _$XdgSurfaceMessage {
-
   const factory XdgSurfaceMessage.xdgToplevel({
     required SurfaceId? parent,
     required String? appId,

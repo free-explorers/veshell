@@ -7,7 +7,7 @@ use smithay::utils::{Buffer as BufferCoords, Logical, Point, Rectangle, Size};
 #[serde(rename_all = "camelCase")]
 pub struct SurfaceMessage {
     pub surface_id: u64,
-    pub role: SurfaceRole,
+    pub role: Option<SurfaceRole>,
     pub texture_id: i64,
     pub buffer_delta: Option<MyPoint<i32, Logical>>,
     pub buffer_size: Option<MySize<i32, BufferCoords>>,

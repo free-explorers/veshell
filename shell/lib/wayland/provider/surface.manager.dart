@@ -4,11 +4,16 @@ import 'dart:ui';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/wayland/model/event/commit_surface/commit_surface.serializable.dart';
+import 'package:shell/wayland/model/event/destroy_popup/destroy_popup.serializable.dart';
+import 'package:shell/wayland/model/event/destroy_subsurface/destroy_subsurface.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_surface/destroy_surface.serializable.dart';
+import 'package:shell/wayland/model/event/new_popup/new_popup.serializable.dart';
+import 'package:shell/wayland/model/event/new_subsurface/new_subsurface.serializable.dart';
+import 'package:shell/wayland/model/event/new_surface/new_surface.serializable.dart';
+import 'package:shell/wayland/model/event/new_toplevel/new_toplevel.serializable.dart';
 import 'package:shell/wayland/model/event/wayland_event.serializable.dart';
 import 'package:shell/wayland/model/request/unregister_view_texture/unregister_view_texture.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
-import 'package:shell/wayland/provider/popup_stack_state.dart';
 import 'package:shell/wayland/provider/subsurface_state.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
@@ -23,11 +28,23 @@ class SurfaceManager extends _$SurfaceManager {
   @override
   ISet<int> build() {
     ref.listen(waylandManagerProvider, (_, next) {
-      if (next case AsyncData(value: final CommitSurfaceEvent event)) {
-        _commitSurface(event.message);
-      }
-      if (next case AsyncData(value: final DestroySurfaceEvent event)) {
-        _destroySurface(event.message);
+      switch (next) {
+        case AsyncData(value: final NewSurfaceEvent event):
+          _newSurface(event.message);
+        case AsyncData(value: final NewToplevelEvent event):
+          _newToplevel(event.message);
+        case AsyncData(value: final NewPopupEvent event):
+          _newPopup(event.message);
+        case AsyncData(value: final NewSubsurfaceEvent event):
+          _newSubsurface(event.message);
+        case AsyncData(value: final CommitSurfaceEvent event):
+          _commitSurface(event.message);
+        case AsyncData(value: final DestroySurfaceEvent event):
+          _destroySurface(event.message);
+        case AsyncData(value: final DestroySubsurfaceEvent event):
+          _destroySubsurface(event.message);
+        case AsyncData(value: final DestroyPopupEvent event):
+          _destroyPopup(event.message);
       }
     });
     return ISet<int>();
@@ -42,40 +59,44 @@ class SurfaceManager extends _$SurfaceManager {
         );
   }
 
+  void _newSurface(NewSurfaceMessage message) {
+    ref.read(wlSurfaceStateProvider(message.surfaceId).notifier).initialize();
+    state = state.add(message.surfaceId);
+  }
+
+  void _newToplevel(NewToplevelMessage message) {
+    ref.read(xdgToplevelStateProvider(message.surfaceId).notifier).initialize();
+  }
+
+  void _newPopup(NewPopupMessage message) {
+    ref.read(xdgPopupStateProvider(message.surfaceId).notifier).initialize(
+          parent: message.parent,
+          position: message.position,
+        );
+    ref
+        .read(xdgSurfaceStateProvider(message.parent).notifier)
+        .addPopup(message.surfaceId);
+  }
+
+  void _newSubsurface(NewSubsurfaceMessage message) {
+    ref.read(subsurfaceStateProvider(message.surfaceId).notifier).initialize(
+          parent: message.parent,
+        );
+  }
+
   void _commitSurface(CommitSurfaceMessage message) {
-    final isNewSurface = !state.contains(message.surfaceId);
-    if (isNewSurface) {
-      _onNewSurface(message);
-      return;
-    }
-
-    for (final id in message.subsurfacesBelow) {
-      ref
-          .read(subsurfaceStateProvider(id).notifier)
-          .setParent(message.surfaceId);
-    }
-
-    for (final id in message.subsurfacesAbove) {
-      ref
-          .read(subsurfaceStateProvider(id).notifier)
-          .setParent(message.surfaceId);
-    }
-
     final role = switch (message.role) {
       XdgSurfaceRoleMessage(:final role) => switch (role) {
           XdgToplevelMessage() => SurfaceRole.xdgToplevel,
           XdgPopupMessage() => SurfaceRole.xdgPopup,
         },
       SubsurfaceRoleMessage() => SurfaceRole.subsurface,
+      null => null,
     };
 
     ref.read(wlSurfaceStateProvider(message.surfaceId).notifier).commit(
           role: role,
           textureId: message.textureId,
-          surfacePosition: Offset(
-            message.bufferDelta?.dx ?? 0.0,
-            message.bufferDelta?.dy ?? 0.0,
-          ),
           surfaceSize: Size(
             message.bufferSize?.width ?? 0.0,
             message.bufferSize?.height ?? 0.0,
@@ -114,132 +135,43 @@ class SurfaceManager extends _$SurfaceManager {
         ref.read(subsurfaceStateProvider(message.surfaceId).notifier).commit(
               position: surfaceRole.position,
             );
-    }
-  }
-
-  void _onNewSurface(CommitSurfaceMessage message) {
-    print('New surface: ${message.surfaceId} ${message.role}');
-
-    state = state.add(message.surfaceId);
-
-    final role = switch (message.role) {
-      XdgSurfaceRoleMessage(:final role) => switch (role) {
-          XdgToplevelMessage() => SurfaceRole.xdgToplevel,
-          XdgPopupMessage() => SurfaceRole.xdgPopup,
-        },
-      SubsurfaceRoleMessage() => SurfaceRole.subsurface,
-    };
-
-    ref.read(wlSurfaceStateProvider(message.surfaceId).notifier).initialize(
-          surfaceId: message.surfaceId,
-          role: role,
-          textureId: message.textureId,
-          scale: message.scale,
-          inputRegion: message.inputRegion,
-          subsurfacesBelow: message.subsurfacesBelow,
-          subsurfacesAbove: message.subsurfacesAbove,
-          bufferDelta: message.bufferDelta,
-          bufferSize: message.bufferSize,
-        );
-
-    final surfaceRole = message.role;
-    switch (surfaceRole) {
-      case XdgSurfaceRoleMessage(:final role):
-        ref
-            .read(xdgSurfaceStateProvider(message.surfaceId).notifier)
-            .initialize(
-              geometry: surfaceRole.geometry,
-            );
-
-        switch (role) {
-          case XdgToplevelMessage():
-            ref
-                .read(xdgToplevelStateProvider(message.surfaceId).notifier)
-                .initialize(
-                  parent: role.parent,
-                  appId: role.appId,
-                  title: role.title,
-                );
-            ref.read(newXdgToplevelSurfaceProvider.notifier).notify(
-                  message.surfaceId,
-                );
-
-          case XdgPopupMessage():
-            ref
-                .read(xdgPopupStateProvider(message.surfaceId).notifier)
-                .initialize(
-                  parent: role.parent,
-                  position: role.position,
-                );
-
-            // TODO: Implement proper popup hierarchy.
-            // Don't just attach them to the nearest toplevel.
-            var parentToplevel = role.parent;
-            while (ref.read(wlSurfaceStateProvider(parentToplevel)).role ==
-                SurfaceRole.xdgPopup) {
-              parentToplevel =
-                  ref.read(xdgPopupStateProvider(parentToplevel)).parent;
-            }
-            assert(ref.read(wlSurfaceStateProvider(parentToplevel)).role ==
-                SurfaceRole.xdgToplevel);
-
-            ref
-                .read(xdgSurfaceStateProvider(parentToplevel).notifier)
-                .addPopup(message.surfaceId);
-
-            ref
-                .read(xdgPopupStateProvider(message.surfaceId).notifier)
-                .setParent(parentToplevel);
-
-            ref.read(popupStackStateProvider.notifier).add(message.surfaceId);
-        }
-
-      case SubsurfaceRoleMessage():
-        ref
-            .read(subsurfaceStateProvider(message.surfaceId).notifier)
-            .initialize(
-              parent: surfaceRole.parent,
-              position: surfaceRole.position,
-            );
+      case null:
+      // Nothing to do.
     }
   }
 
   Future<void> _destroySurface(DestroySurfaceMessage message) async {
     print('Destroy surface: ${message.surfaceId}');
-    if (!state.contains(message.surfaceId)) {
-      return;
-    }
+    assert(state.contains(message.surfaceId));
+
     final wlSurfaceState = ref.read(wlSurfaceStateProvider(message.surfaceId));
-    ref.read(wlSurfaceStateProvider(message.surfaceId).notifier).dispose();
 
-    switch (wlSurfaceState.role) {
-      case SurfaceRole.xdgToplevel:
-        ref
-            .read(xdgToplevelStateProvider(message.surfaceId).notifier)
-            .dispose();
-      case SurfaceRole.xdgPopup:
-        final popup = ref.read(xdgPopupStateProvider(message.surfaceId));
-        ref.read(popupStackStateProvider.notifier).remove(message.surfaceId);
-
-        // TODO: Implement proper popup hierarchy.
-        // Don't just attach them to the nearest toplevel.
-        var parentToplevel = popup.parent;
-        while (ref.read(wlSurfaceStateProvider(parentToplevel)).role ==
-            SurfaceRole.xdgPopup) {
-          parentToplevel =
-              ref.read(xdgPopupStateProvider(parentToplevel)).parent;
-        }
-        assert(ref.read(wlSurfaceStateProvider(parentToplevel)).role ==
-            SurfaceRole.xdgToplevel);
-
-        ref
-            .read(xdgSurfaceStateProvider(parentToplevel).notifier)
-            .removePopup(message.surfaceId);
-        ref.read(xdgPopupStateProvider(message.surfaceId).notifier).dispose();
-      case SurfaceRole.subsurface:
-        ref.read(subsurfaceStateProvider(message.surfaceId).notifier).dispose();
+    // TODO: Patch Smithay to send a destroy event for subsurfaces.
+    // This workaround doesn't work anymore if only the subsurface is destroyed
+    // and not the wayland surface itself.
+    if (wlSurfaceState.role case SurfaceRole.subsurface) {
+      _destroySubsurface(
+          DestroySubsurfaceMessage(surfaceId: message.surfaceId));
     }
+
+    ref.read(wlSurfaceStateProvider(message.surfaceId).notifier).dispose();
     state = state.remove(message.surfaceId);
+  }
+
+  void _destroySubsurface(DestroySubsurfaceMessage message) {
+    final parent = ref.read(subsurfaceStateProvider(message.surfaceId)).parent;
+    ref
+        .read(wlSurfaceStateProvider(parent).notifier)
+        .removeSubsurface(message.surfaceId);
+    ref.read(subsurfaceStateProvider(message.surfaceId).notifier).dispose();
+  }
+
+  void _destroyPopup(DestroyPopupMessage message) {
+    final parent = ref.read(xdgPopupStateProvider(message.surfaceId)).parent;
+    ref
+        .read(xdgSurfaceStateProvider(parent).notifier)
+        .removePopup(message.surfaceId);
+    ref.read(xdgPopupStateProvider(message.surfaceId).notifier).dispose();
   }
 }
 

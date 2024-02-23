@@ -91,7 +91,11 @@ class AnimationsState extends ConsumerState<_Animations>
     begin: Offset(
       0,
       -10.0 /
-          ref.read(wlSurfaceStateProvider(widget.surfaceId)).surfaceSize.height,
+          ref
+              .read(wlSurfaceStateProvider(widget.surfaceId))
+              .texture!
+              .size
+              .height,
     ),
     end: Offset.zero,
   ).animate(

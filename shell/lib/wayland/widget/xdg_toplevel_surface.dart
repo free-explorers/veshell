@@ -18,11 +18,22 @@ class XdgToplevelSurfaceWidget extends ConsumerWidget {
 
   final SurfaceId surfaceId;
 
+  void _collectPopupList(List<int> ids, WidgetRef ref, SurfaceId surfaceId) {
+    final popups = ref.watch(
+        xdgSurfaceStateProvider(surfaceId).select((value) => value.popups));
+    ids.addAll(popups);
+    for (final popupId in popups) {
+      _collectPopupList(ids, ref, popupId);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final popupList = ref.watch(
-      xdgSurfaceStateProvider(surfaceId).select((value) => value.popups),
-    );
+    final popupList = <int>[];
+    _collectPopupList(popupList, ref, surfaceId);
+
+    print("popupList: $popupList");
+
     return VisibilityDetector(
       key: ValueKey(surfaceId),
       onVisibilityChanged: (VisibilityInfo info) {

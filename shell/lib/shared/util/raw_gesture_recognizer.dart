@@ -8,9 +8,12 @@ class RawGestureRecognizer extends GestureRecognizer {
   });
 
   GestureDisposition? Function(PointerDownEvent)? onPointerDown;
-  GestureDisposition? Function(PointerMoveEvent, GestureDisposition?)? onPointerMove;
-  GestureDisposition? Function(PointerUpEvent, GestureDisposition?)? onPointerUp;
-  GestureDisposition? Function(PointerCancelEvent, GestureDisposition?)? onPointerCancel;
+  GestureDisposition? Function(PointerMoveEvent, GestureDisposition?)?
+      onPointerMove;
+  GestureDisposition? Function(PointerUpEvent, GestureDisposition?)?
+      onPointerUp;
+  GestureDisposition? Function(PointerCancelEvent, GestureDisposition?)?
+      onPointerCancel;
   void Function(PointerEvent)? onWin;
   void Function(PointerEvent)? onLose;
 
@@ -21,8 +24,10 @@ class RawGestureRecognizer extends GestureRecognizer {
     assert(_pointers != null);
     assert(!_pointers!.containsKey(event.pointer));
 
-    GestureBinding.instance.pointerRouter.addRoute(event.pointer, _handleEvent, event.transform);
-    GestureArenaEntry entry = GestureBinding.instance.gestureArena.add(event.pointer, this);
+    GestureBinding.instance.pointerRouter
+        .addRoute(event.pointer, _handleEvent, event.transform);
+    GestureArenaEntry entry =
+        GestureBinding.instance.gestureArena.add(event.pointer, this);
     final pointerData = _PointerData(entry, event);
     _pointers![event.pointer] = pointerData;
   }
@@ -37,7 +42,8 @@ class RawGestureRecognizer extends GestureRecognizer {
         final gestureDisposition = invokeCallback('onPointerDown', () {
           return onPointerDown!(event);
         });
-        _resolveGestureArenaEntry(pointerData.gestureArenaEntry, gestureDisposition);
+        _resolveGestureArenaEntry(
+            pointerData.gestureArenaEntry, gestureDisposition);
       }
     } else if (event is PointerMoveEvent) {
       _pointers![event.pointer]!.lastPointerEvent = event;
@@ -45,7 +51,8 @@ class RawGestureRecognizer extends GestureRecognizer {
         final gestureDisposition = invokeCallback('onPointerMove', () {
           return onPointerMove!(event, pointerData.gestureDisposition);
         });
-        _resolveGestureArenaEntry(pointerData.gestureArenaEntry, gestureDisposition);
+        _resolveGestureArenaEntry(
+            pointerData.gestureArenaEntry, gestureDisposition);
       }
     } else if (event is PointerUpEvent) {
       GestureDisposition? gestureDisposition = GestureDisposition.accepted;
@@ -111,7 +118,8 @@ class RawGestureRecognizer extends GestureRecognizer {
     _resolveGestureArenaEntry(entry, gestureDisposition);
   }
 
-  void _resolveGestureArenaEntry(GestureArenaEntry entry, GestureDisposition? gestureDisposition) {
+  void _resolveGestureArenaEntry(
+      GestureArenaEntry entry, GestureDisposition? gestureDisposition) {
     if (gestureDisposition != null) {
       entry.resolve(gestureDisposition);
     }
@@ -119,7 +127,8 @@ class RawGestureRecognizer extends GestureRecognizer {
 
   @override
   void dispose() {
-    _pointers!.keys.toList().forEach((int pointer) => _removeState(pointer, GestureDisposition.rejected));
+    _pointers!.keys.toList().forEach(
+        (int pointer) => _removeState(pointer, GestureDisposition.rejected));
     assert(_pointers!.isEmpty);
     _pointers = null;
     super.dispose();

@@ -364,13 +364,9 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             .change_repeat_info(repeat_delay as i32, repeat_rate as i32);
     }
 
-    fn construct_surface_message(&self, surface: &WlSurface) -> Option<SurfaceMessage> {
+    fn construct_surface_message(&self, surface: &WlSurface) -> SurfaceMessage {
         let surface_id = get_surface_id(surface);
-
-        let role = match self.construct_surface_role_message(surface) {
-            Some(role) => role,
-            None => return None,
-        };
+        let role = self.construct_surface_role_message(surface);
 
         let (buffer_delta, buffer_scale, input_region) = with_states(surface, |surface_data| {
             let surface_state = surface_data.cached_state.current::<SurfaceAttributes>();
@@ -409,7 +405,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
 
         let (subsurfaces_below, subsurfaces_above) = get_direct_subsurfaces(surface);
 
-        let surface_message = SurfaceMessage {
+        SurfaceMessage {
             surface_id,
             role,
             texture_id,
@@ -419,8 +415,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             input_region: input_region.into(),
             subsurfaces_below,
             subsurfaces_above,
-        };
-        Some(surface_message)
+        }
     }
 
     fn construct_surface_role_message(&self, surface: &WlSurface) -> Option<SurfaceRole> {
@@ -587,22 +582,60 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
         surface.with_pending_state(|state| {
             state.states.set(xdg_toplevel::State::Activated);
         });
+
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method(
+            "new_toplevel",
+            Some(Box::new(json!({
+                "surfaceId": surface_id,
+            }))),
+            None,
+        );
     }
 
-    fn new_popup(&mut self, _surface: PopupSurface, _positioner: PositionerState) {
-        _surface.with_pending_state(|state| {
-            state.geometry = _positioner.get_geometry();
-            state.positioner = _positioner;
+    fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {
+        surface.with_pending_state(|state| {
+            state.geometry = positioner.get_geometry();
+            state.positioner = positioner;
         });
-        let surface_id = with_states(_surface.wl_surface(), |surface_data| {
-            surface_data
+
+        let (surface_id, parent) = with_states(surface.wl_surface(), |surface_data| {
+            let surface_id = surface_data
                 .data_map
                 .get::<RefCell<MySurfaceState>>()
                 .unwrap()
                 .borrow()
-                .surface_id
+                .surface_id;
+
+            let parent = surface_data
+                .data_map
+                .get::<XdgPopupSurfaceData>()
+                .unwrap()
+                .lock()
+                .unwrap()
+                .parent
+                .clone();
+
+            (surface_id, parent)
         });
-        self.xdg_popups.insert(surface_id, _surface.clone());
+
+        self.xdg_popups.insert(surface_id, surface.clone());
+
+        // TODO: Revise this unwrap.
+        // Wayland states that popups without parents can exist but I don't know in what case.
+        let parent = get_surface_id(&parent.unwrap());
+        let position: MyPoint<i32, Logical> = positioner.get_geometry().loc.into();
+
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method(
+            "new_popup",
+            Some(Box::new(json!({
+                "surfaceId": surface_id,
+                "parent": parent,
+                "position": position,
+            }))),
+            None,
+        );
     }
 
     fn move_request(&mut self, surface: ToplevelSurface, _seat: WlSeat, _serial: Serial) {
@@ -673,6 +706,27 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
                 .surface_id
         });
         self.xdg_toplevels.remove(&surface_id);
+    }
+
+    fn popup_destroyed(&mut self, surface: PopupSurface) {
+        let surface_id = with_states(surface.wl_surface(), |surface_data| {
+            surface_data
+                .data_map
+                .get::<RefCell<MySurfaceState>>()
+                .unwrap()
+                .borrow()
+                .surface_id
+        });
+        self.xdg_popups.remove(&surface_id);
+
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method(
+            "destroy_popup",
+            Some(Box::new(json!({
+                "surfaceId": surface_id,
+            }))),
+            None,
+        );
     }
 }
 
@@ -751,6 +805,30 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
             })
         });
         self.surfaces.insert(surface_id, surface.clone());
+
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method(
+            "new_surface",
+            Some(Box::new(json!({
+                "surfaceId": surface_id,
+            }))),
+            None,
+        );
+    }
+
+    fn new_subsurface(&mut self, surface: &WlSurface, parent: &WlSurface) {
+        let surface_id = get_surface_id(surface);
+        let parent = get_surface_id(parent);
+
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method(
+            "new_subsurface",
+            Some(Box::new(json!({
+                "surfaceId": surface_id,
+                "parent": parent,
+            }))),
+            None,
+        );
     }
 
     fn commit(&mut self, surface: &WlSurface) {
@@ -867,10 +945,7 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
             )
         });
 
-        let surface_message = match self.construct_surface_message(surface) {
-            Some(surface_message) => surface_message,
-            None => return,
-        };
+        let surface_message = self.construct_surface_message(surface);
 
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
@@ -878,8 +953,6 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
             Some(Box::new(json!(surface_message))),
             None,
         );
-
-        println!("commit surface: {:?}", surface_message.surface_id);
     }
 
     fn destroyed(&mut self, _surface: &WlSurface) {

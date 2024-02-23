@@ -1,3 +1,4 @@
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
@@ -13,16 +14,22 @@ enum SurfaceRole {
 }
 
 @freezed
+class SurfaceTexture with _$SurfaceTexture {
+  const factory SurfaceTexture({
+    required TextureId id,
+    required Size size,
+  }) = _SurfaceTexture;
+}
+
+@freezed
 class WlSurface with _$WlSurface {
   const factory WlSurface({
-    required SurfaceRole role,
     required SurfaceId surfaceId,
-    required TextureId textureId,
-    required Offset surfacePosition,
-    required Size surfaceSize,
+    required SurfaceRole? role,
+    required SurfaceTexture? texture,
     required int scale,
-    required List<int> subsurfacesBelow,
-    required List<int> subsurfacesAbove,
+    required IList<int> subsurfacesBelow,
+    required IList<int> subsurfacesAbove,
     required Rect inputRegion,
   }) = _WlSurface;
 }
