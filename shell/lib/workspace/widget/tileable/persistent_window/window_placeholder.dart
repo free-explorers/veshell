@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/application/provider/desktop_entries.dart';
+import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/shared/util/app_launch.dart';
 import 'package:shell/window/model/window.dart';
@@ -15,10 +15,11 @@ class WindowPlaceholder extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final window = ref.watch(windowStateProvider(windowId)) as PersistentWindow;
-    final entry = ref.watch(
-      localizedDesktopEntriesProvider
-          .select((value) => value.value?[window.appId]),
-    );
+    final entry = ref
+        .watch(
+          localizedDesktopEntryForIdProvider(window.appId),
+        )
+        .value;
     return Material(
       child: InkWell(
         onTap: entry != null

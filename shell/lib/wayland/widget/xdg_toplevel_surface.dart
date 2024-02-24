@@ -32,8 +32,6 @@ class XdgToplevelSurfaceWidget extends ConsumerWidget {
     final popupList = <int>[];
     _collectPopupList(popupList, ref, surfaceId);
 
-    print("popupList: $popupList");
-
     return VisibilityDetector(
       key: ValueKey(surfaceId),
       onVisibilityChanged: (VisibilityInfo info) {
@@ -44,7 +42,6 @@ class XdgToplevelSurfaceWidget extends ConsumerWidget {
         }
       },
       child: _SurfaceFocus(
-        surfaceId: surfaceId,
         child: Stack(
           children: [
             _PointerListener(
@@ -64,32 +61,14 @@ class XdgToplevelSurfaceWidget extends ConsumerWidget {
 
 class _SurfaceFocus extends HookConsumerWidget {
   const _SurfaceFocus({
-    required this.surfaceId,
     required this.child,
   });
 
-  final SurfaceId surfaceId;
   final Widget child;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final focusNode = useFocusNode();
-    useEffect(
-      () {
-        focusNode.addListener(() {
-          ref.read(waylandManagerProvider.notifier).request(
-                ActivateWindowRequest(
-                  message: ActivateWindowMessage(
-                    surfaceId: surfaceId,
-                    activate: focusNode.hasFocus,
-                  ),
-                ),
-              );
-        });
-        return null;
-      },
-      [focusNode],
-    );
+    final focusNode = useFocusNode(debugLabel: 'SurfaceFocus');
 
     return Shortcuts(
       shortcuts: {

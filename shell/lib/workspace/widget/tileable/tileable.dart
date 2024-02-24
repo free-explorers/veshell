@@ -5,7 +5,8 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 /// by the layout typically an application window or the application launcher
 abstract class Tileable extends HookConsumerWidget {
   /// Abstract class for a Tileable
-  const Tileable({super.key});
+  const Tileable({required this.isFocused, super.key});
+  final bool isFocused;
 
   /// Builder to return widget for the workpace panel
   Widget buildPanelWidget(BuildContext context, WidgetRef ref);

@@ -3,7 +3,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/application/widget/app_icon.dart';
-import 'package:shell/wayland/model/request/close_window/close_window.serializable.dart';
+import 'package:shell/wayland/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/wayland/model/request/resize_window/resize_window.serializable.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/wayland/widget/xdg_toplevel_surface.dart';
@@ -11,13 +11,19 @@ import 'package:shell/window/model/window.dart';
 import 'package:shell/window/provider/dialog_list_for_window.dart';
 import 'package:shell/window/provider/window.manager.dart';
 import 'package:shell/window/provider/window_state.dart';
+import 'package:shell/workspace/provider/current_workspace_id.dart';
+import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/tileable/persistent_window/window_placeholder.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
 
 /// Tileable Window that persist when closed
 class PersistentWindowTileable extends Tileable {
   /// Const constructor
-  const PersistentWindowTileable({required this.windowId, super.key});
+  const PersistentWindowTileable({
+    required this.windowId,
+    required super.isFocused,
+    super.key,
+  });
 
   /// The id of the wayland surface
   final WindowId windowId;
@@ -34,46 +40,100 @@ class PersistentWindowTileable extends Tileable {
           ref.read(windowStateProvider(windowId)) as DialogWindow;
       dialogWindowList.add(dialogWindow);
     }
-    if (window.surfaceId != null) {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          return HookBuilder(
-            builder: (context) {
-              useEffect(
-                () {
-                  ref.read(waylandManagerProvider.notifier).request(
-                        ResizeWindowRequest(
-                          message: ResizeWindowMessage(
-                            surfaceId: window.surfaceId!,
-                            width:
-                                constraints.widthConstraints().maxWidth.round(),
-                            height: constraints
-                                .heightConstraints()
-                                .maxHeight
-                                .round(),
-                          ),
-                        ),
-                      );
-                  return null;
-                },
-                [constraints],
-              );
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  XdgToplevelSurfaceWidget(
+    final tileableFocusNode =
+        useFocusNode(debugLabel: 'PersistentWindowTileable');
+
+    useEffect(
+      () {
+        if (isFocused) {
+          tileableFocusNode.requestFocus();
+        }
+        return null;
+      },
+      [isFocused],
+    );
+
+    useEffect(
+      () {
+        if (isFocused && window.surfaceId != null) {
+          ref.read(waylandManagerProvider.notifier).request(
+                ActivateWindowRequest(
+                  message: ActivateWindowMessage(
                     surfaceId: window.surfaceId!,
+                    activate: tileableFocusNode.hasFocus,
                   ),
-                  if (dialogWindowList.isNotEmpty)
-                    for (final dialog in dialogWindowList)
-                      XdgToplevelSurfaceWidget(
-                        surfaceId: dialog.surfaceId,
-                      ),
-                ],
+                ),
               );
-            },
-          );
-        },
+        }
+        return null;
+      },
+      [window.surfaceId],
+    );
+
+    useEffect(
+      () {
+        tileableFocusNode.addListener(() {
+          if (window.surfaceId != null) {
+            ref.read(waylandManagerProvider.notifier).request(
+                  ActivateWindowRequest(
+                    message: ActivateWindowMessage(
+                      surfaceId: window.surfaceId!,
+                      activate: tileableFocusNode.hasFocus,
+                    ),
+                  ),
+                );
+          }
+        });
+        return null;
+      },
+      [tileableFocusNode],
+    );
+    if (window.surfaceId != null) {
+      return Focus(
+        autofocus: true,
+        focusNode: tileableFocusNode,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return HookBuilder(
+              builder: (context) {
+                useEffect(
+                  () {
+                    ref.read(waylandManagerProvider.notifier).request(
+                          ResizeWindowRequest(
+                            message: ResizeWindowMessage(
+                              surfaceId: window.surfaceId!,
+                              width: constraints
+                                  .widthConstraints()
+                                  .maxWidth
+                                  .round(),
+                              height: constraints
+                                  .heightConstraints()
+                                  .maxHeight
+                                  .round(),
+                            ),
+                          ),
+                        );
+                    return null;
+                  },
+                  [constraints],
+                );
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    XdgToplevelSurfaceWidget(
+                      surfaceId: window.surfaceId!,
+                    ),
+                    if (dialogWindowList.isNotEmpty)
+                      for (final dialog in dialogWindowList)
+                        XdgToplevelSurfaceWidget(
+                          surfaceId: dialog.surfaceId,
+                        ),
+                  ],
+                );
+              },
+            );
+          },
+        ),
       );
     } else {
       return WindowPlaceholder(
@@ -87,7 +147,8 @@ class PersistentWindowTileable extends Tileable {
     final window = ref.watch(windowStateProvider(windowId)) as PersistentWindow;
 
     final title = window.title;
-    return Tab(
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, right: 8),
       child: Row(
         children: [
           SizedBox(height: 24, width: 24, child: AppIconById(id: window.appId)),
@@ -102,13 +163,12 @@ class PersistentWindowTileable extends Tileable {
             visualDensity: VisualDensity.compact,
             iconSize: 16,
             onPressed: () {
-              ref.read(waylandManagerProvider.notifier).request(
-                    CloseWindowRequest(
-                      message: CloseWindowMessage(
-                        surfaceId: window.surfaceId!,
-                      ),
-                    ),
-                  );
+              ref
+                  .read(
+                    workspaceStateProvider(ref.read(currentWorkspaceIdProvider))
+                        .notifier,
+                  )
+                  .closeWindow(window);
             },
             icon: Icon(MdiIcons.close),
           ),
