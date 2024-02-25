@@ -3,6 +3,7 @@ import 'package:shell/wayland/model/event/commit_surface/commit_surface.serializ
 import 'package:shell/wayland/model/event/destroy_popup/destroy_popup.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_subsurface/destroy_subsurface.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_surface/destroy_surface.serializable.dart';
+import 'package:shell/wayland/model/event/destroy_toplevel/destroy_toplevel.serializable.dart';
 import 'package:shell/wayland/model/event/interactive_move/interactive_move.serializable.dart';
 import 'package:shell/wayland/model/event/interactive_resize/interactive_resize.serializable.dart';
 import 'package:shell/wayland/model/event/monitor_layout_changed/monitor_layout_changed.serializable.dart';
@@ -70,6 +71,13 @@ class WaylandEvent with _$WaylandEvent implements WaylandInteraction {
     required String method,
     required DestroySubsurfaceMessage message,
   }) = DestroySubsurfaceEvent;
+
+  /// Destroy Toplevel Event
+  /// This event is sent when the compositor destroys a popup.
+  const factory WaylandEvent.destroyToplevel({
+    required String method,
+    required DestroyToplevelMessage message,
+  }) = DestroyToplevelEvent;
 
   /// Destroy Popup Event
   /// This event is sent when the compositor destroys a popup.

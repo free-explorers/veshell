@@ -5,6 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/model/xdg_surface.dart';
+import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 
 part 'xdg_surface_state.g.dart';
@@ -58,12 +59,22 @@ class XdgSurfaceState extends _$XdgSurfaceState {
   void _checkIfMapped() {
     final hasTexture =
         ref.read(wlSurfaceStateProvider(surfaceId)).texture != null;
-
-    final hasRole = ref.read(wlSurfaceStateProvider(surfaceId)).role != null;
+    final role = ref.read(wlSurfaceStateProvider(surfaceId)).role;
+    final hasRole = role != null;
+    final wasMapped = state.mapped;
 
     state = state.copyWith(
       mapped: hasTexture && hasRole,
     );
+
+    if (role == SurfaceRole.xdgToplevel) {
+      if (!wasMapped && state.mapped) {
+        ref.read(newXdgToplevelSurfaceProvider.notifier).mapped(surfaceId);
+        print("mapped $surfaceId");
+      } else if (wasMapped && !state.mapped) {
+        ref.read(newXdgToplevelSurfaceProvider.notifier).unmapped(surfaceId);
+      }
+    }
   }
 
   void dispose() {

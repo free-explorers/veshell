@@ -45,10 +45,6 @@ class XdgPopupState extends _$XdgPopupState {
   }
 
   void dispose() {
-    // ref.read(popupListForSurfaceProvider.notifier).remove(
-    //       state.parent,
-    //       state.surfaceId,
-    //     );
     _keepAliveLink.close();
   }
 }

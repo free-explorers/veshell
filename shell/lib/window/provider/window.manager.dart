@@ -33,20 +33,17 @@ class WindowManager extends _$WindowManager {
 
   @override
   ISet<WindowId> build() {
-    ref
-      ..listen(
-        newXdgToplevelSurfaceProvider,
-        (_, next) async {
-          if (next case AsyncData(value: final SurfaceId surfaceId)) {
-            onNewToplevel(surfaceId);
-          }
-        },
-      )
-      ..listen(waylandManagerProvider, (_, next) {
-        if (next case AsyncData(value: final DestroySurfaceEvent event)) {
-          _onSurfaceIsDestroyed(event.message);
+    ref.listen(
+      newXdgToplevelSurfaceProvider,
+      (_, next) async {
+        switch (next) {
+          case AsyncData(value: final XdgToplevelMappedEvent event):
+            onNewToplevel(event.surfaceId);
+          case AsyncData(value: final XdgToplevelUnmappedEvent event):
+            _onSurfaceIsDestroyed(event.surfaceId);
         }
-      });
+      },
+    );
     return <WindowId>{}.lock;
   }
 
@@ -160,8 +157,8 @@ class WindowManager extends _$WindowManager {
         );
   }
 
-  _onSurfaceIsDestroyed(DestroySurfaceMessage message) {
-    if (ref.read(surfaceWindowMapProvider).get(message.surfaceId)
+  void _onSurfaceIsDestroyed(SurfaceId surfaceId) {
+    if (ref.read(surfaceWindowMapProvider).get(surfaceId)
         case final WindowId windowId) {
       ref.read(windowStateProvider(windowId).notifier).onSurfaceIsDestroyed();
 

@@ -6,6 +6,7 @@ import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/model/xdg_toplevel.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
+import 'package:shell/wayland/provider/xdg_surface_state.dart';
 
 part 'xdg_toplevel_state.g.dart';
 
@@ -23,8 +24,6 @@ class XdgToplevelState extends _$XdgToplevelState {
     ref.onDispose(() {
       print('disposing XdgToplevelStateProvider $surfaceId');
     });
-
-    ref.read(newXdgToplevelSurfaceProvider.notifier).notify(surfaceId);
 
     state = const XdgToplevel(
       appId: null,
@@ -82,6 +81,10 @@ class XdgToplevelState extends _$XdgToplevelState {
   }
 
   void dispose() {
+    final mapped = ref.read(xdgSurfaceStateProvider(surfaceId)).mapped;
+    if (mapped) {
+      ref.read(newXdgToplevelSurfaceProvider.notifier).unmapped(surfaceId);
+    }
     _keepAliveLink.close();
   }
 }

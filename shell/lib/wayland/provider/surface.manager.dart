@@ -7,6 +7,7 @@ import 'package:shell/wayland/model/event/commit_surface/commit_surface.serializ
 import 'package:shell/wayland/model/event/destroy_popup/destroy_popup.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_subsurface/destroy_subsurface.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_surface/destroy_surface.serializable.dart';
+import 'package:shell/wayland/model/event/destroy_toplevel/destroy_toplevel.serializable.dart';
 import 'package:shell/wayland/model/event/new_popup/new_popup.serializable.dart';
 import 'package:shell/wayland/model/event/new_subsurface/new_subsurface.serializable.dart';
 import 'package:shell/wayland/model/event/new_surface/new_surface.serializable.dart';
@@ -43,6 +44,8 @@ class SurfaceManager extends _$SurfaceManager {
           _destroySurface(event.message);
         case AsyncData(value: final DestroySubsurfaceEvent event):
           _destroySubsurface(event.message);
+        case AsyncData(value: final DestroyToplevelEvent event):
+          _destroyToplevel(event.message);
         case AsyncData(value: final DestroyPopupEvent event):
           _destroyPopup(event.message);
       }
@@ -89,6 +92,7 @@ class SurfaceManager extends _$SurfaceManager {
       XdgSurfaceRoleMessage(:final role) => switch (role) {
           XdgToplevelMessage() => SurfaceRole.xdgToplevel,
           XdgPopupMessage() => SurfaceRole.xdgPopup,
+          null => null,
         },
       SubsurfaceRoleMessage() => SurfaceRole.subsurface,
       null => null,
@@ -130,6 +134,8 @@ class SurfaceManager extends _$SurfaceManager {
                   parent: role.parent,
                   position: role.position,
                 );
+          case null:
+          // Nothing to do.
         }
       case SubsurfaceRoleMessage():
         ref.read(subsurfaceStateProvider(message.surfaceId).notifier).commit(
@@ -166,6 +172,10 @@ class SurfaceManager extends _$SurfaceManager {
     ref.read(subsurfaceStateProvider(message.surfaceId).notifier).dispose();
   }
 
+  void _destroyToplevel(DestroyToplevelMessage message) {
+    ref.read(xdgToplevelStateProvider(message.surfaceId).notifier).dispose();
+  }
+
   void _destroyPopup(DestroyPopupMessage message) {
     final parent = ref.read(xdgPopupStateProvider(message.surfaceId)).parent;
     ref
@@ -175,17 +185,35 @@ class SurfaceManager extends _$SurfaceManager {
   }
 }
 
+sealed class XdgToplevelMapEvent {
+  XdgToplevelMapEvent(this.surfaceId);
+
+  final SurfaceId surfaceId;
+}
+
+class XdgToplevelMappedEvent extends XdgToplevelMapEvent {
+  XdgToplevelMappedEvent(super.surfaceId);
+}
+
+class XdgToplevelUnmappedEvent extends XdgToplevelMapEvent {
+  XdgToplevelUnmappedEvent(super.surfaceId);
+}
+
 @Riverpod(keepAlive: true)
 class NewXdgToplevelSurface extends _$NewXdgToplevelSurface {
-  final _streamController = StreamController<int>();
+  final _streamController = StreamController<XdgToplevelMapEvent>();
 
   /// Build the stream of [int]
   @override
-  Stream<int> build() {
+  Stream<XdgToplevelMapEvent> build() {
     return _streamController.stream;
   }
 
-  void notify(SurfaceId surfaceId) {
-    _streamController.sink.add(surfaceId);
+  void mapped(SurfaceId surfaceId) {
+    _streamController.sink.add(XdgToplevelMappedEvent(surfaceId));
+  }
+
+  void unmapped(SurfaceId surfaceId) {
+    _streamController.sink.add(XdgToplevelUnmappedEvent(surfaceId));
   }
 }

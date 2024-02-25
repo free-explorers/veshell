@@ -38,7 +38,7 @@ sealed class CommitSurfaceMessage
 sealed class SurfaceRoleMessage with _$SurfaceRoleMessage {
   const factory SurfaceRoleMessage.xdgSurface({
     @RectConverter() required Rect? geometry,
-    required XdgSurfaceMessage role,
+    required XdgSurfaceMessage? role,
   }) = XdgSurfaceRoleMessage;
 
   const factory SurfaceRoleMessage.subsurface({

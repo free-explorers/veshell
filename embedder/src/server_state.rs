@@ -626,6 +626,8 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
         let parent = get_surface_id(&parent.unwrap());
         let position: MyPoint<i32, Logical> = positioner.get_geometry().loc.into();
 
+        dbg!(&position);
+
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "new_popup",
@@ -706,6 +708,15 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
                 .surface_id
         });
         self.xdg_toplevels.remove(&surface_id);
+
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method(
+            "destroy_toplevel",
+            Some(Box::new(json!({
+                "surfaceId": surface_id,
+            }))),
+            None,
+        );
     }
 
     fn popup_destroyed(&mut self, surface: PopupSurface) {
