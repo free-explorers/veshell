@@ -3,6 +3,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/wayland/provider/xdg_popup_state.dart';
+import 'package:shell/wayland/provider/xdg_surface_state.dart';
 import 'package:shell/wayland/widget/surface.dart';
 
 class PopupWidget extends StatelessWidget {
@@ -40,9 +41,12 @@ class _Positioner extends HookConsumerWidget {
 
     // Sum recursively positions until we reach the toplevel.
     while (ref.read(wlSurfaceStateProvider(id)).role == SurfaceRole.xdgPopup) {
-      final provider = xdgPopupStateProvider(id);
-      offset += ref.watch(provider.select((popup) => popup.position));
-      id = ref.watch(provider.select((popup) => popup.parent));
+      final popup = xdgPopupStateProvider(id);
+      offset += ref.watch(popup.select((popup) => popup.position));
+      // Coordinates are always relative to the visible bounds.
+      offset -= _getVisibleBoundsTopLeft(ref, id);
+      id = ref.watch(popup.select((popup) => popup.parent));
+      offset += _getVisibleBoundsTopLeft(ref, id);
     }
 
     return Positioned(
@@ -50,5 +54,12 @@ class _Positioner extends HookConsumerWidget {
       top: offset.dy,
       child: child,
     );
+  }
+
+  Offset _getVisibleBoundsTopLeft(WidgetRef ref, SurfaceId id) {
+    final geometry = ref.watch(
+      xdgSurfaceStateProvider(id).select((xdgSurface) => xdgSurface.geometry),
+    );
+    return geometry?.topLeft ?? Offset.zero;
   }
 }
