@@ -43,9 +43,11 @@ class _Positioner extends HookConsumerWidget {
     while (ref.read(wlSurfaceStateProvider(id)).role == SurfaceRole.xdgPopup) {
       final popup = xdgPopupStateProvider(id);
       offset += ref.watch(popup.select((popup) => popup.position));
-      // Coordinates are always relative to the visible bounds.
+      // Change the origin of the popup to its visible bounds top left corner.
       offset -= _getVisibleBoundsTopLeft(ref, id);
       id = ref.watch(popup.select((popup) => popup.parent));
+      // Position the popup relative to its parent's visible bounds top left
+      // corner.
       offset += _getVisibleBoundsTopLeft(ref, id);
     }
 

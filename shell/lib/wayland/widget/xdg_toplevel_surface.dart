@@ -19,8 +19,15 @@ class XdgToplevelSurfaceWidget extends ConsumerWidget {
   final SurfaceId surfaceId;
 
   void _collectPopupList(List<int> ids, WidgetRef ref, SurfaceId surfaceId) {
-    final popups = ref.watch(
-        xdgSurfaceStateProvider(surfaceId).select((value) => value.popups));
+    final popups = ref
+        .watch(
+          xdgSurfaceStateProvider(surfaceId).select((value) => value.popups),
+        )
+        .where(
+          (popup) => ref.watch(
+            xdgSurfaceStateProvider(popup).select((value) => value.mapped),
+          ),
+        );
     ids.addAll(popups);
     for (final popupId in popups) {
       _collectPopupList(ids, ref, popupId);
