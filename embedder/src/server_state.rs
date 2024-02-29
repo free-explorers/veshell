@@ -498,6 +498,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
 
         if !initial_configure_sent {
             toplevel.send_configure();
+            return None;
         }
 
         let parent_id = if let Some(ref parent) = parent {
@@ -529,7 +530,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
     fn construct_popup_role_message(&self, surface: &WlSurface) -> Option<PopupMessage> {
         let surface_id = get_surface_id(surface);
         let popup = self.xdg_popups.get(&surface_id)?;
-        let (initial_configure_sent, parent) = with_states(surface, |surface_data| {
+        let (initial_configure_sent, parent, position) = with_states(surface, |surface_data| {
             let surface_state = surface_data
                 .data_map
                 .get::<XdgPopupSurfaceData>()
@@ -540,6 +541,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             (
                 surface_state.initial_configure_sent,
                 surface_state.parent.clone(),
+                surface_state.current.geometry.loc.into(),
             )
         });
 
@@ -547,15 +549,13 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             // NOTE: This should never fail as the initial configure is always
             // allowed.
             popup.send_configure().expect("initial configure failed");
+            return None;
         }
 
-        // TODO: Why do I need to access the pending state and not the current one?
-        // If I access the current state, the position is always (0, 0) on the first commit.
-        let position = popup.with_pending_state(|state| state.geometry.loc.into());
-        let parent_id = get_surface_id(&parent?);
+        let parent = get_surface_id(&parent?);
 
         Some(PopupMessage {
-            parent: parent_id,
+            parent,
             position,
         })
     }

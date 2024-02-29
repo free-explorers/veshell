@@ -9,6 +9,7 @@ part 'xdg_popup.freezed.dart';
 class XdgPopup with _$XdgPopup {
   /// Factory for XdgPopup
   const factory XdgPopup({
+    required bool committed,
     required SurfaceId parent,
     required Offset position,
   }) = _XdgPopup;

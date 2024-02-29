@@ -25,6 +25,7 @@ class XdgPopupState extends _$XdgPopupState {
       print('disposing XdgPopupStateProvider $surfaceId');
     });
     state = XdgPopup(
+      committed: false,
       parent: parent,
       position: position,
     );
@@ -35,6 +36,7 @@ class XdgPopupState extends _$XdgPopupState {
     required Offset position,
   }) {
     state = state.copyWith(
+      committed: true,
       parent: parent,
       position: position,
     );

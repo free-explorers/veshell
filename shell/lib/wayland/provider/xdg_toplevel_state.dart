@@ -26,6 +26,7 @@ class XdgToplevelState extends _$XdgToplevelState {
     });
 
     state = const XdgToplevel(
+      committed: false,
       appId: null,
       title: null,
       parent: null,
@@ -39,6 +40,7 @@ class XdgToplevelState extends _$XdgToplevelState {
     required String? title,
   }) {
     state = state.copyWith(
+      committed: true,
       title: title,
       appId: appId,
       parent: parent,

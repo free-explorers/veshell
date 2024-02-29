@@ -31,6 +31,7 @@ class XdgSurfaceState extends _$XdgSurfaceState {
 
     return XdgSurface(
       mapped: false,
+      committed: false,
       geometry: Rect.zero,
       popups: IList(),
     );
@@ -40,8 +41,10 @@ class XdgSurfaceState extends _$XdgSurfaceState {
     required Rect? geometry,
   }) {
     state = state.copyWith(
+      committed: true,
       geometry: geometry,
     );
+    _checkIfMapped();
   }
 
   void addPopup(SurfaceId surfaceId) {
@@ -61,10 +64,12 @@ class XdgSurfaceState extends _$XdgSurfaceState {
         ref.read(wlSurfaceStateProvider(surfaceId)).texture != null;
     final role = ref.read(wlSurfaceStateProvider(surfaceId)).role;
     final hasRole = role != null;
-    final wasMapped = state.mapped;
+    final isCommitted = state.committed;
+    final isRoleCommitted = _isRoleCommitted();
 
+    final wasMapped = state.mapped;
     state = state.copyWith(
-      mapped: hasTexture && hasRole,
+      mapped: hasTexture && hasRole && isCommitted && isRoleCommitted,
     );
 
     if (role == SurfaceRole.xdgToplevel) {
@@ -75,6 +80,15 @@ class XdgSurfaceState extends _$XdgSurfaceState {
         ref.read(newXdgToplevelSurfaceProvider.notifier).unmapped(surfaceId);
       }
     }
+  }
+
+  bool _isRoleCommitted() {
+    return switch (ref.read(wlSurfaceStateProvider(surfaceId)).role) {
+      SurfaceRole.xdgToplevel => state.committed,
+      SurfaceRole.xdgPopup => state.committed,
+      SurfaceRole.subsurface => false, // unreachable
+      null => false,
+    };
   }
 
   void dispose() {

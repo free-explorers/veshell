@@ -7,6 +7,7 @@ part 'subsurface.freezed.dart';
 @freezed
 class Subsurface with _$Subsurface {
   const factory Subsurface({
+    required bool committed,
     required bool mapped,
     required SurfaceId parent,
     required Offset position, // relative to the parent

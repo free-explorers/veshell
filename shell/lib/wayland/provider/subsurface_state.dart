@@ -30,6 +30,7 @@ class SubsurfaceState extends _$SubsurfaceState {
 
     state = Subsurface(
       mapped: false,
+      committed: false,
       parent: parent,
       position: Offset.zero,
     );
@@ -86,8 +87,10 @@ class SubsurfaceState extends _$SubsurfaceState {
       null => false,
     };
 
+    final isCommitted = state.committed;
+
     state = state.copyWith(
-      mapped: hasTexture && parentMapped,
+      mapped: hasTexture && isCommitted && parentMapped,
     );
   }
 
@@ -100,8 +103,10 @@ class SubsurfaceState extends _$SubsurfaceState {
 
   void commit({required Offset position}) {
     state = state.copyWith(
+      committed: true,
       position: position,
     );
+    _checkIfMapped();
   }
 
   void dispose() {

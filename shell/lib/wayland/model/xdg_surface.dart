@@ -10,6 +10,7 @@ class XdgSurface with _$XdgSurface {
   /// Factory for xdgPopup
   const factory XdgSurface({
     required bool mapped,
+    required bool committed,
     required Rect? geometry,
     required IList<SurfaceId> popups,
   }) = _XdgSurface;
