@@ -12,8 +12,8 @@ part 'subsurface_state.g.dart';
 class SubsurfaceState extends _$SubsurfaceState {
   late final KeepAliveLink _keepAliveLink;
 
-  ProviderSubscription<SurfaceRole?>? parentRoleSub;
-  ProviderSubscription<bool>? parentMappedSub;
+  ProviderSubscription<SurfaceRole?>? _parentRoleSub;
+  ProviderSubscription<bool>? _parentMappedSub;
 
   @override
   Subsurface build(SurfaceId surfaceId) {
@@ -35,21 +35,17 @@ class SubsurfaceState extends _$SubsurfaceState {
       position: Offset.zero,
     );
 
-    // 1. Is a texture attached?
     ref.listen(
       wlSurfaceStateProvider(surfaceId).select((state) => state.texture),
       (_, __) => _checkIfMapped(),
     );
 
-    // 2. Is the parent mapped?
-    // For this, we have to listen to changes in parent's role
-    // and its mapped state.
     _subscribeToParentRole();
   }
 
   void _subscribeToParentRole() {
-    parentRoleSub?.close();
-    parentRoleSub = ref.listen(
+    _parentRoleSub?.close();
+    _parentRoleSub = ref.listen(
       wlSurfaceStateProvider(state.parent).select((value) => value.role),
       (_, __) => _subscribeToParentMappedProperty(),
     );
@@ -57,15 +53,20 @@ class SubsurfaceState extends _$SubsurfaceState {
   }
 
   void _subscribeToParentMappedProperty() {
-    parentMappedSub?.close();
-    parentMappedSub =
+    _parentMappedSub?.close();
+
+    _parentMappedSub =
         switch (ref.read(wlSurfaceStateProvider(state.parent)).role) {
       SurfaceRole.xdgToplevel || SurfaceRole.xdgPopup => ref.listen(
-          xdgSurfaceStateProvider(state.parent).select((state) => state.mapped),
+          xdgSurfaceStateProvider(state.parent).select(
+            (state) => state.mapped,
+          ),
           (_, __) => _checkIfMapped(),
         ),
       SurfaceRole.subsurface => ref.listen(
-          subsurfaceStateProvider(state.parent).select((state) => state.mapped),
+          subsurfaceStateProvider(state.parent).select(
+            (state) => state.mapped,
+          ),
           (_, __) => _checkIfMapped(),
         ),
       null => null,
@@ -90,6 +91,10 @@ class SubsurfaceState extends _$SubsurfaceState {
     final isCommitted = state.committed;
 
     state = state.copyWith(
+      // A sub-surface becomes mapped, when a non-NULL wl_buffer is applied and the parent surface is mapped.
+      // The order of which one happens first is irrelevant.
+      // A sub-surface is hidden if the parent becomes hidden, or if a NULL wl_buffer is applied.
+      // These rules apply recursively through the tree of surfaces.
       mapped: hasTexture && isCommitted && parentMapped,
     );
   }
@@ -110,8 +115,8 @@ class SubsurfaceState extends _$SubsurfaceState {
   }
 
   void dispose() {
-    parentRoleSub?.close();
-    parentMappedSub?.close();
+    _parentRoleSub?.close();
+    _parentMappedSub?.close();
     _keepAliveLink.close();
   }
 }
