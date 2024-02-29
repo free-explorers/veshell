@@ -5,7 +5,8 @@ import 'package:path/path.dart' as path;
 
 Directory persistenceDirectory = Directory(
   path.join(
-    Platform.environment['XDG_CONFIG_HOME']!,
+    Platform.environment['XDG_CONFIG_HOME'] ??
+        '${Platform.environment['HOME']!}/.config',
     'veshell',
     'persistence',
   ),

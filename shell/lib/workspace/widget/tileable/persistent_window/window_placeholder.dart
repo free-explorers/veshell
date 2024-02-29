@@ -48,7 +48,8 @@ class WindowPlaceholder extends HookConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        entry?.entries[DesktopEntryKey.name.string] ?? 'Unkown',
+                        entry?.entries[DesktopEntryKey.name.string] ??
+                            'Unknown',
                         style: Theme.of(context).textTheme.headlineLarge,
                       ),
                       const SizedBox(

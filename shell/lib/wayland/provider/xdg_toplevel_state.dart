@@ -41,8 +41,8 @@ class XdgToplevelState extends _$XdgToplevelState {
     print('initializing XdgToplevelStateProvider $surfaceId ${message.appId}');
     state = XdgToplevelSurface(
       surfaceId: message.surfaceId,
-      appId: message.appId ?? 'unkown',
-      title: message.title ?? 'Unkown',
+      appId: message.appId ?? 'unknown',
+      title: message.title ?? 'Unknown',
       parentSurfaceId: message.parentSurfaceId,
       geometry: message.geometry ??
           Rect.fromLTWH(
