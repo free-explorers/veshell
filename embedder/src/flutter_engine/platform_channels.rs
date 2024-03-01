@@ -17,4 +17,5 @@ pub mod method_result_mpsc_channel;
 pub mod standard_codec_serializer;
 pub mod standard_message_codec;
 pub mod standard_method_codec;
+pub mod text_input_model;
 pub mod text_range;
