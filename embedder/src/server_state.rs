@@ -554,10 +554,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
 
         let parent = get_surface_id(&parent?);
 
-        Some(PopupMessage {
-            parent,
-            position,
-        })
+        Some(PopupMessage { parent, position })
     }
 }
 
