@@ -8,6 +8,7 @@ import 'package:shell/wayland/model/event/destroy_popup/destroy_popup.serializab
 import 'package:shell/wayland/model/event/destroy_subsurface/destroy_subsurface.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_surface/destroy_surface.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_toplevel/destroy_toplevel.serializable.dart';
+import 'package:shell/wayland/model/event/destroy_xdg_surface/destroy_xdg_surface.serializable.dart';
 import 'package:shell/wayland/model/event/new_popup/new_popup.serializable.dart';
 import 'package:shell/wayland/model/event/new_subsurface/new_subsurface.serializable.dart';
 import 'package:shell/wayland/model/event/new_surface/new_surface.serializable.dart';
@@ -152,12 +153,19 @@ class SurfaceManager extends _$SurfaceManager {
 
     final wlSurfaceState = ref.read(wlSurfaceStateProvider(message.surfaceId));
 
-    // TODO: Patch Smithay to send a destroy event for subsurfaces.
-    // This workaround doesn't work anymore if only the subsurface is destroyed
-    // and not the wayland surface itself.
-    if (wlSurfaceState.role case SurfaceRole.subsurface) {
-      _destroySubsurface(
-          DestroySubsurfaceMessage(surfaceId: message.surfaceId));
+    // TODO: Patch Smithay to send destroy events for subsurfaces and xdg surfaces.
+    // Especially important for subsurfaces because when a subsurface is destroyed,
+    // it must be unmapped immediately.
+    switch (wlSurfaceState.role) {
+      case SurfaceRole.subsurface:
+        _destroySubsurface(
+          DestroySubsurfaceMessage(surfaceId: message.surfaceId),
+        );
+      case SurfaceRole.xdgToplevel || SurfaceRole.xdgPopup:
+        _destroyXdgSurface(
+          DestroyXdgSurfaceMessage(surfaceId: message.surfaceId),
+        );
+      case null:
     }
 
     ref.read(wlSurfaceStateProvider(message.surfaceId).notifier).dispose();
@@ -170,6 +178,10 @@ class SurfaceManager extends _$SurfaceManager {
         .read(wlSurfaceStateProvider(parent).notifier)
         .removeSubsurface(message.surfaceId);
     ref.read(subsurfaceStateProvider(message.surfaceId).notifier).dispose();
+  }
+
+  void _destroyXdgSurface(DestroyXdgSurfaceMessage message) {
+    ref.read(xdgSurfaceStateProvider(message.surfaceId).notifier).dispose();
   }
 
   void _destroyToplevel(DestroyToplevelMessage message) {

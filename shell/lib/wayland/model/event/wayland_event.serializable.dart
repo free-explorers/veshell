@@ -4,6 +4,7 @@ import 'package:shell/wayland/model/event/destroy_popup/destroy_popup.serializab
 import 'package:shell/wayland/model/event/destroy_subsurface/destroy_subsurface.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_surface/destroy_surface.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_toplevel/destroy_toplevel.serializable.dart';
+import 'package:shell/wayland/model/event/destroy_xdg_surface/destroy_xdg_surface.serializable.dart';
 import 'package:shell/wayland/model/event/interactive_move/interactive_move.serializable.dart';
 import 'package:shell/wayland/model/event/interactive_resize/interactive_resize.serializable.dart';
 import 'package:shell/wayland/model/event/monitor_layout_changed/monitor_layout_changed.serializable.dart';
@@ -72,8 +73,15 @@ class WaylandEvent with _$WaylandEvent implements WaylandInteraction {
     required DestroySubsurfaceMessage message,
   }) = DestroySubsurfaceEvent;
 
+  /// Destroy XdgSurface Event
+  /// This event is sent when the compositor destroys an XDG surface.
+  const factory WaylandEvent.destroyXdgSurface({
+    required String method,
+    required DestroyXdgSurfaceMessage message,
+  }) = DestroyXdgSurfaceEvent;
+
   /// Destroy Toplevel Event
-  /// This event is sent when the compositor destroys a popup.
+  /// This event is sent when the compositor destroys a toplevel.
   const factory WaylandEvent.destroyToplevel({
     required String method,
     required DestroyToplevelMessage message,
