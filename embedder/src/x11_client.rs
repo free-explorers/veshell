@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::sync::atomic::Ordering;
 
 use log::{error, warn};
@@ -31,6 +32,7 @@ use smithay::{
     },
     utils::DeviceFd,
 };
+use tracing::info;
 
 use crate::drm_backend::DrmBackend;
 use crate::flutter_engine::FlutterEngine;

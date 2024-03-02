@@ -2,23 +2,31 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/wayland/model/event/commit_surface/commit_surface.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_popup/destroy_popup.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_subsurface/destroy_subsurface.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_surface/destroy_surface.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_toplevel/destroy_toplevel.serializable.dart';
+import 'package:shell/wayland/model/event/destroy_x11_surface/destroy_x11_surface.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_xdg_surface/destroy_xdg_surface.serializable.dart';
+import 'package:shell/wayland/model/event/map_x11_surface/map_x11_surface.serializable.dart';
 import 'package:shell/wayland/model/event/new_popup/new_popup.serializable.dart';
 import 'package:shell/wayland/model/event/new_subsurface/new_subsurface.serializable.dart';
 import 'package:shell/wayland/model/event/new_surface/new_surface.serializable.dart';
 import 'package:shell/wayland/model/event/new_toplevel/new_toplevel.serializable.dart';
+import 'package:shell/wayland/model/event/new_x11_surface/new_x11_surface.serializable.dart';
+import 'package:shell/wayland/model/event/unmap_x11_surface/unmap_x11_surface.serializable.dart';
 import 'package:shell/wayland/model/event/wayland_event.serializable.dart';
 import 'package:shell/wayland/model/request/unregister_view_texture/unregister_view_texture.serializable.dart';
+import 'package:shell/wayland/model/surface_manager_state.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
+import 'package:shell/wayland/model/x11_surface.dart';
 import 'package:shell/wayland/provider/subsurface_state.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
+import 'package:shell/wayland/provider/x11_surface_state.dart';
 import 'package:shell/wayland/provider/xdg_popup_state.dart';
 import 'package:shell/wayland/provider/xdg_surface_state.dart';
 import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
@@ -28,11 +36,13 @@ part 'surface.manager.g.dart';
 @Riverpod(keepAlive: true)
 class SurfaceManager extends _$SurfaceManager {
   @override
-  ISet<int> build() {
+  SurfaceManagerState build() {
     ref.listen(waylandManagerProvider, (_, next) {
       switch (next) {
         case AsyncData(value: final NewSurfaceEvent event):
           _newSurface(event.message);
+        case AsyncData(value: final NewX11SurfaceEvent event):
+          _newX11Surface(event.message);
         case AsyncData(value: final NewToplevelEvent event):
           _newToplevel(event.message);
         case AsyncData(value: final NewPopupEvent event):
@@ -41,6 +51,12 @@ class SurfaceManager extends _$SurfaceManager {
           _newSubsurface(event.message);
         case AsyncData(value: final CommitSurfaceEvent event):
           _commitSurface(event.message);
+        case AsyncData(value: final MapX11SurfaceEvent event):
+          _mapX11Surface(event.message);
+        case AsyncData(value: final UnmapX11SurfaceEvent event):
+          _unmapX11Surface(event.message);
+        case AsyncData(value: final DestroyX11SurfaceEvent event):
+          _destroyX11Surface(event.message);
         case AsyncData(value: final DestroySurfaceEvent event):
           _destroySurface(event.message);
         case AsyncData(value: final DestroySubsurfaceEvent event):
@@ -51,7 +67,10 @@ class SurfaceManager extends _$SurfaceManager {
           _destroyPopup(event.message);
       }
     });
-    return ISet<int>();
+    return SurfaceManagerState(
+      wlSurfaces: ISet(),
+      x11Surfaces: ISet(),
+    );
   }
 
   /// Send a [UnregisterViewTextureRequest] to the Wayland compositor
@@ -65,7 +84,19 @@ class SurfaceManager extends _$SurfaceManager {
 
   void _newSurface(NewSurfaceMessage message) {
     ref.read(wlSurfaceStateProvider(message.surfaceId).notifier).initialize();
-    state = state.add(message.surfaceId);
+    state = state.copyWith(
+      wlSurfaces: state.wlSurfaces.add(message.surfaceId),
+    );
+  }
+
+  void _newX11Surface(NewX11SurfaceMessage message) {
+    ref
+        .read(x11SurfaceStateProvider(message.x11SurfaceId).notifier)
+        .initialize();
+
+    state = state.copyWith(
+      x11Surfaces: state.x11Surfaces.add(message.x11SurfaceId),
+    );
   }
 
   void _newToplevel(NewToplevelMessage message) {
@@ -147,9 +178,26 @@ class SurfaceManager extends _$SurfaceManager {
     }
   }
 
+  void _mapX11Surface(MapX11SurfaceMessage message) {
+    ref.read(x11SurfaceStateProvider(message.x11SurfaceId).notifier).map(
+          surfaceId: message.surfaceId,
+        );
+  }
+
+  void _unmapX11Surface(UnmapX11SurfaceMessage message) {
+    ref.read(x11SurfaceStateProvider(message.x11SurfaceId).notifier).unmap();
+  }
+
+  void _destroyX11Surface(DestroyX11SurfaceMessage message) {
+    ref.read(x11SurfaceStateProvider(message.x11SurfaceId).notifier).dispose();
+    state = state.copyWith(
+      x11Surfaces: state.x11Surfaces.remove(message.x11SurfaceId),
+    );
+  }
+
   Future<void> _destroySurface(DestroySurfaceMessage message) async {
     print('Destroy surface: ${message.surfaceId}');
-    assert(state.contains(message.surfaceId));
+    assert(state.wlSurfaces.contains(message.surfaceId));
 
     final wlSurfaceState = ref.read(wlSurfaceStateProvider(message.surfaceId));
 
@@ -169,7 +217,9 @@ class SurfaceManager extends _$SurfaceManager {
     }
 
     ref.read(wlSurfaceStateProvider(message.surfaceId).notifier).dispose();
-    state = state.remove(message.surfaceId);
+    state = state.copyWith(
+      wlSurfaces: state.wlSurfaces.remove(message.surfaceId),
+    );
   }
 
   void _destroySubsurface(DestroySubsurfaceMessage message) {

@@ -1,11 +1,14 @@
-use serde_json::json;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env::{remove_var, set_var};
+use std::ffi::OsString;
+use std::os::fd::OwnedFd;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+use log::error;
+use serde_json::json;
 use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::backend::input::KeyState;
 use smithay::backend::renderer::gles::ffi::Gles2;
@@ -18,13 +21,13 @@ use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::calloop::generic::Generic;
 use smithay::reexports::calloop::{channel, Interest, LoopHandle, Mode, PostAction};
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
-use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::ResizeEdge;
 use smithay::reexports::wayland_server::protocol::wl_buffer;
 use smithay::reexports::wayland_server::protocol::wl_seat::WlSeat;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::{Client, Display, DisplayHandle, Resource};
 use smithay::utils::{
-    Buffer as BufferCoords, Clock, Logical, Monotonic, Rectangle, Serial, Size, SERIAL_COUNTER,
+    Buffer as BufferCoords, Clock, Logical, Monotonic, Point, Rectangle, Serial, Size,
+    SERIAL_COUNTER,
 };
 use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor::{self, get_parent, RectangleKind};
@@ -37,24 +40,28 @@ use smithay::wayland::selection::data_device::{
     set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
     ServerDndGrabHandler,
 };
-use smithay::wayland::selection::SelectionHandler;
+use smithay::wayland::selection::{SelectionHandler, SelectionTarget};
 use smithay::wayland::shell::xdg;
 use smithay::wayland::shell::xdg::{
-    PopupState, PopupSurface, PositionerState, SurfaceCachedState, ToplevelSurface,
-    XdgPopupSurfaceData, XdgShellHandler, XdgShellState, XdgToplevelSurfaceData,
+    PopupSurface, PositionerState, SurfaceCachedState, ToplevelSurface, XdgPopupSurfaceData,
+    XdgShellHandler, XdgShellState, XdgToplevelSurfaceData,
 };
 use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::wayland::socket::ListeningSocketSource;
+use smithay::xwayland::xwm::{Reorder, XwmId};
+use smithay::xwayland::{
+    xwm, X11Surface, X11Wm, XWayland, XWaylandClientData, XWaylandEvent, XwmHandler,
+};
 use smithay::{
     delegate_compositor, delegate_data_device, delegate_dmabuf, delegate_output, delegate_seat,
     delegate_shm, delegate_xdg_shell,
 };
 use tracing::{info, warn};
 
-use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
+use crate::cursor::Cursor;
 use crate::flutter_engine::wayland_messages::{
-    MyPoint, MyRectangle, PopupMessage, SubsurfaceMessage, SurfaceMessage, SurfaceRole,
-    ToplevelMessage, XdgSurfaceMessage, XdgSurfaceRole,
+    MyPoint, PopupMessage, SubsurfaceMessage, SurfaceMessage, SurfaceRole, ToplevelMessage,
+    XdgSurfaceMessage, XdgSurfaceRole,
 };
 use crate::flutter_engine::FlutterEngine;
 use crate::keyboard::key_repeater::KeyRepeater;
@@ -76,10 +83,13 @@ pub struct ServerState<BackendData: Backend + 'static> {
     pub repeat_rate: u64,
     pub tx_flutter_handled_key_event: channel::Sender<(KeyEvent, bool)>,
     pub key_repeater: KeyRepeater<BackendData>,
+    pub xwayland: XWayland,
+    pub x11_wm: Option<X11Wm>,
 
     pub backend_data: Box<BackendData>,
     pub flutter_engine: Option<Box<FlutterEngine<BackendData>>>,
     pub next_surface_id: u64,
+    pub next_x11_surface_id: u64,
     pub next_texture_id: i64,
 
     pub mouse_position: (f64, f64),
@@ -107,6 +117,12 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         let surface_id = self.next_surface_id;
         self.next_surface_id += 1;
         surface_id
+    }
+
+    pub fn get_new_x11_surface_id(&mut self) -> u64 {
+        let x11_surface_id = self.next_x11_surface_id;
+        self.next_x11_surface_id += 1;
+        x11_surface_id
     }
 
     pub fn get_new_texture_id(&mut self) -> i64 {
@@ -320,6 +336,57 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             },
         );
 
+        let xwayland = {
+            let (xwayland, channel) = XWayland::new(&display_handle);
+
+            let ret = loop_handle.insert_source(channel, move |event, _, data| match event {
+                XWaylandEvent::Ready {
+                    connection,
+                    client,
+                    client_fd: _,
+                    display,
+                } => {
+                    dbg!(&display);
+
+                    let mut wm = X11Wm::start_wm(
+                        data.state.loop_handle.clone(),
+                        data.state.display_handle.clone(),
+                        connection,
+                        client,
+                    )
+                    .expect("Failed to attach X11 Window Manager");
+
+                    let cursor = Cursor::load();
+                    let image = cursor.get_image(1, Duration::ZERO);
+                    wm.set_cursor(
+                        &image.pixels_rgba,
+                        Size::from((image.width as u16, image.height as u16)),
+                        Point::from((image.xhot as u16, image.yhot as u16)),
+                    )
+                    .expect("Failed to set xwayland default cursor");
+
+                    data.state.x11_wm = Some(wm);
+                }
+                XWaylandEvent::Exited => {
+                    data.state.x11_wm = None;
+                }
+            });
+            if let Err(e) = ret {
+                tracing::error!("Failed to insert the XWaylandSource into the event loop: {e}");
+            }
+            xwayland
+        };
+
+        if let Err(e) = xwayland.start(
+            loop_handle.clone(),
+            None,
+            std::iter::empty::<(OsString, OsString)>(),
+            true,
+            |_| {},
+        ) {
+            error!("Failed to start XWayland: {}", e);
+        }
+
         Self {
             running: Arc::new(AtomicBool::new(true)),
             display_handle,
@@ -343,7 +410,10 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             repeat_rate,
             tx_flutter_handled_key_event,
             key_repeater,
+            xwayland,
+            x11_wm: None,
             next_surface_id: 1,
+            next_x11_surface_id: 1,
             next_texture_id: 1,
             imported_dmabufs: Vec::new(),
             gles_renderer: None,
@@ -661,7 +731,7 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
         surface: ToplevelSurface,
         _seat: WlSeat,
         _serial: Serial,
-        edges: ResizeEdge,
+        edges: xdg_toplevel::ResizeEdge,
     ) {
         let surface_id = with_states(surface.wl_surface(), |surface_data| {
             surface_data
@@ -799,7 +869,13 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {
-        &client.get_data::<ClientState>().unwrap().compositor_state
+        if let Some(state) = client.get_data::<XWaylandClientData>() {
+            return &state.compositor_state;
+        }
+        if let Some(state) = client.get_data::<ClientState>() {
+            return &state.compositor_state;
+        }
+        panic!("Unknown client data type")
     }
 
     fn new_surface(&mut self, surface: &WlSurface) {
@@ -840,6 +916,8 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
+        X11Wm::commit_hook::<CalloopData<BackendData>>(surface);
+
         let (subsurfaces_below, subsurfaces_above) = get_direct_subsurfaces(surface);
 
         // Make sure Flutter knows about subsurfaces
@@ -1050,5 +1128,136 @@ impl<BackendData: Backend> ServerDndGrabHandler for ServerState<BackendData> {}
 impl<BackendData: Backend> DataDeviceHandler for ServerState<BackendData> {
     fn data_device_state(&self) -> &DataDeviceState {
         &self.data_device_state
+    }
+}
+
+struct MyX11SurfaceState {
+    x11_surface_id: u64,
+}
+
+fn get_x11_surface_id(x11_surface: &X11Surface) -> u64 {
+    x11_surface
+        .user_data()
+        .get::<RefCell<MyX11SurfaceState>>()
+        .unwrap()
+        .borrow()
+        .x11_surface_id
+}
+
+impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
+    fn xwm_state(&mut self, xwm: XwmId) -> &mut X11Wm {
+        self.state.x11_wm.as_mut().unwrap()
+    }
+
+    fn new_window(&mut self, xwm: XwmId, surface: X11Surface) {
+        surface.user_data().insert_if_missing(|| {
+            RefCell::new(MyX11SurfaceState {
+                x11_surface_id: self.state.get_new_x11_surface_id(),
+            })
+        });
+
+        let x11_surface_id = get_x11_surface_id(&surface);
+
+        let platform_method_channel = &mut self.state.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method(
+            "new_x11_surface",
+            Some(Box::new(json!({
+                "x11SurfaceId": x11_surface_id,
+            }))),
+            None,
+        );
+    }
+
+    fn new_override_redirect_window(&mut self, xwm: XwmId, window: X11Surface) {}
+
+    fn map_window_request(&mut self, xwm: XwmId, window: X11Surface) {
+        if !window.is_override_redirect() {
+            let _ = window.set_mapped(true);
+        }
+        dbg!(window);
+    }
+
+    fn map_window_notify(&mut self, xwm: XwmId, surface: X11Surface) {
+        let x11_surface_id = get_x11_surface_id(&surface);
+        let surface_id = get_surface_id(&surface.wl_surface().unwrap());
+
+        let platform_method_channel = &mut self.state.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method(
+            "map_x11_surface",
+            Some(Box::new(json!({
+                "x11SurfaceId": x11_surface_id,
+                "surfaceId": surface_id,
+            }))),
+            None,
+        );
+    }
+
+    fn mapped_override_redirect_window(&mut self, xwm: XwmId, window: X11Surface) {}
+
+    fn unmapped_window(&mut self, xwm: XwmId, surface: X11Surface) {
+        let x11_surface_id = get_x11_surface_id(&surface);
+
+        let platform_method_channel = &mut self.state.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method(
+            "unmap_x11_surface",
+            Some(Box::new(json!({
+                "x11SurfaceId": x11_surface_id,
+            }))),
+            None,
+        );
+    }
+
+    fn destroyed_window(&mut self, xwm: XwmId, surface: X11Surface) {
+        let x11_surface_id = get_x11_surface_id(&surface);
+
+        let platform_method_channel = &mut self.state.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method(
+            "destroy_x11_surface",
+            Some(Box::new(json!({
+                "x11SurfaceId": x11_surface_id,
+            }))),
+            None,
+        );
+    }
+
+    fn configure_request(
+        &mut self,
+        xwm: XwmId,
+        window: X11Surface,
+        x: Option<i32>,
+        y: Option<i32>,
+        w: Option<u32>,
+        h: Option<u32>,
+        reorder: Option<Reorder>,
+    ) {
+    }
+
+    fn configure_notify(
+        &mut self,
+        xwm: XwmId,
+        window: X11Surface,
+        geometry: Rectangle<i32, Logical>,
+        above: Option<u32>,
+    ) {
+    }
+
+    fn resize_request(
+        &mut self,
+        xwm: XwmId,
+        window: X11Surface,
+        button: u32,
+        resize_edge: xwm::ResizeEdge,
+    ) {
+    }
+
+    fn move_request(&mut self, xwm: XwmId, window: X11Surface, button: u32) {}
+
+    fn send_selection(
+        &mut self,
+        xwm: XwmId,
+        selection: SelectionTarget,
+        mime_type: String,
+        fd: OwnedFd,
+    ) {
     }
 }
