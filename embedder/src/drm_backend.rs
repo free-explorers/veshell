@@ -549,6 +549,12 @@ impl ServerState<DrmBackend> {
                                 start_time.elapsed().as_millis() as u32,
                             );
                         }
+                        for surface in data.state.x11_surface_per_wl_surface.keys() {
+                            send_frames_surface_tree(
+                                surface,
+                                start_time.elapsed().as_millis() as u32,
+                            );
+                        }
                     }
                     DrmEvent::Error(error) => {
                         error!("{:?}", error);

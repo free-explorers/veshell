@@ -4,7 +4,7 @@ use log::{error, warn};
 use smithay::backend::input::Event;
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
-use smithay::backend::renderer::ImportEgl;
+use smithay::backend::renderer::{ImportDma, ImportEgl};
 use smithay::output::{Output, PhysicalProperties, Subpixel};
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::wayland_server::protocol::wl_shm;
@@ -67,7 +67,7 @@ pub fn run_x11_client() {
     let egl_context = egl::EGLContext::new(&egl_display).expect("Failed to create EGLContext");
 
     let window = x11::WindowBuilder::new()
-        .title("Anvil")
+        .title("Veshell")
         .build(&x11_handle)
         .expect("Failed to create first window");
 
@@ -135,27 +135,26 @@ pub fn run_x11_client() {
                     .map(|format| format.modifier),
             )
             .expect("Failed to create X11 surface"),
-        None => {
-            let gbm_allocator = GbmAllocator::new(gbm_device, GbmBufferFlags::RENDERING);
-
-            x11_handle
-                .create_surface(
-                    &window,
-                    DmabufAllocator(gbm_allocator),
-                    egl_context
-                        .dmabuf_render_formats()
-                        .iter()
-                        .map(|format| format.modifier),
-                )
-                .expect("Failed to create X11 surface")
-        }
+        None => x11_handle
+            .create_surface(
+                &window,
+                DmabufAllocator(GbmAllocator::new(gbm_device, GbmBufferFlags::RENDERING)),
+                egl_context
+                    .dmabuf_render_formats()
+                    .iter()
+                    .map(|format| format.modifier),
+            )
+            .expect("Failed to create X11 surface"),
     };
 
-    let dmabuf_formats = egl_context
-        .dmabuf_texture_formats()
-        .iter()
-        .copied()
-        .collect::<Vec<_>>();
+    let mut gles_renderer =
+        unsafe { GlesRenderer::new(egl_context) }.expect("Failed to initialize GLES");
+
+    if gles_renderer.bind_wl_display(&display_handle).is_ok() {
+        info!("EGL hardware-acceleration enabled");
+    }
+
+    let dmabuf_formats = gles_renderer.dmabuf_formats().collect::<Vec<_>>();
     let dmabuf_default_feedback = DmabufFeedbackBuilder::new(node.dev_id(), dmabuf_formats)
         .build()
         .unwrap();
@@ -174,13 +173,6 @@ pub fn run_x11_client() {
         },
         Some(dmabuf_state),
     );
-
-    let mut gles_renderer =
-        unsafe { GlesRenderer::new(egl_context) }.expect("Failed to initialize GLES");
-
-    if gles_renderer.bind_wl_display(&display_handle).is_ok() {
-        info!("EGL hardware-acceleration enabled");
-    }
 
     state.gles_renderer = Some(gles_renderer);
     state.gl = Some(Gles2::load_with(
@@ -270,6 +262,9 @@ pub fn run_x11_client() {
                             surface.wl_surface(),
                             start_time.elapsed().as_millis() as u32,
                         );
+                    }
+                    for surface in data.state.x11_surface_per_wl_surface.keys() {
+                        send_frames_surface_tree(surface, start_time.elapsed().as_millis() as u32);
                     }
                 }
 

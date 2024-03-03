@@ -6,6 +6,9 @@ use smithay::reexports::calloop::channel::Event;
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 use smithay::utils::SERIAL_COUNTER;
+use smithay::wayland::compositor::with_states;
+use smithay::wayland::shell::xdg;
+use smithay::xwayland::xwm;
 
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
@@ -180,13 +183,36 @@ pub fn activate_window<BackendData: Backend + 'static>(
 
     let serial = SERIAL_COUNTER.next_serial();
 
-    if !pointer.is_grabbed() {
-        let toplevel = data
-            .state
-            .xdg_toplevels
-            .get(&(payload.surface_id as u64))
-            .cloned();
-        if let Some(toplevel) = toplevel {
+    if pointer.is_grabbed() {
+        result.success(None);
+        return;
+    }
+
+    let Some(wl_surface) = data.state.surfaces.get(&payload.surface_id).cloned() else {
+        result.error(
+            "surface_doesnt_exist".to_string(),
+            format!("Surface {} doesn't exist", payload.surface_id),
+            None,
+        );
+        return;
+    };
+
+    keyboard.set_focus(&mut data.state, Some(wl_surface.clone()), serial);
+
+    let role = with_states(&wl_surface, |states| states.role);
+    match role {
+        Some(xdg::XDG_TOPLEVEL_ROLE) => {
+            let toplevel = data.state.xdg_toplevels.get(&payload.surface_id).cloned();
+
+            let Some(toplevel) = toplevel else {
+                result.error(
+                    "toplevel_doesnt_exist".to_string(),
+                    format!("Toplevel {} doesn't exist", payload.surface_id),
+                    None,
+                );
+                return;
+            };
+
             toplevel.with_pending_state(|state| {
                 if payload.activate {
                     state.states.set(xdg_toplevel::State::Activated);
@@ -194,18 +220,30 @@ pub fn activate_window<BackendData: Backend + 'static>(
                     state.states.unset(xdg_toplevel::State::Activated);
                 }
             });
-            keyboard.set_focus(&mut data.state, Some(toplevel.wl_surface().clone()), serial);
+            toplevel.send_pending_configure();
 
-            for toplevel in data.state.xdg_toplevels.values() {
-                toplevel.send_pending_configure();
-            }
             result.success(None);
-        } else {
+        }
+        Some(xwm::X11_SURFACE_ROLE) => {
+            let Some(x11_surface) = data.state.x11_surface_per_wl_surface.get(&wl_surface) else {
+                result.error(
+                    "x11_surface_doesnt_exist".to_string(),
+                    format!("X11 Surface {} doesn't exist", payload.surface_id),
+                    None,
+                );
+                return;
+            };
+            x11_surface.set_activated(payload.activate).unwrap();
+
+            result.success(None);
+        }
+        _ => {
             result.error(
-                "surface_doesnt_exist".to_string(),
-                format!("Surface {} doesn't exist", payload.surface_id),
+                "invalid_surface_role".to_string(),
+                format!("Surface {} has an invalid role", payload.surface_id),
                 None,
             );
+            return;
         }
     }
 }
@@ -226,25 +264,61 @@ pub fn resize_window<BackendData: Backend + 'static>(
     let args = method_call.arguments().unwrap().clone();
     let payload: ResizeWindowPayload = serde_json::from_value(args).unwrap();
 
-    match data
-        .state
-        .xdg_toplevels
-        .get(&(payload.surface_id as u64))
-        .cloned()
-    {
-        Some(toplevel) => {
-            toplevel.with_pending_state(|state| {
-                state.size = Some((payload.width as i32, payload.height as i32).into());
-            });
-            toplevel.send_pending_configure();
-            result.success(None);
-        }
-        None => result.error(
+    let Some(wl_surface) = data.state.surfaces.get(&payload.surface_id).cloned() else {
+        result.error(
             "surface_doesnt_exist".to_string(),
             format!("Surface {} doesn't exist", payload.surface_id),
             None,
-        ),
+        );
+        return;
     };
+
+    let role = with_states(&wl_surface, |states| states.role);
+    match role {
+        Some(xdg::XDG_TOPLEVEL_ROLE) => {
+            let toplevel = data.state.xdg_toplevels.get(&payload.surface_id).cloned();
+
+            let Some(toplevel) = toplevel else {
+                result.error(
+                    "toplevel_doesnt_exist".to_string(),
+                    format!("Toplevel {} doesn't exist", payload.surface_id),
+                    None,
+                );
+                return;
+            };
+
+            toplevel.with_pending_state(|state| {
+                state.size = Some((payload.width, payload.height).into());
+            });
+            toplevel.send_pending_configure();
+
+            result.success(None);
+        }
+        Some(xwm::X11_SURFACE_ROLE) => {
+            let Some(x11_surface) = data.state.x11_surface_per_wl_surface.get(&wl_surface) else {
+                result.error(
+                    "x11_surface_doesnt_exist".to_string(),
+                    format!("X11 Surface {} doesn't exist", payload.surface_id),
+                    None,
+                );
+                return;
+            };
+
+            let mut geometry = x11_surface.geometry();
+            geometry.size = (payload.width, payload.height).into();
+            x11_surface.configure(geometry).unwrap();
+
+            result.success(None);
+        }
+        _ => {
+            result.error(
+                "invalid_surface_role".to_string(),
+                format!("Surface {} has an invalid role", payload.surface_id),
+                None,
+            );
+            return;
+        }
+    }
 }
 
 #[derive(Debug, serde::Deserialize)]
