@@ -11,6 +11,7 @@ enum SurfaceRole {
   xdgToplevel,
   xdgPopup,
   subsurface,
+  x11Surface,
 }
 
 @freezed

@@ -69,7 +69,7 @@ class SubsurfaceState extends _$SubsurfaceState {
           ),
           (_, __) => _checkIfMapped(),
         ),
-      null => null,
+      SurfaceRole.x11Surface || null => null,
     };
     _checkIfMapped();
   }
@@ -85,7 +85,7 @@ class SubsurfaceState extends _$SubsurfaceState {
         ref.read(xdgSurfaceStateProvider(state.parent)).mapped,
       SurfaceRole.subsurface =>
         ref.read(subsurfaceStateProvider(state.parent)).mapped,
-      null => false,
+      SurfaceRole.x11Surface || null => false,
     };
 
     final isCommitted = state.committed;

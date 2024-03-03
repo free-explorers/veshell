@@ -2,6 +2,8 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/model/x11_surface.dart';
+import 'package:shell/wayland/provider/surface.manager.dart';
+import 'package:shell/wayland/provider/wl_surface_state.dart';
 
 part 'x11_surface_state.g.dart';
 
@@ -29,12 +31,17 @@ class X11SurfaceState extends _$X11SurfaceState {
   void map({
     required SurfaceId surfaceId,
   }) {
+    assert(state.surfaceId == null);
     state = state.copyWith(
       surfaceId: surfaceId,
     );
+    ref.read(wlSurfaceStateProvider(surfaceId).notifier).setX11SurfaceRole();
+    ref.read(surfaceMappedProvider.notifier).mapped(surfaceId);
   }
 
   void unmap() {
+    // assert(state.surfaceId != null);
+    ref.read(surfaceMappedProvider.notifier).unmapped(state.surfaceId!);
     state = state.copyWith(
       surfaceId: null,
     );

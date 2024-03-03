@@ -5,14 +5,12 @@ import 'package:shell/monitor/provider/monitor_list.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/screen/provider/screen_list.dart';
 import 'package:shell/screen/provider/screen_state.dart';
-import 'package:shell/wayland/model/event/destroy_surface/destroy_surface.serializable.dart';
-import 'package:shell/wayland/model/event/wayland_event.serializable.dart';
 import 'package:shell/wayland/model/request/close_window/close_window.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
-import 'package:shell/wayland/model/xdg_surface.dart';
 import 'package:shell/wayland/model/xdg_toplevel.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
+import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
 import 'package:shell/window/model/window.dart';
 import 'package:shell/window/provider/dialog_list_for_window.dart';
@@ -34,13 +32,13 @@ class WindowManager extends _$WindowManager {
   @override
   ISet<WindowId> build() {
     ref.listen(
-      newXdgToplevelSurfaceProvider,
+      surfaceMappedProvider,
       (_, next) async {
         switch (next) {
-          case AsyncData(value: final XdgToplevelMappedEvent event):
-            onNewToplevel(event.surfaceId);
-          case AsyncData(value: final XdgToplevelUnmappedEvent event):
-            _onSurfaceIsDestroyed(event.surfaceId);
+          case AsyncData(value: final SurfaceMappedEvent event):
+            _onSurfaceMapped(event.surfaceId);
+          case AsyncData(value: final SurfaceUnmappedEvent event):
+            _onSurfaceUnmapped(event.surfaceId);
         }
       },
     );
@@ -68,11 +66,21 @@ class WindowManager extends _$WindowManager {
     return windowId;
   }
 
-  /// new toplevel handler
+  /// Surface mapped handler
   ///
-  /// This is called when a new toplevel surface is created
-  /// it first search for a waiting persistent window
-  void onNewToplevel(SurfaceId surfaceId) {
+  /// This is called when a toplevel or X11 surface is mapped.
+  /// It searches for a waiting persistent window.
+  void _onSurfaceMapped(SurfaceId surfaceId) {
+    final role = ref.read(wlSurfaceStateProvider(surfaceId)).role;
+
+    if (role case SurfaceRole.xdgToplevel) {
+      _onToplevelMapped(surfaceId);
+    } else if (role case SurfaceRole.x11Surface) {
+      _onX11SurfaceMapped(surfaceId);
+    }
+  }
+
+  void _onToplevelMapped(SurfaceId surfaceId) {
     final toplevelState = ref.read(xdgToplevelStateProvider(surfaceId));
 
     for (final windowId in state) {
@@ -95,20 +103,51 @@ class WindowManager extends _$WindowManager {
       return;
     }
     // create a new window
-    _createPersistentWindowForSurface(surfaceId, toplevelState);
+    _createPersistentWindowForSurface(
+      surfaceId: surfaceId,
+      appId: toplevelState.appId,
+      title: toplevelState.title,
+    );
   }
 
-  _createPersistentWindowForSurface(
-    SurfaceId surfaceId,
-    XdgToplevel toplevelState,
-  ) {
+  void _onX11SurfaceMapped(SurfaceId surfaceId) {
+    for (final windowId in state) {
+      final window = ref.read(windowStateProvider(windowId));
+      if (window is PersistentWindow) {
+        if (window.isWaitingForSurface) {
+          ref.read(windowStateProvider(windowId).notifier).initialize(
+                window.copyWith(
+                  title: window.title,
+                  surfaceId: surfaceId,
+                  isWaitingForSurface: false,
+                ),
+              );
+          return;
+        }
+      }
+    }
+
+    // create a new window
+    _createPersistentWindowForSurface(
+      surfaceId: surfaceId,
+      // TODO(roscale): Get X11 surface information from Smithay.
+      appId: null,
+      title: null,
+    );
+  }
+
+  void _createPersistentWindowForSurface({
+    required SurfaceId surfaceId,
+    required String? appId,
+    required String? title,
+  }) {
     // create a new window
     final windowId = _uuidGenerator.v4();
 
     final persistentWindow = PersistentWindow(
       windowId: windowId,
-      appId: toplevelState.appId ?? 'unknown',
-      title: toplevelState.title ?? 'unknown',
+      appId: appId ?? 'unknown',
+      title: title ?? 'unknown',
       surfaceId: surfaceId,
     );
 
@@ -131,8 +170,10 @@ class WindowManager extends _$WindowManager {
         .addWindow(windowId);
   }
 
-  _createDialogWindowForSurface(
-      SurfaceId surfaceId, XdgToplevel toplevelState) {
+  void _createDialogWindowForSurface(
+    SurfaceId surfaceId,
+    XdgToplevel toplevelState,
+  ) {
     // create a new window
     final windowId = _uuidGenerator.v4();
 
@@ -157,7 +198,7 @@ class WindowManager extends _$WindowManager {
         );
   }
 
-  void _onSurfaceIsDestroyed(SurfaceId surfaceId) {
+  void _onSurfaceUnmapped(SurfaceId surfaceId) {
     if (ref.read(surfaceWindowMapProvider).get(surfaceId)
         case final WindowId windowId) {
       ref.read(windowStateProvider(windowId).notifier).onSurfaceIsDestroyed();
@@ -175,7 +216,7 @@ class WindowManager extends _$WindowManager {
     }
   }
 
-  closeWindow(WindowId windowId) {
+  void closeWindow(WindowId windowId) {
     final windowState = ref.read(windowStateProvider(windowId));
 
     ref.read(waylandManagerProvider.notifier).request(

@@ -12,6 +12,7 @@ class SurfaceWidget extends ConsumerWidget {
     required this.surfaceId,
     super.key,
   });
+
   final SurfaceId surfaceId;
 
   @override
@@ -30,10 +31,10 @@ class SurfaceWidget extends ConsumerWidget {
             child: Consumer(
               builder: (BuildContext context, WidgetRef ref, Widget? child) {
                 final textureId = ref.watch(
-                  wlSurfaceStateProvider(surfaceId)
-                      .select((v) => v.texture!.id),
+                  wlSurfaceStateProvider(surfaceId).select(
+                    (v) => v.texture!.id,
+                  ),
                 );
-
                 return Texture(
                   textureId: textureId,
                 );
@@ -55,6 +56,7 @@ class _Subsurfaces extends ConsumerWidget {
     required this.surfaceId,
     required this.layer,
   });
+
   final SurfaceId surfaceId;
   final _SubsurfaceLayer layer;
 

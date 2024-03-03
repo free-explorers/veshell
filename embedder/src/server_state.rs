@@ -13,7 +13,7 @@ use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::backend::input::KeyState;
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
-use smithay::backend::renderer::{ImportAll, Texture};
+use smithay::backend::renderer::{ImportAll, ImportDma, Texture};
 use smithay::input::keyboard::KeyboardHandle;
 use smithay::input::pointer::{CursorImageStatus, PointerHandle};
 use smithay::input::{Seat, SeatHandler, SeatState};
@@ -107,6 +107,7 @@ pub struct ServerState<BackendData: Backend + 'static> {
     pub surfaces: HashMap<u64, WlSurface>,
     pub xdg_toplevels: HashMap<u64, ToplevelSurface>,
     pub xdg_popups: HashMap<u64, PopupSurface>,
+    pub x11_surface_per_wl_surface: HashMap<WlSurface, X11Surface>,
     pub texture_ids_per_surface_id: HashMap<u64, Vec<(i64, Size<i32, BufferCoords>)>>,
     pub surface_id_per_texture_id: HashMap<i64, u64>,
     pub texture_swapchains: HashMap<i64, TextureSwapChain>,
@@ -421,6 +422,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             surfaces: HashMap::new(),
             xdg_toplevels: HashMap::new(),
             xdg_popups: HashMap::new(),
+            x11_surface_per_wl_surface: HashMap::new(),
             texture_ids_per_surface_id: HashMap::new(),
             surface_id_per_texture_id: HashMap::new(),
             texture_swapchains: HashMap::new(),
@@ -499,6 +501,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
                 let subsurface_message = Self::construct_subsurface_role_message(surface);
                 Some(SurfaceRole::Subsurface(subsurface_message))
             }
+            Some(xwm::X11_SURFACE_ROLE) => Some(SurfaceRole::X11Surface),
             _ => None,
         }
     }
@@ -916,6 +919,8 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
+        dbg!("commit");
+
         X11Wm::commit_hook::<CalloopData<BackendData>>(surface);
 
         let (subsurfaces_below, subsurfaces_above) = get_direct_subsurfaces(surface);
@@ -1050,6 +1055,7 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                 .borrow()
                 .surface_id
         });
+        dbg!("des: ", surface_id);
         self.surfaces.remove(&surface_id);
 
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
@@ -1077,12 +1083,22 @@ impl<BackendData: Backend> DmabufHandler for ServerState<BackendData> {
     fn dmabuf_imported(
         &mut self,
         _global: &DmabufGlobal,
-        _dmabuf: Dmabuf,
+        dmabuf: Dmabuf,
         notifier: ImportNotifier,
     ) {
         // TODO
-        self.imported_dmabufs.push(_dmabuf);
-        let _ = notifier.successful::<ServerState<BackendData>>();
+        if self
+            .gles_renderer
+            .as_mut()
+            .unwrap()
+            .import_dmabuf(&dmabuf, None)
+            .is_ok()
+        {
+            let _ = notifier.successful::<ServerState<BackendData>>();
+            self.imported_dmabufs.push(dmabuf);
+        } else {
+            notifier.failed();
+        }
     }
 }
 
@@ -1170,16 +1186,38 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
 
     fn new_override_redirect_window(&mut self, xwm: XwmId, window: X11Surface) {}
 
-    fn map_window_request(&mut self, xwm: XwmId, window: X11Surface) {
-        if !window.is_override_redirect() {
-            let _ = window.set_mapped(true);
-        }
-        dbg!(window);
+    fn map_window_request(&mut self, xwm: XwmId, surface: X11Surface) {
+        surface.set_mapped(true).unwrap();
     }
 
     fn map_window_notify(&mut self, xwm: XwmId, surface: X11Surface) {
+        let wl_surface = surface.wl_surface().unwrap();
+        self.state
+            .x11_surface_per_wl_surface
+            .insert(wl_surface.clone(), surface.clone());
+
+        let was_missing = surface.user_data().insert_if_missing(|| {
+            RefCell::new(MyX11SurfaceState {
+                x11_surface_id: self.state.get_new_x11_surface_id(),
+            })
+        });
+
+        if was_missing {
+            let x11_surface_id = get_x11_surface_id(&surface);
+
+            let platform_method_channel =
+                &mut self.state.flutter_engine_mut().platform_method_channel;
+            platform_method_channel.invoke_method(
+                "new_x11_surface",
+                Some(Box::new(json!({
+                    "x11SurfaceId": x11_surface_id,
+                }))),
+                None,
+            );
+        }
+
         let x11_surface_id = get_x11_surface_id(&surface);
-        let surface_id = get_surface_id(&surface.wl_surface().unwrap());
+        let surface_id = get_surface_id(&wl_surface);
 
         let platform_method_channel = &mut self.state.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
@@ -1195,6 +1233,11 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
     fn mapped_override_redirect_window(&mut self, xwm: XwmId, window: X11Surface) {}
 
     fn unmapped_window(&mut self, xwm: XwmId, surface: X11Surface) {
+        let Some(wl_surface) = surface.wl_surface() else {
+            return;
+        };
+        self.state.x11_surface_per_wl_surface.remove(&wl_surface);
+
         let x11_surface_id = get_x11_surface_id(&surface);
 
         let platform_method_channel = &mut self.state.flutter_engine_mut().platform_method_channel;
@@ -1205,19 +1248,23 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
             }))),
             None,
         );
+
+        if !surface.is_override_redirect() {
+            surface.set_mapped(false).unwrap();
+        }
     }
 
     fn destroyed_window(&mut self, xwm: XwmId, surface: X11Surface) {
-        let x11_surface_id = get_x11_surface_id(&surface);
-
-        let platform_method_channel = &mut self.state.flutter_engine_mut().platform_method_channel;
-        platform_method_channel.invoke_method(
-            "destroy_x11_surface",
-            Some(Box::new(json!({
-                "x11SurfaceId": x11_surface_id,
-            }))),
-            None,
-        );
+        // let x11_surface_id = get_x11_surface_id(&surface);
+        //
+        // let platform_method_channel = &mut self.state.flutter_engine_mut().platform_method_channel;
+        // platform_method_channel.invoke_method(
+        //     "destroy_x11_surface",
+        //     Some(Box::new(json!({
+        //         "x11SurfaceId": x11_surface_id,
+        //     }))),
+        //     None,
+        // );
     }
 
     fn configure_request(
@@ -1230,6 +1277,15 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
         h: Option<u32>,
         reorder: Option<Reorder>,
     ) {
+        // we just set the new size, but don't let windows move themselves around freely
+        let mut geo = window.geometry();
+        if let Some(w) = w {
+            geo.size.w = w as i32;
+        }
+        if let Some(h) = h {
+            geo.size.h = h as i32;
+        }
+        let _ = window.configure(geo);
     }
 
     fn configure_notify(

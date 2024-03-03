@@ -85,7 +85,7 @@ class XdgToplevelState extends _$XdgToplevelState {
   void dispose() {
     final mapped = ref.read(xdgSurfaceStateProvider(surfaceId)).mapped;
     if (mapped) {
-      ref.read(newXdgToplevelSurfaceProvider.notifier).unmapped(surfaceId);
+      ref.read(surfaceMappedProvider.notifier).unmapped(surfaceId);
     }
     _keepAliveLink.close();
   }

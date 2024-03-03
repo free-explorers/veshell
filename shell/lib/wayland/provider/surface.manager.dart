@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
-import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/wayland/model/event/commit_surface/commit_surface.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_popup/destroy_popup.serializable.dart';
@@ -22,7 +21,6 @@ import 'package:shell/wayland/model/event/wayland_event.serializable.dart';
 import 'package:shell/wayland/model/request/unregister_view_texture/unregister_view_texture.serializable.dart';
 import 'package:shell/wayland/model/surface_manager_state.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
-import 'package:shell/wayland/model/x11_surface.dart';
 import 'package:shell/wayland/provider/subsurface_state.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
@@ -127,6 +125,7 @@ class SurfaceManager extends _$SurfaceManager {
           null => null,
         },
       SubsurfaceRoleMessage() => SurfaceRole.subsurface,
+      X11SurfaceRoleMessage() => SurfaceRole.x11Surface,
       null => null,
     };
 
@@ -173,7 +172,7 @@ class SurfaceManager extends _$SurfaceManager {
         ref.read(subsurfaceStateProvider(message.surfaceId).notifier).commit(
               position: surfaceRole.position,
             );
-      case null:
+      case X11SurfaceRoleMessage() || null:
       // Nothing to do.
     }
   }
@@ -213,7 +212,7 @@ class SurfaceManager extends _$SurfaceManager {
         _destroyXdgSurface(
           DestroyXdgSurfaceMessage(surfaceId: message.surfaceId),
         );
-      case null:
+      case SurfaceRole.x11Surface || null:
     }
 
     ref.read(wlSurfaceStateProvider(message.surfaceId).notifier).dispose();
@@ -247,35 +246,35 @@ class SurfaceManager extends _$SurfaceManager {
   }
 }
 
-sealed class XdgToplevelMapEvent {
-  XdgToplevelMapEvent(this.surfaceId);
+sealed class SurfaceMapEvent {
+  SurfaceMapEvent(this.surfaceId);
 
   final SurfaceId surfaceId;
 }
 
-class XdgToplevelMappedEvent extends XdgToplevelMapEvent {
-  XdgToplevelMappedEvent(super.surfaceId);
+class SurfaceMappedEvent extends SurfaceMapEvent {
+  SurfaceMappedEvent(super.surfaceId);
 }
 
-class XdgToplevelUnmappedEvent extends XdgToplevelMapEvent {
-  XdgToplevelUnmappedEvent(super.surfaceId);
+class SurfaceUnmappedEvent extends SurfaceMapEvent {
+  SurfaceUnmappedEvent(super.surfaceId);
 }
 
 @Riverpod(keepAlive: true)
-class NewXdgToplevelSurface extends _$NewXdgToplevelSurface {
-  final _streamController = StreamController<XdgToplevelMapEvent>();
+class SurfaceMapped extends _$SurfaceMapped {
+  final _streamController = StreamController<SurfaceMapEvent>();
 
-  /// Build the stream of [int]
+  /// Build the stream of [SurfaceMapEvent]
   @override
-  Stream<XdgToplevelMapEvent> build() {
+  Stream<SurfaceMapEvent> build() {
     return _streamController.stream;
   }
 
   void mapped(SurfaceId surfaceId) {
-    _streamController.sink.add(XdgToplevelMappedEvent(surfaceId));
+    _streamController.sink.add(SurfaceMappedEvent(surfaceId));
   }
 
   void unmapped(SurfaceId surfaceId) {
-    _streamController.sink.add(XdgToplevelUnmappedEvent(surfaceId));
+    _streamController.sink.add(SurfaceUnmappedEvent(surfaceId));
   }
 }

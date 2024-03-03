@@ -23,6 +23,7 @@ pub struct SurfaceMessage {
 pub enum SurfaceRole {
     XdgSurface(XdgSurfaceMessage),
     Subsurface(SubsurfaceMessage),
+    X11Surface,
 }
 
 #[derive(Debug, Serialize)]

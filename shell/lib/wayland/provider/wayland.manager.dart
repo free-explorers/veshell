@@ -40,6 +40,7 @@ class WaylandManager extends _$WaylandManager {
 
   /// Send a [WaylandRequest] to the Wayland compositor
   Future<void> request(WaylandRequest request) async {
+    print(request);
     await _channel.invokeMethod(request.method, request.message?.toJson());
   }
 }

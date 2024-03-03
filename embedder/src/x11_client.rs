@@ -1,10 +1,10 @@
-use std::ffi::OsString;
 use std::sync::atomic::Ordering;
 
 use log::{error, warn};
 use smithay::backend::input::Event;
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
+use smithay::backend::renderer::ImportEgl;
 use smithay::output::{Output, PhysicalProperties, Subpixel};
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::wayland_server::protocol::wl_shm;
@@ -34,7 +34,6 @@ use smithay::{
 };
 use tracing::info;
 
-use crate::drm_backend::DrmBackend;
 use crate::flutter_engine::FlutterEngine;
 use crate::input_handling::handle_input;
 use crate::{
@@ -176,8 +175,12 @@ pub fn run_x11_client() {
         Some(dmabuf_state),
     );
 
-    let gles_renderer =
+    let mut gles_renderer =
         unsafe { GlesRenderer::new(egl_context) }.expect("Failed to initialize GLES");
+
+    if gles_renderer.bind_wl_display(&display_handle).is_ok() {
+        info!("EGL hardware-acceleration enabled");
+    }
 
     state.gles_renderer = Some(gles_renderer);
     state.gl = Some(Gles2::load_with(

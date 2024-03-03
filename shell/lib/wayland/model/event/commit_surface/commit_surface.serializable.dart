@@ -46,6 +46,8 @@ sealed class SurfaceRoleMessage with _$SurfaceRoleMessage {
     @OffsetConverter() required Offset position,
   }) = SubsurfaceRoleMessage;
 
+  const factory SurfaceRoleMessage.x11Surface() = X11SurfaceRoleMessage;
+
   factory SurfaceRoleMessage.fromJson(Map<String, dynamic> json) =>
       _$SurfaceRoleMessageFromJson(json);
 }
