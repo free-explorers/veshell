@@ -180,6 +180,9 @@ class SurfaceManager extends _$SurfaceManager {
   void _mapX11Surface(MapX11SurfaceMessage message) {
     ref.read(x11SurfaceStateProvider(message.x11SurfaceId).notifier).map(
           surfaceId: message.surfaceId,
+          overrideRedirect: message.overrideRedirect,
+          geometry: message.geometry,
+          parent: message.parent,
         );
   }
 

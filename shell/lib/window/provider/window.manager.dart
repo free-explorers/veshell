@@ -11,6 +11,7 @@ import 'package:shell/wayland/model/xdg_toplevel.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
+import 'package:shell/wayland/provider/x11_surface_state.dart';
 import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
 import 'package:shell/window/model/window.dart';
 import 'package:shell/window/provider/dialog_list_for_window.dart';
@@ -111,6 +112,13 @@ class WindowManager extends _$WindowManager {
   }
 
   void _onX11SurfaceMapped(SurfaceId surfaceId) {
+    final x11SurfaceId = ref.read(x11SurfaceIdByWlSurfaceIdProvider(surfaceId));
+
+    if (ref.read(x11SurfaceStateProvider(x11SurfaceId)).overrideRedirect) {
+      // Override redirect surfaces should not be managed by the window manager.
+      return;
+    }
+
     for (final windowId in state) {
       final window = ref.read(windowStateProvider(windowId));
       if (window is PersistentWindow) {

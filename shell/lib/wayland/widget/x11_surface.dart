@@ -5,6 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/wayland/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
+import 'package:shell/wayland/provider/x11_surface_state.dart';
 import 'package:shell/wayland/provider/xdg_surface_state.dart';
 import 'package:shell/wayland/widget/surface.dart';
 import 'package:shell/wayland/widget/surface/pointer_listener.dart';
@@ -22,6 +23,38 @@ class X11SurfaceWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final x11SurfaceId = ref.watch(
+      x11SurfaceIdByWlSurfaceIdProvider(surfaceId),
+    );
+
+    final overrideRedirect = ref.watch(
+      x11SurfaceStateProvider(x11SurfaceId).select(
+        (value) => value.overrideRedirect,
+      ),
+    );
+
+    final children = ref
+        .watch(
+          x11SurfaceStateProvider(x11SurfaceId).select(
+            (value) => value.children,
+          ),
+        )
+        .where(
+          (x11SurfaceId) => ref.watch(
+            x11SurfaceStateProvider(x11SurfaceId).select(
+              (x11Surface) => x11Surface.mapped,
+            ),
+          ),
+        )
+        .map(
+          (x11SurfaceId) => ref.watch(
+            x11SurfaceStateProvider(x11SurfaceId).select(
+              (x11Surface) => x11Surface.surfaceId,
+            ),
+          )!,
+        )
+        .toList();
+
     return VisibilityDetector(
       key: ValueKey(surfaceId),
       onVisibilityChanged: (VisibilityInfo info) {
@@ -32,11 +65,20 @@ class X11SurfaceWidget extends ConsumerWidget {
         }
       },
       child: SurfaceFocus(
-        child: PointerListener(
-          surfaceId: surfaceId,
-          child: SurfaceWidget(
-            surfaceId: surfaceId,
-          ),
+        child: Stack(
+          children: [
+            PointerListener(
+              enabled: !overrideRedirect,
+              surfaceId: surfaceId,
+              child: SurfaceWidget(
+                surfaceId: surfaceId,
+              ),
+            ),
+            for (final child in children)
+              X11SurfaceWidget(
+                surfaceId: child,
+              ),
+          ],
         ),
       ),
     );

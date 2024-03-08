@@ -16,7 +16,7 @@ class XdgToplevelSurfaceWidget extends ConsumerWidget {
 
   final SurfaceId surfaceId;
 
-  void _collectPopupList(List<int> ids, WidgetRef ref, SurfaceId surfaceId) {
+  void _collectPopupList(List<SurfaceId> ids, WidgetRef ref, SurfaceId surfaceId) {
     final popups = ref
         .watch(
           xdgSurfaceStateProvider(surfaceId).select((value) => value.popups),
@@ -34,7 +34,7 @@ class XdgToplevelSurfaceWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final popupList = <int>[];
+    final popupList = <SurfaceId>[];
     _collectPopupList(popupList, ref, surfaceId);
 
     return VisibilityDetector(

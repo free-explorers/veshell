@@ -304,6 +304,18 @@ pub fn resize_window<BackendData: Backend + 'static>(
                 return;
             };
 
+            if x11_surface.is_override_redirect() {
+                result.error(
+                    "resize_unsupported_for_override_redirect_x11_surfaces".to_string(),
+                    format!(
+                        "Resize unsupported for override redirect X11 surface {}",
+                        payload.surface_id,
+                    ),
+                    None,
+                );
+                return;
+            }
+
             let mut geometry = x11_surface.geometry();
             geometry.size = (payload.width, payload.height).into();
             x11_surface.configure(geometry).unwrap();

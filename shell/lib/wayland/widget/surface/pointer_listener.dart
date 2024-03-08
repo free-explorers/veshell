@@ -8,13 +8,19 @@ class PointerListener extends ConsumerWidget {
   const PointerListener({
     required this.surfaceId,
     required this.child,
+    this.enabled = true,
   });
 
   final SurfaceId surfaceId;
   final Widget child;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (!enabled) {
+      return child;
+    }
+
     return Listener(
       onPointerDown: (_) => ref.read(waylandManagerProvider.notifier).request(
             ActivateWindowRequest(
