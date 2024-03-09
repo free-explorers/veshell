@@ -49,9 +49,9 @@ class X11SurfaceWidget extends ConsumerWidget {
         .map(
           (x11SurfaceId) => ref.watch(
             x11SurfaceStateProvider(x11SurfaceId).select(
-              (x11Surface) => x11Surface.surfaceId,
+              (x11Surface) => (x11Surface.surfaceId, x11Surface.geometry),
             ),
-          )!,
+          ),
         )
         .toList();
 
@@ -74,9 +74,13 @@ class X11SurfaceWidget extends ConsumerWidget {
                 surfaceId: surfaceId,
               ),
             ),
-            for (final child in children)
-              X11SurfaceWidget(
-                surfaceId: child,
+            for (final (surfaceId, geometry) in children)
+              Positioned(
+                left: geometry.left,
+                top: geometry.top,
+                child: X11SurfaceWidget(
+                  surfaceId: surfaceId!,
+                ),
               ),
           ],
         ),

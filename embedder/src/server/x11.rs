@@ -8,6 +8,7 @@ use smithay::xwayland::xwm::{Reorder, XwmId};
 use smithay::xwayland::{xwm, X11Surface, X11Wm, XwmHandler};
 use std::cell::RefCell;
 use std::os::fd::OwnedFd;
+use smithay::desktop::space::SpaceElement;
 
 struct MyX11SurfaceState {
     x11_surface_id: u64,
@@ -87,6 +88,7 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
 
     fn map_window_request(&mut self, _xwm: XwmId, surface: X11Surface) {
         surface.set_mapped(true).unwrap();
+        surface.set_activated(true).unwrap();
     }
 
     fn map_window_notify(&mut self, _xwm: XwmId, surface: X11Surface) {
@@ -95,6 +97,7 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
 
     fn mapped_override_redirect_window(&mut self, _xwm: XwmId, surface: X11Surface) {
         self.state.map_x11_surface(surface.clone());
+        surface.set_activated(true).unwrap();
     }
 
     fn unmapped_window(&mut self, xwm: XwmId, surface: X11Surface) {

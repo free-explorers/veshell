@@ -1,5 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/wayland/model/request/wayland_request.dart';
+import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
 part 'mouse_button_event.serializable.freezed.dart';
@@ -21,6 +22,7 @@ class MouseButtonEventMessage
     implements WaylandMessage {
   /// Factory
   factory MouseButtonEventMessage({
+    required SurfaceId surfaceId,
     required int button,
     required bool isPressed,
   }) = _MouseButtonEventMessage;

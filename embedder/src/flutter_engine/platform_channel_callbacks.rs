@@ -131,6 +131,7 @@ pub fn pointer_exit<BackendData: Backend + 'static>(
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct MouseButtonPayload {
+    surface_id: u64,
     button: u32,
     is_pressed: bool,
 }
@@ -146,6 +147,12 @@ pub fn mouse_button_event<BackendData: Backend + 'static>(
     let args = method_call.arguments().unwrap().clone();
     let payload: MouseButtonPayload = serde_json::from_value(args).unwrap();
 
+    // let keyboard = data.state.keyboard.clone();
+    // if payload.is_pressed && !keyboard.is_grabbed() && !pointer.is_grabbed() {
+    //     let surface = data.state.surfaces.get(&payload.surface_id).cloned();
+    //     keyboard.set_focus(&mut data.state, surface, SERIAL_COUNTER.next_serial());
+    // }
+    
     pointer.button(
         &mut data.state,
         &ButtonEvent {

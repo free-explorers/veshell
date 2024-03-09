@@ -168,6 +168,7 @@ class ViewInputListener extends ConsumerWidget {
     return ref.read(waylandManagerProvider.notifier).request(
           MouseButtonEventRequest(
             message: MouseButtonEventMessage(
+              surfaceId: surfaceId,
               button: event.button,
               isPressed: event.state == MouseButtonState.pressed,
             ),
