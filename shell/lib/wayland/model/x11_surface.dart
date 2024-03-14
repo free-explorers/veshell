@@ -25,5 +25,9 @@ class X11Surface with _$X11Surface {
     @RectConverter() required Rect geometry,
     required X11SurfaceId? parent,
     required IList<X11SurfaceId> children,
+    required String title,
+    required String windowClass,
+    required String instance,
+    required String? startupId,
   }) = _X11Surface;
 }

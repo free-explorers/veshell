@@ -113,8 +113,9 @@ class WindowManager extends _$WindowManager {
 
   void _onX11SurfaceMapped(SurfaceId surfaceId) {
     final x11SurfaceId = ref.read(x11SurfaceIdByWlSurfaceIdProvider(surfaceId));
+    final x11SurfaceState = ref.read(x11SurfaceStateProvider(x11SurfaceId));
 
-    if (ref.read(x11SurfaceStateProvider(x11SurfaceId)).overrideRedirect) {
+    if (x11SurfaceState.overrideRedirect) {
       // Override redirect surfaces should not be managed by the window manager.
       return;
     }
@@ -135,12 +136,13 @@ class WindowManager extends _$WindowManager {
       }
     }
 
+    print(x11SurfaceState.instance);
+
     // create a new window
     _createPersistentWindowForSurface(
       surfaceId: surfaceId,
-      // TODO(roscale): Get X11 surface information from Smithay.
-      appId: null,
-      title: null,
+      appId: x11SurfaceState.instance,
+      title: x11SurfaceState.title,
     );
   }
 

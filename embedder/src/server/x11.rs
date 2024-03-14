@@ -67,6 +67,10 @@ impl<BackendData: Backend> ServerState<BackendData> {
                 override_redirect: surface.is_override_redirect(),
                 geometry: surface.geometry().into(),
                 parent,
+                title: surface.title(),
+                window_class: surface.class(),
+                instance: surface.instance(),
+                startup_id: surface.startup_id(),
             }))),
             None,
         );

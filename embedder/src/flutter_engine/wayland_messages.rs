@@ -83,6 +83,10 @@ pub struct MapX11Surface {
     pub override_redirect: bool,
     pub geometry: MyRectangle<i32, Logical>,
     pub parent: Option<u64>,
+    pub title: String,
+    pub window_class: String,
+    pub instance: String,
+    pub startup_id: Option<String>,
 }
 
 #[repr(transparent)]

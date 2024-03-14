@@ -33,6 +33,10 @@ class X11SurfaceState extends _$X11SurfaceState {
       geometry: Rect.zero,
       parent: null,
       children: IList<X11SurfaceId>(),
+      title: '',
+      windowClass: '',
+      instance: '',
+      startupId: null,
     );
   }
 
@@ -41,6 +45,10 @@ class X11SurfaceState extends _$X11SurfaceState {
     required bool overrideRedirect,
     required Rect geometry,
     required X11SurfaceId? parent,
+    required String title,
+    required String windowClass,
+    required String instance,
+    required String? startupId,
   }) {
     assert(!state.mapped);
 
@@ -52,6 +60,10 @@ class X11SurfaceState extends _$X11SurfaceState {
       overrideRedirect: overrideRedirect,
       geometry: geometry,
       parent: parent,
+      title: title,
+      windowClass: windowClass,
+      instance: instance,
+      startupId: startupId,
     );
 
     assert(state.surfaceId != null);

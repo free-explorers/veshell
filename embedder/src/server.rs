@@ -39,6 +39,7 @@ use smithay::wayland::compositor::{
     CompositorHandler, CompositorState, SubsurfaceCachedState, SurfaceAttributes, TraversalAction,
 };
 use smithay::wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier};
+use smithay::wayland::output::OutputHandler;
 use smithay::wayland::selection::data_device::{
     set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
     ServerDndGrabHandler,
@@ -1121,6 +1122,8 @@ impl<BackendData: Backend> DmabufHandler for ServerState<BackendData> {
 impl<BackendData: Backend> SeatHandler for ServerState<BackendData> {
     type KeyboardFocus = WlSurface;
     type PointerFocus = WlSurface;
+    
+    type TouchFocus = WlSurface;
 
     fn seat_state(&mut self) -> &mut SeatState<ServerState<BackendData>> {
         &mut self.seat_state
@@ -1148,3 +1151,5 @@ impl<BackendData: Backend> DataDeviceHandler for ServerState<BackendData> {
         &self.data_device_state
     }
 }
+
+impl<BackendData: Backend> OutputHandler for ServerState<BackendData> {}

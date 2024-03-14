@@ -22,6 +22,10 @@ sealed class MapX11SurfaceMessage
     required bool overrideRedirect,
     @RectConverter() required Rect geometry,
     required X11SurfaceId? parent,
+    required String title,
+    required String windowClass,
+    required String instance,
+    required String? startupId,
   }) = _MapX11SurfaceMessage;
 
   factory MapX11SurfaceMessage.fromJson(Map<String, dynamic> json) =>

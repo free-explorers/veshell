@@ -183,6 +183,10 @@ class SurfaceManager extends _$SurfaceManager {
           overrideRedirect: message.overrideRedirect,
           geometry: message.geometry,
           parent: message.parent,
+          title: message.title,
+          windowClass: message.windowClass,
+          instance: message.instance,
+          startupId: message.startupId,
         );
   }
 
