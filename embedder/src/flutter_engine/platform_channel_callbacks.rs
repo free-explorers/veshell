@@ -13,6 +13,7 @@ use smithay::xwayland::xwm;
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
+use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
 use crate::mouse_button_tracker::FLUTTER_TO_LINUX_MOUSE_BUTTONS;
 use crate::{Backend, CalloopData};
 
@@ -42,28 +43,6 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
     }
 }
 
-macro_rules! extract {
-    ($e:expr, $p:path) => {
-        match $e {
-            $p(value) => value,
-            _ => panic!("Failed to extract value"),
-        }
-    };
-}
-
-fn get<'a>(map: &'a EncodableValue, key: &str) -> &'a EncodableValue {
-    let map = extract!(map, EncodableValue::Map);
-    // TODO: Lookup should be constant time, not linear.
-    for (k, v) in map {
-        if let EncodableValue::String(k) = k {
-            if k == key {
-                return v;
-            }
-        }
-    }
-    panic!("Key {} not found in map", key);
-}
-
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PointerHoverPayload {
@@ -86,9 +65,18 @@ pub fn pointer_hover<BackendData: Backend + 'static>(
         let now = Duration::from(data.state.clock.now()).as_millis() as u32;
         let pointer = data.state.pointer.clone();
 
+        // if let Some(x11_surface) = data.state.x11_surface_per_wl_surface.get(&surface).cloned() {
+        //     let _ = data
+        //         .state
+        //         .x11_wm
+        //         .as_mut()
+        //         .unwrap()
+        //         .raise_window(&x11_surface);
+        // }
+
         pointer.motion(
             &mut data.state,
-            Some((surface.clone(), (0, 0).into())),
+            Some((PointerFocusTarget::from(surface), (0, 0).into())),
             &MotionEvent {
                 location: (payload.x, payload.y).into(),
                 serial: SERIAL_COUNTER.next_serial(),
@@ -147,12 +135,6 @@ pub fn mouse_button_event<BackendData: Backend + 'static>(
     let args = method_call.arguments().unwrap().clone();
     let payload: MouseButtonPayload = serde_json::from_value(args).unwrap();
 
-    // let keyboard = data.state.keyboard.clone();
-    // if payload.is_pressed && !keyboard.is_grabbed() && !pointer.is_grabbed() {
-    //     let surface = data.state.surfaces.get(&payload.surface_id).cloned();
-    //     keyboard.set_focus(&mut data.state, surface, SERIAL_COUNTER.next_serial());
-    // }
-    
     pointer.button(
         &mut data.state,
         &ButtonEvent {
@@ -204,8 +186,6 @@ pub fn activate_window<BackendData: Backend + 'static>(
         return;
     };
 
-    keyboard.set_focus(&mut data.state, Some(wl_surface.clone()), serial);
-
     let role = with_states(&wl_surface, |states| states.role);
     match role {
         Some(xdg::XDG_TOPLEVEL_ROLE) => {
@@ -229,10 +209,21 @@ pub fn activate_window<BackendData: Backend + 'static>(
             });
             toplevel.send_pending_configure();
 
+            keyboard.set_focus(
+                &mut data.state,
+                Some(KeyboardFocusTarget::WlSurface(wl_surface)),
+                serial,
+            );
+
             result.success(None);
         }
         Some(xwm::X11_SURFACE_ROLE) => {
-            let Some(x11_surface) = data.state.x11_surface_per_wl_surface.get(&wl_surface) else {
+            let Some(x11_surface) = data
+                .state
+                .x11_surface_per_wl_surface
+                .get(&wl_surface)
+                .cloned()
+            else {
                 result.error(
                     "x11_surface_doesnt_exist".to_string(),
                     format!("X11 Surface {} doesn't exist", payload.surface_id),
@@ -241,6 +232,19 @@ pub fn activate_window<BackendData: Backend + 'static>(
                 return;
             };
             x11_surface.set_activated(payload.activate).unwrap();
+
+            // let _ = data
+            //     .state
+            //     .x11_wm
+            //     .as_mut()
+            //     .unwrap()
+            //     .raise_window(&x11_surface);
+
+            keyboard.set_focus(
+                &mut data.state,
+                Some(KeyboardFocusTarget::X11Surface(x11_surface)),
+                serial,
+            );
 
             result.success(None);
         }

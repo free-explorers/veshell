@@ -55,6 +55,8 @@ class X11SurfaceWidget extends ConsumerWidget {
         )
         .toList();
 
+    print(children);
+
     return VisibilityDetector(
       key: ValueKey(surfaceId),
       onVisibilityChanged: (VisibilityInfo info) {

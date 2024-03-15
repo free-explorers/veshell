@@ -136,8 +136,6 @@ class WindowManager extends _$WindowManager {
       }
     }
 
-    print(x11SurfaceState.instance);
-
     // create a new window
     _createPersistentWindowForSurface(
       surfaceId: surfaceId,

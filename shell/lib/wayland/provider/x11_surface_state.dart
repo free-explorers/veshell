@@ -71,7 +71,7 @@ class X11SurfaceState extends _$X11SurfaceState {
     ref.read(wlSurfaceStateProvider(surfaceId).notifier).setX11SurfaceRole();
 
     ref
-        .read(x11SurfaceIdByWlSurfaceIdProvider(state.surfaceId!).notifier)
+        .read(x11SurfaceIdByWlSurfaceIdProvider(surfaceId).notifier)
         .linkX11Surface(x11SurfaceId);
 
     if (previousParent != parent) {
