@@ -35,6 +35,7 @@ mod mouse_button_tracker;
 mod server;
 mod texture_swap_chain;
 mod x11_client;
+mod focus;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Ok(env_filter) = tracing_subscriber::EnvFilter::try_from_default_env() {

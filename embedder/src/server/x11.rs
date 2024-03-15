@@ -2,13 +2,14 @@ use crate::flutter_engine::wayland_messages::{MapX11Surface, NewX11Surface};
 use crate::server::{get_surface_id, ServerState};
 use crate::{Backend, CalloopData};
 use serde_json::json;
-use smithay::utils::{Logical, Rectangle};
+use smithay::desktop::space::SpaceElement;
+use smithay::utils::{Logical, Point, Rectangle};
+use smithay::wayland::seat::WaylandFocus;
 use smithay::wayland::selection::SelectionTarget;
 use smithay::xwayland::xwm::{Reorder, XwmId};
 use smithay::xwayland::{xwm, X11Surface, X11Wm, XwmHandler};
 use std::cell::RefCell;
 use std::os::fd::OwnedFd;
-use smithay::desktop::space::SpaceElement;
 
 struct MyX11SurfaceState {
     x11_surface_id: u64,
@@ -51,12 +52,25 @@ impl<BackendData: Backend> ServerState<BackendData> {
         self.x11_surface_per_wl_surface
             .insert(wl_surface.clone(), surface.clone());
 
-        let parent = surface
-            .is_transient_for()
-            .and_then(|x11_surface| self.x11_surface_per_x11_window.get(&x11_surface))
-            // Fall back on the focused surface if the transient parent is not known.
-            .or_else(|| self.keyboard.current_focus().and_then(|wl_surface| self.x11_surface_per_wl_surface.get(&wl_surface)))
-            .map(|x11_surface| get_x11_surface_id(x11_surface));
+        let parent = if surface.is_override_redirect() {
+            surface
+                .is_transient_for()
+                .and_then(|x11_surface| self.x11_surface_per_x11_window.get(&x11_surface))
+                // Fall back on the focused surface if the transient parent is not known.
+                .or_else(|| {
+                    self.keyboard.current_focus().and_then(|focus| {
+                        focus
+                            .wl_surface()
+                            .and_then(|focus| self.x11_surface_per_wl_surface.get(&focus))
+                    })
+                })
+                .map(|x11_surface| get_x11_surface_id(x11_surface))
+        } else {
+            surface
+                .is_transient_for()
+                .and_then(|x11_surface| self.x11_surface_per_x11_window.get(&x11_surface))
+                .map(|x11_surface| get_x11_surface_id(&x11_surface))
+        };
 
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
@@ -83,6 +97,10 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
     }
 
     fn new_window(&mut self, _xwm: XwmId, surface: X11Surface) {
+        let mut geometry = surface.geometry();
+        geometry.loc = Point::from((0, 0));
+        surface.configure(geometry).unwrap();
+
         self.state.new_x11_surface(surface);
     }
 
@@ -156,6 +174,7 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
     ) {
         // We just set the new size, but don't let windows move themselves around freely.
         let mut geo = window.geometry();
+        geo.loc = Point::from((0, 0));
         if let Some(w) = w {
             geo.size.w = w as i32;
         }

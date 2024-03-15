@@ -87,7 +87,7 @@ class X11SurfaceState extends _$X11SurfaceState {
       }
     }
 
-    if (!state.overrideRedirect || state.parent == null) {
+    if (state.parent == null) {
       ref.read(surfaceMappedProvider.notifier).mapped(surfaceId);
     }
   }
@@ -125,6 +125,7 @@ class X11SurfaceState extends _$X11SurfaceState {
     state = state.copyWith(
       surfaceId: null,
       mapped: false,
+      parent: null,
     );
   }
 

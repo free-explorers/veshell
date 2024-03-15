@@ -2,7 +2,6 @@ mod x11;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::env::{remove_var, set_var};
 use std::ffi::OsString;
 use std::os::fd::OwnedFd;
 use std::sync::atomic::AtomicBool;
@@ -60,6 +59,7 @@ use smithay::{
     delegate_compositor, delegate_data_device, delegate_dmabuf, delegate_output, delegate_seat,
     delegate_shm, delegate_xdg_shell,
 };
+use smithay::wayland::seat::WaylandFocus;
 use tracing::{info, warn};
 
 use crate::cursor::Cursor;
@@ -68,6 +68,7 @@ use crate::flutter_engine::wayland_messages::{
     XdgSurfaceMessage, XdgSurfaceRole,
 };
 use crate::flutter_engine::FlutterEngine;
+use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
 use crate::keyboard::key_repeater::KeyRepeater;
 use crate::keyboard::KeyEvent;
 use crate::texture_swap_chain::TextureSwapChain;
@@ -256,11 +257,11 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
 
         info!(name = socket_name, "Listening on wayland socket");
 
-        remove_var("DISPLAY");
-        set_var("WAYLAND_DISPLAY", &socket_name);
-        set_var("XDG_SESSION_TYPE", "wayland");
-        set_var("GDK_BACKEND", "wayland"); // Force GTK apps to run on Wayland.
-        set_var("QT_QPA_PLATFORM", "wayland"); // Force QT apps to run on Wayland.
+        std::env::remove_var("DISPLAY");
+        std::env::set_var("WAYLAND_DISPLAY", &socket_name);
+        std::env::set_var("XDG_SESSION_TYPE", "wayland");
+        std::env::set_var("GDK_BACKEND", "wayland"); // Force GTK apps to run on Wayland.
+        std::env::set_var("QT_QPA_PLATFORM", "wayland"); // Force QT apps to run on Wayland.
 
         loop_handle
             .insert_source(
@@ -352,8 +353,6 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
                     client_fd: _,
                     display,
                 } => {
-                    dbg!(&display);
-
                     let mut wm = X11Wm::start_wm(
                         data.state.loop_handle.clone(),
                         data.state.display_handle.clone(),
@@ -371,9 +370,11 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
                     )
                     .expect("Failed to set xwayland default cursor");
 
+                    std::env::set_var("DISPLAY", format!(":{}", display));
                     data.state.x11_wm = Some(wm);
                 }
                 XWaylandEvent::Exited => {
+                    std::env::remove_var("DISPLAY");
                     data.state.x11_wm = None;
                 }
             });
@@ -1120,18 +1121,18 @@ impl<BackendData: Backend> DmabufHandler for ServerState<BackendData> {
 // }
 
 impl<BackendData: Backend> SeatHandler for ServerState<BackendData> {
-    type KeyboardFocus = WlSurface;
-    type PointerFocus = WlSurface;
-    
-    type TouchFocus = WlSurface;
+    type KeyboardFocus = KeyboardFocusTarget;
+    type PointerFocus = PointerFocusTarget;
+    type TouchFocus = PointerFocusTarget;
 
     fn seat_state(&mut self) -> &mut SeatState<ServerState<BackendData>> {
         &mut self.seat_state
     }
 
-    fn focus_changed(&mut self, seat: &Seat<Self>, target: Option<&WlSurface>) {
+    fn focus_changed(&mut self, seat: &Seat<Self>, target: Option<&KeyboardFocusTarget>) {
         let dh = &self.display_handle;
-        let client = target.and_then(|s| dh.get_client(s.id()).ok());
+        let wl_surface = target.and_then(WaylandFocus::wl_surface);
+        let client = wl_surface.and_then(|s| dh.get_client(s.id()).ok());
         set_data_device_focus(dh, seat, client);
     }
 

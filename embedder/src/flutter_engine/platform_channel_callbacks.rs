@@ -65,14 +65,14 @@ pub fn pointer_hover<BackendData: Backend + 'static>(
         let now = Duration::from(data.state.clock.now()).as_millis() as u32;
         let pointer = data.state.pointer.clone();
 
-        // if let Some(x11_surface) = data.state.x11_surface_per_wl_surface.get(&surface).cloned() {
-        //     let _ = data
-        //         .state
-        //         .x11_wm
-        //         .as_mut()
-        //         .unwrap()
-        //         .raise_window(&x11_surface);
-        // }
+        if let Some(x11_surface) = data.state.x11_surface_per_wl_surface.get(&surface).cloned() {
+            let _ = data
+                .state
+                .x11_wm
+                .as_mut()
+                .unwrap()
+                .raise_window(&x11_surface);
+        }
 
         pointer.motion(
             &mut data.state,
@@ -209,11 +209,13 @@ pub fn activate_window<BackendData: Backend + 'static>(
             });
             toplevel.send_pending_configure();
 
-            keyboard.set_focus(
-                &mut data.state,
-                Some(KeyboardFocusTarget::WlSurface(wl_surface)),
-                serial,
-            );
+            if payload.activate {
+                keyboard.set_focus(
+                    &mut data.state,
+                    Some(KeyboardFocusTarget::WlSurface(wl_surface)),
+                    serial,
+                );
+            }
 
             result.success(None);
         }
@@ -233,18 +235,20 @@ pub fn activate_window<BackendData: Backend + 'static>(
             };
             x11_surface.set_activated(payload.activate).unwrap();
 
-            // let _ = data
-            //     .state
-            //     .x11_wm
-            //     .as_mut()
-            //     .unwrap()
-            //     .raise_window(&x11_surface);
+            if payload.activate {
+                let _ = data
+                    .state
+                    .x11_wm
+                    .as_mut()
+                    .unwrap()
+                    .raise_window(&x11_surface);
 
-            keyboard.set_focus(
-                &mut data.state,
-                Some(KeyboardFocusTarget::X11Surface(x11_surface)),
-                serial,
-            );
+                keyboard.set_focus(
+                    &mut data.state,
+                    Some(KeyboardFocusTarget::X11Surface(x11_surface)),
+                    serial,
+                );
+            }
 
             result.success(None);
         }
