@@ -235,7 +235,7 @@ pub fn activate_window<BackendData: Backend + 'static>(
             };
             x11_surface.set_activated(payload.activate).unwrap();
 
-            if payload.activate {
+            if payload.activate && !x11_surface.is_override_redirect() {
                 let _ = data
                     .state
                     .x11_wm
