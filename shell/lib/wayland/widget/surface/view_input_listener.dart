@@ -19,6 +19,7 @@ class ViewInputListener extends ConsumerWidget {
     required this.child,
     super.key,
   });
+
   final SurfaceId surfaceId;
   final Widget child;
 
@@ -68,6 +69,16 @@ class ViewInputListener extends ConsumerWidget {
                   final position = event.localPosition + inputRegion.topLeft;
                   _pointerMoved(ref, position);
                 }
+              },
+              onPointerSignal: (PointerSignalEvent event) {
+                // https://api.flutter.dev/flutter/gestures/PointerSignalResolver-class.html
+                // Don't propagate scroll events to parent widgets.
+                // Just register an empty handler because dispatching of
+                // scroll events is handled by the Wayland server.
+                GestureBinding.instance.pointerSignalResolver.register(
+                  event,
+                  (PointerSignalEvent event) {},
+                );
               },
               child: MouseRegion(
                 onEnter: (_) => pointerFocusManager.enterSurface(),

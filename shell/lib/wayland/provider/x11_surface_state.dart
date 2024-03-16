@@ -14,6 +14,8 @@ part 'x11_surface_state.g.dart';
 class X11SurfaceState extends _$X11SurfaceState {
   late final KeepAliveLink _keepAliveLink;
 
+  ProviderSubscription<SurfaceTexture?>? textureSubscription;
+
   @override
   X11Surface build(X11SurfaceId x11SurfaceId) {
     throw Exception('X11Surface $x11SurfaceId not yet initialized');
@@ -50,13 +52,12 @@ class X11SurfaceState extends _$X11SurfaceState {
     required String instance,
     required String? startupId,
   }) {
-    assert(!state.mapped);
+    assert(state.surfaceId == null);
 
     X11SurfaceId? previousParent = state.parent;
 
     state = state.copyWith(
       surfaceId: surfaceId,
-      mapped: true,
       overrideRedirect: overrideRedirect,
       geometry: geometry,
       parent: parent,
@@ -87,16 +88,19 @@ class X11SurfaceState extends _$X11SurfaceState {
       }
     }
 
-    if (state.parent == null) {
-      ref.read(surfaceMappedProvider.notifier).mapped(surfaceId);
-    }
+    assert(textureSubscription == null);
+    textureSubscription = ref.listen(
+      wlSurfaceStateProvider(surfaceId).select((value) => value.texture),
+      (_, __) => _checkIfMapped(),
+    );
+
+    _checkIfMapped();
   }
 
   void unmap() {
     assert(state.surfaceId != null);
-    assert(state.mapped);
 
-    if (!state.overrideRedirect || state.parent == null) {
+    if (state.mapped && state.parent == null) {
       ref.read(surfaceMappedProvider.notifier).unmapped(state.surfaceId!);
     }
 
@@ -109,6 +113,9 @@ class X11SurfaceState extends _$X11SurfaceState {
     ref
         .read(x11SurfaceIdByWlSurfaceIdProvider(state.surfaceId!).notifier)
         .unlinkX11Surface();
+
+    textureSubscription!.close();
+    textureSubscription = null;
 
     state = state.copyWith(
       surfaceId: null,
@@ -129,12 +136,36 @@ class X11SurfaceState extends _$X11SurfaceState {
     );
   }
 
-  void dispose() {
-    if (state.mapped) {
-      if (!state.overrideRedirect || state.parent == null) {
+  void _checkIfMapped() {
+    final wasMapped = state.mapped;
+    bool mapped;
+
+    final surfaceId = state.surfaceId;
+    if (surfaceId != null) {
+      final texture = ref.read(wlSurfaceStateProvider(surfaceId)).texture;
+      mapped = texture != null;
+    } else {
+      mapped = false;
+    }
+
+    if (state.parent == null) {
+      if (wasMapped && !mapped) {
         ref.read(surfaceMappedProvider.notifier).unmapped(state.surfaceId!);
+      } else if (!wasMapped && mapped) {
+        ref.read(surfaceMappedProvider.notifier).mapped(state.surfaceId!);
       }
-      if (state.parent != null) {
+    }
+
+    state = state.copyWith(mapped: mapped);
+  }
+
+  void dispose() {
+    textureSubscription?.close();
+
+    if (state.mapped) {
+      if (state.parent == null) {
+        ref.read(surfaceMappedProvider.notifier).unmapped(state.surfaceId!);
+      } else {
         ref
             .read(x11SurfaceStateProvider(state.parent!).notifier)
             .removeChild(x11SurfaceId);
@@ -143,6 +174,7 @@ class X11SurfaceState extends _$X11SurfaceState {
           .read(x11SurfaceIdByWlSurfaceIdProvider(state.surfaceId!).notifier)
           .unlinkX11Surface();
     }
+
     _keepAliveLink.close();
   }
 }
