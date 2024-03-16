@@ -142,10 +142,13 @@ class PersistentWindowTileable extends Tileable {
                               ),
                         ],
                       );
-                    } else {
+                    } else if (role == SurfaceRole.x11Surface) {
                       return X11SurfaceWidget(
                         surfaceId: window.surfaceId!,
                       );
+                    } else {
+                      assert(false, 'Unsupported role: $role');
+                      return const SizedBox();
                     }
                   },
                 );

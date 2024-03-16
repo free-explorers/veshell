@@ -4,8 +4,8 @@ import 'package:shell/wayland/model/request/activate_window/activate_window.seri
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
-class PointerListener extends ConsumerWidget {
-  const PointerListener({
+class ActivateSurfaceOnPointerDown extends ConsumerWidget {
+  const ActivateSurfaceOnPointerDown({
     required this.surfaceId,
     required this.child,
     this.enabled = true,

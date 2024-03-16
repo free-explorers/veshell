@@ -92,18 +92,6 @@ class X11SurfaceState extends _$X11SurfaceState {
     }
   }
 
-  void addChild(X11SurfaceId child) {
-    state = state.copyWith(
-      children: state.children.add(child),
-    );
-  }
-
-  void removeChild(X11SurfaceId child) {
-    state = state.copyWith(
-      children: state.children.remove(child),
-    );
-  }
-
   void unmap() {
     assert(state.surfaceId != null);
     assert(state.mapped);
@@ -126,6 +114,18 @@ class X11SurfaceState extends _$X11SurfaceState {
       surfaceId: null,
       mapped: false,
       parent: null,
+    );
+  }
+
+  void addChild(X11SurfaceId child) {
+    state = state.copyWith(
+      children: state.children.add(child),
+    );
+  }
+
+  void removeChild(X11SurfaceId child) {
+    state = state.copyWith(
+      children: state.children.remove(child),
     );
   }
 

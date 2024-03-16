@@ -16,7 +16,10 @@ class SurfaceSize extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final surfaceSize = ref.watch(
-        wlSurfaceStateProvider(surfaceId).select((v) => v.texture!.size));
+      wlSurfaceStateProvider(surfaceId).select(
+        (v) => v.texture!.size,
+      ),
+    );
 
     return SizedBox(
       width: surfaceSize.width,

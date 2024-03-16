@@ -49,7 +49,7 @@ class XdgToplevelSurfaceWidget extends ConsumerWidget {
       child: SurfaceFocus(
         child: Stack(
           children: [
-            PointerListener(
+            ActivateSurfaceOnPointerDown(
               surfaceId: surfaceId,
               child: SurfaceWidget(
                 surfaceId: surfaceId,
