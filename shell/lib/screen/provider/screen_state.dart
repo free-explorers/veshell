@@ -1,8 +1,9 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/screen/model/screen.dart';
-import 'package:shell/workspace/model/workspace.dart';
+import 'package:shell/screen/model/screen.serializable.dart';
+import 'package:shell/shared/persistence/persistable_provider.mixin.dart';
+import 'package:shell/workspace/model/workspace.serializable.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:uuid/uuid.dart';
 
@@ -10,19 +11,30 @@ part 'screen_state.g.dart';
 
 /// Screen provider
 @riverpod
-class ScreenState extends _$ScreenState {
+class ScreenState extends _$ScreenState
+    with PersistableProvider<Screen, AutoDisposeNotifierProviderRef<Screen>> {
   late final KeepAliveLink _keepAliveLink;
   final _uuidGenerator = const Uuid();
   final _workspaceListenerMap =
       <WorkspaceId, ProviderSubscription<Workspace>>{};
+
+  @override
+  String getPersistentFolder() => 'Screen';
+
+  @override
+  String getPersistentId() => screenId;
+
   @override
   Screen build(ScreenId screenId) {
     _keepAliveLink = ref.keepAlive();
-    final screen = Screen(
-      screenId: screenId,
-      workspaceList: IList([_uuidGenerator.v4()]),
-      selectedIndex: 0,
-    );
+    persistChanges();
+
+    final screen = getPersisted(Screen.fromJson) ??
+        Screen(
+          screenId: screenId,
+          workspaceList: IList([_uuidGenerator.v4()]),
+          selectedIndex: 0,
+        );
 
     // When the last workspace got a new window open in it
     // we create a new blank workspace

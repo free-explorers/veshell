@@ -694,6 +694,9 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
                 });
 
                 if !initial_configure_sent {
+                    toplevel.with_pending_state(|state| {
+                        state.states.set(xdg_toplevel::State::Maximized);
+                    });
                     toplevel.send_configure();
                 }
 

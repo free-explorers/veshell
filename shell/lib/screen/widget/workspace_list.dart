@@ -5,12 +5,12 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/application/widget/app_icon.dart';
-import 'package:shell/screen/model/screen.dart';
+import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/current_screen_id.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/screen/provider/workspace_display_mode.dart';
 import 'package:shell/shared/widget/cross_reorderable_list.dart';
-import 'package:shell/window/provider/window_state.dart';
+import 'package:shell/window/provider/persistant_window_state.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/tileable/persistent_window/persistent_window.dart';
 
@@ -278,7 +278,8 @@ class WorkspaceIcon extends HookConsumerWidget {
       () => workspaceState.tileableWindowList
           .map(
             (windowId) => ref.read(
-              windowStateProvider(windowId).select((value) => value.appId),
+              PersistentWindowStateProvider(windowId)
+                  .select((value) => value.appId),
             ),
           )
           .toList(),

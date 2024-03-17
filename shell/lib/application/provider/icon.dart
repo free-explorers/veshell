@@ -7,7 +7,7 @@ import 'package:shell/application/provider/icon_themes.dart';
 part 'icon.g.dart';
 
 @Riverpod(keepAlive: true)
-class Icon extends _$Icon {
+class IconForQuery extends _$IconForQuery {
   @override
   Future<File?> build(IconQuery query) async {
     final themes = await ref.watch(iconThemesProvider.future);
