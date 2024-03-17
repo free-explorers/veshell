@@ -48,6 +48,7 @@ class WorkspaceState extends _$WorkspaceState
 
   @override
   String getPersistentId() => workspaceId;
+
   @override
   Workspace build(WorkspaceId workspaceId) {
     persistChanges();
@@ -134,6 +135,7 @@ class WorkspaceState extends _$WorkspaceState
                 .select((value) => value.appId),
           ),
         )
+        .whereNotNull()
         .toList();
     if (appIdList.isEmpty) return null;
     final categoryScoreMap = <WorkspaceCategory, int>{};

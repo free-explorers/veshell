@@ -11,7 +11,7 @@ abstract class Window {
   });
 
   final WindowId windowId;
-  final String appId;
-  final String title;
+  final String? appId;
+  final String? title;
   final SurfaceId? surfaceId;
 }

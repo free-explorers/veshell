@@ -14,6 +14,7 @@ class AppIconByPath extends StatelessWidget {
     required this.path,
     super.key,
   });
+
   final String? path;
 
   @override
@@ -89,22 +90,27 @@ class AppIconById extends ConsumerWidget {
     required this.id,
     super.key,
   });
-  final String id;
+
+  final String? id;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return ref.watch(localizedDesktopEntryForIdProvider(id)).maybeWhen(
+    if (id == null) {
+      return Icon(MdiIcons.helpCircle);
+    }
+
+    return ref.watch(localizedDesktopEntryForIdProvider(id!)).maybeWhen(
           data: (entry) {
             if (entry == null) {
               return Icon(MdiIcons.helpCircle);
             }
             final iconPath = entry.entries[DesktopEntryKey.icon.string];
             if (iconPath == null) {
-              return const SizedBox();
+              return Icon(MdiIcons.helpCircle);
             }
             return AppIconByPath(path: iconPath);
           },
-          orElse: () => const SizedBox(),
+          orElse: () => Icon(MdiIcons.helpCircle),
         );
   }
 }
@@ -114,6 +120,7 @@ class AppIconByViewId extends ConsumerWidget {
     required this.surfaceId,
     super.key,
   });
+
   final SurfaceId surfaceId;
 
   @override

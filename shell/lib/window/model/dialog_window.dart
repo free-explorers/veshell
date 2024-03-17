@@ -9,8 +9,8 @@ part 'dialog_window.freezed.dart';
 class DialogWindow with _$DialogWindow implements Window {
   const factory DialogWindow({
     required DialogWindowId windowId,
-    required String appId,
-    required String title,
+    required String? appId,
+    required String? title,
     required SurfaceId surfaceId,
     required int parentSurfaceId,
   }) = _EphemeralWindow;

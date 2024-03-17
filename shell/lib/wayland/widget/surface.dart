@@ -30,7 +30,8 @@ class SurfaceWidget extends ConsumerWidget {
             child: Consumer(
               builder: (BuildContext context, WidgetRef ref, Widget? child) {
                 final textureId = ref.watch(
-                  wlSurfaceStateProvider(surfaceId).select((v) => v.textureId),
+                  wlSurfaceStateProvider(surfaceId)
+                      .select((v) => v.texture!.id),
                 );
 
                 return Texture(

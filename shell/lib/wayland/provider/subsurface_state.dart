@@ -3,101 +3,120 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/wayland/model/subsurface.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
-import 'package:shell/wayland/provider/surface.manager.dart';
+import 'package:shell/wayland/provider/wl_surface_state.dart';
+import 'package:shell/wayland/provider/xdg_surface_state.dart';
 
 part 'subsurface_state.g.dart';
 
-@Riverpod(keepAlive: true)
+@riverpod
 class SubsurfaceState extends _$SubsurfaceState {
-  ProviderSubscription<SurfaceRole>? parentRoleSub;
-  ProviderSubscription<bool>? parentMappedSub;
+  late final KeepAliveLink _keepAliveLink;
+
+  ProviderSubscription<SurfaceRole?>? _parentRoleSub;
+  ProviderSubscription<bool>? _parentMappedSub;
 
   @override
   Subsurface build(SurfaceId surfaceId) {
-    /* ref.listen(
-      wlSurfaceStateProvider(surfaceId).select((state) => state.textureId),
+    throw Exception('Subsurface $surfaceId state was not initialized');
+  }
+
+  void initialize({
+    required SurfaceId parent,
+  }) {
+    _keepAliveLink = ref.keepAlive();
+    ref.onDispose(() {
+      print('disposing SubsurfaceStateProvider $surfaceId');
+    });
+
+    state = Subsurface(
+      mapped: false,
+      committed: false,
+      parent: parent,
+      position: Offset.zero,
+    );
+
+    ref.listen(
+      wlSurfaceStateProvider(surfaceId).select((state) => state.texture),
       (_, __) => _checkIfMapped(),
     );
-    ref.listen(surfaceIdsProvider, (_, __) => _checkIfMapped()); */
 
-    return Subsurface(
-      mapped: false,
-      parent: 0,
-      position: Offset.zero,
-      widgetKey: GlobalKey(),
+    _subscribeToParentRole();
+  }
+
+  void _subscribeToParentRole() {
+    _parentRoleSub?.close();
+    _parentRoleSub = ref.listen(
+      wlSurfaceStateProvider(state.parent).select((value) => value.role),
+      (_, __) => _subscribeToParentMappedProperty(),
+    );
+    _checkIfMapped();
+  }
+
+  void _subscribeToParentMappedProperty() {
+    _parentMappedSub?.close();
+
+    _parentMappedSub =
+        switch (ref.read(wlSurfaceStateProvider(state.parent)).role) {
+      SurfaceRole.xdgToplevel || SurfaceRole.xdgPopup => ref.listen(
+          xdgSurfaceStateProvider(state.parent).select(
+            (state) => state.mapped,
+          ),
+          (_, __) => _checkIfMapped(),
+        ),
+      SurfaceRole.subsurface => ref.listen(
+          subsurfaceStateProvider(state.parent).select(
+            (state) => state.mapped,
+          ),
+          (_, __) => _checkIfMapped(),
+        ),
+      null => null,
+    };
+    _checkIfMapped();
+  }
+
+  void _checkIfMapped() {
+    final hasTexture =
+        ref.read(wlSurfaceStateProvider(surfaceId)).texture != null;
+
+    final parentMapped =
+        switch (ref.read(wlSurfaceStateProvider(state.parent)).role) {
+      SurfaceRole.xdgToplevel ||
+      SurfaceRole.xdgPopup =>
+        ref.read(xdgSurfaceStateProvider(state.parent)).mapped,
+      SurfaceRole.subsurface =>
+        ref.read(subsurfaceStateProvider(state.parent)).mapped,
+      null => false,
+    };
+
+    final isCommitted = state.committed;
+
+    state = state.copyWith(
+      // A sub-surface becomes mapped, when a non-NULL wl_buffer is applied and the parent surface is mapped.
+      // The order of which one happens first is irrelevant.
+      // A sub-surface is hidden if the parent becomes hidden, or if a NULL wl_buffer is applied.
+      // These rules apply recursively through the tree of surfaces.
+      mapped: hasTexture && isCommitted && parentMapped,
     );
   }
 
-  /* void _checkIfMapped() {
-    var parentMapped = false;
-    if (ref.read(surfaceIdsProvider).contains(state.parent)) {
-      final role = ref.read(wlSurfaceStateProvider(state.parent)).role;
-      switch (role) {
-        case SurfaceRole.xdgTopLevel:
-        case SurfaceRole.xdgPopup:
-          parentMapped =
-              ref.read(xdgSurfaceStateProvider(state.parent)).mapped;
-        case SurfaceRole.subsurface:
-          parentMapped =
-              ref.read(subsurfaceStatesProvider(state.parent)).mapped;
-        case SurfaceRole.none:
-        case SurfaceRole.cursorImage:
-      }
-    }
-
-    final mapped = parentMapped &&
-        ref.read(wlSurfaceStateProvider(surfaceId)).textureId != -1;
-
-    state = state.copyWith(
-      mapped: mapped,
-    );
-  } */
-
-  void set_parent(int parent) {
+  void setParent(int parent) {
     state = state.copyWith(
       parent: parent,
     );
-    //_checkIfMapped();
-
-    if (!ref.read(surfaceManagerProvider).contains(parent)) {
-      parentRoleSub?.close();
-      parentMappedSub?.close();
-      return;
-    }
-
-    parentRoleSub?.close();
-    /* parentRoleSub = ref.listen(
-      wlSurfaceStateProvider(parent).select((value) => value.role),
-      (_, __) => _checkIfMapped(),
-    ); */
-
-    parentMappedSub?.close();
-    // print("$surfaceId, parent: $parent");
-    /*final role = ref.read(wlSurfaceStateProvider(parent)).role;
-     switch (role) {
-      case SurfaceRole.xdgTopLevel:
-      case SurfaceRole.xdgPopup:
-        parentMappedSub = ref.listen(
-          xdgSurfaceStatesProvider(parent).select((state) => state.mapped),
-          (_, __) => _checkIfMapped(),
-        );
-      case SurfaceRole.subsurface:
-        parentMappedSub = ref.listen(
-          subsurfaceStatesProvider(parent).select((state) => state.mapped),
-          (_, __) => _checkIfMapped(),
-        );
-      case SurfaceRole.none:
-      case SurfaceRole.cursorImage:
-    } */
+    _subscribeToParentRole();
   }
 
   void commit({required Offset position}) {
     state = state.copyWith(
+      committed: true,
       position: position,
     );
+    _checkIfMapped();
   }
 
   void dispose() {
-    ref.invalidateSelf();
+    _parentRoleSub?.close();
+    _parentMappedSub?.close();
+    _keepAliveLink.close();
   }
 }

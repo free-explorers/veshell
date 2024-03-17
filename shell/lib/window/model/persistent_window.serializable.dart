@@ -13,8 +13,8 @@ class PersistentWindow extends Window
     implements PersistableModel {
   const factory PersistentWindow({
     @PersistentWindowIdConverter() required PersistentWindowId windowId,
-    required String appId,
-    required String title,
+    required String? appId,
+    required String? title,
     SurfaceId? surfaceId,
     @Default(false) bool isWaitingForSurface,
   }) = _PersistentWindow;

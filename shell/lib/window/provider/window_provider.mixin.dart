@@ -1,12 +1,12 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/wayland/model/xdg_surface.dart';
+import 'package:shell/wayland/model/xdg_toplevel.dart';
 import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
 import 'package:shell/window/model/window_base.dart';
 import 'package:shell/window/provider/surface_window_map.dart';
 
 mixin WindowProviderMixin<T extends Window> on BuildlessAutoDisposeNotifier<T> {
-  ProviderSubscription<XdgToplevelSurface>? _surfaceSubscription;
+  ProviderSubscription<XdgToplevel>? _surfaceSubscription;
   KeepAliveLink? _keepAliveLink;
 
   syncWithSurface() {
@@ -34,7 +34,7 @@ mixin WindowProviderMixin<T extends Window> on BuildlessAutoDisposeNotifier<T> {
     });
   }
 
-  void onSurfaceChanged(XdgToplevelSurface surface);
+  void onSurfaceChanged(XdgToplevel surface);
 
   void onSurfaceIsDestroyed() {
     _surfaceSubscription?.close();

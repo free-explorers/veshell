@@ -17,7 +17,9 @@ class GetMonitorLayoutRequest extends WaylandRequest {
 
 /// Model for [GetMonitorLayoutMessage]
 @freezed
-class GetMonitorLayoutMessage with _$GetMonitorLayoutMessage implements WaylandMessage {
+class GetMonitorLayoutMessage
+    with _$GetMonitorLayoutMessage
+    implements WaylandMessage {
   /// Factory
   factory GetMonitorLayoutMessage() = _GetMonitorLayoutMessage;
 

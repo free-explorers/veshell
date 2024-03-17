@@ -316,7 +316,8 @@ pub fn run_drm_backend() {
 }
 
 impl ServerState<DrmBackend> {
-    // TODO: I don't think this method should not be here. It should probably be in GpuData or SurfaceData.
+    // TODO: I don't think this method should be here.
+    // It should probably be in GpuData or SurfaceData.
     pub fn update_crtc_planes(&mut self, crtc: crtc::Handle) {
         // TODO: Ideally, there shouldn't be a "primary gpu" and we should handle multi-gpu setups.
         let primary_gpu = self.backend_data.primary_gpu;

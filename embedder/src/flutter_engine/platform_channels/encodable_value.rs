@@ -35,19 +35,3 @@ impl EncodableValue {
 // so I don't think it's worth implementing this because it's more work than it's worth.
 #[derive(Eq, PartialEq, Debug)]
 pub struct CustomEncodableValue {}
-
-// impl<T: Any + Copy> CustomEncodableValue<T> {
-//     pub fn new(value: &T) -> Self {
-//         Self {
-//             value: *value,
-//         }
-//     }
-//
-//     pub fn call(&self) -> &T {
-//         &self.value
-//     }
-//
-//     pub fn type_id(&self) -> TypeId {
-//         self.value.type_id()
-//     }
-// }

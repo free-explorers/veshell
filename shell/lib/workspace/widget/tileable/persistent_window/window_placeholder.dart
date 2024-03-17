@@ -9,16 +9,20 @@ import 'package:shell/window/provider/persistant_window_state.dart';
 
 class WindowPlaceholder extends HookConsumerWidget {
   const WindowPlaceholder({required this.windowId, super.key});
+
   final PersistentWindowId windowId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final window = ref.watch(persistentWindowStateProvider(windowId));
-    final entry = ref
-        .watch(
-          localizedDesktopEntryForIdProvider(window.appId),
-        )
-        .value;
+    final entry = window.appId != null
+        ? ref
+            .watch(
+              localizedDesktopEntryForIdProvider(window.appId!),
+            )
+            .value
+        : null;
+
     return Material(
       child: InkWell(
         onTap: entry != null

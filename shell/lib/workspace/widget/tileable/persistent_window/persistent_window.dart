@@ -158,7 +158,7 @@ class PersistentWindowTileable extends Tileable {
           const SizedBox(
             width: 16,
           ),
-          Text(title),
+          Text(title ?? "Unknown"),
           const SizedBox(
             width: 16,
           ),

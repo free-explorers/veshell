@@ -284,7 +284,7 @@ class WorkspaceIcon extends HookConsumerWidget {
           )
           .toList(),
       [workspaceState.tileableWindowList],
-    );
+    ).whereNotNull();
 
     if (appIdList.isEmpty) return Icon(MdiIcons.plus);
 

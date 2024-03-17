@@ -4,7 +4,7 @@ import 'package:flutter/rendering.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.dart';
 import 'package:shell/manager/wayland/surface/wl_surface/wl_surface.dart';
-import 'package:shell/manager/wayland/surface/xdg_surface/xdg_surface.dart';
+import 'package:shell/manager/wayland/surface/xdg_surface/xdg_surface_state.dart';
 import 'package:shell/manager/wayland/surface/xdg_toplevel/xdg_toplevel.dart';
 import 'package:shell/manager/wayland/surface/xdg_toplevel/xdg_toplevel.dart';
 import 'package:shell/shared/state/cursor_position/cursor_position.dart';

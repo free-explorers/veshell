@@ -8,11 +8,15 @@ Future<bool> launchDesktopEntry(DesktopEntry desktopEntry) async {
   if (exec == null) {
     return false;
   }
-  final bool terminal = desktopEntry.entries[DesktopEntryKey.terminal.string]?.value.getBoolean() ?? false;
+  final bool terminal = desktopEntry
+          .entries[DesktopEntryKey.terminal.string]?.value
+          .getBoolean() ??
+      false;
   return launchApplication(command: exec, terminal: terminal);
 }
 
-Future<bool> launchApplication({required String command, bool terminal = false}) async {
+Future<bool> launchApplication(
+    {required String command, bool terminal = false}) async {
   // FIXME
   command = command.replaceAll(RegExp(r'( %.?)'), '');
   debugPrint("Launching $command");
