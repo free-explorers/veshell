@@ -1,5 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/screen/model/screen.dart';
+import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 
 part 'workspace_drag_data.freezed.dart';

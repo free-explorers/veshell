@@ -1,13 +1,10 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/monitor/model/monitor.serializable.dart';
-import 'package:shell/screen/model/screen.dart';
+import 'package:shell/screen/model/screen.serializable.dart';
+import 'package:shell/shared/provider/persistent_json_by_folder.dart';
 import 'package:uuid/uuid.dart';
 
 part 'screen_list.g.dart';
-
-// Currently for testing purposes, we can change the number of screen per monitor
-const initialScreenLength = 1;
 
 /// ScreenList provider
 @Riverpod(keepAlive: true)
@@ -15,10 +12,14 @@ class ScreenList extends _$ScreenList {
   final _uuidGenerator = const Uuid();
 
   @override
-  ISet<ScreenId> build(MonitorId monitorName) {
-    return <ScreenId>{
-      for (var i = 0; i < initialScreenLength; i++) _uuidGenerator.v4(),
-    }.lock;
+  ISet<ScreenId> build() {
+    final intialSet = ref
+            .read(persistentJsonByFolderProvider)
+            .requireValue['Screen']
+            ?.keys
+            .toISet() ??
+        <ScreenId>{}.lock;
+    return intialSet;
   }
 
   ScreenId createNewScreen() {

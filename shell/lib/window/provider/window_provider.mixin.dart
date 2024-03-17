@@ -2,28 +2,16 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/wayland/model/xdg_toplevel.dart';
 import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
-import 'package:shell/window/model/window.dart';
+import 'package:shell/window/model/window_base.dart';
 import 'package:shell/window/provider/surface_window_map.dart';
-import 'package:shell/window/provider/window.manager.dart';
 
-part 'window_state.g.dart';
-
-/// Workspace provider
-@riverpod
-class WindowState extends _$WindowState {
+mixin WindowProviderMixin<T extends Window> on BuildlessAutoDisposeNotifier<T> {
   ProviderSubscription<XdgToplevel>? _surfaceSubscription;
   KeepAliveLink? _keepAliveLink;
 
-  @override
-  Window build(WindowId windowId) {
-    throw Exception('WindowState $windowId not yet initialized');
-  }
-
-  void initialize(Window window) {
+  syncWithSurface() {
     _keepAliveLink?.close();
     _keepAliveLink = ref.keepAlive();
-
-    state = window;
     if (state.surfaceId != null) {
       ref.read(surfaceWindowMapProvider.notifier).add(
             state.surfaceId!,
@@ -42,24 +30,18 @@ class WindowState extends _$WindowState {
     }
     _surfaceSubscription =
         ref.listen(xdgToplevelStateProvider(state.surfaceId!), (_, next) {
-      state = state.copyWith(
-        appId: next.appId ?? state.appId,
-        title: next.title ?? state.title,
-      );
+      onSurfaceChanged(next);
     });
   }
+
+  void onSurfaceChanged(XdgToplevel surface);
 
   void onSurfaceIsDestroyed() {
     _surfaceSubscription?.close();
     ref.read(surfaceWindowMapProvider.notifier).remove(state.surfaceId!);
-    if (state case final PersistentWindow persistentWindow) {
-      state = persistentWindow.copyWith(surfaceId: null);
-    } else {
-      _keepAliveLink?.close();
-    }
   }
 
-  void update(Window window) {
-    state = window;
+  void dispose() {
+    _keepAliveLink?.close();
   }
 }

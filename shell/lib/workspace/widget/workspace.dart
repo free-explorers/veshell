@@ -4,9 +4,8 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/shared/util/app_launch.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
-import 'package:shell/window/model/window.dart';
+import 'package:shell/window/provider/persistant_window_state.dart';
 import 'package:shell/window/provider/window.manager.dart';
-import 'package:shell/window/provider/window_state.dart';
 import 'package:shell/workspace/model/workspace_shortcuts.dart';
 import 'package:shell/workspace/provider/current_workspace_id.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
@@ -104,12 +103,9 @@ class WorkspaceWidget extends HookConsumerWidget {
               final tileable = tileableList[workspaceState.focusedIndex];
               if (tileable is PersistentWindowTileable) {
                 final persistentWindow =
-                    ref.read(windowStateProvider(tileable.windowId))
-                        as PersistentWindow;
-                ref
-                    .read(workspaceStateProvider(currentWorkspaceId).notifier)
-                    .closeWindow(
-                      persistentWindow,
+                    ref.read(persistentWindowStateProvider(tileable.windowId));
+                ref.read(windowManagerProvider.notifier).closeWindow(
+                      persistentWindow.windowId,
                     );
               }
 

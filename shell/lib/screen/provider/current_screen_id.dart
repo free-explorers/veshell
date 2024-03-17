@@ -1,5 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/screen/model/screen.dart';
+import 'package:shell/screen/model/screen.serializable.dart';
 
 part 'current_screen_id.g.dart';
 
