@@ -6,7 +6,6 @@ import 'package:shell/shared/util/json_converter/offset.dart';
 import 'package:shell/shared/util/json_converter/size.dart';
 
 part 'monitor.serializable.freezed.dart';
-
 part 'monitor.serializable.g.dart';
 
 typedef MonitorId = String;
@@ -15,7 +14,7 @@ typedef MonitorId = String;
 @freezed
 class Monitor with _$Monitor {
   /// Factory
-  const factory Monitor({
+  factory Monitor({
     required MonitorId name,
     required String description,
     required PhysicalProperties physicalProperties,
@@ -25,6 +24,7 @@ class Monitor with _$Monitor {
     required Mode? preferredMode,
     required List<Mode> modes,
   }) = _Monitor;
+  Monitor._();
 
   factory Monitor.fromJson(Map<String, dynamic> json) =>
       _$MonitorFromJson(json);

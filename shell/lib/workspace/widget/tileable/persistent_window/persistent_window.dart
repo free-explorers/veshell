@@ -7,12 +7,12 @@ import 'package:shell/wayland/model/request/activate_window/activate_window.seri
 import 'package:shell/wayland/model/request/resize_window/resize_window.serializable.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/wayland/widget/xdg_toplevel_surface.dart';
-import 'package:shell/window/model/window.dart';
+import 'package:shell/window/model/dialog_window.dart';
+import 'package:shell/window/model/window_id.dart';
 import 'package:shell/window/provider/dialog_list_for_window.dart';
+import 'package:shell/window/provider/dialog_window_state.dart';
+import 'package:shell/window/provider/persistant_window_state.dart';
 import 'package:shell/window/provider/window.manager.dart';
-import 'package:shell/window/provider/window_state.dart';
-import 'package:shell/workspace/provider/current_workspace_id.dart';
-import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/tileable/persistent_window/window_placeholder.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
 
@@ -26,18 +26,17 @@ class PersistentWindowTileable extends Tileable {
   });
 
   /// The id of the wayland surface
-  final WindowId windowId;
+  final PersistentWindowId windowId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final window = ref.watch(windowStateProvider(windowId)) as PersistentWindow;
+    final window = ref.watch(persistentWindowStateProvider(windowId));
     final dialogWindowIdSet = ref.watch(
       dialogListForWindowProvider.select((value) => value.get(windowId)),
     );
     final dialogWindowList = <DialogWindow>[];
     for (final windowId in dialogWindowIdSet) {
-      final dialogWindow =
-          ref.read(windowStateProvider(windowId)) as DialogWindow;
+      final dialogWindow = ref.read(dialogWindowStateProvider(windowId));
       dialogWindowList.add(dialogWindow);
     }
     final tileableFocusNode =
@@ -70,23 +69,27 @@ class PersistentWindowTileable extends Tileable {
       [window.surfaceId],
     );
 
+    void onTileableFocusChange() {
+      if (window.surfaceId != null) {
+        ref.read(waylandManagerProvider.notifier).request(
+              ActivateWindowRequest(
+                message: ActivateWindowMessage(
+                  surfaceId: window.surfaceId!,
+                  activate: tileableFocusNode.hasFocus,
+                ),
+              ),
+            );
+      }
+    }
+
     useEffect(
       () {
-        tileableFocusNode.addListener(() {
-          if (window.surfaceId != null) {
-            ref.read(waylandManagerProvider.notifier).request(
-                  ActivateWindowRequest(
-                    message: ActivateWindowMessage(
-                      surfaceId: window.surfaceId!,
-                      activate: tileableFocusNode.hasFocus,
-                    ),
-                  ),
-                );
-          }
-        });
-        return null;
+        tileableFocusNode.addListener(onTileableFocusChange);
+        return () {
+          tileableFocusNode.removeListener(onTileableFocusChange);
+        };
       },
-      [tileableFocusNode],
+      [tileableFocusNode, window.surfaceId],
     );
     if (window.surfaceId != null) {
       return Focus(
@@ -144,7 +147,7 @@ class PersistentWindowTileable extends Tileable {
 
   @override
   Widget buildPanelWidget(BuildContext context, WidgetRef ref) {
-    final window = ref.watch(windowStateProvider(windowId)) as PersistentWindow;
+    final window = ref.watch(persistentWindowStateProvider(windowId));
 
     final title = window.title;
     return Padding(
@@ -155,7 +158,7 @@ class PersistentWindowTileable extends Tileable {
           const SizedBox(
             width: 16,
           ),
-          Text(title),
+          Text(title ?? "Unknown"),
           const SizedBox(
             width: 16,
           ),
@@ -165,10 +168,9 @@ class PersistentWindowTileable extends Tileable {
             onPressed: () {
               ref
                   .read(
-                    workspaceStateProvider(ref.read(currentWorkspaceIdProvider))
-                        .notifier,
+                    windowManagerProvider.notifier,
                   )
-                  .closeWindow(window);
+                  .closeWindow(window.windowId);
             },
             icon: Icon(MdiIcons.close),
           ),

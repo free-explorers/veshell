@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:jovial_svg/jovial_svg.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/application/provider/file_to_scalable_image.dart';
 import 'package:shell/application/provider/icon.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
@@ -32,7 +33,7 @@ class AppIconByPath extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final asyncValue = ref.watch(
-          iconProvider(
+          iconForQueryProvider(
             IconQuery(
               name: icon,
               size: constraints.biggest.shortestSide.floor(),
@@ -94,26 +95,22 @@ class AppIconById extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return ref.watch(localizedDesktopEntriesProvider).maybeWhen(
-          data: (Map<String, LocalizedDesktopEntry> desktopEntries) {
-            if (id == null) {
-              // TODO(roscale): Return a default icon for unknown apps.
-              return const SizedBox();
-            }
-            final entry = desktopEntries[id];
+    if (id == null) {
+      return Icon(MdiIcons.helpCircle);
+    }
+
+    return ref.watch(localizedDesktopEntryForIdProvider(id!)).maybeWhen(
+          data: (entry) {
             if (entry == null) {
-              // TODO(roscale): Return a default icon for unknown apps.
-              return const SizedBox();
+              return Icon(MdiIcons.helpCircle);
             }
             final iconPath = entry.entries[DesktopEntryKey.icon.string];
             if (iconPath == null) {
-              // TODO(roscale): Return a default icon for unknown apps.
-              return const SizedBox();
+              return Icon(MdiIcons.helpCircle);
             }
             return AppIconByPath(path: iconPath);
           },
-          // TODO(roscale): Return a default icon for unknown apps.
-          orElse: () => const SizedBox(),
+          orElse: () => Icon(MdiIcons.helpCircle),
         );
   }
 }
@@ -130,7 +127,6 @@ class AppIconByViewId extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final appId =
         ref.watch(xdgToplevelStateProvider(surfaceId).select((v) => v.appId));
-    // TODO: Return an default icon for unknown apps.
     return AppIconById(id: appId);
   }
 }
