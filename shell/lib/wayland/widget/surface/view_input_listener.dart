@@ -1,10 +1,11 @@
 import 'package:arena_listener/arena_listener.dart';
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/pointer/provider/pointer_focus.manager.dart';
 import 'package:shell/shared/provider/mouse_button_tracker.dart';
-import 'package:shell/wayland/model/request/mouse_button_event/mouse_button_event.serializable.dart';
+import 'package:shell/wayland/model/request/mouse_buttons_event/mouse_buttons_event.serializable.dart';
 import 'package:shell/wayland/model/request/pointer_hover/pointer_hover.serializable.dart';
 import 'package:shell/wayland/model/request/touch/touch.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
@@ -169,19 +170,29 @@ class ViewInputListener extends ConsumerWidget {
   }
 
   Future<void> _sendMouseButtonsToPlatform(WidgetRef ref, int buttons) async {
-    final e = ref.read(mouseButtonTrackerProvider).trackButtonState(buttons);
-    if (e != null) {
-      await _mouseButtonEvent(ref, e);
+    final events =
+        ref.read(mouseButtonTrackerProvider).trackButtonState(buttons);
+
+    if (events.isNotEmpty) {
+      await _mouseButtonsEvent(ref, events);
     }
   }
 
-  Future<void> _mouseButtonEvent(WidgetRef ref, MouseButtonEvent event) {
+  Future<void> _mouseButtonsEvent(
+      WidgetRef ref, List<MouseButtonEvent> events) {
     return ref.read(waylandManagerProvider.notifier).request(
-          MouseButtonEventRequest(
-            message: MouseButtonEventMessage(
+          MouseButtonsEventRequest(
+            message: MouseButtonsEventMessage(
               surfaceId: surfaceId,
-              button: event.button,
-              isPressed: event.state == MouseButtonState.pressed,
+              buttons: events
+                  .map(
+                    (e) => Button(
+                      button: e.button,
+                      isPressed: e.state == MouseButtonState.pressed,
+                    ),
+                  )
+                  .toList()
+                  .lockUnsafe,
             ),
           ),
         );

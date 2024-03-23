@@ -30,7 +30,7 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
         match method_call.method() {
             "pointer_hover" => pointer_hover(method_call, result, data),
             "pointer_exit" => pointer_exit(method_call, result, data),
-            "mouse_button_event" => mouse_button_event(method_call, result, data),
+            "mouse_buttons_event" => mouse_buttons_event(method_call, result, data),
             "activate_window" => activate_window(method_call, result, data),
             "resize_window" => resize_window(method_call, result, data),
             "close_window" => close_window(method_call, result, data),
@@ -120,13 +120,19 @@ pub fn pointer_exit<BackendData: Backend + 'static>(
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct MouseButtonPayload {
+struct MouseButtonsPayload {
     surface_id: u64,
+    buttons: Vec<Button>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Button {
     button: u32,
     is_pressed: bool,
 }
 
-pub fn mouse_button_event<BackendData: Backend + 'static>(
+pub fn mouse_buttons_event<BackendData: Backend + 'static>(
     method_call: MethodCall<serde_json::Value>,
     mut result: Box<dyn MethodResult<serde_json::Value>>,
     data: &mut CalloopData<BackendData>,
@@ -135,21 +141,24 @@ pub fn mouse_button_event<BackendData: Backend + 'static>(
     let pointer = data.state.pointer.clone();
 
     let args = method_call.arguments().unwrap().clone();
-    let payload: MouseButtonPayload = serde_json::from_value(args).unwrap();
+    let payload: MouseButtonsPayload = serde_json::from_value(args).unwrap();
 
-    pointer.button(
-        &mut data.state,
-        &ButtonEvent {
-            serial: SERIAL_COUNTER.next_serial(),
-            time: now,
-            button: *FLUTTER_TO_LINUX_MOUSE_BUTTONS.get(&payload.button).unwrap() as u32,
-            state: if payload.is_pressed {
-                ButtonState::Pressed
-            } else {
-                ButtonState::Released
+    for button in payload.buttons {
+        pointer.button(
+            &mut data.state,
+            &ButtonEvent {
+                serial: SERIAL_COUNTER.next_serial(),
+                time: now,
+                button: *FLUTTER_TO_LINUX_MOUSE_BUTTONS.get(&button.button).unwrap() as u32,
+                state: if button.is_pressed {
+                    ButtonState::Pressed
+                } else {
+                    ButtonState::Released
+                },
             },
-        },
-    );
+        );
+    }
+
     pointer.frame(&mut data.state);
     result.success(None);
 }
@@ -433,13 +442,20 @@ pub fn get_environment_variables<BackendData: Backend + 'static>(
 ) {
     let wayland_socket_name = data.state.wayland_socket_name.as_deref();
 
-    let xwayland_display = data.state.xwayland_display.map(|display| format!(":{}", display));
+    let xwayland_display = data
+        .state
+        .xwayland_display
+        .map(|display| format!(":{}", display));
     let xwayland_display = xwayland_display.as_deref();
 
-    data.state.flutter_engine.as_mut().unwrap().set_environment_variables(HashMap::from([
-        ("WAYLAND_DISPLAY", wayland_socket_name),
-        ("DISPLAY", xwayland_display),
-    ]));
+    data.state
+        .flutter_engine
+        .as_mut()
+        .unwrap()
+        .set_environment_variables(HashMap::from([
+            ("WAYLAND_DISPLAY", wayland_socket_name),
+            ("DISPLAY", xwayland_display),
+        ]));
 
     result.success(None);
 }

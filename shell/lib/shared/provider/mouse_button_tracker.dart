@@ -12,16 +12,24 @@ MouseButtonTracker mouseButtonTracker(MouseButtonTrackerRef ref) =>
 class MouseButtonTracker {
   int buttons = 0;
 
-  MouseButtonEvent? trackButtonState(int newButtons) {
+  List<MouseButtonEvent> trackButtonState(int newButtons) {
     if (buttons == newButtons) {
-      return null;
+      return [];
     }
-    final button = buttons ^ newButtons;
-    final state = newButtons & button != 0
-        ? MouseButtonState.pressed
-        : MouseButtonState.released;
+
+    final delta = <MouseButtonEvent>[];
+
+    for (var i = 0; i < 8; i++) {
+      final mask = 1 << i;
+      if ((buttons & mask) == 0 && (newButtons & mask) != 0) {
+        delta.add(MouseButtonEvent(mask, MouseButtonState.pressed));
+      } else if ((buttons & mask) != 0 && (newButtons & mask) == 0) {
+        delta.add(MouseButtonEvent(mask, MouseButtonState.released));
+      }
+    }
+
     buttons = newButtons;
-    return MouseButtonEvent(button, state);
+    return delta;
   }
 }
 
@@ -32,6 +40,7 @@ enum MouseButtonState {
 
 class MouseButtonEvent {
   MouseButtonEvent(this.button, this.state);
+
   int button;
   MouseButtonState state;
 
