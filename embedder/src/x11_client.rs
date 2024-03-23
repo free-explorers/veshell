@@ -75,10 +75,11 @@ pub fn run_x11_client() {
         size: (window.size().w as i32, window.size().h as i32).into(),
         refresh: 144_000,
     };
+    
     let output = Output::new(
         "x11".to_string(),
         PhysicalProperties {
-            size: (0, 0).into(),
+            size: (1000, 1000).into(),
             subpixel: Subpixel::Unknown,
             make: "Veshell".into(),
             model: "x11".into(),
