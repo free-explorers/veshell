@@ -15,23 +15,23 @@ lazy_static! {
         HashMap::from([
             (
                 input_linux::Key::ButtonLeft,
-                FlutterPointerMouseButtons_kFlutterPointerButtonMousePrimary
+                FlutterPointerMouseButtons_kFlutterPointerButtonMousePrimary,
             ),
             (
                 input_linux::Key::ButtonRight,
-                FlutterPointerMouseButtons_kFlutterPointerButtonMouseSecondary
+                FlutterPointerMouseButtons_kFlutterPointerButtonMouseSecondary,
             ),
             (
                 input_linux::Key::ButtonMiddle,
-                FlutterPointerMouseButtons_kFlutterPointerButtonMouseMiddle
+                FlutterPointerMouseButtons_kFlutterPointerButtonMouseMiddle,
             ),
             (
-                input_linux::Key::ButtonBack,
-                FlutterPointerMouseButtons_kFlutterPointerButtonMouseBack
+                input_linux::Key::ButtonSide,
+                FlutterPointerMouseButtons_kFlutterPointerButtonMouseBack,
             ),
             (
-                input_linux::Key::ButtonForward,
-                FlutterPointerMouseButtons_kFlutterPointerButtonMouseForward
+                input_linux::Key::ButtonExtra,
+                FlutterPointerMouseButtons_kFlutterPointerButtonMouseForward,
             ),
         ]);
     pub static ref FLUTTER_TO_LINUX_MOUSE_BUTTONS: HashMap<u32, input_linux::Key> =
@@ -50,11 +50,11 @@ lazy_static! {
             ),
             (
                 FlutterPointerMouseButtons_kFlutterPointerButtonMouseBack,
-                input_linux::Key::ButtonBack
+                input_linux::Key::ButtonSide
             ),
             (
                 FlutterPointerMouseButtons_kFlutterPointerButtonMouseForward,
-                input_linux::Key::ButtonForward
+                input_linux::Key::ButtonExtra
             ),
         ]);
 }

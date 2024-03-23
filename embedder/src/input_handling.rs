@@ -5,12 +5,12 @@ use std::sync::atomic::Ordering;
 use input_linux::sys::{KEY_ESC, KEY_LEFTALT};
 use smithay::backend::input::{
     AbsolutePositionEvent, Axis, AxisRelativeDirection, ButtonState, Event, InputBackend,
-    InputEvent, KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
+    InputEvent, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
     PointerMotionEvent,
 };
-use smithay::input::keyboard::keysyms::KEY_Escape;
 use smithay::input::pointer::AxisFrame;
 
+use crate::{Backend, CalloopData};
 use crate::flutter_engine::embedder::{
     FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse, FlutterPointerEvent,
     FlutterPointerPhase_kDown, FlutterPointerPhase_kHover, FlutterPointerPhase_kMove,
@@ -18,7 +18,6 @@ use crate::flutter_engine::embedder::{
     FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
 };
 use crate::flutter_engine::FlutterEngine;
-use crate::{Backend, CalloopData};
 
 pub fn handle_input<BackendData>(
     event: &InputEvent<impl InputBackend>,
@@ -93,7 +92,7 @@ pub fn handle_input<BackendData>(
                         .get_flutter_button_bitmask(),
                     pan_x: 0.0,
                     pan_y: 0.0,
-                    scale: 0.0,
+                    scale: 1.0,
                     rotation: 0.0,
                 })
                 .unwrap();
@@ -123,15 +122,13 @@ pub fn handle_input<BackendData>(
                     ),
                     time: (event.time() / 1000) as u32, // us to ms
                     axis: (horizontal, vertical),
-                    v120: {
-                        if let (None, None) = (horizontal_discrete, vertical_discrete) {
-                            None
-                        } else {
-                            Some((
-                                horizontal_discrete.unwrap_or(0.0) as i32,
-                                vertical_discrete.unwrap_or(0.0) as i32,
-                            ))
-                        }
+                    v120: if let (None, None) = (horizontal_discrete, vertical_discrete) {
+                        None
+                    } else {
+                        Some((
+                            horizontal_discrete.unwrap_or(0.0) as i32,
+                            vertical_discrete.unwrap_or(0.0) as i32,
+                        ))
                     },
                     stop: (false, false),
                 },
@@ -167,7 +164,7 @@ pub fn handle_input<BackendData>(
                         .get_flutter_button_bitmask(),
                     pan_x: 0.0,
                     pan_y: 0.0,
-                    scale: 0.0,
+                    scale: 1.0,
                     rotation: 0.0,
                 })
                 .unwrap();
@@ -246,7 +243,7 @@ where
                 .get_flutter_button_bitmask(),
             pan_x: 0.0,
             pan_y: 0.0,
-            scale: 0.0,
+            scale: 1.0,
             rotation: 0.0,
         })
         .unwrap();

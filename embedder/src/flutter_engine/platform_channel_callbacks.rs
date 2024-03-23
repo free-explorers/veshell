@@ -11,12 +11,11 @@ use smithay::wayland::compositor::with_states;
 use smithay::wayland::shell::xdg;
 use smithay::xwayland::xwm;
 
-use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
+use crate::{Backend, CalloopData};
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
 use crate::mouse_button_tracker::FLUTTER_TO_LINUX_MOUSE_BUTTONS;
-use crate::{Backend, CalloopData};
 
 pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
     event: Event<(
