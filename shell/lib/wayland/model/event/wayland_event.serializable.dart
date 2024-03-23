@@ -15,6 +15,7 @@ import 'package:shell/wayland/model/event/new_subsurface/new_subsurface.serializ
 import 'package:shell/wayland/model/event/new_surface/new_surface.serializable.dart';
 import 'package:shell/wayland/model/event/new_toplevel/new_toplevel.serializable.dart';
 import 'package:shell/wayland/model/event/new_x11_surface/new_x11_surface.serializable.dart';
+import 'package:shell/wayland/model/event/set_environment_variables/set_environment_variables.serializable.dart';
 import 'package:shell/wayland/model/event/unmap_x11_surface/unmap_x11_surface.serializable.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
@@ -146,6 +147,13 @@ class WaylandEvent with _$WaylandEvent implements WaylandInteraction {
     required String method,
     required MonitorLayoutChangedMessage message,
   }) = MonitorLayoutChangedEvent;
+
+  /// Set Environment Variables Event
+  /// This event is sent when the embedder wants to set environment variables.
+  const factory WaylandEvent.setEnvironmentVariables({
+    required String method,
+    required SetEnvironmentVariablesMessage message,
+  }) = SetEnvironmentVariablesEvent;
 
   /// Creates a new [WaylandEvent] instance from a map.
   ///

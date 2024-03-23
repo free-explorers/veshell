@@ -1,6 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/wayland/model/request/wayland_request.dart';
-import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
 part 'get_monitor_layout.serializable.freezed.dart';

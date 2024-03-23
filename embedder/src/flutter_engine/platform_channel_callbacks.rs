@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
 use smithay::backend::input::ButtonState;
@@ -34,6 +35,7 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             "resize_window" => resize_window(method_call, result, data),
             "close_window" => close_window(method_call, result, data),
             "get_monitor_layout" => get_monitor_layout(method_call, result, data),
+            "get_environment_variables" => get_environment_variables(method_call, result, data),
             _ => result.error(
                 "method_not_found".to_string(),
                 format!("Method {} not found", method_call.method()),
@@ -421,5 +423,23 @@ pub fn get_monitor_layout<BackendData: Backend + 'static>(
     data.state
         .flutter_engine_mut()
         .monitor_layout_changed(monitors);
+    result.success(None);
+}
+
+pub fn get_environment_variables<BackendData: Backend + 'static>(
+    _method_call: MethodCall<serde_json::Value>,
+    mut result: Box<dyn MethodResult<serde_json::Value>>,
+    data: &mut CalloopData<BackendData>,
+) {
+    let wayland_socket_name = data.state.wayland_socket_name.as_deref();
+
+    let xwayland_display = data.state.xwayland_display.map(|display| format!(":{}", display));
+    let xwayland_display = xwayland_display.as_deref();
+
+    data.state.flutter_engine.as_mut().unwrap().set_environment_variables(HashMap::from([
+        ("WAYLAND_DISPLAY", wayland_socket_name),
+        ("DISPLAY", xwayland_display),
+    ]));
+
     result.success(None);
 }

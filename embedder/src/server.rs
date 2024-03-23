@@ -39,6 +39,7 @@ use smithay::wayland::compositor::{
 };
 use smithay::wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier};
 use smithay::wayland::output::OutputHandler;
+use smithay::wayland::seat::WaylandFocus;
 use smithay::wayland::selection::data_device::{
     set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
     ServerDndGrabHandler,
@@ -59,7 +60,6 @@ use smithay::{
     delegate_compositor, delegate_data_device, delegate_dmabuf, delegate_output, delegate_seat,
     delegate_shm, delegate_xdg_shell,
 };
-use smithay::wayland::seat::WaylandFocus;
 use tracing::{info, warn};
 
 use crate::cursor::Cursor;
@@ -90,6 +90,8 @@ pub struct ServerState<BackendData: Backend + 'static> {
     pub key_repeater: KeyRepeater<BackendData>,
     pub xwayland: XWayland,
     pub x11_wm: Option<X11Wm>,
+    pub wayland_socket_name: Option<String>,
+    pub xwayland_display: Option<u32>,
 
     pub backend_data: Box<BackendData>,
     pub flutter_engine: Option<Box<FlutterEngine<BackendData>>>,
@@ -257,8 +259,6 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
 
         info!(name = socket_name, "Listening on wayland socket");
 
-        std::env::remove_var("DISPLAY");
-        std::env::set_var("WAYLAND_DISPLAY", &socket_name);
         std::env::set_var("XDG_SESSION_TYPE", "wayland");
         std::env::set_var("GDK_BACKEND", "wayland"); // Force GTK apps to run on Wayland.
         std::env::set_var("QT_QPA_PLATFORM", "wayland"); // Force QT apps to run on Wayland.
@@ -370,12 +370,24 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
                     )
                     .expect("Failed to set xwayland default cursor");
 
-                    std::env::set_var("DISPLAY", format!(":{}", display));
                     data.state.x11_wm = Some(wm);
+                    data.state.xwayland_display = Some(display);
+
+                    if let Some(flutter_engine) = data.state.flutter_engine.as_mut() {
+                        flutter_engine.set_environment_variable(
+                            "DISPLAY",
+                            Some(format!(":{}", display).as_str()),
+                        );
+                    }
                 }
+
                 XWaylandEvent::Exited => {
-                    std::env::remove_var("DISPLAY");
                     data.state.x11_wm = None;
+                    data.state.xwayland_display = None;
+
+                    if let Some(flutter_engine) = data.state.flutter_engine.as_mut() {
+                        flutter_engine.set_environment_variable("DISPLAY", None);
+                    }
                 }
             });
             if let Err(e) = ret {
@@ -419,6 +431,8 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             key_repeater,
             xwayland,
             x11_wm: None,
+            wayland_socket_name: Some(socket_name),
+            xwayland_display: None,
             next_surface_id: 1,
             next_x11_surface_id: 1,
             next_texture_id: 1,

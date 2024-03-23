@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/shared/util/app_launch.dart';
+import 'package:shell/shared/provider/app_launch.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
 import 'package:shell/window/provider/persistant_window_state.dart';
 import 'package:shell/window/provider/window.manager.dart';
@@ -18,6 +18,7 @@ class WorkspaceWidget extends HookConsumerWidget {
   const WorkspaceWidget({required this.isSelected, super.key});
 
   final bool isSelected;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final workspaceFocusScopeNode = useFocusScopeNode(
@@ -51,7 +52,10 @@ class WorkspaceWidget extends HookConsumerWidget {
         ref
             .read(workspaceStateProvider(currentWorkspaceId).notifier)
             .addWindow(newWindowId);
-        launchDesktopEntry(entry.desktopEntry);
+
+        ref
+            .read(appLaunchProvider.notifier)
+            .launchDesktopEntry(entry.desktopEntry);
       },
     );
 

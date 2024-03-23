@@ -3,7 +3,7 @@ import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/application/widget/app_icon.dart';
-import 'package:shell/shared/util/app_launch.dart';
+import 'package:shell/shared/provider/app_launch.dart';
 import 'package:shell/window/model/window_id.dart';
 import 'package:shell/window/provider/persistant_window_state.dart';
 
@@ -30,7 +30,9 @@ class WindowPlaceholder extends HookConsumerWidget {
                 ref
                     .read(persistentWindowStateProvider(windowId).notifier)
                     .update(window.copyWith(isWaitingForSurface: true));
-                launchDesktopEntry(entry.desktopEntry);
+                ref
+                    .read(appLaunchProvider.notifier)
+                    .launchDesktopEntry(entry.desktopEntry);
               }
             : null,
         child: Stack(

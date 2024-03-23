@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use serde::ser::SerializeStruct;
 use serde::Serialize;
 use smithay::output::{Mode, Output, PhysicalProperties};
@@ -256,4 +257,10 @@ impl Serialize for MyPhysicalProperties {
         state.serialize_field("model", &properties.model)?;
         state.end()
     }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvironmentVariables<'k, 'v> {
+    pub environment_variables: HashMap<&'k str, Option<&'v str>>,
 }
