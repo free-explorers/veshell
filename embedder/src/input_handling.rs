@@ -1,12 +1,14 @@
+use std::collections::HashSet;
 use std::mem::size_of;
 use std::sync::atomic::Ordering;
 
-use input_linux::sys::KEY_ESC;
+use input_linux::sys::{KEY_ESC, KEY_LEFTALT};
 use smithay::backend::input::{
     AbsolutePositionEvent, Axis, AxisRelativeDirection, ButtonState, Event, InputBackend,
     InputEvent, KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
     PointerMotionEvent,
 };
+use smithay::input::keyboard::keysyms::KEY_Escape;
 use smithay::input::pointer::AxisFrame;
 
 use crate::flutter_engine::embedder::{
@@ -171,13 +173,23 @@ pub fn handle_input<BackendData>(
                 .unwrap();
         }
         InputEvent::Keyboard { event } => {
-            if event.key_code() == KEY_ESC as u32 && event.state() == KeyState::Pressed {
+            data.state
+                .handle_key_event(event.key_code(), event.state(), event.time_msec());
+
+            let pressed_keys = data
+                .state
+                .keyboard
+                .pressed_keys()
+                .iter()
+                .map(|key| key.raw())
+                .collect::<HashSet<_>>();
+
+            if pressed_keys.contains(&(KEY_ESC as u32))
+                && pressed_keys.contains(&(KEY_LEFTALT as u32))
+            {
                 data.state.running.store(false, Ordering::SeqCst);
                 return;
             }
-
-            data.state
-                .handle_key_event(event.key_code(), event.state(), event.time_msec());
         }
         InputEvent::GestureSwipeBegin { .. } => {}
         InputEvent::GestureSwipeUpdate { .. } => {}
