@@ -45,10 +45,10 @@ use smithay::wayland::selection::data_device::{
     ServerDndGrabHandler,
 };
 use smithay::wayland::selection::primary_selection::{
-    PrimarySelectionHandler, PrimarySelectionState,
+    set_primary_focus, PrimarySelectionHandler, PrimarySelectionState,
 };
 use smithay::wayland::selection::wlr_data_control::{DataControlHandler, DataControlState};
-use smithay::wayland::selection::{SelectionHandler, SelectionTarget};
+use smithay::wayland::selection::{SelectionHandler, SelectionSource, SelectionTarget};
 use smithay::wayland::shell::xdg;
 use smithay::wayland::shell::xdg::{
     PopupSurface, PositionerState, SurfaceCachedState, ToplevelSurface, XdgPopupSurfaceData,
@@ -253,7 +253,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             Some(&primary_selection_state),
             |_| true,
         );
-        
+
         // init wayland clients
         let source = ListeningSocketSource::new_auto().unwrap();
         let socket_name = source.socket_name().to_string_lossy().into_owned();
@@ -1161,7 +1161,8 @@ impl<BackendData: Backend> SeatHandler for ServerState<BackendData> {
         let dh = &self.display_handle;
         let wl_surface = target.and_then(WaylandFocus::wl_surface);
         let client = wl_surface.and_then(|s| dh.get_client(s.id()).ok());
-        set_data_device_focus(dh, seat, client);
+        set_data_device_focus(dh, seat, client.clone());
+        set_primary_focus(dh, seat, client);
     }
 
     fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {}
@@ -1169,6 +1170,34 @@ impl<BackendData: Backend> SeatHandler for ServerState<BackendData> {
 
 impl<BackendData: Backend> SelectionHandler for ServerState<BackendData> {
     type SelectionUserData = ();
+
+    fn new_selection(
+        &mut self,
+        ty: SelectionTarget,
+        source: Option<SelectionSource>,
+        _seat: Seat<Self>,
+    ) {
+        if let Some(xwm) = self.x11_wm.as_mut() {
+            if let Err(err) = xwm.new_selection(ty, source.map(|source| source.mime_types())) {
+                warn!(?err, ?ty, "Failed to set Xwayland selection");
+            }
+        }
+    }
+
+    fn send_selection(
+        &mut self,
+        ty: SelectionTarget,
+        mime_type: String,
+        fd: OwnedFd,
+        _seat: Seat<Self>,
+        _user_data: &(),
+    ) {
+        if let Some(xwm) = self.x11_wm.as_mut() {
+            if let Err(err) = xwm.send_selection(ty, mime_type, fd, self.loop_handle.clone()) {
+                warn!(?err, "Failed to send primary (X11 -> Wayland)");
+            }
+        }
+    }
 }
 
 impl<BackendData: Backend> ClientDndGrabHandler for ServerState<BackendData> {}
