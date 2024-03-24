@@ -1,15 +1,20 @@
 use crate::flutter_engine::wayland_messages::{MapX11Surface, NewX11Surface};
+use crate::focus::KeyboardFocusTarget;
 use crate::server::{get_surface_id, ServerState};
 use crate::{Backend, CalloopData};
 use serde_json::json;
 use smithay::desktop::space::SpaceElement;
 use smithay::utils::{Logical, Point, Rectangle};
 use smithay::wayland::seat::WaylandFocus;
+use smithay::wayland::selection::data_device::{clear_data_device_selection, current_data_device_selection_userdata, request_data_device_client_selection, set_data_device_selection};
+use smithay::wayland::selection::primary_selection::{clear_primary_selection, current_primary_selection_userdata, PrimarySelectionHandler, PrimarySelectionState, request_primary_client_selection, set_primary_selection};
 use smithay::wayland::selection::SelectionTarget;
 use smithay::xwayland::xwm::{Reorder, XwmId};
 use smithay::xwayland::{xwm, X11Surface, X11Wm, XwmHandler};
 use std::cell::RefCell;
 use std::os::fd::OwnedFd;
+use smithay::delegate_primary_selection;
+use tracing::{error, trace};
 
 struct MyX11SurfaceState {
     x11_surface_id: u64,
@@ -200,19 +205,81 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
         button: u32,
         resize_edge: xwm::ResizeEdge,
     ) {
-        dbg!(window.is_transient_for());
     }
 
     fn move_request(&mut self, xwm: XwmId, window: X11Surface, button: u32) {
-        dbg!(window.is_transient_for());
+    }
+
+    fn allow_selection_access(&mut self, xwm: XwmId, _selection: SelectionTarget) -> bool {
+        if let Some(keyboard) = self.state.seat.get_keyboard() {
+            // check that an X11 window is focused
+            if let Some(KeyboardFocusTarget::X11Surface(surface)) = keyboard.current_focus() {
+                if surface.xwm_id().unwrap() == xwm {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     fn send_selection(
         &mut self,
-        xwm: XwmId,
+        _xwm: XwmId,
         selection: SelectionTarget,
         mime_type: String,
         fd: OwnedFd,
     ) {
+        match selection {
+            SelectionTarget::Clipboard => {
+                if let Err(err) =
+                    request_data_device_client_selection(&self.state.seat, mime_type, fd)
+                {
+                    error!(
+                        ?err,
+                        "Failed to request current wayland clipboard for Xwayland",
+                    );
+                }
+            }
+            SelectionTarget::Primary => {
+                if let Err(err) = request_primary_client_selection(&self.state.seat, mime_type, fd)
+                {
+                    error!(
+                        ?err,
+                        "Failed to request current wayland primary selection for Xwayland",
+                    );
+                }
+            }
+        }
+    }
+
+    fn new_selection(&mut self, _xwm: XwmId, selection: SelectionTarget, mime_types: Vec<String>) {
+        trace!(?selection, ?mime_types, "Got Selection from X11",);
+        // TODO check, that focused windows is X11 window before doing this
+        match selection {
+            SelectionTarget::Clipboard => set_data_device_selection(
+                &self.state.display_handle,
+                &self.state.seat,
+                mime_types,
+                (),
+            ),
+            SelectionTarget::Primary => {
+                set_primary_selection(&self.state.display_handle, &self.state.seat, mime_types, ())
+            }
+        }
+    }
+
+    fn cleared_selection(&mut self, _xwm: XwmId, selection: SelectionTarget) {
+        match selection {
+            SelectionTarget::Clipboard => {
+                if current_data_device_selection_userdata(&self.state.seat).is_some() {
+                    clear_data_device_selection(&self.state.display_handle, &self.state.seat)
+                }
+            }
+            SelectionTarget::Primary => {
+                if current_primary_selection_userdata(&self.state.seat).is_some() {
+                    clear_primary_selection(&self.state.display_handle, &self.state.seat)
+                }
+            }
+        }
     }
 }

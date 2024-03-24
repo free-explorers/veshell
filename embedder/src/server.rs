@@ -44,6 +44,10 @@ use smithay::wayland::selection::data_device::{
     set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
     ServerDndGrabHandler,
 };
+use smithay::wayland::selection::primary_selection::{
+    PrimarySelectionHandler, PrimarySelectionState,
+};
+use smithay::wayland::selection::wlr_data_control::{DataControlHandler, DataControlState};
 use smithay::wayland::selection::{SelectionHandler, SelectionTarget};
 use smithay::wayland::shell::xdg;
 use smithay::wayland::shell::xdg::{
@@ -57,8 +61,8 @@ use smithay::xwayland::{
     xwm, X11Surface, X11Wm, XWayland, XWaylandClientData, XWaylandEvent, XwmHandler,
 };
 use smithay::{
-    delegate_compositor, delegate_data_device, delegate_dmabuf, delegate_output, delegate_seat,
-    delegate_shm, delegate_xdg_shell,
+    delegate_compositor, delegate_data_control, delegate_data_device, delegate_dmabuf,
+    delegate_output, delegate_primary_selection, delegate_seat, delegate_shm, delegate_xdg_shell,
 };
 use tracing::{info, warn};
 
@@ -82,6 +86,8 @@ pub struct ServerState<BackendData: Backend + 'static> {
     pub seat: Seat<ServerState<BackendData>>,
     pub seat_state: SeatState<ServerState<BackendData>>,
     pub data_device_state: DataDeviceState,
+    pub data_control_state: DataControlState,
+    pub primary_selection_state: PrimarySelectionState,
     pub pointer: PointerHandle<ServerState<BackendData>>,
     pub keyboard: KeyboardHandle<ServerState<BackendData>>,
     pub repeat_delay: u64,
@@ -241,7 +247,13 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         let pointer = seat.add_pointer();
 
         let data_device_state = DataDeviceState::new::<Self>(&display_handle);
-
+        let primary_selection_state = PrimarySelectionState::new::<Self>(&display_handle);
+        let data_control_state = DataControlState::new::<Self, _>(
+            &display_handle,
+            Some(&primary_selection_state),
+            |_| true,
+        );
+        
         // init wayland clients
         let source = ListeningSocketSource::new_auto().unwrap();
         let socket_name = source.socket_name().to_string_lossy().into_owned();
@@ -423,6 +435,8 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             seat,
             seat_state,
             data_device_state,
+            primary_selection_state,
+            data_control_state,
             pointer,
             keyboard,
             repeat_delay,
@@ -1168,3 +1182,17 @@ impl<BackendData: Backend> DataDeviceHandler for ServerState<BackendData> {
 }
 
 impl<BackendData: Backend> OutputHandler for ServerState<BackendData> {}
+
+impl<BackendData: Backend> PrimarySelectionHandler for ServerState<BackendData> {
+    fn primary_selection_state(&self) -> &PrimarySelectionState {
+        &self.primary_selection_state
+    }
+}
+delegate_primary_selection!(@<BackendData: Backend + 'static> ServerState<BackendData>);
+
+impl<BackendData: Backend> DataControlHandler for ServerState<BackendData> {
+    fn data_control_state(&self) -> &DataControlState {
+        &self.data_control_state
+    }
+}
+delegate_data_control!(@<BackendData: Backend + 'static> ServerState<BackendData>);
