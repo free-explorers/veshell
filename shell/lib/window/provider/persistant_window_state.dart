@@ -1,9 +1,8 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/shared/persistence/persistable_provider.mixin.dart';
-import 'package:shell/wayland/model/xdg_surface.dart';
-import 'package:shell/wayland/model/xdg_toplevel.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/model/window_properties.dart';
 import 'package:shell/window/provider/window_provider.mixin.dart';
 
 part 'persistant_window_state.g.dart';
@@ -39,7 +38,7 @@ class PersistentWindowState extends _$PersistentWindowState
   }
 
   @override
-  void onSurfaceChanged(XdgToplevel next) {
+  void onSurfaceChanged(WindowPropertiesState next) {
     state = state.copyWith(appId: next.appId, title: next.title);
   }
 

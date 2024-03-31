@@ -56,8 +56,6 @@ sealed class SurfaceRoleMessage with _$SurfaceRoleMessage {
 sealed class XdgSurfaceMessage with _$XdgSurfaceMessage {
   const factory XdgSurfaceMessage.xdgToplevel({
     required SurfaceId? parent,
-    required String? appId,
-    required String? title,
   }) = XdgToplevelMessage;
 
   const factory XdgSurfaceMessage.xdgPopup({

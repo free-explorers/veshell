@@ -7,6 +7,7 @@ import 'package:shell/wayland/model/xdg_toplevel.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/wayland/provider/xdg_surface_state.dart';
+import 'package:shell/window/provider/window_properties.dart';
 
 part 'xdg_toplevel_state.g.dart';
 
@@ -36,13 +37,9 @@ class XdgToplevelState extends _$XdgToplevelState {
   /// Update state from surface commit
   void onCommit({
     required int? parent,
-    required String? appId,
-    required String? title,
   }) {
     state = state.copyWith(
       committed: true,
-      title: title,
-      appId: appId,
       parent: parent,
     );
   }
@@ -70,13 +67,13 @@ class XdgToplevelState extends _$XdgToplevelState {
         );
   }
 
-  void setTitle(String title) {
+  void setTitle(String? title) {
     state = state.copyWith(
       title: title,
     );
   }
 
-  void setAppId(String appId) {
+  void setAppId(String? appId) {
     state = state.copyWith(
       appId: appId,
     );

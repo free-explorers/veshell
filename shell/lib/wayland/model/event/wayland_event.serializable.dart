@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:shell/wayland/model/event/app_id_changed/app_id_changed.serializable.dart';
 import 'package:shell/wayland/model/event/commit_surface/commit_surface.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_popup/destroy_popup.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_subsurface/destroy_subsurface.serializable.dart';
@@ -16,6 +17,7 @@ import 'package:shell/wayland/model/event/new_surface/new_surface.serializable.d
 import 'package:shell/wayland/model/event/new_toplevel/new_toplevel.serializable.dart';
 import 'package:shell/wayland/model/event/new_x11_surface/new_x11_surface.serializable.dart';
 import 'package:shell/wayland/model/event/set_environment_variables/set_environment_variables.serializable.dart';
+import 'package:shell/wayland/model/event/title_changed/title_changed.serializable.dart';
 import 'package:shell/wayland/model/event/unmap_x11_surface/unmap_x11_surface.serializable.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
@@ -126,6 +128,18 @@ class WaylandEvent with _$WaylandEvent implements WaylandInteraction {
     required String method,
     required DestroyX11SurfaceMessage message,
   }) = DestroyX11SurfaceEvent;
+
+  // Sent when the title of an XDG toplevel changes.
+  const factory WaylandEvent.appIdChanged({
+    required String method,
+    required AppIdChangedMessage message,
+  }) = AppIdChangedEvent;
+
+  // Sent when the title of an XDG toplevel changes.
+  const factory WaylandEvent.titleChanged({
+    required String method,
+    required TitleChangedMessage message,
+  }) = TitleChangedEvent;
 
   /// Interactive Move Event
   /// This event is sent when the user starts an interactive move

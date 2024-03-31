@@ -52,8 +52,6 @@ pub enum XdgSurfaceRole {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ToplevelMessage {
-    pub app_id: String,
-    pub title: String,
     pub parent_surface_id: Option<u64>,
 }
 

@@ -615,22 +615,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             None
         };
 
-        let (app_id, title) = with_states(surface, |surface_data| {
-            let surface_state = surface_data
-                .data_map
-                .get::<XdgToplevelSurfaceData>()
-                .unwrap()
-                .lock()
-                .unwrap();
-            (
-                surface_state.app_id.clone().unwrap_or_default(),
-                surface_state.title.clone().unwrap_or_default(),
-            )
-        });
-
         Some(ToplevelMessage {
-            app_id,
-            title,
             parent_surface_id: parent_id,
         })
     }
@@ -676,14 +661,7 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
-        let surface_id = with_states(surface.wl_surface(), |surface_data| {
-            surface_data
-                .data_map
-                .get::<RefCell<MySurfaceState>>()
-                .unwrap()
-                .borrow()
-                .surface_id
-        });
+        let surface_id = get_surface_id(surface.wl_surface());
         self.xdg_toplevels.insert(surface_id, surface.clone());
 
         surface.with_pending_state(|state| {
@@ -746,14 +724,7 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
     }
 
     fn move_request(&mut self, surface: ToplevelSurface, _seat: WlSeat, _serial: Serial) {
-        let surface_id = with_states(surface.wl_surface(), |surface_data| {
-            surface_data
-                .data_map
-                .get::<RefCell<MySurfaceState>>()
-                .unwrap()
-                .borrow()
-                .surface_id
-        });
+        let surface_id = get_surface_id(surface.wl_surface());
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "interactive_move",
@@ -771,14 +742,7 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
         _serial: Serial,
         edges: xdg_toplevel::ResizeEdge,
     ) {
-        let surface_id = with_states(surface.wl_surface(), |surface_data| {
-            surface_data
-                .data_map
-                .get::<RefCell<MySurfaceState>>()
-                .unwrap()
-                .borrow()
-                .surface_id
-        });
+        let surface_id = get_surface_id(surface.wl_surface());
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "interactive_resize",
@@ -804,14 +768,7 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
-        let surface_id = with_states(surface.wl_surface(), |surface_data| {
-            surface_data
-                .data_map
-                .get::<RefCell<MySurfaceState>>()
-                .unwrap()
-                .borrow()
-                .surface_id
-        });
+        let surface_id = get_surface_id(surface.wl_surface());
         self.xdg_toplevels.remove(&surface_id);
 
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
@@ -825,14 +782,7 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
     }
 
     fn popup_destroyed(&mut self, surface: PopupSurface) {
-        let surface_id = with_states(surface.wl_surface(), |surface_data| {
-            surface_data
-                .data_map
-                .get::<RefCell<MySurfaceState>>()
-                .unwrap()
-                .borrow()
-                .surface_id
-        });
+        let surface_id = get_surface_id(surface.wl_surface());
         self.xdg_popups.remove(&surface_id);
 
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
@@ -840,6 +790,56 @@ impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
             "destroy_popup",
             Some(Box::new(json!({
                 "surfaceId": surface_id,
+            }))),
+            None,
+        );
+    }
+
+    fn app_id_changed(&mut self, surface: ToplevelSurface) {
+        let surface_id = get_surface_id(surface.wl_surface());
+
+        let app_id = with_states(surface.wl_surface(), |surface_data| {
+            surface_data
+                .data_map
+                .get::<XdgToplevelSurfaceData>()
+                .unwrap()
+                .lock()
+                .unwrap()
+                .app_id
+                .clone()
+        });
+
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method(
+            "app_id_changed",
+            Some(Box::new(json!({
+                "surfaceId": surface_id,
+                "appId": app_id,
+            }))),
+            None,
+        );
+    }
+
+    fn title_changed(&mut self, surface: ToplevelSurface) {
+        let surface_id = get_surface_id(surface.wl_surface());
+
+        let title = with_states(surface.wl_surface(), |surface_data| {
+            surface_data
+                .data_map
+                .get::<XdgToplevelSurfaceData>()
+                .unwrap()
+                .lock()
+                .unwrap()
+                .title
+                .clone()
+        });
+
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method(
+            "title_changed",
+            Some(Box::new(json!({
+                "surfaceId": surface_id,
+                "title": title,
             }))),
             None,
         );

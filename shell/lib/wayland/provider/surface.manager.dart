@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/wayland/model/event/app_id_changed/app_id_changed.serializable.dart';
 import 'package:shell/wayland/model/event/commit_surface/commit_surface.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_popup/destroy_popup.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_subsurface/destroy_subsurface.serializable.dart';
@@ -16,6 +17,7 @@ import 'package:shell/wayland/model/event/new_subsurface/new_subsurface.serializ
 import 'package:shell/wayland/model/event/new_surface/new_surface.serializable.dart';
 import 'package:shell/wayland/model/event/new_toplevel/new_toplevel.serializable.dart';
 import 'package:shell/wayland/model/event/new_x11_surface/new_x11_surface.serializable.dart';
+import 'package:shell/wayland/model/event/title_changed/title_changed.serializable.dart';
 import 'package:shell/wayland/model/event/unmap_x11_surface/unmap_x11_surface.serializable.dart';
 import 'package:shell/wayland/model/event/wayland_event.serializable.dart';
 import 'package:shell/wayland/model/request/unregister_view_texture/unregister_view_texture.serializable.dart';
@@ -28,6 +30,7 @@ import 'package:shell/wayland/provider/x11_surface_state.dart';
 import 'package:shell/wayland/provider/xdg_popup_state.dart';
 import 'package:shell/wayland/provider/xdg_surface_state.dart';
 import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
+import 'package:shell/window/provider/window_properties.dart';
 
 part 'surface.manager.g.dart';
 
@@ -63,6 +66,10 @@ class SurfaceManager extends _$SurfaceManager {
           _destroyToplevel(event.message);
         case AsyncData(value: final DestroyPopupEvent event):
           _destroyPopup(event.message);
+        case AsyncData(value: final AppIdChangedEvent event):
+          _appIdChanged(event.message);
+        case AsyncData(value: final TitleChangedEvent event):
+          _titleChanged(event.message);
       }
     });
     return SurfaceManagerState(
@@ -155,8 +162,6 @@ class SurfaceManager extends _$SurfaceManager {
                 .read(xdgToplevelStateProvider(message.surfaceId).notifier)
                 .onCommit(
                   parent: role.parent,
-                  appId: role.appId,
-                  title: role.title,
                 );
           case XdgPopupMessage():
             ref
@@ -188,6 +193,12 @@ class SurfaceManager extends _$SurfaceManager {
           instance: message.instance,
           startupId: message.startupId,
         );
+    ref
+        .read(windowPropertiesProvider(message.surfaceId).notifier)
+        .setTitle(message.title);
+    ref
+        .read(windowPropertiesProvider(message.surfaceId).notifier)
+        .setAppId(message.instance);
   }
 
   void _unmapX11Surface(UnmapX11SurfaceMessage message) {
@@ -250,6 +261,24 @@ class SurfaceManager extends _$SurfaceManager {
         .read(xdgSurfaceStateProvider(parent).notifier)
         .removePopup(message.surfaceId);
     ref.read(xdgPopupStateProvider(message.surfaceId).notifier).dispose();
+  }
+
+  void _appIdChanged(AppIdChangedMessage message) {
+    ref
+        .read(xdgToplevelStateProvider(message.surfaceId).notifier)
+        .setAppId(message.appId);
+    ref
+        .read(windowPropertiesProvider(message.surfaceId).notifier)
+        .setAppId(message.appId);
+  }
+
+  void _titleChanged(TitleChangedMessage message) {
+    ref
+        .read(xdgToplevelStateProvider(message.surfaceId).notifier)
+        .setTitle(message.title);
+    ref
+        .read(windowPropertiesProvider(message.surfaceId).notifier)
+        .setTitle(message.title);
   }
 }
 

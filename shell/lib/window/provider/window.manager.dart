@@ -71,7 +71,7 @@ class WindowManager extends _$WindowManager {
     final persistentWindow = PersistentWindow(
       windowId: windowId,
       appId: entry.desktopEntry.id,
-      title: entry.desktopEntry.id,
+      title: entry.entries[DesktopEntryKey.name.string],
       isWaitingForSurface: true,
     );
 
