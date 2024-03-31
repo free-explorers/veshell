@@ -53,6 +53,8 @@ pub enum XdgSurfaceRole {
 #[serde(rename_all = "camelCase")]
 pub struct ToplevelMessage {
     pub parent_surface_id: Option<u64>,
+    pub app_id: Option<String>,
+    pub title: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -82,9 +84,9 @@ pub struct MapX11Surface {
     pub override_redirect: bool,
     pub geometry: MyRectangle<i32, Logical>,
     pub parent: Option<u64>,
-    pub title: String,
-    pub window_class: String,
-    pub instance: String,
+    pub title: Option<String>,
+    pub window_class: Option<String>,
+    pub instance: Option<String>,
     pub startup_id: Option<String>,
 }
 

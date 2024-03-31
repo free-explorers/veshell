@@ -3,17 +3,23 @@ use crate::focus::KeyboardFocusTarget;
 use crate::server::{get_surface_id, ServerState};
 use crate::{Backend, CalloopData};
 use serde_json::json;
+use smithay::delegate_primary_selection;
 use smithay::desktop::space::SpaceElement;
 use smithay::utils::{Logical, Point, Rectangle};
 use smithay::wayland::seat::WaylandFocus;
-use smithay::wayland::selection::data_device::{clear_data_device_selection, current_data_device_selection_userdata, request_data_device_client_selection, set_data_device_selection};
-use smithay::wayland::selection::primary_selection::{clear_primary_selection, current_primary_selection_userdata, PrimarySelectionHandler, PrimarySelectionState, request_primary_client_selection, set_primary_selection};
+use smithay::wayland::selection::data_device::{
+    clear_data_device_selection, current_data_device_selection_userdata,
+    request_data_device_client_selection, set_data_device_selection,
+};
+use smithay::wayland::selection::primary_selection::{
+    clear_primary_selection, current_primary_selection_userdata, request_primary_client_selection,
+    set_primary_selection, PrimarySelectionHandler, PrimarySelectionState,
+};
 use smithay::wayland::selection::SelectionTarget;
-use smithay::xwayland::xwm::{Reorder, XwmId};
+use smithay::xwayland::xwm::{Reorder, WmWindowProperty, XwmId};
 use smithay::xwayland::{xwm, X11Surface, X11Wm, XwmHandler};
 use std::cell::RefCell;
 use std::os::fd::OwnedFd;
-use smithay::delegate_primary_selection;
 use tracing::{error, trace};
 
 struct MyX11SurfaceState {
@@ -77,6 +83,13 @@ impl<BackendData: Backend> ServerState<BackendData> {
                 .map(|x11_surface| get_x11_surface_id(&x11_surface))
         };
 
+        let title = surface.title();
+        let title = if !title.is_empty() { Some(title) } else { None };
+        let window_class = surface.class();
+        let window_class = if !window_class.is_empty() { Some(window_class) } else { None };
+        let instance = surface.instance();
+        let instance = if !instance.is_empty() { Some(instance) } else { None };
+        
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "map_x11_surface",
@@ -86,9 +99,9 @@ impl<BackendData: Backend> ServerState<BackendData> {
                 override_redirect: surface.is_override_redirect(),
                 geometry: surface.geometry().into(),
                 parent,
-                title: surface.title(),
-                window_class: surface.class(),
-                instance: surface.instance(),
+                title,
+                window_class,
+                instance,
                 startup_id: surface.startup_id(),
             }))),
             None,
@@ -198,6 +211,45 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
     ) {
     }
 
+    fn property_notify(&mut self, xwm: XwmId, window: X11Surface, property: WmWindowProperty) {
+        let Some(wl_surface) = window.wl_surface() else {
+            return;
+        };
+        let surface_id = get_surface_id(&wl_surface);
+
+        let platform_method_channel = &mut self.state.flutter_engine_mut().platform_method_channel;
+
+        match property {
+            WmWindowProperty::Title => {
+                let title = window.title();
+                let title = if !title.is_empty() { Some(title) } else { None };
+
+                platform_method_channel.invoke_method(
+                    "title_changed",
+                    Some(Box::new(json!({
+                        "surfaceId": surface_id,
+                        "title": title,
+                    }))),
+                    None,
+                );
+            }
+            WmWindowProperty::Class => {
+                let instance = window.instance();
+                let instance = if !instance.is_empty() { Some(instance) } else { None };
+                
+                platform_method_channel.invoke_method(
+                    "app_id_changed",
+                    Some(Box::new(json!({
+                        "surfaceId": surface_id,
+                        "appId": instance,
+                    }))),
+                    None,
+                );
+            }
+            _ => {}
+        }
+    }
+
     fn resize_request(
         &mut self,
         xwm: XwmId,
@@ -207,8 +259,7 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
     ) {
     }
 
-    fn move_request(&mut self, xwm: XwmId, window: X11Surface, button: u32) {
-    }
+    fn move_request(&mut self, xwm: XwmId, window: X11Surface, button: u32) {}
 
     fn allow_selection_access(&mut self, xwm: XwmId, _selection: SelectionTarget) -> bool {
         if let Some(keyboard) = self.state.seat.get_keyboard() {

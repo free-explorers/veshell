@@ -1970,7 +1970,7 @@ checksum = "e6ecd384b10a64542d77071bd64bd7b231f4ed5940fba55e98c3de13824cf3d7"
 [[package]]
 name = "smithay"
 version = "0.3.0"
-source = "git+https://github.com/Smithay/smithay?rev=76c6b30#76c6b30517c1e09485d016e15c35650aea44259f"
+source = "git+https://github.com/roscale/smithay?branch=property-notify-handler#ede00e70a2ebd1224be52431435b1778f714a161"
 dependencies = [
  "appendlist",
  "ash",

@@ -162,7 +162,14 @@ class SurfaceManager extends _$SurfaceManager {
                 .read(xdgToplevelStateProvider(message.surfaceId).notifier)
                 .onCommit(
                   parent: role.parent,
+                  appId: role.appId,
+                  title: role.title,
                 );
+
+            ref.read(windowPropertiesProvider(message.surfaceId).notifier)
+              ..setTitle(role.title)
+              ..setAppId(role.appId);
+
           case XdgPopupMessage():
             ref
                 .read(xdgPopupStateProvider(message.surfaceId).notifier)
@@ -193,12 +200,10 @@ class SurfaceManager extends _$SurfaceManager {
           instance: message.instance,
           startupId: message.startupId,
         );
-    ref
-        .read(windowPropertiesProvider(message.surfaceId).notifier)
-        .setTitle(message.title);
-    ref
-        .read(windowPropertiesProvider(message.surfaceId).notifier)
-        .setAppId(message.instance);
+
+    ref.read(windowPropertiesProvider(message.surfaceId).notifier)
+      ..setTitle(message.title)
+      ..setAppId(message.instance);
   }
 
   void _unmapX11Surface(UnmapX11SurfaceMessage message) {
@@ -264,18 +269,48 @@ class SurfaceManager extends _$SurfaceManager {
   }
 
   void _appIdChanged(AppIdChangedMessage message) {
-    ref
-        .read(xdgToplevelStateProvider(message.surfaceId).notifier)
-        .setAppId(message.appId);
+    final role = ref.read(wlSurfaceStateProvider(message.surfaceId)).role;
+
+    switch (role) {
+      // TODO: Why is the role null?
+      case SurfaceRole.xdgToplevel || null:
+        ref
+            .read(xdgToplevelStateProvider(message.surfaceId).notifier)
+            .setAppId(message.appId);
+      case SurfaceRole.x11Surface:
+        final x11SurfaceId =
+            ref.read(x11SurfaceIdByWlSurfaceIdProvider(message.surfaceId));
+        ref
+            .read(x11SurfaceStateProvider(x11SurfaceId).notifier)
+            .setAppId(message.appId ?? '');
+      default:
+        assert(false);
+    }
+
     ref
         .read(windowPropertiesProvider(message.surfaceId).notifier)
         .setAppId(message.appId);
   }
 
   void _titleChanged(TitleChangedMessage message) {
-    ref
-        .read(xdgToplevelStateProvider(message.surfaceId).notifier)
-        .setTitle(message.title);
+    final role = ref.read(wlSurfaceStateProvider(message.surfaceId)).role;
+
+    switch (role) {
+      // TODO: Why is the role null?
+      case SurfaceRole.xdgToplevel || null:
+        ref
+            .read(xdgToplevelStateProvider(message.surfaceId).notifier)
+            .setTitle(message.title);
+      case SurfaceRole.x11Surface:
+        final x11SurfaceId =
+            ref.read(x11SurfaceIdByWlSurfaceIdProvider(message.surfaceId));
+        ref
+            .read(x11SurfaceStateProvider(x11SurfaceId).notifier)
+            .setTitle(message.title ?? '');
+      default:
+        assert(false);
+    }
+
     ref
         .read(windowPropertiesProvider(message.surfaceId).notifier)
         .setTitle(message.title);

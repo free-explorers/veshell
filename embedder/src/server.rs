@@ -587,18 +587,21 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         let surface_id = get_surface_id(surface);
         let toplevel = self.xdg_toplevels.get(&surface_id)?;
 
-        let (initial_configure_sent, parent) = with_states(surface, |surface_data| {
-            let surface_state = surface_data
-                .data_map
-                .get::<XdgToplevelSurfaceData>()
-                .unwrap()
-                .lock()
-                .unwrap();
-            (
-                surface_state.initial_configure_sent,
-                surface_state.parent.clone(),
-            )
-        });
+        let (initial_configure_sent, parent, app_id, title) =
+            with_states(surface, |surface_data| {
+                let surface_state = surface_data
+                    .data_map
+                    .get::<XdgToplevelSurfaceData>()
+                    .unwrap()
+                    .lock()
+                    .unwrap();
+                (
+                    surface_state.initial_configure_sent,
+                    surface_state.parent.clone(),
+                    surface_state.app_id.clone(),
+                    surface_state.title.clone(),
+                )
+            });
 
         toplevel.with_pending_state(|state| {
             state.states.set(xdg_toplevel::State::Maximized);
@@ -617,6 +620,8 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
 
         Some(ToplevelMessage {
             parent_surface_id: parent_id,
+            app_id,
+            title,
         })
     }
 

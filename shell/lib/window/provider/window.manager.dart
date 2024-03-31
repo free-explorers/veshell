@@ -139,7 +139,7 @@ class WindowManager extends _$WindowManager {
       if (window.isWaitingForSurface) {
         ref.read(persistentWindowStateProvider(windowId).notifier).initialize(
               window.copyWith(
-                title: window.title,
+                title: x11SurfaceState.title ?? window.title,
                 surfaceId: surfaceId,
                 isWaitingForSurface: false,
               ),

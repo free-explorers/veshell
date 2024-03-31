@@ -37,10 +37,14 @@ class XdgToplevelState extends _$XdgToplevelState {
   /// Update state from surface commit
   void onCommit({
     required int? parent,
+    required String? appId,
+    required String? title,
   }) {
     state = state.copyWith(
       committed: true,
       parent: parent,
+      appId: appId,
+      title: title,
     );
   }
 

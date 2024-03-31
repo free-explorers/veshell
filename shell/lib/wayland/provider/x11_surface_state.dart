@@ -35,9 +35,9 @@ class X11SurfaceState extends _$X11SurfaceState {
       geometry: Rect.zero,
       parent: null,
       children: IList<X11SurfaceId>(),
-      title: '',
-      windowClass: '',
-      instance: '',
+      title: null,
+      windowClass: null,
+      instance: null,
       startupId: null,
     );
   }
@@ -47,9 +47,9 @@ class X11SurfaceState extends _$X11SurfaceState {
     required bool overrideRedirect,
     required Rect geometry,
     required X11SurfaceId? parent,
-    required String title,
-    required String windowClass,
-    required String instance,
+    required String? title,
+    required String? windowClass,
+    required String? instance,
     required String? startupId,
   }) {
     assert(state.surfaceId == null);
@@ -134,6 +134,14 @@ class X11SurfaceState extends _$X11SurfaceState {
     state = state.copyWith(
       children: state.children.remove(child),
     );
+  }
+
+  void setTitle(String title) {
+    state = state.copyWith(title: title);
+  }
+
+  void setAppId(String appId) {
+    state = state.copyWith(instance: appId);
   }
 
   void _checkIfMapped() {

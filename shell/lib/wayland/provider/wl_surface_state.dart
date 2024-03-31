@@ -79,7 +79,6 @@ class WlSurfaceState extends _$WlSurfaceState {
     state = state.copyWith(
       role: SurfaceRole.x11Surface,
     );
-    print(state);
   }
 
   void dispose() {

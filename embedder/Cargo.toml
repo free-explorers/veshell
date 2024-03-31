@@ -9,7 +9,7 @@ members = [
 ]
 
 [dependencies]
-smithay = { git = "https://github.com/Smithay/smithay", rev = "76c6b30", features = ["default", "wayland_frontend", "backend_egl", "use_system_lib", "xwayland"] }
+smithay = { git = "https://github.com/roscale/smithay", branch = "property-notify-handler", features = ["default", "wayland_frontend", "backend_egl", "use_system_lib", "xwayland"] }
 smithay-drm-extras = { path = "third_party/smithay-drm-extras" }
 rustix = "0.38.30"
 input-linux = "0.6.0"
