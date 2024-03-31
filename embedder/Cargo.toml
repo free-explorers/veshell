@@ -22,6 +22,7 @@ xcursor = "0.3.4"
 serde = { version = "1.0.189", features = ["derive"] }
 serde_json = "1.0.107"
 lazy_static = { version = "1.4.0", features = [] }
+rlimit = "0.10.1"
 
 [build-dependencies]
 bindgen = "0.69.1"
