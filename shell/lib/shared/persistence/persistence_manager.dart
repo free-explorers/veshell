@@ -47,13 +47,18 @@ class PersistenceManager {
     String modelId,
     Map<String, dynamic> json,
   ) async {
-    final file = File(
+    final tempFile = File(
+      path.join(persistenceDirectory.path, modelFolder, '$modelId.temp'),
+    );
+    if (!tempFile.existsSync()) {
+      await tempFile.create(recursive: true);
+    }
+    await tempFile.writeAsString(jsonEncode(json));
+
+    final targetFile = File(
       path.join(persistenceDirectory.path, modelFolder, '$modelId.json'),
     );
-    if (!file.existsSync()) {
-      await file.create(recursive: true);
-    }
-    await file.writeAsString(jsonEncode(json));
+    await tempFile.rename(targetFile.path);
   }
 
   static Future<void> deleteModelJson(

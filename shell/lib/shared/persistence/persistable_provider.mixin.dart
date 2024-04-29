@@ -18,30 +18,30 @@ mixin PersistableProvider<T extends PersistableModel, RefT extends Ref<T>> {
     return persistedJson != null ? fromJsonConstructor(persistedJson) : null;
   }
 
-  void persistChanges() {
+  void persistChanges({bool clearOnDispose = true}) {
     if (_isInitialized) return;
     _isInitialized = true;
-    ref
-      ..listenSelf((previous, next) {
-        if (previous != next) {
-          print(
-            'Persisting changes for ${getPersistentFolder()}-${getPersistentId()}',
-          );
-          PersistenceManager.storeModelJson(
-            getPersistentFolder(),
-            getPersistentId(),
-            next.toJson(),
-          );
-        }
-      })
-      ..onDispose(() {
+    ref.listenSelf((previous, next) {
+      if (previous != next) {
         print(
-          'Deleting persisted model for ${getPersistentFolder()}-${getPersistentId()}',
+          'Persisting changes for ${getPersistentFolder()}-${getPersistentId()}',
         );
-        PersistenceManager.deleteModelJson(
+        PersistenceManager.storeModelJson(
           getPersistentFolder(),
           getPersistentId(),
+          next.toJson(),
         );
-      });
+      }
+    });
+    if (clearOnDispose == false) return;
+    ref.onDispose(() {
+      print(
+        'Deleting persisted model for ${getPersistentFolder()}-${getPersistentId()}',
+      );
+      PersistenceManager.deleteModelJson(
+        getPersistentFolder(),
+        getPersistentId(),
+      );
+    });
   }
 }
