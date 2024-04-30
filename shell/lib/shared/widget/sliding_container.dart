@@ -42,6 +42,7 @@ class SlidingContainer extends HookConsumerWidget {
       itemBuilder: (context, index) {
         return children[index];
       },
+      physics: const NeverScrollableScrollPhysics(),
     );
   }
 }

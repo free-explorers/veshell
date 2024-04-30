@@ -30,8 +30,8 @@ class PersistentApplicationSelector extends Tileable {
     );
     return Focus(
       focusNode: focusNode,
-      child: Container(
-        color: Colors.blue,
+      child: ColoredBox(
+        color: Colors.black26,
         child: AppDrawer(
           onSelect: onSelect,
         ),
