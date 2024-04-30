@@ -26,7 +26,7 @@ mixin PersistableProvider<T extends PersistableModel, RefT extends Ref<T>> {
         print(
           'Persisting changes for ${getPersistentFolder()}-${getPersistentId()}',
         );
-        PersistenceManager.storeModelJson(
+        PersistenceManager.queueStoreModelJson(
           getPersistentFolder(),
           getPersistentId(),
           next.toJson(),
