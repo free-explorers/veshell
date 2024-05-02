@@ -125,10 +125,17 @@ class WorkspaceWidget extends HookConsumerWidget {
             children: [
               WorkspacePanel(
                 tileableList: tileableList,
+                visibleLength: workspaceState.visibleLength,
+                onVisibleLengthChange: (value) {
+                  ref
+                      .read(workspaceStateProvider(currentWorkspaceId).notifier)
+                      .setVisibleLength(value);
+                },
               ),
               Expanded(
                 child: SlidingContainer(
                   index: workspaceState.focusedIndex,
+                  visible: workspaceState.visibleLength,
                   children: tileableList,
                 ),
               ),

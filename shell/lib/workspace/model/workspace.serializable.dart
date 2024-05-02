@@ -14,6 +14,7 @@ class Workspace with _$Workspace implements PersistableModel {
     @PersistentWindowIdConverter()
     required IList<PersistentWindowId> tileableWindowList,
     required int focusedIndex,
+    required int visibleLength,
     WorkspaceCategory? category,
     WorkspaceCategory? forcedCategory,
   }) = _Workspace;

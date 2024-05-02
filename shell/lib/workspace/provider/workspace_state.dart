@@ -58,6 +58,7 @@ class WorkspaceState extends _$WorkspaceState
           workspaceId: workspaceId,
           tileableWindowList: <PersistentWindowId>[].lock,
           focusedIndex: 0,
+          visibleLength: 1,
         );
   }
 
@@ -122,6 +123,12 @@ class WorkspaceState extends _$WorkspaceState
   void setFocusedIndex(int index) {
     state = state.copyWith(
       focusedIndex: index,
+    );
+  }
+
+  setVisibleLength(int length) {
+    state = state.copyWith(
+      visibleLength: length,
     );
   }
 
