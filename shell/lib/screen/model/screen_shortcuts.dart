@@ -11,3 +11,9 @@ class FocusWorkspaceBelowIntent extends Intent {
   ///
   const FocusWorkspaceBelowIntent();
 }
+
+/// An intent to toggle the overview.
+class ToggleOverviewIntent extends Intent {
+  ///
+  const ToggleOverviewIntent();
+}

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:shell/overview/provider/overview_is_displayed.dart';
+import 'package:shell/screen/provider/current_screen_id.dart';
 import 'package:shell/screen/widget/workspace_list.dart';
 
 class ScreenPanel extends HookConsumerWidget implements PreferredSizeWidget {
@@ -23,16 +25,21 @@ class ScreenPanel extends HookConsumerWidget implements PreferredSizeWidget {
                 minWidth: 48,
                 minHeight: 48,
               ),
-              style: ButtonStyle(
-                backgroundColor: MaterialStateProperty.all(
-                  theme.colorScheme.primaryContainer,
-                ),
-                shape: MaterialStateProperty.all(
-                  const RoundedRectangleBorder(),
-                ),
+              style: IconButton.styleFrom(
+                backgroundColor: theme.colorScheme.primaryContainer,
+                foregroundColor: theme.colorScheme.onPrimaryContainer,
+                shape: const RoundedRectangleBorder(),
               ),
-              onPressed: () {},
-              icon: SvgPicture.asset('assets/ship_vector.svg', width: 30),
+              onPressed: () {
+                ref
+                    .read(
+                      overviewIsDisplayedProvider(
+                        ref.read(currentScreenIdProvider),
+                      ).notifier,
+                    )
+                    .toggle();
+              },
+              icon: Icon(MdiIcons.telescope),
             ),
             const Expanded(child: WorkspaceListView()),
           ],
