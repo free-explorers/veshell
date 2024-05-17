@@ -70,7 +70,7 @@ use crate::{
             FlutterRendererConfig__bindgen_ty_1, FlutterWindowMetricsEvent, FLUTTER_ENGINE_VERSION,
         },
     },
-    Backend, CalloopData, ServerState,
+    Backend, ServerState,
 };
 
 use {
@@ -90,7 +90,7 @@ pub mod wayland_messages;
 /// - Clone & Copy is willingly not implemented to avoid using the engine after being shut down.
 /// - Send is not implemented because all its methods must be called from the thread the engine was created.
 pub struct FlutterEngine<BackendData: Backend + 'static> {
-    loop_handle: LoopHandle<'static, CalloopData<BackendData>>,
+    loop_handle: LoopHandle<'static, ServerState<BackendData>>,
     pub handle: FlutterEngineHandle,
     data: FlutterEngineData,
     pub task_runner: TaskRunner,
@@ -341,14 +341,13 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
 
         let task_runner_timer_dispatcher = Dispatcher::new(
             Timer::immediate(),
-            move |deadline, _, data: &mut CalloopData<BackendData>| {
-                let duration = data
-                    .state
-                    .flutter_engine_mut()
-                    .task_runner
-                    .execute_expired_tasks(move |task| {
-                        unsafe { FlutterEngineRunTask(flutter_engine, task as *const _) };
-                    });
+            move |deadline, _, data: &mut ServerState<BackendData>| {
+                let duration =
+                    data.flutter_engine_mut()
+                        .task_runner
+                        .execute_expired_tasks(move |task| {
+                            unsafe { FlutterEngineRunTask(flutter_engine, task as *const _) };
+                        });
                 TimeoutAction::ToDuration(duration)
             },
         );
@@ -361,13 +360,12 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             .loop_handle
             .insert_source(
                 rx_reschedule_task_runner_timer,
-                move |event, _, data: &mut CalloopData<BackendData>| {
+                move |event, _, data: &mut ServerState<BackendData>| {
                     if let Msg(duration) = event {
                         task_runner_timer_dispatcher
                             .as_source_mut()
                             .set_duration(duration);
-                        data.state
-                            .loop_handle
+                        data.loop_handle
                             .update(&task_runner_timer_registration_token)
                             .unwrap();
                     }
@@ -379,7 +377,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             .loop_handle
             .insert_source(rx_request_external_texture_name, move |event, _, data| {
                 if let Msg(texture_id) = event {
-                    let texture_swap_chain = data.state.texture_swapchains.get_mut(&texture_id);
+                    let texture_swap_chain = data.texture_swapchains.get_mut(&texture_id);
                     let texture_id = match texture_swap_chain {
                         Some(texture) => {
                             let texture = texture.start_read();
@@ -510,7 +508,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                 let message = JsonMessageCodec::new().decode_message(response).unwrap();
                 let handled = message["handled"].as_bool().unwrap();
                 // We would normally call `glfw_key_codes.input_forward` here to forward the event to a Wayland client,
-                // but we need `data.state` and we can't just capture it by reference.
+                // but we need `data` and we can't just capture it by reference.
                 // Send key event info and Flutter's response over an MPSC channel.
                 // The receiver `rx_flutter_handled_key_event` is registered to the event loop with a callback
                 // that will continue processing the event.

@@ -1,7 +1,6 @@
 use crate::flutter_engine::wayland_messages::{MapX11Surface, NewX11Surface};
 use crate::focus::KeyboardFocusTarget;
-use crate::server::{get_surface_id, ServerState};
-use crate::{Backend, CalloopData};
+use crate::Backend;
 use serde_json::json;
 use smithay::delegate_primary_selection;
 use smithay::desktop::space::SpaceElement;
@@ -16,11 +15,15 @@ use smithay::wayland::selection::primary_selection::{
     set_primary_selection, PrimarySelectionHandler, PrimarySelectionState,
 };
 use smithay::wayland::selection::SelectionTarget;
+use smithay::wayland::xwayland_shell::{XWaylandShellHandler, XWaylandShellState};
 use smithay::xwayland::xwm::{Reorder, WmWindowProperty, XwmId};
 use smithay::xwayland::{xwm, X11Surface, X11Wm, XwmHandler};
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::os::fd::OwnedFd;
 use tracing::{error, trace};
+
+use super::{get_surface_id, ServerState};
 
 struct MyX11SurfaceState {
     x11_surface_id: u64,
@@ -70,9 +73,9 @@ impl<BackendData: Backend> ServerState<BackendData> {
                 // Fall back on the focused surface if the transient parent is not known.
                 .or_else(|| {
                     self.keyboard.current_focus().and_then(|focus| {
-                        focus
-                            .wl_surface()
-                            .and_then(|focus| self.x11_surface_per_wl_surface.get(&focus))
+                        focus.wl_surface().and_then(|focus| {
+                            self.x11_surface_per_wl_surface.get(&focus.into_owned())
+                        })
                     })
                 })
                 .map(|x11_surface| get_x11_surface_id(x11_surface))
@@ -86,10 +89,18 @@ impl<BackendData: Backend> ServerState<BackendData> {
         let title = surface.title();
         let title = if !title.is_empty() { Some(title) } else { None };
         let window_class = surface.class();
-        let window_class = if !window_class.is_empty() { Some(window_class) } else { None };
+        let window_class = if !window_class.is_empty() {
+            Some(window_class)
+        } else {
+            None
+        };
         let instance = surface.instance();
-        let instance = if !instance.is_empty() { Some(instance) } else { None };
-        
+        let instance = if !instance.is_empty() {
+            Some(instance)
+        } else {
+            None
+        };
+
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "map_x11_surface",
@@ -109,9 +120,9 @@ impl<BackendData: Backend> ServerState<BackendData> {
     }
 }
 
-impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
+impl<BackendData: Backend> XwmHandler for ServerState<BackendData> {
     fn xwm_state(&mut self, _xwm: XwmId) -> &mut X11Wm {
-        self.state.x11_wm.as_mut().unwrap()
+        self.x11_wm.as_mut().unwrap()
     }
 
     fn new_window(&mut self, _xwm: XwmId, surface: X11Surface) {
@@ -119,11 +130,11 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
         geometry.loc = Point::from((0, 0));
         surface.configure(geometry).unwrap();
 
-        self.state.new_x11_surface(surface);
+        self.new_x11_surface(surface);
     }
 
     fn new_override_redirect_window(&mut self, _xwm: XwmId, surface: X11Surface) {
-        self.state.new_x11_surface(surface);
+        self.new_x11_surface(surface);
     }
 
     fn map_window_request(&mut self, _xwm: XwmId, surface: X11Surface) {
@@ -132,11 +143,11 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
     }
 
     fn map_window_notify(&mut self, _xwm: XwmId, surface: X11Surface) {
-        self.state.map_x11_surface(surface);
+        self.map_x11_surface(surface);
     }
 
     fn mapped_override_redirect_window(&mut self, _xwm: XwmId, surface: X11Surface) {
-        self.state.map_x11_surface(surface.clone());
+        self.map_x11_surface(surface.clone());
         surface.set_activated(true).unwrap();
     }
 
@@ -145,11 +156,11 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
             return;
         };
 
-        self.state.x11_surface_per_wl_surface.remove(&wl_surface);
+        self.x11_surface_per_wl_surface.remove(&wl_surface);
 
         let x11_surface_id = get_x11_surface_id(&surface);
 
-        let platform_method_channel = &mut self.state.flutter_engine_mut().platform_method_channel;
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "unmap_x11_surface",
             Some(Box::new(json!({
@@ -166,7 +177,7 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
     fn destroyed_window(&mut self, xwm: XwmId, surface: X11Surface) {
         let x11_surface_id = get_x11_surface_id(&surface);
 
-        let platform_method_channel = &mut self.state.flutter_engine_mut().platform_method_channel;
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "destroy_x11_surface",
             Some(Box::new(json!({
@@ -175,9 +186,7 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
             None,
         );
 
-        self.state
-            .x11_surface_per_x11_window
-            .remove(&surface.window_id());
+        self.x11_surface_per_x11_window.remove(&surface.window_id());
     }
 
     fn configure_request(
@@ -217,7 +226,7 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
         };
         let surface_id = get_surface_id(&wl_surface);
 
-        let platform_method_channel = &mut self.state.flutter_engine_mut().platform_method_channel;
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
 
         match property {
             WmWindowProperty::Title => {
@@ -235,8 +244,12 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
             }
             WmWindowProperty::Class => {
                 let instance = window.instance();
-                let instance = if !instance.is_empty() { Some(instance) } else { None };
-                
+                let instance = if !instance.is_empty() {
+                    Some(instance)
+                } else {
+                    None
+                };
+
                 platform_method_channel.invoke_method(
                     "app_id_changed",
                     Some(Box::new(json!({
@@ -262,7 +275,7 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
     fn move_request(&mut self, xwm: XwmId, window: X11Surface, button: u32) {}
 
     fn allow_selection_access(&mut self, xwm: XwmId, _selection: SelectionTarget) -> bool {
-        if let Some(keyboard) = self.state.seat.get_keyboard() {
+        if let Some(keyboard) = self.seat.get_keyboard() {
             // check that an X11 window is focused
             if let Some(KeyboardFocusTarget::X11Surface(surface)) = keyboard.current_focus() {
                 if surface.xwm_id().unwrap() == xwm {
@@ -282,9 +295,7 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
     ) {
         match selection {
             SelectionTarget::Clipboard => {
-                if let Err(err) =
-                    request_data_device_client_selection(&self.state.seat, mime_type, fd)
-                {
+                if let Err(err) = request_data_device_client_selection(&self.seat, mime_type, fd) {
                     error!(
                         ?err,
                         "Failed to request current wayland clipboard for Xwayland",
@@ -292,8 +303,7 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
                 }
             }
             SelectionTarget::Primary => {
-                if let Err(err) = request_primary_client_selection(&self.state.seat, mime_type, fd)
-                {
+                if let Err(err) = request_primary_client_selection(&self.seat, mime_type, fd) {
                     error!(
                         ?err,
                         "Failed to request current wayland primary selection for Xwayland",
@@ -307,14 +317,11 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
         trace!(?selection, ?mime_types, "Got Selection from X11",);
         // TODO check, that focused windows is X11 window before doing this
         match selection {
-            SelectionTarget::Clipboard => set_data_device_selection(
-                &self.state.display_handle,
-                &self.state.seat,
-                mime_types,
-                (),
-            ),
+            SelectionTarget::Clipboard => {
+                set_data_device_selection(&self.display_handle, &self.seat, mime_types, ())
+            }
             SelectionTarget::Primary => {
-                set_primary_selection(&self.state.display_handle, &self.state.seat, mime_types, ())
+                set_primary_selection(&self.display_handle, &self.seat, mime_types, ())
             }
         }
     }
@@ -322,15 +329,21 @@ impl<BackendData: Backend> XwmHandler for CalloopData<BackendData> {
     fn cleared_selection(&mut self, _xwm: XwmId, selection: SelectionTarget) {
         match selection {
             SelectionTarget::Clipboard => {
-                if current_data_device_selection_userdata(&self.state.seat).is_some() {
-                    clear_data_device_selection(&self.state.display_handle, &self.state.seat)
+                if current_data_device_selection_userdata(&self.seat).is_some() {
+                    clear_data_device_selection(&self.display_handle, &self.seat)
                 }
             }
             SelectionTarget::Primary => {
-                if current_primary_selection_userdata(&self.state.seat).is_some() {
-                    clear_primary_selection(&self.state.display_handle, &self.state.seat)
+                if current_primary_selection_userdata(&self.seat).is_some() {
+                    clear_primary_selection(&self.display_handle, &self.seat)
                 }
             }
         }
+    }
+}
+
+impl<BackendData: Backend> XWaylandShellHandler for ServerState<BackendData> {
+    fn xwayland_shell_state(&mut self) -> &mut XWaylandShellState {
+        &mut self.xwayland_shell_state
     }
 }
