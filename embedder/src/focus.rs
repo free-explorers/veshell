@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use smithay::xwayland::X11Surface;
 pub use smithay::{
     backend::input::KeyState,
@@ -57,7 +59,7 @@ impl IsAlive for PointerFocusTarget {
 
 impl From<PointerFocusTarget> for WlSurface {
     fn from(target: PointerFocusTarget) -> Self {
-        target.wl_surface().unwrap()
+        target.wl_surface().unwrap().into_owned()
     }
 }
 
@@ -417,10 +419,10 @@ impl<BackendData: Backend> TouchTarget<ServerState<BackendData>> for PointerFocu
 }
 
 impl WaylandFocus for PointerFocusTarget {
-    fn wl_surface(&self) -> Option<WlSurface> {
+    fn wl_surface(&self) -> Option<Cow<'_, WlSurface>> {
         match self {
             PointerFocusTarget::WlSurface(w) => w.wl_surface(),
-            PointerFocusTarget::X11Surface(w) => w.wl_surface(),
+            PointerFocusTarget::X11Surface(w) => w.wl_surface().map(Cow::Owned),
         }
     }
     fn same_client_as(&self, object_id: &ObjectId) -> bool {
@@ -432,10 +434,10 @@ impl WaylandFocus for PointerFocusTarget {
 }
 
 impl WaylandFocus for KeyboardFocusTarget {
-    fn wl_surface(&self) -> Option<WlSurface> {
+    fn wl_surface(&self) -> Option<Cow<'_, WlSurface>> {
         match self {
             KeyboardFocusTarget::WlSurface(s) => s.wl_surface(),
-            KeyboardFocusTarget::X11Surface(s) => s.wl_surface(),
+            KeyboardFocusTarget::X11Surface(s) => s.wl_surface().map(Cow::Owned),
         }
     }
 }

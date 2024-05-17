@@ -47,9 +47,7 @@ use smithay_drm_extras::edid::EdidInfo;
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::flutter_engine::FlutterEngine;
 use crate::input_handling::handle_input;
-use crate::{
-    flutter_engine::EmbedderChannels, send_frames_surface_tree, Backend, CalloopData, ServerState,
-};
+use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, Backend, ServerState};
 
 pub struct DrmBackend {
     pub space: Space<Window>,
@@ -217,10 +215,8 @@ pub fn run_drm_backend() {
             rx_baton,
         },
     ) = FlutterEngine::new(&mut state).unwrap();
-
+    state.tx_fbo = Some(tx_fbo.clone());
     state.flutter_engine = Some(flutter_engine);
-
-    let mut batons = vec![];
 
     // Initialize already present connectors.
     state.device_changed(primary_gpu);
@@ -234,7 +230,7 @@ pub fn run_drm_backend() {
     event_loop
         .handle()
         .insert_source(libinput_backend, move |event, _, data| {
-            let _dh = data.state.display_handle.clone();
+            let _dh = data.display_handle.clone();
             handle_input::<DrmBackend>(&event, data);
         })
         .unwrap();
@@ -244,7 +240,7 @@ pub fn run_drm_backend() {
         .insert_source(udev_backend, move |event, _, data| {
             if let UdevEvent::Changed { device_id } = event {
                 if let Ok(node) = DrmNode::from_dev_id(device_id) {
-                    data.state.device_changed(node)
+                    data.device_changed(node)
                 }
             }
         })
@@ -268,21 +264,21 @@ pub fn run_drm_backend() {
     event_loop
         .handle()
         .insert_source(rx_request_fbo, move |_, _, data| {
-            let gpu_data = data.state.backend_data.get_gpu_data_mut();
+            let gpu_data = data.backend_data.get_gpu_data_mut();
             let slot = gpu_data.swapchain.acquire().ok().flatten().unwrap();
             let dmabuf = slot.export().unwrap();
             gpu_data.current_slot = Some(slot);
-            data.tx_fbo.send(Some(dmabuf)).unwrap();
+            data.tx_fbo.as_ref().unwrap().send(Some(dmabuf)).unwrap();
         })
         .unwrap();
 
     event_loop
         .handle()
         .insert_source(rx_present, move |_, _, data| {
-            let gpu_data = data.state.backend_data.get_gpu_data_mut();
+            let gpu_data = data.backend_data.get_gpu_data_mut();
             gpu_data.last_rendered_slot = gpu_data.current_slot.take();
 
-            let gpu_data = data.state.backend_data.get_gpu_data_mut();
+            let gpu_data = data.backend_data.get_gpu_data_mut();
             if let Some(ref slot) = gpu_data.last_rendered_slot {
                 gpu_data.swapchain.submitted(slot);
             }
@@ -290,20 +286,7 @@ pub fn run_drm_backend() {
         .unwrap();
 
     while state.running.load(Ordering::SeqCst) {
-        let mut calloop_data = CalloopData {
-            state,
-            tx_fbo,
-            batons,
-        };
-
-        let result = event_loop.dispatch(None, &mut calloop_data);
-
-        CalloopData {
-            state,
-            tx_fbo,
-            batons,
-        } = calloop_data;
-
+        let result = event_loop.dispatch(None, &mut state);
         if result.is_err() {
             state.running.store(false, Ordering::SeqCst);
         } else {
@@ -508,15 +491,15 @@ impl ServerState<DrmBackend> {
             .loop_handle
             .insert_source(
                 notifier,
-                move |event, _metadata, data: &mut CalloopData<_>| match event {
+                move |event, _metadata, data: &mut ServerState<_>| match event {
                     DrmEvent::VBlank(crtc) => {
-                        let gpu_data = data.state.backend_data.gpus.get_mut(&node).unwrap();
+                        let gpu_data = data.backend_data.gpus.get_mut(&node).unwrap();
 
                         if let Some(surface) = gpu_data.surfaces.get_mut(&crtc) {
                             let _ = surface.compositor.frame_submitted();
                         }
 
-                        let (mhz, highest_hz_crtc) = match data.state.backend_data.highest_hz_crtc {
+                        let (mhz, highest_hz_crtc) = match data.backend_data.highest_hz_crtc {
                             Some(highest_hz_crtc) => highest_hz_crtc,
                             None => return,
                         };
@@ -527,29 +510,28 @@ impl ServerState<DrmBackend> {
 
                         let crtcs = gpu_data.surfaces.keys().cloned().collect::<Vec<_>>();
                         for crtc in crtcs {
-                            data.state.update_crtc_planes(crtc);
+                            data.update_crtc_planes(crtc);
                         }
 
-                        for baton in data.batons.drain(..) {
-                            data.state
-                                .flutter_engine()
-                                .on_vsync(baton, mhz as u32)
-                                .unwrap();
+                        let drained: Vec<_> = data.batons.drain(..).collect(); // Mutable borrow ends here
+
+                        for baton in drained {
+                            data.flutter_engine().on_vsync(baton, mhz as u32).unwrap();
                         }
                         let start_time = std::time::Instant::now();
-                        for surface in data.state.xdg_shell_state.toplevel_surfaces() {
+                        for surface in data.xdg_shell_state.toplevel_surfaces() {
                             send_frames_surface_tree(
                                 surface.wl_surface(),
                                 start_time.elapsed().as_millis() as u32,
                             );
                         }
-                        for surface in data.state.xdg_popups.values() {
+                        for surface in data.xdg_popups.values() {
                             send_frames_surface_tree(
                                 surface.wl_surface(),
                                 start_time.elapsed().as_millis() as u32,
                             );
                         }
-                        for surface in data.state.x11_surface_per_wl_surface.keys() {
+                        for surface in data.x11_surface_per_wl_surface.keys() {
                             send_frames_surface_tree(
                                 surface,
                                 start_time.elapsed().as_millis() as u32,
