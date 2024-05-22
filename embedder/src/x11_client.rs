@@ -308,6 +308,8 @@ pub fn run_x11_client() {
         })
         .unwrap();
 
+    state.start_xwayland();
+
     while state.running.load(Ordering::SeqCst) {
         let result = event_loop.dispatch(None, &mut state);
 
