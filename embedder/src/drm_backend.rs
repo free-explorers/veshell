@@ -285,6 +285,8 @@ pub fn run_drm_backend() {
         })
         .unwrap();
 
+    state.start_xwayland();
+
     while state.running.load(Ordering::SeqCst) {
         let result = event_loop.dispatch(None, &mut state);
         if result.is_err() {
