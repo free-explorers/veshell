@@ -19,30 +19,57 @@ class SlidingContainer extends HookConsumerWidget {
     final pageController = usePageController(
       initialPage: index,
       viewportFraction: 1.0 / visible,
+      keys: [visible],
     );
 
-    useEffect(
-      () {
-        if (pageController.hasClients) {
-          pageController.animateToPage(
-            index,
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeInOut,
-          );
-        }
-        return null;
-      },
-      [index, children],
-    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return HookBuilder(
+          builder: (context) {
+            useEffect(
+              () {
+                if (pageController.hasClients) {
+                  final pageWidth = direction == Axis.horizontal
+                      ? constraints.biggest.width / visible
+                      : constraints.biggest.width;
+                  final pageHeight = direction == Axis.horizontal
+                      ? constraints.biggest.height
+                      : constraints.biggest.height / visible;
+                  final currentPage = direction == Axis.horizontal
+                      ? pageController.offset / pageWidth
+                      : pageController.offset / pageHeight;
+                  final visibleRangeStart = currentPage;
+                  final visibleRangeEnd = currentPage + visible - 1;
 
-    return PageView.builder(
-      controller: pageController,
-      scrollDirection: direction,
-      itemCount: children.length,
-      itemBuilder: (context, index) {
-        return children[index];
+                  if (index < visibleRangeStart || index > visibleRangeEnd) {
+                    final offset = direction == Axis.horizontal
+                        ? pageWidth * index
+                        : pageHeight * index;
+                    pageController.animateTo(
+                      offset,
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeInOut,
+                    );
+                  }
+                }
+                return null;
+              },
+              [index, children],
+            );
+            return PageView.builder(
+              controller: pageController,
+              scrollDirection: direction,
+              itemCount: children.length,
+              itemBuilder: (context, index) {
+                return children[index];
+              },
+              physics: const NeverScrollableScrollPhysics(),
+              pageSnapping: false,
+              padEnds: false,
+            );
+          },
+        );
       },
-      physics: const NeverScrollableScrollPhysics(),
     );
   }
 }
