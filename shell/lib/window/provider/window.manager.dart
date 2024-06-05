@@ -4,8 +4,6 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/shared/provider/persistent_json_by_folder.dart';
-import 'package:shell/wayland/model/event/destroy_surface/destroy_surface.serializable.dart';
-import 'package:shell/wayland/model/event/wayland_event.serializable.dart';
 import 'package:shell/wayland/model/request/close_window/close_window.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/model/xdg_toplevel.dart';
@@ -88,6 +86,7 @@ class WindowManager extends _$WindowManager {
   /// This is called when a toplevel or X11 surface is mapped.
   /// It searches for a waiting persistent window.
   void _onSurfaceMapped(SurfaceId surfaceId) {
+    print('WindowManager: Surface mapped: $surfaceId');
     final role = ref.read(wlSurfaceStateProvider(surfaceId)).role;
 
     if (role case SurfaceRole.xdgToplevel) {

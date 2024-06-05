@@ -57,7 +57,9 @@ use smithay::wayland::shell::xdg::{
 use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::wayland::socket::ListeningSocketSource;
 use smithay::wayland::xwayland_keyboard_grab::XWaylandKeyboardGrabState;
-use smithay::wayland::xwayland_shell::{self, XWaylandShellHandler, XWaylandShellState};
+use smithay::wayland::xwayland_shell::{
+    self, XWaylandShellHandler, XWaylandShellState, XWAYLAND_SHELL_ROLE,
+};
 use smithay::xwayland::xwm::{Reorder, XwmId};
 use smithay::xwayland::{
     xwm, X11Surface, X11Wm, XWayland, XWaylandClientData, XWaylandEvent, XwmHandler,
@@ -546,7 +548,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
                 let subsurface_message = Self::construct_subsurface_role_message(surface);
                 Some(SurfaceRole::Subsurface(subsurface_message))
             }
-            Some(xwm::X11_SURFACE_ROLE) => Some(SurfaceRole::X11Surface),
+            Some(XWAYLAND_SHELL_ROLE) => Some(SurfaceRole::X11Surface),
             _ => None,
         }
     }
@@ -969,8 +971,6 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        X11Wm::commit_hook::<ServerState<BackendData>>(self, surface);
-
         let (subsurfaces_below, subsurfaces_above) = get_direct_subsurfaces(surface);
 
         // Make sure Flutter knows about subsurfaces

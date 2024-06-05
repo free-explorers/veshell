@@ -13,6 +13,7 @@ sealed class NewX11SurfaceMessage
   /// Factory
   factory NewX11SurfaceMessage({
     required X11SurfaceId x11SurfaceId,
+    required bool overrideRedirect,
   }) = _NewX11SurfaceMessage;
 
   factory NewX11SurfaceMessage.fromJson(Map<String, dynamic> json) =>

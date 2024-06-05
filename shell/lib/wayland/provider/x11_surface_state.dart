@@ -21,7 +21,7 @@ class X11SurfaceState extends _$X11SurfaceState {
     throw Exception('X11Surface $x11SurfaceId not yet initialized');
   }
 
-  void initialize() {
+  void initialize({required bool overrideRedirect}) {
     _keepAliveLink = ref.keepAlive();
     ref.onDispose(() {
       print('disposing X11SurfaceStateProvider $x11SurfaceId');
@@ -31,7 +31,7 @@ class X11SurfaceState extends _$X11SurfaceState {
       x11SurfaceId: x11SurfaceId,
       surfaceId: null,
       mapped: false,
-      overrideRedirect: false,
+      overrideRedirect: overrideRedirect,
       geometry: Rect.zero,
       parent: null,
       children: IList<X11SurfaceId>(),
@@ -42,19 +42,24 @@ class X11SurfaceState extends _$X11SurfaceState {
     );
   }
 
-  void map({
-    required SurfaceId surfaceId,
-    required bool overrideRedirect,
-    required Rect geometry,
-    required X11SurfaceId? parent,
-    required String? title,
-    required String? windowClass,
-    required String? instance,
-    required String? startupId,
-  }) {
-    assert(state.surfaceId == null);
+  void map({required Rect geometry, int? parent}) {
+    final previousParent = state.parent;
+    state = state.copyWith(parent: parent, geometry: geometry);
+    if (previousParent != parent) {
+      if (parent != null) {
+        ref
+            .read(x11SurfaceStateProvider(parent).notifier)
+            .addChild(x11SurfaceId);
+      }
+      if (previousParent != null) {
+        ref
+            .read(x11SurfaceStateProvider(previousParent).notifier)
+            .removeChild(x11SurfaceId);
+      }
+    }
+/*     assert(state.surfaceId == null);
 
-    X11SurfaceId? previousParent = state.parent;
+   
 
     state = state.copyWith(
       surfaceId: surfaceId,
@@ -69,30 +74,10 @@ class X11SurfaceState extends _$X11SurfaceState {
 
     assert(state.surfaceId != null);
 
-    ref.read(wlSurfaceStateProvider(surfaceId).notifier).setX11SurfaceRole();
+    
 
-    ref
-        .read(x11SurfaceIdByWlSurfaceIdProvider(surfaceId).notifier)
-        .linkX11Surface(x11SurfaceId);
-
-    if (previousParent != parent) {
-      if (parent != null) {
-        ref
-            .read(x11SurfaceStateProvider(parent).notifier)
-            .addChild(x11SurfaceId);
-      }
-      if (previousParent != null) {
-        ref
-            .read(x11SurfaceStateProvider(previousParent).notifier)
-            .removeChild(x11SurfaceId);
-      }
-    }
-
-    assert(textureSubscription == null);
-    textureSubscription = ref.listen(
-      wlSurfaceStateProvider(surfaceId).select((value) => value.texture),
-      (_, __) => _checkIfMapped(),
-    );
+    
+*/
 
     _checkIfMapped();
   }
@@ -114,14 +99,24 @@ class X11SurfaceState extends _$X11SurfaceState {
         .read(x11SurfaceIdByWlSurfaceIdProvider(state.surfaceId!).notifier)
         .unlinkX11Surface();
 
-    textureSubscription!.close();
-    textureSubscription = null;
-
     state = state.copyWith(
       surfaceId: null,
       mapped: false,
       parent: null,
     );
+  }
+
+  void associate(SurfaceId surfaceId) {
+    state = state.copyWith(surfaceId: surfaceId);
+    ref
+        .read(x11SurfaceIdByWlSurfaceIdProvider(surfaceId).notifier)
+        .linkX11Surface(x11SurfaceId);
+    if (textureSubscription != null) textureSubscription!.close();
+    textureSubscription = ref.listen(
+      wlSurfaceStateProvider(surfaceId).select((value) => value.texture),
+      (_, __) => _checkIfMapped(),
+    );
+    _checkIfMapped();
   }
 
   void addChild(X11SurfaceId child) {
@@ -142,6 +137,32 @@ class X11SurfaceState extends _$X11SurfaceState {
 
   void setAppId(String appId) {
     state = state.copyWith(instance: appId);
+  }
+
+  void setStartupId(String startupId) {
+    state = state.copyWith(startupId: startupId);
+  }
+
+  void setGeometry(Rect geometry) {
+    state = state.copyWith(geometry: geometry);
+  }
+
+  void setOverrideRedirect(bool overrideRedirect) {
+    state = state.copyWith(overrideRedirect: overrideRedirect);
+  }
+
+  void setProperties({
+    required String? title,
+    required String? windowClass,
+    required String? instance,
+    required String? startupId,
+  }) {
+    state = state.copyWith(
+      title: title,
+      windowClass: windowClass,
+      instance: instance,
+      startupId: startupId,
+    );
   }
 
   void _checkIfMapped() {

@@ -44,7 +44,7 @@ class WlSurfaceState extends _$WlSurfaceState {
     required Rect inputRegion,
   }) {
     state = state.copyWith(
-      role: role,
+      role: role ?? state.role,
       texture: SurfaceTexture(
         id: textureId,
         size: surfaceSize,
@@ -72,13 +72,6 @@ class WlSurfaceState extends _$WlSurfaceState {
       case SurfaceRole.x11Surface || null:
         return false;
     }
-  }
-
-  void setX11SurfaceRole() {
-    assert(state.role == null);
-    state = state.copyWith(
-      role: SurfaceRole.x11Surface,
-    );
   }
 
   void dispose() {

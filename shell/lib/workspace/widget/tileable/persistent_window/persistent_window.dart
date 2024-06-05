@@ -125,11 +125,10 @@ class PersistentWindowTileable extends Tileable {
                 );
                 return Builder(
                   builder: (context) {
-                    final role = ref
-                        .read(
-                          wlSurfaceStateProvider(window.surfaceId!),
-                        )
-                        .role;
+                    final role = ref.read(
+                      wlSurfaceStateProvider(window.surfaceId!)
+                          .select((value) => value.role),
+                    );
 
                     if (role == SurfaceRole.xdgToplevel) {
                       return Stack(
@@ -180,7 +179,7 @@ class PersistentWindowTileable extends Tileable {
           const SizedBox(
             width: 16,
           ),
-          Text(title ?? "Unknown"),
+          Text(title ?? 'Unknown'),
           const SizedBox(
             width: 16,
           ),

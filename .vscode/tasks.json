@@ -14,11 +14,8 @@
 			},
 			"options": {
 				"cwd": "${workspaceFolder}/embedder",
-				"env": {
-					"BUNDLE": "true",
-					"FLUTTER_ENGINE_BUILD": "debug"
-				}
-			}
+			},
+			"dependsOn": "build_flutter"
 		},
 		{
 			"label": "build_flutter",
@@ -31,11 +28,27 @@
 			],
 			"options": {
 				"cwd": "${workspaceFolder}/shell",
-				"env": {
-					"BUNDLE": "true",
-					"XDG_CONFIG_HOME": "${workspaceFolder}/shell/.config",
-				}
-			}
+			},
+			"dependsOn": "build_runner_build"
+		},
+		{
+			"label": "build_runner_build",
+			"type": "dart",
+			"command": "dart",
+			"args": [
+				"run",
+				"build_runner",
+				"build",
+				"--delete-conflicting-outputs"
+			],
+			"problemMatcher": [
+				"$dart-build_runner",
+			],
+			"group": "build",
+			"detail": "shell",
+			"options": {
+				"cwd": "${workspaceFolder}/shell"
+			},
 		},
 		{
 			"type": "dart",
@@ -69,6 +82,33 @@
 				"cwd": "${workspaceFolder}/shell"
 			},
 			"dependsOn": "build veshell",
+			"isBackground": true,
+			"presentation": {
+				"echo": true,
+				"reveal": "silent",
+				"focus": false,
+				"panel": "shared",
+				"showReuseMessage": true,
+				"clear": false
+			},
+		},
+		{
+			"label": "build_runner watch only",
+			"type": "dart",
+			"command": "dart",
+			"args": [
+				"run",
+				"build_runner",
+				"watch"
+			],
+			"problemMatcher": [
+				"$dart-build_runner",
+			],
+			"group": "build",
+			"detail": "shell",
+			"options": {
+				"cwd": "${workspaceFolder}/shell"
+			},
 			"isBackground": true,
 			"presentation": {
 				"echo": true,
