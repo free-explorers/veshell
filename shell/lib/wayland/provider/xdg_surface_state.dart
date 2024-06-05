@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:ui';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
@@ -89,7 +88,7 @@ class XdgSurfaceState extends _$XdgSurfaceState {
         ),
       null => null,
       // unreachable
-      SurfaceRole.subsurface => null,
+      SurfaceRole.x11Surface || SurfaceRole.subsurface => null,
     };
   }
 
@@ -112,9 +111,9 @@ class XdgSurfaceState extends _$XdgSurfaceState {
 
     if (role == SurfaceRole.xdgToplevel) {
       if (!wasMapped && state.mapped) {
-        ref.read(newXdgToplevelSurfaceProvider.notifier).mapped(surfaceId);
+        ref.read(surfaceMappedProvider.notifier).mapped(surfaceId);
       } else if (wasMapped && !state.mapped) {
-        ref.read(newXdgToplevelSurfaceProvider.notifier).unmapped(surfaceId);
+        ref.read(surfaceMappedProvider.notifier).unmapped(surfaceId);
       }
     }
   }
@@ -125,7 +124,7 @@ class XdgSurfaceState extends _$XdgSurfaceState {
       SurfaceRole.xdgPopup => state.committed,
       null => false,
       // unreachable
-      SurfaceRole.subsurface => false,
+      SurfaceRole.x11Surface || SurfaceRole.subsurface => false,
     };
   }
 

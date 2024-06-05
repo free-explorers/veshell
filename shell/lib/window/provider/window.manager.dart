@@ -8,10 +8,11 @@ import 'package:shell/wayland/model/event/destroy_surface/destroy_surface.serial
 import 'package:shell/wayland/model/event/wayland_event.serializable.dart';
 import 'package:shell/wayland/model/request/close_window/close_window.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
-import 'package:shell/wayland/model/xdg_surface.dart';
 import 'package:shell/wayland/model/xdg_toplevel.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
+import 'package:shell/wayland/provider/wl_surface_state.dart';
+import 'package:shell/wayland/provider/x11_surface_state.dart';
 import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
 import 'package:shell/window/model/dialog_window.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
@@ -37,13 +38,13 @@ class WindowManager extends _$WindowManager {
   @override
   ISet<WindowId> build() {
     ref.listen(
-      newXdgToplevelSurfaceProvider,
+      surfaceMappedProvider,
       (_, next) async {
         switch (next) {
-          case AsyncData(value: final XdgToplevelMappedEvent event):
-            onNewToplevel(event.surfaceId);
-          case AsyncData(value: final XdgToplevelUnmappedEvent event):
-            _onSurfaceIsDestroyed(event.surfaceId);
+          case AsyncData(value: final SurfaceMappedEvent event):
+            _onSurfaceMapped(event.surfaceId);
+          case AsyncData(value: final SurfaceUnmappedEvent event):
+            _onSurfaceUnmapped(event.surfaceId);
         }
       },
     );
@@ -69,8 +70,8 @@ class WindowManager extends _$WindowManager {
 
     final persistentWindow = PersistentWindow(
       windowId: windowId,
-      appId: entry.desktopEntry.id ?? '',
-      title: entry.desktopEntry.id ?? '',
+      appId: entry.desktopEntry.id,
+      title: entry.entries[DesktopEntryKey.name.string],
       isWaitingForSurface: true,
     );
 
@@ -82,11 +83,21 @@ class WindowManager extends _$WindowManager {
     return windowId;
   }
 
-  /// new toplevel handler
+  /// Surface mapped handler
   ///
-  /// This is called when a new toplevel surface is created
-  /// it first search for a waiting persistent window
-  void onNewToplevel(SurfaceId surfaceId) {
+  /// This is called when a toplevel or X11 surface is mapped.
+  /// It searches for a waiting persistent window.
+  void _onSurfaceMapped(SurfaceId surfaceId) {
+    final role = ref.read(wlSurfaceStateProvider(surfaceId)).role;
+
+    if (role case SurfaceRole.xdgToplevel) {
+      _onToplevelMapped(surfaceId);
+    } else if (role case SurfaceRole.x11Surface) {
+      _onX11SurfaceMapped(surfaceId);
+    }
+  }
+
+  void _onToplevelMapped(SurfaceId surfaceId) {
     final toplevelState = ref.read(xdgToplevelStateProvider(surfaceId));
 
     for (final windowId in _persistentWindowSet) {
@@ -107,20 +118,56 @@ class WindowManager extends _$WindowManager {
       return;
     }
     // create a new window
-    _createPersistentWindowForSurface(surfaceId, toplevelState);
+    _createPersistentWindowForSurface(
+      surfaceId: surfaceId,
+      appId: toplevelState.appId,
+      title: toplevelState.title,
+    );
   }
 
-  _createPersistentWindowForSurface(
-    SurfaceId surfaceId,
-    XdgToplevel toplevelState,
-  ) {
+  void _onX11SurfaceMapped(SurfaceId surfaceId) {
+    final x11SurfaceId = ref.read(x11SurfaceIdByWlSurfaceIdProvider(surfaceId));
+    final x11SurfaceState = ref.read(x11SurfaceStateProvider(x11SurfaceId));
+
+    if (x11SurfaceState.overrideRedirect) {
+      // Override redirect surfaces should not be managed by the window manager.
+      return;
+    }
+
+    for (final windowId in _persistentWindowSet) {
+      final window = ref.read(persistentWindowStateProvider(windowId));
+      if (window.isWaitingForSurface) {
+        ref.read(persistentWindowStateProvider(windowId).notifier).initialize(
+              window.copyWith(
+                title: x11SurfaceState.title ?? window.title,
+                surfaceId: surfaceId,
+                isWaitingForSurface: false,
+              ),
+            );
+        return;
+      }
+    }
+
+    // create a new window
+    _createPersistentWindowForSurface(
+      surfaceId: surfaceId,
+      appId: x11SurfaceState.instance,
+      title: x11SurfaceState.title,
+    );
+  }
+
+  void _createPersistentWindowForSurface({
+    required SurfaceId surfaceId,
+    required String? appId,
+    required String? title,
+  }) {
     // create a new window
     final windowId = PersistentWindowId(_uuidGenerator.v4());
 
     final persistentWindow = PersistentWindow(
       windowId: windowId,
-      appId: toplevelState.appId ?? 'unknown',
-      title: toplevelState.title ?? 'unknown',
+      appId: appId,
+      title: title,
       surfaceId: surfaceId,
     );
 
@@ -142,8 +189,10 @@ class WindowManager extends _$WindowManager {
         .addWindow(windowId);
   }
 
-  _createDialogWindowForSurface(
-      SurfaceId surfaceId, XdgToplevel toplevelState) {
+  void _createDialogWindowForSurface(
+    SurfaceId surfaceId,
+    XdgToplevel toplevelState,
+  ) {
     // create a new window
     final windowId = DialogWindowId(_uuidGenerator.v4());
 
@@ -169,8 +218,7 @@ class WindowManager extends _$WindowManager {
         );
   }
 
-  void _onSurfaceIsDestroyed(SurfaceId surfaceId) {
-    print('onSurfaceIsDestroyed $surfaceId');
+  void _onSurfaceUnmapped(SurfaceId surfaceId) {
     if (ref.read(surfaceWindowMapProvider).get(surfaceId)
         case final WindowId windowId) {
       switch (windowId) {

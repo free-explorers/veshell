@@ -5,7 +5,10 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/wayland/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/wayland/model/request/resize_window/resize_window.serializable.dart';
+import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
+import 'package:shell/wayland/provider/wl_surface_state.dart';
+import 'package:shell/wayland/widget/x11_surface.dart';
 import 'package:shell/wayland/widget/xdg_toplevel_surface.dart';
 import 'package:shell/window/model/dialog_window.dart';
 import 'package:shell/window/model/window_id.dart';
@@ -120,18 +123,37 @@ class PersistentWindowTileable extends Tileable {
                   },
                   [constraints],
                 );
-                return Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    XdgToplevelSurfaceWidget(
-                      surfaceId: window.surfaceId!,
-                    ),
-                    if (dialogWindowList.isNotEmpty)
-                      for (final dialog in dialogWindowList)
-                        XdgToplevelSurfaceWidget(
-                          surfaceId: dialog.surfaceId,
-                        ),
-                  ],
+                return Builder(
+                  builder: (context) {
+                    final role = ref
+                        .read(
+                          wlSurfaceStateProvider(window.surfaceId!),
+                        )
+                        .role;
+
+                    if (role == SurfaceRole.xdgToplevel) {
+                      return Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          XdgToplevelSurfaceWidget(
+                            surfaceId: window.surfaceId!,
+                          ),
+                          if (dialogWindowList.isNotEmpty)
+                            for (final dialog in dialogWindowList)
+                              XdgToplevelSurfaceWidget(
+                                surfaceId: dialog.surfaceId,
+                              ),
+                        ],
+                      );
+                    } else if (role == SurfaceRole.x11Surface) {
+                      return X11SurfaceWidget(
+                        surfaceId: window.surfaceId!,
+                      );
+                    } else {
+                      assert(false, 'Unsupported role: $role');
+                      return const SizedBox();
+                    }
+                  },
                 );
               },
             );

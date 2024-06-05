@@ -23,7 +23,7 @@ use smithay::{
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::flutter_engine::FlutterEngine;
 use crate::mouse_button_tracker::MouseButtonTracker;
-use crate::server_state::ServerState;
+use crate::server::ServerState;
 
 mod cursor;
 mod drm_backend;
@@ -32,9 +32,10 @@ mod gles_framebuffer_importer;
 mod input_handling;
 mod keyboard;
 mod mouse_button_tracker;
-mod server_state;
+mod server;
 mod texture_swap_chain;
 mod x11_client;
+mod focus;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Ok(env_filter) = tracing_subscriber::EnvFilter::try_from_default_env() {
@@ -42,6 +43,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         tracing_subscriber::fmt().init();
     }
+
+    // Fix XWayland crash when too many file descriptors are open.
+    let _ = rlimit::increase_nofile_limit(u64::MAX);
 
     if env::var("DISPLAY").is_ok() || env::var("WAYLAND_DISPLAY").is_ok() {
         x11_client::run_x11_client();

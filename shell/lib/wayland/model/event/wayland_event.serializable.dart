@@ -1,17 +1,24 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:shell/wayland/model/event/app_id_changed/app_id_changed.serializable.dart';
 import 'package:shell/wayland/model/event/commit_surface/commit_surface.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_popup/destroy_popup.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_subsurface/destroy_subsurface.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_surface/destroy_surface.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_toplevel/destroy_toplevel.serializable.dart';
+import 'package:shell/wayland/model/event/destroy_x11_surface/destroy_x11_surface.serializable.dart';
 import 'package:shell/wayland/model/event/destroy_xdg_surface/destroy_xdg_surface.serializable.dart';
 import 'package:shell/wayland/model/event/interactive_move/interactive_move.serializable.dart';
 import 'package:shell/wayland/model/event/interactive_resize/interactive_resize.serializable.dart';
+import 'package:shell/wayland/model/event/map_x11_surface/map_x11_surface.serializable.dart';
 import 'package:shell/wayland/model/event/monitor_layout_changed/monitor_layout_changed.serializable.dart';
 import 'package:shell/wayland/model/event/new_popup/new_popup.serializable.dart';
 import 'package:shell/wayland/model/event/new_subsurface/new_subsurface.serializable.dart';
 import 'package:shell/wayland/model/event/new_surface/new_surface.serializable.dart';
 import 'package:shell/wayland/model/event/new_toplevel/new_toplevel.serializable.dart';
+import 'package:shell/wayland/model/event/new_x11_surface/new_x11_surface.serializable.dart';
+import 'package:shell/wayland/model/event/set_environment_variables/set_environment_variables.serializable.dart';
+import 'package:shell/wayland/model/event/title_changed/title_changed.serializable.dart';
+import 'package:shell/wayland/model/event/unmap_x11_surface/unmap_x11_surface.serializable.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
 part 'wayland_event.serializable.freezed.dart';
@@ -52,12 +59,33 @@ class WaylandEvent with _$WaylandEvent implements WaylandInteraction {
     required NewPopupMessage message,
   }) = NewPopupEvent;
 
+  /// New X11 surface Event
+  /// This event is sent when the a client creates a new X11 surface.
+  const factory WaylandEvent.newX11Surface({
+    required String method,
+    required NewX11SurfaceMessage message,
+  }) = NewX11SurfaceEvent;
+
   /// Commit Surface Event
   /// This event is sent when the compositor commits a surface.
   const factory WaylandEvent.commitSurface({
     required String method,
     required CommitSurfaceMessage message,
   }) = CommitSurfaceEvent;
+
+  /// Map X11 surface Event
+  /// This event is sent when the compositor maps an X11 surface.
+  const factory WaylandEvent.mapX11Surface({
+    required String method,
+    required MapX11SurfaceMessage message,
+  }) = MapX11SurfaceEvent;
+
+  /// Unmap X11 surface Event
+  /// This event is sent when the compositor maps an X11 surface.
+  const factory WaylandEvent.unmapX11Surface({
+    required String method,
+    required UnmapX11SurfaceMessage message,
+  }) = UnmapX11SurfaceEvent;
 
   /// Destroy Surface Event
   /// This event is sent when the compositor destroys a surface.
@@ -94,6 +122,25 @@ class WaylandEvent with _$WaylandEvent implements WaylandInteraction {
     required DestroyPopupMessage message,
   }) = DestroyPopupEvent;
 
+  /// Destroy X11 surface Event
+  /// This event is sent when the compositor destroys an X11 surface.
+  const factory WaylandEvent.destroyX11Surface({
+    required String method,
+    required DestroyX11SurfaceMessage message,
+  }) = DestroyX11SurfaceEvent;
+
+  // Sent when the title of an XDG toplevel changes.
+  const factory WaylandEvent.appIdChanged({
+    required String method,
+    required AppIdChangedMessage message,
+  }) = AppIdChangedEvent;
+
+  // Sent when the title of an XDG toplevel changes.
+  const factory WaylandEvent.titleChanged({
+    required String method,
+    required TitleChangedMessage message,
+  }) = TitleChangedEvent;
+
   /// Interactive Move Event
   /// This event is sent when the user starts an interactive move
   const factory WaylandEvent.interactiveMove({
@@ -114,6 +161,13 @@ class WaylandEvent with _$WaylandEvent implements WaylandInteraction {
     required String method,
     required MonitorLayoutChangedMessage message,
   }) = MonitorLayoutChangedEvent;
+
+  /// Set Environment Variables Event
+  /// This event is sent when the embedder wants to set environment variables.
+  const factory WaylandEvent.setEnvironmentVariables({
+    required String method,
+    required SetEnvironmentVariablesMessage message,
+  }) = SetEnvironmentVariablesEvent;
 
   /// Creates a new [WaylandEvent] instance from a map.
   ///

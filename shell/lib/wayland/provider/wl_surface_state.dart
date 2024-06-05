@@ -69,9 +69,16 @@ class WlSurfaceState extends _$WlSurfaceState {
         return ref.read(xdgSurfaceStateProvider(surfaceId)).mapped;
       case SurfaceRole.subsurface:
         return ref.read(subsurfaceStateProvider(surfaceId)).mapped;
-      case null:
+      case SurfaceRole.x11Surface || null:
         return false;
     }
+  }
+
+  void setX11SurfaceRole() {
+    assert(state.role == null);
+    state = state.copyWith(
+      role: SurfaceRole.x11Surface,
+    );
   }
 
   void dispose() {

@@ -7,6 +7,7 @@ import 'package:shell/wayland/model/xdg_toplevel.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/wayland/provider/xdg_surface_state.dart';
+import 'package:shell/window/provider/window_properties.dart';
 
 part 'xdg_toplevel_state.g.dart';
 
@@ -41,9 +42,9 @@ class XdgToplevelState extends _$XdgToplevelState {
   }) {
     state = state.copyWith(
       committed: true,
-      title: title,
-      appId: appId,
       parent: parent,
+      appId: appId,
+      title: title,
     );
   }
 
@@ -70,13 +71,13 @@ class XdgToplevelState extends _$XdgToplevelState {
         );
   }
 
-  void setTitle(String title) {
+  void setTitle(String? title) {
     state = state.copyWith(
       title: title,
     );
   }
 
-  void setAppId(String appId) {
+  void setAppId(String? appId) {
     state = state.copyWith(
       appId: appId,
     );
@@ -85,7 +86,7 @@ class XdgToplevelState extends _$XdgToplevelState {
   void dispose() {
     final mapped = ref.read(xdgSurfaceStateProvider(surfaceId)).mapped;
     if (mapped) {
-      ref.read(newXdgToplevelSurfaceProvider.notifier).unmapped(surfaceId);
+      ref.read(surfaceMappedProvider.notifier).unmapped(surfaceId);
     }
     _keepAliveLink.close();
   }

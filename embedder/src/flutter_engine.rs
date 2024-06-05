@@ -1,5 +1,6 @@
 use serde_json::json;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::ffi::{c_int, CString};
 use std::mem::{size_of, MaybeUninit};
 use std::ops::DerefMut;
@@ -52,7 +53,7 @@ use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::flutter_engine::task_runner::TaskRunner;
 use crate::flutter_engine::text_input::{text_input_channel_method_call_handler, TextInput};
-use crate::flutter_engine::wayland_messages::{MonitorsMessage, MyOutput};
+use crate::flutter_engine::wayland_messages::{EnvironmentVariables, MonitorsMessage, MyOutput};
 use crate::gles_framebuffer_importer::GlesFramebufferImporter;
 use crate::keyboard::KeyEvent;
 use crate::mouse_button_tracker::MouseButtonTracker;
@@ -549,6 +550,23 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             "monitor_layout_changed",
             Some(Box::new(json!(MonitorsMessage {
                 monitors: outputs.into_iter().map(|output| MyOutput(output)).collect()
+            }))),
+            None,
+        );
+    }
+
+    pub fn set_environment_variable(&mut self, key: &str, value: Option<&str>) {
+        self.set_environment_variables(HashMap::from([(key, value)]));
+    }
+
+    pub fn set_environment_variables(
+        &mut self,
+        environment_variables: HashMap<&str, Option<&str>>,
+    ) {
+        self.platform_method_channel.invoke_method(
+            "set_environment_variables",
+            Some(Box::new(json!(EnvironmentVariables {
+                environment_variables,
             }))),
             None,
         );

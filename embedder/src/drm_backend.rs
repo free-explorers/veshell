@@ -18,7 +18,7 @@ use smithay::backend::renderer::element::texture::{TextureBuffer, TextureRenderE
 use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
-use smithay::backend::renderer::ImportDma;
+use smithay::backend::renderer::{ImportDma, ImportEgl};
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{libseat, Session};
 use smithay::backend::udev::{all_gpus, primary_gpu, UdevBackend, UdevEvent};
@@ -549,6 +549,12 @@ impl ServerState<DrmBackend> {
                                 start_time.elapsed().as_millis() as u32,
                             );
                         }
+                        for surface in data.state.x11_surface_per_wl_surface.keys() {
+                            send_frames_surface_tree(
+                                surface,
+                                start_time.elapsed().as_millis() as u32,
+                            );
+                        }
                     }
                     DrmEvent::Error(error) => {
                         error!("{:?}", error);
@@ -570,9 +576,13 @@ impl ServerState<DrmBackend> {
             GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT,
         );
 
-        let gles_renderer =
+        let mut gles_renderer =
             unsafe { GlesRenderer::new(EGLContext::new(&egl_display).unwrap()) }.unwrap();
 
+        if gles_renderer.bind_wl_display(&self.display_handle).is_ok() {
+            info!("EGL hardware-acceleration enabled");
+        }
+            
         let swapchain = {
             let dmabuf_allocator: Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>> = {
                 let gbm_allocator =
