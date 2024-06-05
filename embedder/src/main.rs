@@ -1,5 +1,6 @@
 use std::env;
 
+use log::debug;
 use smithay::output::Output;
 use smithay::reexports::calloop::{channel, EventSource};
 use smithay::{
@@ -95,10 +96,10 @@ struct ClientState {
 
 impl ClientData for ClientState {
     fn initialized(&self, _client_id: ClientId) {
-        println!("initialized");
+        debug!("Client initialized {:?}", _client_id);
     }
 
     fn disconnected(&self, _client_id: ClientId, _reason: DisconnectReason) {
-        println!("disconnected");
+        debug!("Client disconnected {:?} {:?}", _client_id, _reason);
     }
 }

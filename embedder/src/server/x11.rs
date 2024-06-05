@@ -4,6 +4,9 @@ use crate::Backend;
 use serde_json::json;
 use smithay::delegate_primary_selection;
 use smithay::desktop::space::SpaceElement;
+use smithay::reexports::ash::vk::wl_surface;
+use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
+use smithay::reexports::x11rb::protocol::xproto::Window;
 use smithay::utils::{Logical, Point, Rectangle};
 use smithay::wayland::seat::WaylandFocus;
 use smithay::wayland::selection::data_device::{
@@ -18,7 +21,7 @@ use smithay::wayland::selection::SelectionTarget;
 use smithay::wayland::xwayland_shell::{XWaylandShellHandler, XWaylandShellState};
 use smithay::xwayland::xwm::{Reorder, WmWindowProperty, XwmId};
 use smithay::xwayland::{xwm, X11Surface, X11Wm, XwmHandler};
-use std::borrow::Cow;
+use std::borrow::{Borrow, Cow};
 use std::cell::RefCell;
 use std::os::fd::OwnedFd;
 use tracing::{error, trace};
@@ -40,6 +43,7 @@ fn get_x11_surface_id(x11_surface: &X11Surface) -> u64 {
 
 impl<BackendData: Backend> ServerState<BackendData> {
     fn new_x11_surface(&mut self, surface: X11Surface) {
+        println!("new_x11_surface {:?}", surface.window_id());
         self.x11_surface_per_x11_window
             .insert(surface.window_id(), surface.clone());
 
@@ -54,18 +58,13 @@ impl<BackendData: Backend> ServerState<BackendData> {
             "new_x11_surface",
             Some(Box::new(json!(NewX11Surface {
                 x11_surface_id: get_x11_surface_id(&surface),
+                override_redirect: surface.is_override_redirect(),
             }))),
             None,
         );
     }
 
     fn map_x11_surface(&mut self, surface: X11Surface) {
-        let Some(wl_surface) = surface.wl_surface() else {
-            return;
-        };
-        self.x11_surface_per_wl_surface
-            .insert(wl_surface.clone(), surface.clone());
-
         let parent = if surface.is_override_redirect() {
             surface
                 .is_transient_for()
@@ -86,34 +85,13 @@ impl<BackendData: Backend> ServerState<BackendData> {
                 .map(|x11_surface| get_x11_surface_id(&x11_surface))
         };
 
-        let title = surface.title();
-        let title = if !title.is_empty() { Some(title) } else { None };
-        let window_class = surface.class();
-        let window_class = if !window_class.is_empty() {
-            Some(window_class)
-        } else {
-            None
-        };
-        let instance = surface.instance();
-        let instance = if !instance.is_empty() {
-            Some(instance)
-        } else {
-            None
-        };
-
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "map_x11_surface",
             Some(Box::new(json!(MapX11Surface {
                 x11_surface_id: get_x11_surface_id(&surface),
-                surface_id: get_surface_id(&wl_surface),
-                override_redirect: surface.is_override_redirect(),
                 geometry: surface.geometry().into(),
                 parent,
-                title,
-                window_class,
-                instance,
-                startup_id: surface.startup_id(),
             }))),
             None,
         );
@@ -221,14 +199,28 @@ impl<BackendData: Backend> XwmHandler for ServerState<BackendData> {
     }
 
     fn property_notify(&mut self, xwm: XwmId, window: X11Surface, property: WmWindowProperty) {
-        let Some(wl_surface) = window.wl_surface() else {
-            return;
-        };
-        let surface_id = get_surface_id(&wl_surface);
-
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
 
-        match property {
+        // to simplify we sent all properties to flutter when any changes
+        // TODO: split each property to channel
+
+        platform_method_channel.invoke_method(
+            "x11_properties_changed",
+            Some(Box::new(json!({
+                "x11SurfaceId": get_x11_surface_id(&window),
+                "title": if !window.title().is_empty() { Some(window.title()) } else { None },
+                "windowClass": window.class(),
+                "instance": if !window.instance().is_empty() {
+                    Some(window.instance())
+                } else {
+                    None
+                },
+                "startupId": window.startup_id(),
+            }))),
+            None,
+        );
+
+        /* match property {
             WmWindowProperty::Title => {
                 let title = window.title();
                 let title = if !title.is_empty() { Some(title) } else { None };
@@ -260,7 +252,7 @@ impl<BackendData: Backend> XwmHandler for ServerState<BackendData> {
                 );
             }
             _ => {}
-        }
+        } */
     }
 
     fn resize_request(
@@ -345,5 +337,24 @@ impl<BackendData: Backend> XwmHandler for ServerState<BackendData> {
 impl<BackendData: Backend> XWaylandShellHandler for ServerState<BackendData> {
     fn xwayland_shell_state(&mut self) -> &mut XWaylandShellState {
         &mut self.xwayland_shell_state
+    }
+
+    fn surface_associated(&mut self, _surface: WlSurface, _window: Window) {
+        println!("surface {:?}", _surface);
+        println!("window {:?}", _window);
+        let x11_surface = self.x11_surface_per_x11_window.get(&_window).unwrap();
+        let x11_surface_id = get_x11_surface_id(x11_surface);
+        self.x11_surface_per_wl_surface
+            .insert(_surface.clone(), x11_surface.clone());
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+
+        platform_method_channel.invoke_method(
+            "surface_associated",
+            Some(Box::new(json!({
+                "surfaceId": get_surface_id(_surface.borrow()),
+                "x11SurfaceId": x11_surface_id,
+            }))),
+            None,
+        );
     }
 }

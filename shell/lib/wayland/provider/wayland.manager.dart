@@ -23,11 +23,13 @@ class WaylandManager extends _$WaylandManager {
       // try catch to be notified of errors since errors occuring
       // in setMethodCallHandler seem to be outside zone
       try {
+        final event = WaylandEvent.fromJson({
+          'method': call.method,
+          'message': (call.arguments as Map).cast<String, dynamic>(),
+        });
+        print(event);
         _streamController.sink.add(
-          WaylandEvent.fromJson({
-            'method': call.method,
-            'message': (call.arguments as Map).cast<String, dynamic>(),
-          }),
+          event,
         );
       } catch (e, stackTrace) {
         print(e);
@@ -40,6 +42,7 @@ class WaylandManager extends _$WaylandManager {
 
   /// Send a [WaylandRequest] to the Wayland compositor
   Future<void> request(WaylandRequest request) async {
+    print(request);
     await _channel.invokeMethod(request.method, request.message?.toJson());
   }
 }

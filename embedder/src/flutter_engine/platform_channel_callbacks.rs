@@ -9,6 +9,7 @@ use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 use smithay::utils::SERIAL_COUNTER;
 use smithay::wayland::compositor::with_states;
 use smithay::wayland::shell::xdg;
+use smithay::wayland::xwayland_shell::XWAYLAND_SHELL_ROLE;
 use smithay::xwayland::xwm;
 
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
@@ -225,7 +226,7 @@ pub fn activate_window<BackendData: Backend + 'static>(
 
             result.success(None);
         }
-        Some(xwm::X11_SURFACE_ROLE) => {
+        Some(XWAYLAND_SHELL_ROLE) => {
             let Some(x11_surface) = data.x11_surface_per_wl_surface.get(&wl_surface).cloned()
             else {
                 result.error(
@@ -306,7 +307,7 @@ pub fn resize_window<BackendData: Backend + 'static>(
 
             result.success(None);
         }
-        Some(xwm::X11_SURFACE_ROLE) => {
+        Some(XWAYLAND_SHELL_ROLE) => {
             let Some(x11_surface) = data.x11_surface_per_wl_surface.get(&wl_surface) else {
                 result.error(
                     "x11_surface_doesnt_exist".to_string(),
@@ -385,7 +386,7 @@ pub fn close_window<BackendData: Backend + 'static>(
             toplevel.send_close();
             result.success(None);
         }
-        Some(xwm::X11_SURFACE_ROLE) => {
+        Some(XWAYLAND_SHELL_ROLE) => {
             let Some(x11_surface) = data.x11_surface_per_wl_surface.get(&wl_surface) else {
                 result.error(
                     "x11_surface_doesnt_exist".to_string(),

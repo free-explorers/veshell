@@ -17,12 +17,13 @@ import 'package:shell/wayland/model/event/new_surface/new_surface.serializable.d
 import 'package:shell/wayland/model/event/new_toplevel/new_toplevel.serializable.dart';
 import 'package:shell/wayland/model/event/new_x11_surface/new_x11_surface.serializable.dart';
 import 'package:shell/wayland/model/event/set_environment_variables/set_environment_variables.serializable.dart';
+import 'package:shell/wayland/model/event/surface_associated/surface_associated.serializable.dart';
 import 'package:shell/wayland/model/event/title_changed/title_changed.serializable.dart';
 import 'package:shell/wayland/model/event/unmap_x11_surface/unmap_x11_surface.serializable.dart';
+import 'package:shell/wayland/model/event/x11_properties_changed/x11_properties_changed.serializable.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
 part 'wayland_event.serializable.freezed.dart';
-
 part 'wayland_event.serializable.g.dart';
 
 /// Model for WaylandEvent
@@ -86,6 +87,20 @@ class WaylandEvent with _$WaylandEvent implements WaylandInteraction {
     required String method,
     required UnmapX11SurfaceMessage message,
   }) = UnmapX11SurfaceEvent;
+
+  /// X11 Properties Changed Event
+  /// This event is sent when the X11 properties of a surface change.
+  const factory WaylandEvent.x11PropertiesChanged({
+    required String method,
+    required X11PropertiesChangedMessage message,
+  }) = X11PropertiesChangedEvent;
+
+  /// Surface Associated Event
+  /// This event is sent when the compositor associates a surface with an X11 surface.
+  const factory WaylandEvent.surfaceAssociated({
+    required String method,
+    required SurfaceAssociatedMessage message,
+  }) = SurfaceAssociatedEvent;
 
   /// Destroy Surface Event
   /// This event is sent when the compositor destroys a surface.

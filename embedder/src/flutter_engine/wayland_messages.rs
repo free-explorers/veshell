@@ -1,8 +1,8 @@
-use std::collections::HashMap;
 use serde::ser::SerializeStruct;
 use serde::Serialize;
 use smithay::output::{Mode, Output, PhysicalProperties};
 use smithay::utils::{Buffer as BufferCoords, Logical, Point, Rectangle, Size};
+use std::collections::HashMap;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -74,20 +74,15 @@ pub struct MonitorsMessage {
 #[serde(rename_all = "camelCase")]
 pub struct NewX11Surface {
     pub x11_surface_id: u64,
+    pub override_redirect: bool,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MapX11Surface {
     pub x11_surface_id: u64,
-    pub surface_id: u64,
-    pub override_redirect: bool,
     pub geometry: MyRectangle<i32, Logical>,
     pub parent: Option<u64>,
-    pub title: Option<String>,
-    pub window_class: Option<String>,
-    pub instance: Option<String>,
-    pub startup_id: Option<String>,
 }
 
 #[repr(transparent)]
