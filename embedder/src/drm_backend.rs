@@ -659,11 +659,22 @@ impl ServerState<DrmBackend> {
             return;
         }
 
-        let mode_id = connector
-            .modes()
-            .iter()
-            .position(|mode| mode.mode_type().contains(ModeTypeFlags::PREFERRED))
-            .unwrap_or(0);
+        // check if there is a file in xdgConfigHome/veshell/persistence/Monitor/<output_name>.json and if so, get mode from there
+        // if not, get the preferred mode from the connector
+        info!("output_name: {}", output_name);
+        let mode_id = get_mode_id_for_monitor_from_file(&output_name).unwrap_or_else(|| {
+            connector
+                .modes()
+                .iter()
+                .position(|mode| mode.mode_type().contains(ModeTypeFlags::PREFERRED))
+                .unwrap_or(0)
+        });
+        info!("using mode_id: {}", mode_id);
+
+        // log all modes
+        for (i, mode) in connector.modes().iter().enumerate() {
+            info!("mode {}: {:?}", i, mode);
+        }
 
         let drm_mode = connector.modes()[mode_id];
         let wl_mode = Mode::from(drm_mode);
@@ -901,3 +912,39 @@ pub type GbmDrmCompositor = DrmCompositor<
     Option<OutputPresentationFeedback>,
     DrmDeviceFd,
 >;
+
+fn get_mode_id_for_monitor_from_file(output_name: &str) -> Option<usize> {
+    let path = std::env::var("XDG_CONFIG_HOME")
+        .unwrap_or_else(|_| std::env::var("HOME").unwrap() + "/.config")
+        + "/veshell/persistence/Monitor/"
+        + output_name
+        + ".json";
+
+    info!("path: {}", path);
+
+    let file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(err) => {
+            error!("Failed to open file: {}", err);
+            return None;
+        }
+    };
+    let reader = std::io::BufReader::new(file);
+    let json: serde_json::Value = match serde_json::from_reader(reader) {
+        Ok(json) => json,
+        Err(err) => {
+            error!("Failed to parse JSON: {}", err);
+            return None;
+        }
+    };
+    info!("json: {:?}", json);
+    let mode = json["selectedMode"].as_u64();
+
+    match mode {
+        Some(mode) => Some(mode as usize),
+        None => {
+            error!("selectedMode not found in JSON");
+            None
+        }
+    }
+}

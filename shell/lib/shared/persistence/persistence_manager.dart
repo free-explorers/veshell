@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
@@ -42,18 +44,60 @@ class PersistenceManager {
     return folderToModelMap;
   }
 
-  static Future<void> storeModelJson(
+  static Future<void> _storeModelJson(
     String modelFolder,
     String modelId,
     Map<String, dynamic> json,
   ) async {
-    final file = File(
+    print('start storeModelJson for $modelFolder-$modelId');
+    final tempFile = File(
+      path.join(persistenceDirectory.path, modelFolder, '$modelId.temp'),
+    );
+    if (!tempFile.existsSync()) {
+      await tempFile.create(recursive: true);
+    }
+    await tempFile.writeAsString(jsonEncode(json));
+
+    final targetFile = File(
       path.join(persistenceDirectory.path, modelFolder, '$modelId.json'),
     );
-    if (!file.existsSync()) {
-      await file.create(recursive: true);
+    await tempFile.rename(targetFile.path);
+    print('end storeModelJson for $modelFolder-$modelId');
+  }
+
+  static final _fileQueues = <String, Queue<Future<void> Function()>>{};
+
+  static Future<void> queueStoreModelJson(
+    String modelFolder,
+    String modelId,
+    Map<String, dynamic> json,
+  ) async {
+    final filePath =
+        path.join(persistenceDirectory.path, modelFolder, '$modelId.json');
+
+    _fileQueues.putIfAbsent(filePath, Queue.new);
+
+    final completer = Completer<void>();
+
+    _fileQueues[filePath]!.add(() async {
+      try {
+        await _storeModelJson(modelFolder, modelId, json);
+        completer.complete();
+      } catch (e) {
+        completer.completeError(e);
+      } finally {
+        _fileQueues[filePath]!.removeFirst();
+        if (_fileQueues[filePath]!.isNotEmpty) {
+          _fileQueues[filePath]!.first();
+        }
+      }
+    });
+
+    if (_fileQueues[filePath]!.length == 1) {
+      _fileQueues[filePath]!.first();
     }
-    await file.writeAsString(jsonEncode(json));
+
+    return completer.future;
   }
 
   static Future<void> deleteModelJson(
