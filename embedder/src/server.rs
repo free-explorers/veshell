@@ -56,6 +56,10 @@ use smithay::wayland::shell::xdg::{
 };
 use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::wayland::socket::ListeningSocketSource;
+use smithay::wayland::xwayland_keyboard_grab::XWaylandKeyboardGrabState;
+use smithay::wayland::xwayland_shell::{
+    self, XWaylandShellHandler, XWaylandShellState, XWAYLAND_SHELL_ROLE,
+};
 use smithay::xwayland::xwm::{Reorder, XwmId};
 use smithay::xwayland::{
     xwm, X11Surface, X11Wm, XWayland, XWaylandClientData, XWaylandEvent, XwmHandler,
@@ -63,6 +67,7 @@ use smithay::xwayland::{
 use smithay::{
     delegate_compositor, delegate_data_control, delegate_data_device, delegate_dmabuf,
     delegate_output, delegate_primary_selection, delegate_seat, delegate_shm, delegate_xdg_shell,
+    delegate_xwayland_shell,
 };
 use tracing::{info, warn};
 
@@ -76,13 +81,15 @@ use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
 use crate::keyboard::key_repeater::KeyRepeater;
 use crate::keyboard::KeyEvent;
 use crate::texture_swap_chain::TextureSwapChain;
-use crate::{Backend, CalloopData, ClientState};
+use crate::{flutter_engine, Backend, ClientState};
 
 pub struct ServerState<BackendData: Backend + 'static> {
     pub running: Arc<AtomicBool>,
     pub display_handle: DisplayHandle,
-    pub loop_handle: LoopHandle<'static, CalloopData<BackendData>>,
+    pub loop_handle: LoopHandle<'static, ServerState<BackendData>>,
     pub clock: Clock<Monotonic>,
+    pub tx_fbo: Option<channel::Sender<Option<Dmabuf>>>,
+    pub batons: Vec<flutter_engine::Baton>,
     pub seat: Seat<ServerState<BackendData>>,
     pub seat_state: SeatState<ServerState<BackendData>>,
     pub data_device_state: DataDeviceState,
@@ -94,7 +101,6 @@ pub struct ServerState<BackendData: Backend + 'static> {
     pub repeat_rate: u64,
     pub tx_flutter_handled_key_event: channel::Sender<(KeyEvent, bool)>,
     pub key_repeater: KeyRepeater<BackendData>,
-    pub xwayland: XWayland,
     pub x11_wm: Option<X11Wm>,
     pub wayland_socket_name: Option<String>,
     pub xwayland_display: Option<u32>,
@@ -125,6 +131,7 @@ pub struct ServerState<BackendData: Backend + 'static> {
     pub texture_ids_per_surface_id: HashMap<u64, Vec<(i64, Size<i32, BufferCoords>)>>,
     pub surface_id_per_texture_id: HashMap<i64, u64>,
     pub texture_swapchains: HashMap<i64, TextureSwapChain>,
+    pub xwayland_shell_state: xwayland_shell::XWaylandShellState,
 }
 
 impl<BackendData: Backend + 'static> ServerState<BackendData> {
@@ -219,11 +226,12 @@ delegate_dmabuf!(@<BackendData: Backend + 'static> ServerState<BackendData>);
 delegate_output!(@<BackendData: Backend + 'static> ServerState<BackendData>);
 delegate_seat!(@<BackendData: Backend + 'static> ServerState<BackendData>);
 delegate_data_device!(@<BackendData: Backend + 'static> ServerState<BackendData>);
+delegate_xwayland_shell!(@<BackendData: Backend + 'static> ServerState<BackendData>);
 
 impl<BackendData: Backend + 'static> ServerState<BackendData> {
     pub fn new(
         display: Display<ServerState<BackendData>>,
-        loop_handle: LoopHandle<'static, CalloopData<BackendData>>,
+        loop_handle: LoopHandle<'static, ServerState<BackendData>>,
         backend_data: BackendData,
         dmabuf_state: Option<DmabufState>,
     ) -> ServerState<BackendData> {
@@ -260,7 +268,6 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         loop_handle
             .insert_source(source, |client_stream, _, data| {
                 if let Err(err) = data
-                    .state
                     .display_handle
                     .insert_client(client_stream, Arc::new(ClientState::default()))
                 {
@@ -282,7 +289,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
                     profiling::scope!("dispatch_clients");
                     // Safety: we don't drop the display
                     unsafe {
-                        display.get_mut().dispatch_clients(&mut data.state).unwrap();
+                        display.get_mut().dispatch_clients(data).unwrap();
                     }
                     Ok(PostAction::Continue)
                 },
@@ -295,15 +302,14 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         loop_handle
             .insert_source(
                 rx_flutter_handled_key_event,
-                move |event, _, data: &mut CalloopData<BackendData>| {
+                move |event, _, data: &mut ServerState<BackendData>| {
                     if let Msg((key_event, handled)) = event {
                         if handled {
                             // Flutter consumed this event. Probably a keyboard shortcut.
                             return;
                         }
 
-                        let text_input =
-                            &mut data.state.flutter_engine.as_mut().unwrap().text_input;
+                        let text_input = &mut data.flutter_engine.as_mut().unwrap().text_input;
                         if text_input.is_active() {
                             if key_event.state == KeyState::Pressed
                                 && !key_event.mods.ctrl
@@ -318,9 +324,9 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
 
                         // The compositor was not interested in this event,
                         // so we forward it to the Wayland client in focus if there is one.
-                        let keyboard = data.state.keyboard.clone();
+                        let keyboard = data.keyboard.clone();
                         keyboard.input_forward(
-                            &mut data.state,
+                            data,
                             key_event.key_code,
                             key_event.state,
                             SERIAL_COUNTER.next_serial(),
@@ -334,12 +340,12 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
 
         let key_repeater = KeyRepeater::new(
             loop_handle.clone(),
-            |key_code, code_point, data: &mut CalloopData<BackendData>| {
-                let keyboard = data.state.keyboard.clone();
+            |key_code, code_point, data: &mut ServerState<BackendData>| {
+                let keyboard = data.keyboard.clone();
 
                 let mods = keyboard.modifier_state();
-                data.state.flutter_engine.as_mut().unwrap().send_key_event(
-                    data.state.tx_flutter_handled_key_event.clone(),
+                data.flutter_engine.as_mut().unwrap().send_key_event(
+                    data.tx_flutter_handled_key_event.clone(),
                     KeyEvent {
                         key_code,
                         codepoint: code_point,
@@ -355,74 +361,16 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             },
         );
 
-        let xwayland = {
-            let (xwayland, channel) = XWayland::new(&display_handle);
-
-            let ret = loop_handle.insert_source(channel, move |event, _, data| match event {
-                XWaylandEvent::Ready {
-                    connection,
-                    client,
-                    client_fd: _,
-                    display,
-                } => {
-                    let mut wm = X11Wm::start_wm(
-                        data.state.loop_handle.clone(),
-                        data.state.display_handle.clone(),
-                        connection,
-                        client,
-                    )
-                    .expect("Failed to attach X11 Window Manager");
-
-                    let cursor = Cursor::load();
-                    let image = cursor.get_image(1, Duration::ZERO);
-                    wm.set_cursor(
-                        &image.pixels_rgba,
-                        Size::from((image.width as u16, image.height as u16)),
-                        Point::from((image.xhot as u16, image.yhot as u16)),
-                    )
-                    .expect("Failed to set xwayland default cursor");
-
-                    data.state.x11_wm = Some(wm);
-                    data.state.xwayland_display = Some(display);
-
-                    if let Some(flutter_engine) = data.state.flutter_engine.as_mut() {
-                        flutter_engine.set_environment_variable(
-                            "DISPLAY",
-                            Some(format!(":{}", display).as_str()),
-                        );
-                    }
-                }
-
-                XWaylandEvent::Exited => {
-                    data.state.x11_wm = None;
-                    data.state.xwayland_display = None;
-
-                    if let Some(flutter_engine) = data.state.flutter_engine.as_mut() {
-                        flutter_engine.set_environment_variable("DISPLAY", None);
-                    }
-                }
-            });
-            if let Err(e) = ret {
-                tracing::error!("Failed to insert the XWaylandSource into the event loop: {e}");
-            }
-            xwayland
-        };
-
-        if let Err(e) = xwayland.start(
-            loop_handle.clone(),
-            None,
-            std::iter::empty::<(OsString, OsString)>(),
-            true,
-            |_| {},
-        ) {
-            error!("Failed to start XWayland: {}", e);
-        }
+        let xwayland_shell_state =
+            xwayland_shell::XWaylandShellState::new::<Self>(&&display_handle.clone());
 
         Self {
             running: Arc::new(AtomicBool::new(true)),
             display_handle,
             loop_handle,
             clock,
+            tx_fbo: None,
+            batons: vec![],
             backend_data: Box::new(backend_data),
             mouse_position: (0.0, 0.0),
             surface_id_under_cursor: None,
@@ -443,7 +391,6 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             repeat_rate,
             tx_flutter_handled_key_event,
             key_repeater,
-            xwayland,
             x11_wm: None,
             wayland_socket_name: Some(socket_name),
             xwayland_display: None,
@@ -461,6 +408,71 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             texture_ids_per_surface_id: HashMap::new(),
             surface_id_per_texture_id: HashMap::new(),
             texture_swapchains: HashMap::new(),
+            xwayland_shell_state,
+        }
+    }
+
+    pub fn start_xwayland(&mut self) {
+        use std::process::Stdio;
+
+        //XWaylandKeyboardGrabState::new::<Self>(&self.display_handle.clone());
+
+        let (xwayland, client) = XWayland::spawn(
+            &self.display_handle,
+            None,
+            std::iter::empty::<(String, String)>(),
+            true,
+            Stdio::null(),
+            Stdio::null(),
+            |_| (),
+        )
+        .expect("failed to start XWayland");
+
+        let dh = self.display_handle.clone();
+        let ret = self
+            .loop_handle
+            .insert_source(xwayland, move |event, _, data| match event {
+                XWaylandEvent::Ready {
+                    x11_socket,
+                    display_number,
+                } => {
+                    let mut wm =
+                        X11Wm::start_wm(data.loop_handle.clone(), x11_socket, client.clone())
+                            .expect("Failed to attach X11 Window Manager");
+
+                    let cursor = Cursor::load();
+                    let image = cursor.get_image(1, Duration::ZERO);
+                    wm.set_cursor(
+                        &image.pixels_rgba,
+                        Size::from((image.width as u16, image.height as u16)),
+                        Point::from((image.xhot as u16, image.yhot as u16)),
+                    )
+                    .expect("Failed to set xwayland default cursor");
+
+                    data.x11_wm = Some(wm);
+                    data.xwayland_display = Some(display_number);
+
+                    if let Some(flutter_engine) = data.flutter_engine.as_mut() {
+                        flutter_engine.set_environment_variable(
+                            "DISPLAY",
+                            Some(format!(":{}", display_number).as_str()),
+                        );
+                    }
+                }
+                XWaylandEvent::Error => {
+                    data.x11_wm = None;
+                    data.xwayland_display = None;
+
+                    if let Some(flutter_engine) = data.flutter_engine.as_mut() {
+                        flutter_engine.set_environment_variable("DISPLAY", None);
+                    }
+                }
+            });
+        if let Err(e) = ret {
+            tracing::error!(
+                "Failed to insert the XWaylandSource into the event loop: {}",
+                e
+            );
         }
     }
 
@@ -536,7 +548,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
                 let subsurface_message = Self::construct_subsurface_role_message(surface);
                 Some(SurfaceRole::Subsurface(subsurface_message))
             }
-            Some(xwm::X11_SURFACE_ROLE) => Some(SurfaceRole::X11Surface),
+            Some(XWAYLAND_SHELL_ROLE) => Some(SurfaceRole::X11Surface),
             _ => None,
         }
     }
@@ -959,8 +971,6 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        X11Wm::commit_hook::<CalloopData<BackendData>>(surface);
-
         let (subsurfaces_below, subsurfaces_above) = get_direct_subsurfaces(surface);
 
         // Make sure Flutter knows about subsurfaces

@@ -9,7 +9,8 @@ use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::flutter_engine::platform_channels::text_input_model::TextInputModel;
 use crate::flutter_engine::platform_channels::text_range::TextRange;
-use crate::{Backend, CalloopData};
+use crate::server::ServerState;
+use crate::Backend;
 
 pub struct TextInput {
     channel: MethodChannel<serde_json::Value>,
@@ -113,9 +114,9 @@ pub fn text_input_channel_method_call_handler<BackendData: Backend + 'static>(
         Box<dyn MethodResult<serde_json::Value>>,
     )>,
     _: &mut (),
-    data: &mut CalloopData<BackendData>,
+    data: &mut ServerState<BackendData>,
 ) {
-    let text_input = &mut data.state.flutter_engine.as_mut().unwrap().text_input;
+    let text_input = &mut data.flutter_engine.as_mut().unwrap().text_input;
 
     if let Event::Msg((method_call, mut result)) = event {
         let arguments = method_call.arguments();

@@ -4,12 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = [
-    "third_party/smithay-drm-extras",
-]
+members = ["third_party/smithay-drm-extras"]
 
 [dependencies]
-smithay = { git = "https://github.com/roscale/smithay", branch = "property-notify-handler", features = ["default", "wayland_frontend", "backend_egl", "use_system_lib", "xwayland"] }
+smithay = { git = "https://github.com/Smithay/smithay", branch = "feature/xwayland_hook", features = [
+    "default",
+    "wayland_frontend",
+    "backend_egl",
+    "use_system_lib",
+    "xwayland",
+] }
 smithay-drm-extras = { path = "third_party/smithay-drm-extras" }
 rustix = "0.38.30"
 input-linux = "0.6.0"

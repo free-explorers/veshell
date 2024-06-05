@@ -36,9 +36,7 @@ use tracing::info;
 
 use crate::flutter_engine::FlutterEngine;
 use crate::input_handling::handle_input;
-use crate::{
-    flutter_engine::EmbedderChannels, send_frames_surface_tree, Backend, CalloopData, ServerState,
-};
+use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, Backend, ServerState};
 
 pub fn run_x11_client() {
     let mut event_loop = EventLoop::try_new().unwrap();
@@ -75,7 +73,7 @@ pub fn run_x11_client() {
         size: (window.size().w as i32, window.size().h as i32).into(),
         refresh: 144_000,
     };
-    
+
     let output = Output::new(
         "x11".to_string(),
         PhysicalProperties {
@@ -190,6 +188,7 @@ pub fn run_x11_client() {
             rx_baton,
         },
     ) = FlutterEngine::new(&mut state).unwrap();
+    state.tx_fbo = Some(tx_fbo.clone());
 
     state.flutter_engine = Some(flutter_engine);
 
@@ -206,21 +205,19 @@ pub fn run_x11_client() {
         .shm_state
         .update_formats([wl_shm::Format::Argb8888, wl_shm::Format::Xrgb8888]);
 
-    let mut baton = vec![];
-
     event_loop
         .handle()
         .insert_source(
             x11_backend,
-            move |event, _, data: &mut CalloopData<X11Data>| match event {
+            move |event, _, data: &mut ServerState<X11Data>| match event {
                 X11Event::CloseRequested { .. } => {
-                    data.state.running.store(false, Ordering::SeqCst);
+                    data.running.store(false, Ordering::SeqCst);
                 }
 
                 X11Event::Resized { new_size, .. } => {
                     let size = { (new_size.w as i32, new_size.h as i32).into() };
 
-                    data.state.backend_data.output.change_current_state(
+                    data.backend_data.output.change_current_state(
                         Some(Mode {
                             size,
                             refresh: 144_000,
@@ -229,48 +226,44 @@ pub fn run_x11_client() {
                         None,
                         Some((0, 0).into()),
                     );
-                    data.state.backend_data.output.set_preferred(mode);
+                    data.backend_data.output.set_preferred(mode);
 
                     let _ = tx_output_height.send(new_size.h);
-                    data.state
-                        .flutter_engine()
+                    data.flutter_engine()
                         .send_window_metrics((size.w as u32, size.h as u32).into())
                         .unwrap();
 
-                    let monitors = data.state.backend_data.get_monitor_layout();
-                    data.state
-                        .flutter_engine_mut()
-                        .monitor_layout_changed(monitors);
+                    let monitors = data.backend_data.get_monitor_layout();
+                    data.flutter_engine_mut().monitor_layout_changed(monitors);
                 }
 
                 X11Event::PresentCompleted { .. } | X11Event::Refresh { .. } => {
-                    data.state.is_next_flutter_frame_scheduled = false;
-                    for baton in data.batons.drain(..) {
-                        data.state
-                            .flutter_engine()
-                            .on_vsync(baton, 144_000)
-                            .unwrap();
+                    data.is_next_flutter_frame_scheduled = false;
+                    let drained: Vec<_> = data.batons.drain(..).collect(); // Mutable borrow ends here
+
+                    for baton in drained {
+                        data.flutter_engine().on_vsync(baton, 144_000).unwrap();
                     }
                     let start_time = std::time::Instant::now();
-                    for surface in data.state.xdg_shell_state.toplevel_surfaces() {
+                    for surface in data.xdg_shell_state.toplevel_surfaces() {
                         send_frames_surface_tree(
                             surface.wl_surface(),
                             start_time.elapsed().as_millis() as u32,
                         );
                     }
-                    for surface in data.state.xdg_popups.values() {
+                    for surface in data.xdg_popups.values() {
                         send_frames_surface_tree(
                             surface.wl_surface(),
                             start_time.elapsed().as_millis() as u32,
                         );
                     }
-                    for surface in data.state.x11_surface_per_wl_surface.keys() {
+                    for surface in data.x11_surface_per_wl_surface.keys() {
                         send_frames_surface_tree(surface, start_time.elapsed().as_millis() as u32);
                     }
                 }
 
-                X11Event::Input(event) => handle_input::<X11Data>(&event, data),
-                X11Event::Focus(false) => data.state.release_all_keys(),
+                X11Event::Input { event, .. } => handle_input::<X11Data>(&event, data),
+                X11Event::Focus { focused: false, .. } => data.release_all_keys(),
                 _ => {}
             },
         )
@@ -280,14 +273,11 @@ pub fn run_x11_client() {
         .handle()
         .insert_source(rx_baton, move |baton, _, data| {
             if let Msg(baton) = baton {
-                if data.state.is_next_flutter_frame_scheduled {
+                if data.is_next_flutter_frame_scheduled {
                     data.batons.push(baton);
                     return;
                 }
-                data.state
-                    .flutter_engine()
-                    .on_vsync(baton, 144_000)
-                    .unwrap();
+                data.flutter_engine().on_vsync(baton, 144_000).unwrap();
             }
         })
         .unwrap();
@@ -295,13 +285,13 @@ pub fn run_x11_client() {
     event_loop
         .handle()
         .insert_source(rx_request_fbo, move |_, _, data| {
-            match data.state.backend_data.x11_surface.buffer() {
+            match data.backend_data.x11_surface.buffer() {
                 Ok((dmabuf, _age)) => {
-                    let _ = data.tx_fbo.send(Some(dmabuf));
+                    let _ = data.tx_fbo.as_ref().unwrap().send(Some(dmabuf));
                 }
                 Err(err) => {
                     error!("{err}");
-                    let _ = data.tx_fbo.send(None);
+                    let _ = data.tx_fbo.as_ref().unwrap().send(None);
                 }
             }
         })
@@ -310,28 +300,18 @@ pub fn run_x11_client() {
     event_loop
         .handle()
         .insert_source(rx_present, move |_, _, data| {
-            data.state.is_next_flutter_frame_scheduled = true;
-            if let Err(err) = data.state.backend_data.x11_surface.submit() {
-                data.state.backend_data.x11_surface.reset_buffers();
+            data.is_next_flutter_frame_scheduled = true;
+            if let Err(err) = data.backend_data.x11_surface.submit() {
+                data.backend_data.x11_surface.reset_buffers();
                 warn!("Failed to submit buffer: {}. Retrying", err);
             };
         })
         .unwrap();
 
+    state.start_xwayland();
+
     while state.running.load(Ordering::SeqCst) {
-        let mut calloop_data = CalloopData {
-            state,
-            tx_fbo,
-            batons: baton,
-        };
-
-        let result = event_loop.dispatch(None, &mut calloop_data);
-
-        CalloopData {
-            state,
-            tx_fbo,
-            batons: baton,
-        } = calloop_data;
+        let result = event_loop.dispatch(None, &mut state);
 
         if result.is_err() {
             state.running.store(false, Ordering::SeqCst);

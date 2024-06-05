@@ -1,5 +1,6 @@
 use std::env;
 
+use log::debug;
 use smithay::output::Output;
 use smithay::reexports::calloop::{channel, EventSource};
 use smithay::{
@@ -28,6 +29,7 @@ use crate::server::ServerState;
 mod cursor;
 mod drm_backend;
 mod flutter_engine;
+mod focus;
 mod gles_framebuffer_importer;
 mod input_handling;
 mod keyboard;
@@ -35,7 +37,6 @@ mod mouse_button_tracker;
 mod server;
 mod texture_swap_chain;
 mod x11_client;
-mod focus;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Ok(env_filter) = tracing_subscriber::EnvFilter::try_from_default_env() {
@@ -67,12 +68,6 @@ pub struct FlutterState<BackendData: Backend + 'static> {
     pub mouse_button_tracker: MouseButtonTracker,
 }
 
-pub struct CalloopData<BackendData: Backend + 'static> {
-    pub state: ServerState<BackendData>,
-    pub tx_fbo: channel::Sender<Option<Dmabuf>>,
-    pub batons: Vec<flutter_engine::Baton>,
-}
-
 pub fn send_frames_surface_tree(surface: &wl_surface::WlSurface, time: u32) {
     with_surface_tree_downward(
         surface,
@@ -101,10 +96,10 @@ struct ClientState {
 
 impl ClientData for ClientState {
     fn initialized(&self, _client_id: ClientId) {
-        println!("initialized");
+        debug!("Client initialized {:?}", _client_id);
     }
 
     fn disconnected(&self, _client_id: ClientId, _reason: DisconnectReason) {
-        println!("disconnected");
+        debug!("Client disconnected {:?} {:?}", _client_id, _reason);
     }
 }

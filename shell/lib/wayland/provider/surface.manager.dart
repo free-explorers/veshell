@@ -17,9 +17,11 @@ import 'package:shell/wayland/model/event/new_subsurface/new_subsurface.serializ
 import 'package:shell/wayland/model/event/new_surface/new_surface.serializable.dart';
 import 'package:shell/wayland/model/event/new_toplevel/new_toplevel.serializable.dart';
 import 'package:shell/wayland/model/event/new_x11_surface/new_x11_surface.serializable.dart';
+import 'package:shell/wayland/model/event/surface_associated/surface_associated.serializable.dart';
 import 'package:shell/wayland/model/event/title_changed/title_changed.serializable.dart';
 import 'package:shell/wayland/model/event/unmap_x11_surface/unmap_x11_surface.serializable.dart';
 import 'package:shell/wayland/model/event/wayland_event.serializable.dart';
+import 'package:shell/wayland/model/event/x11_properties_changed/x11_properties_changed.serializable.dart';
 import 'package:shell/wayland/model/request/unregister_view_texture/unregister_view_texture.serializable.dart';
 import 'package:shell/wayland/model/surface_manager_state.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
@@ -56,6 +58,10 @@ class SurfaceManager extends _$SurfaceManager {
           _mapX11Surface(event.message);
         case AsyncData(value: final UnmapX11SurfaceEvent event):
           _unmapX11Surface(event.message);
+        case AsyncData(value: final X11PropertiesChangedEvent event):
+          _x11PropertiesChanged(event.message);
+        case AsyncData(value: final SurfaceAssociatedEvent event):
+          _surfaceAssociated(event.message);
         case AsyncData(value: final DestroyX11SurfaceEvent event):
           _destroyX11Surface(event.message);
         case AsyncData(value: final DestroySurfaceEvent event):
@@ -95,9 +101,9 @@ class SurfaceManager extends _$SurfaceManager {
   }
 
   void _newX11Surface(NewX11SurfaceMessage message) {
-    ref
-        .read(x11SurfaceStateProvider(message.x11SurfaceId).notifier)
-        .initialize();
+    ref.read(x11SurfaceStateProvider(message.x11SurfaceId).notifier).initialize(
+          overrideRedirect: message.overrideRedirect,
+        );
 
     state = state.copyWith(
       x11Surfaces: state.x11Surfaces.add(message.x11SurfaceId),
@@ -190,24 +196,30 @@ class SurfaceManager extends _$SurfaceManager {
   }
 
   void _mapX11Surface(MapX11SurfaceMessage message) {
-    ref.read(x11SurfaceStateProvider(message.x11SurfaceId).notifier).map(
-          surfaceId: message.surfaceId,
-          overrideRedirect: message.overrideRedirect,
-          geometry: message.geometry,
-          parent: message.parent,
+    ref
+        .read(x11SurfaceStateProvider(message.x11SurfaceId).notifier)
+        .map(parent: message.parent, geometry: message.geometry);
+  }
+
+  void _unmapX11Surface(UnmapX11SurfaceMessage message) {
+    ref.read(x11SurfaceStateProvider(message.x11SurfaceId).notifier).unmap();
+  }
+
+  void _x11PropertiesChanged(X11PropertiesChangedMessage message) {
+    ref
+        .read(x11SurfaceStateProvider(message.x11SurfaceId).notifier)
+        .setProperties(
           title: message.title,
           windowClass: message.windowClass,
           instance: message.instance,
           startupId: message.startupId,
         );
-
-    ref.read(windowPropertiesProvider(message.surfaceId).notifier)
-      ..setTitle(message.title)
-      ..setAppId(message.instance);
   }
 
-  void _unmapX11Surface(UnmapX11SurfaceMessage message) {
-    ref.read(x11SurfaceStateProvider(message.x11SurfaceId).notifier).unmap();
+  void _surfaceAssociated(SurfaceAssociatedMessage message) {
+    ref
+        .read(x11SurfaceStateProvider(message.x11SurfaceId).notifier)
+        .associate(message.surfaceId);
   }
 
   void _destroyX11Surface(DestroyX11SurfaceMessage message) {
