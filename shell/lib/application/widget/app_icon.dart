@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:jovial_svg/jovial_svg.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
-import 'package:shell/application/provider/file_to_scalable_image.dart';
 import 'package:shell/application/provider/icon.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
@@ -52,27 +51,7 @@ class AppIconByPath extends StatelessWidget {
         }
 
         if (file.path.endsWith('.svg')) {
-          return Consumer(
-            builder: (BuildContext context, WidgetRef ref, Widget? child) {
-              return ref
-                  .watch(fileToScalableImageProvider(file.absolute.path))
-                  .when(
-                data: (ScalableImage scalableImage) {
-                  return SizedBox.expand(
-                    child: ScalableImageWidget(
-                      si: scalableImage,
-                    ),
-                  );
-                },
-                error: (Object error, StackTrace stackTrace) {
-                  return const SizedBox();
-                },
-                loading: () {
-                  return const SizedBox();
-                },
-              );
-            },
-          );
+          return SvgPicture.file(file);
         }
 
         return Image.file(

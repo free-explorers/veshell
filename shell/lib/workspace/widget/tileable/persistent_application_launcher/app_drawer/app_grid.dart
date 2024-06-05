@@ -12,19 +12,23 @@ typedef DesktopEntrySelectedCallback = void Function(
 /// Application grid
 class AppGrid extends HookConsumerWidget {
   /// Const constructor
-  const AppGrid({required this.onSelect, super.key});
+  const AppGrid({required this.searchText, required this.onSelect, super.key});
+
+  final String searchText;
 
   /// Desktop entry selected callback
   final DesktopEntrySelectedCallback onSelect;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final desktopEntries = ref.watch(appDrawerFilteredDesktopEntriesProvider);
+    final desktopEntries =
+        ref.watch(appDrawerFilteredDesktopEntriesProvider(searchText));
     final widgets = desktopEntries.maybeWhen(
       skipLoadingOnReload: true,
       data: (List<LocalizedDesktopEntry> desktopEntries) => desktopEntries
           .map(
             (desktopEntry) => AppEntry(
+              key: ValueKey(desktopEntry.desktopEntry.id),
               desktopEntry: desktopEntry,
               onLaunch: onSelect,
             ),
@@ -32,17 +36,16 @@ class AppGrid extends HookConsumerWidget {
           .toList(),
       orElse: () => <Widget>[],
     );
-    return Material(
-      color: Colors.transparent,
-      child: GridView.builder(
-        itemCount: widgets.length,
-        padding: const EdgeInsets.all(10),
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 90,
-          childAspectRatio: 0.65,
-        ),
-        itemBuilder: (BuildContext context, int index) => widgets[index],
+    return GridView.builder(
+      itemCount: widgets.length,
+      padding: const EdgeInsets.all(24),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 120,
+        childAspectRatio: 0.68,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
       ),
+      itemBuilder: (BuildContext context, int index) => widgets[index],
     );
   }
 }
@@ -64,41 +67,31 @@ class AppEntry extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return InkWell(
+      borderRadius: BorderRadius.circular(24),
       onTap: () async {
-        //await launchDesktopEntry(desktopEntry.desktopEntry)
         onLaunch(desktopEntry);
       },
-      child: Column(
-        children: [
-          LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints constraints) {
-              return ConstrainedBox(
-                constraints: constraints.copyWith(
-                  minHeight: constraints.maxWidth,
-                  maxHeight: constraints.maxWidth,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: AppIconByPath(
+                  path: desktopEntry.entries[DesktopEntryKey.icon.string],
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: AppIconByPath(
-                    path: desktopEntry.entries[DesktopEntryKey.icon.string],
-                  ),
-                ),
-              );
-            },
-          ),
-          Expanded(
-            child: Text(
-              desktopEntry.entries[DesktopEntryKey.name.string] ?? '',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.w700,
               ),
             ),
-          ),
-        ],
+            Text(
+              desktopEntry.entries[DesktopEntryKey.name.string] ?? '',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

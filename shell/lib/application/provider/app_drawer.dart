@@ -5,24 +5,10 @@ import 'package:shell/application/provider/app_drawer_desktop_entries.dart';
 part 'app_drawer.g.dart';
 
 @Riverpod(keepAlive: true)
-class AppDrawerFilter extends _$AppDrawerFilter {
-  // Make it public. Was protected in the superclass.
-  @override
-  set state(String value) {
-    super.state = value;
-  }
-
-  @override
-  String build() {
-    return '';
-  }
-}
-
-@Riverpod(keepAlive: true)
 Future<List<LocalizedDesktopEntry>> appDrawerFilteredDesktopEntries(
   AppDrawerFilteredDesktopEntriesRef ref,
+  String filter,
 ) async {
-  final filter = ref.watch(appDrawerFilterProvider);
   final desktopEntries =
       await ref.watch(appDrawerDesktopEntriesProvider.future);
 
