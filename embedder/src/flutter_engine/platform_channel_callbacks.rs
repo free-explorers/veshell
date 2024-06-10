@@ -37,6 +37,7 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             "close_window" => close_window(method_call, result, data),
             "get_monitor_layout" => get_monitor_layout(method_call, result, data),
             "get_environment_variables" => get_environment_variables(method_call, result, data),
+            "shell_ready" => on_shell_ready(method_call, result, data),
             _ => result.error(
                 "method_not_found".to_string(),
                 format!("Method {} not found", method_call.method()),
@@ -438,5 +439,14 @@ pub fn get_environment_variables<BackendData: Backend + 'static>(
             ("DISPLAY", xwayland_display),
         ]));
 
+    result.success(None);
+}
+
+pub fn on_shell_ready<BackendData: Backend + 'static>(
+    _method_call: MethodCall<serde_json::Value>,
+    mut result: Box<dyn MethodResult<serde_json::Value>>,
+    data: &mut ServerState<BackendData>,
+) {
+    println!("on_shell_ready");
     result.success(None);
 }

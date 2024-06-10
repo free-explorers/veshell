@@ -9,6 +9,7 @@ import 'package:shell/shared/provider/root_overlay.dart';
 import 'package:shell/theme/provider/theme.manager.dart';
 import 'package:shell/wayland/model/request/get_environment_variables/get_environment_variables.serializable.dart';
 import 'package:shell/wayland/model/request/get_monitor_layout/get_monitor_layout.serializable.dart';
+import 'package:shell/wayland/model/request/shell_ready/shell_ready.serializable.dart';
 import 'package:shell/wayland/provider/environment_variables.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
@@ -28,6 +29,7 @@ void main() {
 
   SchedulerBinding.instance.addPostFrameCallback((_) {
     container.read(waylandManagerProvider.notifier)
+      ..request(const ShellReadyRequest())
       ..request(
         GetEnvironmentVariablesRequest(
           message: GetEnvironmentVariablesMessage(),
