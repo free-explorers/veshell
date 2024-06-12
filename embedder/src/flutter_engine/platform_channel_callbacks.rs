@@ -22,6 +22,9 @@ use crate::flutter_engine::wayland_messages::NewX11Surface;
 use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
 use crate::mouse_button_tracker::FLUTTER_TO_LINUX_MOUSE_BUTTONS;
 
+use crate::server::{get_surface_id, ServerState};
+use crate::Backend;
+
 pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
     event: Event<(
         MethodCall<serde_json::Value>,
