@@ -15,7 +15,7 @@ import 'package:shell/window/model/window_id.dart';
 import 'package:shell/window/provider/dialog_list_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/persistant_window_state.dart';
-import 'package:shell/window/provider/window.manager.dart';
+import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/workspace/widget/tileable/persistent_window/window_placeholder.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
 

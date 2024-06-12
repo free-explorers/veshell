@@ -14,7 +14,7 @@ import 'package:shell/wayland/model/request/shell_ready/shell_ready.serializable
 import 'package:shell/wayland/provider/environment_variables.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
-import 'package:shell/window/provider/window.manager.dart';
+import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
 void main() {

@@ -23,7 +23,7 @@ import 'package:shell/workspace/provider/window_workspace_map.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:uuid/uuid.dart';
 
-part 'window.manager.g.dart';
+part 'window_manager.g.dart';
 
 /// Window manager
 @Riverpod(keepAlive: true)
