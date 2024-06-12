@@ -1,11 +1,5 @@
-import 'dart:io';
-
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/application/provider/app_drawer_desktop_entries.dart';
-import 'package:shell/application/provider/icon.dart';
-import 'package:shell/application/provider/icon_themes.dart';
-import 'package:shell/application/provider/localized_desktop_entries.dart';
 
 part 'desktop_entries.g.dart';
 

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
-import 'package:shell/application/provider/icon.dart';
+import 'package:shell/application/provider/image_from_icon_query.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
@@ -28,34 +27,26 @@ class AppIconByPath extends StatelessWidget {
     );
   }
 
-  Widget _buildIcon(WidgetRef ref, String icon) {
+  Widget _buildIcon(WidgetRef ref, String path) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final asyncValue = ref.watch(
-          iconForQueryProvider(
+          imageFromIconQueryProvider(
             IconQuery(
-              name: icon,
+              name: path,
               size: constraints.biggest.shortestSide.floor(),
               extensions: const ['svg', 'png'],
             ),
+            constraints.biggest,
           ),
         );
 
         if (!asyncValue.hasValue) {
           return const SizedBox();
         }
-        final file = asyncValue.value;
-
-        if (file == null) {
-          return const SizedBox();
-        }
-
-        if (file.path.endsWith('.svg')) {
-          return SvgPicture.file(file);
-        }
-
-        return Image.file(
-          file,
+        final rawImage = asyncValue.value;
+        return RawImage(
+          image: rawImage,
           filterQuality: FilterQuality.medium,
           fit: BoxFit.contain,
         );

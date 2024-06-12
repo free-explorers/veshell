@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/display/widget/display.dart';
 import 'package:shell/monitor/provider/monitor_list.dart';
@@ -9,6 +10,7 @@ import 'package:shell/shared/provider/root_overlay.dart';
 import 'package:shell/theme/provider/theme.manager.dart';
 import 'package:shell/wayland/model/request/get_environment_variables/get_environment_variables.serializable.dart';
 import 'package:shell/wayland/model/request/get_monitor_layout/get_monitor_layout.serializable.dart';
+import 'package:shell/wayland/model/request/shell_ready/shell_ready.serializable.dart';
 import 'package:shell/wayland/provider/environment_variables.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
@@ -91,12 +93,18 @@ class Veshell extends ConsumerWidget {
       theme: theme,
       home: _EagerInitialization(
         child: Scaffold(
-          body: Consumer(
+          body: HookConsumer(
             builder: (
               BuildContext context,
               WidgetRef ref,
               Widget? child,
             ) {
+              useEffect(() {
+                ref
+                    .read(waylandManagerProvider.notifier)
+                    .request(const ShellReadyRequest());
+                return null;
+              });
               return Stack(
                 children: [
                   const Positioned.fill(child: DisplayWidget()),

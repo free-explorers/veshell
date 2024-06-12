@@ -55,7 +55,11 @@ Future<void> buildEmbedder(
     'cargo',
     cargoArgs,
     workingDirectory: 'embedder',
-    environment: {'BUNDLE': 'true', 'FLUTTER_ENGINE_BUILD': target.name},
+    environment: {
+      'BUNDLE': 'true',
+      'FLUTTER_ENGINE_BUILD': target.name,
+      'RUST_LOG': logger.level == Level.verbose ? 'debug' : 'warn'
+    },
   );
   if (exitCode != 0) {
     exit(exitCode);

@@ -35,6 +35,7 @@ class WindowManager extends _$WindowManager {
 
   @override
   ISet<WindowId> build() {
+    print('WindowManager build');
     ref.listen(
       surfaceMappedProvider,
       (_, next) async {

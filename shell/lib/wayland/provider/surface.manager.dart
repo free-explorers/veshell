@@ -40,6 +40,8 @@ part 'surface.manager.g.dart';
 class SurfaceManager extends _$SurfaceManager {
   @override
   SurfaceManagerState build() {
+    print('SurfaceManager build');
+
     ref.listen(waylandManagerProvider, (_, next) {
       switch (next) {
         case AsyncData(value: final NewSurfaceEvent event):

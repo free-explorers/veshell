@@ -29,7 +29,9 @@ fn main() {
         None => FlutterEngineBuild::Debug,
     };
 
-    if should_download_flutter_engine_library(&flutter_engine_revision, flutter_engine_build) {
+    let should_download =
+        should_download_flutter_engine_library(&flutter_engine_revision, flutter_engine_build);
+    if should_download {
         download_flutter_engine_library(&flutter_engine_revision, flutter_engine_build);
     }
     generate_embedder_bindings();
