@@ -27,7 +27,7 @@ class WaylandManager extends _$WaylandManager {
           'method': call.method,
           'message': (call.arguments as Map).cast<String, dynamic>(),
         });
-        //print(event);
+        print(event);
         _streamController.sink.add(
           event,
         );

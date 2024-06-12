@@ -28,20 +28,20 @@ use tracing::{error, trace};
 
 use super::{get_surface_id, ServerState};
 
-struct MyX11SurfaceState {
-    x11_surface_id: u64,
-}
-
-fn get_x11_surface_id(x11_surface: &X11Surface) -> u64 {
-    x11_surface
-        .user_data()
-        .get::<RefCell<MyX11SurfaceState>>()
-        .unwrap()
-        .borrow()
-        .x11_surface_id
+pub struct MyX11SurfaceState {
+    pub x11_surface_id: u64,
 }
 
 impl<BackendData: Backend> ServerState<BackendData> {
+    pub fn get_x11_surface_id(x11_surface: &X11Surface) -> u64 {
+        x11_surface
+            .user_data()
+            .get::<RefCell<MyX11SurfaceState>>()
+            .unwrap()
+            .borrow()
+            .x11_surface_id
+    }
+
     fn new_x11_surface(&mut self, surface: X11Surface) {
         println!("new_x11_surface {:?}", surface.window_id());
         self.x11_surface_per_x11_window
@@ -57,14 +57,14 @@ impl<BackendData: Backend> ServerState<BackendData> {
         platform_method_channel.invoke_method(
             "new_x11_surface",
             Some(Box::new(json!(NewX11Surface {
-                x11_surface_id: get_x11_surface_id(&surface),
+                x11_surface_id: Self::get_x11_surface_id(&surface),
                 override_redirect: surface.is_override_redirect(),
             }))),
             None,
         );
     }
 
-    fn map_x11_surface(&mut self, surface: X11Surface) {
+    pub fn map_x11_surface(&mut self, surface: X11Surface) {
         let parent = if surface.is_override_redirect() {
             surface
                 .is_transient_for()
@@ -77,19 +77,19 @@ impl<BackendData: Backend> ServerState<BackendData> {
                         })
                     })
                 })
-                .map(|x11_surface| get_x11_surface_id(x11_surface))
+                .map(|x11_surface| Self::get_x11_surface_id(x11_surface))
         } else {
             surface
                 .is_transient_for()
                 .and_then(|x11_surface| self.x11_surface_per_x11_window.get(&x11_surface))
-                .map(|x11_surface| get_x11_surface_id(&x11_surface))
+                .map(|x11_surface| Self::get_x11_surface_id(&x11_surface))
         };
 
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "map_x11_surface",
             Some(Box::new(json!(MapX11Surface {
-                x11_surface_id: get_x11_surface_id(&surface),
+                x11_surface_id: Self::get_x11_surface_id(&surface),
                 geometry: surface.geometry().into(),
                 parent,
             }))),
@@ -136,7 +136,7 @@ impl<BackendData: Backend> XwmHandler for ServerState<BackendData> {
 
         self.x11_surface_per_wl_surface.remove(&wl_surface);
 
-        let x11_surface_id = get_x11_surface_id(&surface);
+        let x11_surface_id = Self::get_x11_surface_id(&surface);
 
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
@@ -153,7 +153,7 @@ impl<BackendData: Backend> XwmHandler for ServerState<BackendData> {
     }
 
     fn destroyed_window(&mut self, xwm: XwmId, surface: X11Surface) {
-        let x11_surface_id = get_x11_surface_id(&surface);
+        let x11_surface_id = Self::get_x11_surface_id(&surface);
 
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
@@ -198,7 +198,7 @@ impl<BackendData: Backend> XwmHandler for ServerState<BackendData> {
     ) {
     }
 
-    fn property_notify(&mut self, xwm: XwmId, window: X11Surface, property: WmWindowProperty) {
+    fn property_notify(&mut self, xwm: XwmId, x11_surface: X11Surface, property: WmWindowProperty) {
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
 
         // to simplify we sent all properties to flutter when any changes
@@ -207,15 +207,15 @@ impl<BackendData: Backend> XwmHandler for ServerState<BackendData> {
         platform_method_channel.invoke_method(
             "x11_properties_changed",
             Some(Box::new(json!({
-                "x11SurfaceId": get_x11_surface_id(&window),
-                "title": if !window.title().is_empty() { Some(window.title()) } else { None },
-                "windowClass": window.class(),
-                "instance": if !window.instance().is_empty() {
-                    Some(window.instance())
+                "x11SurfaceId": Self::get_x11_surface_id(&x11_surface),
+                "title": if !x11_surface.title().is_empty() { Some(x11_surface.title()) } else { None },
+                "windowClass": x11_surface.class(),
+                "instance": if !x11_surface.instance().is_empty() {
+                    Some(x11_surface.instance())
                 } else {
                     None
                 },
-                "startupId": window.startup_id(),
+                "startupId": x11_surface.startup_id(),
             }))),
             None,
         );
@@ -343,7 +343,7 @@ impl<BackendData: Backend> XWaylandShellHandler for ServerState<BackendData> {
         println!("surface {:?}", _surface);
         println!("window {:?}", _window);
         let x11_surface = self.x11_surface_per_x11_window.get(&_window).unwrap();
-        let x11_surface_id = get_x11_surface_id(x11_surface);
+        let x11_surface_id = Self::get_x11_surface_id(x11_surface);
         self.x11_surface_per_wl_surface
             .insert(_surface.clone(), x11_surface.clone());
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;

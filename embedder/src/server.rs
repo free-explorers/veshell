@@ -124,6 +124,7 @@ pub struct ServerState<BackendData: Backend + 'static> {
     pub gles_renderer: Option<GlesRenderer>,
     pub gl: Option<Gles2>,
     pub surfaces: HashMap<u64, WlSurface>,
+    pub subsurfaces: HashMap<u64, WlSurface>,
     pub xdg_toplevels: HashMap<u64, ToplevelSurface>,
     pub xdg_popups: HashMap<u64, PopupSurface>,
     pub x11_surface_per_x11_window: HashMap<X11Window, X11Surface>,
@@ -401,6 +402,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             gles_renderer: None,
             gl: None,
             surfaces: HashMap::new(),
+            subsurfaces: HashMap::new(),
             xdg_toplevels: HashMap::new(),
             xdg_popups: HashMap::new(),
             x11_surface_per_x11_window: HashMap::new(),
@@ -483,7 +485,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
             .change_repeat_info(repeat_delay as i32, repeat_rate as i32);
     }
 
-    fn construct_surface_message(&self, surface: &WlSurface) -> SurfaceMessage {
+    pub fn construct_surface_message(&self, surface: &WlSurface) -> SurfaceMessage {
         let surface_id = get_surface_id(surface);
         let role = self.construct_surface_role_message(surface);
 
@@ -581,7 +583,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         XdgSurfaceMessage { geometry, role }
     }
 
-    fn construct_subsurface_role_message(surface: &WlSurface) -> SubsurfaceMessage {
+    pub fn construct_subsurface_role_message(surface: &WlSurface) -> SubsurfaceMessage {
         let location = with_states(surface, |surface_data| {
             surface_data
                 .cached_state
@@ -637,7 +639,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         })
     }
 
-    fn construct_popup_role_message(&self, surface: &WlSurface) -> Option<PopupMessage> {
+    pub fn construct_popup_role_message(&self, surface: &WlSurface) -> Option<PopupMessage> {
         let surface_id = get_surface_id(surface);
         let popup = self.xdg_popups.get(&surface_id)?;
         let (initial_configure_sent, parent, position) = with_states(surface, |surface_data| {
@@ -868,7 +870,7 @@ pub struct MySurfaceState {
     pub old_texture_size: Option<Size<i32, BufferCoords>>,
 }
 
-fn get_surface_id(surface: &WlSurface) -> u64 {
+pub fn get_surface_id(surface: &WlSurface) -> u64 {
     with_states(surface, |surface_data| {
         surface_data
             .data_map
@@ -958,7 +960,7 @@ impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
     fn new_subsurface(&mut self, surface: &WlSurface, parent: &WlSurface) {
         let surface_id = get_surface_id(surface);
         let parent = get_surface_id(parent);
-
+        self.subsurfaces.insert(surface_id, surface.clone());
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "new_subsurface",

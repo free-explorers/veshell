@@ -1,7 +1,11 @@
+use std::borrow::Borrow;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::Duration;
 
+use serde_json::json;
 use smithay::backend::input::ButtonState;
+use smithay::backend::x11;
 use smithay::input::pointer::{ButtonEvent, MotionEvent};
 use smithay::reexports::calloop::channel::Event;
 use smithay::reexports::calloop::channel::Event::Msg;
@@ -14,9 +18,10 @@ use smithay::xwayland::xwm;
 
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
+use crate::flutter_engine::wayland_messages::NewX11Surface;
 use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
 use crate::mouse_button_tracker::FLUTTER_TO_LINUX_MOUSE_BUTTONS;
-use crate::server::ServerState;
+use crate::server::{get_surface_id, ServerState};
 use crate::Backend;
 
 pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
@@ -442,11 +447,139 @@ pub fn get_environment_variables<BackendData: Backend + 'static>(
     result.success(None);
 }
 
+// For development purpose the shell can reload to apply current changes
+// In order to be the most transparent for the dev
+// We resend all existing surfaces to it so it can benefit from the Persistence
 pub fn on_shell_ready<BackendData: Backend + 'static>(
     _method_call: MethodCall<serde_json::Value>,
     mut result: Box<dyn MethodResult<serde_json::Value>>,
     data: &mut ServerState<BackendData>,
 ) {
+    let surfaces = data.surfaces.clone();
+
     println!("on_shell_ready");
+    // Send new_surface for all existing surface
+    for surface_id in surfaces.keys() {
+        let platform_method_channel = &mut data.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method(
+            "new_surface",
+            Some(Box::new(json!({
+                "surfaceId": surface_id,
+            }))),
+            None,
+        );
+    }
+
+    let toplevels = data.xdg_toplevels.clone();
+    for surface_id in toplevels.keys() {
+        let platform_method_channel = &mut data.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method(
+            "new_toplevel",
+            Some(Box::new(json!({
+                "surfaceId": surface_id,
+            }))),
+            None,
+        );
+    }
+
+    let popups = data.xdg_popups.clone();
+    for surface_id in popups.keys() {
+        if let Some(wl_surface) = surfaces.get(surface_id) {
+            let (parent, position) = {
+                let popup_message = data.construct_popup_role_message(wl_surface.clone().borrow());
+                (
+                    popup_message.as_ref().unwrap().parent,
+                    popup_message.unwrap().position,
+                )
+            };
+            let platform_method_channel = &mut data.flutter_engine_mut().platform_method_channel;
+            platform_method_channel.invoke_method(
+                "new_popup",
+                Some(Box::new(json!({
+                    "surfaceId": surface_id,
+                    "parent": parent,
+                    "position": position,
+                }))),
+                None,
+            );
+        }
+    }
+    let subsurfaces = data.subsurfaces.clone();
+
+    for surface_id in subsurfaces.keys() {
+        if let Some(wl_surface) = surfaces.get(surface_id) {
+            let subsurface_message = ServerState::<BackendData>::construct_subsurface_role_message(
+                wl_surface.clone().borrow(),
+            );
+            let platform_method_channel: &mut crate::flutter_engine::platform_channels::method_channel::MethodChannel<serde_json::Value> = &mut data.flutter_engine_mut().platform_method_channel;
+
+            platform_method_channel.invoke_method(
+                "new_subsurface",
+                Some(Box::new(json!({
+                    "surfaceId": surface_id,
+                    "parentId": subsurface_message.parent,
+                }))),
+                None,
+            );
+        }
+    }
+
+    let x11_surfaces = data.x11_surface_per_x11_window.clone();
+
+    for x11_surface in x11_surfaces.values() {
+        let platform_method_channel = &mut data.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method(
+            "new_x11_surface",
+            Some(Box::new(json!(NewX11Surface {
+                x11_surface_id: ServerState::<BackendData>::get_x11_surface_id(&x11_surface),
+                override_redirect: x11_surface.is_override_redirect(),
+            }))),
+            None,
+        );
+    }
+
+    for x11_surface in x11_surfaces.values() {
+        let platform_method_channel = &mut data.flutter_engine_mut().platform_method_channel;
+
+        platform_method_channel.invoke_method(
+            "x11_properties_changed",
+            Some(Box::new(json!({
+                "x11SurfaceId": ServerState::<BackendData>::get_x11_surface_id(&x11_surface),
+                "title": if !x11_surface.title().is_empty() { Some(x11_surface.title()) } else { None },
+                "windowClass": x11_surface.class(),
+                "instance": if !x11_surface.instance().is_empty() {
+                    Some(x11_surface.instance())
+                } else {
+                    None
+                },
+                "startupId": x11_surface.startup_id(),
+            }))),
+            None,
+        );
+        if (x11_surface.is_mapped()) {
+            platform_method_channel.invoke_method(
+                "surface_associated",
+                Some(Box::new(json!({
+                    "surfaceId":  get_surface_id(x11_surface.wl_surface().unwrap().borrow()),
+                    "x11SurfaceId": ServerState::<BackendData>::get_x11_surface_id(&x11_surface),
+                }))),
+                None,
+            );
+            data.map_x11_surface(x11_surface.clone());
+        }
+    }
+
+    // send commited_state for all existing surface
+    for surface_id in surfaces.keys() {
+        if let Some(wl_surface) = surfaces.get(surface_id) {
+            let surface_message = data.construct_surface_message(wl_surface.clone().borrow());
+            let platform_method_channel = &mut data.flutter_engine_mut().platform_method_channel;
+            platform_method_channel.invoke_method(
+                "commit_surface",
+                Some(Box::new(json!(surface_message))),
+                None,
+            );
+        }
+    }
     result.success(None);
 }

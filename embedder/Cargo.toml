@@ -7,7 +7,7 @@ edition = "2021"
 members = ["third_party/smithay-drm-extras"]
 
 [dependencies]
-smithay = { git = "https://github.com/Smithay/smithay", branch = "feature/xwayland_hook", features = [
+smithay = { git = "https://github.com/Smithay/smithay", rev = "e89fc8a", features = [
     "default",
     "wayland_frontend",
     "backend_egl",
@@ -34,5 +34,4 @@ bytes = "1.5.0"
 reqwest = { version = "0.11.22", features = ["blocking"] }
 zip = "0.6.6"
 lazy_static = { version = "1.4.0", features = [] }
-log = "0.4.20"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

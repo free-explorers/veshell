@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/display/widget/display.dart';
 import 'package:shell/monitor/provider/monitor_list.dart';
@@ -29,7 +30,6 @@ void main() {
 
   SchedulerBinding.instance.addPostFrameCallback((_) {
     container.read(waylandManagerProvider.notifier)
-      ..request(const ShellReadyRequest())
       ..request(
         GetEnvironmentVariablesRequest(
           message: GetEnvironmentVariablesMessage(),
@@ -93,12 +93,18 @@ class Veshell extends ConsumerWidget {
       theme: theme,
       home: _EagerInitialization(
         child: Scaffold(
-          body: Consumer(
+          body: HookConsumer(
             builder: (
               BuildContext context,
               WidgetRef ref,
               Widget? child,
             ) {
+              useEffect(() {
+                ref
+                    .read(waylandManagerProvider.notifier)
+                    .request(const ShellReadyRequest());
+                return null;
+              });
               return Stack(
                 children: [
                   const Positioned.fill(child: DisplayWidget()),
