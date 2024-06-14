@@ -101,8 +101,6 @@ class XdgSurfaceState extends _$XdgSurfaceState {
         ref.read(wlSurfaceStateProvider(surfaceId)).texture != null;
 
     final wasMapped = state.mapped;
-    print(
-        'hasRole $hasRole && isCommitted $isCommitted && isRoleCommitted $isRoleCommitted && hasTexture $hasTexture');
     state = state.copyWith(
       // For an xdg_surface to be mapped by the compositor, the following conditions must be met:
       // (1) the client has assigned an xdg_surface-based role to the surface

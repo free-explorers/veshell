@@ -170,7 +170,7 @@ class SurfaceManager extends _$SurfaceManager {
             ref
                 .read(xdgToplevelStateProvider(message.surfaceId).notifier)
                 .onCommit(
-                  parent: role.parent,
+                  parent: role.parentSurfaceId,
                   appId: role.appId,
                   title: role.title,
                 );
