@@ -15,10 +15,12 @@ import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
 import 'package:shell/window/model/dialog_window.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/model/window_properties.serializable.dart';
 import 'package:shell/window/provider/dialog_list_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
-import 'package:shell/window/provider/persistant_window_state.dart';
+import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/surface_window_map.dart';
+import 'package:shell/window/provider/window_manager/matching_engine.dart';
 import 'package:shell/workspace/provider/window_workspace_map.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:uuid/uuid.dart';
@@ -61,6 +63,9 @@ class WindowManager extends _$WindowManager {
     return intialSet;
   }
 
+  /// Get the Persistent Window Set
+  ISet<PersistentWindowId> getPersistentWindowSet() => _persistentWindowSet;
+
   /// Create persistent window for desktop entry
   PersistentWindowId createPersistentWindowForDesktopEntry(
     LocalizedDesktopEntry entry,
@@ -69,14 +74,15 @@ class WindowManager extends _$WindowManager {
 
     final persistentWindow = PersistentWindow(
       windowId: windowId,
-      appId: entry.desktopEntry.id,
-      title: entry.entries[DesktopEntryKey.name.string],
-      isWaitingForSurface: true,
+      properties: WindowProperties(
+        appId: entry.desktopEntry.id ?? '',
+        title: entry.entries[DesktopEntryKey.name.string],
+      ),
     );
 
-    ref
-        .read(PersistentWindowStateProvider(windowId).notifier)
-        .initialize(persistentWindow);
+    ref.read(persistentWindowStateProvider(windowId).notifier)
+      ..initialize(persistentWindow)
+      ..waitForSurface();
 
     state = state.add(windowId);
     return windowId;
@@ -100,29 +106,12 @@ class WindowManager extends _$WindowManager {
   void _onToplevelMapped(SurfaceId surfaceId) {
     final toplevelState = ref.read(xdgToplevelStateProvider(surfaceId));
 
-    for (final windowId in _persistentWindowSet) {
-      final window = ref.read(persistentWindowStateProvider(windowId));
-      if (window.appId == toplevelState.appId && window.isWaitingForSurface) {
-        ref.read(persistentWindowStateProvider(windowId).notifier).initialize(
-              window.copyWith(
-                title: toplevelState.title ?? window.title,
-                surfaceId: surfaceId,
-                isWaitingForSurface: false,
-              ),
-            );
-        return;
-      }
-    }
     if (toplevelState.parent != null) {
       _createDialogWindowForSurface(surfaceId, toplevelState);
       return;
     }
-    // create a new window
-    _createPersistentWindowForSurface(
-      surfaceId: surfaceId,
-      appId: toplevelState.appId,
-      title: toplevelState.title,
-    );
+
+    ref.read(matchingEngineProvider.notifier).addSurface(surfaceId);
   }
 
   void _onX11SurfaceMapped(SurfaceId surfaceId) {
@@ -133,30 +122,10 @@ class WindowManager extends _$WindowManager {
       // Override redirect surfaces should not be managed by the window manager.
       return;
     }
-
-    for (final windowId in _persistentWindowSet) {
-      final window = ref.read(persistentWindowStateProvider(windowId));
-      if (window.isWaitingForSurface) {
-        ref.read(persistentWindowStateProvider(windowId).notifier).initialize(
-              window.copyWith(
-                title: x11SurfaceState.title ?? window.title,
-                surfaceId: surfaceId,
-                isWaitingForSurface: false,
-              ),
-            );
-        return;
-      }
-    }
-
-    // create a new window
-    _createPersistentWindowForSurface(
-      surfaceId: surfaceId,
-      appId: x11SurfaceState.instance,
-      title: x11SurfaceState.title,
-    );
+    ref.read(matchingEngineProvider.notifier).addSurface(surfaceId);
   }
 
-  void _createPersistentWindowForSurface({
+  void createPersistentWindowForSurface({
     required SurfaceId surfaceId,
     required String? appId,
     required String? title,
@@ -166,8 +135,10 @@ class WindowManager extends _$WindowManager {
 
     final persistentWindow = PersistentWindow(
       windowId: windowId,
-      appId: appId,
-      title: title,
+      properties: WindowProperties(
+        appId: appId ?? '',
+        title: title,
+      ),
       surfaceId: surfaceId,
     );
 
@@ -198,8 +169,10 @@ class WindowManager extends _$WindowManager {
 
     final dialogWindow = DialogWindow(
       windowId: windowId,
-      appId: toplevelState.appId ?? 'unknown',
-      title: toplevelState.title ?? 'unknown',
+      properties: WindowProperties(
+        appId: toplevelState.appId ?? 'unknown',
+        title: toplevelState.title ?? 'unknown',
+      ),
       surfaceId: surfaceId,
       parentSurfaceId: toplevelState.parent!,
     );
@@ -226,6 +199,7 @@ class WindowManager extends _$WindowManager {
           ref
               .read(persistentWindowStateProvider(windowId).notifier)
               .onSurfaceIsDestroyed();
+          ref.read(matchingEngineProvider.notifier).removeSurface(surfaceId);
         case DialogWindowId():
           ref
               .read(dialogWindowStateProvider(windowId).notifier)

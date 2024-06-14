@@ -4,7 +4,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/shared/provider/app_launch.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
-import 'package:shell/window/provider/persistant_window_state.dart';
+import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/workspace/model/workspace_shortcuts.dart';
 import 'package:shell/workspace/provider/current_workspace_id.dart';

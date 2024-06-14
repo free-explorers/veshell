@@ -5,7 +5,7 @@ import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/shared/provider/app_launch.dart';
 import 'package:shell/window/model/window_id.dart';
-import 'package:shell/window/provider/persistant_window_state.dart';
+import 'package:shell/window/provider/persistent_window_state.dart';
 
 class WindowPlaceholder extends HookConsumerWidget {
   const WindowPlaceholder({required this.windowId, super.key});
@@ -15,10 +15,10 @@ class WindowPlaceholder extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final window = ref.watch(persistentWindowStateProvider(windowId));
-    final entry = window.appId != null
+    final entry = window.properties.appId != null
         ? ref
             .watch(
-              localizedDesktopEntryForIdProvider(window.appId!),
+              localizedDesktopEntryForIdProvider(window.properties.appId),
             )
             .value
         : null;
@@ -29,7 +29,7 @@ class WindowPlaceholder extends HookConsumerWidget {
             ? () {
                 ref
                     .read(persistentWindowStateProvider(windowId).notifier)
-                    .update(window.copyWith(isWaitingForSurface: true));
+                    .waitForSurface();
                 ref
                     .read(appLaunchProvider.notifier)
                     .launchDesktopEntry(entry.desktopEntry);
@@ -44,7 +44,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                   SizedBox(
                     height: 160,
                     width: 160,
-                    child: AppIconById(id: window.appId),
+                    child: AppIconById(id: window.properties.appId),
                   ),
                   const SizedBox(
                     width: 24,

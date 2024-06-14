@@ -18,7 +18,6 @@ class WlSurfaceState extends _$WlSurfaceState {
   }
 
   void initialize() {
-    print('initialize $surfaceId');
     _keepAliveLink = ref.keepAlive();
     ref.onDispose(() {
       print('disposing WlSurfaceStateProvider $surfaceId');

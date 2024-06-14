@@ -27,7 +27,7 @@ class WaylandManager extends _$WaylandManager {
           'method': call.method,
           'message': (call.arguments as Map).cast<String, dynamic>(),
         });
-        print(event);
+        //print(event);
         _streamController.sink.add(
           event,
         );
@@ -42,7 +42,7 @@ class WaylandManager extends _$WaylandManager {
 
   /// Send a [WaylandRequest] to the Wayland compositor
   Future<void> request(WaylandRequest request) async {
-    print(request);
+    //print(request);
     await _channel.invokeMethod(request.method, request.message?.toJson());
   }
 }

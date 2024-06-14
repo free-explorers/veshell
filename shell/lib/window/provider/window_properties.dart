@@ -1,22 +1,20 @@
-import 'dart:ui';
-
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
-import 'package:shell/window/model/window_properties.dart';
+import 'package:shell/window/model/window_properties.serializable.dart';
 
 part 'window_properties.g.dart';
 
 @Riverpod(keepAlive: true)
-class WindowProperties extends _$WindowProperties {
+class WindowPropertiesState extends _$WindowPropertiesState {
   @override
-  WindowPropertiesState build(SurfaceId surfaceId) {
-    return const WindowPropertiesState(
-      appId: null,
+  WindowProperties build(SurfaceId surfaceId) {
+    return const WindowProperties(
+      appId: '',
       title: null,
     );
   }
 
-  void setAppId(String? appId) {
+  void setAppId(String appId) {
     state = state.copyWith(appId: appId);
   }
 

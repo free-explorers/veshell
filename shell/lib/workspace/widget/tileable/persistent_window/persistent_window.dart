@@ -14,7 +14,7 @@ import 'package:shell/window/model/dialog_window.dart';
 import 'package:shell/window/model/window_id.dart';
 import 'package:shell/window/provider/dialog_list_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
-import 'package:shell/window/provider/persistant_window_state.dart';
+import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/workspace/widget/tileable/persistent_window/window_placeholder.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
@@ -170,12 +170,16 @@ class PersistentWindowTileable extends Tileable {
   Widget buildPanelWidget(BuildContext context, WidgetRef ref) {
     final window = ref.watch(persistentWindowStateProvider(windowId));
 
-    final title = window.title;
+    final title = window.properties.title;
     return Padding(
       padding: const EdgeInsets.only(left: 16, right: 8),
       child: Row(
         children: [
-          SizedBox(height: 24, width: 24, child: AppIconById(id: window.appId)),
+          SizedBox(
+            height: 24,
+            width: 24,
+            child: AppIconById(id: window.properties.appId),
+          ),
           const SizedBox(
             width: 16,
           ),

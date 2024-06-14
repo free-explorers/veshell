@@ -32,6 +32,7 @@ import 'package:shell/wayland/provider/x11_surface_state.dart';
 import 'package:shell/wayland/provider/xdg_popup_state.dart';
 import 'package:shell/wayland/provider/xdg_surface_state.dart';
 import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
+import 'package:shell/window/provider/window_manager/matching_engine.dart';
 import 'package:shell/window/provider/window_properties.dart';
 
 part 'surface.manager.g.dart';
@@ -174,9 +175,9 @@ class SurfaceManager extends _$SurfaceManager {
                   title: role.title,
                 );
 
-            ref.read(windowPropertiesProvider(message.surfaceId).notifier)
+            ref.read(windowPropertiesStateProvider(message.surfaceId).notifier)
               ..setTitle(role.title)
-              ..setAppId(role.appId);
+              ..setAppId(role.appId ?? '');
 
           case XdgPopupMessage():
             ref
@@ -195,6 +196,7 @@ class SurfaceManager extends _$SurfaceManager {
       case X11SurfaceRoleMessage() || null:
       // Nothing to do.
     }
+    ref.read(matchingEngineProvider.notifier).checkMatching();
   }
 
   void _mapX11Surface(MapX11SurfaceMessage message) {
@@ -302,8 +304,8 @@ class SurfaceManager extends _$SurfaceManager {
     }
 
     ref
-        .read(windowPropertiesProvider(message.surfaceId).notifier)
-        .setAppId(message.appId);
+        .read(windowPropertiesStateProvider(message.surfaceId).notifier)
+        .setAppId(message.appId ?? '');
   }
 
   void _titleChanged(TitleChangedMessage message) {
@@ -326,7 +328,7 @@ class SurfaceManager extends _$SurfaceManager {
     }
 
     ref
-        .read(windowPropertiesProvider(message.surfaceId).notifier)
+        .read(windowPropertiesStateProvider(message.surfaceId).notifier)
         .setTitle(message.title);
   }
 }
@@ -348,6 +350,7 @@ class SurfaceUnmappedEvent extends SurfaceMapEvent {
 @Riverpod(keepAlive: true)
 class SurfaceMapped extends _$SurfaceMapped {
   final _streamController = StreamController<SurfaceMapEvent>();
+  ISet<SurfaceId> _mappedSurfaceSet = ISet<SurfaceId>();
 
   /// Build the stream of [SurfaceMapEvent]
   @override
@@ -356,10 +359,17 @@ class SurfaceMapped extends _$SurfaceMapped {
   }
 
   void mapped(SurfaceId surfaceId) {
+    _mappedSurfaceSet = _mappedSurfaceSet.add(surfaceId);
     _streamController.sink.add(SurfaceMappedEvent(surfaceId));
   }
 
   void unmapped(SurfaceId surfaceId) {
+    _mappedSurfaceSet = _mappedSurfaceSet.remove(surfaceId);
     _streamController.sink.add(SurfaceUnmappedEvent(surfaceId));
+  }
+
+  /// Return the set of mapped surface ids.
+  ISet<SurfaceId> getMappedSurfaceSet() {
+    return _mappedSurfaceSet;
   }
 }
