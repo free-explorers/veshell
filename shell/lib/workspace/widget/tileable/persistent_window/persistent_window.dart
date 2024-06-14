@@ -171,59 +171,72 @@ class PersistentWindowTileable extends Tileable {
     final window = ref.watch(persistentWindowStateProvider(windowId));
     final isRunning = window.surfaceId != null;
     final title = window.properties.title;
-    return Padding(
-      padding: const EdgeInsets.only(left: 16, right: 8),
-      child: Opacity(
-        opacity: isRunning ? 1 : 0.7,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 300),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                height: 24,
-                width: 24,
-                child: isRunning
-                    ? AppIconById(id: window.properties.appId)
-                    : ColorFiltered(
-                        colorFilter: const ColorFilter.matrix(<double>[
-                          0.2126, 0.7152, 0.0722, 0, 0, //
-                          0.2126, 0.7152, 0.0722, 0, 0,
-                          0.2126, 0.7152, 0.0722, 0, 0,
-                          0, 0, 0, 1, 0,
-                        ]),
-                        child: AppIconById(id: window.properties.appId),
+    return HookBuilder(
+      builder: (context) {
+        final isHoverState = useState(false);
+        return MouseRegion(
+          onEnter: (event) => isHoverState.value = true,
+          onExit: (event) => isHoverState.value = false,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 16, right: 8),
+            child: Opacity(
+              opacity: isRunning ? 1 : 0.7,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 300),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      height: 24,
+                      width: 24,
+                      child: isRunning
+                          ? AppIconById(id: window.properties.appId)
+                          : ColorFiltered(
+                              colorFilter: const ColorFilter.matrix(<double>[
+                                0.2126, 0.7152, 0.0722, 0, 0, //
+                                0.2126, 0.7152, 0.0722, 0, 0,
+                                0.2126, 0.7152, 0.0722, 0, 0,
+                                0, 0, 0, 1, 0,
+                              ]),
+                              child: AppIconById(id: window.properties.appId),
+                            ),
+                    ),
+                    const SizedBox(
+                      width: 16,
+                    ),
+                    Flexible(
+                      child: Text(
+                        title ?? 'Unknown',
+                        overflow: TextOverflow.ellipsis,
                       ),
-              ),
-              const SizedBox(
-                width: 16,
-              ),
-              Flexible(
-                child: Text(
-                  title ?? 'Unknown',
-                  overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(
+                      width: 8,
+                    ),
+                    SizedBox(
+                      width: 32,
+                      child: isFocused || isHoverState.value
+                          ? IconButton(
+                              visualDensity: VisualDensity.compact,
+                              iconSize: 16,
+                              onPressed: () {
+                                ref
+                                    .read(
+                                      windowManagerProvider.notifier,
+                                    )
+                                    .closeWindow(window.windowId);
+                              },
+                              icon: Icon(MdiIcons.close),
+                            )
+                          : null,
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(
-                width: 16,
-              ),
-              if (isFocused)
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 16,
-                  onPressed: () {
-                    ref
-                        .read(
-                          windowManagerProvider.notifier,
-                        )
-                        .closeWindow(window.windowId);
-                  },
-                  icon: Icon(MdiIcons.close),
-                ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
