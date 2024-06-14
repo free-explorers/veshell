@@ -138,9 +138,16 @@ class PersistentWindowTileable extends Tileable {
                             surfaceId: window.surfaceId!,
                           ),
                           if (dialogWindowList.isNotEmpty)
+                            const ColoredBox(color: Colors.black38),
+                          if (dialogWindowList.isNotEmpty)
                             for (final dialog in dialogWindowList)
-                              XdgToplevelSurfaceWidget(
-                                surfaceId: dialog.surfaceId,
+                              Center(
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: XdgToplevelSurfaceWidget(
+                                    surfaceId: dialog.surfaceId,
+                                  ),
+                                ),
                               ),
                         ],
                       );
