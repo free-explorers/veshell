@@ -169,37 +169,60 @@ class PersistentWindowTileable extends Tileable {
   @override
   Widget buildPanelWidget(BuildContext context, WidgetRef ref) {
     final window = ref.watch(persistentWindowStateProvider(windowId));
-
+    final isRunning = window.surfaceId != null;
     final title = window.properties.title;
     return Padding(
       padding: const EdgeInsets.only(left: 16, right: 8),
-      child: Row(
-        children: [
-          SizedBox(
-            height: 24,
-            width: 24,
-            child: AppIconById(id: window.properties.appId),
+      child: Opacity(
+        opacity: isRunning ? 1 : 0.7,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 300),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                height: 24,
+                width: 24,
+                child: isRunning
+                    ? AppIconById(id: window.properties.appId)
+                    : ColorFiltered(
+                        colorFilter: const ColorFilter.matrix(<double>[
+                          0.2126, 0.7152, 0.0722, 0, 0, //
+                          0.2126, 0.7152, 0.0722, 0, 0,
+                          0.2126, 0.7152, 0.0722, 0, 0,
+                          0, 0, 0, 1, 0,
+                        ]),
+                        child: AppIconById(id: window.properties.appId),
+                      ),
+              ),
+              const SizedBox(
+                width: 16,
+              ),
+              Flexible(
+                child: Text(
+                  title ?? 'Unknown',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(
+                width: 16,
+              ),
+              if (isFocused)
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 16,
+                  onPressed: () {
+                    ref
+                        .read(
+                          windowManagerProvider.notifier,
+                        )
+                        .closeWindow(window.windowId);
+                  },
+                  icon: Icon(MdiIcons.close),
+                ),
+            ],
           ),
-          const SizedBox(
-            width: 16,
-          ),
-          Text(title ?? 'Unknown'),
-          const SizedBox(
-            width: 16,
-          ),
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            iconSize: 16,
-            onPressed: () {
-              ref
-                  .read(
-                    windowManagerProvider.notifier,
-                  )
-                  .closeWindow(window.windowId);
-            },
-            icon: Icon(MdiIcons.close),
-          ),
-        ],
+        ),
       ),
     );
   }

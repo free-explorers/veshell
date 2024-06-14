@@ -21,4 +21,8 @@ class WindowPropertiesState extends _$WindowPropertiesState {
   void setTitle(String? title) {
     state = state.copyWith(title: title);
   }
+
+  void setProperties(WindowProperties properties) {
+    state = properties;
+  }
 }

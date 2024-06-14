@@ -99,12 +99,15 @@ class Veshell extends ConsumerWidget {
               WidgetRef ref,
               Widget? child,
             ) {
-              useEffect(() {
-                ref
-                    .read(waylandManagerProvider.notifier)
-                    .request(const ShellReadyRequest());
-                return null;
-              });
+              useEffect(
+                () {
+                  ref
+                      .read(waylandManagerProvider.notifier)
+                      .request(const ShellReadyRequest());
+                  return null;
+                },
+                [],
+              );
               return Stack(
                 children: [
                   const Positioned.fill(child: DisplayWidget()),
