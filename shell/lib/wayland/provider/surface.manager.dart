@@ -83,6 +83,9 @@ class SurfaceManager extends _$SurfaceManager {
     });
     return SurfaceManagerState(
       wlSurfaces: ISet(),
+      xdgTopLevelSurfaces: ISet(),
+      xdgPopupSurfaces: ISet(),
+      subSurfaces: ISet(),
       x11Surfaces: ISet(),
     );
   }
@@ -115,6 +118,9 @@ class SurfaceManager extends _$SurfaceManager {
 
   void _newToplevel(NewToplevelMessage message) {
     ref.read(xdgToplevelStateProvider(message.surfaceId).notifier).initialize();
+    state = state.copyWith(
+      xdgTopLevelSurfaces: state.xdgTopLevelSurfaces.add(message.surfaceId),
+    );
   }
 
   void _newPopup(NewPopupMessage message) {
@@ -122,6 +128,9 @@ class SurfaceManager extends _$SurfaceManager {
           parent: message.parent,
           position: message.position,
         );
+    state = state.copyWith(
+      xdgPopupSurfaces: state.xdgPopupSurfaces.add(message.surfaceId),
+    );
     ref
         .read(xdgSurfaceStateProvider(message.parent).notifier)
         .addPopup(message.surfaceId);
@@ -131,6 +140,9 @@ class SurfaceManager extends _$SurfaceManager {
     ref.read(subsurfaceStateProvider(message.surfaceId).notifier).initialize(
           parent: message.parent,
         );
+    state = state.copyWith(
+      subSurfaces: state.subSurfaces.add(message.surfaceId),
+    );
   }
 
   void _commitSurface(CommitSurfaceMessage message) {
@@ -161,6 +173,11 @@ class SurfaceManager extends _$SurfaceManager {
     final surfaceRole = message.role;
     switch (surfaceRole) {
       case XdgSurfaceRoleMessage(:final role):
+        // We need to double check that the surface is still an xdgSurface because sometime a surface can be removed from xdg but still be a wlSurface
+        if (!state.xdgTopLevelSurfaces.contains(message.surfaceId) &&
+            !state.xdgPopupSurfaces.contains(message.surfaceId)) {
+          break;
+        }
         ref.read(xdgSurfaceStateProvider(message.surfaceId).notifier).commit(
               geometry: surfaceRole.geometry,
             );
@@ -178,6 +195,7 @@ class SurfaceManager extends _$SurfaceManager {
             ref.read(windowPropertiesStateProvider(message.surfaceId).notifier)
               ..setTitle(role.title)
               ..setAppId(role.appId ?? '');
+            ref.read(matchingEngineProvider.notifier).checkMatching();
 
           case XdgPopupMessage():
             ref
@@ -196,7 +214,6 @@ class SurfaceManager extends _$SurfaceManager {
       case X11SurfaceRoleMessage() || null:
       // Nothing to do.
     }
-    ref.read(matchingEngineProvider.notifier).checkMatching();
   }
 
   void _mapX11Surface(MapX11SurfaceMessage message) {
@@ -218,6 +235,7 @@ class SurfaceManager extends _$SurfaceManager {
           instance: message.instance,
           startupId: message.startupId,
         );
+    ref.read(matchingEngineProvider.notifier).checkMatching();
   }
 
   void _surfaceAssociated(SurfaceAssociatedMessage message) {
@@ -242,16 +260,10 @@ class SurfaceManager extends _$SurfaceManager {
     // TODO: Patch Smithay to send destroy events for subsurfaces and xdg surfaces.
     // Especially important for subsurfaces because when a subsurface is destroyed,
     // it must be unmapped immediately.
-    switch (wlSurfaceState.role) {
-      case SurfaceRole.subsurface:
-        _destroySubsurface(
-          DestroySubsurfaceMessage(surfaceId: message.surfaceId),
-        );
-      case SurfaceRole.xdgToplevel || SurfaceRole.xdgPopup:
-        _destroyXdgSurface(
-          DestroyXdgSurfaceMessage(surfaceId: message.surfaceId),
-        );
-      case SurfaceRole.x11Surface || null:
+    if (wlSurfaceState.role == SurfaceRole.subsurface) {
+      _destroySubsurface(
+        DestroySubsurfaceMessage(surfaceId: message.surfaceId),
+      );
     }
 
     ref.read(wlSurfaceStateProvider(message.surfaceId).notifier).dispose();
@@ -266,6 +278,9 @@ class SurfaceManager extends _$SurfaceManager {
         .read(wlSurfaceStateProvider(parent).notifier)
         .removeSubsurface(message.surfaceId);
     ref.read(subsurfaceStateProvider(message.surfaceId).notifier).dispose();
+    state = state.copyWith(
+      subSurfaces: state.subSurfaces.remove(message.surfaceId),
+    );
   }
 
   void _destroyXdgSurface(DestroyXdgSurfaceMessage message) {
@@ -273,15 +288,27 @@ class SurfaceManager extends _$SurfaceManager {
   }
 
   void _destroyToplevel(DestroyToplevelMessage message) {
+    _destroyXdgSurface(
+      DestroyXdgSurfaceMessage(surfaceId: message.surfaceId),
+    );
     ref.read(xdgToplevelStateProvider(message.surfaceId).notifier).dispose();
+    state = state.copyWith(
+      xdgTopLevelSurfaces: state.xdgTopLevelSurfaces.remove(message.surfaceId),
+    );
   }
 
   void _destroyPopup(DestroyPopupMessage message) {
+    _destroyXdgSurface(
+      DestroyXdgSurfaceMessage(surfaceId: message.surfaceId),
+    );
     final parent = ref.read(xdgPopupStateProvider(message.surfaceId)).parent;
     ref
         .read(xdgSurfaceStateProvider(parent).notifier)
         .removePopup(message.surfaceId);
     ref.read(xdgPopupStateProvider(message.surfaceId).notifier).dispose();
+    state = state.copyWith(
+      xdgPopupSurfaces: state.xdgPopupSurfaces.remove(message.surfaceId),
+    );
   }
 
   void _appIdChanged(AppIdChangedMessage message) {

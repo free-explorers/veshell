@@ -27,6 +27,9 @@ class WaylandManager extends _$WaylandManager {
           'method': call.method,
           'message': (call.arguments as Map).cast<String, dynamic>(),
         });
+        /* if (event is! CommitSurfaceEvent) {
+          print(event);
+        } */
         //print(event);
         _streamController.sink.add(
           event,

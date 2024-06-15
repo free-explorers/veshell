@@ -7,7 +7,6 @@ import 'package:shell/wayland/model/xdg_toplevel.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/wayland/provider/xdg_surface_state.dart';
-import 'package:shell/window/provider/window_properties.dart';
 
 part 'xdg_toplevel_state.g.dart';
 
@@ -89,5 +88,6 @@ class XdgToplevelState extends _$XdgToplevelState {
       ref.read(surfaceMappedProvider.notifier).unmapped(surfaceId);
     }
     _keepAliveLink.close();
+    ref.invalidateSelf();
   }
 }

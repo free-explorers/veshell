@@ -192,6 +192,7 @@ class WindowManager extends _$WindowManager {
   }
 
   void _onSurfaceUnmapped(SurfaceId surfaceId) {
+    print('WindowManager: Surface UnMapped: $surfaceId');
     if (ref.read(surfaceWindowMapProvider).get(surfaceId)
         case final WindowId windowId) {
       switch (windowId) {
@@ -201,10 +202,6 @@ class WindowManager extends _$WindowManager {
               .onSurfaceIsDestroyed();
           ref.read(matchingEngineProvider.notifier).removeSurface(surfaceId);
         case DialogWindowId():
-          ref
-              .read(dialogWindowStateProvider(windowId).notifier)
-              .onSurfaceIsDestroyed();
-
           final dialogWindow = ref.read(dialogWindowStateProvider(windowId));
 
           ref.read(dialogListForWindowProvider.notifier).remove(
@@ -213,6 +210,9 @@ class WindowManager extends _$WindowManager {
                     .get(dialogWindow.parentSurfaceId)!,
                 dialogWindow.windowId,
               );
+          ref
+              .read(dialogWindowStateProvider(windowId).notifier)
+              .onSurfaceIsDestroyed();
           _removeWindow(windowId);
         case EphemeralWindowId():
         // TODO: Handle this case.

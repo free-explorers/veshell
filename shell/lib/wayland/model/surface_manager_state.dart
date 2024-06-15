@@ -9,6 +9,9 @@ part 'surface_manager_state.freezed.dart';
 class SurfaceManagerState with _$SurfaceManagerState {
   const factory SurfaceManagerState({
     required ISet<SurfaceId> wlSurfaces,
+    required ISet<SurfaceId> xdgTopLevelSurfaces,
+    required ISet<SurfaceId> xdgPopupSurfaces,
+    required ISet<SurfaceId> subSurfaces,
     required ISet<X11SurfaceId> x11Surfaces,
   }) = _SurfaceManagerState;
 }

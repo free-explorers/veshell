@@ -147,10 +147,10 @@ class MatchingEngine extends _$MatchingEngine {
 
       for (var i = 0; i < assignments.length; i++) {
         final idx = assignments[i];
-        if (idx < candidatePersistentWindowSet.length) {
+        if (idx < candidatePersistentWindowSetForAppId.length) {
           // Found a good match
           final persistentWindowId =
-              candidatePersistentWindowSet.elementAt(idx);
+              candidatePersistentWindowSetForAppId.elementAt(idx);
           final windowState =
               ref.read(persistentWindowStateProvider(persistentWindowId));
           // If the window still have a surface associated, that means the persistent window was already associated correctly
