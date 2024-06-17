@@ -9,12 +9,12 @@ import 'package:shell/wayland/widget/surface/surface_focus.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
 class X11SurfaceWidget extends ConsumerWidget {
-  final SurfaceId surfaceId;
 
   const X11SurfaceWidget({
     required this.surfaceId,
     super.key,
   });
+  final SurfaceId surfaceId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -50,12 +50,11 @@ class X11SurfaceWidget extends ConsumerWidget {
 }
 
 class X11RootWindow extends ConsumerWidget {
-  final SurfaceId surfaceId;
 
   const X11RootWindow({
-    super.key,
-    required this.surfaceId,
+    required this.surfaceId, super.key,
   });
+  final SurfaceId surfaceId;
 
   void _collectChildren(
     List<X11SurfaceId> ids,
@@ -117,12 +116,11 @@ class X11RootWindow extends ConsumerWidget {
 }
 
 class X11ChildWindow extends ConsumerWidget {
-  final SurfaceId surfaceId;
 
   const X11ChildWindow({
-    super.key,
-    required this.surfaceId,
+    required this.surfaceId, super.key,
   });
+  final SurfaceId surfaceId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

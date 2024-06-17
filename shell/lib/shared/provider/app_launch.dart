@@ -13,11 +13,11 @@ class AppLaunch extends _$AppLaunch {
   void build() {}
 
   Future<bool> launchDesktopEntry(DesktopEntry desktopEntry) async {
-    String? exec = desktopEntry.entries[DesktopEntryKey.exec.string]?.value;
+    final exec = desktopEntry.entries[DesktopEntryKey.exec.string]?.value;
     if (exec == null) {
       return false;
     }
-    final bool terminal = desktopEntry
+    final terminal = desktopEntry
             .entries[DesktopEntryKey.terminal.string]?.value
             .getBoolean() ??
         false;
@@ -25,10 +25,10 @@ class AppLaunch extends _$AppLaunch {
   }
 
   Future<bool> launchApplication(
-      {required String command, bool terminal = false}) async {
+      {required String command, bool terminal = false,}) async {
     // FIXME
-    command = command.replaceAll(RegExp(r'( %.?)'), '');
-    debugPrint("Launching $command");
+    command = command.replaceAll(RegExp('( %.?)'), '');
+    debugPrint('Launching $command');
 
     final environment = ref.read(environmentVariablesProvider);
 

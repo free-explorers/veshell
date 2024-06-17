@@ -58,7 +58,7 @@ Future<void> buildEmbedder(
     environment: {
       'BUNDLE': 'true',
       'FLUTTER_ENGINE_BUILD': target.name,
-      'RUST_LOG': logger.level == Level.verbose ? 'debug' : 'warn'
+      'RUST_LOG': logger.level == Level.verbose ? 'debug' : 'warn',
     },
   );
   if (exitCode != 0) {

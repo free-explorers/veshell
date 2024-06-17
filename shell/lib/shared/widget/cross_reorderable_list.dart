@@ -83,7 +83,7 @@ class _CrossReorderableListState<T extends Object>
           }
           return willAccept;
         },
-        onAccept: (data) {
+        onAcceptWithDetails: (data) {
           _notifyListChanged();
           _clearDropInProgress();
         },
@@ -159,13 +159,13 @@ class _CrossReorderableListState<T extends Object>
           rejectedData,
         ) =>
             Container(),
-        onWillAccept: (dragData) {
-          if (dragData != data &&
-              (index == 0 || dragData != localDataList[index - 1])) {
+        onWillAcceptWithDetails: (dragData) {
+          if (dragData.data != data &&
+              (index == 0 || dragData.data != localDataList[index - 1])) {
             setState(() {
               localDataList
-                ..remove(dragData)
-                ..insert(index, dragData!);
+                ..remove(dragData.data)
+                ..insert(index, dragData.data);
             });
           } else {
             setState(() {
@@ -184,14 +184,14 @@ class _CrossReorderableListState<T extends Object>
           rejectedData,
         ) =>
             Container(),
-        onWillAccept: (dragData) {
-          if (dragData != data &&
+        onWillAcceptWithDetails: (dragData) {
+          if (dragData.data != data &&
               index < localDataList.length - 1 &&
-              dragData != localDataList[index + 1]) {
+              dragData.data != localDataList[index + 1]) {
             setState(() {
               localDataList
-                ..remove(dragData)
-                ..insert(index, dragData!);
+                ..remove(dragData.data)
+                ..insert(index, dragData.data);
             });
           } else {
             setState(() {

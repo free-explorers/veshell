@@ -28,7 +28,7 @@ abstract class PackageManagerBase {
   String printInstallDependenciesCommand(List<String> dependencyList);
 
   Future<List<String>> missingDependencyList() async {
-    var missingDependencies = <String>[];
+    final missingDependencies = <String>[];
     for (final dependency in dependencyList) {
       if (await isPackageInstalled(dependency) != 0) {
         missingDependencies.add(dependency);
