@@ -518,7 +518,7 @@ pub fn on_shell_ready<BackendData: Backend + 'static>(
                 "new_subsurface",
                 Some(Box::new(json!({
                     "surfaceId": surface_id,
-                    "parentId": subsurface_message.parent,
+                    "parent": subsurface_message.parent,
                 }))),
                 None,
             );

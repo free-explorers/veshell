@@ -8,9 +8,11 @@ import 'package:shell/window/model/window_id.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 
 class WindowPlaceholder extends HookConsumerWidget {
-  const WindowPlaceholder({required this.windowId, super.key});
+  const WindowPlaceholder(
+      {required this.windowId, required this.tileableFocusNode, super.key});
 
   final PersistentWindowId windowId;
+  final FocusNode tileableFocusNode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -25,6 +27,7 @@ class WindowPlaceholder extends HookConsumerWidget {
 
     return Material(
       child: InkWell(
+        focusNode: tileableFocusNode,
         onTap: entry != null
             ? () {
                 ref

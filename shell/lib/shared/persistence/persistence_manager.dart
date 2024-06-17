@@ -33,9 +33,13 @@ class PersistenceManager {
         for (final modelFile in modelFiles) {
           if (modelFile is File) {
             final modelId = path.basenameWithoutExtension(modelFile.path);
-            final modelJson = jsonDecode(await modelFile.readAsString())
-                as Map<String, dynamic>;
-            modelMap[modelId] = modelJson;
+            try {
+              final modelJson = jsonDecode(await modelFile.readAsString())
+                  as Map<String, dynamic>;
+              modelMap[modelId] = modelJson;
+            } catch (e) {
+              print('Error loading model $modelId: $e');
+            }
           }
         }
         folderToModelMap[modelFolderName] = modelMap;

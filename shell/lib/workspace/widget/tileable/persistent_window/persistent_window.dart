@@ -22,15 +22,17 @@ import 'package:shell/workspace/widget/tileable/tileable.dart';
 /// Tileable Window that persist when closed
 class PersistentWindowTileable extends Tileable {
   /// Const constructor
-  const PersistentWindowTileable({
+  PersistentWindowTileable({
     required this.windowId,
-    required super.isFocused,
+    required this.focusNode,
     super.key,
-  });
+  }) : super(
+          isFocused: focusNode.hasFocus,
+        );
 
   /// The id of the wayland surface
   final PersistentWindowId windowId;
-
+  final FocusNode focusNode;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final window = ref.watch(persistentWindowStateProvider(windowId));
@@ -42,18 +44,7 @@ class PersistentWindowTileable extends Tileable {
       final dialogWindow = ref.read(dialogWindowStateProvider(windowId));
       dialogWindowList.add(dialogWindow);
     }
-    final tileableFocusNode =
-        useFocusNode(debugLabel: 'PersistentWindowTileable');
-
-    useEffect(
-      () {
-        if (isFocused) {
-          tileableFocusNode.requestFocus();
-        }
-        return null;
-      },
-      [isFocused],
-    );
+    final tileableFocusNode = focusNode;
 
     useEffect(
       () {
@@ -62,7 +53,7 @@ class PersistentWindowTileable extends Tileable {
                 ActivateWindowRequest(
                   message: ActivateWindowMessage(
                     surfaceId: window.surfaceId!,
-                    activate: tileableFocusNode.hasFocus,
+                    activate: true,
                   ),
                 ),
               );
@@ -72,32 +63,21 @@ class PersistentWindowTileable extends Tileable {
       [window.surfaceId],
     );
 
-    void onTileableFocusChange() {
-      if (window.surfaceId != null) {
-        ref.read(waylandManagerProvider.notifier).request(
-              ActivateWindowRequest(
-                message: ActivateWindowMessage(
-                  surfaceId: window.surfaceId!,
-                  activate: tileableFocusNode.hasFocus,
-                ),
-              ),
-            );
-      }
-    }
-
-    useEffect(
-      () {
-        tileableFocusNode.addListener(onTileableFocusChange);
-        return () {
-          tileableFocusNode.removeListener(onTileableFocusChange);
-        };
-      },
-      [tileableFocusNode, window.surfaceId],
-    );
     if (window.surfaceId != null) {
       return Focus(
-        autofocus: true,
         focusNode: tileableFocusNode,
+        onFocusChange: (value) {
+          if (window.surfaceId != null) {
+            ref.read(waylandManagerProvider.notifier).request(
+                  ActivateWindowRequest(
+                    message: ActivateWindowMessage(
+                      surfaceId: window.surfaceId!,
+                      activate: tileableFocusNode.hasFocus,
+                    ),
+                  ),
+                );
+          }
+        },
         child: LayoutBuilder(
           builder: (context, constraints) {
             return HookBuilder(
@@ -169,6 +149,7 @@ class PersistentWindowTileable extends Tileable {
     } else {
       return WindowPlaceholder(
         windowId: windowId,
+        tileableFocusNode: tileableFocusNode,
       );
     }
   }

@@ -37,6 +37,7 @@ class WorkspaceWidget extends HookConsumerWidget {
       },
       [isSelected],
     );
+
     final windowManager = ref.watch(windowManagerProvider.notifier);
     final currentWorkspaceId = ref.watch(currentWorkspaceIdProvider);
     final workspaceState =
@@ -61,10 +62,33 @@ class WorkspaceWidget extends HookConsumerWidget {
 
     final tileableList = <Tileable>[];
     for (final (index, windowId) in workspaceState.tileableWindowList.indexed) {
+      final persistentFocusNode =
+          useFocusNode(debugLabel: 'PersistentWindowTileable');
+      void onTileableFocusChange() {
+        if (persistentFocusNode.hasFocus) {
+          ref
+              .read(workspaceStateProvider(currentWorkspaceId).notifier)
+              .setFocusedIndex(index);
+        }
+      }
+
+      useEffect(
+        () {
+          persistentFocusNode.addListener(onTileableFocusChange);
+          return () {
+            persistentFocusNode.removeListener(onTileableFocusChange);
+          };
+        },
+        [persistentFocusNode],
+      );
+      if (workspaceState.focusedIndex == index &&
+          !persistentFocusNode.hasFocus) {
+        persistentFocusNode.requestFocus();
+      }
       tileableList.add(
         PersistentWindowTileable(
           windowId: windowId,
-          isFocused: workspaceState.focusedIndex == index,
+          focusNode: persistentFocusNode,
         ),
       );
     }
@@ -119,7 +143,6 @@ class WorkspaceWidget extends HookConsumerWidget {
         },
         child: FocusScope(
           node: workspaceFocusScopeNode,
-          onFocusChange: (value) {},
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
