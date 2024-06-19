@@ -29,13 +29,16 @@ pub fn handle_input<BackendData>(
         InputEvent::DeviceAdded { .. } => {}
         InputEvent::DeviceRemoved { .. } => {}
         InputEvent::PointerMotion { event } => {
-            data.mouse_position.0 += event.delta_x();
-            data.mouse_position.1 += event.delta_y();
-            send_motion_event(data);
+            clamp_mouse_to_monitor(
+                data,
+                (
+                    data.mouse_position.0 + event.delta_x(),
+                    data.mouse_position.1 + event.delta_y(),
+                ),
+            );
         }
         InputEvent::PointerMotionAbsolute { event } => {
-            data.mouse_position = (event.x(), event.y());
-            send_motion_event(data);
+            clamp_mouse_to_monitor(data, (event.x(), event.y()));
         }
         InputEvent::PointerButton { event } => {
             let phase = if event.state() == ButtonState::Pressed {
@@ -197,6 +200,39 @@ pub fn handle_input<BackendData>(
         InputEvent::Special(_) => {}
         InputEvent::SwitchToggle { .. } => {}
     }
+}
+
+fn clamp_mouse_to_monitor<BackendData>(
+    data: &mut ServerState<BackendData>,
+    new_mouse_position: (f64, f64),
+) where
+    BackendData: Backend + 'static,
+{
+    let outputs: Vec<smithay::output::Output> = data.backend_data.get_monitor_layout();
+
+    let mut clamped_position = new_mouse_position;
+
+    for output in outputs {
+        let location = output.current_location();
+        let size = output.current_mode().unwrap().size;
+
+        // Clamp x-coordinate
+        if clamped_position.0 < location.x as f64 {
+            clamped_position.0 = location.x as f64;
+        } else if clamped_position.0 > (location.x as f64 + size.w as f64) {
+            clamped_position.0 = location.x as f64 + size.w as f64;
+        }
+
+        // Clamp y-coordinate
+        if clamped_position.1 < location.y as f64 {
+            clamped_position.1 = location.y as f64;
+        } else if clamped_position.1 > (location.y as f64 + size.h as f64) {
+            clamped_position.1 = location.y as f64 + size.h as f64;
+        }
+    }
+
+    data.mouse_position = clamped_position;
+    send_motion_event(data);
 }
 
 fn send_motion_event<BackendData>(data: &mut ServerState<BackendData>)
