@@ -1,5 +1,10 @@
+import 'dart:io';
+
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/application/model/launch_config.serializable.dart';
+import 'package:shell/application/provider/app_launch.dart';
+import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/window/model/window_base.dart';
 import 'package:shell/window/model/window_properties.serializable.dart';
 import 'package:shell/window/provider/surface_window_map.dart';
@@ -32,6 +37,21 @@ mixin WindowProviderMixin<T extends Window> on BuildlessAutoDisposeNotifier<T> {
         ref.listen(windowPropertiesStateProvider(state.surfaceId!), (_, next) {
       onSurfaceChanged(next);
     });
+  }
+
+  Future<Process?> launchSelf() async {
+    final entry = ref
+        .watch(
+          localizedDesktopEntryForIdProvider(state.properties.appId),
+        )
+        .value;
+
+    if (entry == null) {
+      return null;
+    }
+    return ref.read(appLaunchProvider.notifier).launchApplication(
+          LaunchConfig.fromDesktopEntry(entry.desktopEntry),
+        );
   }
 
   void onSurfaceChanged(WindowProperties windowProperties);

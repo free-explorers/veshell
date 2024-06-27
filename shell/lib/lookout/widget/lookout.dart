@@ -76,7 +76,6 @@ class NotificationWidget extends StatelessWidget {
           ),
           Expanded(
             child: Card(
-              elevation: 0,
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
@@ -158,7 +157,6 @@ class LookoutWidget extends StatelessWidget {
           // Network usage
 
           Card(
-            elevation: 0,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -208,7 +206,6 @@ class LookoutWidget extends StatelessWidget {
             ),
           ),
           Card(
-            elevation: 0,
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
@@ -235,7 +232,6 @@ class LookoutWidget extends StatelessWidget {
             ),
           ),
           Card(
-            elevation: 0,
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
@@ -262,7 +258,6 @@ class LookoutWidget extends StatelessWidget {
             ),
           ),
           Card(
-            elevation: 0,
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
@@ -289,7 +284,6 @@ class LookoutWidget extends StatelessWidget {
             ),
           ),
           Card(
-            elevation: 0,
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
@@ -316,7 +310,6 @@ class LookoutWidget extends StatelessWidget {
             ),
           ),
           Card(
-            elevation: 0,
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
@@ -343,7 +336,6 @@ class LookoutWidget extends StatelessWidget {
             ),
           ),
           Card(
-            elevation: 0,
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: [

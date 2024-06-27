@@ -34,20 +34,14 @@ class ScreenWidget extends HookConsumerWidget {
       parent: overviewAnimationController,
       curve: Curves.easeIn,
     );
-    useEffect(
-      () {
-        ref.listen(overviewIsDisplayedProvider(screenId), (previous, next) {
-          if (next) {
-            overviewAnimationController.forward();
-          } else {
-            overviewAnimationController.reverse();
-          }
-        });
-
-        return null;
-      },
-      [],
-    );
+    ref.listen(overviewIsDisplayedProvider(screenId), (previous, next) {
+      print('overviewIsDisplayedProvider changed $previous $next');
+      if (next) {
+        overviewAnimationController.forward();
+      } else {
+        overviewAnimationController.reverse();
+      }
+    });
 
     /* useEffect(
       () {
@@ -64,15 +58,9 @@ class ScreenWidget extends HookConsumerWidget {
       },
       [],
     ); */
-    return Shortcuts(
-      shortcuts: <LogicalKeySet, Intent>{
-        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyW):
-            const FocusWorkspaceAboveIntent(),
-        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyS):
-            const FocusWorkspaceBelowIntent(),
-        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyO):
-            const ToggleOverviewIntent(),
-      },
+    final shortcutManager = useMemoized(LoggingShortcutManager.new, []);
+    return Shortcuts.manager(
+      manager: shortcutManager,
       child: Actions(
         actions: {
           FocusWorkspaceAboveIntent: CallbackAction<FocusWorkspaceAboveIntent>(
@@ -99,6 +87,7 @@ class ScreenWidget extends HookConsumerWidget {
           ),
           ToggleOverviewIntent: CallbackAction<ToggleOverviewIntent>(
             onInvoke: (_) {
+              print('In ToggleOverviewIntent');
               ref.read(overviewIsDisplayedProvider(screenId).notifier).toggle();
               return null;
             },
@@ -165,5 +154,61 @@ class ScreenWidget extends HookConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+class LoggingShortcutManager extends ShortcutManager {
+  LoggingShortcutManager()
+      : super(
+          shortcuts: <LogicalKeySet, Intent>{
+            LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyW):
+                const FocusWorkspaceAboveIntent(),
+            LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyS):
+                const FocusWorkspaceBelowIntent(),
+          },
+        );
+  bool _isOverviewKeySolePressed = false;
+  ToggleOverviewIntent overviewIntent = const ToggleOverviewIntent();
+  final LogicalKeyboardKey overviewKey = LogicalKeyboardKey.meta;
+  @override
+  KeyEventResult handleKeypress(BuildContext context, KeyEvent event) {
+    if (event is KeyUpEvent &&
+        LogicalKeyboardKey.collapseSynonyms(event.logicalKey.synonyms)
+            .contains(overviewKey) &&
+        _isOverviewKeySolePressed) {
+      _isOverviewKeySolePressed = false;
+      print('Meta Keyup and _isMetaSolePressed $_isOverviewKeySolePressed');
+      final primaryContext = primaryFocus?.context;
+      if (primaryContext != null) {
+        final action = Actions.maybeFind<Intent>(
+          primaryContext,
+          intent: overviewIntent,
+        );
+        if (action != null) {
+          final (bool enabled, Object? invokeResult) =
+              Actions.of(primaryContext).invokeActionIfEnabled(
+            action,
+            overviewIntent,
+            primaryContext,
+          );
+          if (enabled) {
+            return action.toKeyEventResult(overviewIntent, invokeResult);
+          }
+        }
+      }
+    }
+
+    _isOverviewKeySolePressed = event is KeyDownEvent &&
+        LogicalKeyboardKey.collapseSynonyms(event.logicalKey.synonyms)
+            .contains(overviewKey);
+
+    print('_isMetaSolePressed $_isOverviewKeySolePressed');
+
+    print('Handling keypress $event');
+    final result = super.handleKeypress(context, event);
+    if (result == KeyEventResult.handled) {
+      print('Handled shortcut ${result.name}');
+    }
+    return result;
   }
 }

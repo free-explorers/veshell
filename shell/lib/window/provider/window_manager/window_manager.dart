@@ -80,9 +80,9 @@ class WindowManager extends _$WindowManager {
       ),
     );
 
-    ref.read(persistentWindowStateProvider(windowId).notifier)
-      ..initialize(persistentWindow)
-      ..waitForSurface();
+    ref
+        .read(persistentWindowStateProvider(windowId).notifier)
+        .initialize(persistentWindow);
 
     state = state.add(windowId);
     return windowId;

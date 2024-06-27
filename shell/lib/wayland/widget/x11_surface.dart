@@ -6,10 +6,8 @@ import 'package:shell/wayland/provider/x11_surface_state.dart';
 import 'package:shell/wayland/widget/surface.dart';
 import 'package:shell/wayland/widget/surface/pointer_listener.dart';
 import 'package:shell/wayland/widget/surface/surface_focus.dart';
-import 'package:visibility_detector/visibility_detector.dart';
 
 class X11SurfaceWidget extends ConsumerWidget {
-
   const X11SurfaceWidget({
     required this.surfaceId,
     super.key,
@@ -35,24 +33,14 @@ class X11SurfaceWidget extends ConsumerWidget {
       false => X11ChildWindow(surfaceId: surfaceId),
     };
 
-    return VisibilityDetector(
-      key: ValueKey(surfaceId),
-      onVisibilityChanged: (VisibilityInfo info) {
-        final visible = info.visibleFraction > 0;
-        if (ref.context.mounted) {
-          /* ref.read(xdgToplevelStateProvider(surfaceId).notifier).visible =
-              visible; */
-        }
-      },
-      child: widget,
-    );
+    return widget;
   }
 }
 
 class X11RootWindow extends ConsumerWidget {
-
   const X11RootWindow({
-    required this.surfaceId, super.key,
+    required this.surfaceId,
+    super.key,
   });
   final SurfaceId surfaceId;
 
@@ -116,9 +104,9 @@ class X11RootWindow extends ConsumerWidget {
 }
 
 class X11ChildWindow extends ConsumerWidget {
-
   const X11ChildWindow({
-    required this.surfaceId, super.key,
+    required this.surfaceId,
+    super.key,
   });
   final SurfaceId surfaceId;
 

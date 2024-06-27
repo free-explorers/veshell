@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/window/model/window_base.dart';

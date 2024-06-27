@@ -30,7 +30,7 @@ class WaylandManager extends _$WaylandManager {
         /* if (event is! CommitSurfaceEvent) {
           print(event);
         } */
-        //print(event);
+        //log.d(event);
         _streamController.sink.add(
           event,
         );

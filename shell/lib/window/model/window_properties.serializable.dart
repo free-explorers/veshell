@@ -11,7 +11,8 @@ part 'window_properties.serializable.g.dart';
 class WindowProperties with _$WindowProperties {
   const factory WindowProperties({
     required String appId,
-    required String? title,
+    int? pid,
+    String? title,
     String? windowClass,
     String? startupId,
   }) = _WindowProperties;

@@ -10,7 +10,6 @@ class WindowPropertiesState extends _$WindowPropertiesState {
   WindowProperties build(SurfaceId surfaceId) {
     return const WindowProperties(
       appId: '',
-      title: null,
     );
   }
 
@@ -22,7 +21,23 @@ class WindowPropertiesState extends _$WindowPropertiesState {
     state = state.copyWith(title: title);
   }
 
-  void setProperties(WindowProperties properties) {
-    state = properties;
+  void setPid(int pid) {
+    state = state.copyWith(pid: pid);
+  }
+
+  void setProperties({
+    String? appId,
+    int? pid,
+    String? title,
+    String? windowClass,
+    String? startupId,
+  }) {
+    state = state.copyWith(
+      appId: appId ?? state.appId,
+      pid: pid ?? state.pid,
+      title: title,
+      windowClass: windowClass,
+      startupId: startupId,
+    );
   }
 }

@@ -15,21 +15,14 @@ class AppDrawer extends HookConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(),
-            child: _AppDrawerTextField(
-              onSearchTextChange: (searchText) {
-                searchTextState.value = searchText;
-              },
-            ),
+          _AppDrawerTextField(
+            onSearchTextChange: (searchText) {
+              searchTextState.value = searchText;
+            },
           ),
           const SizedBox(height: 24),
           Expanded(
             child: Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
               child: AppGrid(
                 searchText: searchTextState.value,
                 onSelect: onSelect,

@@ -1,10 +1,8 @@
-mod x11;
-
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::os::fd::OwnedFd;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
@@ -15,7 +13,8 @@ use smithay::backend::input::KeyState;
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::renderer::{ImportAll, ImportDma, Texture};
-use smithay::input::keyboard::KeyboardHandle;
+use smithay::backend::session::Session;
+use smithay::input::keyboard::{KeyboardHandle, Keysym, ModifiersState, XkbConfig};
 use smithay::input::pointer::{CursorImageStatus, PointerHandle};
 use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::reexports::calloop::channel::Event::Msg;
@@ -34,8 +33,7 @@ use smithay::utils::{
 use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor::{self, get_parent, RectangleKind};
 use smithay::wayland::compositor::{
-    with_states, with_surface_tree_upward, BufferAssignment, CompositorClientState,
-    CompositorHandler, CompositorState, SubsurfaceCachedState, SurfaceAttributes, TraversalAction,
+    with_states, CompositorState, SubsurfaceCachedState, SurfaceAttributes,
 };
 use smithay::wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier};
 use smithay::wayland::output::OutputHandler;
@@ -51,12 +49,11 @@ use smithay::wayland::selection::wlr_data_control::{DataControlHandler, DataCont
 use smithay::wayland::selection::{SelectionHandler, SelectionSource, SelectionTarget};
 use smithay::wayland::shell::xdg;
 use smithay::wayland::shell::xdg::{
-    PopupSurface, PositionerState, SurfaceCachedState, ToplevelSurface, XdgPopupSurfaceData,
-    XdgShellHandler, XdgShellState, XdgToplevelSurfaceData,
+    PopupSurface, SurfaceCachedState, ToplevelSurface, XdgPopupSurfaceData, XdgShellState,
+    XdgToplevelSurfaceData,
 };
 use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::wayland::socket::ListeningSocketSource;
-use smithay::wayland::xwayland_keyboard_grab::XWaylandKeyboardGrabState;
 use smithay::wayland::xwayland_shell::{
     self, XWaylandShellHandler, XWaylandShellState, XWAYLAND_SHELL_ROLE,
 };
@@ -81,22 +78,23 @@ use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
 use crate::keyboard::key_repeater::KeyRepeater;
 use crate::keyboard::KeyEvent;
 use crate::texture_swap_chain::TextureSwapChain;
+use crate::wayland::wayland::{get_direct_subsurfaces, get_surface_id};
 use crate::{flutter_engine, Backend, ClientState};
 
-pub struct ServerState<BackendData: Backend + 'static> {
+pub struct State<BackendData: Backend + 'static> {
     pub running: Arc<AtomicBool>,
     pub display_handle: DisplayHandle,
-    pub loop_handle: LoopHandle<'static, ServerState<BackendData>>,
+    pub loop_handle: LoopHandle<'static, State<BackendData>>,
     pub clock: Clock<Monotonic>,
     pub tx_fbo: Option<channel::Sender<Option<Dmabuf>>>,
     pub batons: Vec<flutter_engine::Baton>,
-    pub seat: Seat<ServerState<BackendData>>,
-    pub seat_state: SeatState<ServerState<BackendData>>,
+    pub seat: Seat<State<BackendData>>,
+    pub seat_state: SeatState<State<BackendData>>,
     pub data_device_state: DataDeviceState,
     pub data_control_state: DataControlState,
     pub primary_selection_state: PrimarySelectionState,
-    pub pointer: PointerHandle<ServerState<BackendData>>,
-    pub keyboard: KeyboardHandle<ServerState<BackendData>>,
+    pub pointer: PointerHandle<State<BackendData>>,
+    pub keyboard: KeyboardHandle<State<BackendData>>,
     pub repeat_delay: u64,
     pub repeat_rate: u64,
     pub tx_flutter_handled_key_event: channel::Sender<(KeyEvent, bool)>,
@@ -135,7 +133,7 @@ pub struct ServerState<BackendData: Backend + 'static> {
     pub xwayland_shell_state: xwayland_shell::XWaylandShellState,
 }
 
-impl<BackendData: Backend + 'static> ServerState<BackendData> {
+impl<BackendData: Backend + 'static> State<BackendData> {
     pub fn get_new_surface_id(&mut self) -> u64 {
         let surface_id = self.next_surface_id;
         self.next_surface_id += 1;
@@ -159,20 +157,54 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         // Every key event must be passed through `glfw_key_codes.input_intercept`
         // so that Smithay knows what keys are pressed.
         let keyboard = self.keyboard.clone();
-        let ((mods, utf32_codepoint), mods_changed) =
+
+        // 1. Update the Smithay keyboard state but intercept the event so it's not forwarded to the focused client just yet
+        let ((mods, keysym), mods_changed) =
             keyboard.input_intercept::<_, _>(self, key_code, state, |_, mods, keysym_handle| {
-                // After updating the keyboard state,
-                // we get the state of the modifiers and the character that was typed.
-                let utf32_codepoint = keysym_handle.modified_sym().key_char();
-                (*mods, utf32_codepoint)
+                // 2. Retrieve the keysym and modifiers with the xkb layout applied
+                (*mods, keysym_handle.modified_sym())
             });
 
-        // Forward the key event to Flutter.
+        // 3. Check if the keystroke result in compositor hotkeys shortcuts
+
+        // Switching to another VT
+        if (Keysym::XF86_Switch_VT_1.raw()..=Keysym::XF86_Switch_VT_12.raw())
+            .contains(&keysym.raw())
+        {
+            if let Err(_err) = self
+                .backend_data
+                .get_session()
+                .change_vt((keysym.raw() - Keysym::XF86_Switch_VT_1.raw() + 1) as i32)
+            {
+                error!("Failed switching virtual terminal.");
+            }
+        }
+
+        // Exiiting the compositor
+        if keysym == Keysym::Escape && mods.alt {
+            self.running.store(false, Ordering::SeqCst);
+            return;
+        }
+
+        println!(
+            "KeyEvent {:?} {:?} {:?} {:?} {:?} {:?} {:?} {:?}",
+            key_code,
+            keysym.key_char(),
+            state,
+            time,
+            mods,
+            mods_changed,
+            keysym.raw(),
+            keysym
+        );
+
+        // 4. Forward the key event to Flutter.
         self.flutter_engine.as_mut().unwrap().send_key_event(
             self.tx_flutter_handled_key_event.clone(),
             KeyEvent {
                 key_code,
-                codepoint: utf32_codepoint,
+                specifiedLogicalKey: None,
+                codepoint: keysym.key_char(),
                 state,
                 time,
                 mods,
@@ -181,7 +213,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         );
 
         // Initiate key repeat.
-        // The callback that gets called repeatedly is defined in the constructor of `ServerState`.
+        // The callback that gets called repeatedly is defined in the constructor of `State`.
         // Modifier keys do nothing on their own, so it doesn't make sense to repeat them.
         // TODO: It would be nice to be able to define the callback here next to this block of code
         // because asynchronous flows like this one are difficult to follow.
@@ -190,7 +222,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
                 KeyState::Pressed => {
                     self.key_repeater.down(
                         key_code,
-                        utf32_codepoint,
+                        keysym.key_char(),
                         Duration::from_millis(self.repeat_delay),
                         Duration::from_millis(self.repeat_rate),
                     );
@@ -210,7 +242,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
     }
 }
 
-impl<BackendData: Backend + 'static> ServerState<BackendData> {
+impl<BackendData: Backend + 'static> State<BackendData> {
     pub fn flutter_engine(&self) -> &FlutterEngine<BackendData> {
         self.flutter_engine.as_ref().unwrap()
     }
@@ -220,22 +252,22 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
 }
 
 // Macros used to delegate protocol handling to types in the app state.
-delegate_compositor!(@<BackendData: Backend + 'static> ServerState<BackendData>);
-delegate_xdg_shell!(@<BackendData: Backend + 'static> ServerState<BackendData>);
-delegate_shm!(@<BackendData: Backend + 'static> ServerState<BackendData>);
-delegate_dmabuf!(@<BackendData: Backend + 'static> ServerState<BackendData>);
-delegate_output!(@<BackendData: Backend + 'static> ServerState<BackendData>);
-delegate_seat!(@<BackendData: Backend + 'static> ServerState<BackendData>);
-delegate_data_device!(@<BackendData: Backend + 'static> ServerState<BackendData>);
-delegate_xwayland_shell!(@<BackendData: Backend + 'static> ServerState<BackendData>);
+delegate_compositor!(@<BackendData: Backend + 'static> State<BackendData>);
+delegate_xdg_shell!(@<BackendData: Backend + 'static> State<BackendData>);
+delegate_shm!(@<BackendData: Backend + 'static> State<BackendData>);
+delegate_dmabuf!(@<BackendData: Backend + 'static> State<BackendData>);
+delegate_output!(@<BackendData: Backend + 'static> State<BackendData>);
+delegate_seat!(@<BackendData: Backend + 'static> State<BackendData>);
+delegate_data_device!(@<BackendData: Backend + 'static> State<BackendData>);
+delegate_xwayland_shell!(@<BackendData: Backend + 'static> State<BackendData>);
 
-impl<BackendData: Backend + 'static> ServerState<BackendData> {
+impl<BackendData: Backend + 'static> State<BackendData> {
     pub fn new(
-        display: Display<ServerState<BackendData>>,
-        loop_handle: LoopHandle<'static, ServerState<BackendData>>,
+        display: Display<State<BackendData>>,
+        loop_handle: LoopHandle<'static, State<BackendData>>,
         backend_data: BackendData,
         dmabuf_state: Option<DmabufState>,
-    ) -> ServerState<BackendData> {
+    ) -> State<BackendData> {
         let display_handle = display.handle();
         let clock = Clock::new();
         let compositor_state = CompositorState::new::<Self>(&display_handle);
@@ -250,7 +282,14 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         let repeat_delay: u64 = 200;
         let repeat_rate: u64 = 50;
         let keyboard = seat
-            .add_keyboard(Default::default(), repeat_delay as i32, repeat_rate as i32)
+            .add_keyboard(
+                XkbConfig {
+                    layout: "us(altgr-intl)",
+                    ..XkbConfig::default()
+                },
+                repeat_delay as i32,
+                repeat_rate as i32,
+            )
             .unwrap();
 
         let pointer = seat.add_pointer();
@@ -303,7 +342,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         loop_handle
             .insert_source(
                 rx_flutter_handled_key_event,
-                move |event, _, data: &mut ServerState<BackendData>| {
+                move |event, _, data: &mut State<BackendData>| {
                     if let Msg((key_event, handled)) = event {
                         if handled {
                             // Flutter consumed this event. Probably a keyboard shortcut.
@@ -341,7 +380,7 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
 
         let key_repeater = KeyRepeater::new(
             loop_handle.clone(),
-            |key_code, code_point, data: &mut ServerState<BackendData>| {
+            |key_code, code_point, data: &mut State<BackendData>| {
                 let keyboard = data.keyboard.clone();
 
                 let mods = keyboard.modifier_state();
@@ -349,13 +388,23 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
                     data.tx_flutter_handled_key_event.clone(),
                     KeyEvent {
                         key_code,
+                        specifiedLogicalKey: None,
                         codepoint: code_point,
                         state: KeyState::Pressed,
                         time: SystemTime::now()
                             .duration_since(SystemTime::UNIX_EPOCH)
                             .unwrap()
                             .as_millis() as u32,
-                        mods,
+                        mods: ModifiersState {
+                            alt: true,
+                            ctrl: false,
+                            shift: false,
+                            caps_lock: false,
+                            logo: false,
+                            num_lock: false,
+                            iso_level3_shift: false,
+                            serialized: mods.serialized,
+                        },
                         mods_changed: false,
                     },
                 );
@@ -414,70 +463,6 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         }
     }
 
-    pub fn start_xwayland(&mut self) {
-        use std::process::Stdio;
-
-        //XWaylandKeyboardGrabState::new::<Self>(&self.display_handle.clone());
-
-        let (xwayland, client) = XWayland::spawn(
-            &self.display_handle,
-            None,
-            std::iter::empty::<(String, String)>(),
-            true,
-            Stdio::null(),
-            Stdio::null(),
-            |_| (),
-        )
-        .expect("failed to start XWayland");
-
-        let dh = self.display_handle.clone();
-        let ret = self
-            .loop_handle
-            .insert_source(xwayland, move |event, _, data| match event {
-                XWaylandEvent::Ready {
-                    x11_socket,
-                    display_number,
-                } => {
-                    let mut wm =
-                        X11Wm::start_wm(data.loop_handle.clone(), x11_socket, client.clone())
-                            .expect("Failed to attach X11 Window Manager");
-
-                    let cursor = Cursor::load();
-                    let image = cursor.get_image(1, Duration::ZERO);
-                    wm.set_cursor(
-                        &image.pixels_rgba,
-                        Size::from((image.width as u16, image.height as u16)),
-                        Point::from((image.xhot as u16, image.yhot as u16)),
-                    )
-                    .expect("Failed to set xwayland default cursor");
-
-                    data.x11_wm = Some(wm);
-                    data.xwayland_display = Some(display_number);
-
-                    if let Some(flutter_engine) = data.flutter_engine.as_mut() {
-                        flutter_engine.set_environment_variable(
-                            "DISPLAY",
-                            Some(format!(":{}", display_number).as_str()),
-                        );
-                    }
-                }
-                XWaylandEvent::Error => {
-                    data.x11_wm = None;
-                    data.xwayland_display = None;
-
-                    if let Some(flutter_engine) = data.flutter_engine.as_mut() {
-                        flutter_engine.set_environment_variable("DISPLAY", None);
-                    }
-                }
-            });
-        if let Err(e) = ret {
-            tracing::error!(
-                "Failed to insert the XWaylandSource into the event loop: {}",
-                e
-            );
-        }
-    }
-
     pub fn change_keyboard_repeat_info(&mut self, repeat_delay: u64, repeat_rate: u64) {
         self.repeat_delay = repeat_delay;
         self.repeat_rate = repeat_rate;
@@ -490,7 +475,8 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         let role = self.construct_surface_role_message(surface);
 
         let (buffer_delta, buffer_scale, input_region) = with_states(surface, |surface_data| {
-            let surface_state = surface_data.cached_state.current::<SurfaceAttributes>();
+            let mut binding = surface_data.cached_state.get::<SurfaceAttributes>();
+            let surface_state = binding.current();
             let buffer_delta = surface_state.buffer_delta;
             let buffer_scale = surface_state.buffer_scale;
             let input_region = surface_state.input_region.clone();
@@ -563,7 +549,8 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         let geometry = with_states(surface, |surface_data| {
             surface_data
                 .cached_state
-                .current::<SurfaceCachedState>()
+                .get::<SurfaceCachedState>()
+                .current()
                 .geometry
                 .map(|geometry| geometry.into())
         });
@@ -587,7 +574,8 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
         let location = with_states(surface, |surface_data| {
             surface_data
                 .cached_state
-                .current::<SubsurfaceCachedState>()
+                .get::<SubsurfaceCachedState>()
+                .current()
                 .location
         });
 
@@ -670,461 +658,17 @@ impl<BackendData: Backend + 'static> ServerState<BackendData> {
     }
 }
 
-impl<BackendData: Backend> BufferHandler for ServerState<BackendData> {
+impl<BackendData: Backend> BufferHandler for State<BackendData> {
     fn buffer_destroyed(&mut self, _buffer: &wl_buffer::WlBuffer) {}
 }
 
-impl<BackendData: Backend> XdgShellHandler for ServerState<BackendData> {
-    fn xdg_shell_state(&mut self) -> &mut XdgShellState {
-        &mut self.xdg_shell_state
-    }
-
-    fn new_toplevel(&mut self, surface: ToplevelSurface) {
-        let surface_id = get_surface_id(surface.wl_surface());
-        self.xdg_toplevels.insert(surface_id, surface.clone());
-
-        surface.with_pending_state(|state| {
-            state.states.set(xdg_toplevel::State::Activated);
-        });
-
-        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-        platform_method_channel.invoke_method(
-            "new_toplevel",
-            Some(Box::new(json!({
-                "surfaceId": surface_id,
-            }))),
-            None,
-        );
-    }
-
-    fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {
-        surface.with_pending_state(|state| {
-            state.geometry = positioner.get_geometry();
-            state.positioner = positioner;
-        });
-
-        let (surface_id, parent) = with_states(surface.wl_surface(), |surface_data| {
-            let surface_id = surface_data
-                .data_map
-                .get::<RefCell<MySurfaceState>>()
-                .unwrap()
-                .borrow()
-                .surface_id;
-
-            let parent = surface_data
-                .data_map
-                .get::<XdgPopupSurfaceData>()
-                .unwrap()
-                .lock()
-                .unwrap()
-                .parent
-                .clone();
-
-            (surface_id, parent)
-        });
-
-        self.xdg_popups.insert(surface_id, surface.clone());
-
-        // TODO: Revise this unwrap.
-        // Wayland states that popups without parents can exist but I don't know in what case.
-        let parent = get_surface_id(&parent.unwrap());
-        let position: MyPoint<i32, Logical> = positioner.get_geometry().loc.into();
-
-        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-        platform_method_channel.invoke_method(
-            "new_popup",
-            Some(Box::new(json!({
-                "surfaceId": surface_id,
-                "parent": parent,
-                "position": position,
-            }))),
-            None,
-        );
-    }
-
-    fn move_request(&mut self, surface: ToplevelSurface, _seat: WlSeat, _serial: Serial) {
-        let surface_id = get_surface_id(surface.wl_surface());
-        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-        platform_method_channel.invoke_method(
-            "interactive_move",
-            Some(Box::new(json!({
-                    "surfaceId": surface_id,
-            }))),
-            None,
-        );
-    }
-
-    fn resize_request(
-        &mut self,
-        surface: ToplevelSurface,
-        _seat: WlSeat,
-        _serial: Serial,
-        edges: xdg_toplevel::ResizeEdge,
-    ) {
-        let surface_id = get_surface_id(surface.wl_surface());
-        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-        platform_method_channel.invoke_method(
-            "interactive_resize",
-            Some(Box::new(json!({
-                    "surfaceId": surface_id,
-                    "edge": edges as i64,
-            }))),
-            None,
-        );
-    }
-
-    fn grab(&mut self, _surface: PopupSurface, _seat: WlSeat, _serial: Serial) {
-        // Handle popup grab here
-    }
-
-    fn reposition_request(
-        &mut self,
-        surface: PopupSurface,
-        _positioner: PositionerState,
-        token: u32,
-    ) {
-        surface.send_repositioned(token);
-    }
-
-    fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
-        let surface_id = get_surface_id(surface.wl_surface());
-        self.xdg_toplevels.remove(&surface_id);
-
-        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-        platform_method_channel.invoke_method(
-            "destroy_toplevel",
-            Some(Box::new(json!({
-                "surfaceId": surface_id,
-            }))),
-            None,
-        );
-    }
-
-    fn popup_destroyed(&mut self, surface: PopupSurface) {
-        let surface_id = get_surface_id(surface.wl_surface());
-        self.xdg_popups.remove(&surface_id);
-
-        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-        platform_method_channel.invoke_method(
-            "destroy_popup",
-            Some(Box::new(json!({
-                "surfaceId": surface_id,
-            }))),
-            None,
-        );
-    }
-
-    fn app_id_changed(&mut self, surface: ToplevelSurface) {
-        let surface_id = get_surface_id(surface.wl_surface());
-
-        let app_id = with_states(surface.wl_surface(), |surface_data| {
-            surface_data
-                .data_map
-                .get::<XdgToplevelSurfaceData>()
-                .unwrap()
-                .lock()
-                .unwrap()
-                .app_id
-                .clone()
-        });
-
-        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-        platform_method_channel.invoke_method(
-            "app_id_changed",
-            Some(Box::new(json!({
-                "surfaceId": surface_id,
-                "appId": app_id,
-            }))),
-            None,
-        );
-    }
-
-    fn title_changed(&mut self, surface: ToplevelSurface) {
-        let surface_id = get_surface_id(surface.wl_surface());
-
-        let title = with_states(surface.wl_surface(), |surface_data| {
-            surface_data
-                .data_map
-                .get::<XdgToplevelSurfaceData>()
-                .unwrap()
-                .lock()
-                .unwrap()
-                .title
-                .clone()
-        });
-
-        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-        platform_method_channel.invoke_method(
-            "title_changed",
-            Some(Box::new(json!({
-                "surfaceId": surface_id,
-                "title": title,
-            }))),
-            None,
-        );
-    }
-}
-
-pub struct MySurfaceState {
-    pub surface_id: u64,
-    pub old_texture_size: Option<Size<i32, BufferCoords>>,
-}
-
-pub fn get_surface_id(surface: &WlSurface) -> u64 {
-    with_states(surface, |surface_data| {
-        surface_data
-            .data_map
-            .get::<RefCell<MySurfaceState>>()
-            .unwrap()
-            .borrow()
-            .surface_id
-    })
-}
-
-fn get_direct_subsurfaces(surface: &WlSurface) -> (Vec<u64>, Vec<u64>) {
-    let mut subsurfaces_below = vec![];
-    let mut subsurfaces_above = vec![];
-    let mut above = false;
-
-    with_surface_tree_upward(
-        surface,
-        (),
-        |child_surface, _, ()| {
-            // Only traverse the direct children of the surface
-            if child_surface == surface {
-                TraversalAction::DoChildren(())
-            } else {
-                TraversalAction::SkipChildren
-            }
-        },
-        |child_surface, child_surface_data, ()| {
-            if child_surface == surface {
-                above = true;
-                return;
-            }
-
-            let surface_id = child_surface_data
-                .data_map
-                .get::<RefCell<MySurfaceState>>()
-                .unwrap()
-                .borrow()
-                .surface_id;
-            if above {
-                subsurfaces_above.push(surface_id);
-            } else {
-                subsurfaces_below.push(surface_id);
-            }
-        },
-        |_, _, _| true,
-    );
-    (subsurfaces_below, subsurfaces_above)
-}
-
-impl<BackendData: Backend> CompositorHandler for ServerState<BackendData> {
-    fn compositor_state(&mut self) -> &mut CompositorState {
-        &mut self.compositor_state
-    }
-
-    fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {
-        if let Some(state) = client.get_data::<XWaylandClientData>() {
-            return &state.compositor_state;
-        }
-        if let Some(state) = client.get_data::<ClientState>() {
-            return &state.compositor_state;
-        }
-        panic!("Unknown client data type")
-    }
-
-    fn new_surface(&mut self, surface: &WlSurface) {
-        let surface_id = self.get_new_surface_id();
-        with_states(surface, |surface_data| {
-            surface_data.data_map.insert_if_missing(|| {
-                RefCell::new(MySurfaceState {
-                    surface_id,
-                    old_texture_size: None,
-                })
-            })
-        });
-        self.surfaces.insert(surface_id, surface.clone());
-
-        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-        platform_method_channel.invoke_method(
-            "new_surface",
-            Some(Box::new(json!({
-                "surfaceId": surface_id,
-            }))),
-            None,
-        );
-    }
-
-    fn new_subsurface(&mut self, surface: &WlSurface, parent: &WlSurface) {
-        let surface_id = get_surface_id(surface);
-        let parent = get_surface_id(parent);
-        self.subsurfaces.insert(surface_id, surface.clone());
-        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-        platform_method_channel.invoke_method(
-            "new_subsurface",
-            Some(Box::new(json!({
-                "surfaceId": surface_id,
-                "parent": parent,
-            }))),
-            None,
-        );
-    }
-
-    fn commit(&mut self, surface: &WlSurface) {
-        let (subsurfaces_below, subsurfaces_above) = get_direct_subsurfaces(surface);
-
-        // Make sure Flutter knows about subsurfaces
-        // because Wayland clients have the option to never commit them.
-        // In Wayland, when the parent surface is committed,
-        // subsurfaces are also committed recursively.
-        for surface_id in subsurfaces_below.iter().chain(subsurfaces_above.iter()) {
-            let surface = self.surfaces.get(surface_id).unwrap().clone();
-            let _ = self.commit(&surface);
-        }
-
-        with_states(surface, |surface_data| {
-            let (surface_id, old_texture_size) = {
-                let my_state = surface_data
-                    .data_map
-                    .get::<RefCell<MySurfaceState>>()
-                    .unwrap()
-                    .borrow();
-                (my_state.surface_id, my_state.old_texture_size)
-            };
-
-            let attributes = surface_data.cached_state.current::<SurfaceAttributes>();
-
-            let texture = attributes
-                .buffer
-                .as_ref()
-                .and_then(|assignment| match assignment {
-                    BufferAssignment::NewBuffer(buffer) => self
-                        .gles_renderer
-                        .as_mut()
-                        .unwrap()
-                        .import_buffer(buffer, Some(surface_data), &[])
-                        .and_then(|t| t.ok()),
-                    _ => None,
-                });
-
-            let (texture_id, size) = if let Some(texture) = texture {
-                unsafe {
-                    self.gl.as_ref().unwrap().Finish();
-                }
-
-                let size = texture.size();
-
-                let size_changed = match old_texture_size {
-                    Some(old_size) => old_size != size,
-                    None => true,
-                };
-
-                surface_data
-                    .data_map
-                    .get::<RefCell<MySurfaceState>>()
-                    .unwrap()
-                    .borrow_mut()
-                    .old_texture_size = Some(size);
-
-                let texture_id = match size_changed {
-                    true => None,
-                    false => self
-                        .texture_ids_per_surface_id
-                        .get(&surface_id)
-                        .and_then(|v| v.last().cloned())
-                        .map(|(id, _)| id),
-                };
-
-                let texture_id = texture_id.unwrap_or_else(|| {
-                    let texture_id = self.get_new_texture_id();
-                    while self
-                        .texture_ids_per_surface_id
-                        .entry(surface_id)
-                        .or_default()
-                        .len()
-                        >= 2
-                    {
-                        self.texture_ids_per_surface_id
-                            .entry(surface_id)
-                            .or_default()
-                            .remove(0);
-                    }
-
-                    self.texture_ids_per_surface_id
-                        .entry(surface_id)
-                        .or_default()
-                        .push((texture_id, size));
-                    self.surface_id_per_texture_id
-                        .insert(texture_id, surface_id);
-                    self.flutter_engine_mut()
-                        .register_external_texture(texture_id)
-                        .unwrap();
-                    texture_id
-                });
-
-                let swapchain = self.texture_swapchains.entry(texture_id).or_default();
-                swapchain.commit(texture.clone());
-
-                self.flutter_engine_mut()
-                    .mark_external_texture_frame_available(texture_id)
-                    .unwrap();
-
-                (texture_id, Some(size))
-            } else {
-                (-1, None)
-            };
-
-            (
-                surface_id,
-                texture_id,
-                size,
-                attributes.buffer_delta,
-                attributes.buffer_scale,
-                attributes.input_region.clone(),
-            )
-        });
-
-        let surface_message = self.construct_surface_message(surface);
-
-        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-        platform_method_channel.invoke_method(
-            "commit_surface",
-            Some(Box::new(json!(surface_message))),
-            None,
-        );
-    }
-
-    fn destroyed(&mut self, _surface: &WlSurface) {
-        let surface_id = with_states(_surface, |surface_data| {
-            surface_data
-                .data_map
-                .get::<RefCell<MySurfaceState>>()
-                .unwrap()
-                .borrow()
-                .surface_id
-        });
-        self.surfaces.remove(&surface_id);
-
-        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-        platform_method_channel.invoke_method(
-            "destroy_surface",
-            Some(Box::new(json!({
-                "surfaceId": surface_id,
-            }))),
-            None,
-        );
-    }
-}
-
-impl<BackendData: Backend> ShmHandler for ServerState<BackendData> {
+impl<BackendData: Backend> ShmHandler for State<BackendData> {
     fn shm_state(&self) -> &ShmState {
         &self.shm_state
     }
 }
 
-impl<BackendData: Backend> DmabufHandler for ServerState<BackendData> {
+impl<BackendData: Backend> DmabufHandler for State<BackendData> {
     fn dmabuf_state(&mut self) -> &mut DmabufState {
         self.dmabuf_state.as_mut().unwrap()
     }
@@ -1143,7 +687,7 @@ impl<BackendData: Backend> DmabufHandler for ServerState<BackendData> {
             .import_dmabuf(&dmabuf, None)
             .is_ok()
         {
-            let _ = notifier.successful::<ServerState<BackendData>>();
+            let _ = notifier.successful::<State<BackendData>>();
             self.imported_dmabufs.push(dmabuf);
         } else {
             notifier.failed();
@@ -1151,7 +695,7 @@ impl<BackendData: Backend> DmabufHandler for ServerState<BackendData> {
     }
 }
 
-// impl DmabufHandler for ServerState<X11Data> {
+// impl DmabufHandler for State<X11Data> {
 //     fn dmabuf_state(&mut self) -> &mut DmabufState {
 //         &mut self.dmabuf_state.as_mut().unwrap()
 //     }
@@ -1165,12 +709,12 @@ impl<BackendData: Backend> DmabufHandler for ServerState<BackendData> {
 //     }
 // }
 
-impl<BackendData: Backend> SeatHandler for ServerState<BackendData> {
+impl<BackendData: Backend> SeatHandler for State<BackendData> {
     type KeyboardFocus = KeyboardFocusTarget;
     type PointerFocus = PointerFocusTarget;
     type TouchFocus = PointerFocusTarget;
 
-    fn seat_state(&mut self) -> &mut SeatState<ServerState<BackendData>> {
+    fn seat_state(&mut self) -> &mut SeatState<State<BackendData>> {
         &mut self.seat_state
     }
 
@@ -1185,7 +729,7 @@ impl<BackendData: Backend> SeatHandler for ServerState<BackendData> {
     fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {}
 }
 
-impl<BackendData: Backend> SelectionHandler for ServerState<BackendData> {
+impl<BackendData: Backend> SelectionHandler for State<BackendData> {
     type SelectionUserData = ();
 
     fn new_selection(
@@ -1217,28 +761,28 @@ impl<BackendData: Backend> SelectionHandler for ServerState<BackendData> {
     }
 }
 
-impl<BackendData: Backend> ClientDndGrabHandler for ServerState<BackendData> {}
+impl<BackendData: Backend> ClientDndGrabHandler for State<BackendData> {}
 
-impl<BackendData: Backend> ServerDndGrabHandler for ServerState<BackendData> {}
+impl<BackendData: Backend> ServerDndGrabHandler for State<BackendData> {}
 
-impl<BackendData: Backend> DataDeviceHandler for ServerState<BackendData> {
+impl<BackendData: Backend> DataDeviceHandler for State<BackendData> {
     fn data_device_state(&self) -> &DataDeviceState {
         &self.data_device_state
     }
 }
 
-impl<BackendData: Backend> OutputHandler for ServerState<BackendData> {}
+impl<BackendData: Backend> OutputHandler for State<BackendData> {}
 
-impl<BackendData: Backend> PrimarySelectionHandler for ServerState<BackendData> {
+impl<BackendData: Backend> PrimarySelectionHandler for State<BackendData> {
     fn primary_selection_state(&self) -> &PrimarySelectionState {
         &self.primary_selection_state
     }
 }
-delegate_primary_selection!(@<BackendData: Backend + 'static> ServerState<BackendData>);
+delegate_primary_selection!(@<BackendData: Backend + 'static> State<BackendData>);
 
-impl<BackendData: Backend> DataControlHandler for ServerState<BackendData> {
+impl<BackendData: Backend> DataControlHandler for State<BackendData> {
     fn data_control_state(&self) -> &DataControlState {
         &self.data_control_state
     }
 }
-delegate_data_control!(@<BackendData: Backend + 'static> ServerState<BackendData>);
+delegate_data_control!(@<BackendData: Backend + 'static> State<BackendData>);

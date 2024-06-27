@@ -7,7 +7,7 @@ import 'package:shell/monitor/provider/monitor_list.dart';
 import 'package:shell/screen/provider/screen_list.dart';
 import 'package:shell/shared/provider/persistent_json_by_folder.dart';
 import 'package:shell/shared/provider/root_overlay.dart';
-import 'package:shell/theme/provider/theme.manager.dart';
+import 'package:shell/theme/theme.dart';
 import 'package:shell/wayland/model/request/get_environment_variables/get_environment_variables.serializable.dart';
 import 'package:shell/wayland/model/request/get_monitor_layout/get_monitor_layout.serializable.dart';
 import 'package:shell/wayland/model/request/shell_ready/shell_ready.serializable.dart';
@@ -88,9 +88,10 @@ class Veshell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = ref.watch(themeProvider);
     return MaterialApp(
-      theme: theme,
+      theme: VeshellTheme.light,
+      darkTheme: VeshellTheme.dark,
+      themeMode: ThemeMode.dark,
       home: _EagerInitialization(
         child: Scaffold(
           body: HookConsumer(

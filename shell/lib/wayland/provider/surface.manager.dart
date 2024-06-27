@@ -117,7 +117,9 @@ class SurfaceManager extends _$SurfaceManager {
   }
 
   void _newToplevel(NewToplevelMessage message) {
-    ref.read(xdgToplevelStateProvider(message.surfaceId).notifier).initialize();
+    ref
+        .read(xdgToplevelStateProvider(message.surfaceId).notifier)
+        .initialize(message.pid);
     state = state.copyWith(
       xdgTopLevelSurfaces: state.xdgTopLevelSurfaces.add(message.surfaceId),
     );
@@ -234,6 +236,7 @@ class SurfaceManager extends _$SurfaceManager {
           windowClass: message.windowClass,
           instance: message.instance,
           startupId: message.startupId,
+          pid: message.pid,
         );
     ref.read(matchingEngineProvider.notifier).checkMatching();
   }

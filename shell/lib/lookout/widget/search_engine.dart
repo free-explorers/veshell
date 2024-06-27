@@ -111,7 +111,6 @@ class SearchEngine extends HookConsumerWidget {
                 ),
                 Expanded(
                   child: Card(
-                    elevation: 0,
                     clipBehavior: Clip.antiAlias,
                     child: ApplicationList(
                       searchText: searchTextState.value,

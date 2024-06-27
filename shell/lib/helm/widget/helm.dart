@@ -51,7 +51,6 @@ class HelmWidget extends StatelessWidget {
           // Restart / sleep / lock / logout / shutdown / hibernate
           Expanded(
             child: Card(
-              elevation: 0,
               child: Column(
                 children: [
                   Padding(

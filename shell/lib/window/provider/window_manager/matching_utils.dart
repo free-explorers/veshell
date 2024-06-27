@@ -50,7 +50,7 @@ int windowMatchingCost(
   cost += matchingCost(windowMatchInfo.title, surfaceMatchInfo.title, 50, 1);
   cost +=
       matchingCost(windowMatchInfo.startupId, surfaceMatchInfo.startupId, 1, 1);
-
+  cost += matchingCost(windowMatchInfo.pid, surfaceMatchInfo.pid, 1, 1);
   // Prefer to keep existing matchings
   cost += persistentWindow.surfaceId == surfaceId ? 0 : 5;
 

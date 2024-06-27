@@ -7,6 +7,7 @@ import 'package:shell/wayland/model/xdg_toplevel.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/wayland/provider/xdg_surface_state.dart';
+import 'package:shell/window/provider/window_properties.dart';
 
 part 'xdg_toplevel_state.g.dart';
 
@@ -19,11 +20,13 @@ class XdgToplevelState extends _$XdgToplevelState {
     throw Exception('XdgToplevel $surfaceId state was not initialized');
   }
 
-  void initialize() {
+  void initialize(int pid) {
     _keepAliveLink = ref.keepAlive();
     ref.onDispose(() {
       print('disposing XdgToplevelStateProvider $surfaceId');
     });
+
+    ref.read(windowPropertiesStateProvider(surfaceId).notifier).setPid(pid);
 
     state = const XdgToplevel(
       committed: false,

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/shared/persistence/persistable_provider.mixin.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
@@ -80,8 +82,14 @@ class PersistentWindowState extends _$PersistentWindowState
     _matchingInfo = MatchingInfo.fromWindowProperties(state.properties);
   }
 
-  void waitForSurface() {
-    state = state.copyWith(isWaitingForSurface: true);
-    _matchingInfo = _matchingInfo.copyWith(waitingForAppSince: DateTime.now());
+  @override
+  Future<Process?> launchSelf() async {
+    final process = await super.launchSelf();
+    if (process != null) {
+      state = state.copyWith(isWaitingForSurface: true);
+      _matchingInfo = _matchingInfo.copyWith(
+          waitingForAppSince: DateTime.now(), pid: process.pid);
+    }
+    return process;
   }
 }

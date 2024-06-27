@@ -6,7 +6,6 @@ import 'package:shell/wayland/widget/surface.dart';
 import 'package:shell/wayland/widget/surface/pointer_listener.dart';
 import 'package:shell/wayland/widget/surface/surface_focus.dart';
 import 'package:shell/wayland/widget/surface/xdg_popup/popup.dart';
-import 'package:visibility_detector/visibility_detector.dart';
 
 class XdgToplevelSurfaceWidget extends ConsumerWidget {
   const XdgToplevelSurfaceWidget({
@@ -16,7 +15,8 @@ class XdgToplevelSurfaceWidget extends ConsumerWidget {
 
   final SurfaceId surfaceId;
 
-  void _collectPopupList(List<SurfaceId> ids, WidgetRef ref, SurfaceId surfaceId) {
+  void _collectPopupList(
+      List<SurfaceId> ids, WidgetRef ref, SurfaceId surfaceId) {
     final popups = ref
         .watch(
           xdgSurfaceStateProvider(surfaceId).select((value) => value.popups),
@@ -37,28 +37,18 @@ class XdgToplevelSurfaceWidget extends ConsumerWidget {
     final popupList = <SurfaceId>[];
     _collectPopupList(popupList, ref, surfaceId);
 
-    return VisibilityDetector(
-      key: ValueKey(surfaceId),
-      onVisibilityChanged: (VisibilityInfo info) {
-        final visible = info.visibleFraction > 0;
-        if (ref.context.mounted) {
-          /* ref.read(xdgToplevelStateProvider(surfaceId).notifier).visible =
-              visible; */
-        }
-      },
-      child: SurfaceFocus(
-        child: Stack(
-          children: [
-            ActivateSurfaceOnPointerDown(
+    return SurfaceFocus(
+      child: Stack(
+        children: [
+          ActivateSurfaceOnPointerDown(
+            surfaceId: surfaceId,
+            child: SurfaceWidget(
               surfaceId: surfaceId,
-              child: SurfaceWidget(
-                surfaceId: surfaceId,
-              ),
             ),
-            for (final popupSurfaceId in popupList)
-              PopupWidget(surfaceId: popupSurfaceId),
-          ],
-        ),
+          ),
+          for (final popupSurfaceId in popupList)
+            PopupWidget(surfaceId: popupSurfaceId),
+        ],
       ),
     );
   }

@@ -11,6 +11,7 @@ abstract class MatchingInfo with _$MatchingInfo {
     String? title,
     String? windowClass,
     String? startupId,
+    int? pid,
     DateTime? matchedAtTime,
     DateTime? waitingForAppSince,
     bool? matchedWhileWaiting,
@@ -22,6 +23,7 @@ abstract class MatchingInfo with _$MatchingInfo {
         title: props.title,
         windowClass: props.windowClass,
         startupId: props.startupId,
+        pid: props.pid,
       );
 
   factory MatchingInfo.fromJson(Map<String, dynamic> json) =>

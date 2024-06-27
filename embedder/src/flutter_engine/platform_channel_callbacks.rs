@@ -10,6 +10,7 @@ use smithay::input::pointer::{ButtonEvent, MotionEvent};
 use smithay::reexports::calloop::channel::Event;
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
+use smithay::reexports::wayland_server::Resource;
 use smithay::utils::SERIAL_COUNTER;
 use smithay::wayland::compositor::with_states;
 use smithay::wayland::shell::xdg;
@@ -22,7 +23,8 @@ use crate::flutter_engine::wayland_messages::NewX11Surface;
 use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
 use crate::mouse_button_tracker::FLUTTER_TO_LINUX_MOUSE_BUTTONS;
 
-use crate::server::{get_surface_id, ServerState};
+use crate::state::State;
+use crate::wayland::wayland::get_surface_id;
 use crate::Backend;
 
 pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
@@ -31,7 +33,7 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
         Box<dyn MethodResult<serde_json::Value>>,
     )>,
     _: &mut (),
-    data: &mut ServerState<BackendData>,
+    data: &mut State<BackendData>,
 ) {
     if let Msg((method_call, mut result)) = event {
         match method_call.method() {
@@ -64,7 +66,7 @@ struct PointerHoverPayload {
 pub fn pointer_hover<BackendData: Backend + 'static>(
     method_call: MethodCall<serde_json::Value>,
     mut result: Box<dyn MethodResult<serde_json::Value>>,
-    data: &mut ServerState<BackendData>,
+    data: &mut State<BackendData>,
 ) {
     let args = method_call.arguments().unwrap().clone();
     let payload: PointerHoverPayload = serde_json::from_value(args).unwrap();
@@ -81,7 +83,7 @@ pub fn pointer_hover<BackendData: Backend + 'static>(
 
         pointer.motion(
             data,
-            Some((PointerFocusTarget::from(surface), (0, 0).into())),
+            Some((PointerFocusTarget::from(surface), (0.0, 0.0).into())),
             &MotionEvent {
                 location: (payload.x, payload.y).into(),
                 serial: SERIAL_COUNTER.next_serial(),
@@ -102,7 +104,7 @@ pub fn pointer_hover<BackendData: Backend + 'static>(
 pub fn pointer_exit<BackendData: Backend + 'static>(
     _method_call: MethodCall<serde_json::Value>,
     mut result: Box<dyn MethodResult<serde_json::Value>>,
-    data: &mut ServerState<BackendData>,
+    data: &mut State<BackendData>,
 ) {
     let now = Duration::from(data.clock.now()).as_millis() as u32;
     let pointer = data.pointer.clone();
@@ -138,7 +140,7 @@ struct Button {
 pub fn mouse_buttons_event<BackendData: Backend + 'static>(
     method_call: MethodCall<serde_json::Value>,
     mut result: Box<dyn MethodResult<serde_json::Value>>,
-    data: &mut ServerState<BackendData>,
+    data: &mut State<BackendData>,
 ) {
     let now = Duration::from(data.clock.now()).as_millis() as u32;
     let pointer = data.pointer.clone();
@@ -176,7 +178,7 @@ struct ActivateWindowPayload {
 pub fn activate_window<BackendData: Backend + 'static>(
     method_call: MethodCall<serde_json::Value>,
     mut result: Box<dyn MethodResult<serde_json::Value>>,
-    data: &mut ServerState<BackendData>,
+    data: &mut State<BackendData>,
 ) {
     let args = method_call.arguments().unwrap().clone();
     let payload: ActivateWindowPayload = serde_json::from_value(args).unwrap();
@@ -279,7 +281,7 @@ struct ResizeWindowPayload {
 pub fn resize_window<BackendData: Backend + 'static>(
     method_call: MethodCall<serde_json::Value>,
     mut result: Box<dyn MethodResult<serde_json::Value>>,
-    data: &mut ServerState<BackendData>,
+    data: &mut State<BackendData>,
 ) {
     let args = method_call.arguments().unwrap().clone();
     let payload: ResizeWindowPayload = serde_json::from_value(args).unwrap();
@@ -362,7 +364,7 @@ struct CloseWindowPayload {
 pub fn close_window<BackendData: Backend + 'static>(
     method_call: MethodCall<serde_json::Value>,
     mut result: Box<dyn MethodResult<serde_json::Value>>,
-    data: &mut ServerState<BackendData>,
+    data: &mut State<BackendData>,
 ) {
     let args = method_call.arguments().unwrap().clone();
     let payload: CloseWindowPayload = serde_json::from_value(args).unwrap();
@@ -420,7 +422,7 @@ pub fn close_window<BackendData: Backend + 'static>(
 pub fn get_monitor_layout<BackendData: Backend + 'static>(
     _method_call: MethodCall<serde_json::Value>,
     mut result: Box<dyn MethodResult<serde_json::Value>>,
-    data: &mut ServerState<BackendData>,
+    data: &mut State<BackendData>,
 ) {
     let monitors = data.backend_data.get_monitor_layout();
     data.flutter_engine_mut().monitor_layout_changed(monitors);
@@ -430,7 +432,7 @@ pub fn get_monitor_layout<BackendData: Backend + 'static>(
 pub fn get_environment_variables<BackendData: Backend + 'static>(
     _method_call: MethodCall<serde_json::Value>,
     mut result: Box<dyn MethodResult<serde_json::Value>>,
-    data: &mut ServerState<BackendData>,
+    data: &mut State<BackendData>,
 ) {
     let wayland_socket_name = data.wayland_socket_name.as_deref();
 
@@ -454,7 +456,7 @@ pub fn get_environment_variables<BackendData: Backend + 'static>(
 pub fn on_shell_ready<BackendData: Backend + 'static>(
     _method_call: MethodCall<serde_json::Value>,
     mut result: Box<dyn MethodResult<serde_json::Value>>,
-    data: &mut ServerState<BackendData>,
+    data: &mut State<BackendData>,
 ) {
     let surfaces = data.surfaces.clone();
 
@@ -472,12 +474,20 @@ pub fn on_shell_ready<BackendData: Backend + 'static>(
     }
 
     let toplevels = data.xdg_toplevels.clone();
-    for surface_id in toplevels.keys() {
+    for (surface_id, surface) in toplevels.iter() {
+        let pid = {
+            let client = surface.wl_surface().client().unwrap();
+
+            let credentials = client.get_credentials(&data.display_handle).unwrap();
+
+            credentials.pid
+        };
         let platform_method_channel = &mut data.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "new_toplevel",
             Some(Box::new(json!({
                 "surfaceId": surface_id,
+                "pid": pid,
             }))),
             None,
         );
@@ -509,7 +519,7 @@ pub fn on_shell_ready<BackendData: Backend + 'static>(
 
     for surface_id in subsurfaces.keys() {
         if let Some(wl_surface) = surfaces.get(surface_id) {
-            let subsurface_message = ServerState::<BackendData>::construct_subsurface_role_message(
+            let subsurface_message = State::<BackendData>::construct_subsurface_role_message(
                 wl_surface.clone().borrow(),
             );
             let platform_method_channel: &mut crate::flutter_engine::platform_channels::method_channel::MethodChannel<serde_json::Value> = &mut data.flutter_engine_mut().platform_method_channel;
@@ -532,7 +542,7 @@ pub fn on_shell_ready<BackendData: Backend + 'static>(
         platform_method_channel.invoke_method(
             "new_x11_surface",
             Some(Box::new(json!(NewX11Surface {
-                x11_surface_id: ServerState::<BackendData>::get_x11_surface_id(&x11_surface),
+                x11_surface_id: State::<BackendData>::get_x11_surface_id(&x11_surface),
                 override_redirect: x11_surface.is_override_redirect(),
             }))),
             None,
@@ -545,7 +555,7 @@ pub fn on_shell_ready<BackendData: Backend + 'static>(
         platform_method_channel.invoke_method(
             "x11_properties_changed",
             Some(Box::new(json!({
-                "x11SurfaceId": ServerState::<BackendData>::get_x11_surface_id(&x11_surface),
+                "x11SurfaceId": State::<BackendData>::get_x11_surface_id(&x11_surface),
                 "title": if !x11_surface.title().is_empty() { Some(x11_surface.title()) } else { None },
                 "windowClass": x11_surface.class(),
                 "instance": if !x11_surface.instance().is_empty() {
@@ -554,6 +564,7 @@ pub fn on_shell_ready<BackendData: Backend + 'static>(
                     None
                 },
                 "startupId": x11_surface.startup_id(),
+                "pid": x11_surface.pid(),
             }))),
             None,
         );
@@ -562,7 +573,7 @@ pub fn on_shell_ready<BackendData: Backend + 'static>(
                 "surface_associated",
                 Some(Box::new(json!({
                     "surfaceId":  get_surface_id(x11_surface.wl_surface().unwrap().borrow()),
-                    "x11SurfaceId": ServerState::<BackendData>::get_x11_surface_id(&x11_surface),
+                    "x11SurfaceId": State::<BackendData>::get_x11_surface_id(&x11_surface),
                 }))),
                 None,
             );
