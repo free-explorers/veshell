@@ -7,7 +7,7 @@ edition = "2021"
 members = ["third_party/smithay-drm-extras"]
 
 [dependencies]
-smithay = { git = "https://github.com/Smithay/smithay", rev = "e89fc8a", features = [
+smithay = { git = "https://github.com/Smithay/smithay", rev = "4171247", features = [
     "default",
     "wayland_frontend",
     "backend_egl",
