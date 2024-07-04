@@ -1,6 +1,6 @@
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
-import 'package:shell/window/model/persistent_window.serializable.dart';
+import 'package:shell/window/model/window_base.dart';
 
 /// Checks if `found` is equal to `desired` and returns the appropriate cost.
 /// If desired is not given (null) then `skipCost` is returned.
@@ -37,7 +37,7 @@ int windowMatchingCost(
   MatchingInfo surfaceMatchInfo,
   MatchingInfo windowMatchInfo,
   SurfaceId surfaceId,
-  PersistentWindow persistentWindow,
+  Window window,
 ) {
   var cost = 0;
   // The wmClass *must* match if specified
@@ -52,9 +52,9 @@ int windowMatchingCost(
       matchingCost(windowMatchInfo.startupId, surfaceMatchInfo.startupId, 1, 1);
   cost += matchingCost(windowMatchInfo.pid, surfaceMatchInfo.pid, 1, 1);
   // Prefer to keep existing matchings
-  cost += persistentWindow.surfaceId == surfaceId ? 0 : 5;
+  cost += window.surfaceId == surfaceId ? 0 : 5;
 
-  final waiting = persistentWindow.surfaceId == null
+  final waiting = window.surfaceId == null
       ? windowMatchInfo.waitingForAppSince != null
       : windowMatchInfo.matchedWhileWaiting ?? false;
   // Prefer matching to MsWindows which are waiting for an app to open

@@ -20,6 +20,7 @@ use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::calloop::generic::Generic;
 use smithay::reexports::calloop::{channel, Interest, LoopHandle, Mode, PostAction};
+use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 use smithay::reexports::wayland_server::protocol::wl_buffer;
 use smithay::reexports::wayland_server::protocol::wl_seat::WlSeat;
@@ -607,6 +608,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 
         toplevel.with_pending_state(|state| {
             state.states.set(xdg_toplevel::State::Maximized);
+            state.decoration_mode = Some(zxdg_toplevel_decoration_v1::Mode::ServerSide);
         });
 
         if !initial_configure_sent {

@@ -32,7 +32,6 @@ import 'package:shell/wayland/provider/x11_surface_state.dart';
 import 'package:shell/wayland/provider/xdg_popup_state.dart';
 import 'package:shell/wayland/provider/xdg_surface_state.dart';
 import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
-import 'package:shell/window/provider/window_manager/matching_engine.dart';
 import 'package:shell/window/provider/window_properties.dart';
 
 part 'surface.manager.g.dart';
@@ -197,7 +196,6 @@ class SurfaceManager extends _$SurfaceManager {
             ref.read(windowPropertiesStateProvider(message.surfaceId).notifier)
               ..setTitle(role.title)
               ..setAppId(role.appId ?? '');
-            ref.read(matchingEngineProvider.notifier).checkMatching();
 
           case XdgPopupMessage():
             ref
@@ -238,7 +236,6 @@ class SurfaceManager extends _$SurfaceManager {
           startupId: message.startupId,
           pid: message.pid,
         );
-    ref.read(matchingEngineProvider.notifier).checkMatching();
   }
 
   void _surfaceAssociated(SurfaceAssociatedMessage message) {

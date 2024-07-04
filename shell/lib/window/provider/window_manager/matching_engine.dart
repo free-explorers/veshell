@@ -2,7 +2,10 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
+import 'package:shell/window/model/window_base.dart';
 import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/provider/dialog_window_state.dart';
+import 'package:shell/window/provider/ephemeral_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/surface_window_map.dart';
 import 'package:shell/window/provider/window_manager/matching_utils.dart';
@@ -21,6 +24,23 @@ class MatchingEngine extends _$MatchingEngine {
     return IMap();
   }
 
+  Window _getWindowState(WindowId windowId) => switch (windowId) {
+        EphemeralWindowId() => ref.read(ephemeralWindowStateProvider(windowId)),
+        PersistentWindowId() =>
+          ref.read(persistentWindowStateProvider(windowId)),
+        DialogWindowId() => ref.read(dialogWindowStateProvider(windowId)),
+      };
+
+  MatchingInfo _getWindowMatchingInfo(WindowId windowId) => switch (windowId) {
+        EphemeralWindowId() => ref
+            .read(ephemeralWindowStateProvider(windowId).notifier)
+            .getMatchingInfo(),
+        PersistentWindowId() => ref
+            .read(persistentWindowStateProvider(windowId).notifier)
+            .getMatchingInfo(),
+        DialogWindowId() => throw Exception("Dialog don't have matching infos"),
+      };
+
   void checkMatching() {
     if (_surfaceToMatchSet.isEmpty) {
       return;
@@ -29,12 +49,9 @@ class MatchingEngine extends _$MatchingEngine {
 
     // Purge all surfaces that have been matched for too long.
     for (final surfaceId in _surfaceToMatchSet) {
-      if (ref.read(surfaceWindowMapProvider).get(surfaceId)
-          case final PersistentWindowId windowId) {
-        final matchedAtTime = ref
-            .read(persistentWindowStateProvider(windowId).notifier)
-            .getMatchingInfo()
-            .matchedAtTime!;
+      final windowId = ref.read(surfaceWindowMapProvider).get(surfaceId);
+      if (windowId != null) {
+        final matchedAtTime = _getWindowMatchingInfo(windowId).matchedAtTime!;
         if (DateTime.now().difference(matchedAtTime).inMilliseconds >
             MAX_WINDOW_REASSOCIATION_TIME_MS) {
           removeSurface(surfaceId);
@@ -42,17 +59,16 @@ class MatchingEngine extends _$MatchingEngine {
       }
     }
 
-    // A PersistentWindow is a candidate for matching if it has no surfaceId
-    // or if it has a surfaceId but it has been matched recently enough.
-    final candidatePersistentWindowSet = ref
-        .read(windowManagerProvider.notifier)
-        .getPersistentWindowSet()
-        .where((persistentWindowId) {
-      final windowState =
-          ref.read(persistentWindowStateProvider(persistentWindowId));
-      final matchingInfo = ref
-          .read(persistentWindowStateProvider(persistentWindowId).notifier)
-          .getMatchingInfo();
+    // Filter the list of windows to find matching candidates
+    // We only consider Ephemeral or Persistent Windows
+    // that have no surfaceId or has been matched recently enough.
+    final candidateWindowSet =
+        ref.read(windowManagerProvider).where((windowId) {
+      if (windowId is DialogWindowId) return false;
+
+      final windowState = _getWindowState(windowId);
+      final matchingInfo = _getWindowMatchingInfo(windowId);
+
       return windowState.surfaceId == null ||
           DateTime.now()
                   .difference(matchingInfo.matchedAtTime!)
@@ -71,14 +87,12 @@ class MatchingEngine extends _$MatchingEngine {
     // iterate over entries
     for (final MapEntry(key: appId, value: surfaceIdList)
         in surfacesToMatch.entries) {
-      final candidatePersistentWindowSetForAppId =
-          candidatePersistentWindowSet.where((persistentWindowId) {
-        final windowState =
-            ref.read(persistentWindowStateProvider(persistentWindowId));
+      final candidateWindowSetForAppId = candidateWindowSet.where((windowId) {
+        final windowState = _getWindowState(windowId);
         return windowState.properties.appId == appId;
       });
       print(
-        'MATCHING - start assignating surface of $appId, surfaceIdList $surfaceIdList, windowCandidates $candidatePersistentWindowSetForAppId ',
+        'MATCHING - start assignating surface of $appId, surfaceIdList $surfaceIdList, windowCandidates $candidateWindowSetForAppId ',
       );
 
       final costMatrix = <List<int>>[];
@@ -87,17 +101,12 @@ class MatchingEngine extends _$MatchingEngine {
             ref.read(windowPropertiesStateProvider(surfaceId));
         final surfaceMatchInfo =
             MatchingInfo.fromWindowProperties(surfaceWindowProperties);
-        final costs =
-            candidatePersistentWindowSetForAppId.map((persistentWindowId) {
+        final costs = candidateWindowSetForAppId.map((windowId) {
           return windowMatchingCost(
             surfaceMatchInfo,
-            ref
-                .read(
-                  persistentWindowStateProvider(persistentWindowId).notifier,
-                )
-                .getMatchingInfo(),
+            _getWindowMatchingInfo(windowId),
             surfaceId,
-            ref.read(persistentWindowStateProvider(persistentWindowId)),
+            _getWindowState(windowId),
           );
         }).toList();
 
@@ -118,19 +127,18 @@ class MatchingEngine extends _$MatchingEngine {
 
       // The meta window to be assigned to each MsWindow
       final windowAssignments =
-          List<SurfaceId?>.filled(candidatePersistentWindowSet.length, null);
+          List<SurfaceId?>.filled(candidateWindowSet.length, null);
       for (var i = 0; i < assignments.length; i++) {
         final idx = assignments[i];
-        if (idx < candidatePersistentWindowSetForAppId.length) {
+        if (idx < candidateWindowSetForAppId.length) {
           // Found a good match
           windowAssignments[idx] = surfaceIdList[i];
         }
       }
 
-      for (var i = 0; i < candidatePersistentWindowSet.length; i++) {
-        final persistentWindowId = candidatePersistentWindowSet.elementAt(i);
-        final windowState =
-            ref.read(persistentWindowStateProvider(persistentWindowId));
+      for (var i = 0; i < candidateWindowSet.length; i++) {
+        final windowId = candidateWindowSet.elementAt(i);
+        final windowState = _getWindowState(windowId);
         if (windowState.surfaceId != null &&
             windowState.surfaceId != windowAssignments[i]) {
           // The contents of this PersistentWindow will be replaced.
@@ -138,34 +146,46 @@ class MatchingEngine extends _$MatchingEngine {
           // Initially, these windows might be associated incorrectly, but once the titles get updated,
           // we can associate them more accurately. This might necessitate swapping some already associated PersistentWindows.
           // For all PersistentWindows which will need to be changed, we first unassign their surfaces.
-          print('MATCHING - unsetSurface of $persistentWindowId');
-          ref
-              .read(persistentWindowStateProvider(persistentWindowId).notifier)
-              .unsetSurface();
+          print('MATCHING - unsetSurface of $windowId');
+          switch (windowId) {
+            case PersistentWindowId():
+              ref
+                  .read(persistentWindowStateProvider(windowId).notifier)
+                  .unsetSurface();
+            case EphemeralWindowId():
+              ref
+                  .read(ephemeralWindowStateProvider(windowId).notifier)
+                  .unsetSurface();
+            case _: // ignore: no_default_cases
+          }
         }
       }
 
       for (var i = 0; i < assignments.length; i++) {
         final idx = assignments[i];
-        if (idx < candidatePersistentWindowSetForAppId.length) {
+        if (idx < candidateWindowSetForAppId.length) {
           // Found a good match
-          final persistentWindowId =
-              candidatePersistentWindowSetForAppId.elementAt(idx);
-          final windowState =
-              ref.read(persistentWindowStateProvider(persistentWindowId));
+          final windowId = candidateWindowSetForAppId.elementAt(idx);
+          final windowState = _getWindowState(windowId);
           // If the window still have a surface associated, that means the persistent window was already associated correctly
           // and we can skip associating it again.
           if (windowState.surfaceId == null) {
             print(
-              'MATCHING - Associating $surfaceIdList[i] with $persistentWindowId',
+              'MATCHING - Associating $surfaceIdList[i] with $windowId',
             );
             // Associate the surface with the persistent window.
             // This promise is designed to run asynchronously and will cancel itself automatically if necessary.
-            ref
-                .read(
-                  persistentWindowStateProvider(persistentWindowId).notifier,
-                )
-                .matchWithSurface(surfaceIdList[i]);
+            switch (windowId) {
+              case PersistentWindowId():
+                ref
+                    .read(persistentWindowStateProvider(windowId).notifier)
+                    .setSurface(surfaceIdList[i]);
+              case EphemeralWindowId():
+                ref
+                    .read(ephemeralWindowStateProvider(windowId).notifier)
+                    .setSurface(surfaceIdList[i]);
+              case _: // ignore: no_default_cases
+            }
           }
         } else {
           print(
@@ -186,8 +206,37 @@ class MatchingEngine extends _$MatchingEngine {
     }
   }
 
-  addSurface(SurfaceId surfaceId) {
-    print('MATCHING - Add surface $surfaceId from matching engine');
+  /* bool checkEphemeralWindow(SurfaceId surfaceId) {
+    final surfaceWindowProperties =
+        ref.read(windowPropertiesStateProvider(surfaceId));
+    final surfaceMatchInfo =
+        MatchingInfo.fromWindowProperties(surfaceWindowProperties);
+    final ephemeralWindowSet =
+        ref.read(windowManagerProvider.notifier).getEphemeralWindowSet();
+
+    final ephemeralMatched = ephemeralWindowSet.firstWhereOrNull(
+      (ephemeralWindowId) {
+        final matchInfo = ref
+            .read(ephemeralWindowStateProvider(ephemeralWindowId).notifier)
+            .getMatchingInfo();
+        return matchInfo.pid == surfaceMatchInfo.pid;
+      },
+    );
+
+    if (ephemeralMatched != null) {
+      print(
+        'MATCHING - Associating $surfaceId with $ephemeralMatched',
+      );
+      ref
+          .read(ephemeralWindowStateProvider(ephemeralMatched).notifier)
+          .setSurface(surfaceId);
+      return true;
+    }
+    return false;
+  } */
+
+  void addSurface(SurfaceId surfaceId) {
+    print('MATCHING - Add surface $surfaceId to matching engine');
     _surfaceToMatchSet = _surfaceToMatchSet.add(surfaceId);
     checkMatching();
   }

@@ -21,14 +21,14 @@ class ClockWidget extends HookConsumerWidget {
       children: [
         Text(
           currentTime,
-          style: Theme.of(context).textTheme.titleLarge!.copyWith(
+          style: Theme.of(context).textTheme.titleMedium!.copyWith(
                 fontWeight: FontWeight.w500,
               ),
         ),
         const SizedBox(width: 16),
         Text(
           currentDate,
-          style: Theme.of(context).textTheme.titleLarge!.copyWith(
+          style: Theme.of(context).textTheme.titleMedium!.copyWith(
                 fontWeight: FontWeight.w500,
               ),
         ),

@@ -5,26 +5,25 @@ import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/application/widget/app_icon.dart';
-import 'package:shell/window/model/window_id.dart';
-import 'package:shell/window/provider/persistent_window_state.dart';
 
 class WindowPlaceholder extends HookConsumerWidget {
   const WindowPlaceholder({
-    required this.windowId,
-    required this.tileableFocusNode,
+    required this.appId,
+    required this.focusNode,
+    this.onTap,
     super.key,
   });
 
-  final PersistentWindowId windowId;
-  final FocusNode tileableFocusNode;
+  final String? appId;
+  final FocusNode focusNode;
+  final void Function()? onTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final window = ref.watch(persistentWindowStateProvider(windowId));
-    final entry = window.properties.appId != null
+    final entry = appId != null
         ? ref
             .watch(
-              localizedDesktopEntryForIdProvider(window.properties.appId),
+              localizedDesktopEntryForIdProvider(appId!),
             )
             .value
         : null;
@@ -32,15 +31,8 @@ class WindowPlaceholder extends HookConsumerWidget {
     return Material(
       color: Colors.black26,
       child: InkWell(
-        focusNode: tileableFocusNode,
-        onTap: entry != null
-            ? () {
-                tileableFocusNode.requestFocus();
-                ref
-                    .read(persistentWindowStateProvider(windowId).notifier)
-                    .launchSelf();
-              }
-            : null,
+        focusNode: focusNode,
+        onTap: entry != null ? onTap : null,
         child: Center(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -70,7 +62,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                         SizedBox(
                           height: 160,
                           width: 160,
-                          child: AppIconById(id: window.properties.appId),
+                          child: AppIconById(id: appId),
                         ),
                         const SizedBox(
                           width: 24,

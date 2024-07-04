@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/overview/provider/overview_is_displayed.dart';
+import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/overview/widget/overview.dart';
 import 'package:shell/screen/model/screen_shortcuts.dart';
 import 'package:shell/screen/provider/current_screen_id.dart';
@@ -25,23 +25,6 @@ class ScreenWidget extends HookConsumerWidget {
 
     final screenFocusScopeNode =
         useFocusScopeNode(debugLabel: 'ScreenFocusNode');
-
-    final overviewAnimationController = useAnimationController(
-      duration: const Duration(milliseconds: 200),
-    );
-
-    final animation = CurvedAnimation(
-      parent: overviewAnimationController,
-      curve: Curves.easeIn,
-    );
-    ref.listen(overviewIsDisplayedProvider(screenId), (previous, next) {
-      print('overviewIsDisplayedProvider changed $previous $next');
-      if (next) {
-        overviewAnimationController.forward();
-      } else {
-        overviewAnimationController.reverse();
-      }
-    });
 
     /* useEffect(
       () {
@@ -88,7 +71,7 @@ class ScreenWidget extends HookConsumerWidget {
           ToggleOverviewIntent: CallbackAction<ToggleOverviewIntent>(
             onInvoke: (_) {
               print('In ToggleOverviewIntent');
-              ref.read(overviewIsDisplayedProvider(screenId).notifier).toggle();
+              ref.read(overviewStateProvider(screenId).notifier).toggle();
               return null;
             },
           ),
@@ -104,51 +87,42 @@ class ScreenWidget extends HookConsumerWidget {
                     .setFocusedScreen(screenId);
               }
             },
-            child: AnimatedBuilder(
-              animation: animation,
-              builder: (context, child) {
-                return Stack(
+            child: Stack(
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  textDirection: TextDirection.rtl,
                   children: [
-                    child!,
-                    if (overviewAnimationController.value > 0.0)
-                      Opacity(
-                        opacity: overviewAnimationController.value,
-                        child: const Overview(),
-                      ),
-                  ],
-                );
-              },
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                textDirection: TextDirection.rtl,
-                children: [
-                  Expanded(
-                    child: SlidingContainer(
-                      direction: Axis.vertical,
-                      index: screenState.selectedIndex,
-                      children: screenState.workspaceList
-                          .mapIndexed(
-                            (index, workspaceId) => ProviderScope(
-                              key: Key(workspaceId),
-                              overrides: [
-                                currentWorkspaceIdProvider
-                                    .overrideWith((ref) => workspaceId),
-                              ],
-                              child: WorkspaceWidget(
-                                isSelected: screenState.selectedIndex == index,
+                    Expanded(
+                      child: SlidingContainer(
+                        direction: Axis.vertical,
+                        index: screenState.selectedIndex,
+                        children: screenState.workspaceList
+                            .mapIndexed(
+                              (index, workspaceId) => ProviderScope(
+                                key: Key(workspaceId),
+                                overrides: [
+                                  currentWorkspaceIdProvider
+                                      .overrideWith((ref) => workspaceId),
+                                ],
+                                child: WorkspaceWidget(
+                                  isSelected:
+                                      screenState.selectedIndex == index,
+                                ),
                               ),
-                            ),
-                          )
-                          .toList(),
+                            )
+                            .toList(),
+                      ),
                     ),
-                  ),
-                  const Material(
-                    elevation: 4,
-                    child: ScreenPanel(),
-                  ),
-                ],
-              ),
+                    const Material(
+                      elevation: 4,
+                      child: ScreenPanel(),
+                    ),
+                  ],
+                ),
+                const OverviewWidget(),
+              ],
             ),
           ),
         ),

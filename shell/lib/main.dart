@@ -7,6 +7,7 @@ import 'package:shell/monitor/provider/monitor_list.dart';
 import 'package:shell/screen/provider/screen_list.dart';
 import 'package:shell/shared/provider/persistent_json_by_folder.dart';
 import 'package:shell/shared/provider/root_overlay.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:shell/theme/theme.dart';
 import 'package:shell/wayland/model/request/get_environment_variables/get_environment_variables.serializable.dart';
 import 'package:shell/wayland/model/request/get_monitor_layout/get_monitor_layout.serializable.dart';
@@ -18,6 +19,7 @@ import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
 void main() {
+  configureLogs();
   // debugRepaintRainbowEnabled = true;
   // debugPrintGestureArenaDiagnostics = true;
   WidgetsFlutterBinding.ensureInitialized();

@@ -1,6 +1,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/window/model/window_properties.serializable.dart';
+import 'package:shell/window/provider/window_manager/matching_engine.dart';
 
 part 'window_properties.g.dart';
 
@@ -8,6 +9,13 @@ part 'window_properties.g.dart';
 class WindowPropertiesState extends _$WindowPropertiesState {
   @override
   WindowProperties build(SurfaceId surfaceId) {
+    ref.listenSelf(
+      (previous, next) {
+        if (previous != next) {
+          ref.read(matchingEngineProvider.notifier).checkMatching();
+        }
+      },
+    );
     return const WindowProperties(
       appId: '',
     );

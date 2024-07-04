@@ -2,8 +2,10 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/wayland/model/request/resize_window/resize_window.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/subsurface_state.dart';
+import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/wayland/provider/xdg_surface_state.dart';
 
 part 'wl_surface_state.g.dart';
@@ -72,6 +74,55 @@ class WlSurfaceState extends _$WlSurfaceState {
       case SurfaceRole.x11Surface || null:
         return false;
     }
+  }
+
+  void resizeSurface({required int width, required int height}) {
+    // In order to have the texture the desired size we need to expand
+    // the requested size to include all the subsurfaces geometry
+    final rect = Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble());
+    /* print('resizeSurface from $rect');
+
+    // recursively expand the rect to include all subsurfaces
+    void expandRect(SurfaceId surfaceId) {
+      final subsurface = ref.read(subsurfaceStateProvider(surfaceId));
+      final surface = ref.read(wlSurfaceStateProvider(surfaceId));
+      print(
+        'expandToInclude(Rect.fromLTWH(${subsurface.position.dx}, ${subsurface.position.dy}, ${surface.texture?.size.width ?? 0}, ${surface.texture?.size.height ?? 0}',
+      );
+      rect = rect.expandToInclude(
+        Rect.fromLTWH(
+          subsurface.position.dx,
+          subsurface.position.dy,
+          surface.texture?.size.width ?? 0,
+          surface.texture?.size.height ?? 0,
+        ),
+      );
+      for (final subsurface in surface.subsurfacesBelow) {
+        expandRect(subsurface);
+      }
+      for (final subsurface in surface.subsurfacesAbove) {
+        expandRect(subsurface);
+      }
+    }
+
+    for (final subsurface in state.subsurfacesBelow) {
+      expandRect(subsurface);
+    }
+    for (final subsurface in state.subsurfacesAbove) {
+      expandRect(subsurface);
+    }
+
+    print('resizeSurface to $rect'); */
+
+    ref.read(waylandManagerProvider.notifier).request(
+          ResizeWindowRequest(
+            message: ResizeWindowMessage(
+              surfaceId: surfaceId,
+              width: rect.width.toInt(),
+              height: rect.height.toInt(),
+            ),
+          ),
+        );
   }
 
   void dispose() {

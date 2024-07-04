@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
-import 'package:shell/helm/widget/audio_output.dart';
+import 'package:shell/overview/helm/control_panel/widget/audio_output.dart';
 
-class HelmWidget extends StatelessWidget {
-  const HelmWidget({
+class ControlPanel extends StatelessWidget {
+  const ControlPanel({
     super.key,
   });
 
@@ -12,33 +12,6 @@ class HelmWidget extends StatelessWidget {
     return Expanded(
       child: Column(
         children: [
-          Row(
-            children: [
-              IconButton.filled(
-                onPressed: () {},
-                icon: Icon(MdiIcons.shipWheel),
-                style: IconButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  padding: const EdgeInsets.all(12),
-                  iconSize: 28,
-                ),
-              ),
-              const SizedBox(
-                width: 24,
-              ),
-              Text(
-                'Helm',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-            ],
-          ),
-          const SizedBox(
-            height: 16,
-          ),
           // Battery level
           // Multimedia
           // Wifi control

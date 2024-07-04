@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 const veshellColor = Color.fromARGB(255, 67, 76, 94);
 const surfaceRadius = 24.0;
+const panelSize = 48.0;
 
 class VeshellTheme {
   static ThemeData get light => _buildTheme(

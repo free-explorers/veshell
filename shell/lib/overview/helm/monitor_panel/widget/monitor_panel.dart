@@ -1,120 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
-import 'package:shell/helm/widget/helm.dart';
-import 'package:shell/lookout/widget/search_engine.dart';
 
-class Lookout extends HookConsumerWidget {
-  const Lookout({super.key});
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Row(
-      children: [
-        const Expanded(child: SearchEngine()),
-        const SizedBox(width: 16),
-        AspectRatio(
-          aspectRatio: 16 / 12,
-          child: Material(
-            borderRadius: BorderRadius.circular(20),
-            color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
-            child: const Padding(
-              padding: EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  HelmWidget(),
-                  SizedBox(width: 8),
-                  LookoutWidget(),
-                  SizedBox(width: 8),
-                  NotificationWidget(),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class NotificationWidget extends StatelessWidget {
-  const NotificationWidget({
-    super.key,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              IconButton.filled(
-                onPressed: () {},
-                icon: Icon(MdiIcons.bullhornVariant),
-                style: IconButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  padding: const EdgeInsets.all(12),
-                  iconSize: 28,
-                ),
-              ),
-              const SizedBox(
-                width: 24,
-              ),
-              Text(
-                'Notifications',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-            ],
-          ),
-          const SizedBox(
-            height: 16,
-          ),
-          Expanded(
-            child: Card(
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                children: [
-                  Expanded(
-                    child: ListView(
-                      children: [
-                        ListTile(
-                          leading: Icon(MdiIcons.bell),
-                          title: const Text('Notification title'),
-                          subtitle: const Text('Notification body'),
-                          onTap: () {},
-                        ),
-                        ListTile(
-                          leading: Icon(MdiIcons.bell),
-                          title: const Text('Notification title'),
-                          subtitle: const Text('Notification body'),
-                          onTap: () {},
-                        ),
-                        ListTile(
-                          leading: Icon(MdiIcons.bell),
-                          title: const Text('Notification title'),
-                          subtitle: const Text('Notification body'),
-                          onTap: () {},
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class LookoutWidget extends StatelessWidget {
-  const LookoutWidget({
+class MonitorPanel extends StatelessWidget {
+  const MonitorPanel({
     super.key,
   });
 
@@ -123,33 +11,6 @@ class LookoutWidget extends StatelessWidget {
     return Expanded(
       child: Column(
         children: [
-          Row(
-            children: [
-              IconButton.filled(
-                onPressed: () {},
-                icon: Icon(MdiIcons.telescope),
-                style: IconButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  padding: const EdgeInsets.all(12),
-                  iconSize: 28,
-                ),
-              ),
-              const SizedBox(
-                width: 24,
-              ),
-              Text(
-                'Lookout',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-            ],
-          ),
-          const SizedBox(
-            height: 16,
-          ),
           // Battery level
           // Disk usages
           // CPU loading
