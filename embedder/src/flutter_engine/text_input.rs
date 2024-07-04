@@ -9,7 +9,7 @@ use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::flutter_engine::platform_channels::text_input_model::TextInputModel;
 use crate::flutter_engine::platform_channels::text_range::TextRange;
-use crate::server::ServerState;
+use crate::state::State;
 use crate::Backend;
 
 pub struct TextInput {
@@ -114,7 +114,7 @@ pub fn text_input_channel_method_call_handler<BackendData: Backend + 'static>(
         Box<dyn MethodResult<serde_json::Value>>,
     )>,
     _: &mut (),
-    data: &mut ServerState<BackendData>,
+    data: &mut State<BackendData>,
 ) {
     let text_input = &mut data.flutter_engine.as_mut().unwrap().text_input;
 

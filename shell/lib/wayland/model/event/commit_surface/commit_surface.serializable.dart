@@ -9,7 +9,6 @@ import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
 part 'commit_surface.serializable.freezed.dart';
-
 part 'commit_surface.serializable.g.dart';
 
 /// Model for CommitSurfaceMessage
@@ -55,7 +54,7 @@ sealed class SurfaceRoleMessage with _$SurfaceRoleMessage {
 @Freezed(unionKey: 'type')
 sealed class XdgSurfaceMessage with _$XdgSurfaceMessage {
   const factory XdgSurfaceMessage.xdgToplevel({
-    required SurfaceId? parent,
+    required SurfaceId? parentSurfaceId,
     required String? appId,
     required String? title,
   }) = XdgToplevelMessage;

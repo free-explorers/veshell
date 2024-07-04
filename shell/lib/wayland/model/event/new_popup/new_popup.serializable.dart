@@ -2,8 +2,6 @@ import 'dart:ui';
 
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/shared/util/json_converter/offset.dart';
-import 'package:shell/shared/util/json_converter/rect.dart';
-import 'package:shell/shared/util/json_converter/size.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 

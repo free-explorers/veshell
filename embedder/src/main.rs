@@ -1,6 +1,8 @@
 use std::env;
+use std::process::Command;
 
 use log::debug;
+use smithay::backend::session::libseat::LibSeatSession;
 use smithay::output::Output;
 use smithay::reexports::calloop::{channel, EventSource};
 use smithay::{
@@ -24,19 +26,20 @@ use smithay::{
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::flutter_engine::FlutterEngine;
 use crate::mouse_button_tracker::MouseButtonTracker;
-use crate::server::ServerState;
+use crate::state::State;
 
+mod backend;
 mod cursor;
-mod drm_backend;
 mod flutter_engine;
 mod focus;
 mod gles_framebuffer_importer;
 mod input_handling;
 mod keyboard;
 mod mouse_button_tracker;
-mod server;
+mod state;
 mod texture_swap_chain;
-mod x11_client;
+mod wayland;
+mod xwayland;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Ok(env_filter) = tracing_subscriber::EnvFilter::try_from_default_env() {
@@ -49,9 +52,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = rlimit::increase_nofile_limit(u64::MAX);
 
     if env::var("DISPLAY").is_ok() || env::var("WAYLAND_DISPLAY").is_ok() {
-        x11_client::run_x11_client();
+        backend::x11_client::run_x11_client();
     } else {
-        drm_backend::run_drm_backend();
+        backend::drm_backend::run_drm_backend();
     }
 
     Ok(())
@@ -61,6 +64,8 @@ pub trait Backend {
     fn seat_name(&self) -> String;
 
     fn get_monitor_layout(&self) -> Vec<Output>;
+
+    fn get_session(&self) -> LibSeatSession;
 }
 
 pub struct FlutterState<BackendData: Backend + 'static> {
@@ -78,7 +83,8 @@ pub fn send_frames_surface_tree(surface: &wl_surface::WlSurface, time: u32) {
             // yet been commited
             for callback in states
                 .cached_state
-                .current::<SurfaceAttributes>()
+                .get::<SurfaceAttributes>()
+                .current()
                 .frame_callbacks
                 .drain(..)
             {

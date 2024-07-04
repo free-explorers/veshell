@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/overview/provider/overview_state.dart';
+import 'package:shell/overview/widget/overview.dart';
 import 'package:shell/screen/model/screen_shortcuts.dart';
 import 'package:shell/screen/provider/current_screen_id.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
@@ -39,13 +41,9 @@ class ScreenWidget extends HookConsumerWidget {
       },
       [],
     ); */
-    return Shortcuts(
-      shortcuts: <LogicalKeySet, Intent>{
-        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyW):
-            const FocusWorkspaceAboveIntent(),
-        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyS):
-            const FocusWorkspaceBelowIntent(),
-      },
+    final shortcutManager = useMemoized(LoggingShortcutManager.new, []);
+    return Shortcuts.manager(
+      manager: shortcutManager,
       child: Actions(
         actions: {
           FocusWorkspaceAboveIntent: CallbackAction<FocusWorkspaceAboveIntent>(
@@ -70,6 +68,13 @@ class ScreenWidget extends HookConsumerWidget {
               return null;
             },
           ),
+          ToggleOverviewIntent: CallbackAction<ToggleOverviewIntent>(
+            onInvoke: (_) {
+              print('In ToggleOverviewIntent');
+              ref.read(overviewStateProvider(screenId).notifier).toggle();
+              return null;
+            },
+          ),
         },
         child: MouseRegion(
           onEnter: (event) => screenFocusScopeNode.requestFocus(),
@@ -82,36 +87,102 @@ class ScreenWidget extends HookConsumerWidget {
                     .setFocusedScreen(screenId);
               }
             },
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: Stack(
               children: [
-                const ScreenPanel(),
-                Expanded(
-                  child: SlidingContainer(
-                    direction: Axis.vertical,
-                    index: screenState.selectedIndex,
-                    children: screenState.workspaceList
-                        .mapIndexed(
-                          (index, workspaceId) => ProviderScope(
-                            key: Key(workspaceId),
-                            overrides: [
-                              currentWorkspaceIdProvider
-                                  .overrideWith((ref) => workspaceId),
-                            ],
-                            child: WorkspaceWidget(
-                              isSelected: screenState.selectedIndex == index,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  textDirection: TextDirection.rtl,
+                  children: [
+                    Expanded(
+                      child: SlidingContainer(
+                        direction: Axis.vertical,
+                        index: screenState.selectedIndex,
+                        children: screenState.workspaceList
+                            .mapIndexed(
+                              (index, workspaceId) => ProviderScope(
+                                key: Key(workspaceId),
+                                overrides: [
+                                  currentWorkspaceIdProvider
+                                      .overrideWith((ref) => workspaceId),
+                                ],
+                                child: WorkspaceWidget(
+                                  isSelected:
+                                      screenState.selectedIndex == index,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ),
+                    const Material(
+                      elevation: 4,
+                      child: ScreenPanel(),
+                    ),
+                  ],
                 ),
+                const OverviewWidget(),
               ],
             ),
           ),
         ),
       ),
     );
+  }
+}
+
+class LoggingShortcutManager extends ShortcutManager {
+  LoggingShortcutManager()
+      : super(
+          shortcuts: <LogicalKeySet, Intent>{
+            LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyW):
+                const FocusWorkspaceAboveIntent(),
+            LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyS):
+                const FocusWorkspaceBelowIntent(),
+          },
+        );
+  bool _isOverviewKeySolePressed = false;
+  ToggleOverviewIntent overviewIntent = const ToggleOverviewIntent();
+  final LogicalKeyboardKey overviewKey = LogicalKeyboardKey.meta;
+  @override
+  KeyEventResult handleKeypress(BuildContext context, KeyEvent event) {
+    if (event is KeyUpEvent &&
+        LogicalKeyboardKey.collapseSynonyms(event.logicalKey.synonyms)
+            .contains(overviewKey) &&
+        _isOverviewKeySolePressed) {
+      _isOverviewKeySolePressed = false;
+      print('Meta Keyup and _isMetaSolePressed $_isOverviewKeySolePressed');
+      final primaryContext = primaryFocus?.context;
+      if (primaryContext != null) {
+        final action = Actions.maybeFind<Intent>(
+          primaryContext,
+          intent: overviewIntent,
+        );
+        if (action != null) {
+          final (bool enabled, Object? invokeResult) =
+              Actions.of(primaryContext).invokeActionIfEnabled(
+            action,
+            overviewIntent,
+            primaryContext,
+          );
+          if (enabled) {
+            return action.toKeyEventResult(overviewIntent, invokeResult);
+          }
+        }
+      }
+    }
+
+    _isOverviewKeySolePressed = event is KeyDownEvent &&
+        LogicalKeyboardKey.collapseSynonyms(event.logicalKey.synonyms)
+            .contains(overviewKey);
+
+    print('_isMetaSolePressed $_isOverviewKeySolePressed');
+
+    print('Handling keypress $event');
+    final result = super.handleKeypress(context, event);
+    if (result == KeyEventResult.handled) {
+      print('Handled shortcut ${result.name}');
+    }
+    return result;
   }
 }

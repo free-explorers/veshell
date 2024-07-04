@@ -10,7 +10,8 @@ import 'package:shell/screen/provider/current_screen_id.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/screen/provider/workspace_display_mode.dart';
 import 'package:shell/shared/widget/cross_reorderable_list.dart';
-import 'package:shell/window/provider/persistant_window_state.dart';
+import 'package:shell/theme/theme.dart';
+import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/tileable/persistent_window/persistent_window.dart';
 
@@ -185,8 +186,8 @@ class WorkspaceIndicatorPainter extends CustomPainter {
     final to = (ltr ? from + 1 : from - 1)
         .clamp(0, length); // ignore_clamp_double_lint
 
-    final fromRect = Rect.fromLTWH(0, 48.0 * from, 48, 48);
-    final toRect = Rect.fromLTWH(0, 48.0 * to, 48, 48);
+    final fromRect = Rect.fromLTWH(0, panelSize * from, panelSize, panelSize);
+    final toRect = Rect.fromLTWH(0, panelSize * to, panelSize, panelSize);
     _currentRect = Rect.lerp(fromRect, toRect, (value - from).abs());
     assert(_currentRect != null);
 
@@ -221,11 +222,11 @@ class WorkspaceListButton extends HookConsumerWidget {
     final screenState = ref.watch(screenStateProvider(screenId));
 
     return DragTarget<PersistentWindowTileable>(
-      onWillAccept: (data) => data is PersistentWindowTileable,
-      onAccept: (data) {
+      onWillAcceptWithDetails: (data) => data is PersistentWindowTileable,
+      onAcceptWithDetails: (details) {
         ref
             .read(WorkspaceStateProvider(workspaceId).notifier)
-            .addWindow(data.windowId);
+            .addWindow(details.data.windowId);
       },
       builder: (
         context,
@@ -236,17 +237,17 @@ class WorkspaceListButton extends HookConsumerWidget {
           aspectRatio: 1,
           child: IconButton(
             style: ButtonStyle(
-              backgroundColor: MaterialStatePropertyAll(
+              backgroundColor: WidgetStatePropertyAll(
                 candidateData.isNotEmpty
                     ? Theme.of(context).colorScheme.primary
                     : null,
               ),
-              foregroundColor: MaterialStatePropertyAll(
+              foregroundColor: WidgetStatePropertyAll(
                 candidateData.isNotEmpty
                     ? Theme.of(context).colorScheme.onPrimary
                     : null,
               ),
-              shape: MaterialStateProperty.all(
+              shape: WidgetStateProperty.all(
                 const RoundedRectangleBorder(),
               ),
             ),
@@ -279,7 +280,7 @@ class WorkspaceIcon extends HookConsumerWidget {
           .map(
             (windowId) => ref.read(
               PersistentWindowStateProvider(windowId)
-                  .select((value) => value.appId),
+                  .select((value) => value.properties.appId),
             ),
           )
           .toList(),

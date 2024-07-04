@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:logging/logging.dart';
 import 'package:path/path.dart' as path;
 
 Directory persistenceDirectory = Directory(
@@ -13,6 +14,8 @@ Directory persistenceDirectory = Directory(
     'persistence',
   ),
 );
+
+final _log = Logger('PersistenceManager');
 
 class PersistenceManager {
   /// Load all models from the persistence directory
@@ -33,9 +36,13 @@ class PersistenceManager {
         for (final modelFile in modelFiles) {
           if (modelFile is File) {
             final modelId = path.basenameWithoutExtension(modelFile.path);
-            final modelJson = jsonDecode(await modelFile.readAsString())
-                as Map<String, dynamic>;
-            modelMap[modelId] = modelJson;
+            try {
+              final modelJson = jsonDecode(await modelFile.readAsString())
+                  as Map<String, dynamic>;
+              modelMap[modelId] = modelJson;
+            } catch (e, stack) {
+              _log.severe('Error loading model $modelId', e, stack);
+            }
           }
         }
         folderToModelMap[modelFolderName] = modelMap;
@@ -49,7 +56,7 @@ class PersistenceManager {
     String modelId,
     Map<String, dynamic> json,
   ) async {
-    print('start storeModelJson for $modelFolder-$modelId');
+    _log.info('start storeModelJson for $modelFolder-$modelId');
     final tempFile = File(
       path.join(persistenceDirectory.path, modelFolder, '$modelId.temp'),
     );
@@ -62,7 +69,10 @@ class PersistenceManager {
       path.join(persistenceDirectory.path, modelFolder, '$modelId.json'),
     );
     await tempFile.rename(targetFile.path);
-    print('end storeModelJson for $modelFolder-$modelId');
+    final stack = StackTrace.current;
+    _log.info(
+      'end storeModelJson for $modelFolder-$modelId',
+    );
   }
 
   static final _fileQueues = <String, Queue<Future<void> Function()>>{};

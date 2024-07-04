@@ -1,12 +1,11 @@
-use std::collections::HashSet;
 use std::mem::size_of;
-use std::sync::atomic::Ordering;
 
-use input_linux::sys::{KEY_ESC, KEY_LEFTALT};
+use input_linux::sys::{KEY_ESC, KEY_F1, KEY_LEFTALT};
 use smithay::backend::input::{
     AbsolutePositionEvent, Axis, AxisRelativeDirection, ButtonState, Event, InputBackend,
     InputEvent, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
 };
+use smithay::input::keyboard::{FilterResult, Keysym};
 use smithay::input::pointer::AxisFrame;
 
 use crate::flutter_engine::embedder::{
@@ -16,26 +15,30 @@ use crate::flutter_engine::embedder::{
     FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
 };
 use crate::flutter_engine::FlutterEngine;
-use crate::server::ServerState;
+use crate::state::State;
 use crate::Backend;
 
 pub fn handle_input<BackendData>(
     event: &InputEvent<impl InputBackend>,
-    data: &mut ServerState<BackendData>,
+    data: &mut State<BackendData>,
 ) where
     BackendData: Backend + 'static,
 {
+    use smithay::backend::input::Event;
     match event {
         InputEvent::DeviceAdded { .. } => {}
         InputEvent::DeviceRemoved { .. } => {}
         InputEvent::PointerMotion { event } => {
-            data.mouse_position.0 += event.delta_x();
-            data.mouse_position.1 += event.delta_y();
-            send_motion_event(data);
+            clamp_mouse_to_monitor(
+                data,
+                (
+                    data.mouse_position.0 + event.delta_x(),
+                    data.mouse_position.1 + event.delta_y(),
+                ),
+            );
         }
         InputEvent::PointerMotionAbsolute { event } => {
-            data.mouse_position = (event.x(), event.y());
-            send_motion_event(data);
+            clamp_mouse_to_monitor(data, (event.x(), event.y()));
         }
         InputEvent::PointerButton { event } => {
             let phase = if event.state() == ButtonState::Pressed {
@@ -162,20 +165,6 @@ pub fn handle_input<BackendData>(
         }
         InputEvent::Keyboard { event } => {
             data.handle_key_event(event.key_code(), event.state(), event.time_msec());
-
-            let pressed_keys = data
-                .keyboard
-                .pressed_keys()
-                .iter()
-                .map(|key| key.raw())
-                .collect::<HashSet<_>>();
-
-            if pressed_keys.contains(&(KEY_ESC as u32))
-                && pressed_keys.contains(&(KEY_LEFTALT as u32))
-            {
-                data.running.store(false, Ordering::SeqCst);
-                return;
-            }
         }
         InputEvent::GestureSwipeBegin { .. } => {}
         InputEvent::GestureSwipeUpdate { .. } => {}
@@ -199,7 +188,40 @@ pub fn handle_input<BackendData>(
     }
 }
 
-fn send_motion_event<BackendData>(data: &mut ServerState<BackendData>)
+fn clamp_mouse_to_monitor<BackendData>(
+    data: &mut State<BackendData>,
+    new_mouse_position: (f64, f64),
+) where
+    BackendData: Backend + 'static,
+{
+    let outputs: Vec<smithay::output::Output> = data.backend_data.get_monitor_layout();
+
+    let mut clamped_position = new_mouse_position;
+
+    for output in outputs {
+        let location = output.current_location();
+        let size = output.current_mode().unwrap().size;
+
+        // Clamp x-coordinate
+        if clamped_position.0 < location.x as f64 {
+            clamped_position.0 = location.x as f64;
+        } else if clamped_position.0 > (location.x as f64 + size.w as f64) {
+            clamped_position.0 = location.x as f64 + size.w as f64;
+        }
+
+        // Clamp y-coordinate
+        if clamped_position.1 < location.y as f64 {
+            clamped_position.1 = location.y as f64;
+        } else if clamped_position.1 > (location.y as f64 + size.h as f64) {
+            clamped_position.1 = location.y as f64 + size.h as f64;
+        }
+    }
+
+    data.mouse_position = clamped_position;
+    send_motion_event(data);
+}
+
+fn send_motion_event<BackendData>(data: &mut State<BackendData>)
 where
     BackendData: Backend + 'static,
 {

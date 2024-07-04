@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/shared/provider/app_launch.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
-import 'package:shell/window/provider/persistant_window_state.dart';
-import 'package:shell/window/provider/window.manager.dart';
+import 'package:shell/window/provider/persistent_window_state.dart';
+import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/workspace/model/workspace_shortcuts.dart';
 import 'package:shell/workspace/provider/current_workspace_id.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
@@ -37,6 +36,7 @@ class WorkspaceWidget extends HookConsumerWidget {
       },
       [isSelected],
     );
+
     final windowManager = ref.watch(windowManagerProvider.notifier);
     final currentWorkspaceId = ref.watch(currentWorkspaceIdProvider);
     final workspaceState =
@@ -49,22 +49,46 @@ class WorkspaceWidget extends HookConsumerWidget {
         print('start ${entry.desktopEntry.id}');
         final newWindowId =
             windowManager.createPersistentWindowForDesktopEntry(entry);
+
+        ref
+            .read(persistentWindowStateProvider(newWindowId).notifier)
+            .launchSelf();
+
         ref
             .read(workspaceStateProvider(currentWorkspaceId).notifier)
             .addWindow(newWindowId);
-
-        ref
-            .read(appLaunchProvider.notifier)
-            .launchDesktopEntry(entry.desktopEntry);
       },
     );
 
     final tileableList = <Tileable>[];
     for (final (index, windowId) in workspaceState.tileableWindowList.indexed) {
+      final persistentFocusNode =
+          useFocusNode(debugLabel: 'PersistentWindowTileable');
+      void onTileableFocusChange() {
+        if (persistentFocusNode.hasFocus) {
+          ref
+              .read(workspaceStateProvider(currentWorkspaceId).notifier)
+              .setFocusedIndex(index);
+        }
+      }
+
+      useEffect(
+        () {
+          persistentFocusNode.addListener(onTileableFocusChange);
+          return () {
+            persistentFocusNode.removeListener(onTileableFocusChange);
+          };
+        },
+        [persistentFocusNode],
+      );
+      if (workspaceState.focusedIndex == index &&
+          !persistentFocusNode.hasFocus) {
+        persistentFocusNode.requestFocus();
+      }
       tileableList.add(
         PersistentWindowTileable(
           windowId: windowId,
-          isFocused: workspaceState.focusedIndex == index,
+          focusNode: persistentFocusNode,
         ),
       );
     }
@@ -119,7 +143,6 @@ class WorkspaceWidget extends HookConsumerWidget {
         },
         child: FocusScope(
           node: workspaceFocusScopeNode,
-          onFocusChange: (value) {},
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

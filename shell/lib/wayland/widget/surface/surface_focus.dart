@@ -4,8 +4,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 class SurfaceFocus extends HookConsumerWidget {
-  const SurfaceFocus({
-    required this.child,
+  const SurfaceFocus({required this.child, super.key,
   });
 
   final Widget child;

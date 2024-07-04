@@ -1,14 +1,14 @@
-use crate::server::ServerState;
+use crate::state::State;
 use crate::Backend;
 use smithay::reexports::calloop;
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::calloop::{timer, LoopHandle, RegistrationToken};
 use std::time::{Duration, Instant};
 
-type Callback<BackendData> = fn(u32, Option<char>, &mut ServerState<BackendData>);
+type Callback<BackendData> = fn(u32, Option<char>, &mut State<BackendData>);
 
 pub struct KeyRepeater<BackendData: Backend + 'static> {
-    loop_handle: LoopHandle<'static, ServerState<BackendData>>,
+    loop_handle: LoopHandle<'static, State<BackendData>>,
     timer_token: Option<RegistrationToken>,
     callback: Callback<BackendData>,
     repeating_key: Option<u32>,
@@ -16,7 +16,7 @@ pub struct KeyRepeater<BackendData: Backend + 'static> {
 
 impl<BackendData: Backend + 'static> KeyRepeater<BackendData> {
     pub fn new(
-        loop_handle: LoopHandle<'static, ServerState<BackendData>>,
+        loop_handle: LoopHandle<'static, State<BackendData>>,
         callback: Callback<BackendData>,
     ) -> Self {
         Self {

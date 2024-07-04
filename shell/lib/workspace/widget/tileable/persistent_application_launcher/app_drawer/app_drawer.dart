@@ -15,21 +15,14 @@ class AppDrawer extends HookConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(),
-            child: _AppDrawerTextField(
-              onSearchTextChange: (searchText) {
-                searchTextState.value = searchText;
-              },
-            ),
+          _AppDrawerTextField(
+            onSearchTextChange: (searchText) {
+              searchTextState.value = searchText;
+            },
           ),
           const SizedBox(height: 24),
           Expanded(
             child: Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
               child: AppGrid(
                 searchText: searchTextState.value,
                 onSelect: onSelect,
@@ -53,21 +46,29 @@ class _AppDrawerTextField extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final searchController = useTextEditingController();
     final searchFocusNode = useFocusNode();
+    final onListener = useMemoized(
+      () => () {
+        onSearchTextChange(searchController.text);
+      },
+    );
     useEffect(
       () {
-        searchController.addListener(() {
-          onSearchTextChange(searchController.text);
-        });
-        searchFocusNode.requestFocus();
-        return null;
+        searchController.addListener(onListener);
+
+        return () {
+          searchController.removeListener(onListener);
+        };
       },
-      [],
+      [searchController],
     );
+    final scope = FocusScope.of(context);
+    if (scope.hasFocus) {
+      scope.autofocus(searchFocusNode);
+    }
 
     return TextField(
       controller: searchController,
       focusNode: searchFocusNode,
-      autofocus: true,
       decoration: InputDecoration(
         prefixIcon: const Padding(
           padding: EdgeInsets.fromLTRB(16, 0, 8, 0),

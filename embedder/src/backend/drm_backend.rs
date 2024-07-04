@@ -47,7 +47,8 @@ use smithay_drm_extras::edid::EdidInfo;
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::flutter_engine::FlutterEngine;
 use crate::input_handling::handle_input;
-use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, Backend, ServerState};
+use crate::state;
+use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, Backend, State};
 
 pub struct DrmBackend {
     pub space: Space<Window>,
@@ -85,6 +86,10 @@ impl Backend for DrmBackend {
     fn get_monitor_layout(&self) -> Vec<Output> {
         self.space.outputs().cloned().collect::<Vec<_>>()
     }
+
+    fn get_session(&self) -> LibSeatSession {
+        self.session.clone()
+    }
 }
 
 impl DrmBackend {
@@ -119,7 +124,7 @@ const SUPPORTED_FORMATS_8BIT_ONLY: &[Fourcc] = &[Fourcc::Abgr8888, Fourcc::Argb8
 
 pub fn run_drm_backend() {
     let mut event_loop = EventLoop::try_new().unwrap();
-    let display: Display<ServerState<DrmBackend>> = Display::new().unwrap();
+    let display: Display<State<DrmBackend>> = Display::new().unwrap();
     let mut display_handle = display.handle();
 
     let (session, _notifier) = match LibSeatSession::new() {
@@ -164,7 +169,7 @@ pub fn run_drm_backend() {
     libinput_context.udev_assign_seat(&session.seat()).unwrap();
     let libinput_backend = LibinputInputBackend::new(libinput_context.clone());
 
-    let mut state = ServerState::new(
+    let mut state = State::new(
         display,
         event_loop.handle(),
         DrmBackend {
@@ -196,11 +201,10 @@ pub fn run_drm_backend() {
         .build()
         .unwrap();
     let mut dmabuf_state = DmabufState::new();
-    let _dmabuf_global = dmabuf_state
-        .create_global_with_default_feedback::<ServerState<DrmBackend>>(
-            &display_handle,
-            &dmabuf_default_feedback,
-        );
+    let _dmabuf_global = dmabuf_state.create_global_with_default_feedback::<State<DrmBackend>>(
+        &display_handle,
+        &dmabuf_default_feedback,
+    );
 
     state.dmabuf_state = Some(dmabuf_state);
 
@@ -285,7 +289,7 @@ pub fn run_drm_backend() {
         })
         .unwrap();
 
-    state.start_xwayland();
+    state::State::<DrmBackend>::start_xwayland(&mut state);
 
     while state.running.load(Ordering::SeqCst) {
         let result = event_loop.dispatch(None, &mut state);
@@ -300,7 +304,7 @@ pub fn run_drm_backend() {
     drop(tx_fbo);
 }
 
-impl ServerState<DrmBackend> {
+impl State<DrmBackend> {
     // TODO: I don't think this method should be here.
     // It should probably be in GpuData or SurfaceData.
     pub fn update_crtc_planes(&mut self, crtc: crtc::Handle) {
@@ -473,7 +477,7 @@ enum DeviceAddError {
     AddNode(egl::Error),
 }
 
-impl ServerState<DrmBackend> {
+impl State<DrmBackend> {
     fn gpu_added(&mut self, node: DrmNode, path: &Path) -> Result<(), DeviceAddError> {
         // Try to open the device
         let fd = self
@@ -493,7 +497,7 @@ impl ServerState<DrmBackend> {
             .loop_handle
             .insert_source(
                 notifier,
-                move |event, _metadata, data: &mut ServerState<_>| match event {
+                move |event, _metadata, data: &mut State<_>| match event {
                     DrmEvent::VBlank(crtc) => {
                         let gpu_data = data.backend_data.gpus.get_mut(&node).unwrap();
 
@@ -700,7 +704,7 @@ impl ServerState<DrmBackend> {
                 model,
             },
         );
-        let global = output.create_global::<ServerState<DrmBackend>>(&self.display_handle);
+        let global = output.create_global::<State<DrmBackend>>(&self.display_handle);
 
         // Put the new output at the right of the last one.
         let x = self.backend_data.space.outputs().fold(0, |acc, o| {

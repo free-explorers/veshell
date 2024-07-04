@@ -20,11 +20,13 @@ class XdgToplevelState extends _$XdgToplevelState {
     throw Exception('XdgToplevel $surfaceId state was not initialized');
   }
 
-  void initialize() {
+  void initialize(int pid) {
     _keepAliveLink = ref.keepAlive();
     ref.onDispose(() {
       print('disposing XdgToplevelStateProvider $surfaceId');
     });
+
+    ref.read(windowPropertiesStateProvider(surfaceId).notifier).setPid(pid);
 
     state = const XdgToplevel(
       committed: false,
@@ -89,5 +91,6 @@ class XdgToplevelState extends _$XdgToplevelState {
       ref.read(surfaceMappedProvider.notifier).unmapped(surfaceId);
     }
     _keepAliveLink.close();
+    ref.invalidateSelf();
   }
 }

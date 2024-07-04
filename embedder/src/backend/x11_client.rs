@@ -6,6 +6,7 @@ use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::renderer::{ImportDma, ImportEgl};
 use smithay::output::{Output, PhysicalProperties, Subpixel};
+use smithay::reexports::ash::ext;
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::x11rb::protocol::xproto::{
@@ -25,7 +26,6 @@ use smithay::{
     },
     output::Mode,
     reexports::{
-        ash::vk::ExtPhysicalDeviceDrmFn,
         calloop::EventLoop,
         gbm::{self, BufferObjectFlags as GbmBufferFlags},
         wayland_server::Display,
@@ -36,11 +36,12 @@ use tracing::info;
 
 use crate::flutter_engine::FlutterEngine;
 use crate::input_handling::handle_input;
-use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, Backend, ServerState};
+use crate::state;
+use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, Backend, State};
 
 pub fn run_x11_client() {
     let mut event_loop = EventLoop::try_new().unwrap();
-    let display: Display<ServerState<X11Data>> = Display::new().unwrap();
+    let display: Display<State<X11Data>> = Display::new().unwrap();
     let mut display_handle = display.handle();
 
     let x11_backend = x11::X11Backend::new().expect("Failed to initilize X11 backend");
@@ -83,7 +84,7 @@ pub fn run_x11_client() {
             model: "x11".into(),
         },
     );
-    let _global = output.create_global::<ServerState<X11Data>>(&display_handle);
+    let _global = output.create_global::<State<X11Data>>(&display_handle);
     output.change_current_state(Some(mode), None, None, Some((0, 0).into()));
     output.set_preferred(mode);
 
@@ -104,7 +105,7 @@ pub fn run_x11_client() {
                     .ok()
                     .and_then(|devices| {
                         devices
-                            .filter(|phd| phd.has_device_extension(ExtPhysicalDeviceDrmFn::name()))
+                            .filter(|phd| phd.has_device_extension(ext::physical_device_drm::NAME))
                             .find(|phd| {
                                 phd.primary_node().unwrap() == Some(node)
                                     || phd.render_node().unwrap() == Some(node)
@@ -153,17 +154,17 @@ pub fn run_x11_client() {
         info!("EGL hardware-acceleration enabled");
     }
 
-    let dmabuf_formats = gles_renderer.dmabuf_formats().collect::<Vec<_>>();
+    let dmabuf_formats = gles_renderer.dmabuf_formats();
     let dmabuf_default_feedback = DmabufFeedbackBuilder::new(node.dev_id(), dmabuf_formats)
         .build()
         .unwrap();
     let mut dmabuf_state = DmabufState::new();
-    let _dmabuf_global = dmabuf_state.create_global_with_default_feedback::<ServerState<X11Data>>(
+    let _dmabuf_global = dmabuf_state.create_global_with_default_feedback::<State<X11Data>>(
         &display.handle(),
         &dmabuf_default_feedback,
     );
 
-    let mut state = ServerState::new(
+    let mut state = State::new(
         display,
         event_loop.handle(),
         X11Data {
@@ -209,7 +210,7 @@ pub fn run_x11_client() {
         .handle()
         .insert_source(
             x11_backend,
-            move |event, _, data: &mut ServerState<X11Data>| match event {
+            move |event, _, data: &mut State<X11Data>| match event {
                 X11Event::CloseRequested { .. } => {
                     data.running.store(false, Ordering::SeqCst);
                 }
@@ -308,7 +309,7 @@ pub fn run_x11_client() {
         })
         .unwrap();
 
-    state.start_xwayland();
+    state::State::<X11Data>::start_xwayland(&mut state);
 
     while state.running.load(Ordering::SeqCst) {
         let result = event_loop.dispatch(None, &mut state);
@@ -336,5 +337,9 @@ impl Backend for X11Data {
 
     fn get_monitor_layout(&self) -> Vec<Output> {
         vec![self.output.clone()]
+    }
+
+    fn get_session(&self) -> smithay::backend::session::libseat::LibSeatSession {
+        unreachable!("X11 backend does not support libseat")
     }
 }

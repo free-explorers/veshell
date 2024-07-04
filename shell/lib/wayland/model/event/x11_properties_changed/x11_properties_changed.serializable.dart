@@ -17,6 +17,7 @@ sealed class X11PropertiesChangedMessage
     required String? windowClass,
     required String? instance,
     required String? startupId,
+    required int? pid,
   }) = _X11PropertiesChangedMessage;
 
   factory X11PropertiesChangedMessage.fromJson(Map<String, dynamic> json) =>

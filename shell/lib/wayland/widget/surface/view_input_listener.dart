@@ -179,7 +179,7 @@ class ViewInputListener extends ConsumerWidget {
   }
 
   Future<void> _mouseButtonsEvent(
-      WidgetRef ref, List<MouseButtonEvent> events) {
+      WidgetRef ref, List<MouseButtonEvent> events,) {
     return ref.read(waylandManagerProvider.notifier).request(
           MouseButtonsEventRequest(
             message: MouseButtonsEventMessage(

@@ -51,6 +51,7 @@
 			},
 		},
 		{
+			"label": "build veshell",
 			"type": "dart",
 			"command": "dart",
 			"args": [
@@ -58,7 +59,6 @@
 				"veshell",
 				"build"
 			],
-			"label": "build veshell",
 			"group": {
 				"kind": "build",
 				"isDefault": true
@@ -82,33 +82,6 @@
 				"cwd": "${workspaceFolder}/shell"
 			},
 			"dependsOn": "build veshell",
-			"isBackground": true,
-			"presentation": {
-				"echo": true,
-				"reveal": "silent",
-				"focus": false,
-				"panel": "shared",
-				"showReuseMessage": true,
-				"clear": false
-			},
-		},
-		{
-			"label": "build_runner watch only",
-			"type": "dart",
-			"command": "dart",
-			"args": [
-				"run",
-				"build_runner",
-				"watch"
-			],
-			"problemMatcher": [
-				"$dart-build_runner",
-			],
-			"group": "build",
-			"detail": "shell",
-			"options": {
-				"cwd": "${workspaceFolder}/shell"
-			},
 			"isBackground": true,
 			"presentation": {
 				"echo": true,
