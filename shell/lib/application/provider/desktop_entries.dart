@@ -7,5 +7,6 @@ part 'desktop_entries.g.dart';
 Future<Map<String, DesktopEntry>> installedDesktopEntries(
   InstalledDesktopEntriesRef ref,
 ) async {
-  return parseAllInstalledDesktopFiles();
+  final entries = await parseAllInstalledDesktopFiles();
+  return entries;
 }

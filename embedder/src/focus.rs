@@ -25,7 +25,7 @@ use smithay::{
     },
 };
 
-use crate::server::ServerState;
+use crate::state::State;
 use crate::Backend;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -63,11 +63,11 @@ impl From<PointerFocusTarget> for WlSurface {
     }
 }
 
-impl<BackendData: Backend> PointerTarget<ServerState<BackendData>> for PointerFocusTarget {
+impl<BackendData: Backend> PointerTarget<State<BackendData>> for PointerFocusTarget {
     fn enter(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         event: &MotionEvent,
     ) {
         match self {
@@ -77,8 +77,8 @@ impl<BackendData: Backend> PointerTarget<ServerState<BackendData>> for PointerFo
     }
     fn motion(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         event: &MotionEvent,
     ) {
         match self {
@@ -88,8 +88,8 @@ impl<BackendData: Backend> PointerTarget<ServerState<BackendData>> for PointerFo
     }
     fn relative_motion(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         event: &RelativeMotionEvent,
     ) {
         match self {
@@ -103,8 +103,8 @@ impl<BackendData: Backend> PointerTarget<ServerState<BackendData>> for PointerFo
     }
     fn button(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         event: &ButtonEvent,
     ) {
         match self {
@@ -114,8 +114,8 @@ impl<BackendData: Backend> PointerTarget<ServerState<BackendData>> for PointerFo
     }
     fn axis(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         frame: AxisFrame,
     ) {
         match self {
@@ -123,7 +123,7 @@ impl<BackendData: Backend> PointerTarget<ServerState<BackendData>> for PointerFo
             PointerFocusTarget::X11Surface(w) => PointerTarget::axis(w, seat, data, frame),
         }
     }
-    fn frame(&self, seat: &Seat<ServerState<BackendData>>, data: &mut ServerState<BackendData>) {
+    fn frame(&self, seat: &Seat<State<BackendData>>, data: &mut State<BackendData>) {
         match self {
             PointerFocusTarget::WlSurface(w) => PointerTarget::frame(w, seat, data),
             PointerFocusTarget::X11Surface(w) => PointerTarget::frame(w, seat, data),
@@ -131,8 +131,8 @@ impl<BackendData: Backend> PointerTarget<ServerState<BackendData>> for PointerFo
     }
     fn leave(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         serial: Serial,
         time: u32,
     ) {
@@ -143,8 +143,8 @@ impl<BackendData: Backend> PointerTarget<ServerState<BackendData>> for PointerFo
     }
     fn gesture_swipe_begin(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         event: &GestureSwipeBeginEvent,
     ) {
         match self {
@@ -158,8 +158,8 @@ impl<BackendData: Backend> PointerTarget<ServerState<BackendData>> for PointerFo
     }
     fn gesture_swipe_update(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         event: &GestureSwipeUpdateEvent,
     ) {
         match self {
@@ -173,8 +173,8 @@ impl<BackendData: Backend> PointerTarget<ServerState<BackendData>> for PointerFo
     }
     fn gesture_swipe_end(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         event: &GestureSwipeEndEvent,
     ) {
         match self {
@@ -188,8 +188,8 @@ impl<BackendData: Backend> PointerTarget<ServerState<BackendData>> for PointerFo
     }
     fn gesture_pinch_begin(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         event: &GesturePinchBeginEvent,
     ) {
         match self {
@@ -203,8 +203,8 @@ impl<BackendData: Backend> PointerTarget<ServerState<BackendData>> for PointerFo
     }
     fn gesture_pinch_update(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         event: &GesturePinchUpdateEvent,
     ) {
         match self {
@@ -218,8 +218,8 @@ impl<BackendData: Backend> PointerTarget<ServerState<BackendData>> for PointerFo
     }
     fn gesture_pinch_end(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         event: &GesturePinchEndEvent,
     ) {
         match self {
@@ -233,8 +233,8 @@ impl<BackendData: Backend> PointerTarget<ServerState<BackendData>> for PointerFo
     }
     fn gesture_hold_begin(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         event: &GestureHoldBeginEvent,
     ) {
         match self {
@@ -248,8 +248,8 @@ impl<BackendData: Backend> PointerTarget<ServerState<BackendData>> for PointerFo
     }
     fn gesture_hold_end(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         event: &GestureHoldEndEvent,
     ) {
         match self {
@@ -263,11 +263,11 @@ impl<BackendData: Backend> PointerTarget<ServerState<BackendData>> for PointerFo
     }
 }
 
-impl<BackendData: Backend> KeyboardTarget<ServerState<BackendData>> for KeyboardFocusTarget {
+impl<BackendData: Backend> KeyboardTarget<State<BackendData>> for KeyboardFocusTarget {
     fn enter(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         keys: Vec<KeysymHandle<'_>>,
         serial: Serial,
     ) {
@@ -280,8 +280,8 @@ impl<BackendData: Backend> KeyboardTarget<ServerState<BackendData>> for Keyboard
     }
     fn leave(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         serial: Serial,
     ) {
         match self {
@@ -291,8 +291,8 @@ impl<BackendData: Backend> KeyboardTarget<ServerState<BackendData>> for Keyboard
     }
     fn key(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         key: KeysymHandle<'_>,
         state: KeyState,
         serial: Serial,
@@ -309,8 +309,8 @@ impl<BackendData: Backend> KeyboardTarget<ServerState<BackendData>> for Keyboard
     }
     fn modifiers(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         modifiers: ModifiersState,
         serial: Serial,
     ) {
@@ -325,11 +325,11 @@ impl<BackendData: Backend> KeyboardTarget<ServerState<BackendData>> for Keyboard
     }
 }
 
-impl<BackendData: Backend> TouchTarget<ServerState<BackendData>> for PointerFocusTarget {
+impl<BackendData: Backend> TouchTarget<State<BackendData>> for PointerFocusTarget {
     fn down(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         event: &smithay::input::touch::DownEvent,
         seq: Serial,
     ) {
@@ -341,8 +341,8 @@ impl<BackendData: Backend> TouchTarget<ServerState<BackendData>> for PointerFocu
 
     fn up(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         event: &smithay::input::touch::UpEvent,
         seq: Serial,
     ) {
@@ -354,8 +354,8 @@ impl<BackendData: Backend> TouchTarget<ServerState<BackendData>> for PointerFocu
 
     fn motion(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         event: &smithay::input::touch::MotionEvent,
         seq: Serial,
     ) {
@@ -365,24 +365,14 @@ impl<BackendData: Backend> TouchTarget<ServerState<BackendData>> for PointerFocu
         }
     }
 
-    fn frame(
-        &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
-        seq: Serial,
-    ) {
+    fn frame(&self, seat: &Seat<State<BackendData>>, data: &mut State<BackendData>, seq: Serial) {
         match self {
             PointerFocusTarget::WlSurface(w) => TouchTarget::frame(w, seat, data, seq),
             PointerFocusTarget::X11Surface(w) => TouchTarget::frame(w, seat, data, seq),
         }
     }
 
-    fn cancel(
-        &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
-        seq: Serial,
-    ) {
+    fn cancel(&self, seat: &Seat<State<BackendData>>, data: &mut State<BackendData>, seq: Serial) {
         match self {
             PointerFocusTarget::WlSurface(w) => TouchTarget::cancel(w, seat, data, seq),
             PointerFocusTarget::X11Surface(w) => TouchTarget::cancel(w, seat, data, seq),
@@ -391,8 +381,8 @@ impl<BackendData: Backend> TouchTarget<ServerState<BackendData>> for PointerFocu
 
     fn shape(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         event: &smithay::input::touch::ShapeEvent,
         seq: Serial,
     ) {
@@ -404,8 +394,8 @@ impl<BackendData: Backend> TouchTarget<ServerState<BackendData>> for PointerFocu
 
     fn orientation(
         &self,
-        seat: &Seat<ServerState<BackendData>>,
-        data: &mut ServerState<BackendData>,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
         event: &smithay::input::touch::OrientationEvent,
         seq: Serial,
     ) {

@@ -9,7 +9,7 @@ part 'xdg_popup_state.g.dart';
 
 @riverpod
 class XdgPopupState extends _$XdgPopupState {
-  late final KeepAliveLink _keepAliveLink;
+  KeepAliveLink? _keepAliveLink;
 
   @override
   XdgPopup build(SurfaceId surfaceId) {
@@ -21,9 +21,6 @@ class XdgPopupState extends _$XdgPopupState {
     required Offset position,
   }) {
     _keepAliveLink = ref.keepAlive();
-    ref.onDispose(() {
-      print('disposing XdgPopupStateProvider $surfaceId');
-    });
     state = XdgPopup(
       committed: false,
       parent: parent,
@@ -47,6 +44,6 @@ class XdgPopupState extends _$XdgPopupState {
   }
 
   void dispose() {
-    _keepAliveLink.close();
+    _keepAliveLink?.close();
   }
 }

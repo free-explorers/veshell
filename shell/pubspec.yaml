@@ -50,6 +50,9 @@ dependencies:
   json_annotation: ^4.8.1
   uuid: ^4.2.2
   collection: ^1.18.0
+  path: any
+  logger: ^2.3.0
+  logging: ^1.2.0
   
 dev_dependencies:
   # The "flutter_lints" package below contains a set of recommended lints to

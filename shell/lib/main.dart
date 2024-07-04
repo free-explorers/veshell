@@ -7,17 +7,19 @@ import 'package:shell/monitor/provider/monitor_list.dart';
 import 'package:shell/screen/provider/screen_list.dart';
 import 'package:shell/shared/provider/persistent_json_by_folder.dart';
 import 'package:shell/shared/provider/root_overlay.dart';
-import 'package:shell/theme/provider/theme.manager.dart';
+import 'package:shell/shared/util/logger.dart';
+import 'package:shell/theme/theme.dart';
 import 'package:shell/wayland/model/request/get_environment_variables/get_environment_variables.serializable.dart';
 import 'package:shell/wayland/model/request/get_monitor_layout/get_monitor_layout.serializable.dart';
 import 'package:shell/wayland/model/request/shell_ready/shell_ready.serializable.dart';
 import 'package:shell/wayland/provider/environment_variables.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
-import 'package:shell/window/provider/window.manager.dart';
+import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
 void main() {
+  configureLogs();
   // debugRepaintRainbowEnabled = true;
   // debugPrintGestureArenaDiagnostics = true;
   WidgetsFlutterBinding.ensureInitialized();
@@ -88,9 +90,10 @@ class Veshell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = ref.watch(themeProvider);
     return MaterialApp(
-      theme: theme,
+      theme: VeshellTheme.light,
+      darkTheme: VeshellTheme.dark,
+      themeMode: ThemeMode.dark,
       home: _EagerInitialization(
         child: Scaffold(
           body: HookConsumer(
@@ -99,12 +102,15 @@ class Veshell extends ConsumerWidget {
               WidgetRef ref,
               Widget? child,
             ) {
-              useEffect(() {
-                ref
-                    .read(waylandManagerProvider.notifier)
-                    .request(const ShellReadyRequest());
-                return null;
-              });
+              useEffect(
+                () {
+                  ref
+                      .read(waylandManagerProvider.notifier)
+                      .request(const ShellReadyRequest());
+                  return null;
+                },
+                [],
+              );
               return Stack(
                 children: [
                   const Positioned.fill(child: DisplayWidget()),

@@ -18,7 +18,8 @@ class PersistentApplicationSelector extends Tileable {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final focusNode = useFocusNode(debugLabel: 'PersistentApplicationSelector');
+    final focusNode =
+        useFocusScopeNode(debugLabel: 'PersistentApplicationSelector');
     useEffect(
       () {
         if (isFocused) {
@@ -28,8 +29,8 @@ class PersistentApplicationSelector extends Tileable {
       },
       [isFocused],
     );
-    return Focus(
-      focusNode: focusNode,
+    return FocusScope(
+      node: focusNode,
       child: ColoredBox(
         color: Colors.black26,
         child: AppDrawer(

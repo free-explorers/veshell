@@ -7,6 +7,7 @@ import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/model/x11_surface.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
+import 'package:shell/window/provider/window_properties.dart';
 
 part 'x11_surface_state.g.dart';
 
@@ -39,6 +40,7 @@ class X11SurfaceState extends _$X11SurfaceState {
       windowClass: null,
       instance: null,
       startupId: null,
+      pid: null,
     );
   }
 
@@ -116,6 +118,15 @@ class X11SurfaceState extends _$X11SurfaceState {
       wlSurfaceStateProvider(surfaceId).select((value) => value.texture),
       (_, __) => _checkIfMapped(),
     );
+    ref
+        .read(windowPropertiesStateProvider(state.surfaceId!).notifier)
+        .setProperties(
+          appId: state.instance ?? '',
+          title: state.title,
+          windowClass: state.windowClass,
+          startupId: state.startupId,
+          pid: state.pid,
+        );
     _checkIfMapped();
   }
 
@@ -156,13 +167,26 @@ class X11SurfaceState extends _$X11SurfaceState {
     required String? windowClass,
     required String? instance,
     required String? startupId,
+    required int? pid,
   }) {
     state = state.copyWith(
       title: title,
       windowClass: windowClass,
       instance: instance,
       startupId: startupId,
+      pid: pid,
     );
+    if (state.surfaceId != null) {
+      ref
+          .read(windowPropertiesStateProvider(state.surfaceId!).notifier)
+          .setProperties(
+            appId: instance ?? '',
+            title: title,
+            windowClass: windowClass,
+            startupId: startupId,
+            pid: pid,
+          );
+    }
   }
 
   void _checkIfMapped() {

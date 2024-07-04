@@ -1,6 +1,8 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/overview/provider/overview_state.dart';
+import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/shared/provider/persistent_json_by_folder.dart';
@@ -13,17 +15,21 @@ import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/wayland/provider/x11_surface_state.dart';
 import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
 import 'package:shell/window/model/dialog_window.dart';
+import 'package:shell/window/model/ephemeral_window.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/model/window_properties.serializable.dart';
 import 'package:shell/window/provider/dialog_list_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
-import 'package:shell/window/provider/persistant_window_state.dart';
+import 'package:shell/window/provider/ephemeral_window_state.dart';
+import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/surface_window_map.dart';
+import 'package:shell/window/provider/window_manager/matching_engine.dart';
 import 'package:shell/workspace/provider/window_workspace_map.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:uuid/uuid.dart';
 
-part 'window.manager.g.dart';
+part 'window_manager.g.dart';
 
 /// Window manager
 @Riverpod(keepAlive: true)
@@ -33,9 +39,11 @@ class WindowManager extends _$WindowManager {
   ISet<PersistentWindowId> get _persistentWindowSet =>
       state.whereType<PersistentWindowId>().toISet();
 
+  ISet<EphemeralWindowId> get _ephemeralWindowSet =>
+      state.whereType<EphemeralWindowId>().toISet();
+
   @override
   ISet<WindowId> build() {
-    print('WindowManager build');
     ref.listen(
       surfaceMappedProvider,
       (_, next) async {
@@ -61,6 +69,12 @@ class WindowManager extends _$WindowManager {
     return intialSet;
   }
 
+  /// Get the Persistent Window Set
+  ISet<PersistentWindowId> getPersistentWindowSet() => _persistentWindowSet;
+
+  /// Get the Ephemeral Window Set
+  ISet<EphemeralWindowId> getEphemeralWindowSet() => _ephemeralWindowSet;
+
   /// Create persistent window for desktop entry
   PersistentWindowId createPersistentWindowForDesktopEntry(
     LocalizedDesktopEntry entry,
@@ -69,16 +83,42 @@ class WindowManager extends _$WindowManager {
 
     final persistentWindow = PersistentWindow(
       windowId: windowId,
-      appId: entry.desktopEntry.id,
-      title: entry.entries[DesktopEntryKey.name.string],
-      isWaitingForSurface: true,
+      properties: WindowProperties(
+        appId: entry.desktopEntry.id ?? '',
+        title: entry.entries[DesktopEntryKey.name.string],
+      ),
     );
 
     ref
-        .read(PersistentWindowStateProvider(windowId).notifier)
+        .read(persistentWindowStateProvider(windowId).notifier)
         .initialize(persistentWindow);
 
     state = state.add(windowId);
+    return windowId;
+  }
+
+  /// Create persistent window for desktop entry
+  EphemeralWindowId createEphemeralWindowForDesktopEntry(
+    LocalizedDesktopEntry entry,
+    ScreenId screenId,
+  ) {
+    final windowId = EphemeralWindowId(_uuidGenerator.v4());
+
+    final ephemeralWindow = EphemeralWindow(
+      windowId: windowId,
+      screenId: screenId,
+      properties: WindowProperties(
+        appId: entry.desktopEntry.id ?? '',
+        title: entry.entries[DesktopEntryKey.name.string],
+      ),
+    );
+
+    ref
+        .read(ephemeralWindowStateProvider(windowId).notifier)
+        .initialize(ephemeralWindow);
+
+    state = state.add(windowId);
+    print('return windowId $windowId');
     return windowId;
   }
 
@@ -100,29 +140,12 @@ class WindowManager extends _$WindowManager {
   void _onToplevelMapped(SurfaceId surfaceId) {
     final toplevelState = ref.read(xdgToplevelStateProvider(surfaceId));
 
-    for (final windowId in _persistentWindowSet) {
-      final window = ref.read(persistentWindowStateProvider(windowId));
-      if (window.appId == toplevelState.appId && window.isWaitingForSurface) {
-        ref.read(persistentWindowStateProvider(windowId).notifier).initialize(
-              window.copyWith(
-                title: toplevelState.title ?? window.title,
-                surfaceId: surfaceId,
-                isWaitingForSurface: false,
-              ),
-            );
-        return;
-      }
-    }
     if (toplevelState.parent != null) {
       _createDialogWindowForSurface(surfaceId, toplevelState);
       return;
     }
-    // create a new window
-    _createPersistentWindowForSurface(
-      surfaceId: surfaceId,
-      appId: toplevelState.appId,
-      title: toplevelState.title,
-    );
+
+    ref.read(matchingEngineProvider.notifier).addSurface(surfaceId);
   }
 
   void _onX11SurfaceMapped(SurfaceId surfaceId) {
@@ -133,30 +156,10 @@ class WindowManager extends _$WindowManager {
       // Override redirect surfaces should not be managed by the window manager.
       return;
     }
-
-    for (final windowId in _persistentWindowSet) {
-      final window = ref.read(persistentWindowStateProvider(windowId));
-      if (window.isWaitingForSurface) {
-        ref.read(persistentWindowStateProvider(windowId).notifier).initialize(
-              window.copyWith(
-                title: x11SurfaceState.title ?? window.title,
-                surfaceId: surfaceId,
-                isWaitingForSurface: false,
-              ),
-            );
-        return;
-      }
-    }
-
-    // create a new window
-    _createPersistentWindowForSurface(
-      surfaceId: surfaceId,
-      appId: x11SurfaceState.instance,
-      title: x11SurfaceState.title,
-    );
+    ref.read(matchingEngineProvider.notifier).addSurface(surfaceId);
   }
 
-  void _createPersistentWindowForSurface({
+  void createPersistentWindowForSurface({
     required SurfaceId surfaceId,
     required String? appId,
     required String? title,
@@ -166,8 +169,10 @@ class WindowManager extends _$WindowManager {
 
     final persistentWindow = PersistentWindow(
       windowId: windowId,
-      appId: appId,
-      title: title,
+      properties: WindowProperties(
+        appId: appId ?? '',
+        title: title,
+      ),
       surfaceId: surfaceId,
     );
 
@@ -198,8 +203,10 @@ class WindowManager extends _$WindowManager {
 
     final dialogWindow = DialogWindow(
       windowId: windowId,
-      appId: toplevelState.appId ?? 'unknown',
-      title: toplevelState.title ?? 'unknown',
+      properties: WindowProperties(
+        appId: toplevelState.appId ?? 'unknown',
+        title: toplevelState.title ?? 'unknown',
+      ),
       surfaceId: surfaceId,
       parentSurfaceId: toplevelState.parent!,
     );
@@ -219,6 +226,7 @@ class WindowManager extends _$WindowManager {
   }
 
   void _onSurfaceUnmapped(SurfaceId surfaceId) {
+    ref.read(matchingEngineProvider.notifier).removeSurface(surfaceId);
     if (ref.read(surfaceWindowMapProvider).get(surfaceId)
         case final WindowId windowId) {
       switch (windowId) {
@@ -227,10 +235,6 @@ class WindowManager extends _$WindowManager {
               .read(persistentWindowStateProvider(windowId).notifier)
               .onSurfaceIsDestroyed();
         case DialogWindowId():
-          ref
-              .read(dialogWindowStateProvider(windowId).notifier)
-              .onSurfaceIsDestroyed();
-
           final dialogWindow = ref.read(dialogWindowStateProvider(windowId));
 
           ref.read(dialogListForWindowProvider.notifier).remove(
@@ -239,9 +243,16 @@ class WindowManager extends _$WindowManager {
                     .get(dialogWindow.parentSurfaceId)!,
                 dialogWindow.windowId,
               );
+          ref
+              .read(dialogWindowStateProvider(windowId).notifier)
+              .onSurfaceIsDestroyed();
           _removeWindow(windowId);
         case EphemeralWindowId():
-        // TODO: Handle this case.
+          ref
+              .read(ephemeralWindowStateProvider(windowId).notifier)
+              .onSurfaceIsDestroyed();
+
+          _removeWindow(windowId);
       }
     }
   }
@@ -250,10 +261,22 @@ class WindowManager extends _$WindowManager {
     state = state.remove(windowId);
     switch (windowId) {
       case PersistentWindowId():
+        final workspaceId = ref.read(windowWorkspaceMapProvider).get(windowId);
+        if (workspaceId != null) {
+          ref
+              .read(workspaceStateProvider(workspaceId).notifier)
+              .removeWindow(windowId);
+        }
         ref.read(persistentWindowStateProvider(windowId).notifier).dispose();
       case DialogWindowId():
         ref.read(dialogWindowStateProvider(windowId).notifier).dispose();
       case EphemeralWindowId():
+        final screenId =
+            ref.read(ephemeralWindowStateProvider(windowId)).screenId;
+        ref.read(ephemeralWindowStateProvider(windowId).notifier).dispose();
+        ref
+            .read(overviewStateProvider(screenId).notifier)
+            .removeWindow(windowId);
     }
   }
 
@@ -266,19 +289,19 @@ class WindowManager extends _$WindowManager {
           closeWindowSurface(persistentWindow.surfaceId!);
         } else {
           _removeWindow(windowId);
-          final workspaceId =
-              ref.read(windowWorkspaceMapProvider).get(windowId);
-          if (workspaceId != null) {
-            ref
-                .read(workspaceStateProvider(workspaceId).notifier)
-                .removeWindow(windowId);
-          }
         }
       case DialogWindowId():
         closeWindowSurface(
           ref.read(dialogWindowStateProvider(windowId)).surfaceId,
         );
       case EphemeralWindowId():
+        final ephemeralWindow =
+            ref.read(ephemeralWindowStateProvider(windowId));
+        if (ephemeralWindow.surfaceId != null) {
+          closeWindowSurface(ephemeralWindow.surfaceId!);
+        } else {
+          _removeWindow(windowId);
+        }
     }
   }
 

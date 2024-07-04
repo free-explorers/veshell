@@ -7,7 +7,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/shared/persistence/persistable_provider.mixin.dart';
 import 'package:shell/window/model/window_id.dart';
-import 'package:shell/window/provider/persistant_window_state.dart';
+import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/workspace/model/workspace.serializable.dart';
 import 'package:shell/workspace/provider/window_workspace_map.dart';
 
@@ -139,7 +139,7 @@ class WorkspaceState extends _$WorkspaceState
         .map(
           (windowId) => ref.read(
             persistentWindowStateProvider(windowId)
-                .select((value) => value.appId),
+                .select((value) => value.properties.appId),
           ),
         )
         .whereNotNull()

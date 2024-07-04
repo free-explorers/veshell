@@ -70,7 +70,7 @@ use crate::{
             FlutterRendererConfig__bindgen_ty_1, FlutterWindowMetricsEvent, FLUTTER_ENGINE_VERSION,
         },
     },
-    Backend, ServerState,
+    Backend, State,
 };
 
 use {
@@ -90,7 +90,7 @@ pub mod wayland_messages;
 /// - Clone & Copy is willingly not implemented to avoid using the engine after being shut down.
 /// - Send is not implemented because all its methods must be called from the thread the engine was created.
 pub struct FlutterEngine<BackendData: Backend + 'static> {
-    loop_handle: LoopHandle<'static, ServerState<BackendData>>,
+    loop_handle: LoopHandle<'static, State<BackendData>>,
     pub handle: FlutterEngineHandle,
     data: FlutterEngineData,
     pub task_runner: TaskRunner,
@@ -109,7 +109,7 @@ pub struct Baton(isize);
 
 impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
     pub fn new(
-        server_state: &mut ServerState<BackendData>,
+        server_state: &mut State<BackendData>,
     ) -> Result<(Box<Self>, EmbedderChannels), Box<dyn std::error::Error>> {
         let (tx_present, rx_present) = channel::channel::<()>();
         let (tx_request_fbo, rx_request_fbo) = channel::channel::<()>();
@@ -341,7 +341,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
 
         let task_runner_timer_dispatcher = Dispatcher::new(
             Timer::immediate(),
-            move |deadline, _, data: &mut ServerState<BackendData>| {
+            move |deadline, _, data: &mut State<BackendData>| {
                 let duration =
                     data.flutter_engine_mut()
                         .task_runner
@@ -360,7 +360,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             .loop_handle
             .insert_source(
                 rx_reschedule_task_runner_timer,
-                move |event, _, data: &mut ServerState<BackendData>| {
+                move |event, _, data: &mut State<BackendData>| {
                     if let Msg(duration) = event {
                         task_runner_timer_dispatcher
                             .as_source_mut()
@@ -491,6 +491,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                 "keymap": "linux",
                 "toolkit": "glfw",
                 "keyCode": get_glfw_keycode(key_event.key_code),
+                "specifiedLogicalKey": key_event.specifiedLogicalKey,
                 "scanCode": key_event.key_code + 8,
                 "modifiers": get_glfw_modifiers(key_event.mods),
                 "unicodeScalarValues": key_event.codepoint.map(|c| c as u32),
@@ -512,7 +513,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                 // Send key event info and Flutter's response over an MPSC channel.
                 // The receiver `rx_flutter_handled_key_event` is registered to the event loop with a callback
                 // that will continue processing the event.
-                // This callback is defined in the constructor of `ServerState`.
+                // This callback is defined in the constructor of `State`.
                 tx.send((key_event, handled)).unwrap();
             })),
         );

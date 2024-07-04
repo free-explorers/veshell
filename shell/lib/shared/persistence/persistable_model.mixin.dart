@@ -1,5 +1,5 @@
 abstract class PersistableModel {
-  factory PersistableModel.fromJson(Map<String, dynamic> json) {
+  factory PersistableModel.fromJson() {
     throw UnimplementedError();
   }
   Map<String, dynamic> toJson();

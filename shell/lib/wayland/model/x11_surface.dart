@@ -45,5 +45,6 @@ class X11Surface with _$X11Surface {
     required String? windowClass,
     required String? instance,
     required String? startupId,
+    required int? pid,
   }) = _X11Surface;
 }

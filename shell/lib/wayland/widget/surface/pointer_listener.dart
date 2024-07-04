@@ -5,9 +5,7 @@ import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
 class ActivateSurfaceOnPointerDown extends ConsumerWidget {
-  const ActivateSurfaceOnPointerDown({
-    required this.surfaceId,
-    required this.child,
+  const ActivateSurfaceOnPointerDown({required this.surfaceId, required this.child, super.key,
     this.enabled = true,
   });
 

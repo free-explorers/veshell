@@ -29,22 +29,31 @@ class SlidingContainer extends HookConsumerWidget {
             useEffect(
               () {
                 if (pageController.hasClients) {
+                  final viewportWidth = constraints.biggest.width;
+                  final viewportHeight = constraints.biggest.height;
                   final pageWidth = direction == Axis.horizontal
-                      ? constraints.biggest.width / visible
-                      : constraints.biggest.width;
+                      ? viewportWidth / visible
+                      : viewportWidth;
                   final pageHeight = direction == Axis.horizontal
-                      ? constraints.biggest.height
-                      : constraints.biggest.height / visible;
+                      ? viewportHeight
+                      : viewportHeight / visible;
                   final currentPage = direction == Axis.horizontal
                       ? pageController.offset / pageWidth
                       : pageController.offset / pageHeight;
                   final visibleRangeStart = currentPage;
                   final visibleRangeEnd = currentPage + visible - 1;
-
-                  if (index < visibleRangeStart || index > visibleRangeEnd) {
-                    final offset = direction == Axis.horizontal
+                  double? offset;
+                  // Depending on the direction calculate the minimal offset to animate
+                  if (index < visibleRangeStart) {
+                    offset = direction == Axis.horizontal
                         ? pageWidth * index
                         : pageHeight * index;
+                  } else if (index > visibleRangeEnd) {
+                    offset = direction == Axis.horizontal
+                        ? pageWidth * (index - visible + 1)
+                        : pageHeight * (index - visible + 1);
+                  }
+                  if (offset != null) {
                     pageController.animateTo(
                       offset,
                       duration: const Duration(milliseconds: 200),
