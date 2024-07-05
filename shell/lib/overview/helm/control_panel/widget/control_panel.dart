@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/overview/helm/control_panel/widget/audio_output.dart';
+import 'package:shell/overview/helm/control_panel/widget/session_controls.dart';
 
 class ControlPanel extends StatelessWidget {
   const ControlPanel({
@@ -155,34 +156,7 @@ class ControlPanel extends StatelessWidget {
                   const Divider(
                     height: 2,
                   ),
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        IconButton(
-                          onPressed: () {},
-                          icon: Icon(MdiIcons.power),
-                        ),
-                        IconButton(
-                          onPressed: () {},
-                          icon: Icon(MdiIcons.powerSleep),
-                        ),
-                        IconButton(
-                          onPressed: () {},
-                          icon: Icon(MdiIcons.restart),
-                        ),
-                        IconButton(
-                          onPressed: () {},
-                          icon: Icon(MdiIcons.logout),
-                        ),
-                        IconButton(
-                          onPressed: () {},
-                          icon: Icon(MdiIcons.lock),
-                        ),
-                      ],
-                    ),
-                  ),
+                  const SessionControls(),
                 ],
               ),
             ),

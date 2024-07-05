@@ -53,6 +53,7 @@ dependencies:
   path: any
   logger: ^2.3.0
   logging: ^1.2.0
+  ubuntu_session: ^0.0.4
   
 dev_dependencies:
   # The "flutter_lints" package below contains a set of recommended lints to
