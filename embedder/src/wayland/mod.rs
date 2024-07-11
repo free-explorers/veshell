@@ -238,7 +238,6 @@ pub mod wayland {
                     attributes.input_region.clone(),
                 )
             });
-
             let surface_message = self.construct_surface_message(surface);
 
             let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;

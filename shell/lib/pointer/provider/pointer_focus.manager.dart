@@ -1,15 +1,11 @@
 import 'dart:async';
 
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/wayland/model/request/pointer_exit/pointer_exit.serializable.dart';
+import 'package:shell/pointer/model/pointer_focus.serializable.dart';
+import 'package:shell/wayland/model/request/pointer_focus/pointer_focus.serializable.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
 part 'pointer_focus.manager.g.dart';
-
-@Riverpod(keepAlive: true)
-PointerFocusManager pointerFocusManager(PointerFocusManagerRef ref) =>
-    PointerFocusManager(ref);
 
 /// The problem:
 /// When moving the pointer between 2 MouseRegions, one would trigger an exit event, and the other one an enter event.
@@ -21,9 +17,19 @@ PointerFocusManager pointerFocusManager(PointerFocusManagerRef ref) =>
 /// Don't send the exit event right away. See if an enter event is generated just after.
 /// We schedule a asynchronous task for sending an exit event, but if an enter event happens before the next event loop
 /// iteration, we cancel the currently scheduled task, thus the exit event will no longer be sent.
-class PointerFocusManager {
-  PointerFocusManager(this._ref);
-  final Ref _ref;
+@Riverpod(keepAlive: true)
+class PointerFocusManager extends _$PointerFocusManager {
+  @override
+  PointerFocus? build() {
+    ref.listenSelf(
+      (previous, next) {
+        if (previous != next) {
+          _notifyWayland();
+        }
+      },
+    );
+    return null;
+  }
 
   Timer? _pointerExitTimer;
   bool _maybeDragging = false;
@@ -40,6 +46,10 @@ class PointerFocusManager {
     }
   }
 
+  void hoverSurface(PointerFocus focus) {
+    state = focus;
+  }
+
   void exitSurface() {
     _insideSurface = false;
     if (!_maybeDragging) {
@@ -47,7 +57,8 @@ class PointerFocusManager {
     }
   }
 
-  void enterSurface() {
+  void enterSurface(PointerFocus focus) {
+    state = focus;
     _insideSurface = true;
     _pointerExitTimer?.cancel();
   }
@@ -55,9 +66,16 @@ class PointerFocusManager {
   void _scheduleExitEvent() {
     _pointerExitTimer = Timer(
       Duration.zero,
-      () => _ref
-          .read(waylandManagerProvider.notifier)
-          .request(const PointerExitRequest()),
+      () {
+        state = null;
+      },
     );
+  }
+
+  void _notifyWayland() {
+    print(state?.toJson());
+    ref.read(waylandManagerProvider.notifier).request(
+          PointerFocusRequest(message: PointerFocusMessage(focus: state)),
+        );
   }
 }

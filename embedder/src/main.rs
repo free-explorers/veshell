@@ -1,6 +1,7 @@
 use std::env;
 use std::process::Command;
 
+use backend::Backend;
 use log::debug;
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::output::Output;
@@ -58,14 +59,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
-}
-
-pub trait Backend {
-    fn seat_name(&self) -> String;
-
-    fn get_monitor_layout(&self) -> Vec<Output>;
-
-    fn get_session(&self) -> LibSeatSession;
 }
 
 pub struct FlutterState<BackendData: Backend + 'static> {

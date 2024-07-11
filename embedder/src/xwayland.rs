@@ -1,10 +1,10 @@
 pub mod xwayland {
+    use crate::backend::Backend;
     use crate::cursor::Cursor;
     use crate::flutter_engine::wayland_messages::{MapX11Surface, NewX11Surface};
     use crate::focus::KeyboardFocusTarget;
     use crate::state::State;
     use crate::wayland::wayland::get_surface_id;
-    use crate::Backend;
     use serde_json::json;
 
     use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
@@ -260,6 +260,7 @@ pub mod xwayland {
             geometry: Rectangle<i32, Logical>,
             above: Option<u32>,
         ) {
+            print!("configure_notify");
         }
 
         fn property_notify(
@@ -332,9 +333,12 @@ pub mod xwayland {
             button: u32,
             resize_edge: xwm::ResizeEdge,
         ) {
+            print!("resize_request");
         }
 
-        fn move_request(&mut self, xwm: XwmId, window: X11Surface, button: u32) {}
+        fn move_request(&mut self, xwm: XwmId, window: X11Surface, button: u32) {
+            print!("move_request");
+        }
 
         fn allow_selection_access(&mut self, xwm: XwmId, _selection: SelectionTarget) -> bool {
             if let Some(keyboard) = self.seat.get_keyboard() {

@@ -4,13 +4,13 @@ use std::ptr::null_mut;
 use smithay::backend::renderer::gles::ffi;
 use tracing::error;
 
+use crate::backend::Backend;
 use crate::flutter_engine::embedder::{
     FlutterDamage, FlutterOpenGLTexture, FlutterPlatformMessage, FlutterPresentInfo, FlutterRect,
     FlutterTask, FlutterTransformation,
 };
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::flutter_engine::{Baton, FlutterEngine};
-use crate::Backend;
 
 pub unsafe extern "C" fn make_current<BackendData>(user_data: *mut c_void) -> bool
 where

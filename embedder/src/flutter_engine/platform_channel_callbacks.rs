@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use serde_json::json;
 use smithay::backend::input::ButtonState;
-use smithay::backend::x11;
 use smithay::input::pointer::{ButtonEvent, MotionEvent};
 use smithay::reexports::calloop::channel::Event;
 use smithay::reexports::calloop::channel::Event::Msg;
@@ -17,6 +16,7 @@ use smithay::wayland::shell::xdg;
 use smithay::wayland::xwayland_shell::XWAYLAND_SHELL_ROLE;
 use smithay::xwayland::xwm;
 
+use crate::backend::Backend;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::flutter_engine::wayland_messages::NewX11Surface;
@@ -25,7 +25,6 @@ use crate::mouse_button_tracker::FLUTTER_TO_LINUX_MOUSE_BUTTONS;
 
 use crate::state::State;
 use crate::wayland::wayland::get_surface_id;
-use crate::Backend;
 
 pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
     event: Event<(
@@ -37,8 +36,8 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
 ) {
     if let Msg((method_call, mut result)) = event {
         match method_call.method() {
-            "pointer_hover" => pointer_hover(method_call, result, data),
             "pointer_exit" => pointer_exit(method_call, result, data),
+            "pointer_focus" => pointer_focus(method_call, result, data),
             "mouse_buttons_event" => mouse_buttons_event(method_call, result, data),
             "activate_window" => activate_window(method_call, result, data),
             "resize_window" => resize_window(method_call, result, data),
@@ -54,51 +53,51 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
         }
     }
 }
-
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct PointerHoverPayload {
-    surface_id: u64,
+struct Offset {
     x: f64,
     y: f64,
 }
 
-pub fn pointer_hover<BackendData: Backend + 'static>(
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PointerFocus {
+    surface_id: u64,
+    global_offset: Offset,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PointerFocusMessage {
+    focus: Option<PointerFocus>,
+}
+
+pub fn pointer_focus<BackendData: Backend + 'static>(
     method_call: MethodCall<serde_json::Value>,
     mut result: Box<dyn MethodResult<serde_json::Value>>,
     data: &mut State<BackendData>,
 ) {
     let args = method_call.arguments().unwrap().clone();
-    let payload: PointerHoverPayload = serde_json::from_value(args).unwrap();
+    let payload: PointerFocusMessage = serde_json::from_value(args).unwrap();
+    println!("Rust pointer_hover {:?}", payload);
 
-    data.surface_id_under_cursor = Some(payload.surface_id);
-
-    if let Some(surface) = data.surfaces.get(&payload.surface_id).cloned() {
-        let now = Duration::from(data.clock.now()).as_millis() as u32;
-        let pointer = data.pointer.clone();
-
-        if let Some(x11_surface) = data.x11_surface_per_wl_surface.get(&surface).cloned() {
-            let _ = data.x11_wm.as_mut().unwrap().raise_window(&x11_surface);
+    if let Some(pointer_focus) = payload.focus {
+        data.surface_id_under_cursor = Some(pointer_focus.surface_id);
+        if let Some(surface) = data.surfaces.get(&pointer_focus.surface_id) {
+            if let Some(x11_surface) = data.x11_surface_per_wl_surface.get(surface).cloned() {
+                let _ = data.x11_wm.as_mut().unwrap().raise_window(&x11_surface);
+            }
+            data.pointer_focus = Some((
+                PointerFocusTarget::from(surface),
+                (pointer_focus.global_offset.x, pointer_focus.global_offset.y).into(),
+            ));
         }
-
-        pointer.motion(
-            data,
-            Some((PointerFocusTarget::from(surface), (0.0, 0.0).into())),
-            &MotionEvent {
-                location: (payload.x, payload.y).into(),
-                serial: SERIAL_COUNTER.next_serial(),
-                time: now,
-            },
-        );
-        pointer.frame(data);
-        result.success(None);
     } else {
-        result.error(
-            "surface_doesnt_exist".to_string(),
-            format!("Surface {} doesn't exist", payload.surface_id),
-            None,
-        );
+        data.surface_id_under_cursor = None;
+        data.pointer_focus = None;
     }
+    result.success(None);
 }
 
 pub fn pointer_exit<BackendData: Backend + 'static>(
@@ -106,20 +105,9 @@ pub fn pointer_exit<BackendData: Backend + 'static>(
     mut result: Box<dyn MethodResult<serde_json::Value>>,
     data: &mut State<BackendData>,
 ) {
-    let now = Duration::from(data.clock.now()).as_millis() as u32;
-    let pointer = data.pointer.clone();
-
     data.surface_id_under_cursor = None;
 
-    pointer.motion(
-        data,
-        None,
-        &MotionEvent {
-            location: (0.0, 0.0).into(),
-            serial: SERIAL_COUNTER.next_serial(),
-            time: now,
-        },
-    );
+    data.pointer_focus = None;
     result.success(None);
 }
 
@@ -180,6 +168,7 @@ pub fn activate_window<BackendData: Backend + 'static>(
     mut result: Box<dyn MethodResult<serde_json::Value>>,
     data: &mut State<BackendData>,
 ) {
+    println!("activate_window");
     let args = method_call.arguments().unwrap().clone();
     let payload: ActivateWindowPayload = serde_json::from_value(args).unwrap();
 
@@ -424,7 +413,7 @@ pub fn get_monitor_layout<BackendData: Backend + 'static>(
     mut result: Box<dyn MethodResult<serde_json::Value>>,
     data: &mut State<BackendData>,
 ) {
-    let monitors = data.backend_data.get_monitor_layout();
+    let monitors = data.space.outputs().cloned().collect::<Vec<_>>();
     data.flutter_engine_mut().monitor_layout_changed(monitors);
     result.success(None);
 }

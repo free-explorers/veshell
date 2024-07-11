@@ -14,6 +14,7 @@ use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::renderer::{ImportAll, ImportDma, Texture};
 use smithay::backend::session::Session;
+use smithay::desktop::{Space, Window};
 use smithay::input::keyboard::{KeyboardHandle, Keysym, ModifiersState, XkbConfig};
 use smithay::input::pointer::{CursorImageStatus, PointerHandle};
 use smithay::input::{Seat, SeatHandler, SeatState};
@@ -38,6 +39,7 @@ use smithay::wayland::compositor::{
 };
 use smithay::wayland::dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier};
 use smithay::wayland::output::OutputHandler;
+use smithay::wayland::relative_pointer::RelativePointerManagerState;
 use smithay::wayland::seat::WaylandFocus;
 use smithay::wayland::selection::data_device::{
     set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
@@ -64,8 +66,8 @@ use smithay::xwayland::{
 };
 use smithay::{
     delegate_compositor, delegate_data_control, delegate_data_device, delegate_dmabuf,
-    delegate_output, delegate_primary_selection, delegate_seat, delegate_shm, delegate_xdg_shell,
-    delegate_xwayland_shell,
+    delegate_output, delegate_primary_selection, delegate_relative_pointer, delegate_seat,
+    delegate_shm, delegate_xdg_shell, delegate_xwayland_shell,
 };
 use tracing::{info, warn};
 
@@ -83,54 +85,52 @@ use crate::wayland::wayland::{get_direct_subsurfaces, get_surface_id};
 use crate::{flutter_engine, Backend, ClientState};
 
 pub struct State<BackendData: Backend + 'static> {
-    pub running: Arc<AtomicBool>,
-    pub display_handle: DisplayHandle,
-    pub loop_handle: LoopHandle<'static, State<BackendData>>,
-    pub clock: Clock<Monotonic>,
-    pub tx_fbo: Option<channel::Sender<Option<Dmabuf>>>,
+    pub backend_data: Box<BackendData>,
     pub batons: Vec<flutter_engine::Baton>,
-    pub seat: Seat<State<BackendData>>,
-    pub seat_state: SeatState<State<BackendData>>,
-    pub data_device_state: DataDeviceState,
+    pub clock: Clock<Monotonic>,
+    pub compositor_state: CompositorState,
     pub data_control_state: DataControlState,
-    pub primary_selection_state: PrimarySelectionState,
-    pub pointer: PointerHandle<State<BackendData>>,
+    pub data_device_state: DataDeviceState,
+    pub display_handle: DisplayHandle,
+    pub dmabuf_state: Option<DmabufState>,
+    pub flutter_engine: Option<Box<FlutterEngine<BackendData>>>,
+    pub gl: Option<Gles2>,
+    pub gles_renderer: Option<GlesRenderer>,
+    pub imported_dmabufs: Vec<Dmabuf>,
+    pub is_next_flutter_frame_scheduled: bool,
     pub keyboard: KeyboardHandle<State<BackendData>>,
+    pub key_repeater: KeyRepeater<BackendData>,
+    pub loop_handle: LoopHandle<'static, State<BackendData>>,
+    pub next_surface_id: u64,
+    pub next_texture_id: i64,
+    pub next_x11_surface_id: u64,
+    pub pointer: PointerHandle<State<BackendData>>,
+    pub pointer_frame_pending: bool,
+    pub primary_selection_state: PrimarySelectionState,
     pub repeat_delay: u64,
     pub repeat_rate: u64,
-    pub tx_flutter_handled_key_event: channel::Sender<(KeyEvent, bool)>,
-    pub key_repeater: KeyRepeater<BackendData>,
-    pub x11_wm: Option<X11Wm>,
-    pub wayland_socket_name: Option<String>,
-    pub xwayland_display: Option<u32>,
-
-    pub backend_data: Box<BackendData>,
-    pub flutter_engine: Option<Box<FlutterEngine<BackendData>>>,
-    pub next_surface_id: u64,
-    pub next_x11_surface_id: u64,
-    pub next_texture_id: i64,
-
-    pub mouse_position: (f64, f64),
-    pub surface_id_under_cursor: Option<u64>,
-    pub is_next_flutter_frame_scheduled: bool,
-
-    pub compositor_state: CompositorState,
-    pub xdg_shell_state: XdgShellState,
+    pub running: Arc<AtomicBool>,
+    pub seat: Seat<State<BackendData>>,
+    pub seat_state: SeatState<State<BackendData>>,
     pub shm_state: ShmState,
-    pub dmabuf_state: Option<DmabufState>,
-
-    pub imported_dmabufs: Vec<Dmabuf>,
-    pub gles_renderer: Option<GlesRenderer>,
-    pub gl: Option<Gles2>,
+    pub space: Space<Window>,
+    pub surface_id_per_texture_id: HashMap<i64, u64>,
+    pub surface_id_under_cursor: Option<u64>,
+    pub pointer_focus: Option<(PointerFocusTarget, Point<f64, Logical>)>,
     pub surfaces: HashMap<u64, WlSurface>,
     pub subsurfaces: HashMap<u64, WlSurface>,
-    pub xdg_toplevels: HashMap<u64, ToplevelSurface>,
-    pub xdg_popups: HashMap<u64, PopupSurface>,
-    pub x11_surface_per_x11_window: HashMap<X11Window, X11Surface>,
-    pub x11_surface_per_wl_surface: HashMap<WlSurface, X11Surface>,
     pub texture_ids_per_surface_id: HashMap<u64, Vec<(i64, Size<i32, BufferCoords>)>>,
-    pub surface_id_per_texture_id: HashMap<i64, u64>,
     pub texture_swapchains: HashMap<i64, TextureSwapChain>,
+    pub tx_fbo: Option<channel::Sender<Option<Dmabuf>>>,
+    pub tx_flutter_handled_key_event: channel::Sender<(KeyEvent, bool)>,
+    pub wayland_socket_name: Option<String>,
+    pub x11_surface_per_wl_surface: HashMap<WlSurface, X11Surface>,
+    pub x11_surface_per_x11_window: HashMap<X11Window, X11Surface>,
+    pub x11_wm: Option<X11Wm>,
+    pub xdg_popups: HashMap<u64, PopupSurface>,
+    pub xdg_shell_state: XdgShellState,
+    pub xdg_toplevels: HashMap<u64, ToplevelSurface>,
+    pub xwayland_display: Option<u32>,
     pub xwayland_shell_state: xwayland_shell::XWaylandShellState,
 }
 
@@ -261,6 +261,7 @@ delegate_output!(@<BackendData: Backend + 'static> State<BackendData>);
 delegate_seat!(@<BackendData: Backend + 'static> State<BackendData>);
 delegate_data_device!(@<BackendData: Backend + 'static> State<BackendData>);
 delegate_xwayland_shell!(@<BackendData: Backend + 'static> State<BackendData>);
+delegate_relative_pointer!(@<BackendData: Backend + 'static> State<BackendData>);
 
 impl<BackendData: Backend + 'static> State<BackendData> {
     pub fn new(
@@ -294,6 +295,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .unwrap();
 
         let pointer = seat.add_pointer();
+        // Expose global only if backend supports relative motion events
+        if BackendData::HAS_RELATIVE_MOTION {
+            RelativePointerManagerState::new::<Self>(&display_handle);
+        }
 
         let data_device_state = DataDeviceState::new::<Self>(&display_handle);
         let primary_selection_state = PrimarySelectionState::new::<Self>(&display_handle);
@@ -412,8 +417,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             },
         );
 
-        let xwayland_shell_state =
-            xwayland_shell::XWaylandShellState::new::<Self>(&&display_handle.clone());
+        let xwayland_shell_state = xwayland_shell::XWaylandShellState::new::<Self>(&display_handle);
 
         Self {
             running: Arc::new(AtomicBool::new(true)),
@@ -423,7 +427,6 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             tx_fbo: None,
             batons: vec![],
             backend_data: Box::new(backend_data),
-            mouse_position: (0.0, 0.0),
             surface_id_under_cursor: None,
             is_next_flutter_frame_scheduled: false,
             compositor_state,
@@ -437,6 +440,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             primary_selection_state,
             data_control_state,
             pointer,
+            pointer_frame_pending: false,
             keyboard,
             repeat_delay,
             repeat_rate,
@@ -461,6 +465,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             surface_id_per_texture_id: HashMap::new(),
             texture_swapchains: HashMap::new(),
             xwayland_shell_state,
+            space: Space::default(),
+            pointer_focus: None,
         }
     }
 

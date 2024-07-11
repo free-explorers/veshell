@@ -46,12 +46,12 @@ use smithay_drm_extras::edid::EdidInfo;
 
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::flutter_engine::FlutterEngine;
-use crate::input_handling::handle_input;
 use crate::state;
-use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, Backend, State};
+use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
+
+use super::Backend;
 
 pub struct DrmBackend {
-    pub space: Space<Window>,
     pub session: LibSeatSession,
     gpus: HashMap<DrmNode, GpuData>,
     primary_gpu: DrmNode,
@@ -60,31 +60,11 @@ pub struct DrmBackend {
     highest_hz_crtc: Option<(i32, crtc::Handle)>,
 }
 
-impl DrmBackend {
-    fn determine_highest_hz_crtc(&mut self) {
-        self.highest_hz_crtc = self
-            .space
-            .outputs()
-            // Ignore outputs that don't have a mode.
-            .filter_map(|output| output.current_mode().map(|mode| (mode.refresh, output)))
-            // Take the one with the highest refresh rate.
-            .max_by_key(|(refresh, output)| *refresh)
-            .map(|(refresh, output)| {
-                (
-                    refresh,
-                    output.user_data().get::<UdevOutputId>().unwrap().crtc,
-                )
-            });
-    }
-}
-
 impl Backend for DrmBackend {
+    const HAS_RELATIVE_MOTION: bool = true;
+
     fn seat_name(&self) -> String {
         self.session.seat()
-    }
-
-    fn get_monitor_layout(&self) -> Vec<Output> {
-        self.space.outputs().cloned().collect::<Vec<_>>()
     }
 
     fn get_session(&self) -> LibSeatSession {
@@ -173,7 +153,6 @@ pub fn run_drm_backend() {
         display,
         event_loop.handle(),
         DrmBackend {
-            space: Space::default(),
             session,
             gpus: HashMap::new(),
             primary_gpu,
@@ -235,7 +214,7 @@ pub fn run_drm_backend() {
         .handle()
         .insert_source(libinput_backend, move |event, _, data| {
             let _dh = data.display_handle.clone();
-            handle_input::<DrmBackend>(&event, data);
+            data.handle_input(&event);
         })
         .unwrap();
 
@@ -342,7 +321,7 @@ impl State<DrmBackend> {
             return;
         };
 
-        let output = self.backend_data.space.outputs().find(|output| {
+        let output = self.space.outputs().find(|output| {
             output
                 .user_data()
                 .get::<UdevOutputId>()
@@ -355,7 +334,7 @@ impl State<DrmBackend> {
             None => return,
         };
 
-        let geometry = match self.backend_data.space.output_geometry(output) {
+        let geometry = match self.space.output_geometry(output) {
             Some(geometry) => geometry.to_f64(),
             None => return,
         };
@@ -390,7 +369,10 @@ impl State<DrmBackend> {
             .pointer_image
             .get_image(1, self.clock.now().into());
 
-        let cursor_position = Point::from(self.mouse_position)
+        let cursor_position = self
+            .pointer
+            .current_location()
+            .to_physical(scale.fractional_scale())
             - Point::from((pointer_frame.xhot as f64, pointer_frame.yhot as f64))
             - geometry.loc.to_physical(scale.fractional_scale());
 
@@ -441,8 +423,23 @@ impl State<DrmBackend> {
     }
 
     fn monitor_layout_changed(&mut self) {
-        let monitors = self.backend_data.get_monitor_layout();
+        let monitors = self.space.outputs().cloned().collect::<Vec<_>>();
         self.flutter_engine_mut().monitor_layout_changed(monitors);
+    }
+    fn determine_highest_hz_crtc(&mut self) {
+        self.backend_data.highest_hz_crtc = self
+            .space
+            .outputs()
+            // Ignore outputs that don't have a mode.
+            .filter_map(|output| output.current_mode().map(|mode| (mode.refresh, output)))
+            // Take the one with the highest refresh rate.
+            .max_by_key(|(refresh, output)| *refresh)
+            .map(|(refresh, output)| {
+                (
+                    refresh,
+                    output.user_data().get::<UdevOutputId>().unwrap().crtc,
+                )
+            });
     }
 }
 
@@ -707,14 +704,14 @@ impl State<DrmBackend> {
         let global = output.create_global::<State<DrmBackend>>(&self.display_handle);
 
         // Put the new output at the right of the last one.
-        let x = self.backend_data.space.outputs().fold(0, |acc, o| {
-            acc + self.backend_data.space.output_geometry(o).unwrap().size.w
+        let x = self.space.outputs().fold(0, |acc, o| {
+            acc + self.space.output_geometry(o).unwrap().size.w
         });
         let position = (x, 0).into();
 
         output.set_preferred(wl_mode);
         output.change_current_state(Some(wl_mode), None, None, Some(position));
-        self.backend_data.space.map_output(&output, position);
+        self.space.map_output(&output, position);
 
         output.user_data().insert_if_missing(|| UdevOutputId {
             crtc,
@@ -802,10 +799,9 @@ impl State<DrmBackend> {
         device.surfaces.insert(crtc, surface);
 
         let bounding_box = self
-            .backend_data
             .space
             .outputs()
-            .map(|output| self.backend_data.space.output_geometry(output).unwrap())
+            .map(|output| self.space.output_geometry(output).unwrap())
             .reduce(|first, second| first.merge(second))
             .unwrap();
 
@@ -816,7 +812,7 @@ impl State<DrmBackend> {
             .send_window_metrics((bounding_box.size.w as u32, bounding_box.size.h as u32).into())
             .unwrap();
 
-        self.backend_data.determine_highest_hz_crtc();
+        self.determine_highest_hz_crtc();
         self.monitor_layout_changed();
     }
 
@@ -843,7 +839,6 @@ impl State<DrmBackend> {
         }
 
         let output = self
-            .backend_data
             .space
             .outputs()
             .find(|o| {
@@ -855,14 +850,13 @@ impl State<DrmBackend> {
             .cloned();
 
         if let Some(output) = output {
-            self.backend_data.space.unmap_output(&output);
+            self.space.unmap_output(&output);
         }
 
         let bounding_box = self
-            .backend_data
             .space
             .outputs()
-            .map(|output| self.backend_data.space.output_geometry(output).unwrap())
+            .map(|output| self.space.output_geometry(output).unwrap())
             .reduce(|first, second| first.merge(second))
             .unwrap_or(Rectangle::default());
 
@@ -873,7 +867,7 @@ impl State<DrmBackend> {
             .send_window_metrics((bounding_box.size.w as u32, bounding_box.size.h as u32).into())
             .unwrap();
 
-        self.backend_data.determine_highest_hz_crtc();
+        self.determine_highest_hz_crtc();
         self.monitor_layout_changed();
     }
 

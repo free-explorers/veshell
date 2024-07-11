@@ -1,5 +1,5 @@
+use crate::backend::Backend;
 use crate::state::State;
-use crate::Backend;
 use smithay::reexports::calloop;
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::calloop::{timer, LoopHandle, RegistrationToken};

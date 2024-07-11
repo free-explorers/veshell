@@ -35,9 +35,10 @@ use smithay::{
 use tracing::info;
 
 use crate::flutter_engine::FlutterEngine;
-use crate::input_handling::handle_input;
 use crate::state;
-use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, Backend, State};
+use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
+
+use super::Backend;
 
 pub fn run_x11_client() {
     let mut event_loop = EventLoop::try_new().unwrap();
@@ -167,10 +168,7 @@ pub fn run_x11_client() {
     let mut state = State::new(
         display,
         event_loop.handle(),
-        X11Data {
-            x11_surface,
-            output,
-        },
+        X11Data { x11_surface },
         Some(dmabuf_state),
     );
 
@@ -195,6 +193,9 @@ pub fn run_x11_client() {
 
     let size = window.size();
     tx_output_height.send(size.h).unwrap();
+    state.space.map_output(&output, (0, 0));
+    let output_clone = output.clone();
+
     state
         .flutter_engine_mut()
         .send_window_metrics((size.w as u32, size.h as u32).into())
@@ -218,7 +219,7 @@ pub fn run_x11_client() {
                 X11Event::Resized { new_size, .. } => {
                     let size = { (new_size.w as i32, new_size.h as i32).into() };
 
-                    data.backend_data.output.change_current_state(
+                    output_clone.change_current_state(
                         Some(Mode {
                             size,
                             refresh: 144_000,
@@ -227,14 +228,14 @@ pub fn run_x11_client() {
                         None,
                         Some((0, 0).into()),
                     );
-                    data.backend_data.output.set_preferred(mode);
+                    output_clone.set_preferred(mode);
 
                     let _ = tx_output_height.send(new_size.h);
                     data.flutter_engine()
                         .send_window_metrics((size.w as u32, size.h as u32).into())
                         .unwrap();
 
-                    let monitors = data.backend_data.get_monitor_layout();
+                    let monitors = data.space.outputs().cloned().collect::<Vec<_>>();
                     data.flutter_engine_mut().monitor_layout_changed(monitors);
                 }
 
@@ -263,7 +264,7 @@ pub fn run_x11_client() {
                     }
                 }
 
-                X11Event::Input { event, .. } => handle_input::<X11Data>(&event, data),
+                X11Event::Input { event, .. } => data.handle_input(&event),
                 X11Event::Focus { focused: false, .. } => data.release_all_keys(),
                 _ => {}
             },
@@ -327,16 +328,11 @@ pub fn run_x11_client() {
 
 pub struct X11Data {
     pub x11_surface: X11Surface,
-    pub output: Output,
 }
 
 impl Backend for X11Data {
     fn seat_name(&self) -> String {
         "x11".to_string()
-    }
-
-    fn get_monitor_layout(&self) -> Vec<Output> {
-        vec![self.output.clone()]
     }
 
     fn get_session(&self) -> smithay::backend::session::libseat::LibSeatSession {

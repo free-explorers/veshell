@@ -22,8 +22,6 @@ class TouchDownMessage with _$TouchDownMessage implements WaylandMessage {
   factory TouchDownMessage({
     required SurfaceId surfaceId,
     required int touchId,
-    required double x,
-    required double y,
   }) = _TouchDownMessage;
 
   /// Creates a new [TouchDownMessage] instance from a map.
@@ -49,8 +47,6 @@ class TouchMotionMessage with _$TouchMotionMessage implements WaylandMessage {
   /// Factory
   factory TouchMotionMessage({
     required int touchId,
-    required double x,
-    required double y,
   }) = _TouchMotionMessage;
 
   /// Creates a new [TouchMotionMessage] instance from a map.

@@ -25,8 +25,8 @@ use smithay::{
     },
 };
 
+use crate::backend::Backend;
 use crate::state::State;
-use crate::Backend;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum KeyboardFocusTarget {

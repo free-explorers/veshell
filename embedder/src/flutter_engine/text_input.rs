@@ -4,13 +4,13 @@ use input_linux::sys::KEY_ENTER;
 use serde_json::json;
 use smithay::reexports::calloop::channel::Event;
 
+use crate::backend::Backend;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::flutter_engine::platform_channels::text_input_model::TextInputModel;
 use crate::flutter_engine::platform_channels::text_range::TextRange;
 use crate::state::State;
-use crate::Backend;
 
 pub struct TextInput {
     channel: MethodChannel<serde_json::Value>,

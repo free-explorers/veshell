@@ -30,6 +30,7 @@ use smithay::{
     utils::{Physical, Size},
 };
 
+use crate::backend::Backend;
 use crate::flutter_engine::callbacks::{
     gl_external_texture_frame_callback, platform_message_callback, populate_existing_damage,
     post_task_callback, runs_task_on_current_thread_callback, vsync_callback,
@@ -70,7 +71,7 @@ use crate::{
             FlutterRendererConfig__bindgen_ty_1, FlutterWindowMetricsEvent, FLUTTER_ENGINE_VERSION,
         },
     },
-    Backend, State,
+    State,
 };
 
 use {
