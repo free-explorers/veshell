@@ -187,18 +187,6 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             return;
         }
 
-        println!(
-            "KeyEvent {:?} {:?} {:?} {:?} {:?} {:?} {:?} {:?}",
-            key_code,
-            keysym.key_char(),
-            state,
-            time,
-            mods,
-            mods_changed,
-            keysym.raw(),
-            keysym
-        );
-
         // 4. Forward the key event to Flutter.
         self.flutter_engine.as_mut().unwrap().send_key_event(
             self.tx_flutter_handled_key_event.clone(),

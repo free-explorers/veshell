@@ -51,6 +51,7 @@ class _AppDrawerTextField extends HookConsumerWidget {
         onSearchTextChange(searchController.text);
       },
     );
+
     useEffect(
       () {
         searchController.addListener(onListener);
@@ -61,14 +62,11 @@ class _AppDrawerTextField extends HookConsumerWidget {
       },
       [searchController],
     );
-    final scope = FocusScope.of(context);
-    if (scope.hasFocus) {
-      scope.autofocus(searchFocusNode);
-    }
 
     return TextField(
       controller: searchController,
       focusNode: searchFocusNode,
+      autofocus: true,
       decoration: InputDecoration(
         prefixIcon: const Padding(
           padding: EdgeInsets.fromLTRB(16, 0, 8, 0),

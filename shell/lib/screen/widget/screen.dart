@@ -41,7 +41,7 @@ class ScreenWidget extends HookConsumerWidget {
       },
       [],
     ); */
-    final shortcutManager = useMemoized(LoggingShortcutManager.new, []);
+    final shortcutManager = useMemoized(ScreenShortcutManager.new, []);
     return Shortcuts.manager(
       manager: shortcutManager,
       child: Actions(
@@ -131,8 +131,8 @@ class ScreenWidget extends HookConsumerWidget {
   }
 }
 
-class LoggingShortcutManager extends ShortcutManager {
-  LoggingShortcutManager()
+class ScreenShortcutManager extends ShortcutManager {
+  ScreenShortcutManager()
       : super(
           shortcuts: <LogicalKeySet, Intent>{
             LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyW):
@@ -151,7 +151,6 @@ class LoggingShortcutManager extends ShortcutManager {
             .contains(overviewKey) &&
         _isOverviewKeySolePressed) {
       _isOverviewKeySolePressed = false;
-      print('Meta Keyup and _isMetaSolePressed $_isOverviewKeySolePressed');
       final primaryContext = primaryFocus?.context;
       if (primaryContext != null) {
         final action = Actions.maybeFind<Intent>(
@@ -176,13 +175,6 @@ class LoggingShortcutManager extends ShortcutManager {
         LogicalKeyboardKey.collapseSynonyms(event.logicalKey.synonyms)
             .contains(overviewKey);
 
-    print('_isMetaSolePressed $_isOverviewKeySolePressed');
-
-    print('Handling keypress $event');
-    final result = super.handleKeypress(context, event);
-    if (result == KeyEventResult.handled) {
-      print('Handled shortcut ${result.name}');
-    }
-    return result;
+    return super.handleKeypress(context, event);
   }
 }

@@ -217,9 +217,14 @@ pub fn activate_window<BackendData: Backend + 'static>(
             if payload.activate {
                 keyboard.set_focus(
                     data,
-                    Some(KeyboardFocusTarget::WlSurface(wl_surface)),
+                    Some(KeyboardFocusTarget::WlSurface(wl_surface.clone())),
                     serial,
                 );
+            }
+            if keyboard.current_focus() == Some(KeyboardFocusTarget::WlSurface(wl_surface))
+                && !payload.activate
+            {
+                keyboard.set_focus(data, None, serial);
             }
 
             result.success(None);
@@ -241,9 +246,14 @@ pub fn activate_window<BackendData: Backend + 'static>(
 
                 keyboard.set_focus(
                     data,
-                    Some(KeyboardFocusTarget::X11Surface(x11_surface)),
+                    Some(KeyboardFocusTarget::X11Surface(x11_surface.clone())),
                     serial,
                 );
+            }
+            if keyboard.current_focus() == Some(KeyboardFocusTarget::X11Surface(x11_surface))
+                && !payload.activate
+            {
+                keyboard.set_focus(data, None, serial);
             }
 
             result.success(None);

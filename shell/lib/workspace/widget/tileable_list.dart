@@ -18,7 +18,7 @@ class TileableListView extends HookConsumerWidget {
     final animationController = useAnimationController(
       duration: const Duration(milliseconds: 200),
       upperBound: workspaceState.tileableWindowList.length.toDouble(),
-      initialValue: workspaceState.focusedIndex.toDouble(),
+      initialValue: workspaceState.selectedIndex.toDouble(),
       keys: [tileableList.length],
     );
     final dropInProgressState = useState(false);
@@ -34,13 +34,13 @@ class TileableListView extends HookConsumerWidget {
     useEffect(
       () {
         animationController.animateTo(
-          workspaceState.focusedIndex.toDouble(),
+          workspaceState.selectedIndex.toDouble(),
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOut,
         );
         return null;
       },
-      [workspaceState.focusedIndex],
+      [workspaceState.selectedIndex],
     );
 
     final listKey = useMemoized(GlobalKey.new);
@@ -52,7 +52,7 @@ class TileableListView extends HookConsumerWidget {
         child: InkWell(
           onTap: () => ref
               .read(workspaceStateProvider(workspaceId).notifier)
-              .setFocusedIndex(
+              .setSelectedIndex(
                 index,
               ),
           child: tileable.buildPanelWidget(context, ref),
@@ -63,7 +63,7 @@ class TileableListView extends HookConsumerWidget {
     return CustomPaint(
       painter: TileableIndicatorPainter(
         controller: animationController,
-        index: workspaceState.focusedIndex,
+        index: workspaceState.selectedIndex,
         tileableKeyList: tileableKeyList,
         listKey: listKey,
         length: tileableList.length,

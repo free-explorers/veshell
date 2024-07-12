@@ -31,7 +31,6 @@ impl<BackendData: Backend> State<BackendData> {
             InputEvent::DeviceAdded { .. } => {}
             InputEvent::DeviceRemoved { .. } => {}
             InputEvent::PointerMotion { event } => {
-                println!("InputEvent::PointerMotion");
                 let pointer: smithay::input::pointer::PointerHandle<State<BackendData>> =
                     self.pointer.clone();
 
@@ -66,7 +65,6 @@ impl<BackendData: Backend> State<BackendData> {
                 self.send_motion_event(pointer_location)
             }
             InputEvent::PointerMotionAbsolute { event } => {
-                println!("InputEvent::PointerMotionAbsolute");
                 let serial = SERIAL_COUNTER.next_serial();
                 let outputs: Vec<smithay::output::Output> =
                     self.space.outputs().cloned().collect::<Vec<_>>();

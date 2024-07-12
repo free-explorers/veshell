@@ -4,7 +4,9 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 class SurfaceFocus extends HookConsumerWidget {
-  const SurfaceFocus({required this.child, super.key,
+  const SurfaceFocus({
+    required this.child,
+    super.key,
   });
 
   final Widget child;
@@ -67,6 +69,9 @@ class SurfaceFocus extends HookConsumerWidget {
         },
         child: Focus(
           focusNode: focusNode,
+          onFocusChange: (value) {
+            print('Surface focus $value');
+          },
           child: Listener(
             onPointerDown: (_) => focusNode.requestFocus(),
             child: child,

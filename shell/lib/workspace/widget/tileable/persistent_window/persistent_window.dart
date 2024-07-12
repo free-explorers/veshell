@@ -10,6 +10,7 @@ import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/wayland/widget/x11_surface.dart';
 import 'package:shell/wayland/widget/xdg_toplevel_surface.dart';
 import 'package:shell/window/model/dialog_window.dart';
+import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.dart';
 import 'package:shell/window/provider/dialog_list_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
@@ -21,20 +22,52 @@ import 'package:shell/workspace/widget/tileable/tileable.dart';
 /// Tileable Window that persist when closed
 class PersistentWindowTileable extends Tileable {
   /// Const constructor
-  PersistentWindowTileable({
+  const PersistentWindowTileable({
     required this.windowId,
-    required this.focusNode,
+    required super.isSelected,
+    super.onGrabFocus,
     super.key,
-  }) : super(
-          isFocused: focusNode.hasFocus,
-        );
+  });
 
   /// The id of the wayland surface
   final PersistentWindowId windowId;
-  final FocusNode focusNode;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final window = ref.watch(persistentWindowStateProvider(windowId));
+
+    final persistentFocusNode = useFocusScopeNode(
+      debugLabel: 'PersistentWindowTileable ${window.properties.title}',
+    );
+    useEffect(
+      () {
+        print(
+          'Focus for ${window.properties.title}',
+        );
+        print('|_ isSelected $isSelected');
+        print('|_ focusedChild ${persistentFocusNode.focusedChild}');
+        print('|_ canRequestFocus ${persistentFocusNode.canRequestFocus}');
+        print(
+          '|_ descendantsAreFocusable ${persistentFocusNode.descendantsAreFocusable}',
+        );
+        //persistentFocusNode.canRequestFocus = isSelected;
+
+        if (isSelected) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            print(
+              'persistentFocusNode.requestFocus() for ${window.properties.title}',
+            );
+            persistentFocusNode.requestFocus();
+          });
+        }
+        return null;
+      },
+      [isSelected],
+    );
+    if (persistentFocusNode.hasPrimaryFocus &&
+        persistentFocusNode.focusedChild == null) {
+      print('persistentFocusNode.focusInDirection()');
+      persistentFocusNode.focusInDirection(TraversalDirection.down);
+    }
     final dialogWindowIdSet = ref.watch(
       dialogListForWindowProvider.select((value) => value.get(windowId)),
     );
@@ -43,11 +76,10 @@ class PersistentWindowTileable extends Tileable {
       final dialogWindow = ref.read(dialogWindowStateProvider(windowId));
       dialogWindowList.add(dialogWindow);
     }
-    final tileableFocusNode = focusNode;
 
     useEffect(
       () {
-        if (isFocused && window.surfaceId != null) {
+        if (isSelected && window.surfaceId != null) {
           ref.read(waylandManagerProvider.notifier).request(
                 ActivateWindowRequest(
                   message: ActivateWindowMessage(
@@ -62,96 +94,41 @@ class PersistentWindowTileable extends Tileable {
       [window.surfaceId],
     );
 
-    if (window.surfaceId != null) {
-      return Focus(
-        focusNode: tileableFocusNode,
-        onFocusChange: (value) {
-          if (window.surfaceId != null) {
-            ref.read(waylandManagerProvider.notifier).request(
-                  ActivateWindowRequest(
-                    message: ActivateWindowMessage(
-                      surfaceId: window.surfaceId!,
-                      activate: tileableFocusNode.hasFocus,
-                    ),
+    return FocusScope(
+      node: persistentFocusNode,
+      onFocusChange: (value) {
+        if (value) {
+          print(
+            'onGrabFocus for ${window.properties.title}',
+          );
+          onGrabFocus?.call();
+        }
+        if (window.surfaceId != null) {
+          print(
+            'ActivateWindowRequest for ${window.properties.title} $value',
+          );
+          ref.read(waylandManagerProvider.notifier).request(
+                ActivateWindowRequest(
+                  message: ActivateWindowMessage(
+                    surfaceId: window.surfaceId!,
+                    activate: value,
                   ),
-                );
-          }
-        },
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return HookBuilder(
-              builder: (context) {
-                useEffect(
-                  () {
-                    ref
-                        .read(
-                          wlSurfaceStateProvider(window.surfaceId!).notifier,
-                        )
-                        .resizeSurface(
-                          width:
-                              constraints.widthConstraints().maxWidth.round(),
-                          height:
-                              constraints.heightConstraints().maxHeight.round(),
-                        );
-                    return null;
-                  },
-                  [constraints],
-                );
-                return Builder(
-                  builder: (context) {
-                    final role = ref.read(
-                      wlSurfaceStateProvider(window.surfaceId!)
-                          .select((value) => value.role),
-                    );
-
-                    if (role == SurfaceRole.xdgToplevel) {
-                      return Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          XdgToplevelSurfaceWidget(
-                            surfaceId: window.surfaceId!,
-                          ),
-                          if (dialogWindowList.isNotEmpty)
-                            const ColoredBox(color: Colors.black38),
-                          if (dialogWindowList.isNotEmpty)
-                            for (final dialog in dialogWindowList)
-                              Center(
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: XdgToplevelSurfaceWidget(
-                                    surfaceId: dialog.surfaceId,
-                                  ),
-                                ),
-                              ),
-                        ],
-                      );
-                    } else if (role == SurfaceRole.x11Surface) {
-                      return X11SurfaceWidget(
-                        surfaceId: window.surfaceId!,
-                      );
-                    } else {
-                      assert(false, 'Unsupported role: $role');
-                      return const SizedBox();
-                    }
-                  },
-                );
+                ),
+              );
+        }
+      },
+      child: window.surfaceId != null
+          ? surfacesWidget(window: window, dialogWindowList: dialogWindowList)
+          : WindowPlaceholder(
+              appId: window.properties.appId,
+              onTap: () {
+                persistentFocusNode.requestFocus();
+                ref
+                    .read(persistentWindowStateProvider(windowId).notifier)
+                    .launchSelf();
               },
-            );
-          },
-        ),
-      );
-    } else {
-      return WindowPlaceholder(
-        appId: window.properties.appId,
-        focusNode: tileableFocusNode,
-        onTap: () {
-          focusNode.requestFocus();
-          ref
-              .read(persistentWindowStateProvider(windowId).notifier)
-              .launchSelf();
-        },
-      );
-    }
+            ),
+    );
   }
 
   @override
@@ -203,7 +180,7 @@ class PersistentWindowTileable extends Tileable {
                     ),
                     SizedBox(
                       width: 32,
-                      child: isFocused || isHoverState.value
+                      child: isSelected || isHoverState.value
                           ? IconButton(
                               visualDensity: VisualDensity.compact,
                               iconSize: 16,
@@ -223,6 +200,81 @@ class PersistentWindowTileable extends Tileable {
               ),
             ),
           ),
+        );
+      },
+    );
+  }
+}
+
+class surfacesWidget extends HookConsumerWidget {
+  const surfacesWidget({
+    required this.window,
+    required this.dialogWindowList,
+    super.key,
+  });
+
+  final PersistentWindow window;
+  final List<DialogWindow> dialogWindowList;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return HookBuilder(
+          builder: (context) {
+            useEffect(
+              () {
+                ref
+                    .read(
+                      wlSurfaceStateProvider(window.surfaceId!).notifier,
+                    )
+                    .resizeSurface(
+                      width: constraints.widthConstraints().maxWidth.round(),
+                      height: constraints.heightConstraints().maxHeight.round(),
+                    );
+                return null;
+              },
+              [constraints],
+            );
+            return Builder(
+              builder: (context) {
+                final role = ref.read(
+                  wlSurfaceStateProvider(window.surfaceId!)
+                      .select((value) => value.role),
+                );
+
+                if (role == SurfaceRole.xdgToplevel) {
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      XdgToplevelSurfaceWidget(
+                        surfaceId: window.surfaceId!,
+                      ),
+                      if (dialogWindowList.isNotEmpty)
+                        const ColoredBox(color: Colors.black38),
+                      if (dialogWindowList.isNotEmpty)
+                        for (final dialog in dialogWindowList)
+                          Center(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: XdgToplevelSurfaceWidget(
+                                surfaceId: dialog.surfaceId,
+                              ),
+                            ),
+                          ),
+                    ],
+                  );
+                } else if (role == SurfaceRole.x11Surface) {
+                  return X11SurfaceWidget(
+                    surfaceId: window.surfaceId!,
+                  );
+                } else {
+                  assert(false, 'Unsupported role: $role');
+                  return const SizedBox();
+                }
+              },
+            );
+          },
         );
       },
     );

@@ -15,7 +15,21 @@ mixin PersistableProvider<T extends PersistableModel, RefT extends Ref<T>> {
     final persistedJson = ref
         .read(persistentJsonByFolderProvider)
         .requireValue[getPersistentFolder()]?[getPersistentId()];
-    return persistedJson != null ? fromJsonConstructor(persistedJson) : null;
+
+    if (persistedJson == null) return null;
+
+    try {
+      return fromJsonConstructor(persistedJson);
+    } catch (e) {
+      print(
+        'Error parsing persisted json for ${getPersistentFolder()}-${getPersistentId()}: $e',
+      );
+      PersistenceManager.deleteModelJson(
+        getPersistentFolder(),
+        getPersistentId(),
+      );
+      return null;
+    }
   }
 
   void persistChanges({bool clearOnDispose = true}) {

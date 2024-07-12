@@ -137,7 +137,6 @@ class EphemeralWindowWidget extends HookConsumerWidget {
     } else {
       return WindowPlaceholder(
         appId: window.properties.appId,
-        focusNode: focusNode,
       );
     }
   }

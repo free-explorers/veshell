@@ -57,7 +57,7 @@ class WorkspaceState extends _$WorkspaceState
         Workspace(
           workspaceId: workspaceId,
           tileableWindowList: <PersistentWindowId>[].lock,
-          focusedIndex: 0,
+          selectedIndex: 0,
           visibleLength: 1,
         );
   }
@@ -71,8 +71,8 @@ class WorkspaceState extends _$WorkspaceState
             .every((element) => newWindowList.contains(element))) {
       state = state.copyWith(
         tileableWindowList: newWindowList,
-        focusedIndex:
-            newWindowList.indexOf(state.tileableWindowList[state.focusedIndex]),
+        selectedIndex: newWindowList
+            .indexOf(state.tileableWindowList[state.selectedIndex]),
       );
     }
   }
@@ -101,17 +101,17 @@ class WorkspaceState extends _$WorkspaceState
   Future<void> removeWindow(PersistentWindowId windowId) async {
     final removedIndex = state.tileableWindowList.indexOf(windowId);
     final newWindowList = state.tileableWindowList.remove(windowId);
-    final isCurrentyFocused = state.focusedIndex < newWindowList.length &&
-        windowId == state.tileableWindowList[state.focusedIndex];
+    final isCurrentyFocused = state.selectedIndex < newWindowList.length &&
+        windowId == state.tileableWindowList[state.selectedIndex];
 
     state = state.copyWith(
       tileableWindowList: newWindowList,
       category: state.forcedCategory ?? await _determineCategory(newWindowList),
-      focusedIndex: isCurrentyFocused
-          ? newWindowList.indexOf(state.tileableWindowList[state.focusedIndex])
-          : state.focusedIndex > removedIndex
-              ? state.focusedIndex - 1
-              : state.focusedIndex,
+      selectedIndex: isCurrentyFocused
+          ? newWindowList.indexOf(state.tileableWindowList[state.selectedIndex])
+          : state.selectedIndex > removedIndex
+              ? state.selectedIndex - 1
+              : state.selectedIndex,
     );
 
     final workspaceId = ref.read(windowWorkspaceMapProvider).get(windowId);
@@ -120,9 +120,9 @@ class WorkspaceState extends _$WorkspaceState
     }
   }
 
-  void setFocusedIndex(int index) {
+  void setSelectedIndex(int index) {
     state = state.copyWith(
-      focusedIndex: index,
+      selectedIndex: index,
     );
   }
 

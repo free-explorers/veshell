@@ -11,7 +11,7 @@ class PersistentApplicationSelector extends Tileable {
   /// Const constructor
   const PersistentApplicationSelector({
     required this.onSelect,
-    required super.isFocused,
+    required super.isSelected,
     super.key,
   });
   final DesktopEntrySelectedCallback onSelect;
@@ -22,15 +22,20 @@ class PersistentApplicationSelector extends Tileable {
         useFocusScopeNode(debugLabel: 'PersistentApplicationSelector');
     useEffect(
       () {
-        if (isFocused) {
+        focusNode.canRequestFocus = isSelected;
+
+        if (isSelected) {
           focusNode.requestFocus();
         }
         return null;
       },
-      [isFocused],
+      [isSelected],
     );
     return FocusScope(
       node: focusNode,
+      onFocusChange: (value) {
+        print('PersistentApplicationSelector focus $value');
+      },
       child: ColoredBox(
         color: Colors.black26,
         child: AppDrawer(

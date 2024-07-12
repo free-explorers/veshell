@@ -20,30 +20,30 @@ class WorkspaceWidget extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final windowManager = ref.watch(windowManagerProvider.notifier);
+    final currentWorkspaceId = ref.watch(currentWorkspaceIdProvider);
+    final workspaceState =
+        ref.watch(workspaceStateProvider(currentWorkspaceId));
+
     final workspaceFocusScopeNode = useFocusScopeNode(
       debugLabel: 'WorkspaceScope',
-      canRequestFocus: isSelected,
     );
 
     useEffect(
       () {
         if (isSelected) {
-          workspaceFocusScopeNode
-            ..canRequestFocus = isSelected
-            ..requestFocus();
+          print(
+            'workspaceFocusScopeNode.requestFocus ${workspaceState.tileableWindowList} ${workspaceState.selectedIndex}',
+          );
+          workspaceFocusScopeNode.requestFocus();
         }
         return null;
       },
       [isSelected],
     );
 
-    final windowManager = ref.watch(windowManagerProvider.notifier);
-    final currentWorkspaceId = ref.watch(currentWorkspaceIdProvider);
-    final workspaceState =
-        ref.watch(workspaceStateProvider(currentWorkspaceId));
-
     final appLauncher = PersistentApplicationSelector(
-      isFocused: workspaceState.focusedIndex ==
+      isSelected: workspaceState.selectedIndex ==
           workspaceState.tileableWindowList.length,
       onSelect: (entry) {
         print('start ${entry.desktopEntry.id}');
@@ -62,33 +62,13 @@ class WorkspaceWidget extends HookConsumerWidget {
 
     final tileableList = <Tileable>[];
     for (final (index, windowId) in workspaceState.tileableWindowList.indexed) {
-      final persistentFocusNode =
-          useFocusNode(debugLabel: 'PersistentWindowTileable');
-      void onTileableFocusChange() {
-        if (persistentFocusNode.hasFocus) {
-          ref
-              .read(workspaceStateProvider(currentWorkspaceId).notifier)
-              .setFocusedIndex(index);
-        }
-      }
-
-      useEffect(
-        () {
-          persistentFocusNode.addListener(onTileableFocusChange);
-          return () {
-            persistentFocusNode.removeListener(onTileableFocusChange);
-          };
-        },
-        [persistentFocusNode],
-      );
-      if (workspaceState.focusedIndex == index &&
-          !persistentFocusNode.hasFocus) {
-        persistentFocusNode.requestFocus();
-      }
       tileableList.add(
         PersistentWindowTileable(
           windowId: windowId,
-          focusNode: persistentFocusNode,
+          isSelected: workspaceState.selectedIndex == index,
+          onGrabFocus: () => ref
+              .read(workspaceStateProvider(currentWorkspaceId).notifier)
+              .setSelectedIndex(index),
         ),
       );
     }
@@ -106,29 +86,29 @@ class WorkspaceWidget extends HookConsumerWidget {
         actions: {
           FocusLeftTileableIntent: CallbackAction<FocusLeftTileableIntent>(
             onInvoke: (_) {
-              final nextIndex = workspaceState.focusedIndex - 1;
+              final nextIndex = workspaceState.selectedIndex - 1;
               if (nextIndex >= 0) {
                 ref
                     .read(workspaceStateProvider(currentWorkspaceId).notifier)
-                    .setFocusedIndex(nextIndex);
+                    .setSelectedIndex(nextIndex);
               }
               return null;
             },
           ),
           FocusRightTileableIntent: CallbackAction<FocusRightTileableIntent>(
             onInvoke: (_) {
-              final nextIndex = workspaceState.focusedIndex + 1;
+              final nextIndex = workspaceState.selectedIndex + 1;
               if (nextIndex < tileableList.length) {
                 ref
                     .read(workspaceStateProvider(currentWorkspaceId).notifier)
-                    .setFocusedIndex(nextIndex);
+                    .setSelectedIndex(nextIndex);
               }
               return null;
             },
           ),
           CloseTileableIntent: CallbackAction<CloseTileableIntent>(
             onInvoke: (_) {
-              final tileable = tileableList[workspaceState.focusedIndex];
+              final tileable = tileableList[workspaceState.selectedIndex];
               if (tileable is PersistentWindowTileable) {
                 final persistentWindow =
                     ref.read(persistentWindowStateProvider(tileable.windowId));
@@ -143,6 +123,10 @@ class WorkspaceWidget extends HookConsumerWidget {
         },
         child: FocusScope(
           node: workspaceFocusScopeNode,
+          onFocusChange: (value) {
+            print('Focus changed $value for $currentWorkspaceId');
+          },
+          autofocus: isSelected,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -157,7 +141,7 @@ class WorkspaceWidget extends HookConsumerWidget {
               ),
               Expanded(
                 child: SlidingContainer(
-                  index: workspaceState.focusedIndex,
+                  index: workspaceState.selectedIndex,
                   visible: workspaceState.visibleLength,
                   children: tileableList,
                 ),
