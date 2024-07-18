@@ -4,6 +4,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/display/widget/display.dart';
 import 'package:shell/monitor/provider/monitor_list.dart';
+import 'package:shell/polkit/provider/authentication_agent.dart';
 import 'package:shell/screen/provider/screen_list.dart';
 import 'package:shell/shared/provider/persistent_json_by_folder.dart';
 import 'package:shell/shared/provider/root_overlay.dart';
@@ -18,7 +19,7 @@ import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 
-void main() {
+void main() async {
   configureLogs();
   // debugRepaintRainbowEnabled = true;
   // debugPrintGestureArenaDiagnostics = true;
@@ -64,6 +65,7 @@ class _EagerInitialization extends ConsumerWidget {
     // Eagerly initialize providers by watching them.
     // By using "watch", the provider will stay alive and not be disposed.
     final result = ref.watch(persistentJsonByFolderProvider);
+
     ref.watch(monitorListProvider);
     // Handle error states and loading states
     if (result.isLoading) {
@@ -79,11 +81,14 @@ class _EagerInitialization extends ConsumerWidget {
 
     ref
       ..watch(screenListProvider)
-      ..watch(windowManagerProvider);
+      ..watch(windowManagerProvider)
+      ..watch(polkitAuthenticationAgentStateProvider);
 
     return child;
   }
 }
+
+final globalVeshellKey = GlobalKey();
 
 class Veshell extends ConsumerWidget {
   const Veshell({super.key});
@@ -96,6 +101,7 @@ class Veshell extends ConsumerWidget {
       themeMode: ThemeMode.dark,
       home: _EagerInitialization(
         child: Scaffold(
+          key: globalVeshellKey,
           body: HookConsumer(
             builder: (
               BuildContext context,

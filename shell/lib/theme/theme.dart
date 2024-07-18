@@ -29,6 +29,7 @@ class VeshellTheme {
     )!;
 
     var theme = defaultTheme.copyWith(
+      visualDensity: VisualDensity.standard,
       brightness: colorScheme.brightness,
       colorScheme: colorScheme,
       highlightColor: lighterSurface.withOpacity(0.12),

@@ -20,13 +20,12 @@ class SearchInput extends StatelessWidget {
       style: Theme.of(context).textTheme.titleLarge,
       decoration: InputDecoration(
         prefixIcon: const Padding(
-          padding: EdgeInsets.fromLTRB(12, 12, 48, 12),
+          padding: EdgeInsets.fromLTRB(12, 12, 32, 12),
           child: Icon(
             Icons.search,
             size: 28,
           ),
         ),
-        contentPadding: const EdgeInsets.all(24),
         hintText: 'Search',
         fillColor: Theme.of(context).colorScheme.surface,
         filled: true,

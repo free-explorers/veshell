@@ -1,0 +1,61 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+         "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+
+<node name="/">
+
+  <interface name="org.freedesktop.PolicyKit1.AuthenticationAgent">
+    <annotation name="org.gtk.EggDBus.DocString.Summary" value="Authentication Agent Interface"/>
+    <annotation name="org.gtk.EggDBus.DocString" value="<para>This D-Bus interface is used for communication between the system-wide PolicyKit daemon and one or more authentication agents each running in a user session.</para><para>An authentication agent must implement this interface and register (passing the object path of the object implementing the interface) using the org.freedesktop.PolicyKit1.Authority.RegisterAuthenticationAgent() and org.freedesktop.PolicyKit1.Authority.UnregisterAuthenticationAgent() methods on the #org.freedesktop.PolicyKit1.Authority interface of the PolicyKit daemon.</para>"/>
+
+    <method name="BeginAuthentication">
+      <annotation name="org.gtk.EggDBus.DocString" value="<para>Called
+      by the PolicyKit daemon when the authentication agent needs the
+      user to authenticate as one of the identities in @identities for
+      the action with the identifier @action_id.</para><para>This
+      authentication is normally achieved via the
+      PolkitAgentSession API, which invokes a private
+      setuid helper process to verify the authentication.  When
+      successful, it calls the
+      org.freedesktop.PolicyKit1.Authority.AuthenticationAgentResponse2()
+      method on the #org.freedesktop.PolicyKit1.Authority interface of
+      the PolicyKit daemon before returning.  If the user dismisses the
+      authentication dialog, the authentication agent should return an
+      error.</para>"/>
+
+      <arg name="action_id" direction="in" type="s">
+        <annotation name="org.gtk.EggDBus.DocString" value="The identifier for the action that the user is authentication for."/>
+      </arg>
+
+      <arg name="message" direction="in" type="s">
+        <annotation name="org.gtk.EggDBus.DocString" value="The message to display to the user. This is translated into the locale passed when registering the authentication agent using org.freedesktop.PolicyKit1.Authority.RegisterAuthenticationAgent()."/>
+      </arg>
+
+      <arg name="icon_name" direction="in" type="s">
+        <annotation name="org.gtk.EggDBus.DocString" value="The themed icon describing the action or the empty string if no icon is set."/>
+      </arg>
+
+      <arg name="details" direction="in" type="a{ss}">
+        <annotation name="org.gtk.EggDBus.DocString" value="Details about the authentication request. This is a dictionary of key/value pairs where both key and value are strings. These strings are translated into the locale passed when registering the authentication agent using org.freedesktop.PolicyKit1.Authority.RegisterAuthenticationAgent()."/>
+      </arg>
+
+      <arg name="cookie" direction="in" type="s">
+        <annotation name="org.gtk.EggDBus.DocString" value="A cookie identifying the authentication request."/>
+      </arg>
+
+      <arg name="identities" direction="in" type="a(sa{sv})">
+        <annotation name="org.gtk.EggDBus.Type" value="Array<Identity>"/>
+        <annotation name="org.gtk.EggDBus.DocString" value="An array of #Identity structs that the user can use for authentication."/>
+      </arg>
+    </method>
+
+    <method name="CancelAuthentication">
+      <annotation name="org.gtk.EggDBus.DocString" value="Called by the PolicyKit daemon if the authentication agent needs to cancel an authentication dialog."/>
+
+      <arg name="cookie" direction="in" type="s">
+        <annotation name="org.gtk.EggDBus.DocString" value="The cookie identifying the authentication request."/>
+      </arg>
+    </method>
+
+  </interface>
+
+</node>

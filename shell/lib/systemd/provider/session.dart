@@ -1,27 +1,38 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/shared/provider/dbus_client.dart';
 import 'package:ubuntu_session/ubuntu_session.dart';
 
 part 'session.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 class Session extends _$Session {
   @override
   SystemdSessionManager build() {
-    return SystemdSessionManager();
+    final client = ref.watch(dbusClientProvider);
+
+    return SystemdSessionManager(bus: client);
   }
 
-  Future<SystemdSession?> get activeSession async {
-    final sessions = await state.listSessions();
+  /// Returns a list of all user sessions.
+  Future<List<SystemdSession>> getUserSessions() async =>
+      Stream.fromIterable(await state.listSessions())
+          .asyncMap((session) async {
+            final classStr = await session.classString;
+            return classStr == 'user' ? session : null;
+          })
+          .where((session) => session != null)
+          .cast<SystemdSession>()
+          .toList();
 
-    SystemdSession? activeSession;
-    var i = 0;
-    while (activeSession == null && i < sessions.length) {
-      if (await sessions.elementAt(i).active) {
-        activeSession = sessions.elementAt(i);
+  /// Returns the active user session.
+  Future<SystemdSession?> getActiveUserSession() async {
+    final sessions = await getUserSessions();
+    for (final session in sessions) {
+      if (await session.active) {
+        return session;
       }
-      i++;
     }
-    return activeSession;
+    return null;
   }
 
   Future<void> shutdown() => state.powerOff(true);
@@ -31,16 +42,16 @@ class Session extends _$Session {
   Future<void> sleep() => state.reboot(true);
 
   Future<void> logout() async {
-    final session = await activeSession;
+    final session = await getActiveUserSession();
     if (session != null) {
-      await session.terminate();
+      await session.terminate(interactive: true);
     }
   }
 
   Future<void> lock() async {
-    final session = await activeSession;
+    final session = await getActiveUserSession();
     if (session != null) {
-      await session.lock();
+      await session.lock(interactive: true);
     }
   }
 }

@@ -69,7 +69,7 @@ class _AppDrawerTextField extends HookConsumerWidget {
       autofocus: true,
       decoration: InputDecoration(
         prefixIcon: const Padding(
-          padding: EdgeInsets.fromLTRB(16, 0, 8, 0),
+          padding: EdgeInsets.fromLTRB(16, 0, 16, 0),
           child: Icon(Icons.search),
         ),
         hintText: 'Search apps',

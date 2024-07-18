@@ -1,0 +1,554 @@
+[2m2024-07-18T14:08:53.909920Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m Using card1 as primary gpu.
+[2m2024-07-18T14:08:53.937087Z[0m [32m INFO[0m [2msmithay::backend::libinput[0m[2m:[0m Initializing a libinput backend
+[2m2024-07-18T14:08:53.937476Z[0m [32m INFO[0m [1minput_seat[0m[1m{[0m[3mname[0m[2m=[0m"seat0"[1m}[0m[2m:[0m[1madd_keyboard[0m[1m{[0m[3mxkb_config[0m[2m=[0mXkbConfig { rules: "", model: "", layout: "us(altgr-intl)", variant: "", options: None } [3mrepeat_delay[0m[2m=[0m200 [3mrepeat_rate[0m[2m=[0m50[1m}[0m[2m:[0m[1minput_keyboard[0m[2m:[0m [2msmithay::input::keyboard[0m[2m:[0m Initializing a xkbcommon handler with keymap query
+[2m2024-07-18T14:08:53.939294Z[0m [32m INFO[0m [1minput_seat[0m[1m{[0m[3mname[0m[2m=[0m"seat0"[1m}[0m[2m:[0m[1madd_keyboard[0m[1m{[0m[3mxkb_config[0m[2m=[0mXkbConfig { rules: "", model: "", layout: "us(altgr-intl)", variant: "", options: None } [3mrepeat_delay[0m[2m=[0m200 [3mrepeat_rate[0m[2m=[0m50[1m}[0m[2m:[0m[1minput_keyboard[0m[2m:[0m [2msmithay::input::keyboard[0m[2m:[0m Loaded Keymap [3mname[0m[2m=[0m"English (intl., with AltGr dead keys)"
+[2m2024-07-18T14:08:53.939810Z[0m [32m INFO[0m [2msmithay::wayland::socket[0m[2m:[0m Created new socket [3mname[0m[2m=[0mSome("wayland-1")
+[2m2024-07-18T14:08:53.939842Z[0m [32m INFO[0m [2mveshell::state[0m[2m:[0m Listening on wayland socket [3mname[0m[2m=[0m"wayland-1"
+[2m2024-07-18T14:08:53.940356Z[0m [33m WARN[0m [2msmithay::backend::drm::device::fd[0m[2m:[0m Unable to become drm master, assuming unprivileged mode
+[2m2024-07-18T14:08:53.940382Z[0m [32m INFO[0m [2msmithay::backend::drm::device[0m[2m:[0m DrmDevice initializing
+[2m2024-07-18T14:08:54.040420Z[0m [32m INFO[0m [2msmithay::backend::egl::display[0m[2m:[0m Successfully selected EGL platform: PLATFORM_GBM_KHR
+[2m2024-07-18T14:08:54.041817Z[0m [32m INFO[0m [2msmithay::backend::egl::display[0m[2m:[0m EGL Initialized
+[2m2024-07-18T14:08:54.041829Z[0m [32m INFO[0m [2msmithay::backend::egl::display[0m[2m:[0m EGL Version: (1, 5)
+[2m2024-07-18T14:08:54.041857Z[0m [32m INFO[0m [2msmithay::backend::egl::display[0m[2m:[0m Supported EGL display extensions: ["EGL_ANDROID_blob_cache", "EGL_ANDROID_native_fence_sync", "EGL_EXT_buffer_age", "EGL_EXT_config_select_group", "EGL_EXT_create_context_robustness", "EGL_EXT_image_dma_buf_import", "EGL_EXT_image_dma_buf_import_modifiers", "EGL_EXT_query_reset_notification_strategy", "EGL_IMG_context_priority", "EGL_KHR_cl_event2", "EGL_KHR_config_attribs", "EGL_KHR_context_flush_control", "EGL_KHR_create_context", "EGL_KHR_create_context_no_error", "EGL_KHR_fence_sync", "EGL_KHR_get_all_proc_addresses", "EGL_KHR_gl_colorspace", "EGL_KHR_gl_renderbuffer_image", "EGL_KHR_gl_texture_2D_image", "EGL_KHR_gl_texture_3D_image", "EGL_KHR_gl_texture_cubemap_image", "EGL_KHR_image", "EGL_KHR_image_base", "EGL_KHR_image_pixmap", "EGL_KHR_no_config_context", "EGL_KHR_reusable_sync", "EGL_KHR_surfaceless_context", "EGL_EXT_pixel_format_float", "EGL_KHR_wait_sync", "EGL_MESA_configless_context", "EGL_MESA_drm_image", "EGL_MESA_gl_interop", "EGL_MESA_image_dma_buf_export", "EGL_MESA_query_driver", "EGL_MESA_x11_native_visual_id", "EGL_WL_bind_wayland_display", ""]
+[2m2024-07-18T14:08:54.042903Z[0m [32m INFO[0m [1megl[0m[1m{[0m[3mnative[0m[2m=[0m"/dev/dri/card1" [3mplatform[0m[2m=[0m"PLATFORM_GBM_KHR" [3mversion[0m[2m=[0m(1, 5)[1m}[0m[2m:[0m[1megl_context[0m[1m{[0m[3mptr[0m[2m=[0m105476971993040[1m}[0m[2m:[0m [2msmithay::backend::egl::context[0m[2m:[0m EGL context created [3mpriority[0m[2m=[0mSome(Medium)
+[2m2024-07-18T14:08:54.043777Z[0m [32m INFO[0m [1megl[0m[1m{[0m[3mnative[0m[2m=[0m"/dev/dri/card1" [3mplatform[0m[2m=[0m"PLATFORM_GBM_KHR" [3mversion[0m[2m=[0m(1, 5)[1m}[0m[2m:[0m[1megl_context[0m[1m{[0m[3mptr[0m[2m=[0m105476971993040[1m}[0m[2m:[0m[1mrenderer_gles2[0m[2m:[0m [2msmithay::backend::renderer::gles[0m[2m:[0m Initializing OpenGL ES Renderer
+[2m2024-07-18T14:08:54.043808Z[0m [32m INFO[0m [1megl[0m[1m{[0m[3mnative[0m[2m=[0m"/dev/dri/card1" [3mplatform[0m[2m=[0m"PLATFORM_GBM_KHR" [3mversion[0m[2m=[0m(1, 5)[1m}[0m[2m:[0m[1megl_context[0m[1m{[0m[3mptr[0m[2m=[0m105476971993040[1m}[0m[2m:[0m[1mrenderer_gles2[0m[2m:[0m [2msmithay::backend::renderer::gles[0m[2m:[0m GL Version: "OpenGL ES 3.2 Mesa 24.1.3-manjaro1.1"
+[2m2024-07-18T14:08:54.043823Z[0m [32m INFO[0m [1megl[0m[1m{[0m[3mnative[0m[2m=[0m"/dev/dri/card1" [3mplatform[0m[2m=[0m"PLATFORM_GBM_KHR" [3mversion[0m[2m=[0m(1, 5)[1m}[0m[2m:[0m[1megl_context[0m[1m{[0m[3mptr[0m[2m=[0m105476971993040[1m}[0m[2m:[0m[1mrenderer_gles2[0m[2m:[0m [2msmithay::backend::renderer::gles[0m[2m:[0m GL Vendor: "AMD"
+[2m2024-07-18T14:08:54.043838Z[0m [32m INFO[0m [1megl[0m[1m{[0m[3mnative[0m[2m=[0m"/dev/dri/card1" [3mplatform[0m[2m=[0m"PLATFORM_GBM_KHR" [3mversion[0m[2m=[0m(1, 5)[1m}[0m[2m:[0m[1megl_context[0m[1m{[0m[3mptr[0m[2m=[0m105476971993040[1m}[0m[2m:[0m[1mrenderer_gles2[0m[2m:[0m [2msmithay::backend::renderer::gles[0m[2m:[0m GL Renderer: "AMD Radeon RX Vega (radeonsi, vega10, LLVM 18.1.8, DRM 3.57, 6.9.9-1-MANJARO)"
+[2m2024-07-18T14:08:54.043851Z[0m [32m INFO[0m [1megl[0m[1m{[0m[3mnative[0m[2m=[0m"/dev/dri/card1" [3mplatform[0m[2m=[0m"PLATFORM_GBM_KHR" [3mversion[0m[2m=[0m(1, 5)[1m}[0m[2m:[0m[1megl_context[0m[1m{[0m[3mptr[0m[2m=[0m105476971993040[1m}[0m[2m:[0m[1mrenderer_gles2[0m[2m:[0m [2msmithay::backend::renderer::gles[0m[2m:[0m Supported GL Extensions: ["GL_EXT_blend_minmax", "GL_EXT_multi_draw_arrays", "GL_EXT_texture_filter_anisotropic", "GL_EXT_texture_compression_s3tc", "GL_EXT_texture_compression_dxt1", "GL_EXT_texture_compression_rgtc", "GL_EXT_texture_format_BGRA8888", "GL_OES_compressed_ETC1_RGB8_texture", "GL_OES_depth24", "GL_OES_element_index_uint", "GL_OES_fbo_render_mipmap", "GL_OES_mapbuffer", "GL_OES_rgb8_rgba8", "GL_OES_standard_derivatives", "GL_OES_stencil8", "GL_OES_texture_3D", "GL_OES_texture_float", "GL_OES_texture_float_linear", "GL_OES_texture_half_float", "GL_OES_texture_half_float_linear", "GL_OES_texture_npot", "GL_OES_vertex_half_float", "GL_EXT_draw_instanced", "GL_EXT_texture_sRGB_decode", "GL_OES_EGL_image", "GL_OES_depth_texture", "GL_AMD_performance_monitor", "GL_OES_packed_depth_stencil", "GL_EXT_texture_type_2_10_10_10_REV", "GL_NV_conditional_render", "GL_OES_get_program_binary", "GL_APPLE_texture_max_level", "GL_EXT_discard_framebuffer", "GL_EXT_read_format_bgra", "GL_EXT_texture_storage", "GL_NV_pack_subimage", "GL_NV_texture_barrier", "GL_EXT_frag_depth", "GL_NV_fbo_color_attachments", "GL_OES_EGL_image_external", "GL_OES_EGL_sync", "GL_OES_vertex_array_object", "GL_OES_viewport_array", "GL_ANGLE_pack_reverse_row_order", "GL_ANGLE_texture_compression_dxt3", "GL_ANGLE_texture_compression_dxt5", "GL_EXT_occlusion_query_boolean", "GL_EXT_robustness", "GL_EXT_texture_rg", "GL_EXT_unpack_subimage", "GL_NV_draw_buffers", "GL_NV_read_buffer", "GL_NV_read_depth", "GL_NV_read_depth_stencil", "GL_NV_read_stencil", "GL_APPLE_sync", "GL_EXT_draw_buffers", "GL_EXT_instanced_arrays", "GL_EXT_map_buffer_range", "GL_KHR_debug", "GL_KHR_robustness", "GL_KHR_texture_compression_astc_ldr", "GL_NV_generate_mipmap_sRGB", "GL_NV_pixel_buffer_object", "GL_OES_depth_texture_cube_map", "GL_OES_required_internalformat", "GL_OES_surfaceless_context", "GL_EXT_color_buffer_float", "GL_EXT_debug_label", "GL_EXT_sRGB_write_control", "GL_EXT_separate_shader_objects", "GL_EXT_shader_group_vote", "GL_EXT_shader_implicit_conversions", "GL_EXT_shader_integer_mix", "GL_EXT_tessellation_point_size", "GL_EXT_tessellation_shader", "GL_ANDROID_extension_pack_es31a", "GL_EXT_base_instance", "GL_EXT_compressed_ETC1_RGB8_sub_texture", "GL_EXT_copy_image", "GL_EXT_draw_buffers_indexed", "GL_EXT_draw_elements_base_vertex", "GL_EXT_gpu_shader5", "GL_EXT_polygon_offset_clamp", "GL_EXT_primitive_bounding_box", "GL_EXT_render_snorm", "GL_EXT_shader_io_blocks", "GL_EXT_texture_border_clamp", "GL_EXT_texture_buffer", "GL_EXT_texture_cube_map_array", "GL_EXT_texture_norm16", "GL_EXT_texture_view", "GL_KHR_blend_equation_advanced", "GL_KHR_context_flush_control", "GL_KHR_robust_buffer_access_behavior", "GL_NV_image_formats", "GL_NV_shader_noperspective_interpolation", "GL_OES_copy_image", "GL_OES_draw_buffers_indexed", "GL_OES_draw_elements_base_vertex", "GL_OES_gpu_shader5", "GL_OES_primitive_bounding_box", "GL_OES_sample_shading", "GL_OES_sample_variables", "GL_OES_shader_io_blocks", "GL_OES_shader_multisample_interpolation", "GL_OES_tessellation_point_size", "GL_OES_tessellation_shader", "GL_OES_texture_border_clamp", "GL_OES_texture_buffer", "GL_OES_texture_cube_map_array", "GL_OES_texture_stencil8", "GL_OES_texture_storage_multisample_2d_array", "GL_OES_texture_view", "GL_EXT_blend_func_extended", "GL_EXT_buffer_storage", "GL_EXT_float_blend", "GL_EXT_geometry_point_size", "GL_EXT_geometry_shader", "GL_EXT_shader_samples_identical", "GL_EXT_texture_sRGB_R8", "GL_KHR_no_error", "GL_KHR_texture_compression_astc_sliced_3d", "GL_OES_EGL_image_external_essl3", "GL_OES_geometry_point_size", "GL_OES_geometry_shader", "GL_OES_shader_image_atomic", "GL_EXT_clear_texture", "GL_EXT_clip_cull_distance", "GL_EXT_disjoint_timer_query", "GL_EXT_texture_compression_s3tc_srgb", "GL_EXT_window_rectangles", "GL_MESA_shader_integer_functions", "GL_EXT_clip_control", "GL_EXT_color_buffer_half_float", "GL_EXT_memory_object", "GL_EXT_memory_object_fd", "GL_EXT_semaphore", "GL_EXT_semaphore_fd", "GL_EXT_texture_compression_bptc", "GL_EXT_texture_mirror_clamp_to_edge", "GL_KHR_parallel_shader_compile", "GL_NV_alpha_to_coverage_dither_control", "GL_AMD_framebuffer_multisample_advanced", "GL_EXT_EGL_image_storage", "GL_EXT_texture_shadow_lod", "GL_INTEL_blackhole_render", "GL_MESA_framebuffer_flip_y", "GL_NV_compute_shader_derivatives", "GL_EXT_demote_to_helper_invocation", "GL_EXT_depth_clamp", "GL_EXT_texture_query_lod", "GL_MESA_sampler_objects", "GL_MESA_bgra", "GL_MESA_texture_const_bandwidth", ""]
+[2m2024-07-18T14:08:54.047811Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m EGL hardware-acceleration enabled
+[2m2024-07-18T14:08:54.049410Z[0m [32m INFO[0m [1megl[0m[1m{[0m[3mnative[0m[2m=[0m"/dev/dri/card1" [3mplatform[0m[2m=[0m"PLATFORM_GBM_KHR" [3mversion[0m[2m=[0m(1, 5)[1m}[0m[2m:[0m[1megl_context[0m[1m{[0m[3mshared[0m[2m=[0m105476971993040[1m}[0m[2m:[0m [2msmithay::backend::egl::display[0m[2m:[0m Selected color format: PixelFormat { hardware_accelerated: true, color_bits: 24, alpha_bits: 8, depth_bits: 24, stencil_bits: 8, stereoscopy: false, multisampling: None, srgb: false }
+[2m2024-07-18T14:08:54.049793Z[0m [32m INFO[0m [1megl[0m[1m{[0m[3mnative[0m[2m=[0m"/dev/dri/card1" [3mplatform[0m[2m=[0m"PLATFORM_GBM_KHR" [3mversion[0m[2m=[0m(1, 5)[1m}[0m[2m:[0m[1megl_context[0m[1m{[0m[3mshared[0m[2m=[0m105476971993040 [3mptr[0m[2m=[0m105476980380192[1m}[0m[2m:[0m [2msmithay::backend::egl::context[0m[2m:[0m EGL context created [3mpriority[0m[2m=[0mSome(Medium)
+[2m2024-07-18T14:08:54.049852Z[0m [32m INFO[0m [1megl[0m[1m{[0m[3mnative[0m[2m=[0m"/dev/dri/card1" [3mplatform[0m[2m=[0m"PLATFORM_GBM_KHR" [3mversion[0m[2m=[0m(1, 5)[1m}[0m[2m:[0m[1megl_context[0m[1m{[0m[3mshared[0m[2m=[0m105476971993040[1m}[0m[2m:[0m [2msmithay::backend::egl::display[0m[2m:[0m Selected color format: PixelFormat { hardware_accelerated: true, color_bits: 24, alpha_bits: 8, depth_bits: 24, stencil_bits: 8, stereoscopy: false, multisampling: None, srgb: false }
+[2m2024-07-18T14:08:54.050260Z[0m [32m INFO[0m [1megl[0m[1m{[0m[3mnative[0m[2m=[0m"/dev/dri/card1" [3mplatform[0m[2m=[0m"PLATFORM_GBM_KHR" [3mversion[0m[2m=[0m(1, 5)[1m}[0m[2m:[0m[1megl_context[0m[1m{[0m[3mshared[0m[2m=[0m105476971993040 [3mptr[0m[2m=[0m105476980879616[1m}[0m[2m:[0m [2msmithay::backend::egl::context[0m[2m:[0m EGL context created [3mpriority[0m[2m=[0mSome(Medium)
+[2m2024-07-18T14:08:54.050405Z[0m [32m INFO[0m [2mveshell::gles_framebuffer_importer[0m[2m:[0m Initializing OpenGL ES buffer importer
+[2m2024-07-18T14:08:54.050415Z[0m [32m INFO[0m [2mveshell::gles_framebuffer_importer[0m[2m:[0m GL Version: "OpenGL ES 3.2 Mesa 24.1.3-manjaro1.1"
+[2m2024-07-18T14:08:54.050422Z[0m [32m INFO[0m [2mveshell::gles_framebuffer_importer[0m[2m:[0m GL Vendor: "AMD"
+[2m2024-07-18T14:08:54.050428Z[0m [32m INFO[0m [2mveshell::gles_framebuffer_importer[0m[2m:[0m GL Renderer: "AMD Radeon RX Vega (radeonsi, vega10, LLVM 18.1.8, DRM 3.57, 6.9.9-1-MANJARO)"
+[2m2024-07-18T14:08:54.062883Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m Trying to setup connector DP-2 [3mcrtc[0m[2m=[0mcrtc::Handle(66)
+[2m2024-07-18T14:08:54.062986Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m output_name: DP-2
+[2m2024-07-18T14:08:54.062999Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m path: /home/papyelgringo/.config/veshell/persistence/Monitor/DP-2.json
+[2m2024-07-18T14:08:54.063055Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m json: Object {"screenConfiguration": Object {"displayMode": String("splitHorizontal"), "screenList": Array [String("aaaa8f60-29c2-4d39-8318-7424d760facd")]}, "selectedMode": Number(0)}
+[2m2024-07-18T14:08:54.063076Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m using mode_id: 0
+[2m2024-07-18T14:08:54.063082Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 0: Mode { name: "2560x1440", clock: 583600, size: (2560, 1440), hsync: (2568, 2600, 2720), vsync: (1465, 1473, 1490), hskew: 0, vscan: 0, vrefresh: 144, mode_type: ModeTypeFlags(PREFERRED | DRIVER) }
+[2m2024-07-18T14:08:54.063095Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 1: Mode { name: "2560x1440", clock: 497750, size: (2560, 1440), hsync: (2608, 2640, 2720), vsync: (1443, 1448, 1525), hskew: 0, vscan: 0, vrefresh: 120, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063103Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 2: Mode { name: "2560x1440", clock: 241500, size: (2560, 1440), hsync: (2608, 2640, 2720), vsync: (1443, 1448, 1481), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063111Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 3: Mode { name: "2560x1440", clock: 241500, size: (2560, 1440), hsync: (2608, 2640, 2720), vsync: (1443, 1448, 1481), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063119Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 4: Mode { name: "1920x1200", clock: 583600, size: (1920, 1200), hsync: (2568, 2600, 2720), vsync: (1465, 1473, 1490), hskew: 0, vscan: 0, vrefresh: 144, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063127Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 5: Mode { name: "1920x1080", clock: 297000, size: (1920, 1080), hsync: (2008, 2052, 2200), vsync: (1084, 1089, 1125), hskew: 0, vscan: 0, vrefresh: 120, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063135Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 6: Mode { name: "1920x1080", clock: 296703, size: (1920, 1080), hsync: (2008, 2052, 2200), vsync: (1084, 1089, 1125), hskew: 0, vscan: 0, vrefresh: 120, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063144Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 7: Mode { name: "1920x1080", clock: 148500, size: (1920, 1080), hsync: (2008, 2052, 2200), vsync: (1084, 1089, 1125), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063152Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 8: Mode { name: "1920x1080", clock: 148500, size: (1920, 1080), hsync: (2008, 2052, 2200), vsync: (1084, 1089, 1125), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063167Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 9: Mode { name: "1920x1080", clock: 148352, size: (1920, 1080), hsync: (2008, 2052, 2200), vsync: (1084, 1089, 1125), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063175Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 10: Mode { name: "1920x1080", clock: 148500, size: (1920, 1080), hsync: (2448, 2492, 2640), vsync: (1084, 1089, 1125), hskew: 0, vscan: 0, vrefresh: 50, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063183Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 11: Mode { name: "1600x1200", clock: 583600, size: (1600, 1200), hsync: (2568, 2600, 2720), vsync: (1465, 1473, 1490), hskew: 0, vscan: 0, vrefresh: 144, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063190Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 12: Mode { name: "1680x1050", clock: 146250, size: (1680, 1050), hsync: (1784, 1960, 2240), vsync: (1053, 1059, 1089), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063198Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 13: Mode { name: "1280x1024", clock: 135000, size: (1280, 1024), hsync: (1296, 1440, 1688), vsync: (1025, 1028, 1066), hskew: 0, vscan: 0, vrefresh: 75, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063206Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 14: Mode { name: "1280x1024", clock: 108000, size: (1280, 1024), hsync: (1328, 1440, 1688), vsync: (1025, 1028, 1066), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063213Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 15: Mode { name: "1440x900", clock: 106500, size: (1440, 900), hsync: (1520, 1672, 1904), vsync: (903, 909, 934), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063221Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 16: Mode { name: "1280x960", clock: 108000, size: (1280, 960), hsync: (1376, 1488, 1800), vsync: (961, 964, 1000), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063229Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 17: Mode { name: "1280x800", clock: 83500, size: (1280, 800), hsync: (1352, 1480, 1680), vsync: (803, 809, 831), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063236Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 18: Mode { name: "1152x864", clock: 108000, size: (1152, 864), hsync: (1216, 1344, 1600), vsync: (865, 868, 900), hskew: 0, vscan: 0, vrefresh: 75, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063244Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 19: Mode { name: "1280x720", clock: 74250, size: (1280, 720), hsync: (1390, 1430, 1650), vsync: (725, 730, 750), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063252Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 20: Mode { name: "1280x720", clock: 74250, size: (1280, 720), hsync: (1390, 1430, 1650), vsync: (725, 730, 750), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063259Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 21: Mode { name: "1280x720", clock: 74176, size: (1280, 720), hsync: (1390, 1430, 1650), vsync: (725, 730, 750), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063267Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 22: Mode { name: "1280x720", clock: 74250, size: (1280, 720), hsync: (1720, 1760, 1980), vsync: (725, 730, 750), hskew: 0, vscan: 0, vrefresh: 50, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063275Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 23: Mode { name: "1280x720", clock: 74250, size: (1280, 720), hsync: (1720, 1760, 1980), vsync: (725, 730, 750), hskew: 0, vscan: 0, vrefresh: 50, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063285Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 24: Mode { name: "1024x768", clock: 78750, size: (1024, 768), hsync: (1040, 1136, 1312), vsync: (769, 772, 800), hskew: 0, vscan: 0, vrefresh: 75, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063293Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 25: Mode { name: "1024x768", clock: 75000, size: (1024, 768), hsync: (1048, 1184, 1328), vsync: (771, 777, 806), hskew: 0, vscan: 0, vrefresh: 70, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063301Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 26: Mode { name: "1024x768", clock: 65000, size: (1024, 768), hsync: (1048, 1184, 1344), vsync: (771, 777, 806), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063308Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 27: Mode { name: "832x624", clock: 57284, size: (832, 624), hsync: (864, 928, 1152), vsync: (625, 628, 667), hskew: 0, vscan: 0, vrefresh: 75, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063316Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 28: Mode { name: "800x600", clock: 49500, size: (800, 600), hsync: (816, 896, 1056), vsync: (601, 604, 625), hskew: 0, vscan: 0, vrefresh: 75, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063324Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 29: Mode { name: "800x600", clock: 50000, size: (800, 600), hsync: (856, 976, 1040), vsync: (637, 643, 666), hskew: 0, vscan: 0, vrefresh: 72, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063331Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 30: Mode { name: "800x600", clock: 40000, size: (800, 600), hsync: (840, 968, 1056), vsync: (601, 605, 628), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063339Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 31: Mode { name: "800x600", clock: 36000, size: (800, 600), hsync: (824, 896, 1024), vsync: (601, 603, 625), hskew: 0, vscan: 0, vrefresh: 56, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063347Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 32: Mode { name: "720x576", clock: 27000, size: (720, 576), hsync: (732, 796, 864), vsync: (581, 586, 625), hskew: 0, vscan: 0, vrefresh: 50, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063355Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 33: Mode { name: "720x576", clock: 27000, size: (720, 576), hsync: (732, 796, 864), vsync: (581, 586, 625), hskew: 0, vscan: 0, vrefresh: 50, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063362Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 34: Mode { name: "720x480", clock: 27027, size: (720, 480), hsync: (736, 798, 858), vsync: (489, 495, 525), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063370Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 35: Mode { name: "720x480", clock: 27027, size: (720, 480), hsync: (736, 798, 858), vsync: (489, 495, 525), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063378Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 36: Mode { name: "720x480", clock: 27000, size: (720, 480), hsync: (736, 798, 858), vsync: (489, 495, 525), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063386Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 37: Mode { name: "720x480", clock: 27000, size: (720, 480), hsync: (736, 798, 858), vsync: (489, 495, 525), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063396Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 38: Mode { name: "640x480", clock: 31500, size: (640, 480), hsync: (656, 720, 840), vsync: (481, 484, 500), hskew: 0, vscan: 0, vrefresh: 75, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063404Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 39: Mode { name: "640x480", clock: 31500, size: (640, 480), hsync: (664, 704, 832), vsync: (489, 492, 520), hskew: 0, vscan: 0, vrefresh: 73, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063411Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 40: Mode { name: "640x480", clock: 30240, size: (640, 480), hsync: (704, 768, 864), vsync: (483, 486, 525), hskew: 0, vscan: 0, vrefresh: 67, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063419Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 41: Mode { name: "640x480", clock: 25200, size: (640, 480), hsync: (656, 752, 800), vsync: (490, 492, 525), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063427Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 42: Mode { name: "640x480", clock: 25175, size: (640, 480), hsync: (656, 752, 800), vsync: (490, 492, 525), hskew: 0, vscan: 0, vrefresh: 60, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063435Z[0m [32m INFO[0m [2mveshell::backend::drm_backend[0m[2m:[0m mode 43: Mode { name: "720x400", clock: 28320, size: (720, 400), hsync: (738, 846, 900), vsync: (412, 414, 449), hskew: 0, vscan: 0, vrefresh: 70, mode_type: ModeTypeFlags(DRIVER) }
+[2m2024-07-18T14:08:54.063834Z[0m [32m INFO[0m [1mdrm_atomic[0m[2m:[0m[1mcreate_surface[0m[1m{[0m[3mcrtc[0m[2m=[0mcrtc::Handle(66) [3mmode[0m[2m=[0mMode { name: "2560x1440", clock: 583600, size: (2560, 1440), hsync: (2568, 2600, 2720), vsync: (1465, 1473, 1490), hskew: 0, vscan: 0, vrefresh: 144, mode_type: ModeTypeFlags(PREFERRED | DRIVER) } [3mconnectors[0m[2m=[0m[connector::Handle(94)][1m}[0m[2m:[0m[1mdrm_atomic[0m[1m{[0m[3mcrtc[0m[2m=[0mcrtc::Handle(66)[1m}[0m[2m:[0m [2msmithay::backend::drm::surface::atomic[0m[2m:[0m Initializing drm surface (crtc::Handle(66):plane::Handle(59)) with mode Mode { name: "2560x1440", clock: 583600, size: (2560, 1440), hsync: (2568, 2600, 2720), vsync: (1465, 1473, 1490), hskew: 0, vscan: 0, vrefresh: 144, mode_type: ModeTypeFlags(PREFERRED | DRIVER) } and connectors [connector::Handle(94)]
+[2m2024-07-18T14:08:54.064175Z[0m [32m INFO[0m [1mnew[0m[1m{[0m[3mname[0m[2m=[0m"DP-2" [3mphysical[0m[2m=[0mPhysicalProperties { size: Size<smithay::utils::geometry::Raw> { w: 600, h: 340 }, subpixel: Unknown, make: "Unknown", model: "Unknown" }[1m}[0m[2m:[0m [2msmithay::output[0m[2m:[0m Creating new Output [3mname[0m[2m=[0m"DP-2"
+[2m2024-07-18T14:08:54.064202Z[0m [32m INFO[0m [2msmithay::wayland::output[0m[2m:[0m Creating new wl_output [3moutput[0m[2m=[0m"DP-2"
+[2m2024-07-18T14:08:54.126978Z[0m [32m INFO[0m [2msmithay::backend::drm::surface::atomic[0m[2m:[0m Adding connector: DisplayPort
+[2m2024-07-18T14:08:54.127024Z[0m [32m INFO[0m [2msmithay::backend::drm::surface::atomic[0m[2m:[0m Setting new mode: "2560x1440"
+[2m2024-07-18T14:08:54.127654Z[0m [33m WARN[0m [2msmithay::backend::drm::surface::atomic[0m[2m:[0m Failed to destroy old mode property blob: No such file or directory (os error 2)
+flutter: The Dart VM service is listening on http://127.0.0.1:12345/
+[2m2024-07-18T14:08:54.180977Z[0m [32m INFO[0m [2msmithay::xwayland::xserver[0m[2m:[0m spawning XWayland instance
+flutter: SurfaceManager build
+flutter: WaylandEvent.monitorLayoutChanged(method: monitor_layout_changed, message: MonitorLayoutChangedMessage(monitors: [Monitor(name: DP-2, description: Unknown - Unknown - DP-2, physicalProperties: PhysicalProperties(size: Size(600.0, 340.0), make: Unknown, model: Unknown), scale: 1.0, location: Offset(0.0, 0.0), currentMode: Mode(size: Size(2560.0, 1440.0), refreshRate: 143999), preferredMode: Mode(size: Size(2560.0, 1440.0), refreshRate: 143999), modes: [Mode(size: Size(2560.0, 1440.0), refreshRate: 143999)])]))
+flutter: WaylandEvent.newSurface(method: new_surface, message: NewSurfaceMessage(surfaceId: 1))
+flutter: WaylandEvent.setEnvironmentVariables(method: set_environment_variables, message: SetEnvironmentVariablesMessage(environmentVariables: {DISPLAY: :2}))
+flutter: WaylandEvent.setEnvironmentVariables(method: set_environment_variables, message: SetEnvironmentVariablesMessage(environmentVariables: {
+   DISPLAY: :2,
+   WAYLAND_DISPLAY: wayland-1
+}))
+flutter: WaylandEvent.monitorLayoutChanged(method: monitor_layout_changed, message: MonitorLayoutChangedMessage(monitors: [Monitor(name: DP-2, description: Unknown - Unknown - DP-2, physicalProperties: PhysicalProperties(size: Size(600.0, 340.0), make: Unknown, model: Unknown), scale: 1.0, location: Offset(0.0, 0.0), currentMode: Mode(size: Size(2560.0, 1440.0), refreshRate: 143999), preferredMode: Mode(size: Size(2560.0, 1440.0), refreshRate: 143999), modes: [Mode(size: Size(2560.0, 1440.0), refreshRate: 143999)])]))
+on_shell_ready
+flutter: Persisting changes for Monitor-DP-2
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Monitor-DP-2[0m
+flutter: Persisting changes for Screen-aaaa8f60-29c2-4d39-8318-7424d760facd
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Screen-aaaa8f60-29c2-4d39-8318-7424d760facd[0m
+flutter: Persisting changes for Workspace-6258fc16-3448-4117-b6f8-a0b2a77df4e1
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Workspace-6258fc16-3448-4117-b6f8-a0b2a77df4e1[0m
+flutter: Persisting changes for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb[0m
+flutter: Persisting changes for Workspace-0c381bb9-b535-480b-ae98-eed1aaa17f2c
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Workspace-0c381bb9-b535-480b-ae98-eed1aaa17f2c[0m
+flutter: Persisting changes for Workspace-61b17bb6-bb2a-46c5-ab05-9abf4d39b481
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Workspace-61b17bb6-bb2a-46c5-ab05-9abf4d39b481[0m
+flutter: Persisting changes for Window-0207b2a9-22e1-434f-b42f-1febebc816c5
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-0207b2a9-22e1-434f-b42f-1febebc816c5[0m
+flutter: Persisting changes for Window-41e741b5-6123-4034-9fce-ee789b33ba94
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-41e741b5-6123-4034-9fce-ee789b33ba94[0m
+flutter: Persisting changes for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2[0m
+flutter: Persisting changes for Window-d353be86-3ce1-4fc6-82af-73839e90ee68
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-d353be86-3ce1-4fc6-82af-73839e90ee68[0m
+flutter: Persisting changes for Window-205675f5-671d-4083-950c-333a1a809cfc
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-205675f5-671d-4083-950c-333a1a809cfc[0m
+flutter: workspaceFocusScopeNode.requestFocus [
+   6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2,
+   d353be86-3ce1-4fc6-82af-73839e90ee68
+] 1
+flutter: Focus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: |_ isSelected true
+flutter: |_ focusedChild null
+flutter: |_ canRequestFocus true
+flutter: |_ descendantsAreFocusable true
+flutter: persistentFocusNode.requestFocus() for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: Focus changed true for 714cee36-c6dc-4836-a587-845f1a2427bb
+flutter: onGrabFocus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: WaylandEvent.newSurface(method: new_surface, message: NewSurfaceMessage(surfaceId: 1))
+[ERROR:flutter/runtime/dart_vm_initializer.cc(41)] Unhandled Exception: LateInitializationError: Field '_keepAliveLink@185029634' has already been initialized.
+#0      LateError._throwFieldAlreadyInitialized (dart:_internal-patch/internal_patch.dart:185:5)
+#1      WlSurfaceState._keepAliveLink= (package:shell/wayland/provider/wl_surface_state.dart)
+#2      WlSurfaceState.initialize (package:shell/wayland/provider/wl_surface_state.dart:23:5)
+#3      SurfaceManager._newSurface (package:shell/wayland/provider/surface.manager.dart:102:66)
+#4      SurfaceManager.build.<anonymous closure> (package:shell/wayland/provider/surface.manager.dart:48:11)
+#5      ProviderBase.addListener.<anonymous closure> (package:riverpod/src/framework/provider_base.dart:98:41)
+#6      _RootZone.runBinaryGuarded (dart:async/zone.dart:1606:10)
+#7      ProviderElementBase._notifyListeners.<anonymous closure> (package:riverpod/src/framework/element.dart:525:28)
+#8      ResultData.map (package:riverpod/src/result.dart:74:16)
+#9      ProviderElementBase._notifyListeners (package:riverpod/src/framework/element.dart:519:14)
+#10     ProviderElementBase.setState (package:riverpod/src/framework/element.dart:138:7)
+#11     AsyncTransition.asyncTransition (package:riverpod/src/common.dart:28:7)
+#12     FutureHandlerProviderElementMixin.onData (package:riverpod/src/async_notifier/base.dart:277:7)
+#13     FutureHandlerProviderElementMixin._handleAsync.<anonymous closure> (package:riverpod/src/async_notifier/base.dart:383:11)
+#14     _RootZone.runUnaryGuarded (dart:async/zone.dart:1594:10)
+#15     _BufferingStreamSubscription._sendData (dart:async/stream_impl.dart:365:11)
+#16     _BufferingStreamSubscription._add (dart:async/stream_impl.dart:297:7)
+#17     _SyncBroadcastStreamController._sendData.<anonymous closure> (dart:async/broadcast_stream_controller.dart:385:20)
+#18     _BroadcastStreamController._forEachListener (dart:async/broadcast_stream_controller.dart:322:15)
+#19     _SyncBroadcastStreamController._sendData (dart:async/broadcast_stream_controller.dart:384:5)
+#20     _BroadcastStreamController.add (dart:async/broadcast_stream_controller.dart:244:5)
+#21     _AsBroadcastStreamController.add (dart:async/broadcast_stream_controller.dart:474:11)
+#22     _RootZone.runUnaryGuarded (dart:async/zone.dart:1594:10)
+#23     _BufferingStreamSubscription._sendData (dart:async/stream_impl.dart:365:11)
+#24     _DelayedData.perform (dart:async/stream_impl.dart:541:14)
+#25     _PendingEvents.handleNext (dart:async/stream_impl.dart:646:11)
+#26     _PendingEvents.schedule.<anonymous closure> (dart:async/stream_impl.dart:617:7)
+#27     _microtaskLoop (dart:async/schedule_microtask.dart:40:21)
+#28     _startMicrotaskLoop (dart:async/schedule_microtask.dart:49:5)
+
+flutter: persistentFocusNode.focusInDirection()
+flutter: PersistentApplicationSelector focus false
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Monitor-DP-2[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Screen-aaaa8f60-29c2-4d39-8318-7424d760facd[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Workspace-6258fc16-3448-4117-b6f8-a0b2a77df4e1[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Workspace-0c381bb9-b535-480b-ae98-eed1aaa17f2c[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Workspace-61b17bb6-bb2a-46c5-ab05-9abf4d39b481[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-0207b2a9-22e1-434f-b42f-1febebc816c5[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-41e741b5-6123-4034-9fce-ee789b33ba94[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-d353be86-3ce1-4fc6-82af-73839e90ee68[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-205675f5-671d-4083-950c-333a1a809cfc[0m
+flutter: unhandled element <defs/>; Picture key: Svg loader
+flutter: unhandled element <sodipodi:namedview/>; Picture key: Svg loader
+flutter: unhandled element <metadata/>; Picture key: Svg loader
+flutter: unhandled element <inkscape:perspective/>; Picture key: Svg loader
+flutter: unhandled element <filter/>; Picture key: Svg loader
+flutter: unhandled element <style/>; Picture key: Svg loader
+flutter: unhandled element <inkscape:clipboard/>; Picture key: Svg loader
+[2m2024-07-18T14:08:59.478900Z[0m [32m INFO[0m [2msmithay::backend::libinput[0m[2m:[0m New device "event1"
+[2m2024-07-18T14:08:59.478933Z[0m [32m INFO[0m [2msmithay::backend::libinput[0m[2m:[0m New device "event2"
+[2m2024-07-18T14:08:59.478941Z[0m [32m INFO[0m [2msmithay::backend::libinput[0m[2m:[0m New device "event0"
+[2m2024-07-18T14:08:59.478947Z[0m [32m INFO[0m [2msmithay::backend::libinput[0m[2m:[0m New device "event3"
+[2m2024-07-18T14:08:59.478953Z[0m [32m INFO[0m [2msmithay::backend::libinput[0m[2m:[0m New device "event4"
+[2m2024-07-18T14:08:59.478958Z[0m [32m INFO[0m [2msmithay::backend::libinput[0m[2m:[0m New device "event5"
+[2m2024-07-18T14:08:59.478963Z[0m [32m INFO[0m [2msmithay::backend::libinput[0m[2m:[0m New device "event6"
+[2m2024-07-18T14:08:59.478969Z[0m [32m INFO[0m [2msmithay::backend::libinput[0m[2m:[0m New device "event9"
+[2m2024-07-18T14:08:59.478974Z[0m [32m INFO[0m [2msmithay::backend::libinput[0m[2m:[0m New device "event8"
+flutter: Persisting changes for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb[0m
+flutter: Focus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: |_ isSelected false
+flutter: |_ focusedChild null
+flutter: |_ canRequestFocus true
+flutter: |_ descendantsAreFocusable true
+flutter: persistentFocusNode.focusInDirection()
+flutter: onGrabFocus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: Persisting changes for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb[0m
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb[0m
+flutter: Focus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: |_ isSelected true
+flutter: |_ focusedChild FocusNode#e1c0c(Placeholder Alacritty [PRIMARY FOCUS])(context: Focus, PRIMARY FOCUS)
+flutter: |_ canRequestFocus true
+flutter: |_ descendantsAreFocusable true
+flutter: Focus for journalctl -f
+flutter: |_ isSelected false
+flutter: |_ focusedChild null
+flutter: |_ canRequestFocus true
+flutter: |_ descendantsAreFocusable true
+flutter: persistentFocusNode.requestFocus() for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb[0m
+flutter: Persisting changes for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb[0m
+flutter: Focus for journalctl -f
+flutter: |_ isSelected true
+flutter: |_ focusedChild null
+flutter: |_ canRequestFocus true
+flutter: |_ descendantsAreFocusable true
+flutter: Focus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: |_ isSelected false
+flutter: |_ focusedChild FocusNode#e1c0c(Placeholder Alacritty [PRIMARY FOCUS])(context: Focus, PRIMARY FOCUS)
+flutter: |_ canRequestFocus true
+flutter: |_ descendantsAreFocusable true
+flutter: persistentFocusNode.requestFocus() for journalctl -f
+flutter: onGrabFocus for journalctl -f
+flutter: persistentFocusNode.focusInDirection()
+flutter: onGrabFocus for journalctl -f
+flutter: LaunchConfig(command: alacritty, arguments: [], useDedicatedGpu: false)
+flutter: Persisting changes for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2[0m
+flutter: WaylandEvent.newSurface(method: new_surface, message: NewSurfaceMessage(surfaceId: 2))
+flutter: WaylandEvent.newSurface(method: new_surface, message: NewSurfaceMessage(surfaceId: 3))
+flutter: WaylandEvent.newToplevel(method: new_toplevel, message: NewToplevelMessage(surfaceId: 3, pid: 41838))
+flutter: WaylandEvent.appIdChanged(method: app_id_changed, message: AppIdChangedMessage(surfaceId: 3, appId: Alacritty))
+flutter: WaylandEvent.titleChanged(method: title_changed, message: TitleChangedMessage(surfaceId: 3, title: Alacritty))
+flutter: WaylandEvent.newSurface(method: new_surface, message: NewSurfaceMessage(surfaceId: 4))
+flutter: WaylandEvent.newSubsurface(method: new_subsurface, message: NewSubsurfaceMessage(surfaceId: 4, parent: 3))
+flutter: WaylandEvent.newSurface(method: new_surface, message: NewSurfaceMessage(surfaceId: 5))
+flutter: WaylandEvent.newSubsurface(method: new_subsurface, message: NewSubsurfaceMessage(surfaceId: 5, parent: 3))
+flutter: WaylandEvent.newSurface(method: new_surface, message: NewSurfaceMessage(surfaceId: 6))
+flutter: WaylandEvent.newSubsurface(method: new_subsurface, message: NewSubsurfaceMessage(surfaceId: 6, parent: 3))
+flutter: WaylandEvent.newSurface(method: new_surface, message: NewSurfaceMessage(surfaceId: 7))
+flutter: WaylandEvent.newSubsurface(method: new_subsurface, message: NewSubsurfaceMessage(surfaceId: 7, parent: 3))
+flutter: WaylandEvent.newSurface(method: new_surface, message: NewSurfaceMessage(surfaceId: 8))
+flutter: WaylandEvent.newSubsurface(method: new_subsurface, message: NewSubsurfaceMessage(surfaceId: 8, parent: 3))
+flutter: WindowManager: Surface mapped: 3
+flutter: MATCHING - Add surface 3 to matching engine
+flutter: MATCHING - checkMatching Start
+flutter: Persisting changes for Window-498e49e8-d517-440a-9cd5-4c18b97662d7
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-498e49e8-d517-440a-9cd5-4c18b97662d7[0m
+flutter: Persisting changes for Window-a587dc26-0a57-429f-b900-8430ab0f9b69
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-a587dc26-0a57-429f-b900-8430ab0f9b69[0m
+flutter: Persisting changes for Window-7aeb3909-8450-41bb-a3d4-f5a44464d9be
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-7aeb3909-8450-41bb-a3d4-f5a44464d9be[0m
+flutter: Persisting changes for Window-d2c559fb-9849-456e-baf3-dd6c975e6abc
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-d2c559fb-9849-456e-baf3-dd6c975e6abc[0m
+flutter: Persisting changes for Window-909d423c-0f12-40fb-a332-0bdf9e5233d5
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-909d423c-0f12-40fb-a332-0bdf9e5233d5[0m
+flutter: Persisting changes for Window-bcb09d05-af6b-489a-b883-42ad33bd3161
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-bcb09d05-af6b-489a-b883-42ad33bd3161[0m
+flutter: Persisting changes for Window-69a10f96-e2d2-4906-bee6-aa5c36a4b1c4
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-69a10f96-e2d2-4906-bee6-aa5c36a4b1c4[0m
+flutter: Persisting changes for Window-be8b72e2-16ce-44dd-8c3c-6db3cb6e22a3
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-be8b72e2-16ce-44dd-8c3c-6db3cb6e22a3[0m
+flutter: Persisting changes for Window-2e5746ae-d146-4c6d-830c-fa03991a76d1
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-2e5746ae-d146-4c6d-830c-fa03991a76d1[0m
+flutter: Persisting changes for Window-8eb72cf5-a7b8-4906-8ec0-72cdd231e6d5
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-8eb72cf5-a7b8-4906-8ec0-72cdd231e6d5[0m
+flutter: MATCHING - start assignating surface of Alacritty, surfaceIdList [3], windowCandidates (d2c559fb-9849-456e-baf3-dd6c975e6abc, d353be86-3ce1-4fc6-82af-73839e90ee68, 6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2, 8eb72cf5-a7b8-4906-8ec0-72cdd231e6d5) 
+flutter: MATCHES - Comparing MatchingInfo(appId: Alacritty, title: Alacritty, windowClass: null, startupId: null, pid: 41838, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) and MatchingInfo(appId: Alacritty, title: papyelgringo@papyelgringo-desk:~, windowClass: null, startupId: null, pid: 2455, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) cost is 258
+flutter: MATCHES - Comparing MatchingInfo(appId: Alacritty, title: Alacritty, windowClass: null, startupId: null, pid: 41838, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) and MatchingInfo(appId: Alacritty, title: papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype, windowClass: null, startupId: null, pid: 36307, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) cost is 258
+flutter: MATCHES - Comparing MatchingInfo(appId: Alacritty, title: Alacritty, windowClass: null, startupId: null, pid: 41838, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) and MatchingInfo(appId: Alacritty, title: journalctl -f, windowClass: null, startupId: null, pid: 41838, matchedAtTime: null, waitingForAppSince: 2024-07-18 16:09:02.407168, matchedWhileWaiting: null) cost is 57
+flutter: MATCHES - Comparing MatchingInfo(appId: Alacritty, title: Alacritty, windowClass: null, startupId: null, pid: 41838, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) and MatchingInfo(appId: Alacritty, title: papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype, windowClass: null, startupId: null, pid: 33615, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) cost is 258
+flutter: MATCHES - costMatrix [[258, 258, 57, 258, 99999]]
+flutter: MATCHES - assignments [2]
+flutter: MATCHING - Associating [3][i] with 6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2
+flutter: Persisting changes for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2[0m
+activate_window
+flutter: {surfaceId: 3, globalOffset: {x: 48.0, y: 48.0}}
+Rust pointer_hover PointerFocusMessage { focus: Some(PointerFocus { surface_id: 3, global_offset: Offset { x: 48.0, y: 48.0 } }) }
+flutter: Focus changed true for 714cee36-c6dc-4836-a587-845f1a2427bb
+flutter: onGrabFocus for journalctl -f
+flutter: ActivateWindowRequest for journalctl -f true
+activate_window
+flutter: Persisting changes for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2
+flutter: WaylandEvent.titleChanged(method: title_changed, message: TitleChangedMessage(surfaceId: 3, title: papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype))
+flutter: MATCHING - checkMatching Start
+flutter: MATCHING - start assignating surface of Alacritty, surfaceIdList [3], windowCandidates (d2c559fb-9849-456e-baf3-dd6c975e6abc, d353be86-3ce1-4fc6-82af-73839e90ee68, 6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2, 8eb72cf5-a7b8-4906-8ec0-72cdd231e6d5) 
+flutter: MATCHES - Comparing MatchingInfo(appId: Alacritty, title: papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype, windowClass: null, startupId: null, pid: 41838, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) and MatchingInfo(appId: Alacritty, title: papyelgringo@papyelgringo-desk:~, windowClass: null, startupId: null, pid: 2455, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) cost is 258
+flutter: MATCHES - Comparing MatchingInfo(appId: Alacritty, title: papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype, windowClass: null, startupId: null, pid: 41838, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) and MatchingInfo(appId: Alacritty, title: papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype, windowClass: null, startupId: null, pid: 36307, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) cost is 208
+flutter: MATCHES - Comparing MatchingInfo(appId: Alacritty, title: papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype, windowClass: null, startupId: null, pid: 41838, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) and MatchingInfo(appId: Alacritty, title: journalctl -f, windowClass: null, startupId: null, pid: 41838, matchedAtTime: 2024-07-18 16:09:02.493966, waitingForAppSince: 2024-07-18 16:09:02.407168, matchedWhileWaiting: true) cost is 52
+flutter: MATCHES - Comparing MatchingInfo(appId: Alacritty, title: papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype, windowClass: null, startupId: null, pid: 41838, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) and MatchingInfo(appId: Alacritty, title: papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype, windowClass: null, startupId: null, pid: 33615, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) cost is 208
+flutter: MATCHES - costMatrix [[258, 208, 52, 208, 99999]]
+flutter: MATCHES - assignments [2]
+flutter: MATCHING - unsetSurface of 6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2
+flutter: Persisting changes for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2
+flutter: MATCHING - Associating [3][i] with 6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2
+flutter: Persisting changes for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2
+flutter: Persisting changes for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2
+flutter: persistentFocusNode.focusInDirection()
+flutter: onGrabFocus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: ActivateWindowRequest for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype true
+activate_window
+flutter: Surface focus true
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-498e49e8-d517-440a-9cd5-4c18b97662d7[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-a587dc26-0a57-429f-b900-8430ab0f9b69[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-d2c559fb-9849-456e-baf3-dd6c975e6abc[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-7aeb3909-8450-41bb-a3d4-f5a44464d9be[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-909d423c-0f12-40fb-a332-0bdf9e5233d5[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-bcb09d05-af6b-489a-b883-42ad33bd3161[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-69a10f96-e2d2-4906-bee6-aa5c36a4b1c4[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-be8b72e2-16ce-44dd-8c3c-6db3cb6e22a3[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-2e5746ae-d146-4c6d-830c-fa03991a76d1[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-8eb72cf5-a7b8-4906-8ec0-72cdd231e6d5[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2[0m
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2[0m
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2[0m
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2[0m
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2[0m
+flutter: null
+Rust pointer_hover PointerFocusMessage { focus: None }
+flutter: Persisting changes for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb[0m
+flutter: Focus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: |_ isSelected false
+flutter: |_ focusedChild FocusNode#fdc00(SurfaceFocus [PRIMARY FOCUS])(context: Focus, PRIMARY FOCUS)
+flutter: |_ canRequestFocus true
+flutter: |_ descendantsAreFocusable true
+flutter: Focus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: |_ isSelected true
+flutter: |_ focusedChild FocusNode#e1c0c(Placeholder Alacritty)(context: Focus)
+flutter: |_ canRequestFocus true
+flutter: |_ descendantsAreFocusable true
+flutter: persistentFocusNode.requestFocus() for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: onGrabFocus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: ActivateWindowRequest for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype false
+flutter: Surface focus false
+activate_window
+flutter: {surfaceId: 3, globalOffset: {x: 48.0, y: 48.0}}
+Rust pointer_hover PointerFocusMessage { focus: Some(PointerFocus { surface_id: 3, global_offset: Offset { x: 48.0, y: 48.0 } }) }
+flutter: null
+Rust pointer_hover PointerFocusMessage { focus: None }
+flutter: LaunchConfig(command: alacritty, arguments: [], useDedicatedGpu: false)
+flutter: Persisting changes for Window-d353be86-3ce1-4fc6-82af-73839e90ee68
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-d353be86-3ce1-4fc6-82af-73839e90ee68[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-d353be86-3ce1-4fc6-82af-73839e90ee68[0m
+flutter: WaylandEvent.newSurface(method: new_surface, message: NewSurfaceMessage(surfaceId: 9))
+flutter: WaylandEvent.newSurface(method: new_surface, message: NewSurfaceMessage(surfaceId: 10))
+flutter: WaylandEvent.newToplevel(method: new_toplevel, message: NewToplevelMessage(surfaceId: 10, pid: 41934))
+flutter: MATCHING - checkMatching Start
+flutter: MATCHING - Remove surface 3 from matching engine
+flutter: WaylandEvent.appIdChanged(method: app_id_changed, message: AppIdChangedMessage(surfaceId: 10, appId: Alacritty))
+flutter: WaylandEvent.titleChanged(method: title_changed, message: TitleChangedMessage(surfaceId: 10, title: Alacritty))
+flutter: WaylandEvent.newSurface(method: new_surface, message: NewSurfaceMessage(surfaceId: 11))
+flutter: WaylandEvent.newSubsurface(method: new_subsurface, message: NewSubsurfaceMessage(surfaceId: 11, parent: 10))
+flutter: WaylandEvent.newSurface(method: new_surface, message: NewSurfaceMessage(surfaceId: 12))
+flutter: WaylandEvent.newSubsurface(method: new_subsurface, message: NewSubsurfaceMessage(surfaceId: 12, parent: 10))
+flutter: WaylandEvent.newSurface(method: new_surface, message: NewSurfaceMessage(surfaceId: 13))
+flutter: WaylandEvent.newSubsurface(method: new_subsurface, message: NewSubsurfaceMessage(surfaceId: 13, parent: 10))
+flutter: WaylandEvent.newSurface(method: new_surface, message: NewSurfaceMessage(surfaceId: 14))
+flutter: WaylandEvent.newSubsurface(method: new_subsurface, message: NewSubsurfaceMessage(surfaceId: 14, parent: 10))
+flutter: WaylandEvent.newSurface(method: new_surface, message: NewSurfaceMessage(surfaceId: 15))
+flutter: WaylandEvent.newSubsurface(method: new_subsurface, message: NewSubsurfaceMessage(surfaceId: 15, parent: 10))
+flutter: WindowManager: Surface mapped: 10
+flutter: MATCHING - Add surface 10 to matching engine
+flutter: MATCHING - checkMatching Start
+flutter: MATCHING - start assignating surface of Alacritty, surfaceIdList [10], windowCandidates (d2c559fb-9849-456e-baf3-dd6c975e6abc, d353be86-3ce1-4fc6-82af-73839e90ee68, 8eb72cf5-a7b8-4906-8ec0-72cdd231e6d5) 
+flutter: MATCHES - Comparing MatchingInfo(appId: Alacritty, title: Alacritty, windowClass: null, startupId: null, pid: 41934, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) and MatchingInfo(appId: Alacritty, title: papyelgringo@papyelgringo-desk:~, windowClass: null, startupId: null, pid: 2455, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) cost is 258
+flutter: MATCHES - Comparing MatchingInfo(appId: Alacritty, title: Alacritty, windowClass: null, startupId: null, pid: 41934, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) and MatchingInfo(appId: Alacritty, title: papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype, windowClass: null, startupId: null, pid: 41934, matchedAtTime: null, waitingForAppSince: 2024-07-18 16:09:05.757895, matchedWhileWaiting: null) cost is 57
+flutter: MATCHES - Comparing MatchingInfo(appId: Alacritty, title: Alacritty, windowClass: null, startupId: null, pid: 41934, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) and MatchingInfo(appId: Alacritty, title: papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype, windowClass: null, startupId: null, pid: 33615, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) cost is 258
+flutter: MATCHES - costMatrix [[258, 57, 258, 99999]]
+flutter: MATCHES - assignments [1]
+flutter: MATCHING - Associating [10][i] with d353be86-3ce1-4fc6-82af-73839e90ee68
+flutter: Persisting changes for Window-d353be86-3ce1-4fc6-82af-73839e90ee68
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-d353be86-3ce1-4fc6-82af-73839e90ee68[0m
+activate_window
+flutter: {surfaceId: 10, globalOffset: {x: 1304.0, y: 48.0}}
+Rust pointer_hover PointerFocusMessage { focus: Some(PointerFocus { surface_id: 10, global_offset: Offset { x: 1304.0, y: 48.0 } }) }
+flutter: Focus changed true for 714cee36-c6dc-4836-a587-845f1a2427bb
+flutter: onGrabFocus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: ActivateWindowRequest for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype true
+activate_window
+flutter: Persisting changes for Window-d353be86-3ce1-4fc6-82af-73839e90ee68
+flutter: persistentFocusNode.focusInDirection()
+flutter: onGrabFocus for Alacritty
+flutter: ActivateWindowRequest for Alacritty true
+flutter: Surface focus true
+activate_window
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-d353be86-3ce1-4fc6-82af-73839e90ee68[0m
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-d353be86-3ce1-4fc6-82af-73839e90ee68[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-d353be86-3ce1-4fc6-82af-73839e90ee68[0m
+flutter: WaylandEvent.titleChanged(method: title_changed, message: TitleChangedMessage(surfaceId: 10, title: papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype))
+flutter: MATCHING - checkMatching Start
+flutter: MATCHING - start assignating surface of Alacritty, surfaceIdList [10], windowCandidates (d2c559fb-9849-456e-baf3-dd6c975e6abc, d353be86-3ce1-4fc6-82af-73839e90ee68, 8eb72cf5-a7b8-4906-8ec0-72cdd231e6d5) 
+flutter: MATCHES - Comparing MatchingInfo(appId: Alacritty, title: papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype, windowClass: null, startupId: null, pid: 41934, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) and MatchingInfo(appId: Alacritty, title: papyelgringo@papyelgringo-desk:~, windowClass: null, startupId: null, pid: 2455, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) cost is 258
+flutter: MATCHES - Comparing MatchingInfo(appId: Alacritty, title: papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype, windowClass: null, startupId: null, pid: 41934, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) and MatchingInfo(appId: Alacritty, title: papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype, windowClass: null, startupId: null, pid: 41934, matchedAtTime: 2024-07-18 16:09:05.827100, waitingForAppSince: 2024-07-18 16:09:05.757895, matchedWhileWaiting: true) cost is 2
+flutter: MATCHES - Comparing MatchingInfo(appId: Alacritty, title: papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype, windowClass: null, startupId: null, pid: 41934, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) and MatchingInfo(appId: Alacritty, title: papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype, windowClass: null, startupId: null, pid: 33615, matchedAtTime: null, waitingForAppSince: null, matchedWhileWaiting: null) cost is 208
+flutter: MATCHES - costMatrix [[258, 2, 208, 99999]]
+flutter: MATCHES - assignments [1]
+flutter: MATCHING - unsetSurface of d353be86-3ce1-4fc6-82af-73839e90ee68
+flutter: Persisting changes for Window-d353be86-3ce1-4fc6-82af-73839e90ee68
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-d353be86-3ce1-4fc6-82af-73839e90ee68[0m
+flutter: MATCHING - Associating [10][i] with d353be86-3ce1-4fc6-82af-73839e90ee68
+flutter: Persisting changes for Window-d353be86-3ce1-4fc6-82af-73839e90ee68
+flutter: Persisting changes for Window-d353be86-3ce1-4fc6-82af-73839e90ee68
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-d353be86-3ce1-4fc6-82af-73839e90ee68[0m
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-d353be86-3ce1-4fc6-82af-73839e90ee68[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-d353be86-3ce1-4fc6-82af-73839e90ee68[0m
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-d353be86-3ce1-4fc6-82af-73839e90ee68[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-d353be86-3ce1-4fc6-82af-73839e90ee68[0m
+flutter: {surfaceId: 3, globalOffset: {x: 48.0, y: 48.0}}
+Rust pointer_hover PointerFocusMessage { focus: Some(PointerFocus { surface_id: 3, global_offset: Offset { x: 48.0, y: 48.0 } }) }
+activate_window
+flutter: onGrabFocus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: Persisting changes for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb[0m
+flutter: ActivateWindowRequest for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype true
+flutter: ActivateWindowRequest for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype false
+flutter: Surface focus false
+flutter: Surface focus true
+activate_window
+activate_window
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb[0m
+flutter: Focus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: |_ isSelected true
+flutter: |_ focusedChild FocusNode#fdc00(SurfaceFocus [PRIMARY FOCUS])(context: Focus, PRIMARY FOCUS)
+flutter: |_ canRequestFocus true
+flutter: |_ descendantsAreFocusable true
+flutter: Focus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: |_ isSelected false
+flutter: |_ focusedChild FocusNode#b1cc9(SurfaceFocus)(context: Focus)
+flutter: |_ canRequestFocus true
+flutter: |_ descendantsAreFocusable true
+flutter: persistentFocusNode.requestFocus() for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: {surfaceId: 10, globalOffset: {x: 1304.0, y: 48.0}}
+Rust pointer_hover PointerFocusMessage { focus: Some(PointerFocus { surface_id: 10, global_offset: Offset { x: 1304.0, y: 48.0 } }) }
+activate_window
+flutter: onGrabFocus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: Persisting changes for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb[0m
+flutter: ActivateWindowRequest for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype true
+flutter: ActivateWindowRequest for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype false
+flutter: Surface focus false
+flutter: Surface focus true
+activate_window
+activate_window
+flutter: Focus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: |_ isSelected false
+flutter: |_ focusedChild FocusNode#fdc00(SurfaceFocus)(context: Focus)
+flutter: |_ canRequestFocus true
+flutter: |_ descendantsAreFocusable true
+flutter: Focus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: |_ isSelected true
+flutter: |_ focusedChild FocusNode#b1cc9(SurfaceFocus [PRIMARY FOCUS])(context: Focus, PRIMARY FOCUS)
+flutter: |_ canRequestFocus true
+flutter: |_ descendantsAreFocusable true
+flutter: persistentFocusNode.requestFocus() for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb[0m
+flutter: {surfaceId: 3, globalOffset: {x: 48.0, y: 48.0}}
+Rust pointer_hover PointerFocusMessage { focus: Some(PointerFocus { surface_id: 3, global_offset: Offset { x: 48.0, y: 48.0 } }) }
+activate_window
+flutter: onGrabFocus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: Persisting changes for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb[0m
+flutter: ActivateWindowRequest for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype true
+flutter: ActivateWindowRequest for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype false
+flutter: Surface focus false
+flutter: Surface focus true
+activate_window
+activate_window
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb[0m
+flutter: Focus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: |_ isSelected true
+flutter: |_ focusedChild FocusNode#fdc00(SurfaceFocus [PRIMARY FOCUS])(context: Focus, PRIMARY FOCUS)
+flutter: |_ canRequestFocus true
+flutter: |_ descendantsAreFocusable true
+flutter: Focus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: |_ isSelected false
+flutter: |_ focusedChild FocusNode#b1cc9(SurfaceFocus)(context: Focus)
+flutter: |_ canRequestFocus true
+flutter: |_ descendantsAreFocusable true
+flutter: persistentFocusNode.requestFocus() for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: WaylandEvent.titleChanged(method: title_changed, message: TitleChangedMessage(surfaceId: 3, title: journalctl -f))
+flutter: MATCHING - checkMatching Start
+flutter: MATCHING - Remove surface 10 from matching engine
+flutter: Persisting changes for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-6f7eef2f-3a5d-4795-9e2e-a358d5e4b9f2[0m
+flutter: {surfaceId: 10, globalOffset: {x: 1304.0, y: 48.0}}
+Rust pointer_hover PointerFocusMessage { focus: Some(PointerFocus { surface_id: 10, global_offset: Offset { x: 1304.0, y: 48.0 } }) }
+activate_window
+flutter: onGrabFocus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: Persisting changes for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb[0m
+flutter: ActivateWindowRequest for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype true
+flutter: ActivateWindowRequest for journalctl -f false
+flutter: Surface focus false
+activate_window
+flutter: Surface focus true
+activate_window
+flutter: Focus for journalctl -f
+flutter: |_ isSelected false
+flutter: |_ focusedChild FocusNode#fdc00(SurfaceFocus)(context: Focus)
+flutter: |_ canRequestFocus true
+flutter: |_ descendantsAreFocusable true
+flutter: Focus for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: |_ isSelected true
+flutter: |_ focusedChild FocusNode#b1cc9(SurfaceFocus [PRIMARY FOCUS])(context: Focus, PRIMARY FOCUS)
+flutter: |_ canRequestFocus true
+flutter: |_ descendantsAreFocusable true
+flutter: persistentFocusNode.requestFocus() for papyelgringo@papyelgringo-desk:~/workspace/veshell-prototype
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Workspace-714cee36-c6dc-4836-a587-845f1a2427bb[0m
+flutter: WaylandEvent.titleChanged(method: title_changed, message: TitleChangedMessage(surfaceId: 10, title: pkexec code))
+flutter: Persisting changes for Window-d353be86-3ce1-4fc6-82af-73839e90ee68
+flutter: [38;5;12m[PersistenceManager] start storeModelJson for Window-d353be86-3ce1-4fc6-82af-73839e90ee68[0m
+flutter: [38;5;12m[PersistenceManager] end storeModelJson for Window-d353be86-3ce1-4fc6-82af-73839e90ee68[0m
+flutter: polkit handleMethodCall DBusMethodCall(sender: ':1.168', interface: 'org.freedesktop.PolicyKit1.AuthenticationAgent', name: 'BeginAuthentication', values: [DBusString('org.freedesktop.policykit.exec'), DBusString('Authentication is needed to run `/usr/bin/code' as the super user'), DBusString(''), DBusDict(DBusSignature('s'), DBusSignature('s'), {DBusString('polkit.caller-pid'): DBusString('42026'), DBusString('polkit.subject-pid'): DBusString('41953')}), DBusString('18-10e6af03dc7fd0338e095c26ddfc7d55-1-6f2218652975fbe07784de455cac0ab3'), DBusArray(DBusSignature('(sa{sv})'), [DBusStruct([DBusString('unix-user'), DBusDict.stringVariant({'uid': DBusUint32(1000)})])])])
+flutter: unix-user {uid: DBusUint32(1000)}
+flutter: ActivateWindowRequest for pkexec code false
+flutter: Focus changed false for 714cee36-c6dc-4836-a587-845f1a2427bb
+flutter: Surface focus false
+activate_window
+flutter: null
+Rust pointer_hover PointerFocusMessage { focus: None }
+flutter: onGrabFocus for pkexec code
+flutter: ActivateWindowRequest for pkexec code true
+flutter: Focus changed true for 714cee36-c6dc-4836-a587-845f1a2427bb
+activate_window
+flutter: Surface focus true
+flutter: {surfaceId: 10, globalOffset: {x: 1304.0, y: 48.0}}
+Rust pointer_hover PointerFocusMessage { focus: Some(PointerFocus { surface_id: 10, global_offset: Offset { x: 1304.0, y: 48.0 } }) }
+[2m2024-07-18T14:09:40.400499Z[0m [32m INFO[0m [2msmithay::backend::libinput[0m[2m:[0m Removed device "event4"
+[2m2024-07-18T14:09:40.400567Z[0m [32m INFO[0m [2msmithay::backend::libinput[0m[2m:[0m Removed device "event9"
+[2m2024-07-18T14:09:40.400585Z[0m [32m INFO[0m [2msmithay::backend::libinput[0m[2m:[0m Removed device "event8"
+[2m2024-07-18T14:09:40.400599Z[0m [32m INFO[0m [2msmithay::backend::libinput[0m[2m:[0m Removed device "event2"
+[2m2024-07-18T14:09:40.400616Z[0m [32m INFO[0m [2msmithay::backend::libinput[0m[2m:[0m Removed device "event5"
+[2m2024-07-18T14:09:40.400656Z[0m [32m INFO[0m [2msmithay::backend::libinput[0m[2m:[0m Removed device "event0"
+[2m2024-07-18T14:09:40.400669Z[0m [32m INFO[0m [2msmithay::backend::libinput[0m[2m:[0m Removed device "event1"
+[2m2024-07-18T14:09:40.400681Z[0m [32m INFO[0m [2msmithay::backend::libinput[0m[2m:[0m Removed device "event3"
+[2m2024-07-18T14:09:40.400722Z[0m [32m INFO[0m [2msmithay::backend::libinput[0m[2m:[0m Removed device "event6"
+thread 'main' panicked at src/backend/drm_backend.rs:422:46:
+called `Result::unwrap()` on an `Err` value: DrmError(Access(AccessError { errmsg: "Page flip commit failed", dev: Some("/dev/dri/card1"), source: Os { code: 13, kind: PermissionDenied, message: "Permission denied" } }))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+[2m2024-07-18T14:09:40.401565Z[0m [33m WARN[0m [1mdrm_atomic[0m[2m:[0m[1mcreate_surface[0m[1m{[0m[3mcrtc[0m[2m=[0mcrtc::Handle(66) [3mmode[0m[2m=[0mMode { name: "2560x1440", clock: 583600, size: (2560, 1440), hsync: (2568, 2600, 2720), vsync: (1465, 1473, 1490), hskew: 0, vscan: 0, vrefresh: 144, mode_type: ModeTypeFlags(PREFERRED | DRIVER) } [3mconnectors[0m[2m=[0m[connector::Handle(94)][1m}[0m[2m:[0m[1mdrm_atomic[0m[1m{[0m[3mcrtc[0m[2m=[0mcrtc::Handle(66)[1m}[0m[2m:[0m [2msmithay::backend::drm::surface::atomic[0m[2m:[0m Unable to clear state: DRM access error: Failed to commit on clear_state on device `Some("/dev/dri/card1")` (Permission denied (os error 13))
