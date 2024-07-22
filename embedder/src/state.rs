@@ -6,6 +6,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+use input_linux::sys::{KEY_ESC, KEY_LEFTMETA};
+use input_linux::InputEvent;
 use log::error;
 use serde_json::json;
 use smithay::backend::allocator::dmabuf::Dmabuf;
@@ -27,6 +29,7 @@ use smithay::reexports::wayland_server::protocol::wl_buffer;
 use smithay::reexports::wayland_server::protocol::wl_seat::WlSeat;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::{Client, Display, DisplayHandle, Resource};
+use smithay::reexports::winit::keyboard::KeyCode;
 use smithay::reexports::x11rb::protocol::xproto::Window as X11Window;
 use smithay::utils::{
     Buffer as BufferCoords, Clock, Logical, Monotonic, Point, Rectangle, Serial, Size,
@@ -153,11 +156,19 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         texture_id
     }
 
-    pub fn handle_key_event(&mut self, key_code: u32, state: KeyState, time: u32) {
+    pub fn handle_key_event(&mut self, mut key_code: u32, state: KeyState, time: u32) {
         // Update the state of the keyboard.
         // Every key event must be passed through `glfw_key_codes.input_intercept`
         // so that Smithay knows what keys are pressed.
         let keyboard = self.keyboard.clone();
+
+        // Swap Meta ant leftAlt keycode
+        if key_code == input_linux::sys::KEY_LEFTMETA as u32 {
+            key_code = input_linux::sys::KEY_LEFTALT as u32
+        }
+        if key_code == input_linux::sys::KEY_LEFTALT as u32 {
+            key_code = input_linux::sys::KEY_LEFTMETA as u32
+        }
 
         // 1. Update the Smithay keyboard state but intercept the event so it's not forwarded to the focused client just yet
         let ((mods, keysym), mods_changed) =
