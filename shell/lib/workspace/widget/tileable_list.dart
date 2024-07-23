@@ -192,8 +192,10 @@ class _TileableIndicatorPainter extends BoxPainter {
 
   @override
   void paint(Canvas canvas, Offset offset, ImageConfiguration configuration) {
-    assert(configuration.size != null);
+    assert(configuration.size != null, 'No size');
     final rect = offset & configuration.size!;
+    if (rect.hasNaN) return;
+
     final backgroundPaint = Paint()..color = decoration.backgroundColor;
     canvas.drawRect(rect, backgroundPaint);
     decoration.border.paint(canvas, rect);

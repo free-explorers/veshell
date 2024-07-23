@@ -35,39 +35,11 @@ class PersistentWindowTileable extends Tileable {
   Widget build(BuildContext context, WidgetRef ref) {
     final window = ref.watch(persistentWindowStateProvider(windowId));
 
-    final persistentFocusNode = useFocusScopeNode(
-      debugLabel: 'PersistentWindowTileable ${window.properties.title}',
-    );
-    useEffect(
-      () {
-        print(
-          'Focus for ${window.properties.title}',
-        );
-        print('|_ isSelected $isSelected');
-        print('|_ focusedChild ${persistentFocusNode.focusedChild}');
-        print('|_ canRequestFocus ${persistentFocusNode.canRequestFocus}');
-        print(
-          '|_ descendantsAreFocusable ${persistentFocusNode.descendantsAreFocusable}',
-        );
-        //persistentFocusNode.canRequestFocus = isSelected;
+    final persistentFocusNode = useFocusScopeNode();
 
-        if (isSelected) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            print(
-              'persistentFocusNode.requestFocus() for ${window.properties.title}',
-            );
-            persistentFocusNode.requestFocus();
-          });
-        }
-        return null;
-      },
-      [isSelected],
+    final primaryFocusNode = useFocusNode(
+      debugLabel: 'PrimaryFocusNode ${window.properties.title}',
     );
-    if (persistentFocusNode.hasPrimaryFocus &&
-        persistentFocusNode.focusedChild == null) {
-      print('persistentFocusNode.focusInDirection()');
-      persistentFocusNode.focusInDirection(TraversalDirection.down);
-    }
     final dialogWindowIdSet = ref.watch(
       dialogListForWindowProvider.select((value) => value.get(windowId)),
     );
@@ -94,19 +66,22 @@ class PersistentWindowTileable extends Tileable {
       [window.surfaceId],
     );
 
+    if (isSelected &&
+        (!persistentFocusNode.hasFocus ||
+            persistentFocusNode.focusedChild == null)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        persistentFocusNode.requestFocus();
+        persistentFocusNode.autofocus(primaryFocusNode);
+      });
+    }
+
     return FocusScope(
       node: persistentFocusNode,
       onFocusChange: (value) {
         if (value) {
-          print(
-            'onGrabFocus for ${window.properties.title}',
-          );
           onGrabFocus?.call();
         }
         if (window.surfaceId != null) {
-          print(
-            'ActivateWindowRequest for ${window.properties.title} $value',
-          );
           ref.read(waylandManagerProvider.notifier).request(
                 ActivateWindowRequest(
                   message: ActivateWindowMessage(
@@ -118,11 +93,16 @@ class PersistentWindowTileable extends Tileable {
         }
       },
       child: window.surfaceId != null
-          ? surfacesWidget(window: window, dialogWindowList: dialogWindowList)
+          ? surfacesWidget(
+              focusNode: primaryFocusNode,
+              window: window,
+              dialogWindowList: dialogWindowList,
+            )
           : WindowPlaceholder(
+              focusNode: primaryFocusNode,
               appId: window.properties.appId,
               onTap: () {
-                persistentFocusNode.requestFocus();
+                primaryFocusNode.requestFocus();
                 ref
                     .read(persistentWindowStateProvider(windowId).notifier)
                     .launchSelf();
@@ -210,8 +190,10 @@ class surfacesWidget extends HookConsumerWidget {
   const surfacesWidget({
     required this.window,
     required this.dialogWindowList,
+    this.focusNode,
     super.key,
   });
+  final FocusNode? focusNode;
 
   final PersistentWindow window;
   final List<DialogWindow> dialogWindowList;
@@ -248,6 +230,7 @@ class surfacesWidget extends HookConsumerWidget {
                     fit: StackFit.expand,
                     children: [
                       XdgToplevelSurfaceWidget(
+                        focusNode: dialogWindowList.isEmpty ? focusNode : null,
                         surfaceId: window.surfaceId!,
                       ),
                       if (dialogWindowList.isNotEmpty)
@@ -258,6 +241,9 @@ class surfacesWidget extends HookConsumerWidget {
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(16),
                               child: XdgToplevelSurfaceWidget(
+                                focusNode: dialog == dialogWindowList.last
+                                    ? focusNode
+                                    : null,
                                 surfaceId: dialog.surfaceId,
                               ),
                             ),
@@ -266,6 +252,7 @@ class surfacesWidget extends HookConsumerWidget {
                   );
                 } else if (role == SurfaceRole.x11Surface) {
                   return X11SurfaceWidget(
+                    focusNode: focusNode,
                     surfaceId: window.surfaceId!,
                   );
                 } else {

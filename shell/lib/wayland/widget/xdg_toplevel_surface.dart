@@ -10,13 +10,18 @@ import 'package:shell/wayland/widget/surface/xdg_popup/popup.dart';
 class XdgToplevelSurfaceWidget extends ConsumerWidget {
   const XdgToplevelSurfaceWidget({
     required this.surfaceId,
+    this.focusNode,
     super.key,
   });
+  final FocusNode? focusNode;
 
   final SurfaceId surfaceId;
 
   void _collectPopupList(
-      List<SurfaceId> ids, WidgetRef ref, SurfaceId surfaceId) {
+    List<SurfaceId> ids,
+    WidgetRef ref,
+    SurfaceId surfaceId,
+  ) {
     final popups = ref
         .watch(
           xdgSurfaceStateProvider(surfaceId).select((value) => value.popups),
@@ -38,6 +43,7 @@ class XdgToplevelSurfaceWidget extends ConsumerWidget {
     _collectPopupList(popupList, ref, surfaceId);
 
     return SurfaceFocus(
+      focusNode: focusNode,
       child: Stack(
         children: [
           ActivateSurfaceOnPointerDown(

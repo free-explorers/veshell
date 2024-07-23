@@ -1,7 +1,6 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
@@ -10,17 +9,16 @@ import 'package:shell/application/widget/app_icon.dart';
 class WindowPlaceholder extends HookConsumerWidget {
   const WindowPlaceholder({
     required this.appId,
+    this.focusNode,
     this.onTap,
     super.key,
   });
-
+  final FocusNode? focusNode;
   final String? appId;
   final void Function()? onTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final focusNode = useFocusNode(debugLabel: 'Placeholder $appId');
-
     final entry = appId != null
         ? ref
             .watch(

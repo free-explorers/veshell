@@ -10,9 +10,11 @@ import 'package:shell/wayland/widget/surface/surface_focus.dart';
 class X11SurfaceWidget extends ConsumerWidget {
   const X11SurfaceWidget({
     required this.surfaceId,
+    this.focusNode,
     super.key,
   });
   final SurfaceId surfaceId;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -29,7 +31,10 @@ class X11SurfaceWidget extends ConsumerWidget {
     final isRootWindow = parent == null;
 
     final widget = switch (isRootWindow) {
-      true => X11RootWindow(surfaceId: surfaceId),
+      true => X11RootWindow(
+          focusNode: focusNode,
+          surfaceId: surfaceId,
+        ),
       false => X11ChildWindow(surfaceId: surfaceId),
     };
 
@@ -40,9 +45,11 @@ class X11SurfaceWidget extends ConsumerWidget {
 class X11RootWindow extends ConsumerWidget {
   const X11RootWindow({
     required this.surfaceId,
+    this.focusNode,
     super.key,
   });
   final SurfaceId surfaceId;
+  final FocusNode? focusNode;
 
   void _collectChildren(
     List<X11SurfaceId> ids,
@@ -87,6 +94,7 @@ class X11RootWindow extends ConsumerWidget {
     _collectChildren(children, ref, surfaceId);
 
     return SurfaceFocus(
+      focusNode: focusNode,
       child: Stack(
         children: [
           ActivateSurfaceOnPointerDown(

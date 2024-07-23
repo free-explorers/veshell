@@ -29,18 +29,11 @@ class WorkspaceWidget extends HookConsumerWidget {
       debugLabel: 'WorkspaceScope',
     );
 
-    useEffect(
-      () {
-        if (isSelected) {
-          print(
-            'workspaceFocusScopeNode.requestFocus ${workspaceState.tileableWindowList} ${workspaceState.selectedIndex}',
-          );
-          workspaceFocusScopeNode.requestFocus();
-        }
-        return null;
-      },
-      [isSelected],
-    );
+    if (isSelected && !workspaceFocusScopeNode.hasFocus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        workspaceFocusScopeNode.requestFocus();
+      });
+    }
 
     final appLauncher = PersistentApplicationSelector(
       isSelected: workspaceState.selectedIndex ==

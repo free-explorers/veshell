@@ -1,20 +1,19 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 class SurfaceFocus extends HookConsumerWidget {
   const SurfaceFocus({
     required this.child,
+    this.focusNode,
     super.key,
   });
+  final FocusNode? focusNode;
 
   final Widget child;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final focusNode = useFocusNode(debugLabel: 'SurfaceFocus');
-
     return Shortcuts(
       // https://github.com/flutter/flutter/blob/73e78fd97c44a88fc164b683e8779293ebe85e95/packages/flutter/lib/src/widgets/app.dart#L1234
 
@@ -73,7 +72,7 @@ class SurfaceFocus extends HookConsumerWidget {
             print('Surface focus $value');
           },
           child: Listener(
-            onPointerDown: (_) => focusNode.requestFocus(),
+            onPointerDown: (_) => focusNode?.requestFocus(),
             child: child,
           ),
         ),
