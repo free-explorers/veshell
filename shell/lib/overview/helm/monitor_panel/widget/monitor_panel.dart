@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:shell/overview/helm/monitor_panel/cpu_monitor/widget/cpu_monitor.dart';
 
 class MonitorPanel extends StatelessWidget {
   const MonitorPanel({
@@ -8,7 +9,8 @@ class MonitorPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
+    return Card(
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           // Battery level
@@ -66,32 +68,10 @@ class MonitorPanel extends StatelessWidget {
               ],
             ),
           ),
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                ListTile(
-                  leading: Icon(
-                    MdiIcons.chip,
-                  ),
-                  title: SliderTheme(
-                    data: Theme.of(context).sliderTheme.copyWith(
-                          thumbShape: SliderComponentShape.noThumb,
-                          disabledActiveTrackColor:
-                              Theme.of(context).colorScheme.primary,
-                          trackShape: const RoundedRectSliderTrackShape(),
-                        ),
-                    child: const Slider(
-                      value: 0.9,
-                      onChanged: null,
-                    ),
-                  ),
-                  trailing: Icon(MdiIcons.chevronDown),
-                  onTap: () {},
-                ),
-              ],
-            ),
-          ),
+          const Flexible(
+              child: CpuMonitorWidget(
+            isExpanded: true,
+          )),
           Card(
             clipBehavior: Clip.antiAlias,
             child: Column(

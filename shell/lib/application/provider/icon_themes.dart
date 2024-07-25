@@ -4,8 +4,6 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'icon_themes.g.dart';
 
 @Riverpod(keepAlive: true)
-Future<FreedesktopIconThemes> iconThemes(IconThemesRef ref) async {
-  final themes = FreedesktopIconThemes();
-  await themes.loadThemes();
-  return themes;
+Future<FreedesktopIconTheme> iconThemes(IconThemesRef ref) async {
+  return FreedesktopIconTheme.loadTheme(theme: 'Adwaita');
 }

@@ -321,10 +321,9 @@ packages:
   freedesktop_desktop_entry:
     dependency: "direct main"
     description:
-      name: freedesktop_desktop_entry
-      sha256: "2f906f74084b7b513800b4eb3f48859f0911c76798acee18fa29be59cb4f726b"
-      url: "https://pub.dev"
-    source: hosted
+      path: "../../freedesktop_desktop_entry"
+      relative: true
+    source: path
     version: "0.6.1"
   freezed:
     dependency: "direct main"

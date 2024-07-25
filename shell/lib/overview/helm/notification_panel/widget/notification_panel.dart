@@ -8,45 +8,43 @@ class NotificationPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Card(
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                children: [
-                  Expanded(
-                    child: ListView(
-                      children: [
-                        ListTile(
-                          leading: Icon(MdiIcons.bell),
-                          title: const Text('Notification title'),
-                          subtitle: const Text('Notification body'),
-                          onTap: () {},
-                        ),
-                        ListTile(
-                          leading: Icon(MdiIcons.bell),
-                          title: const Text('Notification title'),
-                          subtitle: const Text('Notification body'),
-                          onTap: () {},
-                        ),
-                        ListTile(
-                          leading: Icon(MdiIcons.bell),
-                          title: const Text('Notification title'),
-                          subtitle: const Text('Notification body'),
-                          onTap: () {},
-                        ),
-                      ],
-                    ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Card(
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                Expanded(
+                  child: ListView(
+                    children: [
+                      ListTile(
+                        leading: Icon(MdiIcons.bell),
+                        title: const Text('Notification title'),
+                        subtitle: const Text('Notification body'),
+                        onTap: () {},
+                      ),
+                      ListTile(
+                        leading: Icon(MdiIcons.bell),
+                        title: const Text('Notification title'),
+                        subtitle: const Text('Notification body'),
+                        onTap: () {},
+                      ),
+                      ListTile(
+                        leading: Icon(MdiIcons.bell),
+                        title: const Text('Notification title'),
+                        subtitle: const Text('Notification body'),
+                        onTap: () {},
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

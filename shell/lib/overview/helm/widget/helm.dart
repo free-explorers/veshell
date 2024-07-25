@@ -10,11 +10,11 @@ class Helm extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return const Row(
       children: [
-        ControlPanel(),
+        Expanded(child: ControlPanel()),
         SizedBox(width: 8),
-        MonitorPanel(),
+        Expanded(child: MonitorPanel()),
         SizedBox(width: 8),
-        NotificationPanel(),
+        Expanded(child: NotificationPanel()),
       ],
     );
   }

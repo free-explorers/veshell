@@ -37,7 +37,8 @@ dependencies:
   freezed: ^2.4.5
   freezed_annotation: ^2.4.1
   tuple: ^2.0.2
-  freedesktop_desktop_entry: ^0.6.0
+  freedesktop_desktop_entry: 
+    path: ../../freedesktop_desktop_entry
   jovial_svg: ^1.1.15
   flutter_svg: ^2.0.9
   dbus: ^0.7.8
