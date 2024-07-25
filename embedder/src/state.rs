@@ -165,8 +165,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         // Swap Meta ant leftAlt keycode
         if key_code == input_linux::sys::KEY_LEFTMETA as u32 {
             key_code = input_linux::sys::KEY_LEFTALT as u32
-        }
-        if key_code == input_linux::sys::KEY_LEFTALT as u32 {
+        } else if key_code == input_linux::sys::KEY_LEFTALT as u32 {
             key_code = input_linux::sys::KEY_LEFTMETA as u32
         }
 
