@@ -59,8 +59,6 @@ int windowMatchingCost(
       : windowMatchInfo.matchedWhileWaiting ?? false;
   // Prefer matching to MsWindows which are waiting for an app to open
   cost += waiting ? 0 : 200;
-  print(
-    'MATCHES - Comparing $surfaceMatchInfo and $windowMatchInfo cost is $cost',
-  );
+
   return cost;
 }

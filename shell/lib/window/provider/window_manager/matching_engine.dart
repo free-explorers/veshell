@@ -1,4 +1,5 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:logging/logging.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
@@ -15,12 +16,15 @@ import 'package:shell/window/provider/window_properties.dart';
 
 part 'matching_engine.g.dart';
 
+final _log = Logger('MatchingEngine');
+
 /// MatchingEngine is responsible for matching surfaces to windows.
 @Riverpod(keepAlive: true)
 class MatchingEngine extends _$MatchingEngine {
   ISet<SurfaceId> _surfaceToMatchSet = ISet<SurfaceId>();
   @override
   IMap<SurfaceId, WindowId> build() {
+    _log.info('Building MatchingEngine');
     return IMap();
   }
 
@@ -41,11 +45,12 @@ class MatchingEngine extends _$MatchingEngine {
         DialogWindowId() => throw Exception("Dialog don't have matching infos"),
       };
 
+  /// Routine to match surfaces to windows.
   void checkMatching() {
     if (_surfaceToMatchSet.isEmpty) {
       return;
     }
-    print('MATCHING - checkMatching Start');
+    _log.fine('Checking matching');
 
     // Purge all surfaces that have been matched for too long.
     for (final surfaceId in _surfaceToMatchSet) {
@@ -54,6 +59,9 @@ class MatchingEngine extends _$MatchingEngine {
         final matchedAtTime = _getWindowMatchingInfo(windowId).matchedAtTime!;
         if (DateTime.now().difference(matchedAtTime).inMilliseconds >
             MAX_WINDOW_REASSOCIATION_TIME_MS) {
+          _log.fine(
+            'Remove $surfaceId, it has been matched for suffisent time',
+          );
           removeSurface(surfaceId);
         }
       }
@@ -91,8 +99,8 @@ class MatchingEngine extends _$MatchingEngine {
         final windowState = _getWindowState(windowId);
         return windowState.properties.appId == appId;
       });
-      print(
-        'MATCHING - start assignating surface of $appId, surfaceIdList $surfaceIdList, windowCandidates $candidateWindowSetForAppId ',
+      _log.fine(
+        'start assignating surface of $appId, surfaceIdList $surfaceIdList, windowCandidates $candidateWindowSetForAppId',
       );
 
       final costMatrix = <List<int>>[];
@@ -118,12 +126,12 @@ class MatchingEngine extends _$MatchingEngine {
         costMatrix.add(costs);
       }
 
-      print('MATCHES - costMatrix $costMatrix');
+      _log.fine('CostMatrix $costMatrix');
 
       final WeightedMatchingResult(cost: _, assignments: assignments) =
           weightedMatching(costMatrix);
 
-      print('MATCHES - assignments $assignments');
+      _log.fine('Assignments $assignments');
 
       // The meta window to be assigned to each MsWindow
       final windowAssignments =
@@ -146,7 +154,7 @@ class MatchingEngine extends _$MatchingEngine {
           // Initially, these windows might be associated incorrectly, but once the titles get updated,
           // we can associate them more accurately. This might necessitate swapping some already associated PersistentWindows.
           // For all PersistentWindows which will need to be changed, we first unassign their surfaces.
-          print('MATCHING - unsetSurface of $windowId');
+          _log.fine('UnsetSurface of $windowId');
           switch (windowId) {
             case PersistentWindowId():
               ref
@@ -170,8 +178,8 @@ class MatchingEngine extends _$MatchingEngine {
           // If the window still have a surface associated, that means the persistent window was already associated correctly
           // and we can skip associating it again.
           if (windowState.surfaceId == null) {
-            print(
-              'MATCHING - Associating $surfaceIdList[i] with $windowId',
+            _log.info(
+              'Associating $surfaceIdList[i] with $windowId',
             );
             // Associate the surface with the persistent window.
             // This promise is designed to run asynchronously and will cancel itself automatically if necessary.
@@ -186,10 +194,14 @@ class MatchingEngine extends _$MatchingEngine {
                     .setSurface(surfaceIdList[i]);
               case _: // ignore: no_default_cases
             }
+          } else {
+            _log.fine(
+              'Skip associating $surfaceIdList[i] with $windowId as it is already associated with ${windowState.surfaceId}',
+            );
           }
         } else {
-          print(
-            'MATCHING - Creating a PersistentWindow for $surfaceIdList[i]',
+          _log.info(
+            'Creating a PersistentWindow for $surfaceIdList[i]',
           );
           // Did not find a good match, create a new persistent window instead
           ref
@@ -206,43 +218,16 @@ class MatchingEngine extends _$MatchingEngine {
     }
   }
 
-  /* bool checkEphemeralWindow(SurfaceId surfaceId) {
-    final surfaceWindowProperties =
-        ref.read(windowPropertiesStateProvider(surfaceId));
-    final surfaceMatchInfo =
-        MatchingInfo.fromWindowProperties(surfaceWindowProperties);
-    final ephemeralWindowSet =
-        ref.read(windowManagerProvider.notifier).getEphemeralWindowSet();
-
-    final ephemeralMatched = ephemeralWindowSet.firstWhereOrNull(
-      (ephemeralWindowId) {
-        final matchInfo = ref
-            .read(ephemeralWindowStateProvider(ephemeralWindowId).notifier)
-            .getMatchingInfo();
-        return matchInfo.pid == surfaceMatchInfo.pid;
-      },
-    );
-
-    if (ephemeralMatched != null) {
-      print(
-        'MATCHING - Associating $surfaceId with $ephemeralMatched',
-      );
-      ref
-          .read(ephemeralWindowStateProvider(ephemeralMatched).notifier)
-          .setSurface(surfaceId);
-      return true;
-    }
-    return false;
-  } */
-
+  /// Add a new Surface to the matching engine.
   void addSurface(SurfaceId surfaceId) {
-    print('MATCHING - Add surface $surfaceId to matching engine');
+    _log.info('Add surface $surfaceId to matching engine');
     _surfaceToMatchSet = _surfaceToMatchSet.add(surfaceId);
     checkMatching();
   }
 
-  removeSurface(SurfaceId surfaceId) {
-    print('MATCHING - Remove surface $surfaceId from matching engine');
+  /// Remove a Surface from the matching engine.
+  void removeSurface(SurfaceId surfaceId) {
+    _log.info('Remove surface $surfaceId from matching engine');
     if (_surfaceToMatchSet.contains(surfaceId)) {
       _surfaceToMatchSet = _surfaceToMatchSet.remove(surfaceId);
     }

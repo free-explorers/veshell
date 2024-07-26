@@ -1,5 +1,6 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
+import 'package:logging/logging.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
@@ -30,6 +31,8 @@ import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:uuid/uuid.dart';
 
 part 'window_manager.g.dart';
+
+final _log = Logger('WindowManager');
 
 /// Window manager
 @Riverpod(keepAlive: true)
@@ -80,7 +83,9 @@ class WindowManager extends _$WindowManager {
     LocalizedDesktopEntry entry,
   ) {
     final windowId = PersistentWindowId(_uuidGenerator.v4());
-
+    _log.info(
+      'Creating new PersistentWindow $windowId for desktop entry $entry',
+    );
     final persistentWindow = PersistentWindow(
       windowId: windowId,
       properties: WindowProperties(
@@ -103,7 +108,9 @@ class WindowManager extends _$WindowManager {
     ScreenId screenId,
   ) {
     final windowId = EphemeralWindowId(_uuidGenerator.v4());
-
+    _log.info(
+      'Creating new EphemeralWindow $windowId for desktop entry $entry',
+    );
     final ephemeralWindow = EphemeralWindow(
       windowId: windowId,
       screenId: screenId,
@@ -118,7 +125,6 @@ class WindowManager extends _$WindowManager {
         .initialize(ephemeralWindow);
 
     state = state.add(windowId);
-    print('return windowId $windowId');
     return windowId;
   }
 
@@ -127,7 +133,9 @@ class WindowManager extends _$WindowManager {
   /// This is called when a toplevel or X11 surface is mapped.
   /// It searches for a waiting persistent window.
   void _onSurfaceMapped(SurfaceId surfaceId) {
-    print('WindowManager: Surface mapped: $surfaceId');
+    _log.fine(
+      'New surface mapped: $surfaceId',
+    );
     final role = ref.read(wlSurfaceStateProvider(surfaceId)).role;
 
     if (role case SurfaceRole.xdgToplevel) {
@@ -138,6 +146,9 @@ class WindowManager extends _$WindowManager {
   }
 
   void _onToplevelMapped(SurfaceId surfaceId) {
+    _log.info(
+      'Toplevel surface mapped: $surfaceId',
+    );
     final toplevelState = ref.read(xdgToplevelStateProvider(surfaceId));
 
     if (toplevelState.parent != null) {
@@ -149,6 +160,9 @@ class WindowManager extends _$WindowManager {
   }
 
   void _onX11SurfaceMapped(SurfaceId surfaceId) {
+    _log.info(
+      'X11 surface mapped: $surfaceId',
+    );
     final x11SurfaceId = ref.read(x11SurfaceIdByWlSurfaceIdProvider(surfaceId));
     final x11SurfaceState = ref.read(x11SurfaceStateProvider(x11SurfaceId));
 
@@ -166,7 +180,9 @@ class WindowManager extends _$WindowManager {
   }) {
     // create a new window
     final windowId = PersistentWindowId(_uuidGenerator.v4());
-
+    _log.info(
+      'Creating new PersistentWindow $windowId for surface $surfaceId',
+    );
     final persistentWindow = PersistentWindow(
       windowId: windowId,
       properties: WindowProperties(
@@ -200,7 +216,9 @@ class WindowManager extends _$WindowManager {
   ) {
     // create a new window
     final windowId = DialogWindowId(_uuidGenerator.v4());
-
+    _log.info(
+      'Creating new DialogWindow $windowId for surface $surfaceId',
+    );
     final dialogWindow = DialogWindow(
       windowId: windowId,
       properties: WindowProperties(
@@ -226,6 +244,9 @@ class WindowManager extends _$WindowManager {
   }
 
   void _onSurfaceUnmapped(SurfaceId surfaceId) {
+    _log.info(
+      'Surface unmapped: $surfaceId',
+    );
     ref.read(matchingEngineProvider.notifier).removeSurface(surfaceId);
     if (ref.read(surfaceWindowMapProvider).get(surfaceId)
         case final WindowId windowId) {
@@ -258,6 +279,9 @@ class WindowManager extends _$WindowManager {
   }
 
   void _removeWindow(WindowId windowId) {
+    _log.info(
+      'Removing window: $windowId',
+    );
     state = state.remove(windowId);
     switch (windowId) {
       case PersistentWindowId():
@@ -281,6 +305,9 @@ class WindowManager extends _$WindowManager {
   }
 
   void closeWindow(WindowId windowId) {
+    _log.info(
+      'Closing window: $windowId',
+    );
     switch (windowId) {
       case PersistentWindowId():
         final persistentWindow =
@@ -307,6 +334,9 @@ class WindowManager extends _$WindowManager {
 
   /// Close surface for window
   void closeWindowSurface(SurfaceId surfaceId) {
+    _log.info(
+      'Closing surface: $surfaceId',
+    );
     ref.read(waylandManagerProvider.notifier).request(
           CloseWindowRequest(
             message: CloseWindowMessage(

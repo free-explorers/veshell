@@ -12,7 +12,6 @@ class ImageFromIconQuery extends _$ImageFromIconQuery {
   @override
   Future<Image?> build(IconQuery query, Size size) async {
     final themes = await ref.watch(iconThemesProvider.future);
-    print('after theme loads');
     final file = await themes.findIcon(query);
     if (file == null) return null;
     if (file.path.endsWith('.svg')) {
