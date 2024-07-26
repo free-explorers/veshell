@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
-import 'package:shell/overview/helm/monitor_panel/cpu_monitor/widget/cpu_monitor.dart';
+import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/widget/cpu_monitoring.dart';
 
-class MonitorPanel extends StatelessWidget {
-  const MonitorPanel({
+class MonitoringPanel extends StatelessWidget {
+  const MonitoringPanel({
     super.key,
   });
 
@@ -69,9 +69,10 @@ class MonitorPanel extends StatelessWidget {
             ),
           ),
           const Flexible(
-              child: CpuMonitorWidget(
-            isExpanded: true,
-          )),
+            child: CpuMonitoringWidget(
+              isExpanded: true,
+            ),
+          ),
           Card(
             clipBehavior: Clip.antiAlias,
             child: Column(

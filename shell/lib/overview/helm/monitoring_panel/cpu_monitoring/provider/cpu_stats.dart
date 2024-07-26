@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/overview/helm/monitor_panel/cpu_monitor/model/cpu.dart';
-import 'package:shell/overview/helm/monitor_panel/cpu_monitor/model/cpu_line.dart';
+import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/model/cpu.dart';
+import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/model/cpu_line.dart';
 
 part 'cpu_stats.g.dart';
 
@@ -13,13 +13,16 @@ class CpuStatsState extends _$CpuStatsState {
   List<CpuLine>? _prevSnapshot;
   @override
   CpuStats build() {
-    Timer.periodic(const Duration(milliseconds: 500), (Timer t) async {
+    final timer =
+        Timer.periodic(const Duration(milliseconds: 500), (Timer t) async {
       final snapshot = await takeSnapshot();
       if (_prevSnapshot != null) {
         state = calculateCpuStats(_prevSnapshot!, snapshot);
       }
       _prevSnapshot = snapshot;
     });
+    ref.onDispose(timer.cancel);
+
     return CpuStats(
       cpuLoad: 0,
       loadOnMostUsedCore: 0,

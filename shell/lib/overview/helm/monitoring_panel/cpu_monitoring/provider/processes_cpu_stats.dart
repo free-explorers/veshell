@@ -3,24 +3,26 @@ import 'dart:io';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/overview/helm/monitor_panel/cpu_monitor/model/cpu_line.dart';
-import 'package:shell/overview/helm/monitor_panel/cpu_monitor/model/processes_cpu_stats_snapshot.dart';
-import 'package:shell/overview/helm/monitor_panel/provider/process_list.dart';
+import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/model/cpu_line.dart';
+import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/model/processes_cpu_stats_snapshot.dart';
+import 'package:shell/overview/helm/monitoring_panel/provider/process_list.dart';
 
 part 'processes_cpu_stats.g.dart';
 
-@Riverpod(keepAlive: true)
+@riverpod
 class ProcessesCpuStats extends _$ProcessesCpuStats {
   ProcessesCpuStatsSnapshot? _prevSnapshot;
   @override
   IMap<int, double> build() {
-    Timer.periodic(const Duration(milliseconds: 500), (Timer t) async {
+    final timer =
+        Timer.periodic(const Duration(milliseconds: 500), (Timer t) async {
       final snapshot = await takeSnapshot();
       if (_prevSnapshot != null) {
         state = calculateCpuStatsForEachProcesses(_prevSnapshot!, snapshot);
       }
       _prevSnapshot = snapshot;
     });
+    ref.onDispose(timer.cancel);
     return <int, double>{}.lock;
   }
 
@@ -53,7 +55,7 @@ class ProcessesCpuStats extends _$ProcessesCpuStats {
         line.idle +
         line.iowait;
 
-    final processList = ref.read(processListProvider);
+    final processList = await ref.read(processListProvider.future);
     final usageMap = <int, int>{};
     for (final process in processList) {
       if (!File('/proc/$process/stat').existsSync()) continue;

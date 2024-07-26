@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/application/widget/app_icon.dart';
-import 'package:shell/overview/helm/monitor_panel/cpu_monitor/provider/cpu_stats.dart';
-import 'package:shell/overview/helm/monitor_panel/cpu_monitor/provider/process_name.dart';
-import 'package:shell/overview/helm/monitor_panel/cpu_monitor/provider/processes_cpu_stats.dart';
-import 'package:shell/overview/helm/monitor_panel/provider/process_list.dart';
+import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/provider/cpu_stats.dart';
+import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/provider/process_name.dart';
+import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/provider/processes_cpu_stats.dart';
 
-class CpuMonitorWidget extends HookConsumerWidget {
-  const CpuMonitorWidget({
+class CpuMonitoringWidget extends HookConsumerWidget {
+  const CpuMonitoringWidget({
     this.isExpanded = false,
     super.key,
   });
@@ -17,7 +16,6 @@ class CpuMonitorWidget extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final stats = ref.watch(cpuStatsStateProvider);
-    final processList = ref.watch(processListProvider);
     return Column(
       children: [
         ListTile(
