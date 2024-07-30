@@ -5,24 +5,16 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Shell only",
-            "cwd": "shell",
-            "request": "launch",
-            "type": "dart",
-            "env": {
-                "XDG_CONFIG_HOME": "${workspaceFolder}/shell/.config",
-            },
-            "deviceId": "veshell",
-            "preLaunchTask": "build_runner watch",
-            //"postDebugTask": "Terminate All Tasks"
-        },
-        {
-            "name": "Shell",
+            "name": "Attach to running Shell",
             "cwd": "shell",
             "request": "attach",
             "type": "dart",
             "vmServiceUri": "http://127.0.0.1:12345/",
-            "stopOnEntry": false,
+            "presentation": {
+                "hidden": false,
+                "group": "",
+                "order": 2
+            }
         },
         {
             "type": "lldb",
@@ -36,17 +28,27 @@
             "program": "${workspaceFolder}/embedder/target/debug/veshell", // Replace with your binary name
             "args": [],
             "cwd": "${workspaceFolder}/embedder/",
+            "presentation": {
+                "hidden": true,
+                "group": "",
+                "order": 3
+            }
         }
     ],
     "compounds": [
         {
-            "name": "Veshell",
+            "name": "Run Embedder and Attach Shell",
             "configurations": [
                 "Embedder",
-                "Shell"
+                "Attach to running Shell"
             ],
             "preLaunchTask": "build_embedder",
-            "stopAll": true
+            "stopAll": true,
+            "presentation": {
+                "hidden": false,
+                "group": "",
+                "order": 1
+            }
         }
-    ]
+    ],
 }
