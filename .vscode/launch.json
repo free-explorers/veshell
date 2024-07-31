@@ -9,7 +9,7 @@
             "cwd": "shell",
             "request": "attach",
             "type": "dart",
-            "vmServiceUri": "http://127.0.0.1:12345/",
+            "vmServiceInfoFile": "../embedder/vmService.json",
             "presentation": {
                 "hidden": false,
                 "group": "",

@@ -159,14 +159,26 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             format!("../shell/build/linux/{arch}/{flutter_engine_build}/bundle")
         };
 
+        let host = "127.0.0.1";
+        let socket_number: i32 = server_state
+            .wayland_socket_name
+            .as_deref()
+            .and_then(|s| s.split('-').last())
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
+        println!("ECHO SOCKET NAME {:?}", socket_number);
+        let port = 12345 + socket_number;
+        write_vm_service_json(&host, port)?;
         let assets_path = CString::new(format!("{bundle_root}/data/flutter_assets"))?;
         let icu_data_path = CString::new(format!("{bundle_root}/data/icudtl.dat"))?;
         let executable_path = CString::new(executable_path.as_os_str().as_bytes())?;
-        let observatory_port = CString::new("--observatory-port=12345")?;
+        let observatory_host = CString::new(format!("--vm-service-host={}", host))?;
+        let observatory_port = CString::new(format!("--vm-service-port={}", port))?;
         let disable_service_auth_codes = CString::new("--disable-service-auth-codes")?;
 
         let command_line_argv = [
             executable_path.as_ptr(),
+            observatory_host.as_ptr(),
             observatory_port.as_ptr(),
             disable_service_auth_codes.as_ptr(),
         ];
@@ -651,4 +663,18 @@ pub struct EmbedderChannels {
     pub tx_fbo: channel::Sender<Option<Dmabuf>>,
     pub tx_output_height: channel::Sender<u16>,
     pub rx_baton: channel::Channel<Baton>,
+}
+
+use std::fs::File;
+use std::io::Write;
+
+fn write_vm_service_json(host: &str, port: i32) -> Result<(), Box<dyn std::error::Error>> {
+    let vm_service = json!({
+        "uri": format!(r#"http://{host}:{port}/"#),
+    });
+
+    let mut file = File::create("vmService.json")?;
+    file.write_all(vm_service.to_string().as_bytes())?;
+
+    Ok(())
 }
