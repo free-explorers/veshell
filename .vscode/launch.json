@@ -17,7 +17,7 @@
             }
         },
         {
-            "name": "attatch-window-shell",
+            "name": "window-shell",
             "cwd": "shell",
             "request": "attach",
             "type": "dart",
@@ -27,13 +27,13 @@
             "presentation": {
                 "hidden": true,
                 "group": "",
-                "order": 2
+                "order": 3
             }
         },
         {
             "type": "lldb",
             "request": "launch",
-            "name": "run-embedder",
+            "name": "embedder",
             "env": {
                 "XDG_CONFIG_HOME": "${workspaceFolder}/shell/.config",
                 "RUST_LOG": "debug",
@@ -46,7 +46,7 @@
             "presentation": {
                 "hidden": true,
                 "group": "",
-                "order": 3
+                "order": 2
             }
         }
     ],
@@ -54,8 +54,8 @@
         {
             "name": "Run Veshell as Window",
             "configurations": [
-                "run-embedder",
-                "attatch-window-shell"
+                "embedder",
+                "window-shell"
             ],
             "preLaunchTask": "prepare-veshell",
             "stopAll": true,
