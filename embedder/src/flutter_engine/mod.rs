@@ -5,6 +5,7 @@ use std::ffi::{c_int, CString};
 use std::mem::{size_of, MaybeUninit};
 use std::ops::DerefMut;
 use std::os::unix::ffi::OsStrExt;
+use std::path::Path;
 use std::ptr::{null, null_mut};
 use std::rc::Rc;
 use std::time::Duration;
@@ -168,7 +169,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             .unwrap_or(0);
         println!("ECHO SOCKET NAME {:?}", socket_number);
         let port = 12345 + socket_number;
-        write_vm_service_json(&host, port)?;
+        propagate_vm_service(&host, port)?;
         let assets_path = CString::new(format!("{bundle_root}/data/flutter_assets"))?;
         let icu_data_path = CString::new(format!("{bundle_root}/data/icudtl.dat"))?;
         let executable_path = CString::new(executable_path.as_os_str().as_bytes())?;
@@ -665,15 +666,24 @@ pub struct EmbedderChannels {
     pub rx_baton: channel::Channel<Baton>,
 }
 
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::Write;
 
-fn write_vm_service_json(host: &str, port: i32) -> Result<(), Box<dyn std::error::Error>> {
+/// We both save a vmService.json file and set and Env variable to be either be able to connect inside running shell or in child shell
+fn propagate_vm_service(host: &str, port: i32) -> Result<(), Box<dyn std::error::Error>> {
+    std::env::set_var(
+        "VESHELL_VM_SERVICE_URL",
+        format!(r#"http://{host}:{port}/"#),
+    );
     let vm_service = json!({
         "uri": format!(r#"http://{host}:{port}/"#),
     });
 
-    let mut file = File::create("vmService.json")?;
+    let path = "../.temp/vmService.json";
+    if let Some(parent) = Path::new(path).parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut file = File::create(path)?;
     file.write_all(vm_service.to_string().as_bytes())?;
 
     Ok(())
