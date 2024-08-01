@@ -2,7 +2,7 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "build_embedder",
+			"label": "build-embedder",
 			"type": "shell",
 			"command": "cargo build",
 			"problemMatcher": [
@@ -15,10 +15,10 @@
 			"options": {
 				"cwd": "${workspaceFolder}/embedder",
 			},
-			"dependsOn": "build_flutter"
+			"dependsOn": "build-flutter"
 		},
 		{
-			"label": "build_flutter",
+			"label": "build-flutter",
 			"type": "dart",
 			"command": "flutter",
 			"args": [
@@ -29,10 +29,10 @@
 			"options": {
 				"cwd": "${workspaceFolder}/shell",
 			},
-			"dependsOn": "build_runner_build"
+			"dependsOn": "build-runner-build"
 		},
 		{
-			"label": "build_runner_build",
+			"label": "build-runner-build",
 			"type": "dart",
 			"command": "dart",
 			"args": [
@@ -51,82 +51,50 @@
 			},
 		},
 		{
-			"label": "build veshell",
+			"label": "build-veshell",
 			"type": "dart",
 			"command": "dart",
 			"args": [
 				"run",
 				"veshell",
-				"build"
-			],
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
-		},
-		{
-			"label": "build_runner watch",
-			"type": "dart",
-			"command": "dart",
-			"args": [
-				"run",
-				"build_runner",
-				"watch"
+				"build",
 			],
 			"problemMatcher": [
+				"$rustc",
 				"$dart-build_runner",
 			],
 			"group": "build",
 			"detail": "shell",
-			"options": {
-				"cwd": "${workspaceFolder}/shell"
-			},
-			"dependsOn": "build veshell",
-			"isBackground": true,
-			"presentation": {
-				"echo": true,
-				"reveal": "silent",
-				"focus": false,
-				"panel": "shared",
-				"showReuseMessage": true,
-				"clear": false
-			},
 		},
+		// Task used by when launch veshell as window for the embedder is started to attach the flutter debugger.
 		{
-			"label": "clean debug session",
-			"command": "kill $(cat ${workspaceFolder}/process.pid) || true",
+			"label": "wait-for-vmService",
 			"type": "shell",
-			"problemMatcher": [],
+			"command": "while [ ! -f .temp/vmService.json ]; do sleep 0.5; done",
 			"presentation": {
 				"reveal": "never",
-				"showReuseMessage": false,
-				"echo": false,
+				"focus": false,
+				"close": true
+			},
+		},
+		// Remove the existing vmService.json file to make sure the wait-for-vmService task can wait for the new one.
+		{
+			"label": "delete-vmService",
+			"type": "shell",
+			"command": "if [ -f '.temp/vmService.json' ]; then rm .temp/vmService.json; fi",
+			"presentation": {
+				"reveal": "never",
+				"focus": false,
 				"close": true
 			},
 		},
 		{
-			"label": "Terminate All Tasks",
-			"command": "echo ${input:terminate}",
-			"type": "shell",
-			"problemMatcher": [],
-			"dependsOn": "clean debug session",
-			"presentation": {
-				"reveal": "silent",
-				"showReuseMessage": false,
-			}
-		},
-		{
-			"label": "Change working directory",
-			"type": "shell",
-			"command": "cd ${workspaceFolder}/embedder",
-			"problemMatcher": []
-		},
-		{
-			"label": "attach debugger",
-			"command": "echo ${input:attach}",
-			"type": "shell",
-			"problemMatcher": [],
-		},
+			"label": "prepare-veshell",
+			"dependsOn": [
+				"build-veshell",
+				"delete-vmService"
+			],
+		}
 	],
 	"inputs": [
 		{

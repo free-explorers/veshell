@@ -15,22 +15,92 @@ class InstallCommand extends Command<int> {
   @override
   final description = 'Build and install Veshell localy';
 
+  BuildTarget get target =>
+      BuildTarget.values.byName(globalResults!.option('target')!);
   // [run] may also return a Future.
   @override
   Future<int> run() async {
-    /* final buildCommand = BuildCommand(logger: logger);
-    
-    await buildCommand.run(); */
-    final buildCommandArgs = ['build', ...argResults!.arguments];
-    await runner!.runCommand(runner!.parse(buildCommandArgs));
-    final target =
-        BuildTarget.values.byName(globalResults?['target'] as String);
+    await runner!.run(['build', ...argResults!.arguments, '--bundle']);
+    await packageBuild(logger, target: target);
     await createSession(logger, target: target);
 
     logger.success(
       'Congratulation Veshell is succesfully installed, you can now logout and select the veshell session in your login manager!\n',
     );
     return ExitCode.success.code;
+  }
+
+  Future<void> packageBuild(
+    Logger logger, {
+    required BuildTarget target,
+  }) async {
+    logger.info('Packaging build...\n');
+
+    final unameM = (await Process.run('uname', ['-m'])).stdout as String;
+
+    var arch = '';
+
+    if (unameM.contains('x86_64') == true) {
+      arch = 'x64';
+    } else {
+      arch = 'arm64';
+    }
+
+    final buildDirectory = 'build/${target.name}';
+    logger.info('Create $buildDirectory directory');
+    await Directory('$buildDirectory/lib/').create(recursive: true);
+
+    var cargoTarget = target;
+    if (cargoTarget == BuildTarget.profile) {
+      cargoTarget = BuildTarget.release;
+    }
+
+    final binaryPath = 'embedder/target/${cargoTarget.name}/$targetExec';
+    logger.info('Copy $binaryPath');
+
+    final targetPath = '$buildDirectory/$targetExec';
+
+    // handle (OS Error: Text file busy, errno = 26)
+    try {
+      await File(binaryPath).copy(targetPath);
+    } on FileSystemException catch (e) {
+      if (e.osError?.errorCode == 26) {
+        final result = Process.runSync('lsof', ['-t', binaryPath]);
+        logger.info('kill running process ${result.stdout}');
+        final pid = int.tryParse((result.stdout as String).trim());
+        if (pid != null) {
+          Process.runSync('kill', ['-9', pid.toString()]);
+          await File(binaryPath).copy(targetPath); // Retry the copy operation
+        }
+      } else {
+        rethrow; // If it's another error, rethrow it
+      }
+    }
+
+    final libFlutterEnginePath =
+        'embedder/third_party/flutter_engine/${target.name}/libflutter_engine.so';
+
+    logger.info('Copy $libFlutterEnginePath');
+    await File(libFlutterEnginePath)
+        .copy('$buildDirectory/lib/libflutter_engine.so');
+
+    if (target != BuildTarget.debug) {
+      final libAppPath =
+          'shell/build/linux/$arch/${target.name}/bundle/lib/libapp.so';
+      logger.info('Copy $libAppPath');
+      await File(libAppPath).copy('$buildDirectory/lib/libapp.so');
+    }
+
+    await runProcess(
+      'cp',
+      [
+        '-r',
+        'shell/build/linux/$arch/${target.name}/bundle/data',
+        buildDirectory,
+      ],
+    );
+
+    logger.success('\nPackaging completed\n');
   }
 }
 

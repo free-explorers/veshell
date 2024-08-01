@@ -12,7 +12,7 @@ environment:
 # Add regular dependencies here.
 dependencies:
   ansicolor: ^2.0.2
-  args: ^2.4.2
+  args: ^2.5.0
   cli_completion: ^0.4.0
   mason_logger: ^0.2.10
   path: ^1.8.3

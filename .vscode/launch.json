@@ -5,11 +5,11 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Attach to running Shell",
+            "name": "Attach to running Veshell",
             "cwd": "shell",
             "request": "attach",
             "type": "dart",
-            "vmServiceInfoFile": "../embedder/vmService.json",
+            "vmServiceUri": "${env:VESHELL_VM_SERVICE_URL}",
             "presentation": {
                 "hidden": false,
                 "group": "",
@@ -17,9 +17,23 @@
             }
         },
         {
+            "name": "attatch-window-shell",
+            "cwd": "shell",
+            "request": "attach",
+            "type": "dart",
+            "vmServiceInfoFile": "../.temp/vmService.json",
+            "deleteServiceInfoFile": true,
+            "preLaunchTask": "wait-for-vmService",
+            "presentation": {
+                "hidden": true,
+                "group": "",
+                "order": 2
+            }
+        },
+        {
             "type": "lldb",
             "request": "launch",
-            "name": "Embedder",
+            "name": "run-embedder",
             "env": {
                 "XDG_CONFIG_HOME": "${workspaceFolder}/shell/.config",
                 "RUST_LOG": "debug",
@@ -37,12 +51,12 @@
     ],
     "compounds": [
         {
-            "name": "Run Embedder and Attach Shell",
+            "name": "Run Veshell as Window",
             "configurations": [
-                "Embedder",
-                "Attach to running Shell"
+                "run-embedder",
+                "attatch-window-shell"
             ],
-            "preLaunchTask": "build_embedder",
+            "preLaunchTask": "prepare-veshell",
             "stopAll": true,
             "presentation": {
                 "hidden": false,

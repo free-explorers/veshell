@@ -21,14 +21,12 @@ class RunCommand extends Command<int> {
     final target =
         BuildTarget.values.byName(globalResults?['target'] as String);
 
-    final binaryPath = 'build/${target.name}/$targetExec';
+    final binaryPath = 'embedder/target/${target.name}/$targetExec';
     final binary = File('${Directory.current.path}/$binaryPath');
 
     if (!binary.existsSync()) {
-      await buildEmbedder(logger, target: target);
-      await buildShell(logger, target: target);
+      await runner!.run(['build', ...argResults!.arguments]);
     }
-    await packageBuild(logger, target: target);
 
     Process process;
     if (Platform.environment['container'] != null) {
@@ -36,6 +34,7 @@ class RunCommand extends Command<int> {
         'flatpak-spawn',
         ['--host', binary.absolute.path],
         mode: ProcessStartMode.inheritStdio,
+        workingDirectory: './embedder',
       );
     } else {
       logger.alert('Running ${binary.absolute.path}');
@@ -43,6 +42,7 @@ class RunCommand extends Command<int> {
         binary.path,
         [],
         mode: ProcessStartMode.inheritStdio,
+        workingDirectory: './embedder',
       );
     }
 

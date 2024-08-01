@@ -10,4 +10,4 @@ process.pid
 shell/.config
 !shell/.config/custom_devices.json
 .continuerc.json
-embedder/vmService.json
+.temp
