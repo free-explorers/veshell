@@ -37,7 +37,8 @@
             "env": {
                 "XDG_CONFIG_HOME": "${workspaceFolder}/shell/.config",
                 "RUST_LOG": "debug",
-                "WAYLAND_DEBUG": "server"
+                "WAYLAND_DEBUG": "server",
+                "VESHELL_VSCODE_DEBUG": "true",
             },
             "program": "${workspaceFolder}/embedder/target/debug/veshell", // Replace with your binary name
             "args": [],

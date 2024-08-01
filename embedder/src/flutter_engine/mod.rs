@@ -675,16 +675,18 @@ fn propagate_vm_service(host: &str, port: i32) -> Result<(), Box<dyn std::error:
         "VESHELL_VM_SERVICE_URL",
         format!(r#"http://{host}:{port}/"#),
     );
-    let vm_service = json!({
-        "uri": format!(r#"http://{host}:{port}/"#),
-    });
+    if option_env!("VESHELL_VSCODE_DEBUG").is_some() {
+        let vm_service = json!({
+            "uri": format!(r#"http://{host}:{port}/"#),
+        });
 
-    let path = "../.temp/vmService.json";
-    if let Some(parent) = Path::new(path).parent() {
-        fs::create_dir_all(parent)?;
+        let path = "../.temp/vmService.json";
+        if let Some(parent) = Path::new(path).parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let mut file = File::create(path)?;
+        file.write_all(vm_service.to_string().as_bytes())?;
     }
-    let mut file = File::create(path)?;
-    file.write_all(vm_service.to_string().as_bytes())?;
 
     Ok(())
 }
