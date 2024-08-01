@@ -675,7 +675,7 @@ fn propagate_vm_service(host: &str, port: i32) -> Result<(), Box<dyn std::error:
         "VESHELL_VM_SERVICE_URL",
         format!(r#"http://{host}:{port}/"#),
     );
-    if option_env!("VESHELL_VSCODE_DEBUG").is_some() {
+    if std::env::var("VESHELL_VSCODE_DEBUG").is_ok() {
         let vm_service = json!({
             "uri": format!(r#"http://{host}:{port}/"#),
         });
