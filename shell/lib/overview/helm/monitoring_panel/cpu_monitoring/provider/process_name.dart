@@ -6,5 +6,10 @@ part 'process_name.g.dart';
 
 @riverpod
 String ProcessName(ProcessNameRef ref, int pid) {
-  return File('/proc/$pid/comm').readAsStringSync().trim();
+  final file = File('/proc/$pid/comm');
+  if (file.existsSync()) {
+    return file.readAsStringSync().trim();
+  } else {
+    return 'Unknown';
+  }
 }

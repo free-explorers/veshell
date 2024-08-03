@@ -42,13 +42,20 @@ packages:
     source: hosted
     version: "2.5.0"
   async:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: async
       sha256: "947bfcf187f74dbc5e146c9eb9c0f10c9f8b30743e341481c1e2ed3ecc18c20c"
       url: "https://pub.dev"
     source: hosted
     version: "2.11.0"
+  bluez:
+    dependency: "direct main"
+    description:
+      path: "../../bluez.dart"
+      relative: true
+    source: path
+    version: "0.8.2"
   boolean_selector:
     dependency: transitive
     description:
@@ -228,10 +235,11 @@ packages:
   dbus:
     dependency: "direct main"
     description:
-      name: dbus
-      sha256: "365c771ac3b0e58845f39ec6deebc76e3276aa9922b0cc60840712094d9047ac"
-      url: "https://pub.dev"
-    source: hosted
+      path: "."
+      ref: workaround_for_dbus_broker_match_bug
+      resolved-ref: "7d2b6a2cdea37f9f9fb27d7750c8fd8bde1fcbc1"
+      url: "https://github.com/free-explorers/dbus.dart"
+    source: git
     version: "0.7.10"
   equatable:
     dependency: transitive
@@ -782,8 +790,8 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: session_interactive_authorization
-      resolved-ref: bbf84c42c87a128331746509e8ed02ab9377d09f
+      ref: all_pending_changes
+      resolved-ref: "9541fdf66f370fa11c15d126ec4768fc5228b764"
       url: "https://github.com/free-explorers/ubuntu_session.dart"
     source: git
     version: "0.0.4"

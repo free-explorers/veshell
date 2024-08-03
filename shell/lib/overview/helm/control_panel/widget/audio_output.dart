@@ -36,14 +36,6 @@ class AudioOutputWidget extends StatelessWidget {
                 title: const Text('Output 1'),
                 onTap: () {},
               ),
-              ListTile(
-                title: const Text('Output 2'),
-                onTap: () {},
-              ),
-              ListTile(
-                title: const Text('Output 3'),
-                onTap: () {},
-              ),
             ],
           ),
         ),

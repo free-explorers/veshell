@@ -27,6 +27,7 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  async: ^2.11.0
   flutter:
     sdk: flutter
 
@@ -41,7 +42,7 @@ dependencies:
     path: ../../freedesktop_desktop_entry
   jovial_svg: ^1.1.15
   flutter_svg: ^2.0.9
-  dbus: ^0.7.8
+
   visibility_detector: ^0.4.0+2
   flutter_portal: ^1.1.4
   glissando: ^0.0.3
@@ -57,8 +58,13 @@ dependencies:
   ubuntu_session: 
     git:
       url: https://github.com/free-explorers/ubuntu_session.dart
-      ref: session_interactive_authorization
-
+      ref: all_pending_changes
+  dbus: 
+    git:
+      url: https://github.com/free-explorers/dbus.dart
+      ref: workaround_for_dbus_broker_match_bug
+  bluez: 
+    path: ../../bluez.dart
   
 dev_dependencies:
   # The "flutter_lints" package below contains a set of recommended lints to

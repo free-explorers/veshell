@@ -10,45 +10,47 @@ class SessionControls extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Padding(
-      padding: const EdgeInsets.all(8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          IconButton(
-            onPressed: () {
-              ref.read(sessionProvider.notifier).lock();
-            },
-            style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
-            icon: Icon(MdiIcons.lock),
-          ),
-          IconButton(
-            onPressed: () {
-              ref.read(sessionProvider.notifier).logout();
-            },
-            style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
-            icon: Icon(MdiIcons.logout),
-          ),
-          IconButton(
-            onPressed: () {},
-            icon: Icon(MdiIcons.powerSleep),
-            style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
-          ),
-          IconButton(
-            onPressed: () {
-              ref.read(sessionProvider.notifier).reboot();
-            },
-            icon: Icon(MdiIcons.restart),
-            style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
-          ),
-          IconButton(
-            onPressed: () {
-              ref.read(sessionProvider.notifier).shutdown();
-            },
-            style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
-            icon: Icon(MdiIcons.power),
-          ),
-        ],
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            IconButton(
+              onPressed: () {
+                ref.read(sessionProvider.notifier).lock();
+              },
+              style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
+              icon: Icon(MdiIcons.lock),
+            ),
+            IconButton(
+              onPressed: () {
+                ref.read(sessionProvider.notifier).logout();
+              },
+              style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
+              icon: Icon(MdiIcons.logout),
+            ),
+            IconButton(
+              onPressed: () {},
+              icon: Icon(MdiIcons.powerSleep),
+              style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
+            ),
+            IconButton(
+              onPressed: () {
+                ref.read(sessionProvider.notifier).reboot();
+              },
+              icon: Icon(MdiIcons.restart),
+              style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
+            ),
+            IconButton(
+              onPressed: () {
+                ref.read(sessionProvider.notifier).shutdown();
+              },
+              style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
+              icon: Icon(MdiIcons.power),
+            ),
+          ],
+        ),
       ),
     );
   }

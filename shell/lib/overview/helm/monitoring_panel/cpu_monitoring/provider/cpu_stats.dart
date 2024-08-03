@@ -94,6 +94,9 @@ class CpuStatsState extends _$CpuStatsState {
     final total = idle + nonIdle;
     final totalD = total - prevTotal;
     final idleD = idle - prevIdle;
+    if (totalD == 0) {
+      return 0; // or another appropriate value
+    }
     final usage = (totalD - idleD) / totalD;
     return usage * 100;
   }

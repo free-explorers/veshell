@@ -1,0 +1,38 @@
+import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/overview/helm/control_panel/bluetooth/model/bluetooth_device.dart';
+import 'package:shell/overview/helm/control_panel/bluetooth/provider/bluez_device.dart';
+
+part 'bluetooth_device.g.dart';
+
+@riverpod
+class BluetoothDeviceState extends _$BluetoothDeviceState {
+  @override
+  BluetoothDevice build(String address) {
+    return BluetoothDevice(
+      bluezDevice: ref.watch(bluezDeviceProvider(address)),
+      connecting: false,
+      pairing: false,
+    );
+  }
+
+  Future<void> connect() async {
+    state = state.copyWith(connecting: true);
+    try {
+      await state.bluezDevice.connect();
+    } catch (e) {
+      print('connect error $e');
+    }
+    state = state.copyWith(connecting: false);
+  }
+
+  Future<void> pair() async {
+    state = state.copyWith(pairing: true);
+    try {
+      await state.bluezDevice.pair();
+    } catch (e) {
+      print('pair error $e');
+    }
+    state = state.copyWith(pairing: false);
+    await connect();
+  }
+}
