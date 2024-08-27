@@ -52,9 +52,11 @@ packages:
   bluez:
     dependency: "direct main"
     description:
-      path: "../../bluez.dart"
-      relative: true
-    source: path
+      path: "."
+      ref: HEAD
+      resolved-ref: "480fa24dc4144570fe08619d4ae4683fcc033e05"
+      url: "https://github.com/free-explorers/bluez.dart"
+    source: git
     version: "0.8.2"
   boolean_selector:
     dependency: transitive
@@ -236,8 +238,8 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: workaround_for_dbus_broker_match_bug
-      resolved-ref: "7d2b6a2cdea37f9f9fb27d7750c8fd8bde1fcbc1"
+      ref: HEAD
+      resolved-ref: "04eb805175dfb1e4a4f3d025c9b1134285bc1f61"
       url: "https://github.com/free-explorers/dbus.dart"
     source: git
     version: "0.7.10"
@@ -541,6 +543,15 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.5"
+  nm:
+    dependency: "direct main"
+    description:
+      path: "."
+      ref: HEAD
+      resolved-ref: "3d4dc2f4bcd73d0d142862c67c403ebb3e5244b1"
+      url: "https://github.com/free-explorers/nm.dart"
+    source: git
+    version: "0.5.0"
   package_config:
     dependency: transitive
     description:
@@ -790,8 +801,8 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: all_pending_changes
-      resolved-ref: "9541fdf66f370fa11c15d126ec4768fc5228b764"
+      ref: HEAD
+      resolved-ref: "192657d1ee349c1551392d45d1b99dac470df6ef"
       url: "https://github.com/free-explorers/ubuntu_session.dart"
     source: git
     version: "0.0.4"

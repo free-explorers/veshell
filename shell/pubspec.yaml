@@ -58,13 +58,15 @@ dependencies:
   ubuntu_session: 
     git:
       url: https://github.com/free-explorers/ubuntu_session.dart
-      ref: all_pending_changes
   dbus: 
     git:
       url: https://github.com/free-explorers/dbus.dart
-      ref: workaround_for_dbus_broker_match_bug
   bluez: 
-    path: ../../bluez.dart
+    git:
+      url: https://github.com/free-explorers/bluez.dart
+  nm: 
+    git:
+      url: https://github.com/free-explorers/nm.dart
   
 dev_dependencies:
   # The "flutter_lints" package below contains a set of recommended lints to
