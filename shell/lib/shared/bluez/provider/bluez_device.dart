@@ -1,6 +1,6 @@
 import 'package:bluez/bluez.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/overview/helm/control_panel/bluetooth/provider/bluez_devices.dart';
+import 'package:shell/shared/bluez/provider/bluez_devices.dart';
 
 part 'bluez_device.g.dart';
 

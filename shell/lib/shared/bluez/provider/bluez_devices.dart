@@ -1,9 +1,9 @@
 import 'package:bluez/bluez.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/overview/helm/control_panel/bluetooth/provider/bluez_client.dart';
-import 'package:shell/overview/helm/control_panel/bluetooth/provider/bluez_device_added.dart';
-import 'package:shell/overview/helm/control_panel/bluetooth/provider/bluez_device_removed.dart';
+import 'package:shell/shared/bluez/provider/bluez_client.dart';
+import 'package:shell/shared/bluez/provider/bluez_device_added.dart';
+import 'package:shell/shared/bluez/provider/bluez_device_removed.dart';
 
 part 'bluez_devices.g.dart';
 

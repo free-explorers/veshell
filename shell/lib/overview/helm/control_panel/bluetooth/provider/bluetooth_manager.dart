@@ -1,14 +1,14 @@
 import 'package:async/async.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/overview/helm/control_panel/bluetooth/model/meta_bluez_adapter.dart';
-import 'package:shell/overview/helm/control_panel/bluetooth/provider/bluez_client.dart';
+import 'package:shell/overview/helm/control_panel/bluetooth/model/bluetooth_manager_state.dart';
+import 'package:shell/shared/bluez/provider/bluez_client.dart';
 
-part 'meta_bluez_adapter.g.dart';
+part 'bluetooth_manager.g.dart';
 
 @riverpod
-class MetaBluezAdapterState extends _$MetaBluezAdapterState {
+class BluetoothManager extends _$BluetoothManager {
   @override
-  Future<MetaBluezAdapter> build() async {
+  Future<BluetoothManagerState> build() async {
     final client = await ref.watch(bluezClientProvider.future);
     final subscription = StreamGroup.merge([
       client.adapterAdded,
@@ -16,7 +16,7 @@ class MetaBluezAdapterState extends _$MetaBluezAdapterState {
       ...client.adapters.map((adapter) => adapter.propertiesChanged),
     ]).listen((_) => ref.invalidateSelf());
     ref.onDispose(subscription.cancel);
-    return MetaBluezAdapter(
+    return BluetoothManagerState(
       powered: client.adapters.any((adapter) => adapter.powered),
       discovering: client.adapters.any((adapter) => adapter.discovering),
     );

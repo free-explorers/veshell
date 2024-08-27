@@ -3,10 +3,10 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
-import 'package:shell/overview/helm/control_panel/bluetooth/provider/bluez_device.dart';
-import 'package:shell/overview/helm/control_panel/bluetooth/provider/bluez_devices.dart';
-import 'package:shell/overview/helm/control_panel/bluetooth/provider/meta_bluez_adapter.dart';
+import 'package:shell/overview/helm/control_panel/bluetooth/provider/bluetooth_manager.dart';
 import 'package:shell/overview/helm/control_panel/bluetooth/widget/bluetooth_device_list_tile.dart';
+import 'package:shell/shared/bluez/provider/bluez_device.dart';
+import 'package:shell/shared/bluez/provider/bluez_devices.dart';
 
 class BluetoothControl extends HookConsumerWidget {
   const BluetoothControl({
@@ -17,7 +17,7 @@ class BluetoothControl extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final metaAdapter = ref.watch(metaBluezAdapterStateProvider);
+    final bluetoothManagerState = ref.watch(bluetoothManagerProvider);
     final deviceAddresses =
         ref.watch(bluezDevicesProvider).value ?? <String>{}.lock;
     final devices = deviceAddresses
@@ -70,15 +70,15 @@ class BluetoothControl extends HookConsumerWidget {
                         ),
                       ),
                       Switch(
-                        value: metaAdapter.value?.powered ?? false,
+                        value: bluetoothManagerState.value?.powered ?? false,
                         onChanged: (value) {
                           if (value) {
                             ref
-                                .read(metaBluezAdapterStateProvider.notifier)
+                                .read(bluetoothManagerProvider.notifier)
                                 .powerOn();
                           } else {
                             ref
-                                .read(metaBluezAdapterStateProvider.notifier)
+                                .read(bluetoothManagerProvider.notifier)
                                 .powerOff();
                           }
                         },
@@ -106,7 +106,7 @@ class BluetoothControl extends HookConsumerWidget {
                     ),
                     onPressed: () {
                       ref
-                          .read(metaBluezAdapterStateProvider.notifier)
+                          .read(bluetoothManagerProvider.notifier)
                           .startDiscovery();
                       final currentContext = context;
                       final currentBox =
