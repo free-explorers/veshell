@@ -1,4 +1,4 @@
-![Material Shell](documentation/github_logo2.svg)
+![Veshell](documentation/github_logo2.svg)
 
 ---
 
@@ -18,11 +18,35 @@ Support the project by participate in our Kickstarter crowdfunding or by becomin
 <br/>
 <br/>
 
-# Prototype
+# Veshell CLI
 
-Veshell is currently in early stage of development and you can find the Proof Of Concept prototype at [**free-explorers/veshell-prototype**](https://github.com/free-explorers/veshell-prototype)
-<br/>
-<br/>
+You can activate our internal CLI
+
+```shell
+dart pub global activate --source path .
+```
+
+then get access to `veshell` command-line
+```shell
+This CLI help install and develop Veshell
+
+Usage: veshell <command> [arguments]
+
+Global options:
+-h, --help            Print this usage information.
+    --[no-]verbose    Noisy logging, including all shell commands executed.
+-t, --target          Specify the build target
+                      [debug (default), profile, release]
+
+Available commands:
+  build     Build and package Veshell
+  clean     Clean the project and restore it to a fresh state
+  dev       Start a build_runner watch and run flutter shell
+  install   Build and install Veshell localy
+  run       run veshell
+
+Run "veshell help <command>" for more information about a command.
+```
 
 # The innovative workflow
 

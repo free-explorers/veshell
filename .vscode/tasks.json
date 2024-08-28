@@ -1,0 +1,107 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "build-embedder",
+			"type": "shell",
+			"command": "cargo build",
+			"problemMatcher": [
+				"$rustc"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"options": {
+				"cwd": "${workspaceFolder}/embedder",
+			},
+			"dependsOn": "build-flutter"
+		},
+		{
+			"label": "build-flutter",
+			"type": "dart",
+			"command": "flutter",
+			"args": [
+				"build",
+				"linux",
+				"--debug",
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/shell",
+			},
+			"dependsOn": "build-runner-build"
+		},
+		{
+			"label": "build-runner-build",
+			"type": "dart",
+			"command": "dart",
+			"args": [
+				"run",
+				"build_runner",
+				"build",
+				"--delete-conflicting-outputs"
+			],
+			"problemMatcher": [
+				"$dart-build_runner",
+			],
+			"group": "build",
+			"detail": "shell",
+			"options": {
+				"cwd": "${workspaceFolder}/shell"
+			},
+		},
+		{
+			"label": "build-veshell",
+			"type": "dart",
+			"command": "dart",
+			"args": [
+				"run",
+				"veshell",
+				"build",
+			],
+			"problemMatcher": [
+				"$rustc",
+				"$dart-build_runner",
+			],
+			"group": "build",
+			"detail": "shell",
+		},
+		// Task used by when launch veshell as window for the embedder is started to attach the flutter debugger.
+		{
+			"label": "wait-for-vmService",
+			"type": "shell",
+			"command": "while [ ! -f .temp/vmService.json ]; do sleep 0.5; done",
+			"presentation": {
+				"reveal": "never",
+				"focus": false,
+				"close": true
+			},
+		},
+		// Remove the existing vmService.json file to make sure the wait-for-vmService task can wait for the new one.
+		{
+			"label": "delete-vmService",
+			"type": "shell",
+			"command": "if [ -f '.temp/vmService.json' ]; then rm .temp/vmService.json; fi",
+			"presentation": {
+				"reveal": "never",
+				"focus": false,
+				"close": true
+			},
+		},
+		{
+			"label": "prepare-veshell",
+			"dependsOn": [
+				"build-veshell",
+				"delete-vmService"
+			],
+		}
+	],
+	"inputs": [
+		{
+			"id": "terminate",
+			"type": "command",
+			"command": "workbench.action.tasks.terminate",
+			"args": "terminateAll"
+		}
+	]
+}
