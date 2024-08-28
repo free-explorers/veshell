@@ -15,7 +15,7 @@ import 'util.dart';
 void main(List<String> arguments) async {
   // The script can either be run from project root or from the shell directory by flutter
   // But the script expect to be run on the project root
-  if (Directory.current.path.endsWith('shell')) {
+  if (Directory.current.path.endsWith('/shell')) {
     Directory.current = Directory.current.parent;
   }
 
