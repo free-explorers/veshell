@@ -48,10 +48,6 @@ class RunCommand extends Command<int> {
 
     processSet.add(process);
 
-    // Write the PID to a file
-    final pidFile = File('process.pid');
-    await pidFile.writeAsString(process.pid.toString());
-
     return process.exitCode;
   }
 }

@@ -1,4 +1,4 @@
-![Veshell](documentation/github_logo2.svg)
+![Veshell](documentation/assets/github_logo2.svg)
 
 ---
 
@@ -56,7 +56,7 @@ Organize all your applications in a two-dimensional space where you can group th
 
 <br/>
 <p align="center" valign="middle">
- <img align="center" valign="middle" src="./documentation/spatialisation.gif"
+ <img align="center" valign="middle" src="./documentation/assets/spatialisation.gif"
             alt="Spatialisation illustrated">
 </p>
 <br/>
