@@ -20,17 +20,17 @@ Support the project by participate in our Kickstarter crowdfunding or by becomin
 
 # Veshell CLI
 
-You can activate our internal CLI
+You can use our CLI to install Veshell
 
 ```shell
-dart pub global activate --source path .
+dart run veshell install -t release
 ```
 
-then get access to `veshell` command-line
+Or all `dart run veshell` command-line features
 ```shell
 This CLI help install and develop Veshell
 
-Usage: veshell <command> [arguments]
+Usage: dart run veshell <command> [arguments]
 
 Global options:
 -h, --help            Print this usage information.
@@ -45,7 +45,7 @@ Available commands:
   install   Build and install Veshell localy
   run       run veshell
 
-Run "veshell help <command>" for more information about a command.
+Run "dart run veshell help <command>" for more information about a command.
 ```
 
 # The innovative workflow
