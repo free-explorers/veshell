@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Discord of the Free Explorers collective 
+  - name: Chat on Discord 
     url: https://discord.gg/vBb7D9a
-    about: There we can have a chat
+    about: Join the Free Explorers Discord
+  - name: Support the project & become one of us
+    url: https://opencollective.com/free-explorers
+    about: Join the Free Explorers collective
