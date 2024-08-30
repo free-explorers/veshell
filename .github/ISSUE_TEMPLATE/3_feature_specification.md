@@ -2,7 +2,7 @@
 name: Feature specification
 about: A well defined feature specification
 title: '[FEATURE] '
-labels: 'feature'
+labels: 'feature, draft'
 assignees: ''
 
 ---
@@ -10,7 +10,7 @@ assignees: ''
 **Description or related [IDEA]**
 A clear and concise description of the need or related idea link.
 
-**Describe the functionnal solution**
+**Describe the functional solution**
 A clear and concise description of the solution.
 
 **Describe the technical details**
