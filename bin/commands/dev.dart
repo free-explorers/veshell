@@ -15,8 +15,6 @@ class DevCommand extends Command<int> {
   @override
   final description = 'Start a build_runner watch and run flutter shell';
 
-  final subProcessList = [];
-
   @override
   Future<int> run() async {
     await startBuildRunner();
@@ -42,7 +40,8 @@ class DevCommand extends Command<int> {
       }
     });
 
-    // If the process ends and readyFuture has not been completed, complete it with false
+    // If the process ends and readyFuture has not been completed
+    // complete it with false
     unawaited(
       buildRunnerProcess.exitCode.then((_) {
         if (!readyFuture.isCompleted) {

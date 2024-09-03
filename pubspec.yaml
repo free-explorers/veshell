@@ -13,11 +13,11 @@ environment:
 dependencies:
   ansicolor: ^2.0.2
   args: ^2.5.0
-  cli_completion: ^0.4.0
-  mason_logger: ^0.2.10
+  cli_completion: ^0.5.1
+  mason_logger: ^0.3.0
   path: ^1.8.3
 
 dev_dependencies:
-  lints: ^3.0.0
+  lints: ^4.0.0
   test: ^1.24.0
-  very_good_analysis: ^5.1.0
+  very_good_analysis: ^6.0.0
