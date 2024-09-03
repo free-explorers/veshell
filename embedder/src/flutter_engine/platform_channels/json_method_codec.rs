@@ -56,7 +56,7 @@ impl MethodCodec<serde_json::Value> for JsonMethodCodec {
         result: &mut dyn MethodResult<serde_json::Value>,
     ) -> bool {
         (|| {
-            let mut json_response = JsonMessageCodec {}.decode_message(response)?;
+            let json_response = JsonMessageCodec {}.decode_message(response)?;
             let mut json_response = match json_response {
                 Value::Array(vec) => vec,
                 _ => return None,

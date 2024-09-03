@@ -1,12 +1,9 @@
 use std::mem::size_of;
 
-use input_linux::sys::{KEY_ESC, KEY_F1, KEY_LEFTALT};
 use smithay::backend::input::{
-    self, AbsolutePositionEvent, Axis, AxisRelativeDirection, AxisSource, ButtonState, Event,
-    InputBackend, InputEvent, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
-    PointerMotionEvent,
+    self, AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
+    KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
 };
-use smithay::input::keyboard::{FilterResult, Keysym};
 use smithay::input::pointer::{AxisFrame, MotionEvent, RelativeMotionEvent};
 use smithay::utils::{Logical, Point, SERIAL_COUNTER};
 
@@ -18,7 +15,6 @@ use crate::flutter_engine::embedder::{
     FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
 };
 use crate::flutter_engine::FlutterEngine;
-use crate::focus::PointerFocusTarget;
 use crate::state::State;
 
 impl<BackendData: Backend> State<BackendData> {

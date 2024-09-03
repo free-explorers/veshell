@@ -1,5 +1,13 @@
 use std::borrow::Cow;
 
+use smithay::input::{
+    pointer::{
+        GestureHoldBeginEvent, GestureHoldEndEvent, GesturePinchBeginEvent, GesturePinchEndEvent,
+        GesturePinchUpdateEvent, GestureSwipeBeginEvent, GestureSwipeEndEvent,
+        GestureSwipeUpdateEvent,
+    },
+    touch::TouchTarget,
+};
 use smithay::xwayland::X11Surface;
 pub use smithay::{
     backend::input::KeyState,
@@ -9,20 +17,9 @@ pub use smithay::{
         pointer::{AxisFrame, ButtonEvent, MotionEvent, PointerTarget, RelativeMotionEvent},
         Seat,
     },
-    reexports::wayland_server::{backend::ObjectId, protocol::wl_surface::WlSurface, Resource},
+    reexports::wayland_server::{backend::ObjectId, protocol::wl_surface::WlSurface},
     utils::{IsAlive, Serial},
     wayland::seat::WaylandFocus,
-};
-use smithay::{
-    desktop::{Window, WindowSurface},
-    input::{
-        pointer::{
-            GestureHoldBeginEvent, GestureHoldEndEvent, GesturePinchBeginEvent,
-            GesturePinchEndEvent, GesturePinchUpdateEvent, GestureSwipeBeginEvent,
-            GestureSwipeEndEvent, GestureSwipeUpdateEvent,
-        },
-        touch::TouchTarget,
-    },
 };
 
 use crate::backend::Backend;

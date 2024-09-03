@@ -10,7 +10,7 @@ use std::ptr::{null, null_mut};
 use std::rc::Rc;
 use std::time::Duration;
 
-use smithay::backend::input::{InputBackend, KeyboardKeyEvent};
+use smithay::backend::input::KeyboardKeyEvent;
 use smithay::backend::renderer::gles::ffi::RGBA8;
 use smithay::output::Output;
 use smithay::reexports::calloop;

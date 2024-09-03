@@ -1,7 +1,6 @@
 use std::sync::atomic::Ordering;
 
 use log::{error, warn};
-use smithay::backend::input::Event;
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::renderer::{ImportDma, ImportEgl};
@@ -182,7 +181,7 @@ pub fn run_x11_client() {
         EmbedderChannels {
             rx_present,
             rx_request_fbo,
-            mut tx_fbo,
+            tx_fbo,
             tx_output_height,
             rx_baton,
         },

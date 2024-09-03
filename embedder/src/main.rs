@@ -1,30 +1,17 @@
 use std::env;
-use std::process::Command;
 
 use backend::Backend;
 use log::debug;
-use smithay::backend::session::libseat::LibSeatSession;
-use smithay::output::Output;
-use smithay::reexports::calloop::{channel, EventSource};
 use smithay::{
-    backend::allocator::dmabuf::Dmabuf,
     reexports::wayland_server::{
         backend::{ClientData, ClientId, DisconnectReason},
         protocol::wl_surface::{self},
     },
-    wayland::{
-        buffer::BufferHandler,
-        compositor::{
-            with_surface_tree_downward, CompositorClientState, CompositorHandler,
-            SurfaceAttributes, TraversalAction,
-        },
-        dmabuf::DmabufHandler,
-        shell::xdg::XdgShellHandler,
-        shm::ShmHandler,
+    wayland::compositor::{
+        with_surface_tree_downward, CompositorClientState, SurfaceAttributes, TraversalAction,
     },
 };
 
-use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::flutter_engine::FlutterEngine;
 use crate::mouse_button_tracker::MouseButtonTracker;
 use crate::state::State;

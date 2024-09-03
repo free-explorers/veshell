@@ -1,20 +1,15 @@
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
-use std::ffi::OsString;
+use std::collections::HashMap;
 use std::os::fd::OwnedFd;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use input_linux::sys::{KEY_ESC, KEY_LEFTMETA};
-use input_linux::InputEvent;
 use log::error;
-use serde_json::json;
 use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::backend::input::KeyState;
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
-use smithay::backend::renderer::{ImportAll, ImportDma, Texture};
+use smithay::backend::renderer::ImportDma;
 use smithay::backend::session::Session;
 use smithay::desktop::{Space, Window};
 use smithay::input::keyboard::{KeyboardHandle, Keysym, ModifiersState, XkbConfig};
@@ -26,14 +21,11 @@ use smithay::reexports::calloop::{channel, Interest, LoopHandle, Mode, PostActio
 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 use smithay::reexports::wayland_server::protocol::wl_buffer;
-use smithay::reexports::wayland_server::protocol::wl_seat::WlSeat;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::reexports::wayland_server::{Client, Display, DisplayHandle, Resource};
-use smithay::reexports::winit::keyboard::KeyCode;
+use smithay::reexports::wayland_server::{Display, DisplayHandle, Resource};
 use smithay::reexports::x11rb::protocol::xproto::Window as X11Window;
 use smithay::utils::{
-    Buffer as BufferCoords, Clock, Logical, Monotonic, Point, Rectangle, Serial, Size,
-    SERIAL_COUNTER,
+    Buffer as BufferCoords, Clock, Logical, Monotonic, Point, Rectangle, Size, SERIAL_COUNTER,
 };
 use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor::{self, get_parent, RectangleKind};
@@ -60,13 +52,8 @@ use smithay::wayland::shell::xdg::{
 };
 use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::wayland::socket::ListeningSocketSource;
-use smithay::wayland::xwayland_shell::{
-    self, XWaylandShellHandler, XWaylandShellState, XWAYLAND_SHELL_ROLE,
-};
-use smithay::xwayland::xwm::{Reorder, XwmId};
-use smithay::xwayland::{
-    xwm, X11Surface, X11Wm, XWayland, XWaylandClientData, XWaylandEvent, XwmHandler,
-};
+use smithay::wayland::xwayland_shell::{self, XWAYLAND_SHELL_ROLE};
+use smithay::xwayland::{X11Surface, X11Wm, XwmHandler};
 use smithay::{
     delegate_compositor, delegate_data_control, delegate_data_device, delegate_dmabuf,
     delegate_output, delegate_primary_selection, delegate_relative_pointer, delegate_seat,
@@ -74,9 +61,8 @@ use smithay::{
 };
 use tracing::{info, warn};
 
-use crate::cursor::Cursor;
 use crate::flutter_engine::wayland_messages::{
-    MyPoint, PopupMessage, SubsurfaceMessage, SurfaceMessage, SurfaceRole, ToplevelMessage,
+    PopupMessage, SubsurfaceMessage, SurfaceMessage, SurfaceRole, ToplevelMessage,
     XdgSurfaceMessage, XdgSurfaceRole,
 };
 use crate::flutter_engine::FlutterEngine;

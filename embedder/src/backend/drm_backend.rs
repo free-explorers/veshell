@@ -23,7 +23,6 @@ use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{libseat, Session};
 use smithay::backend::udev::{all_gpus, primary_gpu, UdevBackend, UdevEvent};
 use smithay::desktop::utils::OutputPresentationFeedback;
-use smithay::desktop::{Space, Window};
 use smithay::output::Mode;
 use smithay::output::{Output, PhysicalProperties, Subpixel};
 use smithay::reexports::calloop::channel::Event;
@@ -193,7 +192,7 @@ pub fn run_drm_backend() {
         EmbedderChannels {
             rx_present,
             rx_request_fbo,
-            mut tx_fbo,
+            tx_fbo,
             tx_output_height: _,
             rx_baton,
         },

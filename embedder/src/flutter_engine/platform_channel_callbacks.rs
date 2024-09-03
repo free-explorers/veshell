@@ -1,11 +1,10 @@
 use std::borrow::Borrow;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::Duration;
 
 use serde_json::json;
 use smithay::backend::input::ButtonState;
-use smithay::input::pointer::{ButtonEvent, MotionEvent};
+use smithay::input::pointer::ButtonEvent;
 use smithay::reexports::calloop::channel::Event;
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
@@ -14,7 +13,6 @@ use smithay::utils::SERIAL_COUNTER;
 use smithay::wayland::compositor::with_states;
 use smithay::wayland::shell::xdg;
 use smithay::wayland::xwayland_shell::XWAYLAND_SHELL_ROLE;
-use smithay::xwayland::xwm;
 
 use crate::backend::Backend;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
@@ -567,7 +565,7 @@ pub fn on_shell_ready<BackendData: Backend + 'static>(
             }))),
             None,
         );
-        if (x11_surface.is_mapped()) {
+        if x11_surface.is_mapped() {
             platform_method_channel.invoke_method(
                 "surface_associated",
                 Some(Box::new(json!({

@@ -1,9 +1,8 @@
 use crate::backend::Backend;
 use crate::state::State;
-use smithay::reexports::calloop;
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
-use smithay::reexports::calloop::{timer, LoopHandle, RegistrationToken};
-use std::time::{Duration, Instant};
+use smithay::reexports::calloop::{LoopHandle, RegistrationToken};
+use std::time::Duration;
 
 type Callback<BackendData> = fn(u32, Option<char>, &mut State<BackendData>);
 
