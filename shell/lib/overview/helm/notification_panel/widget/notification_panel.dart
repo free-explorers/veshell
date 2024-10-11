@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/notification/provider/notification_list.dart';
+import 'package:shell/overview/helm/notification_panel/widget/notification.dart';
 
-class NotificationPanel extends StatelessWidget {
+class NotificationPanel extends HookConsumerWidget {
   const NotificationPanel({
     super.key,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notificationList = ref.watch(notificationListProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -17,27 +20,16 @@ class NotificationPanel extends StatelessWidget {
             child: Column(
               children: [
                 Expanded(
-                  child: ListView(
-                    children: [
-                      ListTile(
-                        leading: Icon(MdiIcons.bell),
-                        title: const Text('Notification title'),
-                        subtitle: const Text('Notification body'),
-                        onTap: () {},
-                      ),
-                      ListTile(
-                        leading: Icon(MdiIcons.bell),
-                        title: const Text('Notification title'),
-                        subtitle: const Text('Notification body'),
-                        onTap: () {},
-                      ),
-                      ListTile(
-                        leading: Icon(MdiIcons.bell),
-                        title: const Text('Notification title'),
-                        subtitle: const Text('Notification body'),
-                        onTap: () {},
-                      ),
-                    ],
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(8),
+                    separatorBuilder: (context, index) => const SizedBox(
+                      height: 8,
+                    ),
+                    itemBuilder: (context, index) {
+                      final notification = notificationList[index];
+                      return NotificationWidget(notification: notification);
+                    },
+                    itemCount: notificationList.length,
                   ),
                 ),
               ],

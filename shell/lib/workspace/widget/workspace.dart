@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
@@ -32,6 +33,8 @@ class WorkspaceWidget extends HookConsumerWidget {
     if (isSelected && !workspaceFocusScopeNode.hasFocus) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         workspaceFocusScopeNode.requestFocus();
+        focusLog.info(
+            'workspaceFocusScopeNode.requestFocus on first build because its selected and not have the focus');
       });
     }
 

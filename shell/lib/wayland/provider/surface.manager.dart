@@ -158,6 +158,14 @@ class SurfaceManager extends _$SurfaceManager {
       null => null,
     };
 
+    try {
+      ref.read(wlSurfaceStateProvider(message.surfaceId));
+    } catch (e, stackTrace) {
+      // ignore: avoid_print
+      print(e);
+      return;
+    }
+
     ref.read(wlSurfaceStateProvider(message.surfaceId).notifier).commit(
           role: role,
           textureId: message.textureId,
@@ -227,6 +235,13 @@ class SurfaceManager extends _$SurfaceManager {
   }
 
   void _x11PropertiesChanged(X11PropertiesChangedMessage message) {
+    try {
+      ref.read(x11SurfaceStateProvider(message.x11SurfaceId));
+    } catch (e, stackTrace) {
+      // ignore: avoid_print
+      print(e);
+      return;
+    }
     ref
         .read(x11SurfaceStateProvider(message.x11SurfaceId).notifier)
         .setProperties(

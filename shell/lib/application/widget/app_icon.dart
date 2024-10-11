@@ -40,14 +40,12 @@ class AppIconByPath extends StatelessWidget {
             constraints.biggest,
           ),
         );
-
         if (!asyncValue.hasValue) {
           return const SizedBox();
         }
         final rawImage = asyncValue.value;
         return RawImage(
           image: rawImage,
-          filterQuality: FilterQuality.medium,
           fit: BoxFit.contain,
         );
       },

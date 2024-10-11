@@ -10,6 +10,7 @@ import 'package:shell/screen/provider/current_screen_id.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/screen/widget/screen_panel.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
 import 'package:shell/workspace/provider/current_workspace_id.dart';
 import 'package:shell/workspace/widget/workspace.dart';
@@ -26,21 +27,6 @@ class ScreenWidget extends HookConsumerWidget {
     final screenFocusScopeNode =
         useFocusScopeNode(debugLabel: 'ScreenFocusNode');
 
-    /* useEffect(
-      () {
-        onFocusChange() {
-          if (screenFocusScopeNode.hasFocus) {
-            screenFocusScopeNode.requestFocus();
-          }
-        }
-
-        FocusManager.instance.addListener(onFocusChange);
-        return () {
-          FocusManager.instance.removeListener(onFocusChange);
-        };
-      },
-      [],
-    ); */
     final shortcutManager = useMemoized(ScreenShortcutManager.new, []);
     return Shortcuts.manager(
       manager: shortcutManager,
@@ -77,7 +63,10 @@ class ScreenWidget extends HookConsumerWidget {
           ),
         },
         child: MouseRegion(
-          onEnter: (event) => screenFocusScopeNode.requestFocus(),
+          onEnter: (event) {
+            screenFocusScopeNode.requestFocus();
+            focusLog.info('screenFocusScopeNode.requestFocus on MouseEnter');
+          },
           child: FocusScope(
             node: screenFocusScopeNode,
             onFocusChange: (value) {

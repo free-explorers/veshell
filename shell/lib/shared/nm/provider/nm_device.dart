@@ -10,7 +10,6 @@ class NmDevice extends _$NmDevice {
   NetworkManagerDevice build(String hwAddress) {
     final device = ref.read(nmDevicesProvider.notifier).getDevice(hwAddress)!;
     final subscription = device.propertiesChanged.listen((changes) {
-      print('propertiesChanged $changes');
       ref.notifyListeners();
     });
 

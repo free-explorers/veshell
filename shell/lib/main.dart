@@ -4,6 +4,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/display/widget/display.dart';
 import 'package:shell/monitor/provider/monitor_list.dart';
+import 'package:shell/notification/provider/notification_manager.dart';
 import 'package:shell/polkit/provider/authentication_agent.dart';
 import 'package:shell/screen/provider/screen_list.dart';
 import 'package:shell/shared/provider/persistent_json_by_folder.dart';
@@ -69,7 +70,7 @@ class _EagerInitialization extends ConsumerWidget {
     ref.watch(monitorListProvider);
     // Handle error states and loading states
     if (result.isLoading) {
-      return const CircularProgressIndicator();
+      return const Center(child: CircularProgressIndicator());
     } else if (result.hasError) {
       print(result.asError);
       return Row(
@@ -82,7 +83,8 @@ class _EagerInitialization extends ConsumerWidget {
     ref
       ..watch(screenListProvider)
       ..watch(windowManagerProvider)
-      ..watch(polkitAuthenticationAgentStateProvider);
+      ..watch(polkitAuthenticationAgentStateProvider)
+      ..watch(notificationManagerProvider);
 
     return child;
   }

@@ -583,6 +583,7 @@ pub fn on_shell_ready<BackendData: Backend + 'static>(
         if let Some(wl_surface) = surfaces.get(surface_id) {
             let surface_message = data.construct_surface_message(wl_surface.clone().borrow());
             let platform_method_channel = &mut data.flutter_engine_mut().platform_method_channel;
+            println!("Restore commit_surface");
             platform_method_channel.invoke_method(
                 "commit_surface",
                 Some(Box::new(json!(surface_message))),

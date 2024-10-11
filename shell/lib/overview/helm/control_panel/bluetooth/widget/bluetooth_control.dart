@@ -7,13 +7,12 @@ import 'package:shell/overview/helm/control_panel/bluetooth/provider/bluetooth_m
 import 'package:shell/overview/helm/control_panel/bluetooth/widget/bluetooth_device_list_tile.dart';
 import 'package:shell/shared/bluez/provider/bluez_device.dart';
 import 'package:shell/shared/bluez/provider/bluez_devices.dart';
+import 'package:shell/shared/widget/expandable_card.dart';
 
 class BluetoothControl extends HookConsumerWidget {
   const BluetoothControl({
-    this.isExpanded = false,
     super.key,
   });
-  final bool isExpanded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -37,127 +36,71 @@ class BluetoothControl extends HookConsumerWidget {
 
     final connectedDevices =
         devices.where((device) => device.connected).toList();
-    final displayedDevices = isExpanded ? devices : connectedDevices;
-    return Hero(
-      tag: 'bluetooth',
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return Card(
-            elevation: isExpanded ? 32 : 0,
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        onPressed: () {},
-                        icon: Icon(
-                          MdiIcons.bluetooth,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                      const SizedBox(
-                        width: 16,
-                      ),
-                      Expanded(
-                        child: Text(
-                          'Bluetooth',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ),
-                      Switch(
-                        value: bluetoothManagerState.value?.powered ?? false,
-                        onChanged: (value) {
-                          if (value) {
-                            ref
-                                .read(bluetoothManagerProvider.notifier)
-                                .powerOn();
-                          } else {
-                            ref
-                                .read(bluetoothManagerProvider.notifier)
-                                .powerOff();
-                          }
-                        },
-                      ),
-                    ],
+    return ExpandableCard(
+      builder: (context, isExpanded) {
+        final displayedDevices = isExpanded ? devices : connectedDevices;
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(
+                    MdiIcons.bluetooth,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
-                ),
-                Flexible(
-                  flex: isExpanded ? 1 : 0,
-                  child: ColoredBox(
-                    color: Colors.black12,
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemBuilder: (context, index) => BluetoothDeviceListTile(
-                        displayedDevices[index].address,
-                      ),
-                      itemCount: displayedDevices.length,
+                  const SizedBox(
+                    width: 16,
+                  ),
+                  Expanded(
+                    child: Text(
+                      'Bluetooth',
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
                   ),
-                ),
-                if (!isExpanded)
-                  TextButton(
-                    style: TextButton.styleFrom(
-                      shape: const RoundedRectangleBorder(),
-                    ),
-                    onPressed: () {
-                      ref
-                          .read(bluetoothManagerProvider.notifier)
-                          .startDiscovery();
-                      final currentContext = context;
-                      final currentBox =
-                          currentContext.findRenderObject()! as RenderBox;
-                      final currentCoordinates = currentBox.localToGlobal(
-                        Offset.zero,
-                      );
-                      Navigator.of(context).push(
-                        PageRouteBuilder(
-                          opaque: false,
-                          barrierColor: Colors.black38,
-                          barrierDismissible: true,
-                          pageBuilder: (BuildContext context, _, __) {
-                            return LayoutBuilder(
-                              builder: (context, constraints) {
-                                return Stack(
-                                  children: [
-                                    Positioned(
-                                      top: currentCoordinates.dy - 16,
-                                      left: currentCoordinates.dx - 16,
-                                      child: Container(
-                                        constraints: BoxConstraints(
-                                          maxHeight:
-                                              constraints.biggest.height -
-                                                  currentCoordinates.dy +
-                                                  16,
-                                        ),
-                                        width: currentBox.size.width + 32,
-                                        child: const Padding(
-                                          padding: EdgeInsets.all(8),
-                                          child: BluetoothControl(
-                                            isExpanded: true,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              },
-                            );
-                          },
-                        ),
-                      );
+                  Switch(
+                    value: bluetoothManagerState.value?.powered ?? false,
+                    onChanged: (value) {
+                      if (value) {
+                        ref.read(bluetoothManagerProvider.notifier).powerOn();
+                      } else {
+                        ref.read(bluetoothManagerProvider.notifier).powerOff();
+                      }
                     },
-                    child: const Text('View more'),
                   ),
-              ],
+                ],
+              ),
             ),
-          );
-        },
-      ),
+            Flexible(
+              flex: isExpanded ? 1 : 0,
+              child: ColoredBox(
+                color: Colors.black12,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemBuilder: (context, index) => BluetoothDeviceListTile(
+                    displayedDevices[index].address,
+                  ),
+                  itemCount: displayedDevices.length,
+                ),
+              ),
+            ),
+            if (!isExpanded)
+              TextButton(
+                style: TextButton.styleFrom(
+                  shape: const RoundedRectangleBorder(),
+                ),
+                onPressed: () {
+                  ref.read(bluetoothManagerProvider.notifier).startDiscovery();
+                  ExpandableCard.of(context).expand();
+                },
+                child: const Text('View more'),
+              ),
+          ],
+        );
+      },
     );
   }
 }

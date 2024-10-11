@@ -1,5 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
+import 'package:shell/wayland/provider/pid_to_surface_id.dart';
 import 'package:shell/window/model/window_properties.serializable.dart';
 import 'package:shell/window/provider/window_manager/matching_engine.dart';
 
@@ -30,6 +31,8 @@ class WindowPropertiesState extends _$WindowPropertiesState {
   }
 
   void setPid(int pid) {
+    ref.read(pidToSurfaceIdProvider.notifier).setPid(pid, surfaceId);
+
     state = state.copyWith(pid: pid);
   }
 
@@ -40,6 +43,9 @@ class WindowPropertiesState extends _$WindowPropertiesState {
     String? windowClass,
     String? startupId,
   }) {
+    if (pid != null && pid == 0) {
+      ref.read(pidToSurfaceIdProvider.notifier).setPid(pid, surfaceId);
+    }
     state = state.copyWith(
       appId: appId ?? state.appId,
       pid: pid ?? state.pid,

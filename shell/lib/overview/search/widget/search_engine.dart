@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/overview/search/widget/application_search_result.dart';
 import 'package:shell/overview/search/widget/search_input.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:shell/theme/theme.dart';
 
 class SearchEngine extends HookConsumerWidget {
@@ -20,6 +21,7 @@ class SearchEngine extends HookConsumerWidget {
           searchTextState.value = searchController.text;
         });
         searchFocusNode.requestFocus();
+        focusLog.info('Search request at first build');
         return null;
       },
       [],

@@ -10,36 +10,38 @@ class AudioOutputWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        ListTile(
-          onTap: () {},
-          leading: IconButton(
-            onPressed: () {},
-            icon: Icon(
-              MdiIcons.volumeHigh,
+    return Card(
+      child: Column(
+        children: [
+          ListTile(
+            onTap: () {},
+            leading: IconButton(
+              onPressed: () {},
+              icon: Icon(
+                MdiIcons.volumeHigh,
+              ),
+            ),
+            title: Slider(
+              value: 0.5,
+              onChanged: (double value) {},
+            ),
+            trailing: Icon(MdiIcons.chevronUp),
+          ),
+          ColoredBox(
+            color: Colors.black12,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                ListTile(
+                  leading: Icon(MdiIcons.check),
+                  title: const Text('Output 1'),
+                  onTap: () {},
+                ),
+              ],
             ),
           ),
-          title: Slider(
-            value: 0.5,
-            onChanged: (double value) {},
-          ),
-          trailing: Icon(MdiIcons.chevronUp),
-        ),
-        ColoredBox(
-          color: Colors.black12,
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              ListTile(
-                leading: Icon(MdiIcons.check),
-                title: const Text('Output 1'),
-                onTap: () {},
-              ),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

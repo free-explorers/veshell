@@ -36,12 +36,16 @@ class PersistenceManager {
         for (final modelFile in modelFiles) {
           if (modelFile is File) {
             final modelId = path.basenameWithoutExtension(modelFile.path);
+            final fileString = modelFile.readAsStringSync();
             try {
-              final modelJson = jsonDecode(await modelFile.readAsString())
-                  as Map<String, dynamic>;
+              final modelJson = jsonDecode(fileString) as Map<String, dynamic>;
               modelMap[modelId] = modelJson;
             } catch (e, stack) {
-              _log.severe('Error loading model $modelId', e, stack);
+              _log.severe(
+                'Error loading model $modelId \n $e \n in \n $fileString',
+                e,
+                stack,
+              );
             }
           }
         }

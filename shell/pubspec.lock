@@ -248,6 +248,14 @@ packages:
       url: "https://github.com/free-explorers/dbus.dart"
     source: git
     version: "0.7.10"
+  duration:
+    dependency: "direct main"
+    description:
+      name: duration
+      sha256: "13e5d20723c9c1dde8fb318cf86716d10ce294734e81e44ae1a817f3ae714501"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.0.3"
   equatable:
     dependency: transitive
     description:
@@ -288,6 +296,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.0"
+  fl_chart:
+    dependency: "direct main"
+    description:
+      name: fl_chart
+      sha256: "94307bef3a324a0d329d3ab77b2f0c6e5ed739185ffc029ed28c0f9b019ea7ef"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.69.0"
   flutter:
     dependency: "direct main"
     description: flutter
@@ -336,9 +352,11 @@ packages:
   freedesktop_desktop_entry:
     dependency: "direct main"
     description:
-      path: "../../freedesktop_desktop_entry"
-      relative: true
-    source: path
+      path: "."
+      ref: load_single_theme_and_parent
+      resolved-ref: "8befc66a109f96856fc038b5a2b021f2449d99e3"
+      url: "https://github.com/free-explorers/freedesktop_desktop_entry.git"
+    source: git
     version: "0.6.1"
   freezed:
     dependency: "direct main"
@@ -819,6 +837,22 @@ packages:
       url: "https://github.com/free-explorers/ubuntu_session.dart"
     source: git
     version: "0.0.4"
+  universal_disk_space:
+    dependency: "direct main"
+    description:
+      name: universal_disk_space
+      sha256: "210d94e2da6c568770e4f0df83ad36a49c2d3314e8ce4e91b6ac7e6bfa6862af"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.3"
+  universal_io:
+    dependency: transitive
+    description:
+      name: universal_io
+      sha256: "1722b2dcc462b4b2f3ee7d188dad008b6eb4c40bbd03a3de451d82c78bba9aad"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.2"
   uuid:
     dependency: "direct main"
     description:
@@ -933,4 +967,4 @@ packages:
     version: "3.1.2"
 sdks:
   dart: ">=3.5.0-259.0.dev <4.0.0"
-  flutter: ">=3.7.0-0"
+  flutter: ">=3.16.0"

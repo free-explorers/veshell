@@ -260,7 +260,7 @@ pub mod xwayland {
             geometry: Rectangle<i32, Logical>,
             above: Option<u32>,
         ) {
-            print!("configure_notify");
+            println!("configure_notify");
         }
 
         fn property_notify(

@@ -1,6 +1,8 @@
 import 'package:logger/logger.dart';
 import 'package:logging/logging.dart' as Logging;
 
+final focusLog = Logging.Logger('Focus');
+
 final _simpleLogger = Logger(
   printer: HybridPrinter(
     PrettyPrinter(

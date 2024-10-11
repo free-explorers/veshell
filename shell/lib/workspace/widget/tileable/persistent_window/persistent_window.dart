@@ -3,6 +3,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/application/widget/app_icon.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:shell/wayland/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
@@ -66,12 +67,16 @@ class PersistentWindowTileable extends Tileable {
       [window.surfaceId],
     );
 
-    if (isSelected &&
+    if ((ModalRoute.of(context)?.isCurrent ?? false) &&
+        isSelected &&
         (!persistentFocusNode.hasFocus ||
             persistentFocusNode.focusedChild == null)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         persistentFocusNode.requestFocus();
         persistentFocusNode.autofocus(primaryFocusNode);
+        focusLog.info(
+          'persistentFocusNode.requestFocus on first build because its selected and not have the focus',
+        );
       });
     }
 

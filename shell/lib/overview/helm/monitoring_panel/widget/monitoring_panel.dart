@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/widget/cpu_monitoring.dart';
+import 'package:shell/overview/helm/monitoring_panel/disk_monitoring/widget/disk_usage_monitoring.dart';
+import 'package:shell/overview/helm/monitoring_panel/memory_monitoring/widget/memory_monitoring.dart';
 
 class MonitoringPanel extends StatelessWidget {
   const MonitoringPanel({
@@ -9,202 +11,71 @@ class MonitoringPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          // Battery level
-          // Disk usages
-          // CPU loading
-          // Memory loading
-          // Network usage
+    return Column(
+      children: [
+        // Battery level
+        // Disk usages
+        // CPU loading
+        // Memory loading
+        // Network usage
 
-          Card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ListTile(
-                  leading: Icon(
-                    MdiIcons.battery,
-                  ),
-                  title: SliderTheme(
-                    data: Theme.of(context).sliderTheme.copyWith(
-                          thumbShape: SliderComponentShape.noThumb,
-                          trackShape: const RoundedRectSliderTrackShape(),
-                        ),
-                    child: const Slider(
-                      value: 1,
-                      onChanged: null,
-                    ),
-                  ),
-                  trailing: const Text('100%'),
+        Card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ListTile(
+                leading: Icon(
+                  MdiIcons.battery,
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(
-                    left: 16,
-                    bottom: 16,
-                    right: 16,
-                    top: 8,
-                  ),
-                  child: SegmentedButton(
-                    segments: [
-                      ButtonSegment(
-                        icon: Icon(MdiIcons.speedometerSlow),
-                        value: 'power_saver',
+                title: SliderTheme(
+                  data: Theme.of(context).sliderTheme.copyWith(
+                        thumbShape: SliderComponentShape.noThumb,
+                        trackShape: const RoundedRectSliderTrackShape(),
                       ),
-                      ButtonSegment(
-                        icon: Icon(MdiIcons.speedometerMedium),
-                        value: 'balanced',
-                      ),
-                      ButtonSegment(
-                        icon: Icon(MdiIcons.speedometer),
-                        value: 'performance',
-                      ),
-                    ],
-                    selected: const {'balanced'},
-                    onSelectionChanged: (Set<String> value) {},
+                  child: const Slider(
+                    value: 1,
+                    onChanged: null,
                   ),
                 ),
-              ],
-            ),
-          ),
-          const Flexible(
-            child: CpuMonitoringWidget(
-              isExpanded: true,
-            ),
-          ),
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                ListTile(
-                  leading: Icon(
-                    MdiIcons.memory,
-                  ),
-                  title: SliderTheme(
-                    data: Theme.of(context).sliderTheme.copyWith(
-                          thumbShape: SliderComponentShape.noThumb,
-                          disabledActiveTrackColor:
-                              Theme.of(context).colorScheme.primary,
-                          trackShape: const RoundedRectSliderTrackShape(),
-                        ),
-                    child: const Slider(
-                      value: 0.7,
-                      onChanged: null,
+                trailing: const Text('100%'),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(
+                  left: 16,
+                  bottom: 16,
+                  right: 16,
+                  top: 8,
+                ),
+                child: SegmentedButton(
+                  segments: [
+                    ButtonSegment(
+                      icon: Icon(MdiIcons.speedometerSlow),
+                      value: 'power_saver',
                     ),
-                  ),
-                  trailing: Icon(MdiIcons.chevronDown),
-                  onTap: () {},
-                ),
-              ],
-            ),
-          ),
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                ListTile(
-                  leading: Icon(
-                    MdiIcons.expansionCard,
-                  ),
-                  title: SliderTheme(
-                    data: Theme.of(context).sliderTheme.copyWith(
-                          thumbShape: SliderComponentShape.noThumb,
-                          disabledActiveTrackColor:
-                              Theme.of(context).colorScheme.primary,
-                          trackShape: const RoundedRectSliderTrackShape(),
-                        ),
-                    child: const Slider(
-                      value: 0.7,
-                      onChanged: null,
+                    ButtonSegment(
+                      icon: Icon(MdiIcons.speedometerMedium),
+                      value: 'balanced',
                     ),
-                  ),
-                  trailing: Icon(MdiIcons.chevronDown),
-                  onTap: () {},
-                ),
-              ],
-            ),
-          ),
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                ListTile(
-                  leading: Icon(
-                    MdiIcons.downloadNetwork,
-                  ),
-                  title: SliderTheme(
-                    data: Theme.of(context).sliderTheme.copyWith(
-                          thumbShape: SliderComponentShape.noThumb,
-                          disabledActiveTrackColor:
-                              Theme.of(context).colorScheme.primary,
-                          trackShape: const RoundedRectSliderTrackShape(),
-                        ),
-                    child: const Slider(
-                      value: 0.7,
-                      onChanged: null,
+                    ButtonSegment(
+                      icon: Icon(MdiIcons.speedometer),
+                      value: 'performance',
                     ),
-                  ),
-                  trailing: Icon(MdiIcons.chevronDown),
-                  onTap: () {},
+                  ],
+                  selected: const {'balanced'},
+                  onSelectionChanged: (Set<String> value) {},
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                ListTile(
-                  leading: Icon(
-                    MdiIcons.uploadNetwork,
-                  ),
-                  title: SliderTheme(
-                    data: Theme.of(context).sliderTheme.copyWith(
-                          thumbShape: SliderComponentShape.noThumb,
-                          disabledActiveTrackColor:
-                              Theme.of(context).colorScheme.primary,
-                          trackShape: const RoundedRectSliderTrackShape(),
-                        ),
-                    child: const Slider(
-                      value: 0.7,
-                      onChanged: null,
-                    ),
-                  ),
-                  trailing: Icon(MdiIcons.chevronDown),
-                  onTap: () {},
-                ),
-              ],
-            ),
-          ),
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                ListTile(
-                  leading: Icon(
-                    MdiIcons.harddisk,
-                  ),
-                  title: SliderTheme(
-                    data: Theme.of(context).sliderTheme.copyWith(
-                          thumbShape: SliderComponentShape.noThumb,
-                          disabledActiveTrackColor:
-                              Theme.of(context).colorScheme.primary,
-                          trackShape: const RoundedRectSliderTrackShape(),
-                        ),
-                    child: const Slider(
-                      value: 0.6,
-                      onChanged: null,
-                    ),
-                  ),
-                  trailing: Icon(MdiIcons.chevronDown),
-                  onTap: () {},
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        ),
+        const Flexible(
+          child: CpuMonitoringWidget(),
+        ),
+        const Flexible(
+          child: MemoryMonitoringWidget(),
+        ),
+        const DiskUsageMonitoring(),
+      ],
     );
   }
 }

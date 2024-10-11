@@ -53,13 +53,31 @@ class WorkspaceState extends _$WorkspaceState
   Workspace build(WorkspaceId workspaceId) {
     persistChanges();
 
-    return getPersisted(Workspace.fromJson) ??
-        Workspace(
-          workspaceId: workspaceId,
-          tileableWindowList: <PersistentWindowId>[].lock,
-          selectedIndex: 0,
-          visibleLength: 1,
-        );
+    final persistedState = getPersisted(Workspace.fromJson);
+    if (persistedState != null) {
+      return persistedState.copyWith(
+        tileableWindowList: persistedState.tileableWindowList.where(
+          (tileableId) {
+            try {
+              ref.read(persistentWindowStateProvider(tileableId));
+              return true;
+            } catch (e) {
+              print(
+                'Failed to load persistentWindowsState while restoring workspace state',
+              );
+              return false;
+            }
+          },
+        ).toIList(),
+      );
+    } else {
+      return Workspace(
+        workspaceId: workspaceId,
+        tileableWindowList: <PersistentWindowId>[].lock,
+        selectedIndex: 0,
+        visibleLength: 1,
+      );
+    }
   }
 
   void reorderWindowList(IList<PersistentWindowId> newWindowList) {

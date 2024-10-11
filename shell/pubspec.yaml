@@ -39,7 +39,9 @@ dependencies:
   freezed_annotation: ^2.4.1
   tuple: ^2.0.2
   freedesktop_desktop_entry: 
-    path: ../../freedesktop_desktop_entry
+    git:
+      url: https://github.com/free-explorers/freedesktop_desktop_entry.git
+      ref: load_single_theme_and_parent
   jovial_svg: ^1.1.15
   flutter_svg: ^2.0.9
 
@@ -55,6 +57,9 @@ dependencies:
   path: any
   logger: ^2.3.0
   logging: ^1.2.0
+  fl_chart: ^0.69.0
+  universal_disk_space: ^0.2.3
+  duration: ^4.0.3
   ubuntu_session: 
     git:
       url: https://github.com/free-explorers/ubuntu_session.dart
