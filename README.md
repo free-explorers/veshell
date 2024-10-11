@@ -8,15 +8,8 @@ It's the successor of the [Material Shell](https://github.com/material-shell/mat
 <br/>
 <br/>
 
-# Crowdfunding
-
-Support the project by participate in our Kickstarter crowdfunding or by becoming a [free explorers member](https://opencollective.com/free-explorers) !
-
-<br/> 
-<a href="https://opencollective.com/free-explorers/projects/veshell/contribute/kickstart-veshell-67471"><img  src="https://veshell.s3.eu-west-1.amazonaws.com/Board.svg"
-            alt="Spatialisation illustrated"></a>
-<br/>
-<br/>
+# Free Explorers
+Join our community of Open Source enthusiast at [free-explorers.com](free-explorers.com)
 
 # Veshell CLI
 
