@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/overview/helm/control_panel/bluetooth/widget/bluetooth_control.dart';
 import 'package:shell/overview/helm/control_panel/network/widget/network_control.dart';
 import 'package:shell/overview/helm/control_panel/widget/audio_output.dart';
@@ -16,8 +15,8 @@ class ControlPanel extends StatelessWidget {
       children: [
         Expanded(
           child: ListView(
-            children: [
-              Card(
+            children: const [
+              /* Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -74,30 +73,10 @@ class ControlPanel extends StatelessWidget {
                     ],
                   ),
                 ),
-              ),
-              const AudioOutputWidget(),
-              Card(
-                child: Column(
-                  children: [
-                    ListTile(
-                      onTap: () {},
-                      leading: IconButton(
-                        onPressed: () {},
-                        icon: Icon(
-                          MdiIcons.microphone,
-                        ),
-                      ),
-                      title: Slider(
-                        value: 0.9,
-                        onChanged: (double value) {},
-                      ),
-                      trailing: Icon(MdiIcons.chevronDown),
-                    ),
-                  ],
-                ),
-              ),
-              const NetworkControl(),
-              const BluetoothControl(),
+              ), */
+              AudioOutputWidget(),
+              NetworkControl(),
+              BluetoothControl(),
             ],
           ),
         ),

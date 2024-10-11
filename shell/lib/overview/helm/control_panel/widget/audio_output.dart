@@ -13,6 +13,26 @@ class AudioOutputWidget extends StatelessWidget {
     return Card(
       child: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Icon(
+                  MdiIcons.tuneVertical,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(
+                  width: 16,
+                ),
+                Expanded(
+                  child: Text(
+                    'Volume',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+              ],
+            ),
+          ),
           ListTile(
             onTap: () {},
             leading: IconButton(
@@ -39,6 +59,20 @@ class AudioOutputWidget extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          ListTile(
+            onTap: () {},
+            leading: IconButton(
+              onPressed: () {},
+              icon: Icon(
+                MdiIcons.microphone,
+              ),
+            ),
+            title: Slider(
+              value: 0.9,
+              onChanged: (double value) {},
+            ),
+            trailing: Icon(MdiIcons.chevronDown),
           ),
         ],
       ),
