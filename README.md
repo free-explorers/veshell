@@ -2,14 +2,14 @@
 
 ---
 
-Veshell is a Wayland compositor providing an [innovative workflow](#the-innovative-workflows) that utilizes humans natural spatial cognition to enhance navigation and organization in the digital environment.
+Veshell is a Wayland compositor providing an [innovative workflow](#the-innovative-workflow) that utilizes humans natural spatial cognition to enhance navigation and organization in the digital environment.
 
 It's the successor of the [Material Shell](https://github.com/material-shell/material-shell) project.
 <br/>
 <br/>
 
 # Free Explorers
-Join our community of Open Source enthusiast at [free-explorers.com](free-explorers.com)
+Join our community of Open Source enthusiast at [free-explorers.com](https://free-explorers.com)
 
 # Veshell CLI
 
