@@ -14,8 +14,6 @@ Join our community of Open Source enthusiast at [free-explorers.com](https://fre
 # Installation requirements
 
 - Installing flutter and dart https://docs.flutter.dev/get-started/install/linux/desktop#download-then-install-flutter
-- Installing rust/cargo  ``` curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs/ | sh ```
-- Verify that openssl development headers are installed ```apt install libssl-dev ```
 
 # Veshell CLI
 
