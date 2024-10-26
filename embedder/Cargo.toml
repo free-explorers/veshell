@@ -17,7 +17,7 @@ smithay = { git = "https://github.com/Smithay/smithay", rev = "4171247", feature
 smithay-drm-extras = { path = "third_party/smithay-drm-extras" }
 rustix = "0.38.30"
 input-linux = "0.6.0"
-tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.17", features = ["env-filter", "time", "chrono", "ansi"] }
 log = "0.4.20"
 tracing = { version = "0.1.37", features = [] }
 profiling = "1.0.11"
@@ -27,6 +27,8 @@ serde = { version = "1.0.189", features = ["derive"] }
 serde_json = "1.0.107"
 lazy_static = { version = "1.4.0", features = [] }
 rlimit = "0.10.1"
+tracing-appender = "0.2"
+chrono = "0.4"
 
 [build-dependencies]
 bindgen = "0.69.1"
