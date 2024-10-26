@@ -11,6 +11,10 @@ It's the successor of the [Material Shell](https://github.com/material-shell/mat
 # Free Explorers
 Join our community of Open Source enthusiast at [free-explorers.com](https://free-explorers.com)
 
+# Installation requirements
+
+- Installing flutter and dart https://docs.flutter.dev/get-started/install/linux/desktop#download-then-install-flutter
+
 # Veshell CLI
 
 You can use our CLI to install Veshell
