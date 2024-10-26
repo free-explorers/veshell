@@ -34,7 +34,8 @@ class WorkspaceWidget extends HookConsumerWidget {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         workspaceFocusScopeNode.requestFocus();
         focusLog.info(
-            'workspaceFocusScopeNode.requestFocus on first build because its selected and not have the focus');
+          'workspaceFocusScopeNode.requestFocus on first build because its selected and not have the focus',
+        );
       });
     }
 
@@ -46,9 +47,9 @@ class WorkspaceWidget extends HookConsumerWidget {
         final newWindowId =
             windowManager.createPersistentWindowForDesktopEntry(entry);
 
-        ref
+        /* ref
             .read(persistentWindowStateProvider(newWindowId).notifier)
-            .launchSelf();
+            .launchSelf(); */
 
         ref
             .read(workspaceStateProvider(currentWorkspaceId).notifier)
