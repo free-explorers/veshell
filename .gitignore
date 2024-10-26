@@ -11,3 +11,4 @@ shell/.config
 !shell/.config/custom_devices.json
 .continuerc.json
 .temp
+logs/
