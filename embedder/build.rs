@@ -41,29 +41,11 @@ fn main() {
 fn get_flutter_engine_revision() -> String {
     let flutter_cli_path = exec("which", &["flutter"]);
 
+    // When flutter is installed by https://asdf-vm.com/ on linux it changes the default flutter
+    // lib installation path and does not find the engine.version in `../internal/engine.version`.
+    // Instead, it will be found in `../../installs/flutter/<version>/bin/internal/engine/version`.
     if flutter_cli_path.ends_with("shims/flutter") {
-        let asdf_flutter_path = Path::new(&flutter_cli_path)
-            .parent()
-            .and_then(|p| p.parent())
-            .unwrap()
-            .join("installs")
-            .join("flutter");
-
-        let mut entries: Vec<_> = match std::fs::read_dir(asdf_flutter_path) {
-            Ok(dir) => dir
-                .filter_map(Result::ok)
-                .filter(|entry| entry.path().is_dir())
-                .collect(),
-            Err(e) => panic!("{}", e),
-        };
-
-        entries.sort_by_key(|entry| entry.file_name());
-
-        let engine_revision_file = entries
-            .last()
-            .unwrap()
-            .path()
-            .as_path()
+        let engine_revision_file = Path::new(&exec("asdf", &["where", "flutter"]))
             .join("bin")
             .join("internal")
             .join("engine.version");
