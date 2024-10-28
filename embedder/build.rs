@@ -40,6 +40,42 @@ fn main() {
 
 fn get_flutter_engine_revision() -> String {
     let flutter_cli_path = exec("which", &["flutter"]);
+
+    if flutter_cli_path.ends_with("shims/flutter") {
+        let asdf_flutter_path = Path::new(&flutter_cli_path)
+            .parent()
+            .and_then(|p| p.parent())
+            .unwrap()
+            .join("installs")
+            .join("flutter");
+
+        let mut entries: Vec<_> = match std::fs::read_dir(asdf_flutter_path) {
+            Ok(dir) => dir
+                .filter_map(Result::ok)
+                .filter(|entry| entry.path().is_dir())
+                .collect(),
+            Err(e) => panic!("{}", e),
+        };
+
+        entries.sort_by_key(|entry| entry.file_name());
+
+        let engine_revision_file = entries
+            .last()
+            .unwrap()
+            .path()
+            .as_path()
+            .join("bin")
+            .join("internal")
+            .join("engine.version");
+
+        println!(
+            "cargo:rerun-if-changed={}",
+            engine_revision_file.as_path().display().to_string()
+        );
+
+        return std::fs::read_to_string(engine_revision_file).unwrap();
+    }
+
     let flutter_cli_path = Path::new(&flutter_cli_path).parent().unwrap();
     let engine_revision_file = flutter_cli_path.join("internal").join("engine.version");
     let engine_revision_str = engine_revision_file.as_path().display().to_string();
