@@ -1,5 +1,5 @@
-![Veshell](docs/assets/github_logo2.svg)
-
+![Veshell](docs/assets/veshell_banner_dark.svg#gh-dark-mode-only)
+![Veshell](docs/assets/veshell_banner_light.svg#gh-light-mode-only)
 ---
 
 Veshell is a Wayland compositor providing an [innovative workflow](#the-innovative-workflow) that utilizes humans natural spatial cognition to enhance navigation and organization in the digital environment.
