@@ -8,9 +8,6 @@ Designed to simplify navigation and reduce the need to manipulate windows in ord
 
 It provides an [innovative workflow](#the-innovative-workflow) that utilizes humans natural spatial cognition to enhance navigation and organization in the digital environment.
 
-<br/>
-<br/>
-
 # Support the project
 This project is under the umbrella of the [Free Explorers Collective](https://free-explorers.com), a community of Open Source enthusiast that funds and collaborate on Open Source software. 
 By becoming a Free Explorer you can get involve into the project and support it.
