@@ -78,7 +78,6 @@ pub fn pointer_focus<BackendData: Backend + 'static>(
 ) {
     let args = method_call.arguments().unwrap().clone();
     let payload: PointerFocusMessage = serde_json::from_value(args).unwrap();
-    println!("Rust pointer_hover {:?}", payload);
 
     if let Some(pointer_focus) = payload.focus {
         data.surface_id_under_cursor = Some(pointer_focus.surface_id);
@@ -166,7 +165,7 @@ pub fn activate_window<BackendData: Backend + 'static>(
     mut result: Box<dyn MethodResult<serde_json::Value>>,
     data: &mut State<BackendData>,
 ) {
-    println!("activate_window");
+    tracing::info!("activate_window");
     let args = method_call.arguments().unwrap().clone();
     let payload: ActivateWindowPayload = serde_json::from_value(args).unwrap();
 
@@ -457,7 +456,7 @@ pub fn on_shell_ready<BackendData: Backend + 'static>(
 ) {
     let surfaces = data.surfaces.clone();
 
-    println!("on_shell_ready");
+    tracing::info!("on_shell_ready");
     // Send new_surface for all existing surface
     for surface_id in surfaces.keys() {
         let platform_method_channel = &mut data.flutter_engine_mut().platform_method_channel;
@@ -583,7 +582,7 @@ pub fn on_shell_ready<BackendData: Backend + 'static>(
         if let Some(wl_surface) = surfaces.get(surface_id) {
             let surface_message = data.construct_surface_message(wl_surface.clone().borrow());
             let platform_method_channel = &mut data.flutter_engine_mut().platform_method_channel;
-            println!("Restore commit_surface");
+            tracing::info!("Restore commit_surface");
             platform_method_channel.invoke_method(
                 "commit_surface",
                 Some(Box::new(json!(surface_message))),

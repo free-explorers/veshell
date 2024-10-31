@@ -52,7 +52,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         log_dir = exe_dir.join("logs");
     }
     // Create a rolling file appender that rotates daily
-    let file_appender: rolling::RollingFileAppender = rolling::daily(log_dir, "veshell.log");
+    let file_appender: rolling::RollingFileAppender =
+        rolling::daily(log_dir.clone(), "veshell.log");
 
     // Custom log formatting
     let format = fmt::format()
@@ -80,7 +81,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(file_layer)
         .init();
 
-    debug!("Starting Veshell");
+    debug!("Starting Veshell storing logs at {:?}", log_dir);
 
     // Fix XWayland crash when too many file descriptors are open.
     let _ = rlimit::increase_nofile_limit(u64::MAX);
