@@ -80,39 +80,41 @@ class PersistentWindowTileable extends Tileable {
       });
     }
 
-    return FocusScope(
-      node: persistentFocusNode,
-      onFocusChange: (value) {
-        if (value) {
-          onGrabFocus?.call();
-        }
-        if (window.surfaceId != null) {
-          ref.read(waylandManagerProvider.notifier).request(
-                ActivateWindowRequest(
-                  message: ActivateWindowMessage(
-                    surfaceId: window.surfaceId!,
-                    activate: value,
+    return ClipRect(
+      child: FocusScope(
+        node: persistentFocusNode,
+        onFocusChange: (value) {
+          if (value) {
+            onGrabFocus?.call();
+          }
+          if (window.surfaceId != null) {
+            ref.read(waylandManagerProvider.notifier).request(
+                  ActivateWindowRequest(
+                    message: ActivateWindowMessage(
+                      surfaceId: window.surfaceId!,
+                      activate: value,
+                    ),
                   ),
-                ),
-              );
-        }
-      },
-      child: window.surfaceId != null
-          ? surfacesWidget(
-              focusNode: primaryFocusNode,
-              window: window,
-              dialogWindowList: dialogWindowList,
-            )
-          : WindowPlaceholder(
-              focusNode: primaryFocusNode,
-              appId: window.properties.appId,
-              onTap: () {
-                primaryFocusNode.requestFocus();
-                ref
-                    .read(persistentWindowStateProvider(windowId).notifier)
-                    .launchSelf();
-              },
-            ),
+                );
+          }
+        },
+        child: window.surfaceId != null
+            ? surfacesWidget(
+                focusNode: primaryFocusNode,
+                window: window,
+                dialogWindowList: dialogWindowList,
+              )
+            : WindowPlaceholder(
+                focusNode: primaryFocusNode,
+                appId: window.properties.appId,
+                onTap: () {
+                  primaryFocusNode.requestFocus();
+                  ref
+                      .read(persistentWindowStateProvider(windowId).notifier)
+                      .launchSelf();
+                },
+              ),
+      ),
     );
   }
 

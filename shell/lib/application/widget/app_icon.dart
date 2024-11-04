@@ -11,9 +11,11 @@ class AppIconByPath extends StatelessWidget {
   const AppIconByPath({
     required this.path,
     super.key,
+    this.constrainedSize,
   });
 
   final String? path;
+  final int? constrainedSize;
 
   @override
   Widget build(BuildContext context) {
@@ -28,28 +30,47 @@ class AppIconByPath extends StatelessWidget {
   }
 
   Widget _buildIcon(WidgetRef ref, String path) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final asyncValue = ref.watch(
-          imageFromIconQueryProvider(
-            IconQuery(
-              name: path,
-              size: constraints.biggest.shortestSide.floor(),
-              extensions: const ['svg', 'png'],
-            ),
-            constraints.biggest,
+    if (constrainedSize != null) {
+      final asyncValue = ref.watch(
+        imageFromIconQueryProvider(
+          IconQuery(
+            name: path,
+            size: constrainedSize!,
+            extensions: const ['svg', 'png'],
           ),
-        );
-        if (!asyncValue.hasValue) {
-          return const SizedBox();
-        }
-        final rawImage = asyncValue.value;
-        return RawImage(
-          image: rawImage,
-          fit: BoxFit.contain,
-        );
-      },
-    );
+          Size.square(constrainedSize!.toDouble()),
+        ),
+      );
+      if (!asyncValue.hasValue) {
+        return const SizedBox();
+      }
+      final rawImage = asyncValue.value;
+      return RawImage(
+        image: rawImage,
+      );
+    } else {
+      return LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final asyncValue = ref.watch(
+            imageFromIconQueryProvider(
+              IconQuery(
+                name: path,
+                size: constraints.biggest.shortestSide.floor(),
+                extensions: const ['svg', 'png'],
+              ),
+              constraints.biggest,
+            ),
+          );
+          if (!asyncValue.hasValue) {
+            return const SizedBox();
+          }
+          final rawImage = asyncValue.value;
+          return RawImage(
+            image: rawImage,
+          );
+        },
+      );
+    }
   }
 }
 
@@ -57,9 +78,12 @@ class AppIconById extends ConsumerWidget {
   const AppIconById({
     required this.id,
     super.key,
+    this.constrainedSize,
   });
 
   final String? id;
+
+  final int? constrainedSize;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -76,7 +100,10 @@ class AppIconById extends ConsumerWidget {
             if (iconPath == null) {
               return Icon(MdiIcons.helpCircle);
             }
-            return AppIconByPath(path: iconPath);
+            return AppIconByPath(
+              path: iconPath,
+              constrainedSize: constrainedSize,
+            );
           },
           orElse: () => Icon(MdiIcons.helpCircle),
         );

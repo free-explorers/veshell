@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
@@ -29,208 +30,244 @@ class WindowPlaceholder extends HookConsumerWidget {
             .value
         : null;
 
-    return Material(
-      color: Colors.black26,
-      child: InkWell(
-        focusNode: focusNode,
-        onTap: entry != null ? onTap : null,
-        child: Center(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final responsiveRowColumn =
-                  constraints.maxWidth > constraints.maxHeight
-                      ? Row.new
-                      : Column.new;
-              return Center(
-                child: Card(
-                  color: Color.lerp(
-                    Theme.of(context).colorScheme.surface,
-                    Colors.white,
-                    0.04,
-                  )?.withOpacity(0.6),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minWidth: max(constraints.maxWidth / 4, 448),
-                    ),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Positioned(
-                          top: 24,
-                          right: 24,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.end,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final responsiveRowColumn =
+            constraints.maxWidth > constraints.maxHeight ? Row.new : Column.new;
+        return Stack(
+          children: [
+            Positioned.fill(
+              left: -constraints.biggest.width * 0.3,
+              right: -constraints.biggest.width * 0.3,
+              top: -constraints.biggest.height * 0.3,
+              bottom: -constraints.biggest.height * 0.3,
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: 300, sigmaY: 300),
+                child: FittedBox(
+                  fit: BoxFit.fill,
+                  child: AppIconById(
+                    id: appId,
+                    constrainedSize: 24,
+                  ),
+                ),
+              ),
+            ),
+            ColoredBox(
+              color: Colors.black12,
+              child: InkWell(
+                onTap: entry != null ? onTap : null,
+                child: Center(
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    opacity: focusNode?.hasFocus ?? false ? 1 : 0.8,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minWidth: max(constraints.maxWidth / 3, 448),
+                      ),
+                      child: Card(
+                        clipBehavior: Clip.antiAlias,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surface
+                            .withOpacity(0.6),
+                        child: InkWell(
+                          onTap: entry != null ? onTap : null,
+                          splashColor: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withAlpha(32),
+                          child: Stack(
+                            alignment: Alignment.center,
                             children: [
-                              FilledButton.icon(
-                                onPressed: () {},
-                                label: const Text(
-                                  'Maximized',
-                                ),
-                                icon: Icon(MdiIcons.windowMaximize),
-                              ),
-                              const SizedBox(
-                                width: 16,
-                              ),
-                              IconButton(
-                                style: IconButton.styleFrom(
-                                  backgroundColor:
-                                      Colors.white.withOpacity(0.05),
-                                ),
-                                onPressed: () {},
-                                icon: Icon(MdiIcons.fullscreen),
-                                //label: const Text('Fullscreen'),
-                              ),
-                              const SizedBox(
-                                width: 16,
-                              ),
-                              IconButton(
-                                style: IconButton.styleFrom(
-                                  backgroundColor:
-                                      Colors.white.withOpacity(0.05),
-                                ),
-                                onPressed: () {},
-                                icon: Icon(MdiIcons.controller),
-                                //label: const Text('Game'),
-                              ),
-                              const SizedBox(
-                                width: 16,
-                              ),
-                              IconButton(
-                                style: IconButton.styleFrom(
-                                  backgroundColor:
-                                      Colors.white.withOpacity(0.05),
-                                ),
-                                onPressed: () {},
-                                icon: SvgPicture.asset(
-                                  'assets/float-symbolic.svg',
-                                  width: 24,
-                                  height: 24,
-                                ),
-                                //label: const Text('Float'),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.only(
-                            left: 64,
-                            top: 96,
-                            right: 64,
-                            bottom: 128,
-                          ),
-                          child: responsiveRowColumn(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              SizedBox(
-                                height: 196,
-                                width: 196,
-                                child: AppIconById(id: appId),
-                              ),
-                              const SizedBox(
-                                width: 24,
-                                height: 24,
-                              ),
-                              Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment:
-                                    responsiveRowColumn == Row.new
-                                        ? CrossAxisAlignment.start
-                                        : CrossAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    entry?.entries[
-                                            DesktopEntryKey.name.string] ??
-                                        'Unknown',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .displayMedium,
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  const SizedBox(
-                                    height: 16,
-                                  ),
-                                  Material(
-                                    color: Colors.white.withOpacity(0.05),
-                                    borderRadius: const BorderRadius.all(
-                                      Radius.circular(48),
+                              Positioned(
+                                top: 24,
+                                right: 24,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    FilledButton.icon(
+                                      onPressed: () {},
+                                      label: const Text(
+                                        'Maximized',
+                                      ),
+                                      icon: Icon(MdiIcons.windowMaximize),
                                     ),
-                                    child: Row(
+                                    const SizedBox(
+                                      width: 16,
+                                    ),
+                                    IconButton(
+                                      style: IconButton.styleFrom(
+                                        backgroundColor:
+                                            Colors.white.withOpacity(0.05),
+                                      ),
+                                      onPressed: () {},
+                                      icon: Icon(MdiIcons.fullscreen),
+                                      //label: const Text('Fullscreen'),
+                                    ),
+                                    const SizedBox(
+                                      width: 16,
+                                    ),
+                                    IconButton(
+                                      style: IconButton.styleFrom(
+                                        backgroundColor:
+                                            Colors.white.withOpacity(0.05),
+                                      ),
+                                      onPressed: () {},
+                                      icon: Icon(MdiIcons.controller),
+                                      //label: const Text('Game'),
+                                    ),
+                                    const SizedBox(
+                                      width: 16,
+                                    ),
+                                    IconButton(
+                                      style: IconButton.styleFrom(
+                                        backgroundColor:
+                                            Colors.white.withOpacity(0.05),
+                                      ),
+                                      onPressed: () {},
+                                      icon: SvgPicture.asset(
+                                        'assets/float-symbolic.svg',
+                                        width: 24,
+                                        height: 24,
+                                      ),
+                                      //label: const Text('Float'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 96,
+                                  top: 128,
+                                  right: 96,
+                                  bottom: 148,
+                                ),
+                                child: responsiveRowColumn(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    SizedBox(
+                                      height: 196,
+                                      width: 196,
+                                      child: AppIconById(id: appId),
+                                    ),
+                                    const SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                    ),
+                                    Column(
                                       mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          responsiveRowColumn == Row.new
+                                              ? CrossAxisAlignment.start
+                                              : CrossAxisAlignment.center,
                                       children: [
-                                        ConstrainedBox(
-                                          constraints: const BoxConstraints(
-                                            maxWidth: 248,
+                                        Text(
+                                          entry?.entries[DesktopEntryKey
+                                                  .name.string] ??
+                                              'Unknown',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .displayMedium,
+                                          textAlign: TextAlign.center,
+                                        ),
+                                        const SizedBox(
+                                          height: 16,
+                                        ),
+                                        Material(
+                                          color: Colors.white.withOpacity(0.05),
+                                          borderRadius: const BorderRadius.all(
+                                            Radius.circular(48),
                                           ),
-                                          child: IntrinsicWidth(
-                                            child: TextField(
-                                              enabled: false,
-                                              decoration: InputDecoration(
-                                                prefixIcon: Icon(
-                                                  MdiIcons.chevronRight,
-                                                ),
-                                                border:
-                                                    const OutlineInputBorder(
-                                                  borderSide: BorderSide.none,
-                                                ),
-                                                contentPadding: EdgeInsets.zero,
-                                                prefixIconConstraints:
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              ConstrainedBox(
+                                                constraints:
                                                     const BoxConstraints(
-                                                  minWidth: 32,
+                                                  maxWidth: 248,
+                                                ),
+                                                child: IntrinsicWidth(
+                                                  child: TextField(
+                                                    enabled: false,
+                                                    decoration: InputDecoration(
+                                                      prefixIcon: Icon(
+                                                        MdiIcons.chevronRight,
+                                                      ),
+                                                      border:
+                                                          const OutlineInputBorder(
+                                                        borderSide:
+                                                            BorderSide.none,
+                                                      ),
+                                                      contentPadding:
+                                                          EdgeInsets.zero,
+                                                      prefixIconConstraints:
+                                                          const BoxConstraints(
+                                                        minWidth: 32,
+                                                      ),
+                                                    ),
+                                                    controller:
+                                                        TextEditingController(
+                                                      text: entry?.entries[
+                                                              DesktopEntryKey
+                                                                  .exec
+                                                                  .string] ??
+                                                          entry?.entries[
+                                                              DesktopEntryKey
+                                                                  .tryExec
+                                                                  .string] ??
+                                                          'Unknown',
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
-                                              controller: TextEditingController(
-                                                text: entry?.entries[
-                                                        DesktopEntryKey
-                                                            .exec.string] ??
-                                                    entry?.entries[
-                                                        DesktopEntryKey
-                                                            .tryExec.string] ??
-                                                    'Unknown',
+                                              const SizedBox(
+                                                width: 16,
                                               ),
-                                            ),
+                                              IconButton(
+                                                onPressed: () {},
+                                                icon: Icon(MdiIcons.pencil),
+                                              ),
+                                              const SizedBox(
+                                                width: 6,
+                                              ),
+                                            ],
                                           ),
-                                        ),
-                                        const SizedBox(
-                                          width: 16,
-                                        ),
-                                        IconButton(
-                                          onPressed: () {},
-                                          icon: Icon(MdiIcons.pencil),
-                                        ),
-                                        const SizedBox(
-                                          width: 6,
                                         ),
                                       ],
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 54,
+                                child: Text(
+                                  'Click to start the application',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineSmall!
+                                      .copyWith(
+                                        color: focusNode?.hasFocus ?? false
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                            : Theme.of(context).disabledColor,
+                                      ),
+                                ),
                               ),
                             ],
                           ),
                         ),
-                        Positioned(
-                          bottom: 48,
-                          child: Text(
-                            'Click to start the application',
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall!
-                                .copyWith(
-                                  color: Theme.of(context).disabledColor,
-                                ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
-              );
-            },
-          ),
-        ),
-      ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
