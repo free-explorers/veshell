@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/app_drawer/app_drawer.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/app_drawer/app_grid.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
@@ -26,6 +27,7 @@ class PersistentApplicationSelector extends Tileable {
 
         if (isSelected) {
           focusNode.requestFocus();
+          focusLog.info('PersistentApplicationSelector requesting focus');
         }
         return null;
       },

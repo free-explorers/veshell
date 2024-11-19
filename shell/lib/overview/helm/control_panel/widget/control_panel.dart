@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:shell/overview/helm/control_panel/audio/widget/audio_control.dart';
 import 'package:shell/overview/helm/control_panel/bluetooth/widget/bluetooth_control.dart';
 import 'package:shell/overview/helm/control_panel/network/widget/network_control.dart';
-import 'package:shell/overview/helm/control_panel/widget/audio_output.dart';
 import 'package:shell/overview/helm/control_panel/widget/session_controls.dart';
 
 class ControlPanel extends StatelessWidget {
@@ -74,7 +74,7 @@ class ControlPanel extends StatelessWidget {
                   ),
                 ),
               ), */
-              AudioOutputWidget(),
+              AudioControl(),
               NetworkControl(),
               BluetoothControl(),
             ],

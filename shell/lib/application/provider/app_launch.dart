@@ -13,7 +13,6 @@ class AppLaunch extends _$AppLaunch {
 
   Future<Process> launchApplication(LaunchConfig config) async {
     final environment = ref.read(environmentVariablesProvider);
-    print(config);
     final process = await Process.start(
       '/bin/sh',
       ['-c', config.command],

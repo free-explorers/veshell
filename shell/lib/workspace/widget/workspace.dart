@@ -30,14 +30,16 @@ class WorkspaceWidget extends HookConsumerWidget {
       debugLabel: 'WorkspaceScope',
     );
 
-    if (isSelected && !workspaceFocusScopeNode.hasFocus) {
+    /*  if (isSelected && !workspaceFocusScopeNode.hasFocus) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        debugPrint(debugDescribeFocusTree());
+
         workspaceFocusScopeNode.requestFocus();
         focusLog.info(
           'workspaceFocusScopeNode.requestFocus on first build because its selected and not have the focus',
         );
       });
-    }
+    } */
 
     final appLauncher = PersistentApplicationSelector(
       isSelected: workspaceState.selectedIndex ==
@@ -53,7 +55,7 @@ class WorkspaceWidget extends HookConsumerWidget {
 
         ref
             .read(workspaceStateProvider(currentWorkspaceId).notifier)
-            .addWindow(newWindowId);
+            .addWindow(newWindowId, selectWindow: true);
       },
     );
 
@@ -71,6 +73,7 @@ class WorkspaceWidget extends HookConsumerWidget {
     }
     tileableList.add(appLauncher);
     return Shortcuts(
+      debugLabel: 'Workspace_shortcuts',
       shortcuts: <LogicalKeySet, Intent>{
         LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyA):
             const FocusLeftTileableIntent(),
@@ -121,20 +124,28 @@ class WorkspaceWidget extends HookConsumerWidget {
         child: FocusScope(
           node: workspaceFocusScopeNode,
           onFocusChange: (value) {
-            print('Focus changed $value for $currentWorkspaceId');
+            focusLog
+                .info('Focus changed $value for Workspace $currentWorkspaceId');
           },
           autofocus: isSelected,
+          canRequestFocus: isSelected,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              WorkspacePanel(
-                tileableList: tileableList,
-                visibleLength: workspaceState.visibleLength,
-                onVisibleLengthChange: (value) {
-                  ref
-                      .read(workspaceStateProvider(currentWorkspaceId).notifier)
-                      .setVisibleLength(value);
-                },
+              FocusScope(
+                canRequestFocus: false,
+                descendantsAreFocusable: false,
+                child: WorkspacePanel(
+                  tileableList: tileableList,
+                  visibleLength: workspaceState.visibleLength,
+                  onVisibleLengthChange: (value) {
+                    ref
+                        .read(
+                          workspaceStateProvider(currentWorkspaceId).notifier,
+                        )
+                        .setVisibleLength(value);
+                  },
+                ),
               ),
               Expanded(
                 child: SlidingContainer(

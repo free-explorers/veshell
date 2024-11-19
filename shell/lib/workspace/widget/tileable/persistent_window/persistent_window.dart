@@ -3,7 +3,6 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/application/widget/app_icon.dart';
-import 'package:shell/shared/util/logger.dart';
 import 'package:shell/wayland/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
@@ -36,11 +35,31 @@ class PersistentWindowTileable extends Tileable {
   Widget build(BuildContext context, WidgetRef ref) {
     final window = ref.watch(persistentWindowStateProvider(windowId));
 
-    final persistentFocusNode = useFocusScopeNode();
+    final persistentFocusNode = useFocusScopeNode(
+      debugLabel: 'PersistentFocusNode ${window.properties.title}',
+    );
 
     final primaryFocusNode = useFocusNode(
       debugLabel: 'PrimaryFocusNode ${window.properties.title}',
     );
+
+    useEffect(
+      () {
+        persistentFocusNode
+          ..canRequestFocus = isSelected
+          ..descendantsAreFocusable = isSelected;
+        if (isSelected) {
+          if (persistentFocusNode.focusedChild != null) {
+            persistentFocusNode.focusedChild!.requestFocus();
+          } else {
+            persistentFocusNode.requestFocus();
+          }
+        }
+        return null;
+      },
+      [isSelected],
+    );
+
     final dialogWindowIdSet = ref.watch(
       dialogListForWindowProvider.select((value) => value.get(windowId)),
     );
@@ -67,26 +86,22 @@ class PersistentWindowTileable extends Tileable {
       [window.surfaceId],
     );
 
-    if ((ModalRoute.of(context)?.isCurrent ?? false) &&
-        isSelected &&
-        (!persistentFocusNode.hasFocus ||
-            persistentFocusNode.focusedChild == null)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        persistentFocusNode.requestFocus();
-        persistentFocusNode.autofocus(primaryFocusNode);
-        focusLog.info(
-          'persistentFocusNode.requestFocus on first build because its selected and not have the focus',
-        );
-      });
-    }
-
     return ClipRect(
       child: FocusScope(
         node: persistentFocusNode,
+        autofocus: true,
         onFocusChange: (value) {
           if (value) {
-            onGrabFocus?.call();
+            persistentFocusNode.autofocus(primaryFocusNode);
           }
+          /*  focusLog.info(
+            'persistentFocusNode.onFocusChange for ${window.properties.title} $persistentFocusNode',
+          ); */
+
+          /* if (value && !isSelected) {
+            focusLog.info('onGrabFocus for ${window.properties.title}');
+            onGrabFocus?.call();
+          } */
           if (window.surfaceId != null) {
             ref.read(waylandManagerProvider.notifier).request(
                   ActivateWindowRequest(
@@ -98,22 +113,26 @@ class PersistentWindowTileable extends Tileable {
                 );
           }
         },
-        child: window.surfaceId != null
-            ? surfacesWidget(
-                focusNode: primaryFocusNode,
-                window: window,
-                dialogWindowList: dialogWindowList,
-              )
-            : WindowPlaceholder(
-                focusNode: primaryFocusNode,
-                appId: window.properties.appId,
-                onTap: () {
-                  primaryFocusNode.requestFocus();
-                  ref
-                      .read(persistentWindowStateProvider(windowId).notifier)
-                      .launchSelf();
-                },
-              ),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: window.surfaceId != null
+              ? surfacesWidget(
+                  focusNode: primaryFocusNode,
+                  window: window,
+                  dialogWindowList: dialogWindowList,
+                )
+              : WindowPlaceholder(
+                  isSelected: isSelected,
+                  focusNode: primaryFocusNode,
+                  window: window,
+                  onTap: () {
+                    primaryFocusNode.requestFocus();
+                    ref
+                        .read(persistentWindowStateProvider(windowId).notifier)
+                        .launchSelf();
+                  },
+                ),
+        ),
       ),
     );
   }
