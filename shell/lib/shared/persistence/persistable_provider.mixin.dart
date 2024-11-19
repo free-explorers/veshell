@@ -2,6 +2,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/shared/persistence/persistable_model.mixin.dart';
 import 'package:shell/shared/persistence/persistence_manager.dart';
 import 'package:shell/shared/provider/persistent_json_by_folder.dart';
+import 'package:shell/shared/util/logger.dart';
 
 mixin PersistableProvider<T extends PersistableModel, RefT extends Ref<T>> {
   RefT get ref;
@@ -37,7 +38,7 @@ mixin PersistableProvider<T extends PersistableModel, RefT extends Ref<T>> {
     _isInitialized = true;
     ref.listenSelf((previous, next) {
       if (previous != next) {
-        print(
+        persistenceLog.info(
           'Persisting changes for ${getPersistentFolder()}-${getPersistentId()}',
         );
         PersistenceManager.queueStoreModelJson(
@@ -49,7 +50,7 @@ mixin PersistableProvider<T extends PersistableModel, RefT extends Ref<T>> {
     });
     if (clearOnDispose == false) return;
     ref.onDispose(() {
-      print(
+      persistenceLog.info(
         'Deleting persisted model for ${getPersistentFolder()}-${getPersistentId()}',
       );
       PersistenceManager.deleteModelJson(

@@ -50,7 +50,9 @@ dependencies:
   glissando: ^0.0.3
   arena_listener: ^0.0.1
   fast_immutable_collections: ^9.2.0
-  material_design_icons_flutter: ^7.0.7296
+  material_design_icons_flutter: 
+    git:
+      url: https://github.com/free-explorers/material_design_icons_flutter
   json_annotation: ^4.8.1
   uuid: ^4.2.2
   collection: ^1.18.0
@@ -72,6 +74,7 @@ dependencies:
   nm: 
     git:
       url: https://github.com/free-explorers/nm.dart
+  pulseaudio: ^0.0.6
   
 dev_dependencies:
   # The "flutter_lints" package below contains a set of recommended lints to

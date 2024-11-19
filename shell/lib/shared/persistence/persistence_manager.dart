@@ -3,8 +3,8 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:logging/logging.dart';
 import 'package:path/path.dart' as path;
+import 'package:shell/shared/util/logger.dart';
 
 Directory persistenceDirectory = Directory(
   path.join(
@@ -14,8 +14,6 @@ Directory persistenceDirectory = Directory(
     'persistence',
   ),
 );
-
-final _log = Logger('PersistenceManager');
 
 class PersistenceManager {
   /// Load all models from the persistence directory
@@ -41,7 +39,7 @@ class PersistenceManager {
               final modelJson = jsonDecode(fileString) as Map<String, dynamic>;
               modelMap[modelId] = modelJson;
             } catch (e, stack) {
-              _log.severe(
+              persistenceLog.severe(
                 'Error loading model $modelId \n $e \n in \n $fileString',
                 e,
                 stack,
@@ -60,7 +58,7 @@ class PersistenceManager {
     String modelId,
     Map<String, dynamic> json,
   ) async {
-    _log.info('start storeModelJson for $modelFolder-$modelId');
+    persistenceLog.info('start storeModelJson for $modelFolder-$modelId');
     final tempFile = File(
       path.join(persistenceDirectory.path, modelFolder, '$modelId.temp'),
     );
@@ -74,7 +72,7 @@ class PersistenceManager {
     );
     await tempFile.rename(targetFile.path);
     final stack = StackTrace.current;
-    _log.info(
+    persistenceLog.info(
       'end storeModelJson for $modelFolder-$modelId',
     );
   }

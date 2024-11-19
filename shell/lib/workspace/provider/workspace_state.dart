@@ -95,11 +95,22 @@ class WorkspaceState extends _$WorkspaceState
     }
   }
 
-  Future<void> addWindow(PersistentWindowId windowId) async {
-    return insertWindow(windowId, state.tileableWindowList.length);
+  Future<void> addWindow(
+    PersistentWindowId windowId, {
+    bool selectWindow = false,
+  }) async {
+    return insertWindow(
+      windowId,
+      state.tileableWindowList.length,
+      selectWindow: selectWindow,
+    );
   }
 
-  Future<void> insertWindow(PersistentWindowId windowId, int index) async {
+  Future<void> insertWindow(
+    PersistentWindowId windowId,
+    int index, {
+    bool selectWindow = false,
+  }) async {
     final windowWorkspaceMap = ref.read(windowWorkspaceMapProvider);
     if (windowWorkspaceMap.containsKey(windowId)) {
       await ref
@@ -110,6 +121,7 @@ class WorkspaceState extends _$WorkspaceState
     state = state.copyWith(
       tileableWindowList: newWindowList,
       category: state.forcedCategory ?? await _determineCategory(newWindowList),
+      selectedIndex: selectWindow ? index : state.selectedIndex,
     );
     ref
         .read(windowWorkspaceMapProvider.notifier)
@@ -117,19 +129,25 @@ class WorkspaceState extends _$WorkspaceState
   }
 
   Future<void> removeWindow(PersistentWindowId windowId) async {
+    final removedIsCurrentlyFocused =
+        state.selectedIndex < state.tileableWindowList.length &&
+            windowId == state.tileableWindowList[state.selectedIndex];
     final removedIndex = state.tileableWindowList.indexOf(windowId);
     final newWindowList = state.tileableWindowList.remove(windowId);
-    final isCurrentyFocused = state.selectedIndex < newWindowList.length &&
-        windowId == state.tileableWindowList[state.selectedIndex];
 
+    var selectedIndex = state.selectedIndex;
+    if (!removedIsCurrentlyFocused) {
+      if (selectedIndex < state.tileableWindowList.length) {
+        selectedIndex = newWindowList
+            .indexOf(state.tileableWindowList[state.selectedIndex]);
+      } else {
+        selectedIndex--;
+      }
+    }
     state = state.copyWith(
       tileableWindowList: newWindowList,
       category: state.forcedCategory ?? await _determineCategory(newWindowList),
-      selectedIndex: isCurrentyFocused
-          ? newWindowList.indexOf(state.tileableWindowList[state.selectedIndex])
-          : state.selectedIndex > removedIndex
-              ? state.selectedIndex - 1
-              : state.selectedIndex,
+      selectedIndex: selectedIndex,
     );
 
     final workspaceId = ref.read(windowWorkspaceMapProvider).get(windowId);

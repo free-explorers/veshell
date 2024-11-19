@@ -24,6 +24,9 @@
             "vmServiceInfoFile": "../.temp/vmService.json",
             "deleteServiceInfoFile": true,
             "preLaunchTask": "wait-for-vmService",
+            "args": [
+                "--verbose"
+            ],
             "presentation": {
                 "hidden": true,
                 "group": "",

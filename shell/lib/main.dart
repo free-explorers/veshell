@@ -9,6 +9,10 @@ import 'package:shell/polkit/provider/authentication_agent.dart';
 import 'package:shell/screen/provider/screen_list.dart';
 import 'package:shell/shared/provider/persistent_json_by_folder.dart';
 import 'package:shell/shared/provider/root_overlay.dart';
+import 'package:shell/shared/pulseaudio/provider/pulse_audio.dart';
+import 'package:shell/shared/pulseaudio/provider/pulse_server_info.dart';
+import 'package:shell/shared/pulseaudio/provider/pulse_sink_list.dart';
+import 'package:shell/shared/pulseaudio/provider/pulse_source_list.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/theme/theme.dart';
 import 'package:shell/wayland/model/request/get_environment_variables/get_environment_variables.serializable.dart';
@@ -47,7 +51,11 @@ void main() async {
   });
 
   VisibilityDetectorController.instance.updateInterval = Duration.zero;
-
+  FocusManager.instance.addListener(() {
+    focusLog.info(
+      'FocusManager.instance.primaryFocus ${FocusManager.instance.primaryFocus}',
+    );
+  });
   runApp(
     UncontrolledProviderScope(
       container: container,
@@ -65,18 +73,33 @@ class _EagerInitialization extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Eagerly initialize providers by watching them.
     // By using "watch", the provider will stay alive and not be disposed.
-    final result = ref.watch(persistentJsonByFolderProvider);
+    final results = [
+      ref.watch(persistentJsonByFolderProvider),
+      ref.watch(pulseClientProvider),
+      ref.watch(pulseServerInfoProvider),
+      ref.watch(pulseSinkListProvider),
+      ref.watch(pulseSourceListProvider),
+    ];
 
     ref.watch(monitorListProvider);
+
     // Handle error states and loading states
-    if (result.isLoading) {
+    if (results.any(
+      (element) => element.isLoading,
+    )) {
       return const Center(child: CircularProgressIndicator());
-    } else if (result.hasError) {
-      print(result.asError);
-      return Row(
-        children: [
-          Text(result.asError.toString()),
-        ],
+    } else if (results.any(
+      (element) => element.hasError,
+    )) {
+      return Column(
+        children: results
+            .where(
+              (element) => element.hasError,
+            )
+            .map(
+              (e) => Text(e.asError.toString()),
+            )
+            .toList(),
       );
     }
 

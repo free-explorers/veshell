@@ -9,6 +9,7 @@ import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/window/model/window_base.dart';
 import 'package:shell/window/model/window_properties.serializable.dart';
 import 'package:shell/window/provider/surface_window_map.dart';
+import 'package:shell/window/provider/window_process_logs.dart';
 import 'package:shell/window/provider/window_properties.dart';
 
 mixin WindowProviderMixin<T extends Window> on BuildlessAutoDisposeNotifier<T> {
@@ -24,6 +25,13 @@ mixin WindowProviderMixin<T extends Window> on BuildlessAutoDisposeNotifier<T> {
     if (state.surfaceId != null) {
       setSurface(state.surfaceId!);
     }
+
+    ref.listen(
+      windowProcessLogsProvider(window.windowId),
+      (previous, next) {
+        print('windowProcessLogsProvider ${next.length}');
+      },
+    );
   }
 
   /// Assign a surface to a Window subscribing to any changes

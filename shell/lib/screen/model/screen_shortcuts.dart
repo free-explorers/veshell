@@ -17,3 +17,9 @@ class ToggleOverviewIntent extends Intent {
   ///
   const ToggleOverviewIntent();
 }
+
+/// dump debug focus treee.
+class DumpDebugFocusTree extends Intent {
+  ///
+  const DumpDebugFocusTree();
+}

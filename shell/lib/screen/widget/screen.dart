@@ -61,6 +61,13 @@ class ScreenWidget extends HookConsumerWidget {
               return null;
             },
           ),
+          DumpDebugFocusTree: CallbackAction<DumpDebugFocusTree>(
+            onInvoke: (_) {
+              print('In DumpDebugFocusTree');
+              debugDumpFocusTree();
+              return null;
+            },
+          ),
         },
         child: MouseRegion(
           onEnter: (event) {
@@ -70,6 +77,7 @@ class ScreenWidget extends HookConsumerWidget {
           child: FocusScope(
             node: screenFocusScopeNode,
             onFocusChange: (value) {
+              focusLog.info('screenFocusScopeNode.onFocusChange: $value');
               if (value) {
                 ref
                     .read(focusedScreenProvider.notifier)
@@ -128,6 +136,10 @@ class ScreenShortcutManager extends ShortcutManager {
                 const FocusWorkspaceAboveIntent(),
             LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyS):
                 const FocusWorkspaceBelowIntent(),
+            LogicalKeySet(
+              LogicalKeyboardKey.controlRight,
+              LogicalKeyboardKey.keyP,
+            ): const DumpDebugFocusTree(),
           },
         );
   bool _isOverviewKeySolePressed = false;

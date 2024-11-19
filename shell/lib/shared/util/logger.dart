@@ -1,7 +1,10 @@
 import 'package:logger/logger.dart';
-import 'package:logging/logging.dart' as Logging;
+import 'package:logging/logging.dart' as logging;
 
-final focusLog = Logging.Logger('Focus');
+bool hierarchicalLoggingEnabled = true;
+
+final focusLog = logging.Logger('Focus');
+final persistenceLog = logging.Logger('Persistence');
 
 final _simpleLogger = Logger(
   printer: HybridPrinter(
@@ -23,15 +26,19 @@ final _stacktraceLogger = Logger(
 
 /// Configures the logging system to print logs to the console.
 void configureLogs() {
-  Logging.Logger.root.level = Logging.Level.ALL; // defaults to Level.INFO
-  Logging.Logger.root.onRecord.listen((record) {
+  logging.hierarchicalLoggingEnabled = true;
+
+  persistenceLog.level = logging.Level.OFF;
+
+  logging.Logger.root.level = logging.Level.ALL; // defaults to Level.INFO
+  logging.Logger.root.onRecord.listen((record) {
     final logger =
         record.stackTrace != null ? _stacktraceLogger : _simpleLogger;
 
     final loggerFunc = switch (record.level) {
-      Logging.Level.INFO => logger.i,
-      Logging.Level.WARNING => logger.w,
-      Logging.Level.SEVERE => logger.e,
+      logging.Level.INFO => logger.i,
+      logging.Level.WARNING => logger.w,
+      logging.Level.SEVERE => logger.e,
       _ => logger.d,
     };
 

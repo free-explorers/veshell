@@ -12,7 +12,6 @@ import 'package:shell/window/model/window_id.dart';
 import 'package:shell/window/provider/dialog_list_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
-import 'package:shell/workspace/widget/tileable/persistent_window/window_placeholder.dart';
 
 /// Tileable Window that persist when closed
 class EphemeralWindowWidget extends HookConsumerWidget {
@@ -135,9 +134,7 @@ class EphemeralWindowWidget extends HookConsumerWidget {
         ),
       );
     } else {
-      return WindowPlaceholder(
-        appId: window.properties.appId,
-      );
+      return Container();
     }
   }
 }

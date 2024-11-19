@@ -52,6 +52,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         log_dir = exe_dir.join("logs");
     }
     // Create a rolling file appender that rotates daily
+
     let file_appender: rolling::RollingFileAppender =
         rolling::daily(log_dir.clone(), "veshell.log");
 

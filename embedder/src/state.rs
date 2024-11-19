@@ -718,7 +718,9 @@ impl<BackendData: Backend> SeatHandler for State<BackendData> {
         set_primary_focus(dh, seat, client);
     }
 
-    fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {}
+    fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {
+        info!("cursor_image {:?}", image);
+    }
 }
 
 impl<BackendData: Backend> SelectionHandler for State<BackendData> {
