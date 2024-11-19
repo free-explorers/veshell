@@ -107,7 +107,7 @@ pub mod xwayland {
         }
 
         fn new_x11_surface(&mut self, surface: X11Surface) {
-            println!("new_x11_surface {:?}", surface.window_id());
+            tracing::info!("new_x11_surface {:?}", surface.window_id());
             self.x11_surface_per_x11_window
                 .insert(surface.window_id(), surface.clone());
 
@@ -260,7 +260,6 @@ pub mod xwayland {
             geometry: Rectangle<i32, Logical>,
             above: Option<u32>,
         ) {
-            println!("configure_notify");
         }
 
         fn property_notify(
@@ -421,8 +420,6 @@ pub mod xwayland {
         }
 
         fn surface_associated(&mut self, _surface: WlSurface, _window: Window) {
-            println!("surface {:?}", _surface);
-            println!("window {:?}", _window);
             let x11_surface = self.x11_surface_per_x11_window.get(&_window).unwrap();
             let x11_surface_id = Self::get_x11_surface_id(x11_surface);
             self.x11_surface_per_wl_surface

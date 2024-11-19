@@ -1,7 +1,8 @@
+use log::debug;
 use serde_json::json;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ffi::{c_int, CString};
+use std::ffi::{c_int, c_void, CString};
 use std::mem::{size_of, MaybeUninit};
 use std::ops::DerefMut;
 use std::os::unix::ffi::OsStrExt;
@@ -167,7 +168,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             .and_then(|s| s.split('-').last())
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
-        println!("ECHO SOCKET NAME {:?}", socket_number);
+        debug!("ECHO SOCKET NAME {:?}", socket_number);
         let port = 12345 + socket_number;
         propagate_vm_service(&host, port)?;
         let assets_path = CString::new(format!("{bundle_root}/data/flutter_assets"))?;
@@ -257,7 +258,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             compute_platform_resolved_locale_callback: None,
             dart_entrypoint_argc: 0,
             dart_entrypoint_argv: null(),
-            log_message_callback: None,
+            log_message_callback: Some(log_callback),
             log_tag: null(),
             on_pre_engine_restart_callback: None,
             update_semantics_callback: None,
@@ -689,4 +690,12 @@ fn propagate_vm_service(host: &str, port: i32) -> Result<(), Box<dyn std::error:
     }
 
     Ok(())
+}
+
+unsafe extern "C" fn log_callback(tag: *const i8, message: *const i8, user_data: *mut c_void) {
+    //let tag = std::ffi::CStr::from_ptr(tag).to_string_lossy().into_owned();
+    let message = std::ffi::CStr::from_ptr(message)
+        .to_string_lossy()
+        .into_owned();
+    tracing::debug!("{}", message);
 }

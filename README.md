@@ -1,15 +1,20 @@
-![Veshell](docs/assets/github_logo2.svg)
-
+![Veshell](docs/assets/veshell_banner_dark.svg#gh-dark-mode-only)
+![Veshell](docs/assets/veshell_banner_light.svg#gh-light-mode-only)
 ---
 
-Veshell is a Wayland compositor providing an [innovative workflow](#the-innovative-workflows) that utilizes humans natural spatial cognition to enhance navigation and organization in the digital environment.
+Veshell is an innovative not-desktop environment for Linux made with modern technologies like Flutter and Rust.
 
-It's the successor of the [Material Shell](https://github.com/material-shell/material-shell) project.
-<br/>
-<br/>
+Designed to simplify navigation and reduce the need to manipulate windows in order to improve productivity. It's meant to be 100% predictable.
 
-# Free Explorers
-Join our community of Open Source enthusiast at [free-explorers.com](free-explorers.com)
+It provides an [innovative workflow](#the-innovative-workflow) that utilizes humans natural spatial cognition to enhance navigation and organization in the digital environment.
+
+# Support the project
+This project is under the umbrella of the [Free Explorers Collective](https://free-explorers.com), a community of Open Source enthusiast that funds and collaborate on Open Source software. 
+By becoming a Free Explorer you can get involve into the project and support it.
+
+# Installation requirements
+
+- Installing flutter and dart https://docs.flutter.dev/get-started/install/linux/desktop#download-then-install-flutter
 
 # Veshell CLI
 
@@ -54,11 +59,11 @@ Organize all your applications in a two-dimensional space where you can group th
 </p>
 <br/>
 
-Our persistence feature automatically saves your layout and organization on-the-fly, so you can build your own configuration that persists even after a reboot by simply using it.
+The persistence feature automatically saves your layout and organization on-the-fly, so you can build your own configuration that persists even after a reboot by simply using it.
 
 Navigate through your tailored environment with ease, using super intuitive directional inputs inspired by the video game industry.
 
-Our Material Design Interface does not only enhances the visual appeal, but also provides an at-a-glance view of the whole layout, allowing for easy navigation with a mouse or touchscreen.
+The Material Design Interface does not only enhances the visual appeal, but also provides an at-a-glance view of the whole layout, allowing for easy navigation with a mouse or touchscreen.
 
 The secret of Veshell lies in two human mental mechanisms:
 
