@@ -50,12 +50,12 @@ class WindowPlaceholder extends HookConsumerWidget {
         final iconHeight = constraints.biggest.shortestSide *
             6 /
             sqrt(
-              constraints.biggest.shortestSide / 1.5,
+              constraints.biggest.shortestSide / 1.2,
             );
         final iconWidth = constraints.biggest.shortestSide *
             6 /
             sqrt(
-              constraints.biggest.shortestSide / 1.5,
+              constraints.biggest.shortestSide / 1.2,
             );
         return Stack(
           children: [
@@ -114,6 +114,10 @@ class WindowPlaceholder extends HookConsumerWidget {
                               .colorScheme
                               .primary
                               .withAlpha(32),
+                          focusColor: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerLow
+                              .withOpacity(0.5),
                           child: Focus(
                             focusNode: focusNode,
                             autofocus: true,
@@ -138,7 +142,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                                   ),
                                 ),
                                 Expanded(
-                                  flex: 4,
+                                  flex: responsiveRowColumn == Row.new ? 4 : 5,
                                   child: responsiveRowColumn(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
@@ -152,17 +156,17 @@ class WindowPlaceholder extends HookConsumerWidget {
                                             6 /
                                             sqrt(
                                               constraints.biggest.longestSide /
-                                                  1.5,
+                                                  1.2,
                                             ) /
-                                            4,
+                                            8,
                                         height: constraints
                                                 .biggest.longestSide *
                                             6 /
                                             sqrt(
                                               constraints.biggest.longestSide /
-                                                  1.5,
+                                                  1.2,
                                             ) /
-                                            4,
+                                            8,
                                       ),
                                       Column(
                                         mainAxisSize: MainAxisSize.min,

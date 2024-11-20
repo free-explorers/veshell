@@ -40,11 +40,28 @@ fn main() {
 }
 
 fn get_flutter_engine_revision() -> String {
-    let output = Command::new("flutter")
-        .args(&["doctor", "-v"])
-        .output()
-        .expect("Failed to execute command");
+    let mut flutter_cmd = Command::new("flutter");
+    flutter_cmd.args(&["doctor", "-v"]);
 
+    let mut output = flutter_cmd.output();
+
+    if let Err(e) = output {
+        println!("Error: {:?}, trying to find the command with 'which'", e);
+
+        let which_output = Command::new("which")
+            .arg("flutter")
+            .output()
+            .expect("Failed to execute which command");
+
+        let flutter_path = String::from_utf8(which_output.stdout).expect("Not UTF-8");
+        let flutter_path = flutter_path.trim();
+
+        let mut flutter_cmd = Command::new(flutter_path);
+        flutter_cmd.args(&["doctor", "-v"]);
+
+        output = flutter_cmd.output();
+    }
+    let output = output.expect("Failed to execute flutter command");
     let output_str = String::from_utf8(output.stdout).unwrap();
 
     for line in output_str.lines() {
@@ -116,15 +133,6 @@ fn download_flutter_engine_library(
         .expect("Failed to create .flutter_engine_revision");
     write!(revision_file, "{}", flutter_engine_revision)
         .expect("Failed to write .flutter_engine_revision");
-}
-
-fn exec(cmd: &str, args: &[&str]) -> String {
-    let output = Command::new(cmd)
-        .args(args)
-        .output()
-        .expect("failed to execute cmd");
-
-    String::from_utf8(output.stdout).unwrap().trim().to_string()
 }
 
 fn download_from_url(url: &str) -> Result<bytes::Bytes, reqwest::Error> {
