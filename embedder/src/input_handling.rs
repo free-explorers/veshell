@@ -1,7 +1,7 @@
 use std::mem::size_of;
 
 use smithay::backend::input::{
-    self, AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
+    self, AbsolutePositionEvent, Axis, AxisSource, ButtonState, InputBackend, InputEvent,
     KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
 };
 use smithay::input::pointer::{AxisFrame, MotionEvent, RelativeMotionEvent};
@@ -56,7 +56,7 @@ impl<BackendData: Backend> State<BackendData> {
                         time: event.time_msec(),
                     },
                 );
-                self.registerFrame();
+                self.register_frame();
 
                 self.send_motion_event(pointer_location)
             }
@@ -92,7 +92,7 @@ impl<BackendData: Backend> State<BackendData> {
                         time: event.time_msec(),
                     },
                 );
-                self.registerFrame();
+                self.register_frame();
 
                 self.send_motion_event(pointer_location)
             }
@@ -192,7 +192,7 @@ impl<BackendData: Backend> State<BackendData> {
                 }
                 let pointer = self.pointer.clone();
                 pointer.axis(self, frame);
-                self.registerFrame();
+                self.register_frame();
 
                 self.flutter_engine()
                     .send_pointer_event(FlutterPointerEvent {
@@ -250,7 +250,7 @@ impl<BackendData: Backend> State<BackendData> {
         }
     }
 
-    fn registerFrame(&mut self) {
+    fn register_frame(&mut self) {
         if self.pointer_frame_pending {
             return;
         }

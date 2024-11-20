@@ -78,7 +78,7 @@ impl EncodableValue {
 pub(crate) struct StandardCodecSerializer;
 
 impl StandardCodecSerializer {
-    pub fn new() -> Self {
+    pub fn _new() -> Self {
         Default::default()
     }
 

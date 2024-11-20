@@ -49,7 +49,6 @@ pub mod xwayland {
             )
             .expect("failed to start XWayland");
 
-            let dh = data.display_handle.clone();
             let ret = data
                 .loop_handle
                 .insert_source(xwayland, move |event, _, data| match event {
@@ -193,7 +192,7 @@ pub mod xwayland {
             surface.set_activated(true).unwrap();
         }
 
-        fn unmapped_window(&mut self, xwm: XwmId, surface: X11Surface) {
+        fn unmapped_window(&mut self, _: XwmId, surface: X11Surface) {
             let Some(wl_surface) = surface.wl_surface() else {
                 return;
             };
@@ -216,7 +215,7 @@ pub mod xwayland {
             }
         }
 
-        fn destroyed_window(&mut self, xwm: XwmId, surface: X11Surface) {
+        fn destroyed_window(&mut self, _xwm: XwmId, surface: X11Surface) {
             let x11_surface_id = Self::get_x11_surface_id(&surface);
 
             let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
@@ -233,13 +232,13 @@ pub mod xwayland {
 
         fn configure_request(
             &mut self,
-            xwm: XwmId,
+            _xwm: XwmId,
             window: X11Surface,
-            x: Option<i32>,
-            y: Option<i32>,
+            _x: Option<i32>,
+            _y: Option<i32>,
             w: Option<u32>,
             h: Option<u32>,
-            reorder: Option<Reorder>,
+            _reorder: Option<Reorder>,
         ) {
             // We just set the new size, but don't let windows move themselves around freely.
             let mut geo = window.geometry();
@@ -255,18 +254,18 @@ pub mod xwayland {
 
         fn configure_notify(
             &mut self,
-            xwm: XwmId,
-            window: X11Surface,
-            geometry: Rectangle<i32, Logical>,
-            above: Option<u32>,
+            _xwm: XwmId,
+            _window: X11Surface,
+            _geometry: Rectangle<i32, Logical>,
+            _above: Option<u32>,
         ) {
         }
 
         fn property_notify(
             &mut self,
-            xwm: XwmId,
+            _xwm: XwmId,
             x11_surface: X11Surface,
-            property: WmWindowProperty,
+            _property: WmWindowProperty,
         ) {
             let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
 
@@ -327,15 +326,15 @@ pub mod xwayland {
 
         fn resize_request(
             &mut self,
-            xwm: XwmId,
-            window: X11Surface,
-            button: u32,
-            resize_edge: xwm::ResizeEdge,
+            _xwm: XwmId,
+            _window: X11Surface,
+            _button: u32,
+            _resize_edge: xwm::ResizeEdge,
         ) {
             print!("resize_request");
         }
 
-        fn move_request(&mut self, xwm: XwmId, window: X11Surface, button: u32) {
+        fn move_request(&mut self, _xwm: XwmId, _window: X11Surface, _button: u32) {
             print!("move_request");
         }
 

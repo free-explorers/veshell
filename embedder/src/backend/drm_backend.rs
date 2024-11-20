@@ -35,7 +35,7 @@ use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::DisplayHandle;
-use smithay::utils::{Coordinate, DeviceFd, Point, Rectangle, Transform};
+use smithay::utils::{DeviceFd, Point, Rectangle, Transform};
 use smithay::wayland::dmabuf::{DmabufFeedbackBuilder, DmabufState};
 use smithay::wayland::drm_lease::DrmLease;
 use tracing::{error, info, warn};
@@ -43,7 +43,6 @@ use tracing::{error, info, warn};
 use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
 use smithay_drm_extras::edid::EdidInfo;
 
-use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::flutter_engine::FlutterEngine;
 use crate::state;
 use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
@@ -72,7 +71,7 @@ impl Backend for DrmBackend {
 }
 
 impl DrmBackend {
-    fn get_gpu_data(&self) -> &GpuData {
+    fn _get_gpu_data(&self) -> &GpuData {
         self.gpus.get(&self.primary_gpu).unwrap()
     }
 
@@ -432,7 +431,7 @@ impl State<DrmBackend> {
             // Ignore outputs that don't have a mode.
             .filter_map(|output| output.current_mode().map(|mode| (mode.refresh, output)))
             // Take the one with the highest refresh rate.
-            .max_by_key(|(refresh, output)| *refresh)
+            .max_by_key(|(refresh, _)| *refresh)
             .map(|(refresh, output)| {
                 (
                     refresh,
@@ -485,7 +484,7 @@ impl State<DrmBackend> {
             )
             .map_err(DeviceAddError::DeviceOpen)?;
 
-        let fd = DrmDeviceFd::new(unsafe { DeviceFd::from(fd) });
+        let fd = DrmDeviceFd::new(DeviceFd::from(fd));
         let (drm, notifier) =
             DrmDevice::new(fd.clone(), true).map_err(DeviceAddError::DrmDevice)?;
 

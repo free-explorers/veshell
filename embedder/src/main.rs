@@ -1,9 +1,7 @@
 use std::{
     env,
-    fs::{self, File},
-    io,
+    fs::{self},
     path::PathBuf,
-    time::SystemTime,
 };
 
 use backend::Backend;

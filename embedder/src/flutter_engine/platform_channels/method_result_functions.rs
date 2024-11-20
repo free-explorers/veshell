@@ -14,7 +14,7 @@ pub struct MethodResultFunctions<T = EncodableValue> {
 }
 
 impl<T> MethodResultFunctions<T> {
-    pub fn new(
+    pub fn _new(
         on_success: ResultHandlerSuccess<T>,
         on_error: ResultHandlerError<T>,
         on_not_implemented: ResultHandlerNotImplemented,

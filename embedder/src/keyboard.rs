@@ -7,7 +7,7 @@ pub mod key_repeater;
 #[derive(Copy, Clone)]
 pub struct KeyEvent {
     pub key_code: u32,
-    pub specifiedLogicalKey: Option<u32>,
+    pub specified_logical_key: Option<u32>,
     pub codepoint: Option<char>,
     pub state: KeyState,
     pub time: u32,

@@ -111,7 +111,7 @@ pub fn pointer_exit<BackendData: Backend + 'static>(
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct MouseButtonsPayload {
-    surface_id: u64,
+    _surface_id: u64,
     buttons: Vec<Button>,
 }
 

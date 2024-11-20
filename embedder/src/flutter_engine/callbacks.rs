@@ -218,7 +218,7 @@ where
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     let channels = &mut flutter_engine.data.channels;
 
-    let (texture_name, format) = channels
+    let (texture_name, _) = channels
         .tx_request_external_texture_name
         .send(texture_id)
         .ok()

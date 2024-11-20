@@ -53,7 +53,7 @@ use smithay::wayland::shell::xdg::{
 use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::wayland::socket::ListeningSocketSource;
 use smithay::wayland::xwayland_shell::{self, XWAYLAND_SHELL_ROLE};
-use smithay::xwayland::{X11Surface, X11Wm, XwmHandler};
+use smithay::xwayland::{X11Surface, X11Wm};
 use smithay::{
     delegate_compositor, delegate_data_control, delegate_data_device, delegate_dmabuf,
     delegate_output, delegate_primary_selection, delegate_relative_pointer, delegate_seat,
@@ -188,7 +188,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             self.tx_flutter_handled_key_event.clone(),
             KeyEvent {
                 key_code,
-                specifiedLogicalKey: None,
+                specified_logical_key: None,
                 codepoint: keysym.key_char(),
                 state,
                 time,
@@ -378,7 +378,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     data.tx_flutter_handled_key_event.clone(),
                     KeyEvent {
                         key_code,
-                        specifiedLogicalKey: None,
+                        specified_logical_key: None,
                         codepoint: code_point,
                         state: KeyState::Pressed,
                         time: SystemTime::now()

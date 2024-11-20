@@ -11,7 +11,6 @@ use std::ptr::{null, null_mut};
 use std::rc::Rc;
 use std::time::Duration;
 
-use smithay::backend::input::KeyboardKeyEvent;
 use smithay::backend::renderer::gles::ffi::RGBA8;
 use smithay::output::Output;
 use smithay::reexports::calloop;
@@ -356,7 +355,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
 
         let task_runner_timer_dispatcher = Dispatcher::new(
             Timer::immediate(),
-            move |deadline, _, data: &mut State<BackendData>| {
+            move |_, _, data: &mut State<BackendData>| {
                 let duration =
                     data.flutter_engine_mut()
                         .task_runner
@@ -506,7 +505,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                 "keymap": "linux",
                 "toolkit": "glfw",
                 "keyCode": get_glfw_keycode(key_event.key_code),
-                "specifiedLogicalKey": key_event.specifiedLogicalKey,
+                "specifiedLogicalKey": key_event.specified_logical_key,
                 "scanCode": key_event.key_code + 8,
                 "modifiers": get_glfw_modifiers(key_event.mods),
                 "unicodeScalarValues": key_event.codepoint.map(|c| c as u32),
@@ -692,7 +691,7 @@ fn propagate_vm_service(host: &str, port: i32) -> Result<(), Box<dyn std::error:
     Ok(())
 }
 
-unsafe extern "C" fn log_callback(tag: *const i8, message: *const i8, user_data: *mut c_void) {
+unsafe extern "C" fn log_callback(_: *const i8, message: *const i8, _: *mut c_void) {
     //let tag = std::ffi::CStr::from_ptr(tag).to_string_lossy().into_owned();
     let message = std::ffi::CStr::from_ptr(message)
         .to_string_lossy()

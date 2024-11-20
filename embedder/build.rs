@@ -21,6 +21,7 @@ fn main() {
         Err(_e) => println!("Couldn't read FLUTTER_ENGINE_BUILD"),
     }
     let flutter_engine_revision = get_flutter_engine_revision();
+    println!("cargo:rerun-if-changed={flutter_engine_revision}");
     println!("cargo:rerun-if-changed={FLUTTER_ENGINE_LIBS_DIR}");
 
     let flutter_engine_build = match option_env!("FLUTTER_ENGINE_BUILD") {
@@ -39,12 +40,20 @@ fn main() {
 }
 
 fn get_flutter_engine_revision() -> String {
-    let flutter_cli_path = exec("which", &["flutter"]);
-    let flutter_cli_path = Path::new(&flutter_cli_path).parent().unwrap();
-    let engine_revision_file = flutter_cli_path.join("internal").join("engine.version");
-    let engine_revision_str = engine_revision_file.as_path().display().to_string();
-    println!("cargo:rerun-if-changed={engine_revision_str}");
-    std::fs::read_to_string(engine_revision_file).unwrap()
+    let output = Command::new("flutter")
+        .args(&["doctor", "-v"])
+        .output()
+        .expect("Failed to execute command");
+
+    let output_str = String::from_utf8(output.stdout).unwrap();
+
+    for line in output_str.lines() {
+        if line.contains("Engine revision") {
+            return line.split_whitespace().last().unwrap().to_string();
+        }
+    }
+
+    String::new()
 }
 
 fn should_download_flutter_engine_library(
@@ -87,8 +96,7 @@ fn download_flutter_engine_library(
     };
 
     // Download the archive.
-    let short_hash = flutter_engine_revision[..10].to_string();
-    let url = format!("https://github.com/sony/flutter-embedded-linux/releases/download/{short_hash}/elinux-{arch}-{flutter_engine_build}.zip");
+    let url = format!("https://github.com/sony/flutter-embedded-linux/releases/download/{flutter_engine_revision}/elinux-{arch}-{flutter_engine_build}.zip");
     let bytes = download_from_url(&url)
         .expect("Failed to download Flutter engine archive. Try downgrading Flutter.");
     let mut archive = zip::ZipArchive::new(io::Cursor::new(bytes)).expect("Not an archive");

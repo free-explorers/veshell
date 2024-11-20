@@ -21,12 +21,10 @@ class RunCommand extends Command<int> {
     final target =
         BuildTarget.values.byName(globalResults?['target'] as String);
 
+    await runner!.run(['build', ...argResults!.arguments]);
+
     final binaryPath = 'embedder/target/${target.name}/$targetExec';
     final binary = File('${Directory.current.path}/$binaryPath');
-
-    if (!binary.existsSync()) {
-      await runner!.run(['build', ...argResults!.arguments]);
-    }
 
     Process process;
     if (Platform.environment['container'] != null) {

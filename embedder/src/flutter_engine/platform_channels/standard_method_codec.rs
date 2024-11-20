@@ -14,7 +14,7 @@ pub struct StandardMethodCodec {
 }
 
 impl StandardMethodCodec {
-    pub fn new() -> Self {
+    pub fn _new() -> Self {
         Default::default()
     }
 }

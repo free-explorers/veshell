@@ -13,7 +13,7 @@ pub struct StandardMessageCodec {
 }
 
 impl StandardMessageCodec {
-    pub fn new() -> Self {
+    pub fn _new() -> Self {
         Default::default()
     }
 }
