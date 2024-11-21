@@ -111,9 +111,10 @@ fn download_flutter_engine_library(
     } else {
         panic!("Unsupported architecture");
     };
+    let short_hash = flutter_engine_revision.chars().take(10).collect::<String>();
 
     // Download the archive.
-    let url = format!("https://github.com/sony/flutter-embedded-linux/releases/download/{flutter_engine_revision}/elinux-{arch}-{flutter_engine_build}.zip");
+    let url = format!("https://github.com/sony/flutter-embedded-linux/releases/download/{short_hash}/elinux-{arch}-{flutter_engine_build}.zip");
     let bytes = download_from_url(&url)
         .expect("Failed to download Flutter engine archive. Try downgrading Flutter.");
     let mut archive = zip::ZipArchive::new(io::Cursor::new(bytes)).expect("Not an archive");
