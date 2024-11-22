@@ -18,7 +18,6 @@ class CleanCommand extends Command<int> {
       Directory('build'),
       Directory('shell/build'),
       Directory('embedder/target'),
-      Directory('shell/.dart_tool'),
     ];
     for (final dir in dirsToDelete) {
       if (dir.existsSync()) {
@@ -26,7 +25,7 @@ class CleanCommand extends Command<int> {
       }
     }
 
-    final dir = Directory('shell');
+    final dir = Directory('shell/lib');
     final files = dir.listSync(recursive: true);
     for (final file in files) {
       if (file is File &&
@@ -35,6 +34,23 @@ class CleanCommand extends Command<int> {
         file.deleteSync();
       }
     }
+
+    // Run flutter clean in working directory and shell directory
+    await Process.run('flutter', ['clean'], runInShell: true);
+    await Process.run(
+      'flutter',
+      ['clean'],
+      workingDirectory: 'shell',
+      runInShell: true,
+    );
+
+    // Run cargo clean in embedder directory
+    await Process.run(
+      'cargo',
+      ['clean'],
+      workingDirectory: 'embedder',
+      runInShell: true,
+    );
 
     return ExitCode.success.code;
   }

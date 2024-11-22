@@ -65,7 +65,23 @@ class BuildCommand extends Command<int> {
     required BuildTarget target,
   }) async {
     logger.info('Building the shell in ${target.name}...\n');
+
     var exitCode = await (await Process.start(
+      'dart',
+      [
+        'pub',
+        'get',
+      ],
+      workingDirectory: 'shell',
+      mode: ProcessStartMode.inheritStdio,
+    ))
+        .exitCode;
+
+    if (exitCode != 0) {
+      exit(exitCode);
+    }
+
+    exitCode = await (await Process.start(
       'dart',
       [
         'run',
