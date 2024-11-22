@@ -74,7 +74,7 @@ dependencies:
   nm: 
     git:
       url: https://github.com/free-explorers/nm.dart
-  pulseaudio: ^0.0.6
+  pulseaudio: ^0.0.7
   
 dev_dependencies:
   # The "flutter_lints" package below contains a set of recommended lints to
