@@ -67,7 +67,7 @@ class BuildCommand extends Command<int> {
     logger.info('Building the shell in ${target.name}...\n');
 
     var exitCode = await (await Process.start(
-      'dart',
+      'flutter',
       [
         'pub',
         'get',
