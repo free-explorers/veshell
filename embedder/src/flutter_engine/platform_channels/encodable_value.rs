@@ -29,6 +29,69 @@ impl EncodableValue {
             _ => None,
         }
     }
+
+    pub fn map(&self) -> Option<&Vec<(EncodableValue, EncodableValue)>> {
+        match self {
+            EncodableValue::Map(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn list(&self) -> Option<&Vec<EncodableValue>> {
+        match self {
+            EncodableValue::List(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn string(&self) -> Option<&str> {
+        match self {
+            EncodableValue::String(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn double(&self) -> Option<f64> {
+        match self {
+            EncodableValue::Double(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    pub fn bool(&self) -> Option<bool> {
+        match self {
+            EncodableValue::Bool(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    pub fn int32(&self) -> Option<i32> {
+        match self {
+            EncodableValue::Int32(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    pub fn int64(&self) -> Option<i64> {
+        match self {
+            EncodableValue::Int64(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    pub fn byte_list(&self) -> Option<&Vec<u8>> {
+        match self {
+            EncodableValue::ByteList(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn int32_list(&self) -> Option<&Vec<i32>> {
+        match self {
+            EncodableValue::Int32List(v) => Some(v),
+            _ => None,
+        }
+    }
 }
 
 // TODO: It should be generic over T, but the codec doesn't support custom encodable values,

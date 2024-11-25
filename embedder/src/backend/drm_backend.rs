@@ -15,14 +15,16 @@ use smithay::backend::egl;
 use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
 use smithay::backend::renderer::element::texture::{TextureBuffer, TextureRenderElement};
-use smithay::backend::renderer::element::Kind;
+use smithay::backend::renderer::element::utils::{Relocate, RelocateRenderElement};
+use smithay::backend::renderer::element::{Kind, RenderElement};
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
-use smithay::backend::renderer::{ImportDma, ImportEgl};
+use smithay::backend::renderer::{ImportAll, ImportDma, ImportEgl, ImportMem, Texture};
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{libseat, Session};
 use smithay::backend::udev::{all_gpus, primary_gpu, UdevBackend, UdevEvent};
 use smithay::desktop::utils::OutputPresentationFeedback;
+use smithay::input::pointer::CursorImageStatus;
 use smithay::output::Mode;
 use smithay::output::{Output, PhysicalProperties, Subpixel};
 use smithay::reexports::calloop::channel::Event;
@@ -35,7 +37,7 @@ use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::DisplayHandle;
-use smithay::utils::{DeviceFd, Point, Rectangle, Transform};
+use smithay::utils::{DeviceFd, IsAlive, Point, Rectangle, Transform};
 use smithay::wayland::dmabuf::{DmabufFeedbackBuilder, DmabufState};
 use smithay::wayland::drm_lease::DrmLease;
 use tracing::{error, info, warn};
@@ -43,18 +45,18 @@ use tracing::{error, info, warn};
 use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
 use smithay_drm_extras::edid::EdidInfo;
 
+use crate::cursor::{draw_cursor, CursorRenderElement};
 use crate::flutter_engine::FlutterEngine;
 use crate::state;
 use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
 
+use super::render::{get_render_elements, VeshellRenderElements};
 use super::Backend;
 
 pub struct DrmBackend {
     pub session: LibSeatSession,
     gpus: HashMap<DrmNode, GpuData>,
     primary_gpu: DrmNode,
-    pointer_images: Vec<(xcursor::parser::Image, TextureBuffer<GlesTexture>)>,
-    pointer_image: crate::cursor::Cursor,
     highest_hz_crtc: Option<(i32, crtc::Handle)>,
 }
 
@@ -154,8 +156,6 @@ pub fn run_drm_backend() {
             session,
             gpus: HashMap::new(),
             primary_gpu,
-            pointer_images: vec![],
-            pointer_image: crate::cursor::Cursor::load(),
             highest_hz_crtc: None,
         },
         None,
@@ -337,87 +337,32 @@ impl State<DrmBackend> {
             None => return,
         };
 
-        let scale = output.current_scale();
-
-        let flutter_texture = gles_renderer
-            .import_dmabuf(&slot.export().unwrap(), None)
-            .unwrap();
-        let flutter_texture_buffer = TextureBuffer::from_texture(
+        let elements = get_render_elements(
             gles_renderer,
-            flutter_texture,
-            1,
-            Transform::Flipped180,
-            None,
-        );
-        let flutter_texture_element = TextureRenderElement::from_texture_buffer(
-            Point::from((0.0, 0.0)),
-            &flutter_texture_buffer,
-            None,
-            // TODO: I don't know why it has to be like this instead of just `geometry`.
-            Some(Rectangle::from_loc_and_size(
-                (geometry.loc.x, geometry.size.h - geometry.loc.y),
-                geometry.size,
-            )),
-            None,
-            Kind::Unspecified,
+            output,
+            slot,
+            geometry,
+            self.clock.now(),
+            &self.cursor_image_status,
+            &self.cursor_state,
+            self.pointer.current_location(),
+            self.surface_id_under_cursor != None,
         );
 
-        let pointer_frame = self
-            .backend_data
-            .pointer_image
-            .get_image(1, self.clock.now().into());
+        let rendered =
+            surface
+                .compositor
+                .render_frame(gles_renderer, &elements, [0.0, 0.0, 0.0, 0.0]);
 
-        let cursor_position = self
-            .pointer
-            .current_location()
-            .to_physical(scale.fractional_scale())
-            - Point::from((pointer_frame.xhot as f64, pointer_frame.yhot as f64))
-            - geometry.loc.to_physical(scale.fractional_scale());
-
-        let pointer_images = &mut self.backend_data.pointer_images;
-        let pointer_image = pointer_images
-            .iter()
-            .find_map(|(image, texture)| {
-                if image == &pointer_frame {
-                    Some(texture.clone())
-                } else {
-                    None
-                }
-            })
-            .unwrap_or_else(|| {
-                let texture = TextureBuffer::from_memory(
-                    gles_renderer,
-                    &pointer_frame.pixels_rgba,
-                    Fourcc::Abgr8888,
-                    (pointer_frame.width as i32, pointer_frame.height as i32),
-                    false,
-                    1,
-                    Transform::Normal,
-                    None,
-                )
-                .expect("Failed to import cursor bitmap");
-                pointer_images.push((pointer_frame, texture.clone()));
-                texture
-            });
-
-        let cursor_element = TextureRenderElement::from_texture_buffer(
-            cursor_position,
-            &pointer_image,
-            None,
-            None,
-            None,
-            Kind::Cursor,
-        );
-
-        surface
-            .compositor
-            .render_frame::<GlesRenderer, TextureRenderElement<GlesTexture>>(
-                gles_renderer,
-                &[cursor_element, flutter_texture_element],
-                [0.0, 0.0, 0.0, 0.0],
-            )
-            .unwrap();
-        surface.compositor.queue_frame(None).unwrap();
+        match rendered {
+            Ok(frame_result) => {
+                info!("Frame rendered:");
+                surface.compositor.queue_frame(None).unwrap();
+            }
+            Err(err) => {
+                eprintln!("Failed to render frame: {}", err);
+            }
+        }
     }
 
     fn monitor_layout_changed(&mut self) {
@@ -537,6 +482,23 @@ impl State<DrmBackend> {
                                 surface,
                                 start_time.elapsed().as_millis() as u32,
                             );
+                        }
+                        let cursor_status = {
+                            let cursor_image_status = data.cursor_image_status.lock().unwrap();
+
+                            match *cursor_image_status {
+                                CursorImageStatus::Surface(ref surface) if !surface.alive() => {
+                                    CursorImageStatus::default_named()
+                                }
+                                ref status => status.clone(),
+                            }
+                        };
+
+                        if let CursorImageStatus::Surface(wl_surface) = cursor_status {
+                            send_frames_surface_tree(
+                                &wl_surface,
+                                start_time.elapsed().as_millis() as u32,
+                            )
                         }
                     }
                     DrmEvent::Error(error) => {

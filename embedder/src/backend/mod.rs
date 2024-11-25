@@ -1,6 +1,7 @@
 use smithay::backend::session::libseat::LibSeatSession;
 
 pub mod drm_backend;
+pub mod render;
 pub mod x11_client;
 
 pub trait Backend {

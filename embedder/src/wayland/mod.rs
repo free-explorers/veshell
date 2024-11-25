@@ -6,14 +6,16 @@ pub mod wayland {
     use serde_json::json;
     use smithay::{
         backend::renderer::{ImportAll, Texture},
+        input::pointer::{CursorImageStatus, CursorImageSurfaceData},
         reexports::wayland_server::{protocol::wl_surface::WlSurface, Client},
-        utils::{Buffer as BufferCoords, Size},
+        utils::{Buffer as BufferCoords, Rectangle, Size},
         wayland::compositor::{
             with_states, with_surface_tree_upward, BufferAssignment, CompositorClientState,
-            CompositorHandler, CompositorState, SurfaceAttributes, TraversalAction,
+            CompositorHandler, CompositorState, Damage, SurfaceAttributes, TraversalAction,
         },
         xwayland::XWaylandClientData,
     };
+    use tracing::info;
 
     use crate::{state::State, Backend, ClientState};
 
@@ -125,6 +127,29 @@ pub mod wayland {
         }
 
         fn commit(&mut self, surface: &WlSurface) {
+            let is_cursor_image = matches!(*self.cursor_image_status.lock().unwrap(),CursorImageStatus::Surface(ref cursor_surface) if cursor_surface == surface);
+
+            if is_cursor_image {
+                info!("commit cursor image");
+                with_states(surface, |states| {
+                    let cursor_image_attributes = states.data_map.get::<CursorImageSurfaceData>();
+
+                    if let Some(mut cursor_image_attributes) =
+                        cursor_image_attributes.map(|attrs| attrs.lock().unwrap())
+                    {
+                        let buffer_delta = states
+                            .cached_state
+                            .get::<SurfaceAttributes>()
+                            .current()
+                            .buffer_delta
+                            .take();
+                        if let Some(buffer_delta) = buffer_delta {
+                            cursor_image_attributes.hotspot -= buffer_delta;
+                        }
+                    }
+                });
+            }
+
             let (subsurfaces_below, subsurfaces_above) = get_direct_subsurfaces(surface);
 
             // Make sure Flutter knows about subsurfaces
@@ -148,6 +173,17 @@ pub mod wayland {
 
                 let mut binding = surface_data.cached_state.get::<SurfaceAttributes>();
                 let attributes = binding.current();
+
+                /*                let buffer_damage = attributes.damage.drain(..).flat_map(|dmg| {
+                    match dmg {
+                        Damage::Buffer(rect) => rect,
+                        Damage::Surface(rect) => surface_view
+                            .rect_to_local(rect)
+                            .to_i32_up()
+                            .to_buffer(self.buffer_scale, self.buffer_transform, &surface_size),
+                    }
+                    .intersection(Rectangle::from_loc_and_size((0, 0), buffer_dimensions))
+                }); */
 
                 let texture = attributes
                     .buffer
@@ -216,6 +252,14 @@ pub mod wayland {
                             .unwrap();
                         texture_id
                     });
+
+                    if is_cursor_image {
+                        info!("CURSOR TEXTURE {:?}", texture.size());
+                        let mut cursor_state_ref = self.cursor_state.lock().unwrap();
+                        let cursor_state: &mut crate::cursor::CursorStateInner =
+                            &mut *cursor_state_ref;
+                        cursor_state.set_surface_texture(texture_id, texture.clone());
+                    }
 
                     let swapchain = self.texture_swapchains.entry(texture_id).or_default();
                     swapchain.commit(texture.clone());

@@ -1,4 +1,7 @@
 use log::debug;
+use mouse_cursor::mouse_cursor_channel_method_call_handler;
+use platform_channels::encodable_value::EncodableValue;
+use platform_channels::standard_method_codec::StandardMethodCodec;
 use serde_json::json;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -82,6 +85,7 @@ use {
 
 mod callbacks;
 pub mod embedder;
+mod mouse_cursor;
 pub mod platform_channel_callbacks;
 pub mod platform_channels;
 pub mod task_runner;
@@ -306,11 +310,11 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
 
         let binary_messenger = Rc::new(RefCell::new(BinaryMessengerImpl::new(flutter_engine)));
 
-        let codec = Rc::new(JsonMethodCodec::new());
+        let method_codec = Rc::new(JsonMethodCodec::new());
         let mut platform_method_channel = MethodChannel::<serde_json::Value>::new(
             binary_messenger.clone(),
             "platform".to_string(),
-            codec,
+            method_codec.clone(),
         );
 
         let (tx_platform_message, rx_platform_message) = channel::channel::<(
@@ -331,11 +335,10 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             codec,
         );
 
-        let codec = Rc::new(JsonMethodCodec::new());
         let mut text_input_channel = MethodChannel::<serde_json::Value>::new(
             binary_messenger.clone(),
             "flutter/textinput".to_string(),
-            codec,
+            method_codec.clone(),
         );
 
         let (tx_text_input_message, rx_text_input_message) = channel::channel::<(
@@ -345,11 +348,33 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
 
         text_input_channel.set_method_call_mpsc_channel(Some(tx_text_input_message));
 
+        let codec = Rc::new(StandardMethodCodec::new());
         server_state
             .loop_handle
             .insert_source(
                 rx_text_input_message,
                 text_input_channel_method_call_handler,
+            )
+            .unwrap();
+
+        let mut mouse_cursor_channel = MethodChannel::<EncodableValue>::new(
+            binary_messenger.clone(),
+            "flutter/mousecursor".to_string(),
+            codec,
+        );
+
+        let (tx_mouse_cursor_message, rx_mouse_cursor_message) = channel::channel::<(
+            MethodCall<EncodableValue>,
+            Box<dyn MethodResult<EncodableValue>>,
+        )>();
+
+        mouse_cursor_channel.set_method_call_mpsc_channel(Some(tx_mouse_cursor_message));
+
+        server_state
+            .loop_handle
+            .insert_source(
+                rx_mouse_cursor_message,
+                mouse_cursor_channel_method_call_handler,
             )
             .unwrap();
 
