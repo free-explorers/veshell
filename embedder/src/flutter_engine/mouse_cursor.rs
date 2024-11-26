@@ -41,8 +41,6 @@ pub fn mouse_cursor_channel_method_call_handler<BackendData: Backend + 'static>(
                 }
             }
             if let (Some(kind), Some(device)) = (kind, device) {
-                info!("kind: {}", kind);
-                info!("device: {}", device);
                 let mut cursor_state = data.cursor_state.lock().unwrap();
                 match kind {
                     "basic" => cursor_state.set_shape(CursorIcon::Default),

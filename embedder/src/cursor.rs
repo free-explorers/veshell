@@ -64,9 +64,9 @@ impl Cursor {
 }
 
 render_elements! {
-    pub CursorRenderElement<=GlesRenderer>;
-    Static=MemoryRenderBufferRenderElement<GlesRenderer>,
-    Texture=TextureRenderElement<<GlesRenderer as Renderer>::TextureId>,
+    pub CursorRenderElement<R> where R: ImportAll + ImportMem;
+    Static=MemoryRenderBufferRenderElement<R>,
+    Surface=WaylandSurfaceRenderElement<R>,
 }
 
 fn nearest_images(size: u32, images: &[Image]) -> impl Iterator<Item = &Image> {
@@ -124,8 +124,6 @@ pub struct CursorStateInner {
 
     cursors: HashMap<CursorIcon, Cursor>,
     current_image: Option<Image>,
-    current_surface_texture: Option<GlesTexture>,
-    current_surface_texture_id: Option<i64>,
     image_cache: Vec<(Image, MemoryRenderBuffer)>,
 }
 
@@ -136,11 +134,6 @@ impl CursorStateInner {
 
     pub fn unset_shape(&mut self) {
         self.current_cursor = None;
-    }
-
-    pub fn set_surface_texture(&mut self, texture_id: i64, surface_texture: GlesTexture) {
-        self.current_surface_texture_id = Some(texture_id);
-        self.current_surface_texture = Some(surface_texture);
     }
 
     pub fn get_named_cursor(&mut self, shape: CursorIcon) -> &Cursor {
@@ -172,22 +165,25 @@ impl Default for CursorStateInner {
 
             cursors: HashMap::new(),
             current_image: None,
-            current_surface_texture_id: None,
-            current_surface_texture: None,
+
             image_cache: Vec::new(),
         }
     }
 }
 
-pub fn draw_cursor(
-    renderer: &mut GlesRenderer,
+pub fn draw_cursor<R>(
+    renderer: &mut R,
     cursor_image_status: &Mutex<CursorImageStatus>,
     cursor_state: &Mutex<CursorStateInner>,
     scale: Scale<f64>,
     time: Time<Monotonic>,
     location: Point<f64, Logical>,
     is_surface_under_pointer: bool,
-) -> Vec<(CursorRenderElement, Point<i32, BufferCoords>)> {
+) -> Vec<(CursorRenderElement<R>, Point<i32, BufferCoords>)>
+where
+    R: Renderer + ImportMem + ImportAll,
+    <R as Renderer>::TextureId: Send + Clone + 'static,
+{
     let cursor_status = {
         let cursor_image_status = cursor_image_status.lock().unwrap();
 
@@ -208,18 +204,10 @@ pub fn draw_cursor(
         CursorImageStatus::Named(named_cursor) => Some(named_cursor),
         _ => None,
     });
-    let texture = state.current_surface_texture.clone();
 
     if let CursorImageStatus::Surface(ref wl_surface) = cursor_status {
-        if is_surface_under_pointer && texture.is_some() {
-            return draw_surface_cursor(
-                renderer,
-                wl_surface,
-                state.current_surface_texture_id.clone().unwrap(),
-                texture.unwrap(),
-                location.to_i32_round(),
-                scale,
-            );
+        if is_surface_under_pointer {
+            return draw_surface_cursor(renderer, wl_surface, location.to_i32_round(), scale);
         }
     }
     if let Some(current_cursor) = named_cursor {
@@ -272,14 +260,16 @@ pub fn draw_cursor(
     }
 }
 
-pub fn draw_surface_cursor(
-    renderer: &mut GlesRenderer,
+pub fn draw_surface_cursor<R>(
+    renderer: &mut R,
     surface: &WlSurface,
-    texture_id: i64,
-    texture: GlesTexture,
     location: impl Into<Point<i32, Logical>>,
     scale: Scale<f64>,
-) -> Vec<(CursorRenderElement, Point<i32, BufferCoords>)> {
+) -> Vec<(CursorRenderElement<R>, Point<i32, BufferCoords>)>
+where
+    R: Renderer + ImportAll,
+    <R as Renderer>::TextureId: Clone + 'static,
+{
     let position = location.into();
     let h: Point<i32, BufferCoords> = with_states(&surface, |states| {
         states
@@ -296,22 +286,15 @@ pub fn draw_surface_cursor(
             )
     });
 
-    let location = position.to_physical_precise_round(scale);
-    let integer_scale = scale.x.max(scale.y).ceil() as i32;
-
-    let render_element = TextureRenderElement::from_static_texture(
-        Id::new(),
-        renderer.id(),
-        location,
-        texture,
-        integer_scale,
-        Transform::Normal,
-        None,
-        None,
-        None,
-        None,
+    render_elements_from_surface_tree(
+        renderer,
+        surface,
+        position.to_physical_precise_round(scale),
+        scale,
+        1.0,
         Kind::Cursor,
-    );
-
-    Vec::from([(CursorRenderElement::Texture(render_element), h)])
+    )
+    .into_iter()
+    .map(|elem| (elem, h))
+    .collect()
 }

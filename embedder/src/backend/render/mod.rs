@@ -44,13 +44,14 @@ use smithay::{
 use super::Backend;
 
 smithay::backend::renderer::element::render_elements! {
-    pub VeshellRenderElements<=GlesRenderer>;
-    Cursor=RelocateRenderElement<CursorRenderElement>,
-    Flutter=TextureRenderElement<<GlesRenderer as Renderer>::TextureId>,
+    pub VeshellRenderElements<R> where
+        R: ImportAll + ImportMem;
+    Cursor=RelocateRenderElement<CursorRenderElement<R>>,
+    Flutter=TextureRenderElement<R::TextureId>,
 }
 
-pub fn get_render_elements(
-    renderer: &mut GlesRenderer,
+pub fn get_render_elements<R>(
+    renderer: &mut R,
     output: &Output,
     slot: &Slot<Dmabuf>,
     geometry: Rectangle<f64, smithay::utils::Logical>,
@@ -59,7 +60,13 @@ pub fn get_render_elements(
     cursor_state: &Mutex<CursorStateInner>,
     location: Point<f64, Logical>,
     is_surface_under_pointer: bool,
-) -> Vec<VeshellRenderElements> {
+) -> Vec<VeshellRenderElements<R>>
+where
+    R: Renderer + ImportAll + ImportMem + ImportDma,
+    <R as Renderer>::TextureId: Send + Clone + 'static,
+    <R as Renderer>::Error:,
+    VeshellRenderElements<R>: RenderElement<R>,
+{
     let scale = output.current_scale();
 
     let flutter_texture = renderer
@@ -95,8 +102,8 @@ pub fn get_render_elements(
         is_surface_under_pointer,
     );
 
-    let mut elements: Vec<VeshellRenderElements> = Vec::new();
-    let cursor_elements: Vec<VeshellRenderElements> = cursor_element
+    let mut elements: Vec<VeshellRenderElements<R>> = Vec::new();
+    let cursor_elements: Vec<VeshellRenderElements<R>> = cursor_element
         .into_iter()
         .map(|(elem, hotspot)| {
             VeshellRenderElements::Cursor(RelocateRenderElement::from_element(
