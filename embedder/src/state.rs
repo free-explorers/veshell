@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::os::fd::OwnedFd;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 use log::error;
 use smithay::backend::allocator::dmabuf::Dmabuf;
-use smithay::backend::input::KeyState;
+use smithay::backend::input::{KeyState, Keycode};
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::renderer::ImportDma;
@@ -61,6 +61,7 @@ use smithay::{
 };
 use tracing::{info, warn};
 
+use crate::cursor::CursorState;
 use crate::flutter_engine::wayland_messages::{
     PopupMessage, SubsurfaceMessage, SurfaceMessage, SurfaceRole, ToplevelMessage,
     XdgSurfaceMessage, XdgSurfaceRole,
@@ -121,6 +122,8 @@ pub struct State<BackendData: Backend + 'static> {
     pub xdg_toplevels: HashMap<u64, ToplevelSurface>,
     pub xwayland_display: Option<u32>,
     pub xwayland_shell_state: xwayland_shell::XWaylandShellState,
+    pub cursor_state: CursorState,
+    pub cursor_image_status: Mutex<CursorImageStatus>,
 }
 
 impl<BackendData: Backend + 'static> State<BackendData> {
@@ -156,11 +159,15 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         }
 
         // 1. Update the Smithay keyboard state but intercept the event so it's not forwarded to the focused client just yet
-        let ((mods, keysym), mods_changed) =
-            keyboard.input_intercept::<_, _>(self, key_code, state, |_, mods, keysym_handle| {
+        let ((mods, keysym), mods_changed) = keyboard.input_intercept::<_, _>(
+            self,
+            Keycode::new(key_code),
+            state,
+            |_, mods, keysym_handle| {
                 // 2. Retrieve the keysym and modifiers with the xkb layout applied
                 (*mods, keysym_handle.modified_sym())
-            });
+            },
+        );
 
         // 3. Check if the keystroke result in compositor hotkeys shortcuts
 
@@ -357,7 +364,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         let keyboard = data.keyboard.clone();
                         keyboard.input_forward(
                             data,
-                            key_event.key_code,
+                            Keycode::new(key_event.key_code),
                             key_event.state,
                             SERIAL_COUNTER.next_serial(),
                             key_event.time,
@@ -394,6 +401,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                             num_lock: false,
                             iso_level3_shift: false,
                             serialized: mods.serialized,
+                            iso_level5_shift: false,
                         },
                         mods_changed: false,
                     },
@@ -451,6 +459,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             xwayland_shell_state,
             space: Space::default(),
             pointer_focus: None,
+            cursor_state: CursorState::default(),
+            cursor_image_status: Mutex::new(CursorImageStatus::default_named()),
         }
     }
 
@@ -720,6 +730,7 @@ impl<BackendData: Backend> SeatHandler for State<BackendData> {
 
     fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {
         info!("cursor_image {:?}", image);
+        *self.cursor_image_status.lock().unwrap() = image;
     }
 }
 

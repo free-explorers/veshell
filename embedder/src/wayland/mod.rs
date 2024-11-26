@@ -1,3 +1,8 @@
+use smithay::{
+    backend::renderer::{utils::RendererSurfaceStateUserData, ImportAll, Renderer},
+    wayland::compositor::SurfaceData,
+};
+
 pub mod xdg;
 
 pub mod wayland {
@@ -5,15 +10,27 @@ pub mod wayland {
 
     use serde_json::json;
     use smithay::{
-        backend::renderer::{ImportAll, Texture},
+        backend::renderer::{
+            buffer_dimensions,
+            gles::GlesRenderer,
+            utils::{
+                import_surface, on_commit_buffer_handler, RendererSurfaceStateUserData, SurfaceView,
+            },
+            ImportAll, Renderer, Texture,
+        },
+        input::pointer::{CursorImageStatus, CursorImageSurfaceData},
         reexports::wayland_server::{protocol::wl_surface::WlSurface, Client},
-        utils::{Buffer as BufferCoords, Size},
-        wayland::compositor::{
-            with_states, with_surface_tree_upward, BufferAssignment, CompositorClientState,
-            CompositorHandler, CompositorState, SurfaceAttributes, TraversalAction,
+        utils::{Buffer as BufferCoords, Logical, Rectangle, Size},
+        wayland::{
+            compositor::{
+                with_states, with_surface_tree_upward, BufferAssignment, CompositorClientState,
+                CompositorHandler, CompositorState, Damage, SurfaceAttributes, TraversalAction,
+            },
+            viewporter,
         },
         xwayland::XWaylandClientData,
     };
+    use tracing::info;
 
     use crate::{state::State, Backend, ClientState};
 
@@ -125,6 +142,31 @@ pub mod wayland {
         }
 
         fn commit(&mut self, surface: &WlSurface) {
+            on_commit_buffer_handler::<Self>(surface);
+
+            let is_cursor_image = matches!(*self.cursor_image_status.lock().unwrap(),CursorImageStatus::Surface(ref cursor_surface) if cursor_surface == surface);
+
+            if is_cursor_image {
+                info!("commit cursor image");
+                with_states(surface, |states| {
+                    let cursor_image_attributes = states.data_map.get::<CursorImageSurfaceData>();
+
+                    if let Some(mut cursor_image_attributes) =
+                        cursor_image_attributes.map(|attrs| attrs.lock().unwrap())
+                    {
+                        let buffer_delta = states
+                            .cached_state
+                            .get::<SurfaceAttributes>()
+                            .current()
+                            .buffer_delta
+                            .take();
+                        if let Some(buffer_delta) = buffer_delta {
+                            cursor_image_attributes.hotspot -= buffer_delta;
+                        }
+                    }
+                });
+            }
+
             let (subsurfaces_below, subsurfaces_above) = get_direct_subsurfaces(surface);
 
             // Make sure Flutter knows about subsurfaces
@@ -137,6 +179,11 @@ pub mod wayland {
             }
 
             with_states(surface, |surface_data| {
+                let renderer = self.gles_renderer.as_mut().unwrap();
+
+                if let Err(err) = import_surface(renderer, surface_data) {
+                    tracing::error!("Failed to import surface: {:?}", err);
+                }
                 let (surface_id, old_texture_size) = {
                     let my_state = surface_data
                         .data_map
@@ -149,82 +196,75 @@ pub mod wayland {
                 let mut binding = surface_data.cached_state.get::<SurfaceAttributes>();
                 let attributes = binding.current();
 
-                let texture = attributes
-                    .buffer
-                    .as_ref()
-                    .and_then(|assignment| match assignment {
-                        BufferAssignment::NewBuffer(buffer) => self
-                            .gles_renderer
-                            .as_mut()
+                let (texture_id, size) = if let Some(data) =
+                    surface_data.data_map.get::<RendererSurfaceStateUserData>()
+                {
+                    let mut data_ref = data.lock().unwrap();
+                    let renderer_state = &mut *data_ref;
+                    let texture = renderer_state.texture::<GlesRenderer>(renderer.id());
+
+                    if let Some(texture) = texture {
+                        let size = texture.size();
+
+                        let size_changed = match old_texture_size {
+                            Some(old_size) => old_size != size,
+                            None => true,
+                        };
+
+                        surface_data
+                            .data_map
+                            .get::<RefCell<WlSurfaceVeshellState>>()
                             .unwrap()
-                            .import_buffer(buffer, Some(surface_data), &[])
-                            .and_then(|t| t.ok()),
-                        _ => None,
-                    });
+                            .borrow_mut()
+                            .old_texture_size = Some(size);
 
-                let (texture_id, size) = if let Some(texture) = texture {
-                    unsafe {
-                        self.gl.as_ref().unwrap().Finish();
-                    }
+                        let texture_id = match size_changed {
+                            true => None,
+                            false => self
+                                .texture_ids_per_surface_id
+                                .get(&surface_id)
+                                .and_then(|v| v.last().cloned())
+                                .map(|(id, _)| id),
+                        };
 
-                    let size = texture.size();
+                        let texture_id = texture_id.unwrap_or_else(|| {
+                            let texture_id = self.get_new_texture_id();
+                            while self
+                                .texture_ids_per_surface_id
+                                .entry(surface_id)
+                                .or_default()
+                                .len()
+                                >= 2
+                            {
+                                self.texture_ids_per_surface_id
+                                    .entry(surface_id)
+                                    .or_default()
+                                    .remove(0);
+                            }
 
-                    let size_changed = match old_texture_size {
-                        Some(old_size) => old_size != size,
-                        None => true,
-                    };
-
-                    surface_data
-                        .data_map
-                        .get::<RefCell<WlSurfaceVeshellState>>()
-                        .unwrap()
-                        .borrow_mut()
-                        .old_texture_size = Some(size);
-
-                    let texture_id = match size_changed {
-                        true => None,
-                        false => self
-                            .texture_ids_per_surface_id
-                            .get(&surface_id)
-                            .and_then(|v| v.last().cloned())
-                            .map(|(id, _)| id),
-                    };
-
-                    let texture_id = texture_id.unwrap_or_else(|| {
-                        let texture_id = self.get_new_texture_id();
-                        while self
-                            .texture_ids_per_surface_id
-                            .entry(surface_id)
-                            .or_default()
-                            .len()
-                            >= 2
-                        {
                             self.texture_ids_per_surface_id
                                 .entry(surface_id)
                                 .or_default()
-                                .remove(0);
-                        }
+                                .push((texture_id, size));
+                            self.surface_id_per_texture_id
+                                .insert(texture_id, surface_id);
+                            self.flutter_engine_mut()
+                                .register_external_texture(texture_id)
+                                .unwrap();
+                            texture_id
+                        });
 
-                        self.texture_ids_per_surface_id
-                            .entry(surface_id)
-                            .or_default()
-                            .push((texture_id, size));
-                        self.surface_id_per_texture_id
-                            .insert(texture_id, surface_id);
+                        let swapchain = self.texture_swapchains.entry(texture_id).or_default();
+                        swapchain.commit(texture.clone());
+
                         self.flutter_engine_mut()
-                            .register_external_texture(texture_id)
+                            .mark_external_texture_frame_available(texture_id)
                             .unwrap();
-                        texture_id
-                    });
 
-                    let swapchain = self.texture_swapchains.entry(texture_id).or_default();
-                    swapchain.commit(texture.clone());
-
-                    self.flutter_engine_mut()
-                        .mark_external_texture_frame_available(texture_id)
-                        .unwrap();
-
-                    (texture_id, Some(size))
+                        (texture_id, Some(size))
+                    } else {
+                        (-1, None)
+                    }
                 } else {
                     (-1, None)
                 };

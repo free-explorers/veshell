@@ -1,12 +1,13 @@
 pub mod xwayland {
     use crate::backend::Backend;
-    use crate::cursor::Cursor;
+    use crate::cursor::{load_cursor_theme, Cursor};
     use crate::flutter_engine::wayland_messages::{MapX11Surface, NewX11Surface};
     use crate::focus::KeyboardFocusTarget;
     use crate::state::State;
     use crate::wayland::wayland::get_surface_id;
     use serde_json::json;
 
+    use smithay::input::pointer::CursorIcon;
     use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
     use smithay::reexports::x11rb::protocol::xproto::Window;
     use smithay::utils::{Logical, Point, Rectangle, Size};
@@ -60,8 +61,9 @@ pub mod xwayland {
                             X11Wm::start_wm(data.loop_handle.clone(), x11_socket, client.clone())
                                 .expect("Failed to attach X11 Window Manager");
 
-                        let cursor = Cursor::load();
-                        let image = cursor.get_image(1, Duration::ZERO);
+                        let (theme, size) = load_cursor_theme();
+                        let cursor = Cursor::load(&theme, CursorIcon::Default, size);
+                        let image = cursor.get_image(1, 0);
                         wm.set_cursor(
                             &image.pixels_rgba,
                             Size::from((image.width as u16, image.height as u16)),
@@ -418,17 +420,16 @@ pub mod xwayland {
             &mut self.xwayland_shell_state
         }
 
-        fn surface_associated(&mut self, _surface: WlSurface, _window: Window) {
-            let x11_surface = self.x11_surface_per_x11_window.get(&_window).unwrap();
-            let x11_surface_id = Self::get_x11_surface_id(x11_surface);
+        fn surface_associated(&mut self, _xwm: XwmId, wl_surface: WlSurface, surface: X11Surface) {
+            let x11_surface_id = Self::get_x11_surface_id(&surface);
             self.x11_surface_per_wl_surface
-                .insert(_surface.clone(), x11_surface.clone());
+                .insert(wl_surface.clone(), surface.clone());
             let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
 
             platform_method_channel.invoke_method(
                 "surface_associated",
                 Some(Box::new(json!({
-                    "surfaceId": get_surface_id(_surface.borrow()),
+                    "surfaceId": get_surface_id(wl_surface.borrow()),
                     "x11SurfaceId": x11_surface_id,
                 }))),
                 None,
