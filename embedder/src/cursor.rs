@@ -1,5 +1,6 @@
 use std::{collections::HashMap, io::Read, sync::Mutex, time::Duration};
 
+use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::{
     backend::{
         allocator::Fourcc,
@@ -63,9 +64,9 @@ impl Cursor {
 }
 
 render_elements! {
-    pub CursorRenderElement<R> where R: ImportAll + ImportMem;
-    Static=MemoryRenderBufferRenderElement<R>,
-    Texture=TextureRenderElement<R::TextureId>,
+    pub CursorRenderElement<=GlesRenderer>;
+    Static=MemoryRenderBufferRenderElement<GlesRenderer>,
+    Texture=TextureRenderElement<<GlesRenderer as Renderer>::TextureId>,
 }
 
 fn nearest_images(size: u32, images: &[Image]) -> impl Iterator<Item = &Image> {
@@ -178,19 +179,15 @@ impl Default for CursorStateInner {
     }
 }
 
-pub fn draw_cursor<R>(
-    renderer: &mut R,
+pub fn draw_cursor(
+    renderer: &mut GlesRenderer,
     cursor_image_status: &Mutex<CursorImageStatus>,
     cursor_state: &Mutex<CursorStateInner>,
     scale: Scale<f64>,
     time: Time<Monotonic>,
     location: Point<f64, Logical>,
     is_surface_under_pointer: bool,
-) -> Vec<(CursorRenderElement<R>, Point<i32, BufferCoords>)>
-where
-    R: Renderer + ImportMem + ImportAll,
-    <R as Renderer>::TextureId: Send + Clone + 'static,
-{
+) -> Vec<(CursorRenderElement, Point<i32, BufferCoords>)> {
     let cursor_status = {
         let cursor_image_status = cursor_image_status.lock().unwrap();
 
@@ -275,18 +272,14 @@ where
     }
 }
 
-pub fn draw_surface_cursor<R>(
-    renderer: &mut R,
+pub fn draw_surface_cursor(
+    renderer: &mut GlesRenderer,
     surface: &WlSurface,
     texture_id: i64,
     texture: GlesTexture,
     location: impl Into<Point<i32, Logical>>,
     scale: Scale<f64>,
-) -> Vec<(CursorRenderElement<R>, Point<i32, BufferCoords>)>
-where
-    R: Renderer + ImportAll,
-    <R as Renderer>::TextureId: Clone + 'static,
-{
+) -> Vec<(CursorRenderElement, Point<i32, BufferCoords>)> {
     let position = location.into();
     let h: Point<i32, BufferCoords> = with_states(&surface, |states| {
         states
