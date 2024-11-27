@@ -226,7 +226,7 @@ impl<BackendData: Backend> State<BackendData> {
                     .unwrap();
             }
             InputEvent::Keyboard { event } => {
-                self.handle_key_event(event.key_code().raw(), event.state(), event.time_msec());
+                self.handle_key_event(event.key_code(), event.state(), event.time_msec());
             }
             InputEvent::GestureSwipeBegin { .. } => {}
             InputEvent::GestureSwipeUpdate { .. } => {}
