@@ -1,3 +1,4 @@
+use std::env;
 use std::{collections::HashMap, io::Read, sync::Mutex, time::Duration};
 
 use smithay::backend::renderer::gles::GlesRenderer;
@@ -151,6 +152,11 @@ pub fn load_cursor_theme() -> (CursorTheme, u32) {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(24);
+
+    // Set the common XCURSOR env variables.
+    env::set_var("XCURSOR_THEME", name.clone());
+    env::set_var("XCURSOR_SIZE", size.to_string());
+
     (CursorTheme::load(&name), size)
 }
 
