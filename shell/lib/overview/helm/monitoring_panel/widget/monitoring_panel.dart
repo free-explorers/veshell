@@ -24,7 +24,7 @@ class MonitoringPanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               ListTile(
-                leading: Icon(
+                leading: const Icon(
                   MdiIcons.battery,
                 ),
                 title: SliderTheme(
@@ -47,7 +47,7 @@ class MonitoringPanel extends StatelessWidget {
                   top: 8,
                 ),
                 child: SegmentedButton(
-                  segments: [
+                  segments: const [
                     ButtonSegment(
                       icon: Icon(MdiIcons.speedometerSlow),
                       value: 'power_saver',

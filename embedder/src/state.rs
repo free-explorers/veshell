@@ -145,28 +145,35 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         texture_id
     }
 
-    pub fn handle_key_event(&mut self, mut key_code: u32, state: KeyState, time: u32) {
+    pub fn handle_key_event(&mut self, mut key_code: Keycode, state: KeyState, time: u32) {
         // Update the state of the keyboard.
         // Every key event must be passed through `glfw_key_codes.input_intercept`
         // so that Smithay knows what keys are pressed.
         let keyboard = self.keyboard.clone();
+        let mut linux_code = key_code.raw() - 8;
 
         // Swap Meta ant leftAlt keycode
-        if key_code == input_linux::sys::KEY_LEFTMETA as u32 {
-            key_code = input_linux::sys::KEY_LEFTALT as u32
-        } else if key_code == input_linux::sys::KEY_LEFTALT as u32 {
-            key_code = input_linux::sys::KEY_LEFTMETA as u32
+        if linux_code == input_linux::sys::KEY_LEFTMETA as u32 {
+            linux_code = input_linux::sys::KEY_LEFTALT as u32
+        } else if linux_code == input_linux::sys::KEY_LEFTALT as u32 {
+            linux_code = input_linux::sys::KEY_LEFTMETA as u32
         }
 
+        key_code = Keycode::new(linux_code + 8);
+        info!("keycode {:?}", key_code,);
+
         // 1. Update the Smithay keyboard state but intercept the event so it's not forwarded to the focused client just yet
-        let ((mods, keysym), mods_changed) = keyboard.input_intercept::<_, _>(
-            self,
-            Keycode::new(key_code),
-            state,
-            |_, mods, keysym_handle| {
+        let ((mods, keysym), mods_changed) =
+            keyboard.input_intercept::<_, _>(self, key_code, state, |_, mods, keysym_handle| {
                 // 2. Retrieve the keysym and modifiers with the xkb layout applied
                 (*mods, keysym_handle.modified_sym())
-            },
+            });
+
+        info!(
+            ?state,
+            mods = ?mods,
+            keysym = ::xkbcommon::xkb::keysym_get_name(keysym),
+            "keysym",
         );
 
         // 3. Check if the keystroke result in compositor hotkeys shortcuts
@@ -184,7 +191,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             }
         }
 
-        // Exiiting the compositor
+        // Exiting the compositor
         if keysym == Keysym::Escape && mods.alt {
             self.running.store(false, Ordering::SeqCst);
             return;
@@ -194,7 +201,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         self.flutter_engine.as_mut().unwrap().send_key_event(
             self.tx_flutter_handled_key_event.clone(),
             KeyEvent {
-                key_code,
+                key_code: linux_code,
                 specified_logical_key: None,
                 codepoint: keysym.key_char(),
                 state,
@@ -213,14 +220,14 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             match state {
                 KeyState::Pressed => {
                     self.key_repeater.down(
-                        key_code,
+                        linux_code,
                         keysym.key_char(),
                         Duration::from_millis(self.repeat_delay),
                         Duration::from_millis(self.repeat_rate),
                     );
                 }
                 KeyState::Released => {
-                    self.key_repeater.up(key_code);
+                    self.key_repeater.up(linux_code);
                 }
             }
         }
@@ -229,7 +236,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
     pub fn release_all_keys(&mut self) {
         let keyboard = self.keyboard.clone();
         for key_code in keyboard.pressed_keys() {
-            self.handle_key_event(key_code.raw(), KeyState::Released, 0);
+            self.handle_key_event(key_code, KeyState::Released, 0);
         }
     }
 }
@@ -364,7 +371,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         let keyboard = data.keyboard.clone();
                         keyboard.input_forward(
                             data,
-                            Keycode::new(key_event.key_code),
+                            Keycode::new(key_event.key_code + 8),
                             key_event.state,
                             SERIAL_COUNTER.next_serial(),
                             key_event.time,

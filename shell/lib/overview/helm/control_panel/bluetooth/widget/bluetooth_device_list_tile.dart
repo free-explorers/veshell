@@ -22,7 +22,7 @@ class BluetoothDeviceListTile extends HookConsumerWidget {
         title: Text(bluezDevice.alias),
         trailing: bluezDevice.connected
             ? IconButton(
-                icon: Icon(MdiIcons.bluetoothOff),
+                icon: const Icon(MdiIcons.bluetoothOff),
                 onPressed: bluezDevice.disconnect,
               )
             : Row(
@@ -39,13 +39,13 @@ class BluetoothDeviceListTile extends HookConsumerWidget {
                     )
                   else
                     IconButton(
-                      icon: Icon(MdiIcons.bluetoothConnect),
+                      icon: const Icon(MdiIcons.bluetoothConnect),
                       onPressed: ref
                           .read(bluetoothDeviceStateProvider(address).notifier)
                           .connect,
                     ),
                   IconButton(
-                    icon: Icon(
+                    icon: const Icon(
                       MdiIcons.delete,
                     ),
                     onPressed: () =>
@@ -67,7 +67,7 @@ class BluetoothDeviceListTile extends HookConsumerWidget {
                   height: 24,
                   child: CircularProgressIndicator(),
                 )
-              : Icon(MdiIcons.plus),
+              : const Icon(MdiIcons.plus),
         ),
       );
     }

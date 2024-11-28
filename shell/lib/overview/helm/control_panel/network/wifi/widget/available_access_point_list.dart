@@ -73,7 +73,7 @@ class AvailableAccessPointTile extends HookConsumerWidget {
       title: AccessPointLabel(
         accessPoint: accessPoint.bestAccessPoint!,
       ),
-      trailing: Icon(MdiIcons.plus),
+      trailing: const Icon(MdiIcons.plus),
       onTap: () {
         ref
             .read(singleExpandedProvider('AvailableAccessPointTile').notifier)
@@ -120,7 +120,7 @@ class AvailableAccessPointTile extends HookConsumerWidget {
                   ),
                   IconButton(
                     onPressed: onSubmitted,
-                    icon: Icon(MdiIcons.wifiPlus),
+                    icon: const Icon(MdiIcons.wifiPlus),
                   ),
                 ],
               ),

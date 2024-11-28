@@ -58,7 +58,7 @@ class ConfiguredAccesPointTile extends HookConsumerWidget {
 
     return ListTile(
       leading: isSelected
-          ? Icon(MdiIcons.check)
+          ? const Icon(MdiIcons.check)
           : AccessPointIcon(accessPoint: accessPoint.bestAccessPoint!),
       title: AccessPointLabel(
         accessPoint: accessPoint.bestAccessPoint!,
@@ -71,7 +71,7 @@ class ConfiguredAccesPointTile extends HookConsumerWidget {
                     connection: accessPoint.settingsConnection,
                   );
             },
-      trailing: IconButton(icon: Icon(MdiIcons.pencil), onPressed: () {}),
+      trailing: IconButton(icon: const Icon(MdiIcons.pencil), onPressed: () {}),
     );
   }
 }

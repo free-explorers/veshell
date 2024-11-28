@@ -46,7 +46,7 @@ class NotificationWidget extends StatelessWidget {
                     ),
                   )
                 else
-                  Icon(MdiIcons.bell, size: 16),
+                  const Icon(MdiIcons.bell, size: 16),
                 const SizedBox(
                   width: 8,
                 ),

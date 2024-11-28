@@ -46,7 +46,7 @@ class SearchEngine extends HookConsumerWidget {
                   children: [
                     IconButton.filled(
                       onPressed: () {},
-                      icon: Icon(MdiIcons.playBox),
+                      icon: const Icon(MdiIcons.playBox),
                       style: IconButton.styleFrom(
                         backgroundColor: Theme.of(context).colorScheme.primary,
                         foregroundColor:
@@ -61,7 +61,7 @@ class SearchEngine extends HookConsumerWidget {
                     const SizedBox(height: 16),
                     IconButton(
                       onPressed: null,
-                      icon: Icon(MdiIcons.file),
+                      icon: const Icon(MdiIcons.file),
                       style: IconButton.styleFrom(
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(surfaceRadius),
@@ -73,7 +73,7 @@ class SearchEngine extends HookConsumerWidget {
                     const SizedBox(height: 16),
                     IconButton(
                       onPressed: null,
-                      icon: Icon(MdiIcons.cog),
+                      icon: const Icon(MdiIcons.cog),
                       style: IconButton.styleFrom(
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(surfaceRadius),

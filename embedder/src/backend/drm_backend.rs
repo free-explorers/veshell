@@ -356,7 +356,6 @@ impl State<DrmBackend> {
 
         match rendered {
             Ok(frame_result) => {
-                info!("Frame rendered:");
                 surface.compositor.queue_frame(None).unwrap();
             }
             Err(err) => {

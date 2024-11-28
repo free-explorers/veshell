@@ -74,7 +74,7 @@ class MemoryMonitoringWidget extends HookConsumerWidget {
                     padding: const EdgeInsets.all(16),
                     child: Row(
                       children: [
-                        Icon(
+                        const Icon(
                           MdiIcons.memory,
                         ),
                         const SizedBox(

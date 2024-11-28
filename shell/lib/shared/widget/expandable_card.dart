@@ -131,7 +131,6 @@ class _ExpandableCardScope extends InheritedWidget {
   const _ExpandableCardScope({
     required this.expandableCardState,
     required super.child,
-    super.key,
   });
   final ExpandableCardState expandableCardState;
   @override

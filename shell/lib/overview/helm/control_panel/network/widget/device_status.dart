@@ -48,7 +48,7 @@ class DeviceStatus extends ConsumerWidget {
               );
               return Row(
                 children: [
-                  Icon(
+                  const Icon(
                     MdiIcons.arrowUp,
                     size: 12,
                   ),
@@ -58,7 +58,7 @@ class DeviceStatus extends ConsumerWidget {
                     style: Theme.of(context).textTheme.labelSmall,
                   ),
                   const SizedBox(width: 8),
-                  Icon(MdiIcons.arrowDown, size: 12),
+                  const Icon(MdiIcons.arrowDown, size: 12),
                   const SizedBox(width: 4),
                   Text(
                     '${(transferMonitoring.receivingBytesPerSecond / 1024).toStringAsFixed(2)} kB/s',

@@ -197,7 +197,7 @@ class PersistentWindowTileable extends Tileable {
                                     )
                                     .closeWindow(window.windowId);
                               },
-                              icon: Icon(MdiIcons.close),
+                              icon: const Icon(MdiIcons.close),
                             )
                           : null,
                     ),

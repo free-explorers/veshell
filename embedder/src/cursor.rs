@@ -1,3 +1,4 @@
+use std::env;
 use std::{collections::HashMap, io::Read, sync::Mutex, time::Duration};
 
 use smithay::backend::renderer::gles::GlesRenderer;
@@ -151,6 +152,11 @@ pub fn load_cursor_theme() -> (CursorTheme, u32) {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(24);
+
+    // Set the common XCURSOR env variables.
+    env::set_var("XCURSOR_THEME", name.clone());
+    env::set_var("XCURSOR_SIZE", size.to_string());
+
     (CursorTheme::load(&name), size)
 }
 
@@ -194,8 +200,6 @@ where
             ref status => status.clone(),
         }
     };
-
-    info!("draw_cursor {:?}", cursor_status);
 
     let mut state_ref = cursor_state.lock().unwrap();
     let state = &mut *state_ref;
@@ -285,6 +289,8 @@ where
                 &Size::from((1, 1)), /* Size doesn't matter for Transform::Normal */
             )
     });
+
+    info!("surface scale {:?}", scale);
 
     render_elements_from_surface_tree(
         renderer,
