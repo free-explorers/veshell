@@ -88,24 +88,24 @@ class AppIconById extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (id == null) {
-      return Icon(MdiIcons.helpCircle);
+      return const Icon(MdiIcons.helpCircle);
     }
 
     return ref.watch(localizedDesktopEntryForIdProvider(id!)).maybeWhen(
           data: (entry) {
             if (entry == null) {
-              return Icon(MdiIcons.helpCircle);
+              return const Icon(MdiIcons.helpCircle);
             }
             final iconPath = entry.entries[DesktopEntryKey.icon.string];
             if (iconPath == null) {
-              return Icon(MdiIcons.helpCircle);
+              return const Icon(MdiIcons.helpCircle);
             }
             return AppIconByPath(
               path: iconPath,
               constrainedSize: constrainedSize,
             );
           },
-          orElse: () => Icon(MdiIcons.helpCircle),
+          orElse: () => const Icon(MdiIcons.helpCircle),
         );
   }
 }

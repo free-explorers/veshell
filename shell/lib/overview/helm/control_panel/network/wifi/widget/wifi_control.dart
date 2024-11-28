@@ -66,7 +66,7 @@ class WifiControl extends HookConsumerWidget {
                         ExpandableCard.of(context).expand();
                         ref.read(wifiManagerProvider(address).notifier).scan();
                       },
-                      icon: Icon(MdiIcons.plus),
+                      icon: const Icon(MdiIcons.plus),
                       iconSize: 20,
                       style: IconButton.styleFrom(
                         padding: const EdgeInsets.all(4),
@@ -93,7 +93,7 @@ class WifiControl extends HookConsumerWidget {
                                   .read(wifiManagerProvider(address).notifier)
                                   .scan();
                             },
-                            icon: Icon(MdiIcons.refresh),
+                            icon: const Icon(MdiIcons.refresh),
                             iconSize: 20,
                             style: IconButton.styleFrom(
                               padding: const EdgeInsets.all(4),

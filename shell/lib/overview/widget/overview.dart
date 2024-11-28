@@ -62,7 +62,7 @@ class OverviewWidget extends HookConsumerWidget {
                             overviewStateProvider(screenId).notifier,
                           )
                           .toggle(),
-                      icon: Icon(MdiIcons.close),
+                      icon: const Icon(MdiIcons.close),
                       style: IconButton.styleFrom(
                         shape: const RoundedRectangleBorder(),
                         minimumSize: const Size.square(panelSize),

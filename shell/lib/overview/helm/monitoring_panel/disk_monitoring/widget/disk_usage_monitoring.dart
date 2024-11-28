@@ -21,7 +21,7 @@ class DiskUsageMonitoring extends HookConsumerWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(
                 children: [
-                  Icon(
+                  const Icon(
                     MdiIcons.harddisk,
                   ),
                   const SizedBox(

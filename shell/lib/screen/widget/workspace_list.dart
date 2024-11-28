@@ -287,7 +287,7 @@ class WorkspaceIcon extends HookConsumerWidget {
       [workspaceState.tileableWindowList],
     ).whereNotNull();
 
-    if (appIdList.isEmpty) return Icon(MdiIcons.plus);
+    if (appIdList.isEmpty) return const Icon(MdiIcons.plus);
 
     switch (workspaceDisplayMode) {
       case WorkspaceDisplayMode.hybrid:
@@ -346,35 +346,35 @@ class CategoryIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (category!) {
       case WorkspaceCategory.Game:
-        return Icon(MdiIcons.gamepad);
+        return const Icon(MdiIcons.gamepad);
       case WorkspaceCategory.Development:
-        return Icon(MdiIcons.codeBraces);
+        return const Icon(MdiIcons.codeBraces);
       case WorkspaceCategory.Video:
-        return Icon(MdiIcons.movieOpen);
+        return const Icon(MdiIcons.movieOpen);
       case WorkspaceCategory.Audio:
-        return Icon(MdiIcons.music);
+        return const Icon(MdiIcons.music);
       case WorkspaceCategory.AudioVideo:
-        return Icon(MdiIcons.playCircleOutline);
+        return const Icon(MdiIcons.playCircleOutline);
       case WorkspaceCategory.Graphics:
-        return Icon(MdiIcons.palette);
+        return const Icon(MdiIcons.palette);
       case WorkspaceCategory.Office:
-        return Icon(MdiIcons.fileDocument);
+        return const Icon(MdiIcons.fileDocument);
       case WorkspaceCategory.Science:
-        return Icon(MdiIcons.flask);
+        return const Icon(MdiIcons.flask);
       case WorkspaceCategory.Education:
-        return Icon(MdiIcons.school);
+        return const Icon(MdiIcons.school);
       case WorkspaceCategory.FileManager:
-        return Icon(MdiIcons.folder);
+        return const Icon(MdiIcons.folder);
       case WorkspaceCategory.InstantMessaging:
-        return Icon(MdiIcons.forum);
+        return const Icon(MdiIcons.forum);
       case WorkspaceCategory.Network:
-        return Icon(MdiIcons.web);
+        return const Icon(MdiIcons.web);
       case WorkspaceCategory.Settings:
-        return Icon(MdiIcons.cog);
+        return const Icon(MdiIcons.cog);
       case WorkspaceCategory.System:
-        return Icon(MdiIcons.desktopClassic);
+        return const Icon(MdiIcons.desktopClassic);
       case WorkspaceCategory.Utility:
-        return Icon(MdiIcons.applicationCog);
+        return const Icon(MdiIcons.applicationCog);
     }
   }
 }

@@ -21,25 +21,25 @@ class SessionControls extends HookConsumerWidget {
                 ref.read(sessionProvider.notifier).lock();
               },
               style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
-              icon: Icon(MdiIcons.lock),
+              icon: const Icon(MdiIcons.lock),
             ),
             IconButton(
               onPressed: () {
                 ref.read(sessionProvider.notifier).logout();
               },
               style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
-              icon: Icon(MdiIcons.logout),
+              icon: const Icon(MdiIcons.logout),
             ),
             IconButton(
               onPressed: () {},
-              icon: Icon(MdiIcons.powerSleep),
+              icon: const Icon(MdiIcons.powerSleep),
               style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
             ),
             IconButton(
               onPressed: () {
                 ref.read(sessionProvider.notifier).reboot();
               },
-              icon: Icon(MdiIcons.restart),
+              icon: const Icon(MdiIcons.restart),
               style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
             ),
             IconButton(
@@ -47,7 +47,7 @@ class SessionControls extends HookConsumerWidget {
                 ref.read(sessionProvider.notifier).shutdown();
               },
               style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
-              icon: Icon(MdiIcons.power),
+              icon: const Icon(MdiIcons.power),
             ),
           ],
         ),

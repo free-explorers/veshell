@@ -52,7 +52,7 @@ class OverviewContent extends HookConsumerWidget {
 }
 
 class _OverviewContentPanel extends HookConsumerWidget {
-  const _OverviewContentPanel({super.key});
+  const _OverviewContentPanel();
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final screenId = ref.watch(currentScreenIdProvider);
@@ -64,7 +64,7 @@ class _OverviewContentPanel extends HookConsumerWidget {
       children: [
         IconButton.filled(
           onPressed: () {},
-          icon: Icon(MdiIcons.shipWheel),
+          icon: const Icon(MdiIcons.shipWheel),
           style: IconButton.styleFrom(
             backgroundColor: Theme.of(context).colorScheme.primary,
             foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -93,7 +93,6 @@ class _EphemeralWindowPanelButton extends HookConsumerWidget {
   const _EphemeralWindowPanelButton({
     required this.windowId,
     this.isFocused = false,
-    super.key,
   });
   final EphemeralWindowId windowId;
   final bool isFocused;
@@ -134,7 +133,7 @@ class _EphemeralWindowPanelButton extends HookConsumerWidget {
                         )
                         .closeWindow(window.windowId);
                   },
-                  icon: Icon(MdiIcons.close),
+                  icon: const Icon(MdiIcons.close),
                 ),
               ),
             ],

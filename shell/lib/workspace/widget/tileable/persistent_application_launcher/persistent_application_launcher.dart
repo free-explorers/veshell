@@ -49,8 +49,8 @@ class PersistentApplicationSelector extends Tileable {
 
   @override
   Widget buildPanelWidget(BuildContext context, WidgetRef ref) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 12),
       child: Icon(
         MdiIcons.plus,
       ),

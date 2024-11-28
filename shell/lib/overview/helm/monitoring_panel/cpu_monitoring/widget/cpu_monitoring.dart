@@ -74,7 +74,7 @@ class CpuMonitoringWidget extends HookConsumerWidget {
                     padding: const EdgeInsets.all(16),
                     child: Row(
                       children: [
-                        Icon(
+                        const Icon(
                           MdiIcons.chip,
                         ),
                         const SizedBox(

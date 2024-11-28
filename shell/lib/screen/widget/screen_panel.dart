@@ -41,7 +41,7 @@ class ScreenPanel extends HookConsumerWidget implements PreferredSizeWidget {
                     )
                     .toggle();
               },
-              icon: Icon(MdiIcons.shipWheel),
+              icon: const Icon(MdiIcons.shipWheel),
             ),
             const Expanded(child: WorkspaceListView()),
           ],
