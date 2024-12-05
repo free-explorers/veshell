@@ -1,10 +1,12 @@
 use std::{
     env,
     fs::{self},
+    panic,
     path::PathBuf,
 };
 
 use backend::Backend;
+use backtrace::Backtrace;
 use log::debug;
 use smithay::{
     reexports::wayland_server::{
@@ -15,6 +17,7 @@ use smithay::{
         with_surface_tree_downward, CompositorClientState, SurfaceAttributes, TraversalAction,
     },
 };
+use tracing::error;
 use tracing_appender::rolling;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -36,52 +39,16 @@ mod wayland;
 mod xwayland;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Specify the absolute path for the logs directory
-    let mut log_dir = PathBuf::from("/var/log/veshell");
-
-    // Create the log directory if it doesn't exist
-    if !fs::create_dir_all(&log_dir).is_ok() {
-        let exe_path = env::current_exe().expect("Failed to get current executable path");
-        let exe_dir = exe_path
-            .parent()
-            .expect("Failed to get executable directory");
-
-        // Create the logs directory path
-        log_dir = exe_dir.join("logs");
-    }
-    // Create a rolling file appender that rotates daily
-
-    let file_appender: rolling::RollingFileAppender =
-        rolling::daily(log_dir.clone(), "veshell.log");
-
-    // Custom log formatting
-    let format = fmt::format()
+    // Set up subscriber with both stdout and file layers
+    tracing_subscriber::fmt()
         .with_timer(fmt::time::ChronoLocal::new(String::from(
             "%Y-%m-%d %H:%M:%S%.3f",
         )))
-        .compact();
-
-    // Set up stdout layer with custom formatting
-    let stdout_layer = fmt::layer()
-        .event_format(format.clone())
-        .with_writer(std::io::stdout)
-        .with_ansi(true); // Colorful output for the terminal
-
-    // Set up file layer with custom formatting
-    let file_layer = fmt::layer()
-        .event_format(format)
-        .with_writer(file_appender)
-        .with_ansi(false); // No colors in log file
-
-    // Set up subscriber with both stdout and file layers
-    tracing_subscriber::registry()
-        .with(EnvFilter::from_default_env()) // Log level from RUST_LOG
-        .with(stdout_layer)
-        .with(file_layer)
+        .compact()
+        .with_env_filter(EnvFilter::from_default_env()) // Log level from RUST_LOG
         .init();
 
-    debug!("Starting Veshell storing logs at {:?}", log_dir);
-
+    debug!("Starting Veshell");
     // Fix XWayland crash when too many file descriptors are open.
     let _ = rlimit::increase_nofile_limit(u64::MAX);
 
