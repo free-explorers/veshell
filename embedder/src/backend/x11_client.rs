@@ -1,9 +1,11 @@
 use std::sync::atomic::Ordering;
 
 use log::{error, warn};
+use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::renderer::{ImportDma, ImportEgl};
+use smithay::delegate_dmabuf;
 use smithay::output::{Output, PhysicalProperties, Subpixel};
 use smithay::reexports::ash::ext;
 use smithay::reexports::calloop::channel::Event::Msg;
@@ -11,7 +13,9 @@ use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::x11rb::protocol::xproto::{
     AutoRepeatMode, ChangeKeyboardControlAux, ConnectionExt,
 };
-use smithay::wayland::dmabuf::{DmabufFeedbackBuilder, DmabufState};
+use smithay::wayland::dmabuf::{
+    DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier,
+};
 use smithay::{
     backend::{
         allocator::{
@@ -38,6 +42,31 @@ use crate::state;
 use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
 
 use super::Backend;
+
+impl DmabufHandler for State<X11Data> {
+    fn dmabuf_state(&mut self) -> &mut DmabufState {
+        self.dmabuf_state.as_mut().unwrap()
+    }
+
+    fn dmabuf_imported(
+        &mut self,
+        _global: &DmabufGlobal,
+        dmabuf: Dmabuf,
+        notifier: ImportNotifier,
+    ) {
+        if self
+            .backend_data
+            .renderer
+            .import_dmabuf(&dmabuf, None)
+            .is_ok()
+        {
+            let _ = notifier.successful::<State<X11Data>>();
+        } else {
+            notifier.failed();
+        }
+    }
+}
+delegate_dmabuf!(State<X11Data>);
 
 pub fn run_x11_client() {
     let mut event_loop = EventLoop::try_new().unwrap();
@@ -167,11 +196,13 @@ pub fn run_x11_client() {
     let mut state = State::new(
         display,
         event_loop.handle(),
-        X11Data { x11_surface },
+        X11Data {
+            x11_surface,
+            renderer: gles_renderer,
+        },
         Some(dmabuf_state),
     );
 
-    state.gles_renderer = Some(gles_renderer);
     state.gl = Some(Gles2::load_with(
         |s| unsafe { egl::get_proc_address(s) } as *const _
     ));
@@ -327,6 +358,7 @@ pub fn run_x11_client() {
 
 pub struct X11Data {
     pub x11_surface: X11Surface,
+    renderer: GlesRenderer,
 }
 
 impl Backend for X11Data {
@@ -336,5 +368,16 @@ impl Backend for X11Data {
 
     fn get_session(&self) -> smithay::backend::session::libseat::LibSeatSession {
         unreachable!("X11 backend does not support libseat")
+    }
+
+    fn with_primary_renderer<T>(&mut self, f: impl FnOnce(&GlesRenderer) -> T) -> Option<T> {
+        Some(f(&self.renderer))
+    }
+
+    fn with_primary_renderer_mut<T>(
+        &mut self,
+        f: impl FnOnce(&mut GlesRenderer) -> T,
+    ) -> Option<T> {
+        Some(f(&mut self.renderer))
     }
 }

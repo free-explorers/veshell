@@ -179,11 +179,11 @@ pub mod wayland {
             }
 
             with_states(surface, |surface_data| {
-                let renderer = self.gles_renderer.as_mut().unwrap();
-
-                if let Err(err) = import_surface(renderer, surface_data) {
-                    tracing::error!("Failed to import surface: {:?}", err);
-                }
+                self.backend_data.with_primary_renderer_mut(|renderer| {
+                    if let Err(err) = import_surface(renderer, surface_data) {
+                        tracing::error!("Failed to import surface: {:?}", err);
+                    }
+                });
                 let (surface_id, old_texture_size) = {
                     let my_state = surface_data
                         .data_map
@@ -201,7 +201,12 @@ pub mod wayland {
                 {
                     let mut data_ref = data.lock().unwrap();
                     let renderer_state = &mut *data_ref;
-                    let texture = renderer_state.texture::<GlesRenderer>(renderer.id());
+                    let texture = self
+                        .backend_data
+                        .with_primary_renderer(|renderer| {
+                            renderer_state.texture::<GlesRenderer>(renderer.id())
+                        })
+                        .unwrap();
 
                     if let Some(texture) = texture {
                         let size = texture.size();

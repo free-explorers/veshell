@@ -36,9 +36,11 @@ extern "C" fn message_reply(
     data_size: usize,
     user_data: *mut ::std::os::raw::c_void,
 ) {
-    let captures = unsafe { Box::from_raw(user_data as *mut Captures) };
-    let data = unsafe { std::slice::from_raw_parts(data, data_size) };
-    captures.reply.unwrap()(Some(data));
+    if !data.is_null() {
+        let captures = unsafe { Box::from_raw(user_data as *mut Captures) };
+        let data = unsafe { std::slice::from_raw_parts(data, data_size) };
+        captures.reply.unwrap()(Some(data));
+    }
 }
 
 impl BinaryMessenger for BinaryMessengerImpl {

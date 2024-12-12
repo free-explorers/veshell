@@ -15,6 +15,7 @@ use crate::flutter_engine::embedder::{
     FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
 };
 use crate::flutter_engine::FlutterEngine;
+use crate::keyboard::handle_keyboard_event;
 use crate::state::State;
 
 impl<BackendData: Backend> State<BackendData> {
@@ -226,7 +227,12 @@ impl<BackendData: Backend> State<BackendData> {
                     .unwrap();
             }
             InputEvent::Keyboard { event } => {
-                self.handle_key_event(event.key_code(), event.state(), event.time_msec());
+                handle_keyboard_event::<BackendData>(
+                    self,
+                    event.key_code(),
+                    event.state(),
+                    event.time_msec(),
+                );
             }
             InputEvent::GestureSwipeBegin { .. } => {}
             InputEvent::GestureSwipeUpdate { .. } => {}

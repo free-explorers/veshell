@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/shared/util/logger.dart';
@@ -30,28 +29,12 @@ class WorkspaceWidget extends HookConsumerWidget {
       debugLabel: 'WorkspaceScope',
     );
 
-    /*  if (isSelected && !workspaceFocusScopeNode.hasFocus) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        debugPrint(debugDescribeFocusTree());
-
-        workspaceFocusScopeNode.requestFocus();
-        focusLog.info(
-          'workspaceFocusScopeNode.requestFocus on first build because its selected and not have the focus',
-        );
-      });
-    } */
-
     final appLauncher = PersistentApplicationSelector(
       isSelected: workspaceState.selectedIndex ==
           workspaceState.tileableWindowList.length,
       onSelect: (entry) {
-        print('start ${entry.desktopEntry.id}');
         final newWindowId =
             windowManager.createPersistentWindowForDesktopEntry(entry);
-
-        /* ref
-            .read(persistentWindowStateProvider(newWindowId).notifier)
-            .launchSelf(); */
 
         ref
             .read(workspaceStateProvider(currentWorkspaceId).notifier)
@@ -72,90 +55,79 @@ class WorkspaceWidget extends HookConsumerWidget {
       );
     }
     tileableList.add(appLauncher);
-    return Shortcuts(
-      debugLabel: 'Workspace_shortcuts',
-      shortcuts: <LogicalKeySet, Intent>{
-        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyA):
-            const FocusLeftTileableIntent(),
-        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyD):
-            const FocusRightTileableIntent(),
-        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyQ):
-            const CloseTileableIntent(),
-      },
-      child: Actions(
-        actions: {
-          FocusLeftTileableIntent: CallbackAction<FocusLeftTileableIntent>(
-            onInvoke: (_) {
-              final nextIndex = workspaceState.selectedIndex - 1;
-              if (nextIndex >= 0) {
-                ref
-                    .read(workspaceStateProvider(currentWorkspaceId).notifier)
-                    .setSelectedIndex(nextIndex);
-              }
-              return null;
-            },
-          ),
-          FocusRightTileableIntent: CallbackAction<FocusRightTileableIntent>(
-            onInvoke: (_) {
-              final nextIndex = workspaceState.selectedIndex + 1;
-              if (nextIndex < tileableList.length) {
-                ref
-                    .read(workspaceStateProvider(currentWorkspaceId).notifier)
-                    .setSelectedIndex(nextIndex);
-              }
-              return null;
-            },
-          ),
-          CloseTileableIntent: CallbackAction<CloseTileableIntent>(
-            onInvoke: (_) {
-              final tileable = tileableList[workspaceState.selectedIndex];
-              if (tileable is PersistentWindowTileable) {
-                final persistentWindow =
-                    ref.read(persistentWindowStateProvider(tileable.windowId));
-                ref.read(windowManagerProvider.notifier).closeWindow(
-                      persistentWindow.windowId,
-                    );
-              }
-
-              return null;
-            },
-          ),
-        },
-        child: FocusScope(
-          node: workspaceFocusScopeNode,
-          onFocusChange: (value) {
-            focusLog
-                .info('Focus changed $value for Workspace $currentWorkspaceId');
+    return Actions(
+      actions: {
+        FocusLeftTileableIntent: CallbackAction<FocusLeftTileableIntent>(
+          onInvoke: (_) {
+            final nextIndex = workspaceState.selectedIndex - 1;
+            if (nextIndex >= 0) {
+              ref
+                  .read(workspaceStateProvider(currentWorkspaceId).notifier)
+                  .setSelectedIndex(nextIndex);
+            }
+            return null;
           },
-          autofocus: isSelected,
-          canRequestFocus: isSelected,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              FocusScope(
-                canRequestFocus: false,
-                descendantsAreFocusable: false,
-                child: WorkspacePanel(
-                  tileableList: tileableList,
-                  visibleLength: workspaceState.visibleLength,
-                  onVisibleLengthChange: (value) {
-                    ref
-                        .read(
-                          workspaceStateProvider(currentWorkspaceId).notifier,
-                        )
-                        .setVisibleLength(value);
-                  },
-                ),
+        ),
+        FocusRightTileableIntent: CallbackAction<FocusRightTileableIntent>(
+          onInvoke: (_) {
+            final nextIndex = workspaceState.selectedIndex + 1;
+            if (nextIndex < tileableList.length) {
+              ref
+                  .read(workspaceStateProvider(currentWorkspaceId).notifier)
+                  .setSelectedIndex(nextIndex);
+            }
+            return null;
+          },
+        ),
+        CloseTileableIntent: CallbackAction<CloseTileableIntent>(
+          onInvoke: (_) {
+            final tileable = tileableList[workspaceState.selectedIndex];
+            if (tileable is PersistentWindowTileable) {
+              final persistentWindow =
+                  ref.read(persistentWindowStateProvider(tileable.windowId));
+              ref.read(windowManagerProvider.notifier).closeWindow(
+                    persistentWindow.windowId,
+                  );
+            }
+
+            return null;
+          },
+        ),
+      },
+      child: FocusScope(
+        node: workspaceFocusScopeNode,
+        onFocusChange: (value) {
+          focusLog
+              .info('Focus changed $value for Workspace $currentWorkspaceId');
+        },
+        autofocus: isSelected,
+        canRequestFocus: isSelected,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            FocusScope(
+              canRequestFocus: false,
+              descendantsAreFocusable: false,
+              child: WorkspacePanel(
+                tileableList: tileableList,
+                visibleLength: workspaceState.visibleLength,
+                onVisibleLengthChange: (value) {
+                  ref
+                      .read(
+                        workspaceStateProvider(currentWorkspaceId).notifier,
+                      )
+                      .setVisibleLength(value);
+                },
               ),
-              Expanded(
-                child: SlidingContainer(
-                  index: workspaceState.selectedIndex,
-                  visible: workspaceState.visibleLength,
-                  children: tileableList,
-                ),
+            ),
+            Expanded(
+              child: SlidingContainer(
+                index: workspaceState.selectedIndex,
+                visible: workspaceState.visibleLength,
+                children: tileableList,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

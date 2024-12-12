@@ -43,6 +43,9 @@ use smithay::{
 
 use super::Backend;
 
+pub static CLEAR_COLOR: [f32; 4] = [0.8, 0.8, 0.9, 1.0];
+pub static CLEAR_COLOR_FULLSCREEN: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
+
 smithay::backend::renderer::element::render_elements! {
     pub VeshellRenderElements<R> where
         R: ImportAll + ImportMem;
@@ -68,29 +71,7 @@ where
     VeshellRenderElements<R>: RenderElement<R>,
 {
     let scale = output.current_scale();
-
-    let flutter_texture = renderer
-        .import_dmabuf(&slot.export().unwrap(), None)
-        .unwrap();
-    let flutter_texture_buffer = TextureBuffer::from_texture(
-        renderer,
-        flutter_texture,
-        scale.integer_scale(),
-        Transform::Flipped180,
-        None,
-    );
-    let flutter_texture_element = TextureRenderElement::from_texture_buffer(
-        Point::from((0.0, 0.0)),
-        &flutter_texture_buffer,
-        None,
-        // TODO: I don't know why it has to be like this instead of just `geometry`.
-        Some(Rectangle::from_loc_and_size(
-            (geometry.loc.x, geometry.size.h - geometry.loc.y),
-            geometry.size,
-        )),
-        None,
-        Kind::Unspecified,
-    );
+    let mut elements: Vec<VeshellRenderElements<R>> = Vec::new();
 
     let cursor_element = draw_cursor(
         renderer,
@@ -102,7 +83,6 @@ where
         is_surface_under_pointer,
     );
 
-    let mut elements: Vec<VeshellRenderElements<R>> = Vec::new();
     let cursor_elements: Vec<VeshellRenderElements<R>> = cursor_element
         .into_iter()
         .map(|(elem, hotspot)| {
@@ -115,7 +95,30 @@ where
         .collect();
 
     elements.extend(cursor_elements);
-    elements.push(VeshellRenderElements::Flutter(flutter_texture_element));
+    let flutter_texture_result = renderer.import_dmabuf(&slot.export().unwrap(), None);
+    if flutter_texture_result.is_ok() {
+        let flutter_texture = flutter_texture_result.unwrap();
+        let flutter_texture_buffer = TextureBuffer::from_texture(
+            renderer,
+            flutter_texture,
+            scale.integer_scale(),
+            Transform::Flipped180,
+            None,
+        );
+        let flutter_texture_element = TextureRenderElement::from_texture_buffer(
+            Point::from((0.0, 0.0)),
+            &flutter_texture_buffer,
+            None,
+            // TODO: I don't know why it has to be like this instead of just `geometry`.
+            Some(Rectangle::from_loc_and_size(
+                (geometry.loc.x, geometry.size.h - geometry.loc.y),
+                geometry.size,
+            )),
+            None,
+            Kind::Unspecified,
+        );
+        elements.push(VeshellRenderElements::Flutter(flutter_texture_element));
+    }
 
     return elements;
 }

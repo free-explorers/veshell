@@ -55,18 +55,34 @@ fn get_flutter_engine_revision() -> String {
 
         let flutter_path = String::from_utf8(which_output.stdout).expect("Not UTF-8");
         let flutter_path = flutter_path.trim();
-
+        println!("cargo:rerun-if-changed={flutter_path}");
         let mut flutter_cmd = Command::new(flutter_path);
         flutter_cmd.args(&["doctor", "-v"]);
 
         output = flutter_cmd.output();
     }
-    let output = output.expect("Failed to execute flutter command");
-    let output_str = String::from_utf8(output.stdout).unwrap();
+    let output = match output {
+        Ok(output) => output,
+        Err(e) => {
+            println!("Error: {:?}, trying to read from LIBS_REVISION_FILE", e);
+            match std::fs::read_to_string(&*LIBS_REVISION_FILE) {
+                Ok(libs_revision) => return libs_revision,
+                Err(e) => {
+                    println!("Error: {:?}, failed to read from LIBS_REVISION_FILE", e);
+                    return String::new();
+                }
+            }
+        }
+    };
+    let output_str = String::from_utf8(output.stdout).unwrap_or_else(|_| String::new());
 
     for line in output_str.lines() {
         if line.contains("Engine revision") {
-            return line.split_whitespace().last().unwrap().to_string();
+            return line
+                .split_whitespace()
+                .last()
+                .unwrap_or_default()
+                .to_string();
         }
     }
 

@@ -12,4 +12,4 @@ shell/.config
 .continuerc.json
 .temp
 logs/
-process.log
+veshell.log

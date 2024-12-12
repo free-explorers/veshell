@@ -2,7 +2,9 @@ use std::ffi::c_void;
 use std::ptr::null_mut;
 
 use smithay::backend::renderer::gles::ffi;
-use tracing::error;
+use smithay::backend::renderer::ImportDma;
+use smithay::reexports::calloop::channel;
+use tracing::{debug, error};
 
 use crate::backend::Backend;
 use crate::flutter_engine::embedder::{
@@ -11,6 +13,9 @@ use crate::flutter_engine::embedder::{
 };
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::flutter_engine::{Baton, FlutterEngine};
+use crate::keyboard::VeshellKeyEvent;
+
+use super::embedder::FlutterKeyEvent;
 
 pub unsafe extern "C" fn make_current<BackendData>(user_data: *mut c_void) -> bool
 where
@@ -241,4 +246,20 @@ where
     texture_out.height = 0;
 
     texture_name != 0
+}
+
+pub struct FlutterKeyEventData {
+    pub key_event: VeshellKeyEvent,
+    pub tx_flutter_handled_key_event: channel::Sender<(VeshellKeyEvent, bool)>,
+}
+/// It's currently not used because handled is always false it's seems that we will need it when the deprecation of the legacy keyboard handled will be removed we currently listen to the [key_event_channel.send] callback
+pub unsafe extern "C" fn key_event_callback<BackendData>(handled: bool, user_data: *mut c_void)
+where
+    BackendData: Backend + 'static,
+{
+    let data = &mut *(user_data as *mut FlutterKeyEventData);
+
+    data.tx_flutter_handled_key_event
+        .send((data.key_event, handled))
+        .unwrap();
 }

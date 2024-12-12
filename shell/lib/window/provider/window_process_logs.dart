@@ -18,15 +18,17 @@ class WindowProcessLogs extends _$WindowProcessLogs {
 
   setProcess(Process process) {
     reset();
+    onEvent(List<int> event) {
+      final string = String.fromCharCodes(event);
+      print('process: $string');
+      state = [...state, string];
+    }
+
     _stdoutStreamSubscription = process.stdout.listen(
-      (event) {
-        state = [...state, String.fromCharCodes(event)];
-      },
+      onEvent,
     );
     _stderrStreamSubscription = process.stderr.listen(
-      (event) {
-        state = [...state, String.fromCharCodes(event)];
-      },
+      onEvent,
     );
   }
 

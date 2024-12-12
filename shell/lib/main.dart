@@ -14,6 +14,7 @@ import 'package:shell/shared/pulseaudio/provider/pulse_server_info.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_sink_list.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_source_list.dart';
 import 'package:shell/shared/util/logger.dart';
+import 'package:shell/shortcut_manager/widget/shortcut_manager.dart';
 import 'package:shell/theme/theme.dart';
 import 'package:shell/wayland/model/request/get_environment_variables/get_environment_variables.serializable.dart';
 import 'package:shell/wayland/model/request/get_monitor_layout/get_monitor_layout.serializable.dart';
@@ -30,7 +31,6 @@ void main() async {
   // debugPrintGestureArenaDiagnostics = true;
   WidgetsFlutterBinding.ensureInitialized();
   final container = ProviderContainer();
-
   container
     ..read(environmentVariablesProvider)
     ..read(waylandManagerProvider)
@@ -121,36 +121,38 @@ class Veshell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
+      key: globalVeshellKey,
       theme: VeshellTheme.light,
       darkTheme: VeshellTheme.dark,
       themeMode: ThemeMode.dark,
       home: _EagerInitialization(
-        child: Scaffold(
-          key: globalVeshellKey,
-          body: HookConsumer(
-            builder: (
-              BuildContext context,
-              WidgetRef ref,
-              Widget? child,
-            ) {
-              useEffect(
-                () {
-                  ref
-                      .read(waylandManagerProvider.notifier)
-                      .request(const ShellReadyRequest());
-                  return null;
-                },
-                [],
-              );
-              return Stack(
-                children: [
-                  const Positioned.fill(child: DisplayWidget()),
-                  Overlay(
-                    key: ref.watch(rootOverlayKeyProvider),
-                  ),
-                ],
-              );
-            },
+        child: VeshellShortcutManager(
+          child: Material(
+            child: HookConsumer(
+              builder: (
+                BuildContext context,
+                WidgetRef ref,
+                Widget? child,
+              ) {
+                useEffect(
+                  () {
+                    ref
+                        .read(waylandManagerProvider.notifier)
+                        .request(const ShellReadyRequest());
+                    return null;
+                  },
+                  [],
+                );
+                return Stack(
+                  children: [
+                    const Positioned.fill(child: DisplayWidget()),
+                    Overlay(
+                      key: ref.watch(rootOverlayKeyProvider),
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ),

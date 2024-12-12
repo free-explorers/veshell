@@ -4,13 +4,15 @@ use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::calloop::{LoopHandle, RegistrationToken};
 use std::time::Duration;
 
-type Callback<BackendData> = fn(u32, Option<char>, &mut State<BackendData>);
+use super::VeshellKeyEvent;
+
+type Callback<BackendData> = fn(VeshellKeyEvent, &mut State<BackendData>);
 
 pub struct KeyRepeater<BackendData: Backend + 'static> {
     loop_handle: LoopHandle<'static, State<BackendData>>,
     timer_token: Option<RegistrationToken>,
     callback: Callback<BackendData>,
-    repeating_key: Option<u32>,
+    repeating_event: Option<VeshellKeyEvent>,
 }
 
 impl<BackendData: Backend + 'static> KeyRepeater<BackendData> {
@@ -22,20 +24,14 @@ impl<BackendData: Backend + 'static> KeyRepeater<BackendData> {
             loop_handle,
             timer_token: None,
             callback,
-            repeating_key: None,
+            repeating_event: None,
         }
     }
 
-    pub fn down(
-        &mut self,
-        key_code: u32,
-        char_point: Option<char>,
-        repeat_delay: Duration,
-        repeat_rate: Duration,
-    ) {
+    pub fn down(&mut self, event: VeshellKeyEvent, repeat_delay: Duration, repeat_rate: Duration) {
         // Cancel any existing key repeat, we don't want to repeat multiple keys at once.
         self.cancel();
-        self.repeating_key = Some(key_code);
+        self.repeating_event = Some(event);
 
         let timer = Timer::from_duration(repeat_delay);
 
@@ -43,7 +39,7 @@ impl<BackendData: Backend + 'static> KeyRepeater<BackendData> {
         let token = self
             .loop_handle
             .insert_source(timer, move |_, _, data| {
-                callback(key_code, char_point, data);
+                callback(event, data);
                 // Reschedule the timer over and over.
                 TimeoutAction::ToDuration(repeat_rate)
             })
@@ -52,13 +48,13 @@ impl<BackendData: Backend + 'static> KeyRepeater<BackendData> {
         self.timer_token = Some(token);
     }
 
-    pub fn up(&mut self, key_code: u32) {
-        let repeating_key = match self.repeating_key {
-            Some(repeating_key) => repeating_key,
+    pub fn up(&mut self, event: VeshellKeyEvent) {
+        let repeating_event = match self.repeating_event {
+            Some(repeating_event) => repeating_event,
             None => return,
         };
         // Only stop the key repeat if the user releases the same key that caused the repeat.
-        if repeating_key == key_code {
+        if repeating_event.key_code == event.key_code {
             self.cancel();
         }
     }

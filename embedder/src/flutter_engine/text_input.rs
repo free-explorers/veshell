@@ -1,8 +1,8 @@
 //! https://api.flutter.dev/flutter/services/SystemChannels/textInput-constant.html
 
-use input_linux::sys::KEY_ENTER;
 use serde_json::json;
 use smithay::reexports::calloop::channel::Event;
+use xkbcommon::xkb::Keysym;
 
 use crate::backend::Backend;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
@@ -35,20 +35,20 @@ impl TextInput {
         self.active_model.is_some()
     }
 
-    pub fn press_key(&mut self, keycode: u32, code_point: Option<char>) -> bool {
+    pub fn press_key(&mut self, keysym: Keysym) -> bool {
         let model = match self.active_model.as_mut() {
             None => return false,
             Some(model) => model,
         };
 
-        let changed = match keycode as i32 {
+        let changed = match keysym {
             // Navigation keys like arrow keys are handled by Flutter, but the following keys are not.
-            KEY_ENTER => {
+            Keysym::KP_Enter => {
                 self.press_enter();
                 false
             }
             _ => {
-                if let Some(code_point) = code_point {
+                if let Some(code_point) = keysym.key_char() {
                     // A regular character.
                     model.add_char_point(code_point);
                     true
