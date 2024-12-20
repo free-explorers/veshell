@@ -9,7 +9,7 @@ pub mod xwayland {
 
     use smithay::input::pointer::CursorIcon;
     use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-    use smithay::reexports::x11rb::protocol::xproto::Window;
+
     use smithay::utils::{Logical, Point, Rectangle, Size};
     use smithay::wayland::seat::WaylandFocus;
     use smithay::wayland::selection::data_device::{
@@ -27,7 +27,7 @@ pub mod xwayland {
     use std::borrow::Borrow;
     use std::cell::RefCell;
     use std::os::fd::OwnedFd;
-    use std::time::Duration;
+
     use tracing::{error, trace};
     pub struct MyX11SurfaceState {
         pub x11_surface_id: u64,
@@ -147,7 +147,7 @@ pub mod xwayland {
                 surface
                     .is_transient_for()
                     .and_then(|x11_surface| self.x11_surface_per_x11_window.get(&x11_surface))
-                    .map(|x11_surface| Self::get_x11_surface_id(&x11_surface))
+                    .map(|x11_surface| Self::get_x11_surface_id(x11_surface))
             };
 
             let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;

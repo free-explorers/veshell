@@ -54,10 +54,6 @@ use smithay::{
 use tracing::{info, warn};
 
 use crate::cursor::CursorState;
-use crate::flutter_engine::embedder::{
-    FlutterKeyEvent, FlutterKeyEventType, FlutterKeyEventType_kFlutterKeyEventTypeDown,
-    FlutterKeyEventType_kFlutterKeyEventTypeUp,
-};
 use crate::flutter_engine::wayland_messages::{
     PopupMessage, SubsurfaceMessage, SurfaceMessage, SurfaceRole, ToplevelMessage,
     XdgSurfaceMessage, XdgSurfaceRole,
@@ -332,7 +328,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .texture_ids_per_surface_id
             .get(&surface_id)
             .and_then(|ids| ids.last().cloned())
-            .and_then(|(id, size)| Some((id, Some(size))))
+            .map(|(id, size)| (id, Some(size)))
             .unwrap_or((0, None));
 
         // TODO: Serialize all the rectangles instead of merging them into one.
@@ -460,11 +456,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             return None;
         }
 
-        let parent_id = if let Some(ref parent) = parent {
-            Some(get_surface_id(&parent))
-        } else {
-            None
-        };
+        let parent_id = parent.as_ref().map(get_surface_id);
 
         Some(ToplevelMessage {
             parent_surface_id: parent_id,

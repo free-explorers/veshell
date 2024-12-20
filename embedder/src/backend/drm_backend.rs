@@ -1,4 +1,3 @@
-use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::io;
 use std::path::Path;
@@ -14,18 +13,14 @@ use smithay::backend::drm::{
     CreateDrmNodeError, DrmAccessError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent,
     DrmEventMetadata, DrmNode, NodeType,
 };
-use smithay::backend::egl::context::ContextPriority;
 use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
-use smithay::backend::renderer::damage::{Error as OutputDamageTrackerError, OutputDamageTracker};
-use smithay::backend::renderer::element::texture::{TextureBuffer, TextureRenderElement};
-use smithay::backend::renderer::element::utils::{Relocate, RelocateRenderElement};
-use smithay::backend::renderer::element::{Kind, RenderElement};
+use smithay::backend::renderer::element::texture::TextureRenderElement;
 use smithay::backend::renderer::gles::ffi::Gles2;
-use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
+use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::renderer::multigpu::gbm::GbmGlesBackend;
-use smithay::backend::renderer::multigpu::{GpuManager, MultiRenderer};
-use smithay::backend::renderer::{ImportAll, ImportDma, ImportEgl, ImportMem, Renderer, Texture};
+use smithay::backend::renderer::multigpu::MultiRenderer;
+use smithay::backend::renderer::{ImportAll, ImportDma, ImportEgl, Renderer, Texture};
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{libseat, Event as SessionEvent, Session};
 use smithay::backend::udev::{all_gpus, primary_gpu, UdevBackend, UdevEvent};
@@ -35,7 +30,6 @@ use smithay::desktop::utils::OutputPresentationFeedback;
 use smithay::input::pointer::CursorImageStatus;
 use smithay::output::Mode;
 use smithay::output::{Output, PhysicalProperties, Subpixel};
-use smithay::reexports::ash::khr::swapchain;
 use smithay::reexports::calloop::channel::Event;
 use smithay::reexports::calloop::RegistrationToken;
 use smithay::reexports::calloop::{EventLoop, LoopHandle};
@@ -46,7 +40,7 @@ use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::DisplayHandle;
-use smithay::utils::{DeviceFd, IsAlive, Point, Rectangle, Transform};
+use smithay::utils::{DeviceFd, IsAlive, Rectangle};
 use smithay::wayland::dmabuf::{
     DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier,
 };
@@ -55,14 +49,12 @@ use tracing::{debug, error, info, warn};
 
 use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
 use smithay_drm_extras::edid::EdidInfo;
-use tracing_subscriber::field::debug;
 
-use crate::cursor::{draw_cursor, CursorRenderElement};
 use crate::flutter_engine::FlutterEngine;
 use crate::state;
 use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
 
-use super::render::{get_render_elements, VeshellRenderElements, CLEAR_COLOR};
+use super::render::{get_render_elements, CLEAR_COLOR};
 use super::Backend;
 
 type DrmRenderer<'a> = MultiRenderer<
@@ -83,7 +75,7 @@ impl AsGlesRendererMut for GlesRenderer {
     }
 }
 
-impl<'render> AsGlesRendererMut for DrmRenderer<'render> {
+impl AsGlesRendererMut for DrmRenderer<'_> {
     fn as_gles_renderer_mut(&mut self) -> &mut GlesRenderer {
         self.as_mut()
     }
@@ -99,7 +91,7 @@ impl AsGlesRenderer for GlesRenderer {
     }
 }
 
-impl<'render> AsGlesRenderer for DrmRenderer<'render> {
+impl AsGlesRenderer for DrmRenderer<'_> {
     fn as_gles_renderer(&self) -> &GlesRenderer {
         self.as_ref()
     }
@@ -412,12 +404,7 @@ pub fn run_drm_backend() {
     state.tx_fbo = Some(tx_fbo.clone());
     state.flutter_engine = Some(flutter_engine);
 
-    let nodes_available: Vec<DrmNode> = state
-        .backend_data
-        .gpus
-        .iter()
-        .map(|(node, _)| *node)
-        .collect();
+    let nodes_available: Vec<DrmNode> = state.backend_data.gpus.keys().copied().collect();
 
     // Initialize already present connectors.
     for node in nodes_available {
@@ -737,7 +724,7 @@ impl State<DrmBackend> {
             }
         };
 
-        let mut surface = SurfaceData {
+        let surface = SurfaceData {
             dh: self.display_handle.clone(),
             device_id: node,
             crtc,
@@ -869,7 +856,7 @@ impl State<DrmBackend> {
             .and_then(|x| x.try_get_render_node().ok().flatten())
             .unwrap_or(node);
 
-        let mut renderer =
+        let renderer =
             unsafe { GlesRenderer::new(EGLContext::new(&egl_display).unwrap()) }.unwrap();
 
         /*         self.backend_data
@@ -969,7 +956,7 @@ impl State<DrmBackend> {
         }
 
         // drop the backends on this side
-        if let Some(mut backend_data) = self.backend_data.gpus.remove(&node) {
+        if let Some(backend_data) = self.backend_data.gpus.remove(&node) {
             /*             self.backend_data
             .gpu_manager
             .as_mut()
@@ -1185,7 +1172,7 @@ impl State<DrmBackend> {
             &self.cursor_image_status,
             &self.cursor_state,
             self.pointer.current_location(),
-            self.surface_id_under_cursor != None,
+            self.surface_id_under_cursor.is_some(),
         );
 
         let rendered = surface
@@ -1198,7 +1185,6 @@ impl State<DrmBackend> {
                 Err(err) => {
                     warn!("error queueing frame: {err}");
                     warn!("drm active: {:?}", gpu_data.drm_device.is_active());
-                    return;
                 }
             },
             Err(err) => {

@@ -1,9 +1,6 @@
 use std::sync::Mutex;
 
-use crate::{
-    cursor::{draw_cursor, CursorRenderElement, CursorStateInner},
-    state::State,
-};
+use crate::cursor::{draw_cursor, CursorRenderElement, CursorStateInner};
 
 use smithay::{
     backend::{
@@ -11,37 +8,19 @@ use smithay::{
             dmabuf::{AsDmabuf, Dmabuf},
             Slot,
         },
-        drm::DrmNode,
         renderer::{
-            buffer_dimensions,
-            damage::{Error as RenderError, OutputDamageTracker, RenderOutputResult},
             element::{
-                surface::{render_elements_from_surface_tree, WaylandSurfaceRenderElement},
                 texture::{TextureBuffer, TextureRenderElement},
-                utils::{CropRenderElement, Relocate, RelocateRenderElement},
-                AsRenderElements, Element, Id, Kind, RenderElement,
+                utils::{Relocate, RelocateRenderElement},
+                Kind, RenderElement,
             },
-            gles::{
-                element::PixelShaderElement, GlesError, GlesPixelProgram, GlesRenderer, Uniform,
-                UniformName, UniformType,
-            },
-            multigpu::{Error as MultiError, MultiFrame, MultiRenderer},
-            sync::SyncPoint,
-            Bind, Blit, Color32F, ExportMem, ImportAll, ImportDma, ImportMem, Offscreen, Renderer,
-            Texture, TextureFilter,
+            ImportAll, ImportDma, ImportMem, Renderer, Texture,
         },
     },
     input::pointer::CursorImageStatus,
-    output::{Output, OutputNoMode},
-    utils::{IsAlive, Logical, Monotonic, Point, Rectangle, Scale, Time, Transform},
-    wayland::{
-        dmabuf::get_dmabuf,
-        session_lock::LockSurface,
-        shm::{shm_format_to_fourcc, with_buffer_contents},
-    },
+    output::Output,
+    utils::{Logical, Monotonic, Point, Rectangle, Time, Transform},
 };
-
-use super::Backend;
 
 pub static CLEAR_COLOR: [f32; 4] = [0.8, 0.8, 0.9, 1.0];
 pub static CLEAR_COLOR_FULLSCREEN: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
@@ -120,5 +99,5 @@ where
         elements.push(VeshellRenderElements::Flutter(flutter_texture_element));
     }
 
-    return elements;
+    elements
 }
