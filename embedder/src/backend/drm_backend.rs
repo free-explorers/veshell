@@ -10,8 +10,8 @@ use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags};
 use smithay::backend::allocator::{Allocator, Fourcc, Slot, Swapchain};
 use smithay::backend::drm::compositor::DrmCompositor;
 use smithay::backend::drm::{
-    CreateDrmNodeError, DrmAccessError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent,
-    DrmEventMetadata, DrmNode, NodeType,
+    CreateDrmNodeError, DrmAccessError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent, DrmNode,
+    NodeType,
 };
 use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
@@ -839,9 +839,9 @@ impl State<DrmBackend> {
             .loop_handle
             .insert_source(
                 notifier,
-                move |event, metadata, data: &mut State<_>| match event {
+                move |event, _metadata, data: &mut State<_>| match event {
                     DrmEvent::VBlank(crtc) => {
-                        data.frame_finish(node, crtc, metadata);
+                        data.frame_finish(node, crtc);
                     }
                     DrmEvent::Error(error) => {
                         error!("{:?}", error);
@@ -969,12 +969,7 @@ impl State<DrmBackend> {
         }
     }
 
-    fn frame_finish(
-        &mut self,
-        node: DrmNode,
-        crtc: crtc::Handle,
-        metadata: &mut Option<DrmEventMetadata>,
-    ) {
+    fn frame_finish(&mut self, node: DrmNode, crtc: crtc::Handle) {
         let gpu_data = match self.backend_data.gpus.get_mut(&node) {
             Some(gpu_data) => gpu_data,
             None => {
