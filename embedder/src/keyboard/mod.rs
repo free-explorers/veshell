@@ -1,7 +1,7 @@
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use smithay::backend::input::{KeyState, KeyboardKeyEvent};
+use smithay::backend::input::KeyState;
 use smithay::backend::session::Session;
 use smithay::input::keyboard::ModifiersState;
 use smithay::utils::SERIAL_COUNTER;

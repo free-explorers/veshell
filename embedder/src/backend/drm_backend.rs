@@ -20,7 +20,7 @@ use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::renderer::multigpu::gbm::GbmGlesBackend;
 use smithay::backend::renderer::multigpu::MultiRenderer;
-use smithay::backend::renderer::{ImportAll, ImportDma, ImportEgl, Renderer, Texture};
+use smithay::backend::renderer::{ImportAll, ImportDma, ImportEgl, Renderer};
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{libseat, Event as SessionEvent, Session};
 use smithay::backend::udev::{all_gpus, primary_gpu, UdevBackend, UdevEvent};
@@ -428,7 +428,10 @@ pub fn run_drm_backend() {
     event_loop
         .handle()
         .insert_source(udev_backend, move |event, _, data| match event {
-            UdevEvent::Added { device_id, path } => {
+            UdevEvent::Added {
+                device_id: _,
+                path: _,
+            } => {
                 /* debug!("UdevEvent::Added {{ device_id: {device_id}");
                 if let Err(err) = DrmNode::from_dev_id(device_id)
                     .map_err(DeviceAddError::DrmNode)
@@ -443,7 +446,7 @@ pub fn run_drm_backend() {
                     data.device_changed(node)
                 }
             }
-            UdevEvent::Removed { device_id } => {
+            UdevEvent::Removed { device_id: _ } => {
                 /* debug!("UdevEvent::Removed {{ device_id: {device_id} }}");
                 if let Ok(node) = DrmNode::from_dev_id(device_id) {
                     data.device_removed(node)
@@ -988,7 +991,7 @@ impl State<DrmBackend> {
             }
         };
 
-        let output = if let Some(output) = self.space.outputs().find(|o| {
+        let _output = if let Some(output) = self.space.outputs().find(|o| {
             o.user_data().get::<UdevOutputId>()
                 == Some(&UdevOutputId {
                     device_id: surface.device_id,
@@ -1015,7 +1018,7 @@ impl State<DrmBackend> {
             .frame_submitted()
             .map_err(Into::<SwapBuffersError>::into)
         {
-            Ok(user_data) => true,
+            Ok(_user_data) => true,
             Err(err) => {
                 warn!("Error during rendering: {:?}", err);
                 match err {
@@ -1122,7 +1125,7 @@ impl State<DrmBackend> {
             None => return,
         };
 
-        let render_node = surface.render_node;
+        let _render_node = surface.render_node;
         /* let primary_gpu = self.backend_data.primary_gpu;
         let mut renderer = if primary_gpu == render_node {
             self.backend_data.gpu_manager.single_renderer(&render_node)
@@ -1180,7 +1183,7 @@ impl State<DrmBackend> {
             .render_frame(renderer, &elements, [0.0, 0.0, 0.0, 0.0]);
 
         match rendered {
-            Ok(frame_result) => match surface.compositor.queue_frame(None) {
+            Ok(_frame_result) => match surface.compositor.queue_frame(None) {
                 Ok(()) => {}
                 Err(err) => {
                     warn!("error queueing frame: {err}");
@@ -1296,7 +1299,7 @@ where
     let render = surface
         .compositor
         .render_frame::<_, TextureRenderElement<_>>(renderer, &[], CLEAR_COLOR);
-    if let Err(err) = render {
+    if let Err(_err) = render {
         return Err(SwapBuffersError::TemporaryFailure(
             "Failed to render".into(),
         ));

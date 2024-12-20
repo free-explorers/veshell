@@ -138,7 +138,7 @@ pub mod xwayland {
                     .or_else(|| {
                         self.keyboard.current_focus().and_then(|focus| {
                             focus.wl_surface().and_then(|focus| {
-                                self.x11_surface_per_wl_surface.get(&focus.into_owned())
+                                self.x11_surface_per_wl_surface.get(focus.as_ref())
                             })
                         })
                     })

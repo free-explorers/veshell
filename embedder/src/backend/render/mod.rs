@@ -14,7 +14,7 @@ use smithay::{
                 utils::{Relocate, RelocateRenderElement},
                 Kind, RenderElement,
             },
-            ImportAll, ImportDma, ImportMem, Renderer, Texture,
+            ImportAll, ImportDma, ImportMem, Renderer,
         },
     },
     input::pointer::CursorImageStatus,
