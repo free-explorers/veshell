@@ -83,7 +83,8 @@ pub fn handle_keyboard_event<BackendData: Backend + 'static>(
     data.flutter_engine
         .as_mut()
         .unwrap()
-        .send_key_event(veshell_key_event, false);
+        .send_key_event(veshell_key_event, false)
+        .unwrap();
 
     // Initiate key repeat.
     // The callback that gets called repeatedly is defined in the constructor of `State`.

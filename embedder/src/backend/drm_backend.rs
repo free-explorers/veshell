@@ -1069,7 +1069,7 @@ impl State<DrmBackend> {
             slot
         } else {
             // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
-            initial_render(surface, renderer);
+            initial_render(surface, renderer).unwrap();
             return;
         };
 
