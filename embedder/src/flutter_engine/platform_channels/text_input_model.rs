@@ -66,7 +66,7 @@ impl TextInputModel {
         self.composing_range = TextRange::new_position(self.selection.start());
     }
 
-    pub fn update_composing_text_selection(&mut self, text: &Vec<u16>, selection: &TextRange) {
+    pub fn update_composing_text_selection(&mut self, text: &[u16], selection: &TextRange) {
         if text.is_empty() && self.composing_range.collapsed() {
             return;
         }
@@ -87,12 +87,13 @@ impl TextInputModel {
         );
     }
 
-    pub fn update_composing_text(&mut self, text: &Vec<u16>) {
+    pub fn update_composing_text(&mut self, text: &[u16]) {
         self.update_composing_text_selection(text, &TextRange::new_position(text.len()));
     }
 
     pub fn update_composing_text_utf8(&mut self, text: &str) {
-        self.update_composing_text(&text.encode_utf16().collect());
+        let encoded: Vec<u16> = text.encode_utf16().collect();
+        self.update_composing_text(&encoded);
     }
 
     pub fn commit_composing(&mut self) {
@@ -124,17 +125,17 @@ impl TextInputModel {
 
     pub fn add_char_point(&mut self, c: char) {
         if c as u32 <= 0xFFFF {
-            self.add_text(&vec![c as u16])
+            self.add_text(&[c as u16])
         } else {
             let to_decompose = c as u32 - 0x10000;
-            self.add_text(&vec![
+            self.add_text(&[
                 ((to_decompose >> 10) + 0xd800) as u16,
                 ((to_decompose % 0x400) + 0xdc00) as u16,
             ])
         }
     }
 
-    pub fn add_text(&mut self, text: &Vec<u16>) {
+    pub fn add_text(&mut self, text: &[u16]) {
         self.delete_selected();
         if self.composing {
             self.text.splice(
