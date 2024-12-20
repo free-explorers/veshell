@@ -100,6 +100,11 @@ class InstallCommand extends Command<int> {
       ],
     );
 
+    await runProcess(
+      'cp',
+      ['-r', 'settings/', buildDirectory],
+    );
+
     logger.success('\nPackaging completed\n');
   }
 }

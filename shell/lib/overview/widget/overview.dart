@@ -24,7 +24,6 @@ class OverviewWidget extends HookConsumerWidget {
     ref.listen(
         overviewStateProvider(screenId).select((state) => state.isDisplayed),
         (previous, next) {
-      print('overviewIsDisplayedProvider changed $previous $next');
       if (next) {
         overviewAnimationController.forward();
       } else {

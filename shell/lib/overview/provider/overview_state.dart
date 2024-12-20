@@ -25,11 +25,11 @@ class OverviewState extends _$OverviewState {
     state = state.copyWith(isDisplayed: !state.isDisplayed);
 
     /// If the overview is hidden, close all ephemeral applications
-    if (!state.isDisplayed) {
+/*     if (!state.isDisplayed) {
       for (final windowId in state.windowList) {
         ref.read(windowManagerProvider.notifier).closeWindow(windowId);
       }
-    }
+    } */
   }
 
   /// Start an new Ephemeral Application

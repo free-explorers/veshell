@@ -28,28 +28,6 @@ class ScreenWidget extends HookConsumerWidget {
 
     return Actions(
       actions: {
-        FocusWorkspaceAboveIntent: CallbackAction<FocusWorkspaceAboveIntent>(
-          onInvoke: (_) {
-            final nextIndex = screenState.selectedIndex - 1;
-            if (nextIndex >= 0) {
-              ref
-                  .read(screenStateProvider(screenId).notifier)
-                  .selectWorkspace(nextIndex);
-            }
-            return null;
-          },
-        ),
-        FocusWorkspaceBelowIntent: CallbackAction<FocusWorkspaceBelowIntent>(
-          onInvoke: (_) {
-            final nextIndex = screenState.selectedIndex + 1;
-            if (nextIndex < screenState.workspaceList.length) {
-              ref
-                  .read(screenStateProvider(screenId).notifier)
-                  .selectWorkspace(nextIndex);
-            }
-            return null;
-          },
-        ),
         ToggleOverviewIntent: CallbackAction<ToggleOverviewIntent>(
           onInvoke: (_) {
             print('In ToggleOverviewIntent');
@@ -82,36 +60,65 @@ class ScreenWidget extends HookConsumerWidget {
           },
           child: Stack(
             children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                textDirection: TextDirection.rtl,
-                children: [
-                  Expanded(
-                    child: SlidingContainer(
-                      direction: Axis.vertical,
-                      index: screenState.selectedIndex,
-                      children: screenState.workspaceList
-                          .mapIndexed(
-                            (index, workspaceId) => ProviderScope(
-                              key: Key(workspaceId),
-                              overrides: [
-                                currentWorkspaceIdProvider
-                                    .overrideWith((ref) => workspaceId),
-                              ],
-                              child: WorkspaceWidget(
-                                isSelected: screenState.selectedIndex == index,
+              Actions(
+                actions: {
+                  FocusWorkspaceAboveIntent:
+                      CallbackAction<FocusWorkspaceAboveIntent>(
+                    onInvoke: (_) {
+                      final nextIndex = screenState.selectedIndex - 1;
+                      if (nextIndex >= 0) {
+                        ref
+                            .read(screenStateProvider(screenId).notifier)
+                            .selectWorkspace(nextIndex);
+                      }
+                      return null;
+                    },
+                  ),
+                  FocusWorkspaceBelowIntent:
+                      CallbackAction<FocusWorkspaceBelowIntent>(
+                    onInvoke: (_) {
+                      final nextIndex = screenState.selectedIndex + 1;
+                      if (nextIndex < screenState.workspaceList.length) {
+                        ref
+                            .read(screenStateProvider(screenId).notifier)
+                            .selectWorkspace(nextIndex);
+                      }
+                      return null;
+                    },
+                  ),
+                },
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  textDirection: TextDirection.rtl,
+                  children: [
+                    Expanded(
+                      child: SlidingContainer(
+                        direction: Axis.vertical,
+                        index: screenState.selectedIndex,
+                        children: screenState.workspaceList
+                            .mapIndexed(
+                              (index, workspaceId) => ProviderScope(
+                                key: Key(workspaceId),
+                                overrides: [
+                                  currentWorkspaceIdProvider
+                                      .overrideWith((ref) => workspaceId),
+                                ],
+                                child: WorkspaceWidget(
+                                  isSelected:
+                                      screenState.selectedIndex == index,
+                                ),
                               ),
-                            ),
-                          )
-                          .toList(),
+                            )
+                            .toList(),
+                      ),
                     ),
-                  ),
-                  const Material(
-                    elevation: 4,
-                    child: ScreenPanel(),
-                  ),
-                ],
+                    const Material(
+                      elevation: 4,
+                      child: ScreenPanel(),
+                    ),
+                  ],
+                ),
               ),
               const OverviewWidget(),
             ],

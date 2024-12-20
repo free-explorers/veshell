@@ -61,8 +61,17 @@ class VeshellShortcutManager extends HookConsumerWidget {
           ),
           ToggleMute: CallbackAction<ToggleMute>(
             onInvoke: (ToggleMute intent) {
-              print('yoyo');
-              return true;
+              final defaultSink = ref.read(defaultPulseSinkProvider);
+              if (defaultSink == null) return;
+              final sink = ref.read(
+                pulseSinkByNameProvider(defaultSink.name),
+              );
+              if (sink == null) return;
+              ref.read(pulseClientProvider).requireValue.setSinkMute(
+                    defaultSink.name,
+                    !sink.mute,
+                  );
+              return;
             },
           ),
         },
