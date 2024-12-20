@@ -18,8 +18,6 @@ use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface}
 use smithay::backend::renderer::element::texture::TextureRenderElement;
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
-use smithay::backend::renderer::multigpu::gbm::GbmGlesBackend;
-use smithay::backend::renderer::multigpu::MultiRenderer;
 use smithay::backend::renderer::{ImportAll, ImportDma, ImportEgl, Renderer};
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{libseat, Event as SessionEvent, Session};
@@ -56,46 +54,6 @@ use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
 
 use super::render::{get_render_elements, CLEAR_COLOR};
 use super::Backend;
-
-type DrmRenderer<'a> = MultiRenderer<
-    'a,
-    'a,
-    GbmGlesBackend<GlesRenderer, DrmDeviceFd>,
-    GbmGlesBackend<GlesRenderer, DrmDeviceFd>,
->;
-
-/// Trait for getting the underlying `GlesRenderer`.
-pub trait AsGlesRendererMut {
-    fn as_gles_renderer_mut(&mut self) -> &mut GlesRenderer;
-}
-
-impl AsGlesRendererMut for GlesRenderer {
-    fn as_gles_renderer_mut(&mut self) -> &mut GlesRenderer {
-        self
-    }
-}
-
-impl AsGlesRendererMut for DrmRenderer<'_> {
-    fn as_gles_renderer_mut(&mut self) -> &mut GlesRenderer {
-        self.as_mut()
-    }
-}
-
-pub trait AsGlesRenderer {
-    fn as_gles_renderer(&self) -> &GlesRenderer;
-}
-
-impl AsGlesRenderer for GlesRenderer {
-    fn as_gles_renderer(&self) -> &GlesRenderer {
-        self
-    }
-}
-
-impl AsGlesRenderer for DrmRenderer<'_> {
-    fn as_gles_renderer(&self) -> &GlesRenderer {
-        self.as_ref()
-    }
-}
 
 pub struct DrmBackend {
     pub session: LibSeatSession,
@@ -938,34 +896,6 @@ impl State<DrmBackend> {
                 } => self.connector_disconnected(node, connector, crtc),
                 _ => {}
             }
-        }
-    }
-
-    fn device_removed(&mut self, node: DrmNode) {
-        let device = if let Some(device) = self.backend_data.gpus.get_mut(&node) {
-            device
-        } else {
-            return;
-        };
-
-        let crtcs: Vec<_> = device
-            .drm_scanner
-            .crtcs()
-            .map(|(info, crtc)| (info.clone(), crtc))
-            .collect();
-
-        for (connector, crtc) in crtcs {
-            self.connector_disconnected(node, connector, crtc);
-        }
-
-        // drop the backends on this side
-        if let Some(backend_data) = self.backend_data.gpus.remove(&node) {
-            /*             self.backend_data
-            .gpu_manager
-            .as_mut()
-            .remove_node(&backend_data.render_node); */
-
-            self.loop_handle.remove(backend_data.registration_token);
         }
     }
 
