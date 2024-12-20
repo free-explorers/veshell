@@ -1,5 +1,6 @@
 pub mod xdg;
 
+#[allow(clippy::module_inception)]
 pub mod wayland {
     use std::cell::RefCell;
 

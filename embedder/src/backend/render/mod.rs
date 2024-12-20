@@ -32,6 +32,7 @@ smithay::backend::renderer::element::render_elements! {
     Flutter=TextureRenderElement<R::TextureId>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn get_render_elements<R>(
     renderer: &mut R,
     output: &Output,

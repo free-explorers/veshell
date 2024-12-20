@@ -100,6 +100,7 @@ pub struct State<BackendData: Backend + 'static> {
     pub pointer_focus: Option<(PointerFocusTarget, Point<f64, Logical>)>,
     pub surfaces: HashMap<u64, WlSurface>,
     pub subsurfaces: HashMap<u64, WlSurface>,
+    #[allow(clippy::type_complexity)]
     pub texture_ids_per_surface_id: HashMap<u64, Vec<(i64, Size<i32, BufferCoords>)>>,
     pub texture_swapchains: HashMap<i64, TextureSwapChain>,
     pub tx_fbo: Option<channel::Sender<Option<Dmabuf>>>,
