@@ -1,0 +1,46 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Hotkeys",
+    "description": "A list of action and hotkeys associated",
+    "type": "object",
+    "properties": {
+        "$schema": {
+            "type": "string"
+        },
+        "system.increaseVolume": {
+            "type": "string"
+        },
+        "system.decreaseVolume": {
+            "type": "string"
+        },
+        "system.muteVolume": {
+            "type": "string"
+        },
+        "screen.focusWorkspaceAbove": {
+            "type": "string"
+        },
+        "screen.focusWorkspaceBelow": {
+            "type": "string"
+        },
+        "workspace.focusLeftTileable": {
+            "type": "string"
+        },
+        "workspace.focusRightTileable": {
+            "type": "string"
+        },
+        "workspace.closeTileable": {
+            "type": "string"
+        }
+    },
+    "required": [
+        "system.increaseVolume",
+        "system.decreaseVolume",
+        "system.muteVolume",
+        "screen.focusWorkspaceAbove",
+        "screen.focusWorkspaceBelow",
+        "workspace.focusLeftTileable",
+        "workspace.focusRightTileable",
+        "workspace.closeTileable"
+    ],
+    "additionalProperties": false
+}

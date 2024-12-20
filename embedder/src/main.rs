@@ -38,6 +38,17 @@ mod texture_swap_chain;
 mod wayland;
 mod xwayland;
 
+fn initialize_env() {
+    if std::env::var("VESHELL_DEFAULT_CONFIG_DIR").is_err() {
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(exe_dir) = exe_path.parent() {
+                let config_dir = exe_dir.join("settings/default");
+                std::env::set_var("VESHELL_DEFAULT_CONFIG_DIR", config_dir);
+            }
+        }
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up subscriber with both stdout and file layers
     tracing_subscriber::fmt()
@@ -51,7 +62,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     debug!("Starting Veshell");
     // Fix XWayland crash when too many file descriptors are open.
     let _ = rlimit::increase_nofile_limit(u64::MAX);
-
+    initialize_env();
     if env::var("DISPLAY").is_ok() || env::var("WAYLAND_DISPLAY").is_ok() {
         backend::x11_client::run_x11_client();
     } else {

@@ -15,7 +15,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # In iOS, build-name is used as CFBundleShortVersionString while build-number used as CFBundleVersion.
 # Read more about iOS versioning at
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
-version: 1.0.0+1
+version: 0.2.0+1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -34,7 +34,7 @@ dependencies:
   hooks_riverpod: ^2.4.6
   flutter_hooks: ^0.20.3
   riverpod_annotation: ^2.3.1
-  intl: ^0.19.0
+  intl: ^0.20.1
   freezed: ^2.4.5
   freezed_annotation: ^2.4.1
   tuple: ^2.0.2
@@ -53,13 +53,13 @@ dependencies:
   material_design_icons_flutter: 
     git:
       url: https://github.com/free-explorers/material_design_icons_flutter
-  json_annotation: ^4.8.1
+  json_annotation: ^4.9.0
   uuid: ^4.2.2
   collection: ^1.18.0
   path: any
   logger: ^2.3.0
   logging: ^1.2.0
-  fl_chart: ^0.69.0
+  fl_chart: ^0.70.0
   universal_disk_space: ^0.2.3
   duration: ^4.0.3
   ubuntu_session: 
@@ -83,10 +83,10 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   build_runner: ^2.4.13
-  flutter_lints: ^4.0.0
+  flutter_lints: ^5.0.0
   riverpod_generator: ^2.3.6
-  very_good_analysis: ^6.0.0
-  custom_lint: ^0.6.5
+  very_good_analysis: ^7.0.0
+  custom_lint: ^0.7.0
   riverpod_lint: ^2.3.4
   json_serializable: ^6.7.1
 

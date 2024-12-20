@@ -46,6 +46,8 @@ class RunCommand extends Command<int> {
         environment: {
           'RUST_LOG': 'debug',
           'RUST_BACKTRACE': '1',
+          'VESHELL_DEFAULT_CONFIG_DIR':
+              '${Directory.current.path}/settings/default',
         },
         mode: isTty ? ProcessStartMode.normal : ProcessStartMode.inheritStdio,
         workingDirectory: './embedder',

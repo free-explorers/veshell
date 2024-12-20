@@ -1,0 +1,20 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Veshell Settings",
+    "description": "System settings",
+    "type": "object",
+    "properties": {
+        "$schema": {
+            "type": "string"
+        },
+        "keyboard": {
+            "type": "object",
+            "properties": {
+                "layout": {
+                    "type": "string"
+                }
+            },
+            "additionalProperties": false
+        }
+    }
+}

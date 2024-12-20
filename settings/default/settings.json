@@ -1,0 +1,6 @@
+{
+    "keyboard": {
+        "layout": "us(altgr-intl)"
+    },
+    "$schema": "../schemas/settings.schema.json"
+}
