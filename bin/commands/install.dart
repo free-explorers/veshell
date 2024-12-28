@@ -147,6 +147,10 @@ X-GDM-SessionRegisters=true
       'sudo',
       ['cp', desktopFilePath, '/usr/share/wayland-sessions/'],
     );
+    await runProcess(
+      'sudo',
+      ['chmod', 'a+r', '/usr/share/wayland-sessions/veshell.desktop'],
+    );
   }
 
   logger.success('\nSession installation completed\n');
