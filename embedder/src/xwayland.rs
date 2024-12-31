@@ -413,6 +413,12 @@ pub mod xwayland {
                 }
             }
         }
+
+        fn fullscreen_request(&mut self, xwm: XwmId, window: X11Surface) {
+            let mut geometry = window.geometry();
+            window.configure(geometry).unwrap();
+        }
+        
     }
 
     impl<BackendData: Backend> XWaylandShellHandler for State<BackendData> {
