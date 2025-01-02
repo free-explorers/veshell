@@ -361,8 +361,8 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: "2b460e707bb080618fda7f587e5c4ddd355f4195"
-      resolved-ref: "2b460e707bb080618fda7f587e5c4ddd355f4195"
+      ref: "491c717c07dfc1040e3fd9687d4f9f2d37346eb2"
+      resolved-ref: "491c717c07dfc1040e3fd9687d4f9f2d37346eb2"
       url: "https://github.com/free-explorers/freedesktop_desktop_entry.git"
     source: git
     version: "0.6.1"
