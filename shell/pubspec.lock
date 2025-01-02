@@ -361,8 +361,8 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: load_single_theme_and_parent
-      resolved-ref: "8befc66a109f96856fc038b5a2b021f2449d99e3"
+      ref: "2b460e707bb080618fda7f587e5c4ddd355f4195"
+      resolved-ref: "2b460e707bb080618fda7f587e5c4ddd355f4195"
       url: "https://github.com/free-explorers/freedesktop_desktop_entry.git"
     source: git
     version: "0.6.1"

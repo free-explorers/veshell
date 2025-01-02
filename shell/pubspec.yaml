@@ -38,10 +38,11 @@ dependencies:
   freezed: ^2.4.5
   freezed_annotation: ^2.4.1
   tuple: ^2.0.2
-  freedesktop_desktop_entry: 
+  freedesktop_desktop_entry:
     git:
       url: https://github.com/free-explorers/freedesktop_desktop_entry.git
-      ref: load_single_theme_and_parent
+      ref: 2b460e707bb080618fda7f587e5c4ddd355f4195
+
   jovial_svg: ^1.1.15
   flutter_svg: ^2.0.9
 
