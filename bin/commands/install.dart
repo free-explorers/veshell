@@ -124,7 +124,7 @@ Future<void> createSession(
 
   await runProcess('sudo', [
     'ln',
-    '-s',
+    '-sf',
     '${buildDirectory.absolute.path}/veshell',
     '/usr/local/bin/veshell',
   ]);
