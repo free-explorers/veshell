@@ -9,7 +9,7 @@ import 'package:shell/shared/pulseaudio/provider/pulse_audio.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_sink_by_name.dart';
 import 'package:shell/shortcut_manager/model/screen_shortcuts.dart';
 import 'package:shell/shortcut_manager/model/system_intents.dart';
-import 'package:shell/shortcut_manager/provider/hotkeys_activator.provider.dart';
+import 'package:shell/shortcut_manager/provider/hotkeys_activator.dart';
 
 class VeshellShortcutManager extends HookConsumerWidget {
   const VeshellShortcutManager({required this.child, super.key});

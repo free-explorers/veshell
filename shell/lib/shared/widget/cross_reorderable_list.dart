@@ -119,7 +119,7 @@ class _CrossReorderableListState<T extends Object>
                               feedback: Container(
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(8),
-                                  color: Colors.white.withOpacity(0.1),
+                                  color: Colors.white.withAlpha(25),
                                 ),
                                 constraints: constraints,
                                 child: widget.feedbackBuilder

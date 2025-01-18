@@ -19,7 +19,7 @@ class NotificationWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.all(0),
-      color: Colors.white.withOpacity(0.03),
+      color: Colors.white.withAlpha(8),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

@@ -115,43 +115,63 @@ Future<void> createSession(
 }) async {
   logger.info('Creating session...\n');
   final buildDirectory = Directory('build/${target.name}');
-
-  final desktopFileContent = '''
-[Desktop Entry]
-Name=Veshell
-Exec=${buildDirectory.absolute.path}/$targetExec
-Type=Application
-X-GDM-SessionRegisters=true
-''';
-
-  final desktopFilePath = '${buildDirectory.path}/veshell.desktop';
-  logger.info('Creating $desktopFilePath\n');
-  final desktopFile = File(desktopFilePath);
-  await desktopFile.writeAsString(desktopFileContent);
+  final assetsDirectory = Directory('bin/assets');
 
   logger.info(
     'Installing the session in the system require sudo privileges',
     style: importantStyle,
   );
-  if (Platform.environment['container'] != null) {
-    logger
-      ..err(
-        '\nYou are in a container to finish the setup you should call in your host system',
-      )
-      ..info(
-        'sudo mkdir -p /usr/local/share/wayland-sessions && sudo cp ${desktopFile.absolute.path} /usr/local/share/wayland-sessions/',
-        style: commandStyle,
-      );
-  } else {
+
+  await runProcess('sudo', [
+    'ln',
+    '-s',
+    '${buildDirectory.absolute.path}/veshell',
+    '/usr/local/bin/veshell',
+  ]);
+
+  await runProcess(
+    'sudo',
+    [
+      'cp',
+      '${assetsDirectory.absolute.path}/veshell-session',
+      '/usr/local/bin/',
+    ],
+  );
+
+  if (Directory('/usr/local/share/wayland-sessions').existsSync() == false) {
     await runProcess(
       'sudo',
-      ['cp', desktopFilePath, '/usr/share/wayland-sessions/'],
-    );
-    await runProcess(
-      'sudo',
-      ['chmod', 'a+r', '/usr/share/wayland-sessions/veshell.desktop'],
+      ['mkdir', '-p', '/usr/local/share/wayland-sessions'],
     );
   }
+  await runProcess(
+    'sudo',
+    [
+      'cp',
+      '${assetsDirectory.absolute.path}/veshell.desktop',
+      '/usr/local/share/wayland-sessions/',
+    ],
+  );
+  await runProcess(
+    'sudo',
+    ['chmod', 'a+r', '/usr/local/share/wayland-sessions/veshell.desktop'],
+  );
+  await runProcess(
+    'sudo',
+    [
+      'cp',
+      '${assetsDirectory.absolute.path}/veshell.service',
+      '/etc/systemd/user/',
+    ],
+  );
+  await runProcess(
+    'sudo',
+    [
+      'cp',
+      '${assetsDirectory.absolute.path}/veshell-shutdown.target',
+      '/etc/systemd/user/',
+    ],
+  );
 
   logger.success('\nSession installation completed\n');
 }

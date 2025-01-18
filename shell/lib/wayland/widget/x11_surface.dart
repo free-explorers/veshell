@@ -62,24 +62,29 @@ class X11RootWindow extends ConsumerWidget {
 
     final children = ref
         .watch(
-          x11SurfaceStateProvider(x11SurfaceId).select(
-            (value) => value.children,
-          ),
-        )
+      x11SurfaceStateProvider(x11SurfaceId).select(
+        (value) => value.children,
+      ),
+    )
         .where(
-          (x11SurfaceId) => ref.watch(
+      (x11SurfaceId) {
+        try {
+          return ref.watch(
             x11SurfaceStateProvider(x11SurfaceId).select(
               (value) => value.mapped,
             ),
-          ),
-        )
-        .map(
-          (x11SurfaceId) => ref.watch(
-            x11SurfaceStateProvider(x11SurfaceId).select(
-              (value) => value.surfaceId,
-            ),
-          )!,
-        );
+          );
+        } on Exception catch (e) {
+          return false;
+        }
+      },
+    ).map(
+      (x11SurfaceId) => ref.watch(
+        x11SurfaceStateProvider(x11SurfaceId).select(
+          (value) => value.surfaceId,
+        ),
+      )!,
+    );
 
     ids.addAll(children);
 

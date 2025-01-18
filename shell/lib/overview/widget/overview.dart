@@ -9,7 +9,7 @@ import 'package:shell/overview/search/widget/search_engine.dart';
 import 'package:shell/overview/widget/overview_content.dart';
 import 'package:shell/screen/provider/current_screen_id.dart';
 import 'package:shell/shared/widget/clock.dart';
-import 'package:shell/theme/theme.dart';
+import 'package:shell/theme//provider/theme.dart';
 
 class OverviewWidget extends HookConsumerWidget {
   const OverviewWidget({super.key});
@@ -139,7 +139,8 @@ class AnimatedBlurBackground extends HookWidget {
           sigmaY: blurAnimation.value,
         ),
         child: ColoredBox(
-          color: Colors.white.withOpacity(blurAnimation.value / 100),
+          color:
+              Colors.white.withAlpha((255 * blurAnimation.value / 100).round()),
           child: Opacity(
             opacity: opacityAnimation.value,
             child: child,

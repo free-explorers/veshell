@@ -1,10 +1,14 @@
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
-use std::io;
+use std::fs::{self, File};
+use std::io::{self, Write};
+use std::os::fd::FromRawFd;
+
 use std::path::Path;
 use std::sync::atomic::Ordering;
 
 use rustix::fs::OFlags;
+use sd_notify::NotifyState;
 use smithay::backend::allocator::dmabuf::{AnyError, AsDmabuf, Dmabuf, DmabufAllocator};
 use smithay::backend::allocator::gbm::GbmDevice;
 use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags};
@@ -512,6 +516,16 @@ pub fn run_drm_backend() {
         .unwrap();
 
     state::State::<DrmBackend>::start_xwayland(&mut state);
+
+    // Notify systemd we're ready.
+    if let Err(err) = sd_notify::notify(true, &[NotifyState::Ready]) {
+        warn!("error notifying systemd: {err:?}");
+    };
+
+    // Send ready notification to the NOTIFY_FD file descriptor.
+    if let Err(err) = notify_fd() {
+        warn!("error notifying fd: {err:?}");
+    }
 
     while state.running.load(Ordering::SeqCst) {
         let result = event_loop.dispatch(None, &mut state);
@@ -1319,5 +1333,17 @@ where
     surface.compositor.queue_frame(None)?;
     surface.compositor.reset_buffers();
 
+    Ok(())
+}
+
+fn notify_fd() -> Result<(), Box<dyn std::error::Error>> {
+    let fd = match std::env::var("NOTIFY_FD") {
+        Ok(notify_fd) => notify_fd.parse()?,
+        Err(std::env::VarError::NotPresent) => return Ok(()),
+        Err(err) => return Err(err.into()),
+    };
+    std::env::remove_var("NOTIFY_FD");
+    let mut notif = unsafe { File::from_raw_fd(fd) };
+    notif.write_all(b"READY=1\n")?;
     Ok(())
 }

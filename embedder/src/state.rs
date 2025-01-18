@@ -66,9 +66,10 @@ use crate::flutter_engine::FlutterEngine;
 use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
 use crate::keyboard::handle_keyboard_event;
 use crate::keyboard::key_repeater::KeyRepeater;
+use crate::settings::{SettingsManager, VeshellSettings};
 use crate::texture_swap_chain::TextureSwapChain;
 use crate::wayland::wayland::{get_direct_subsurfaces, get_surface_id};
-use crate::{flutter_engine, Backend, ClientState};
+use crate::{flutter_engine, settings, Backend, ClientState};
 
 pub struct State<BackendData: Backend + 'static> {
     pub backend_data: Box<BackendData>,
@@ -118,6 +119,7 @@ pub struct State<BackendData: Backend + 'static> {
     pub xwayland_shell_state: xwayland_shell::XWaylandShellState,
     pub cursor_state: CursorState,
     pub cursor_image_status: Mutex<CursorImageStatus>,
+    pub settings_manager: SettingsManager<BackendData>,
 }
 
 impl<BackendData: Backend + 'static> State<BackendData> {
@@ -183,13 +185,19 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let mut seat_state = SeatState::new();
         let seat_name = backend_data.seat_name();
         let mut seat = seat_state.new_wl_seat(&display_handle, seat_name.clone());
+        let settings_manager =
+            settings::SettingsManager::new(loop_handle.clone(), |data: &mut State<BackendData>| {
+                let settings = data.settings_manager.get_settings();
+                data.apply_veshell_settings(&settings);
+            });
+        let settings = settings_manager.get_settings();
 
         let repeat_delay: u64 = 200;
         let repeat_rate: u64 = 50;
         let keyboard = seat
             .add_keyboard(
                 XkbConfig {
-                    layout: "us(altgr-intl)",
+                    layout: &settings.keyboard.layout,
                     ..XkbConfig::default()
                 },
                 repeat_delay as i32,
@@ -226,7 +234,9 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .expect("Failed to init wayland socket source");
 
         info!(name = socket_name, "Listening on wayland socket");
-
+        // Set the current desktop for xdg-desktop-portal.
+        std::env::set_var("XDG_CURRENT_DESKTOP", "niri");
+        // Ensure the session type is set to Wayland for xdg-autostart and Qt apps.
         std::env::set_var("XDG_SESSION_TYPE", "wayland");
         std::env::set_var("GDK_BACKEND", "wayland"); // Force GTK apps to run on Wayland.
         std::env::set_var("QT_QPA_PLATFORM", "wayland"); // Force QT apps to run on Wayland.
@@ -305,6 +315,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             pointer_focus: None,
             cursor_state: CursorState::default(),
             cursor_image_status: Mutex::new(CursorImageStatus::default_named()),
+            settings_manager,
         }
     }
 
@@ -313,6 +324,19 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         self.repeat_rate = repeat_rate;
         self.keyboard
             .change_repeat_info(repeat_delay as i32, repeat_rate as i32);
+    }
+
+    fn apply_veshell_settings(&mut self, settings: &VeshellSettings) {
+        let keyboard = self.keyboard.clone();
+        keyboard
+            .set_xkb_config(
+                self,
+                XkbConfig {
+                    layout: &settings.keyboard.layout.clone(),
+                    ..XkbConfig::default()
+                },
+            )
+            .unwrap();
     }
 
     pub fn construct_surface_message(&self, surface: &WlSurface) -> SurfaceMessage {
@@ -532,7 +556,6 @@ impl<BackendData: Backend> SeatHandler for State<BackendData> {
     }
 
     fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {
-        info!("cursor_image {:?}", image);
         *self.cursor_image_status.lock().unwrap() = image;
     }
 }

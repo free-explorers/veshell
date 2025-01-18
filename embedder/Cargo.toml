@@ -31,7 +31,8 @@ tracing-appender = "0.2"
 chrono = "0.4"
 xkbcommon = "0.8.0"
 backtrace = "0.3"
-
+notify = "8.0.0"
+sd-notify = "0.4.3"
 
 [build-dependencies]
 bindgen = "0.69.1"

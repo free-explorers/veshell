@@ -22,10 +22,8 @@ class AccessPointLabel extends StatelessWidget {
           TextSpan(
             text: '   ${(accessPoint.frequency / 1000).toStringAsFixed(1)} Ghz',
             style: Theme.of(context).textTheme.titleMedium!.copyWith(
-                  color: DefaultTextStyle.of(context)
-                      .style
-                      .color!
-                      .withOpacity(0.5),
+                  color:
+                      DefaultTextStyle.of(context).style.color!.withAlpha(128),
                 ),
           ),
         ],

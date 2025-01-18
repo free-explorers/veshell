@@ -3,14 +3,15 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-import 'package:path/path.dart' as path;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/settings/provider/config_directory.dart';
+import 'package:shell/settings/provider/default_config_directory.dart';
 import 'package:shell/shortcut_manager/model/screen_shortcuts.dart';
 import 'package:shell/shortcut_manager/model/string_to_key.dart';
 import 'package:shell/shortcut_manager/model/system_intents.dart';
 import 'package:shell/workspace/model/workspace_shortcuts.dart';
 
-part 'hotkeys_activator.provider.g.dart';
+part 'hotkeys_activator.g.dart';
 
 enum HotkeysAction {
   increaseVolume('system.increaseVolume'),
@@ -25,19 +26,6 @@ enum HotkeysAction {
   const HotkeysAction(this.actionId);
   final String actionId;
 }
-
-Directory configDirectory = Directory(
-  Platform.environment['VESHELL_CONFIG_DIR'] ??
-      path.join(
-        Platform.environment['XDG_CONFIG_HOME'] ??
-            '${Platform.environment['HOME']!}/.config',
-        'veshell',
-      ),
-);
-
-Directory defaultDirectory = Directory(
-  Platform.environment['VESHELL_DEFAULT_CONFIG_DIR']!,
-);
 
 Intent getActionIntent(HotkeysAction action) => switch (action) {
       HotkeysAction.increaseVolume => const IncreaseVolume(),
@@ -54,6 +42,9 @@ Intent getActionIntent(HotkeysAction action) => switch (action) {
 class HotkeysActivator extends _$HotkeysActivator {
   @override
   Map<ShortcutActivator, Intent> build() {
+    final configDirectory = ref.watch(configDirectoryProvider);
+    final defaultConfigDirectory = ref.watch(defaultConfigDirectoryProvider);
+
     final hotkeyConfigFile = File('${configDirectory.path}/hotkeys.json');
     final configurationJson = jsonDecode(
       hotkeyConfigFile.existsSync()
@@ -62,7 +53,7 @@ class HotkeysActivator extends _$HotkeysActivator {
     ) as Map<String, dynamic>;
 
     final defaultJson = jsonDecode(
-      File('${defaultDirectory.path}/hotkeys.json').readAsStringSync(),
+      File('${defaultConfigDirectory.path}/hotkeys.json').readAsStringSync(),
     ) as Map<String, dynamic>;
 
     final map = <ShortcutActivator, Intent>{};

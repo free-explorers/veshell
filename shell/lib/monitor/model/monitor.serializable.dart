@@ -1,6 +1,5 @@
 import 'dart:ui';
 
-import 'package:flutter/foundation.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/shared/util/json_converter/offset.dart';
 import 'package:shell/shared/util/json_converter/size.dart';

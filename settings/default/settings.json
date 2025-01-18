@@ -2,5 +2,10 @@
     "keyboard": {
         "layout": "us(altgr-intl)"
     },
+    "theme": {
+        "color": "#FF434C5E",
+        "gtkTheme": "Adwaita-dark",
+        "iconTheme": "Adwaita"
+    },
     "$schema": "../schemas/settings.schema.json"
 }

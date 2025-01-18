@@ -10,7 +10,7 @@ import 'package:shell/screen/provider/current_screen_id.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/screen/provider/workspace_display_mode.dart';
 import 'package:shell/shared/widget/cross_reorderable_list.dart';
-import 'package:shell/theme/theme.dart';
+import 'package:shell/theme//provider/theme.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/tileable/persistent_window/persistent_window.dart';

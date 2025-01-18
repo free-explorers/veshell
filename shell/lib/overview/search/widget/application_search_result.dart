@@ -50,8 +50,8 @@ class ApplicationSearchResult extends HookConsumerWidget {
                 .startEphemeralApplication(desktopEntry);
           },
           visualDensity: VisualDensity.comfortable,
-          focusColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
-          hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+          focusColor: Theme.of(context).colorScheme.primary.withAlpha(50),
+          hoverColor: Theme.of(context).colorScheme.primary.withAlpha(25),
         );
       },
       itemCount: desktopEntries.maybeWhen(

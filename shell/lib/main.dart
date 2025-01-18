@@ -15,7 +15,7 @@ import 'package:shell/shared/pulseaudio/provider/pulse_sink_list.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_source_list.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shortcut_manager/widget/shortcut_manager.dart';
-import 'package:shell/theme/theme.dart';
+import 'package:shell/theme/provider/theme.dart';
 import 'package:shell/wayland/model/request/get_environment_variables/get_environment_variables.serializable.dart';
 import 'package:shell/wayland/model/request/get_monitor_layout/get_monitor_layout.serializable.dart';
 import 'package:shell/wayland/model/request/shell_ready/shell_ready.serializable.dart';
@@ -30,8 +30,7 @@ void main() async {
   // debugRepaintRainbowEnabled = true;
   // debugPrintGestureArenaDiagnostics = true;
   WidgetsFlutterBinding.ensureInitialized();
-  final container = ProviderContainer();
-  container
+  final container = ProviderContainer()
     ..read(environmentVariablesProvider)
     ..read(waylandManagerProvider)
     ..read(surfaceManagerProvider);
@@ -120,10 +119,11 @@ class Veshell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final (lightTheme, darkTheme) = ref.watch(veshellThemeProvider);
     return MaterialApp(
       key: globalVeshellKey,
-      theme: VeshellTheme.light,
-      darkTheme: VeshellTheme.dark,
+      theme: lightTheme,
+      darkTheme: darkTheme,
       themeMode: ThemeMode.dark,
       home: _EagerInitialization(
         child: VeshellShortcutManager(

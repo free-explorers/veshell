@@ -15,6 +15,21 @@
                 }
             },
             "additionalProperties": false
+        },
+        "theme": {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "type": "string"
+                },
+                "gtkTheme": {
+                    "type": "string"
+                },
+                "iconTheme": {
+                    "type": "string"
+                }
+            },
+            "additionalProperties": false
         }
     }
 }

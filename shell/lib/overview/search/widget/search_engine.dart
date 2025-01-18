@@ -3,9 +3,13 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/overview/search/widget/application_search_result.dart';
+import 'package:shell/overview/search/widget/file_search_result.dart';
 import 'package:shell/overview/search/widget/search_input.dart';
+import 'package:shell/overview/search/widget/settings_search_result.dart';
 import 'package:shell/shared/util/logger.dart';
-import 'package:shell/theme/theme.dart';
+import 'package:shell/theme/provider/theme.dart';
+
+enum SearchMode { application, file, settings }
 
 class SearchEngine extends HookConsumerWidget {
   const SearchEngine({super.key});
@@ -14,7 +18,7 @@ class SearchEngine extends HookConsumerWidget {
     final searchController = useTextEditingController();
     final searchFocusNode = useFocusNode();
     final searchTextState = useState('');
-
+    final searchMode = useState(SearchMode.application);
     useEffect(
       () {
         searchController.addListener(() {
@@ -30,7 +34,7 @@ class SearchEngine extends HookConsumerWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(38),
-        color: Theme.of(context).colorScheme.surface.withOpacity(0.8),
+        color: Theme.of(context).colorScheme.surface.withAlpha(200),
       ),
       child: Column(
         children: [
@@ -44,43 +48,28 @@ class SearchEngine extends HookConsumerWidget {
               children: [
                 Column(
                   children: [
-                    IconButton.filled(
-                      onPressed: () {},
+                    SearchModeButton(
                       icon: const Icon(MdiIcons.playBox),
-                      style: IconButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor:
-                            Theme.of(context).colorScheme.onPrimary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(surfaceRadius),
-                        ),
-                        padding: const EdgeInsets.all(12),
-                        iconSize: 28,
-                      ),
+                      onSelected: () {
+                        searchMode.value = SearchMode.application;
+                      },
+                      isSelected: searchMode.value == SearchMode.application,
                     ),
                     const SizedBox(height: 16),
-                    IconButton(
-                      onPressed: null,
+                    SearchModeButton(
                       icon: const Icon(MdiIcons.file),
-                      style: IconButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(surfaceRadius),
-                        ),
-                        padding: const EdgeInsets.all(12),
-                        iconSize: 28,
-                      ),
+                      onSelected: () {
+                        searchMode.value = SearchMode.file;
+                      },
+                      isSelected: searchMode.value == SearchMode.file,
                     ),
                     const SizedBox(height: 16),
-                    IconButton(
-                      onPressed: null,
+                    SearchModeButton(
                       icon: const Icon(MdiIcons.cog),
-                      style: IconButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(surfaceRadius),
-                        ),
-                        padding: const EdgeInsets.all(12),
-                        iconSize: 28,
-                      ),
+                      onSelected: () {
+                        searchMode.value = SearchMode.settings;
+                      },
+                      isSelected: searchMode.value == SearchMode.settings,
                     ),
                   ],
                 ),
@@ -90,9 +79,17 @@ class SearchEngine extends HookConsumerWidget {
                 Expanded(
                   child: Card(
                     clipBehavior: Clip.antiAlias,
-                    child: ApplicationSearchResult(
-                      searchText: searchTextState.value,
-                    ),
+                    child: switch (searchMode.value) {
+                      SearchMode.application => ApplicationSearchResult(
+                          searchText: searchTextState.value,
+                        ),
+                      SearchMode.file => FileSearchResult(
+                          searchText: searchTextState.value,
+                        ),
+                      SearchMode.settings => SettingsSearchResult(
+                          searchText: searchTextState.value,
+                        ),
+                    },
                   ),
                 ),
               ],
@@ -100,6 +97,44 @@ class SearchEngine extends HookConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class SearchModeButton extends StatelessWidget {
+  const SearchModeButton({
+    required this.icon,
+    required this.onSelected,
+    this.isSelected = false,
+    super.key,
+  });
+
+  final bool isSelected;
+  final Widget icon;
+  final void Function()? onSelected;
+  @override
+  Widget build(BuildContext context) {
+    var buttonType = IconButton.new;
+    var style = IconButton.styleFrom(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(surfaceRadius),
+      ),
+      padding: const EdgeInsets.all(12),
+      iconSize: 28,
+    );
+    if (isSelected) {
+      buttonType = IconButton.filled;
+      style = style.copyWith(
+        backgroundColor:
+            WidgetStateProperty.all(Theme.of(context).colorScheme.primary),
+        foregroundColor:
+            WidgetStateProperty.all(Theme.of(context).colorScheme.onPrimary),
+      );
+    }
+    return buttonType(
+      onPressed: onSelected,
+      icon: icon,
+      style: style,
     );
   }
 }

@@ -41,7 +41,6 @@ class WindowPlaceholder extends HookConsumerWidget {
     final isFocused = focusNode?.hasFocus ?? false;
     final backgroundFocusNode = useFocusNode(debugLabel: 'background InkWell');
     final logs = ref.watch(windowProcessLogsProvider(window.windowId));
-    print('build logs length ${logs.length}');
     return LayoutBuilder(
       builder: (context, constraints) {
         final responsiveRowColumn =
@@ -84,7 +83,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                 canRequestFocus: false,
                 onTap: entry != null ? onTap : null,
                 child: ColoredBox(
-                  color: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+                  color: Theme.of(context).colorScheme.surface.withAlpha(150),
                 ),
               ),
             ),
@@ -98,7 +97,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                 opacity: isFocused ? 1 : 0.8,
                 child: Card(
                   clipBehavior: Clip.antiAlias,
-                  color: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+                  color: Theme.of(context).colorScheme.surface.withAlpha(150),
                   child: logs.isNotEmpty
                       ? Padding(
                           padding: const EdgeInsets.all(8),
@@ -117,7 +116,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                           focusColor: Theme.of(context)
                               .colorScheme
                               .surfaceContainerLow
-                              .withOpacity(0.5),
+                              .withAlpha(125),
                           child: Focus(
                             focusNode: focusNode,
                             autofocus: true,
@@ -285,7 +284,7 @@ class ExecCommandEditor extends HookWidget {
       children: [
         Material(
           clipBehavior: Clip.antiAlias,
-          color: Colors.white.withOpacity(0.05),
+          color: Colors.white.withAlpha(12),
           borderRadius: const BorderRadius.all(
             Radius.circular(48),
           ),

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shell/theme/theme.dart';
+import 'package:shell/theme//provider/theme.dart';
 
 class SearchInput extends StatelessWidget {
   const SearchInput({

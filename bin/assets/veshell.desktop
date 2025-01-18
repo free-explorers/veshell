@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Veshell
+Comment=An innovative Not-Desktop environment 
+Exec=veshell-session
+Type=Application
+DesktopNames=veshell
+X-GDM-SessionRegisters=true
