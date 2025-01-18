@@ -147,7 +147,6 @@ pub mod wayland {
             let is_cursor_image = matches!(*self.cursor_image_status.lock().unwrap(),CursorImageStatus::Surface(ref cursor_surface) if cursor_surface == surface);
 
             if is_cursor_image {
-                info!("commit cursor image");
                 with_states(surface, |states| {
                     let cursor_image_attributes = states.data_map.get::<CursorImageSurfaceData>();
 

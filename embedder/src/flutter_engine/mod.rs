@@ -564,17 +564,6 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             }
         };
 
-        if event.raw_keysym.is_some() {
-            println!(
-                "The raw value for raw_keysym is 0x{:x}",
-                event.raw_keysym.unwrap().raw()
-            );
-        }
-        println!(
-            "The raw value for keysym is 0x{:x}",
-            event.keysym.raw() as u64
-        );
-
         let logical_key =
             match GTK_KEYVAL_TO_LOGICAL_KEY_MAP.get(&(event.raw_keysym.unwrap().raw() as u64)) {
                 Some(&key) => key,
@@ -815,5 +804,5 @@ unsafe extern "C" fn log_callback(_: *const i8, message: *const i8, _: *mut c_vo
     let message = std::ffi::CStr::from_ptr(message)
         .to_string_lossy()
         .into_owned();
-    tracing::debug!("{}", message);
+    tracing::debug!("tracing flutter {}", message);
 }

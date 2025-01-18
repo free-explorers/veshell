@@ -140,7 +140,6 @@ pub fn post_flutter_handle_key_event<BackendData: Backend + 'static>(
     event: VeshellKeyEvent,
     handled: bool,
 ) {
-    debug!("handled {:?}", handled);
     if handled {
         // Flutter consumed this event. Probably a keyboard shortcut.
         return;

@@ -31,7 +31,6 @@ pub fn mouse_cursor_channel_method_call_handler<BackendData: Backend + 'static>(
             let mut kind = None;
             let mut device: Option<i32> = None;
             for (key, value) in args.iter() {
-                info!("{}", key.string().unwrap());
                 let key_string = key.string().unwrap();
                 if key_string == "kind" {
                     kind = value.string();

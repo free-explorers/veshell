@@ -290,8 +290,6 @@ where
             )
     });
 
-    info!("surface scale {:?}", scale);
-
     render_elements_from_surface_tree(
         renderer,
         surface,
