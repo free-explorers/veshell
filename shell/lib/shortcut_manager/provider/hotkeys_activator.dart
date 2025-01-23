@@ -1,13 +1,7 @@
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/settings/provider/config_directory.dart';
-import 'package:shell/settings/provider/default_config_directory.dart';
+import 'package:shell/settings/provider/state/hotkeys_setting.dart';
 import 'package:shell/shortcut_manager/model/screen_shortcuts.dart';
-import 'package:shell/shortcut_manager/model/string_to_key.dart';
 import 'package:shell/shortcut_manager/model/system_intents.dart';
 import 'package:shell/workspace/model/workspace_shortcuts.dart';
 
@@ -42,19 +36,7 @@ Intent getActionIntent(HotkeysAction action) => switch (action) {
 class HotkeysActivator extends _$HotkeysActivator {
   @override
   Map<ShortcutActivator, Intent> build() {
-    final configDirectory = ref.watch(configDirectoryProvider);
-    final defaultConfigDirectory = ref.watch(defaultConfigDirectoryProvider);
-
-    final hotkeyConfigFile = File('${configDirectory.path}/hotkeys.json');
-    final configurationJson = jsonDecode(
-      hotkeyConfigFile.existsSync()
-          ? hotkeyConfigFile.readAsStringSync()
-          : '{}',
-    ) as Map<String, dynamic>;
-
-    final defaultJson = jsonDecode(
-      File('${defaultConfigDirectory.path}/hotkeys.json').readAsStringSync(),
-    ) as Map<String, dynamic>;
+    final hotkeysSettings = ref.watch(hotkeysSettingProvider);
 
     final map = <ShortcutActivator, Intent>{};
 
@@ -62,25 +44,10 @@ class HotkeysActivator extends _$HotkeysActivator {
     // fallback to the default one if missing
     for (final action in HotkeysAction.values) {
       final intent = getActionIntent(action);
-      final activator = getKeysetFromJson(action.actionId, configurationJson) ??
-          getKeysetFromJson(action.actionId, defaultJson);
-      if (activator == null) {
-        print('Missing hotkey for action: ${action.actionId} in default file');
-        continue;
-      }
+      final activator = hotkeysSettings[action.actionId];
+      if (activator == null) continue;
       map[activator] = intent;
     }
     return map;
   }
-}
-
-LogicalKeySet? getKeysetFromJson(String actionId, Map<String, dynamic> json) {
-  if (!json.containsKey(actionId)) return null;
-  final keysString = (json[actionId]! as String).split('+');
-  final keys = keysString.map(
-    (e) => stringToKeyMap[e],
-  );
-  if (keys.contains(null)) return null;
-
-  return LogicalKeySet.fromSet(keys.cast<LogicalKeyboardKey>().toSet());
 }

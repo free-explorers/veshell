@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/settings/model/theme_settings.serializable.dart';
-import 'package:shell/settings/provider/veshell_settings.dart';
+import 'package:shell/settings/provider/state/theme_color_setting.dart';
 
 part 'theme.g.dart';
 
@@ -12,27 +11,27 @@ const panelSize = 48.0;
 class VeshellTheme extends _$VeshellTheme {
   @override
   (ThemeData, ThemeData) build() {
-    final themeSettings = ref.watch(veshellSettingsStateProvider).theme;
+    final color = ref.watch(themeColorSettingProvider);
 
     return (
       _buildTheme(
         ThemeData.light(
           useMaterial3: true,
         ),
-        themeSettings,
+        color,
       ),
       _buildTheme(
         ThemeData.dark(
           useMaterial3: true,
         ),
-        themeSettings,
+        color,
       )
     );
   }
 
-  ThemeData _buildTheme(ThemeData defaultTheme, ThemeSettings settings) {
+  ThemeData _buildTheme(ThemeData defaultTheme, Color themeColor) {
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: settings.color,
+      seedColor: themeColor,
       brightness: defaultTheme.brightness,
     );
 

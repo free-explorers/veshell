@@ -1,6 +1,6 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/settings/provider/merged_settings_json.dart';
+import 'package:shell/settings/provider/util/merged_settings_json.dart';
 
 part 'json_value_by_path.g.dart';
 

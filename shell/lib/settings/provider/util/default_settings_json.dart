@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/settings/provider/default_config_directory.dart';
+import 'package:shell/settings/provider/util/default_config_directory.dart';
 
 part 'default_settings_json.g.dart';
 

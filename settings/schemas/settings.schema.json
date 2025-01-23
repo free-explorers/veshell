@@ -12,6 +12,50 @@
             "properties": {
                 "layout": {
                     "type": "string"
+                },
+                "hotkeys": {
+                    "type": "object",
+                    "properties": {
+                        "system": {
+                            "type": "object",
+                            "properties": {
+                                "increaseVolume": {
+                                    "type": "string"
+                                },
+                                "decreaseVolume": {
+                                    "type": "string"
+                                },
+                                "muteVolume": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "screen": {
+                            "type": "object",
+                            "properties": {
+                                "focusWorkspaceAbove": {
+                                    "type": "string"
+                                },
+                                "focusWorkspaceBelow": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "workspace": {
+                            "type": "object",
+                            "properties": {
+                                "focusLeftTileable": {
+                                    "type": "string"
+                                },
+                                "focusRightTileable": {
+                                    "type": "string"
+                                },
+                                "closeTileable": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
                 }
             },
             "additionalProperties": false

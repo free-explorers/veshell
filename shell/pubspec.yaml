@@ -76,6 +76,7 @@ dependencies:
     git:
       url: https://github.com/free-explorers/nm.dart
   pulseaudio: ^0.0.7
+  flex_color_picker: ^3.7.0
   
 dev_dependencies:
   # The "flutter_lints" package below contains a set of recommended lints to

@@ -110,3 +110,6 @@ Map<String, LogicalKeyboardKey> stringToKeyMap = {
   'volumeDown': LogicalKeyboardKey.audioVolumeDown,
   'volumeUp': LogicalKeyboardKey.audioVolumeUp,
 };
+
+Map<LogicalKeyboardKey, String> keyToStringMap =
+    stringToKeyMap.map((key, value) => MapEntry(value, key));

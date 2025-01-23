@@ -1,9 +1,25 @@
 {
     "keyboard": {
-        "layout": "us(altgr-intl)"
+        "layout": "us(altgr-intl)",
+        "hotkeys": {
+            "system": {
+                "increaseVolume": "volumeUp",
+                "decreaseVolume": "volumeDown",
+                "muteVolume": "ctrl+alt+m"
+            },
+            "screen": {
+                "focusWorkspaceAbove": "super+w",
+                "focusWorkspaceBelow": "super+s"
+            },
+            "workspace": {
+                "focusLeftTileable": "super+a",
+                "focusRightTileable": "super+d",
+                "closeTileable": "super+q"
+            }
+        }
     },
     "theme": {
-        "color": "#FF434C5E",
+        "color": "0xFF006888",
         "gtkTheme": "Adwaita-dark",
         "iconTheme": "Adwaita"
     },

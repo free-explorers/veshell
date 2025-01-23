@@ -43,7 +43,7 @@ impl TextInput {
 
         let changed = match keysym {
             // Navigation keys like arrow keys are handled by Flutter, but the following keys are not.
-            Keysym::KP_Enter => {
+            Keysym::Return => {
                 self.press_enter();
                 false
             }
