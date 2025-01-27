@@ -2,9 +2,11 @@ use std::sync::atomic::Ordering;
 
 use log::{error, warn};
 use smithay::backend::allocator::dmabuf::Dmabuf;
+use smithay::backend::input::{Event, InputEvent, KeyboardKeyEvent};
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::renderer::{ImportDma, ImportEgl};
+use smithay::backend::x11::X11Input;
 use smithay::delegate_dmabuf;
 use smithay::output::{Output, PhysicalProperties, Subpixel};
 use smithay::reexports::ash::ext;
@@ -38,6 +40,7 @@ use smithay::{
 use tracing::info;
 
 use crate::flutter_engine::FlutterEngine;
+use crate::keyboard::handle_keyboard_event;
 use crate::state;
 use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
 
@@ -294,7 +297,45 @@ pub fn run_x11_client() {
                     }
                 }
 
-                X11Event::Input { event, .. } => data.handle_input(&event),
+                X11Event::Input { event, .. } => {
+                    match event {
+                        InputEvent::DeviceAdded { mut device } => {
+
+                        },
+                        InputEvent::DeviceRemoved { device } => {},
+                        InputEvent::Keyboard { event } => {
+                            handle_keyboard_event(
+                                data,
+                                event.key_code(),
+                                event.state(),
+                                event.time_msec(),
+                            );
+                        },
+                        InputEvent::PointerMotion { event } => data.on_pointer_motion::<X11Input>(event),
+                        InputEvent::PointerMotionAbsolute { event } => data.on_pointer_motion_absolute::<X11Input>(event),
+                        InputEvent::PointerButton { event } => data.on_pointer_button::<X11Input>(event),
+                        InputEvent::PointerAxis { event } => data.on_pointer_axis::<X11Input>(event),
+                        InputEvent::GestureSwipeBegin { event } => {},
+                        InputEvent::GestureSwipeUpdate { event } => {},
+                        InputEvent::GestureSwipeEnd { event } => {},
+                        InputEvent::GesturePinchBegin { event } => {},
+                        InputEvent::GesturePinchUpdate { event } => {},
+                        InputEvent::GesturePinchEnd { event } => {},
+                        InputEvent::GestureHoldBegin { event } => {},
+                        InputEvent::GestureHoldEnd { event } => {},
+                        InputEvent::TouchDown { event } => {},
+                        InputEvent::TouchMotion { event } => {},
+                        InputEvent::TouchUp { event } => {},
+                        InputEvent::TouchCancel { event } => {},
+                        InputEvent::TouchFrame { event } => {},
+                        InputEvent::TabletToolAxis { event } => {},
+                        InputEvent::TabletToolProximity { event } => {},
+                        InputEvent::TabletToolTip { event } => {},
+                        InputEvent::TabletToolButton { event } => {},
+                        InputEvent::SwitchToggle { event } => {},
+                        InputEvent::Special(_) => {},
+                    }
+                },
                 X11Event::Focus { focused: false, .. } => data.release_all_keys(),
                 _ => {}
             },

@@ -14,8 +14,7 @@ Map<String, LogicalKeySet> hotkeysSetting(Ref ref) {
   const fallback = <String, LogicalKeySet>{};
 
   final group = ref.watch(settingDefinitionByPathProvider(path));
-  final jsonValue = ref.watch(jsonValueByPathProvider(path));
-  if (group == null || group is! SettingGroup || jsonValue == null) {
+  if (group == null || group is! SettingGroup) {
     return fallback;
   }
   final hotkeys = <String, LogicalKeySet>{};
@@ -25,7 +24,8 @@ Map<String, LogicalKeySet> hotkeysSetting(Ref ref) {
     if (property is! SettingProperty<LogicalKeySet>) {
       continue;
     }
-    hotkeys[actionId] = property.castValue(jsonValue);
+    final jsonValue = ref.watch(jsonValueByPathProvider('$path.$actionId'));
+    hotkeys[actionId] = property.castValue(jsonValue ?? '');
   }
   return hotkeys;
 }

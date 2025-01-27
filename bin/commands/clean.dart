@@ -18,6 +18,9 @@ class CleanCommand extends Command<int> {
       Directory('build'),
       Directory('shell/build'),
       Directory('embedder/target'),
+      Directory('embedder/third_party/flutter_engine/debug'),
+      Directory('embedder/third_party/flutter_engine/profiling'),
+      Directory('embedder/third_party/flutter_engine/release'),
     ];
     for (final dir in dirsToDelete) {
       if (dir.existsSync()) {

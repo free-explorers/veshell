@@ -20,6 +20,7 @@ use smithay::backend::drm::{
 };
 use smithay::backend::egl::context::ContextPriority;
 use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
+use smithay::backend::input::{Event, InputEvent, KeyboardKeyEvent};
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
 use smithay::backend::renderer::damage::{Error as OutputDamageTrackerError, OutputDamageTracker};
 use smithay::backend::renderer::element::texture::{TextureBuffer, TextureRenderElement};
@@ -40,7 +41,7 @@ use smithay::input::pointer::CursorImageStatus;
 use smithay::output::Mode;
 use smithay::output::{Output, PhysicalProperties, Subpixel};
 use smithay::reexports::ash::khr::swapchain;
-use smithay::reexports::calloop::channel::Event;
+use smithay::reexports::calloop::channel::Event as CalloopEvent;
 use smithay::reexports::calloop::RegistrationToken;
 use smithay::reexports::calloop::{EventLoop, LoopHandle};
 use smithay::reexports::drm::control::{connector, crtc, Device, ModeTypeFlags};
@@ -63,6 +64,7 @@ use tracing_subscriber::field::debug;
 
 use crate::cursor::{draw_cursor, CursorRenderElement};
 use crate::flutter_engine::FlutterEngine;
+use crate::keyboard::handle_keyboard_event;
 use crate::state;
 use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
 
@@ -438,7 +440,47 @@ pub fn run_drm_backend() {
         .handle()
         .insert_source(libinput_backend, move |event, _, data| {
             let _dh = data.display_handle.clone();
-            data.handle_input(&event);
+            match event {
+                InputEvent::DeviceAdded { mut device } => {
+                    let is_touchpad = device.config_tap_finger_count() > 0;
+                    if is_touchpad {
+                        device.config_tap_set_enabled(true);
+                    }
+                },
+                InputEvent::DeviceRemoved { device } => {},
+                InputEvent::Keyboard { event } => {
+                    handle_keyboard_event(
+                        data,
+                        event.key_code(),
+                        event.state(),
+                        event.time_msec(),
+                    );
+                },
+                InputEvent::PointerMotion { event } => data.on_pointer_motion::<LibinputInputBackend>(event),
+                InputEvent::PointerMotionAbsolute { event } => data.on_pointer_motion_absolute::<LibinputInputBackend>(event),
+                InputEvent::PointerButton { event } => data.on_pointer_button::<LibinputInputBackend>(event),
+                InputEvent::PointerAxis { event } => data.on_pointer_axis::<LibinputInputBackend>(event),
+                InputEvent::GestureSwipeBegin { event } => {},
+                InputEvent::GestureSwipeUpdate { event } => {},
+                InputEvent::GestureSwipeEnd { event } => {},
+                InputEvent::GesturePinchBegin { event } => {},
+                InputEvent::GesturePinchUpdate { event } => {},
+                InputEvent::GesturePinchEnd { event } => {},
+                InputEvent::GestureHoldBegin { event } => {},
+                InputEvent::GestureHoldEnd { event } => {},
+                InputEvent::TouchDown { event } => {},
+                InputEvent::TouchMotion { event } => {},
+                InputEvent::TouchUp { event } => {},
+                InputEvent::TouchCancel { event } => {},
+                InputEvent::TouchFrame { event } => {},
+                InputEvent::TabletToolAxis { event } => {},
+                InputEvent::TabletToolProximity { event } => {},
+                InputEvent::TabletToolTip { event } => {},
+                InputEvent::TabletToolButton { event } => {},
+                InputEvent::SwitchToggle { event } => {},
+                InputEvent::Special(_) => {},
+            }
+            //data.handle_input(&event);
         })
         .unwrap();
 
@@ -478,7 +520,7 @@ pub fn run_drm_backend() {
     event_loop
         .handle()
         .insert_source(rx_baton, move |baton, _, data| {
-            if let Event::Msg(baton) = baton {
+            if let CalloopEvent::Msg(baton) = baton {
                 data.batons.push(baton);
             }
         })

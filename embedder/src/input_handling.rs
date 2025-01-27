@@ -1,11 +1,12 @@
 use std::mem::size_of;
 
 use smithay::backend::input::{
-    self, AbsolutePositionEvent, Axis, AxisSource, ButtonState, InputBackend, InputEvent,
-    KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
+    self, AbsolutePositionEvent, Axis, AxisSource, ButtonState, Device, Event, GestureBeginEvent, GestureEndEvent, InputBackend, InputEvent, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent
 };
-use smithay::input::pointer::{AxisFrame, MotionEvent, RelativeMotionEvent};
+use smithay::input::pointer::{AxisFrame, GestureHoldBeginEvent, GestureHoldEndEvent, MotionEvent, RelativeMotionEvent};
+use smithay::reexports::input::DeviceCapability;
 use smithay::utils::{Logical, Point, SERIAL_COUNTER};
+use tracing::info;
 
 use crate::backend::Backend;
 use crate::flutter_engine::embedder::{
@@ -19,16 +20,12 @@ use crate::keyboard::handle_keyboard_event;
 use crate::state::State;
 
 impl<BackendData: Backend> State<BackendData> {
-    pub fn handle_input(&mut self, event: &InputEvent<impl InputBackend>)
+
+    pub fn on_pointer_motion<B: InputBackend>(&mut self, event: B::PointerMotionEvent)
     where
         BackendData: Backend + 'static,
     {
-        use smithay::backend::input::Event;
-        match event {
-            InputEvent::DeviceAdded { .. } => {}
-            InputEvent::DeviceRemoved { .. } => {}
-            InputEvent::PointerMotion { event } => {
-                let pointer: smithay::input::pointer::PointerHandle<State<BackendData>> =
+        let pointer: smithay::input::pointer::PointerHandle<State<BackendData>> =
                     self.pointer.clone();
 
                 let mut pointer_location = self.pointer.current_location();
@@ -60,9 +57,13 @@ impl<BackendData: Backend> State<BackendData> {
                 self.register_frame();
 
                 self.send_motion_event(pointer_location)
-            }
-            InputEvent::PointerMotionAbsolute { event } => {
-                let serial = SERIAL_COUNTER.next_serial();
+    }
+
+    pub fn on_pointer_motion_absolute<B: InputBackend>(&mut self, event: B::PointerMotionAbsoluteEvent)
+    where
+        BackendData: Backend + 'static,
+    {
+        let serial = SERIAL_COUNTER.next_serial();
                 let outputs: Vec<smithay::output::Output> =
                     self.space.outputs().cloned().collect::<Vec<_>>();
                 let max_x = outputs.into_iter().fold(0, |acc, o| {
@@ -96,63 +97,71 @@ impl<BackendData: Backend> State<BackendData> {
                 self.register_frame();
 
                 self.send_motion_event(pointer_location)
-            }
-            InputEvent::PointerButton { event } => {
-                let phase = if event.state() == ButtonState::Pressed {
-                    let are_any_buttons_pressed = self
-                        .flutter_engine()
-                        .mouse_button_tracker
-                        .are_any_buttons_pressed();
-                    let _ = self
-                        .flutter_engine_mut()
-                        .mouse_button_tracker
-                        .press(event.button_code() as u16);
-                    if are_any_buttons_pressed {
-                        FlutterPointerPhase_kMove
-                    } else {
-                        FlutterPointerPhase_kDown
-                    }
-                } else {
-                    let _ = self
-                        .flutter_engine_mut()
-                        .mouse_button_tracker
-                        .release(event.button_code() as u16);
-                    if self
-                        .flutter_engine()
-                        .mouse_button_tracker
-                        .are_any_buttons_pressed()
-                    {
-                        FlutterPointerPhase_kMove
-                    } else {
-                        FlutterPointerPhase_kUp
-                    }
-                };
+    }
 
-                self.flutter_engine()
-                    .send_pointer_event(FlutterPointerEvent {
-                        struct_size: size_of::<FlutterPointerEvent>(),
-                        phase,
-                        timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
-                        x: self.pointer.current_location().x,
-                        y: self.pointer.current_location().y,
-                        device: 0,
-                        signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
-                        scroll_delta_x: 0.0,
-                        scroll_delta_y: 0.0,
-                        device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
-                        buttons: self
-                            .flutter_engine()
-                            .mouse_button_tracker
-                            .get_flutter_button_bitmask(),
-                        pan_x: 0.0,
-                        pan_y: 0.0,
-                        scale: 1.0,
-                        rotation: 0.0,
-                    })
-                    .unwrap();
+    pub fn on_pointer_button<B: InputBackend>(&mut self, event: B::PointerButtonEvent)
+    where
+        BackendData: Backend + 'static,
+    {
+        let phase = if event.state() == ButtonState::Pressed {
+            let are_any_buttons_pressed = self
+                .flutter_engine()
+                .mouse_button_tracker
+                .are_any_buttons_pressed();
+            let _ = self
+                .flutter_engine_mut()
+                .mouse_button_tracker
+                .press(event.button_code() as u16);
+            if are_any_buttons_pressed {
+                FlutterPointerPhase_kMove
+            } else {
+                FlutterPointerPhase_kDown
             }
-            InputEvent::PointerAxis { event } => {
-                let horizontal_amount =
+        } else {
+            let _ = self
+                .flutter_engine_mut()
+                .mouse_button_tracker
+                .release(event.button_code() as u16);
+            if self
+                .flutter_engine()
+                .mouse_button_tracker
+                .are_any_buttons_pressed()
+            {
+                FlutterPointerPhase_kMove
+            } else {
+                FlutterPointerPhase_kUp
+            }
+        };
+        info!("PointerButton {:?}", event.button_code());
+        self.flutter_engine()
+            .send_pointer_event(FlutterPointerEvent {
+                struct_size: size_of::<FlutterPointerEvent>(),
+                phase,
+                timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
+                x: self.pointer.current_location().x,
+                y: self.pointer.current_location().y,
+                device: 0,
+                signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
+                scroll_delta_x: 0.0,
+                scroll_delta_y: 0.0,
+                device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+                buttons: self
+                    .flutter_engine()
+                    .mouse_button_tracker
+                    .get_flutter_button_bitmask(),
+                pan_x: 0.0,
+                pan_y: 0.0,
+                scale: 1.0,
+                rotation: 0.0,
+            })
+            .unwrap();
+    }
+    
+    pub fn on_pointer_axis<B: InputBackend>(&mut self, event: B::PointerAxisEvent)
+    where
+        BackendData: Backend + 'static,
+    {
+        let horizontal_amount =
                     event.amount(input::Axis::Horizontal).unwrap_or_else(|| {
                         event.amount_v120(input::Axis::Horizontal).unwrap_or(0.0) * 15.0 / 120.
                     });
@@ -225,35 +234,6 @@ impl<BackendData: Backend> State<BackendData> {
                         rotation: 0.0,
                     })
                     .unwrap();
-            }
-            InputEvent::Keyboard { event } => {
-                handle_keyboard_event::<BackendData>(
-                    self,
-                    event.key_code(),
-                    event.state(),
-                    event.time_msec(),
-                );
-            }
-            InputEvent::GestureSwipeBegin { .. } => {}
-            InputEvent::GestureSwipeUpdate { .. } => {}
-            InputEvent::GestureSwipeEnd { .. } => {}
-            InputEvent::GesturePinchBegin { .. } => {}
-            InputEvent::GesturePinchUpdate { .. } => {}
-            InputEvent::GesturePinchEnd { .. } => {}
-            InputEvent::GestureHoldBegin { .. } => {}
-            InputEvent::GestureHoldEnd { .. } => {}
-            InputEvent::TouchDown { .. } => {}
-            InputEvent::TouchMotion { .. } => {}
-            InputEvent::TouchUp { .. } => {}
-            InputEvent::TouchCancel { .. } => {}
-            InputEvent::TouchFrame { .. } => {}
-            InputEvent::TabletToolAxis { .. } => {}
-            InputEvent::TabletToolProximity { .. } => {}
-            InputEvent::TabletToolTip { .. } => {}
-            InputEvent::TabletToolButton { .. } => {}
-            InputEvent::Special(_) => {}
-            InputEvent::SwitchToggle { .. } => {}
-        }
     }
 
     fn register_frame(&mut self) {
