@@ -612,11 +612,11 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             &json!({
                 "keymap": "linux",
                 "toolkit": "gtk",
-                "keyCode": physical_key,
+                "keyCode": 0,
                 "specifiedLogicalKey": 0,
-                "scanCode":event.key_code.raw(),
+                "scanCode":0,
                 "modifiers": 0,
-                "unicodeScalarValues": event.keysym.key_char().map(|c| c as u32),
+                "unicodeScalarValues": 0,
                 "type": match event.state {
                     KeyState::Pressed => "keydown",
                     KeyState::Released => "keyup",

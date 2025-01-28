@@ -1,8 +1,10 @@
 import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:shell/settings/model/setting_definition.dart';
 import 'package:shell/settings/model/setting_group.dart';
 import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/provider/settings_properties.dart';
@@ -45,71 +47,89 @@ class SettingGroupListSliver extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
-    final expanded = useState(false);
-    return SliverMainAxisGroup(
-      slivers: [
-        SliverAppBar(
-          backgroundColor: Color.lerp(
-            Theme.of(context).colorScheme.surface,
-            Colors.black,
-            0.2 * (path.split('.').length - 1),
-          ),
-          toolbarHeight: 72,
-          flexibleSpace: ListTile(
-            minTileHeight: 72,
-            onTap: () {
-              expanded.value = !expanded.value;
-            },
-            leading: settingGroup.icon != null ? Icon(settingGroup.icon) : null,
-            title: Text(
-              settingGroup.name,
-              style: settingGroup.description == null
-                  ? Theme.of(context).textTheme.titleLarge
-                  : null,
+    final expanded = useState(searchText != '');
+    useEffect(
+      () {
+        if (searchText != '') {
+          expanded.value = true;
+        }
+        return null;
+      },
+      [searchText],
+    );
+    if (!searchSetting(searchText, settingGroup, path)) {
+      return const SliverToBoxAdapter();
+    } else {
+      return SliverMainAxisGroup(
+        slivers: [
+          SliverAppBar(
+            backgroundColor: Color.lerp(
+              Theme.of(context).colorScheme.surface,
+              Colors.black,
+              0.2 * (path.split('.').length - 1),
             ),
-            subtitle: settingGroup.description != null
-                ? Text(
-                    settingGroup.description!,
-                  )
-                : null,
-            trailing: expanded.value
-                ? const Icon(MdiIcons.chevronUp)
-                : const Icon(MdiIcons.chevronDown),
+            toolbarHeight: 72,
+            flexibleSpace: ListTile(
+              minTileHeight: 72,
+              onTap: () {
+                expanded.value = !expanded.value;
+              },
+              leading:
+                  settingGroup.icon != null ? Icon(settingGroup.icon) : null,
+              title: Text(
+                settingGroup.name,
+                style: settingGroup.description == null
+                    ? Theme.of(context).textTheme.titleLarge
+                    : null,
+              ),
+              subtitle: settingGroup.description != null
+                  ? Text(
+                      settingGroup.description!,
+                    )
+                  : null,
+              trailing: expanded.value
+                  ? const Icon(MdiIcons.chevronUp)
+                  : const Icon(MdiIcons.chevronDown),
+            ),
+            pinned: true,
+            floating: true,
+            surfaceTintColor: Colors.transparent,
           ),
-          pinned: true,
-          floating: true,
-          surfaceTintColor: Colors.transparent,
-        ),
-        if (expanded.value)
-          DecoratedSliver(
-            decoration: BoxDecoration(
-              color: Color.lerp(
-                Theme.of(context).colorScheme.surface,
-                Colors.black,
-                0.2 * path.split('.').length,
+          if (expanded.value)
+            DecoratedSliver(
+              decoration: BoxDecoration(
+                color: Color.lerp(
+                  Theme.of(context).colorScheme.surface,
+                  Colors.black,
+                  0.2 * path.split('.').length,
+                ),
+              ),
+              sliver: SliverMainAxisGroup(
+                slivers: [
+                  ...settingGroup.children.entries.map((entry) {
+                    if (entry.value is SettingGroup) {
+                      return SettingGroupListSliver(
+                        searchText: searchText,
+                        settingGroup: entry.value as SettingGroup,
+                        path: '$path.${entry.key}',
+                      );
+                    } else {
+                      if (!searchSetting(
+                          searchText, entry.value, '$path.${entry.key}')) {
+                        return const SliverToBoxAdapter();
+                      }
+                      return SettingPropertySliver(
+                        property: entry.value as SettingProperty,
+                        path: '$path.${entry.key}',
+                      );
+                    }
+                  }),
+                ],
               ),
             ),
-            sliver: SliverMainAxisGroup(
-              slivers: [
-                ...settingGroup.children.entries.map((entry) {
-                  if (entry.value is SettingGroup) {
-                    return SettingGroupListSliver(
-                      searchText: searchText,
-                      settingGroup: entry.value as SettingGroup,
-                      path: '$path.${entry.key}',
-                    );
-                  } else {
-                    return SettingPropertySliver(
-                      property: entry.value as SettingProperty,
-                      path: '$path.${entry.key}',
-                    );
-                  }
-                }),
-              ],
-            ),
-          ),
-      ],
-    );
+        ],
+      );
+    }
   }
 }
 
@@ -179,7 +199,8 @@ class SettingPropertyValue<T> extends HookConsumerWidget {
     final val = ref.watch(jsonValueByPathProvider(path));
     if (path.startsWith('keyboard.hotkeys')) {
       return HotkeyViewer(
-        hotkey: val ?? '',
+        hotkey:
+            (property as SettingProperty<LogicalKeySet>).castValue(val ?? ''),
       );
     }
     return switch (property) {
@@ -204,8 +225,16 @@ class SettingPropertyEditor<T> extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final val = ref.watch(jsonValueByPathProvider(path));
     if (path.startsWith('keyboard.hotkeys')) {
-      return HotkeyViewer(
-        hotkey: val ?? '',
+      return SettingPropertyHotkeyEditor(
+        initialValue:
+            (property as SettingProperty<LogicalKeySet>).castValue(val ?? ''),
+        onChanged: (newValue) {
+          ref.read(settingsPropertiesProvider.notifier).updateProperty(
+                path,
+                (property as SettingProperty<LogicalKeySet>)
+                    .serializeValue(newValue),
+              );
+        },
       );
     }
     return switch (property) {
@@ -328,4 +357,75 @@ class SettingPropertyColorEditor extends HookConsumerWidget {
       ],
     );
   }
+}
+
+class SettingPropertyHotkeyEditor extends HookConsumerWidget {
+  const SettingPropertyHotkeyEditor({
+    required this.initialValue,
+    required this.onChanged,
+    super.key,
+  });
+  final LogicalKeySet initialValue;
+  final void Function(LogicalKeySet newValue) onChanged;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final keysPressed = useState<Set<LogicalKeyboardKey>>({});
+    final pressedNum = useState<int>(0);
+    final focusNode = useFocusNode();
+    return Focus(
+      autofocus: true,
+      focusNode: focusNode,
+      onKeyEvent: (node, event) {
+        print(event);
+        if (event.logicalKey == LogicalKeyboardKey.escape &&
+            keysPressed.value.isEmpty) {
+          ExpandableContainer.of(context).toggle();
+          focusNode.unfocus();
+
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.enter) {
+          onChanged(LogicalKeySet.fromSet(keysPressed.value));
+          focusNode.unfocus();
+          ExpandableContainer.of(context).toggle();
+          return KeyEventResult.handled;
+        }
+        if (event is KeyDownEvent) {
+          if (pressedNum.value == 0) {
+            keysPressed.value = {};
+          }
+          keysPressed.value = {...keysPressed.value, event.logicalKey};
+          pressedNum.value++;
+        }
+        if (event is KeyUpEvent) {
+          pressedNum.value--;
+        }
+        return KeyEventResult.handled;
+      },
+      child: keysPressed.value.isEmpty
+          ? const Text('Press any key')
+          : HotkeyViewer(
+              hotkey: LogicalKeySet.fromSet(keysPressed.value),
+            ),
+    );
+  }
+}
+
+bool searchSetting(
+  String searchText,
+  SettingDefinition definition,
+  String path,
+) {
+  if (searchText == '') return true;
+  if (definition is SettingGroup) {
+    return definition.children.entries.any(
+      (entry) => searchSetting(searchText, entry.value, '$path.${entry.key}'),
+    );
+  }
+  if (definition is SettingProperty) {
+    return '${definition.name}.${definition.description}'
+        .toLowerCase()
+        .contains(searchText.toLowerCase());
+  }
+  return false;
 }

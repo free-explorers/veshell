@@ -1,12 +1,32 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+final modKeys = {
+  LogicalKeyboardKey.alt,
+  LogicalKeyboardKey.altLeft,
+  LogicalKeyboardKey.altRight,
+  LogicalKeyboardKey.control,
+  LogicalKeyboardKey.controlLeft,
+  LogicalKeyboardKey.controlRight,
+  LogicalKeyboardKey.superKey,
+  LogicalKeyboardKey.shiftLeft,
+  LogicalKeyboardKey.shiftRight,
+  LogicalKeyboardKey.shift,
+};
 
 class HotkeyViewer extends StatelessWidget {
   const HotkeyViewer({required this.hotkey, super.key});
-  final String hotkey;
+  final LogicalKeySet hotkey;
 
   @override
   Widget build(BuildContext context) {
-    final keys = hotkey.split('+');
+    final keys = hotkey.keys.sorted(
+      (a, b) {
+        return (modKeys.contains(a) ? -1 : 1)
+            .compareTo(modKeys.contains(b) ? -1 : 1);
+      },
+    );
     return Row(
       mainAxisSize: MainAxisSize.min,
       spacing: 4,
@@ -18,7 +38,7 @@ class HotkeyViewer extends StatelessWidget {
                 borderRadius: BorderRadius.circular(4),
                 color: Colors.black38,
               ),
-              child: Text(value.toUpperCase()),
+              child: Text(value.keyLabel),
             ),
           )
           .toList(),
