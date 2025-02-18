@@ -44,14 +44,14 @@ use smithay::reexports::ash::khr::swapchain;
 use smithay::reexports::calloop::channel::Event as CalloopEvent;
 use smithay::reexports::calloop::RegistrationToken;
 use smithay::reexports::calloop::{EventLoop, LoopHandle};
-use smithay::reexports::drm::control::{connector, crtc, Device, ModeTypeFlags};
+use smithay::reexports::drm::control::{self, connector, crtc, Device, ModeFlags, ModeTypeFlags};
 use smithay::reexports::drm::Device as _;
 use smithay::reexports::input::Libinput;
 use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::DisplayHandle;
-use smithay::utils::{DeviceFd, IsAlive, Point, Rectangle, Transform};
+use smithay::utils::{DeviceFd, IsAlive, Point, Rectangle, Size, Transform};
 use smithay::wayland::dmabuf::{
     DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier,
 };
@@ -65,6 +65,7 @@ use tracing_subscriber::field::debug;
 use crate::cursor::{draw_cursor, CursorRenderElement};
 use crate::flutter_engine::FlutterEngine;
 use crate::keyboard::handle_keyboard_event;
+use crate::settings::{self, MonitorConfiguration};
 use crate::state;
 use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
 
@@ -266,7 +267,75 @@ pub fn run_drm_backend() {
 
     /* let gpu_manager =
     GpuManager::new(GbmGlesBackend::with_context_priority(ContextPriority::High)).unwrap(); */
+    let settings_manager = settings::SettingsManager::new(
+        event_loop.handle(),
+        |data: &mut State<DrmBackend>| {
+            let settings = data.settings_manager.get_settings();
+            data.apply_veshell_settings(&settings);
+        },
+        |data, monitor_name| {
+            info!("Monitor settings updated of {}", monitor_name);
+            for (&node, gpu_data) in &mut data.backend_data.gpus {
+                for (&handle, surface) in &mut gpu_data.surfaces {
+                    let monitor_name = surface.name.clone();
+                    if monitor_name.is_empty() {
+                        continue;
+                    }
+                    let Some(connector) = gpu_data
+                        .drm_scanner
+                        .connectors()
+                        .get(&surface.connector_handle)
+                    else {
+                        error!("missing enabled connector in drm_scanner");
+                        continue;
+                    };
+                    let monitor_configuration = match data
+                        .settings_manager
+                        .get_monitor_configuration(&monitor_name)
+                    {
+                        Some(monitor_configuration) => monitor_configuration,
+                        None => {
+                            warn!("Monitor configuration not found for {}", monitor_name);
+                            return;
+                        }
+                    };
 
+                    let (drm_mode, fallback) =
+                        pick_mode(&connector, Some(monitor_configuration.clone())).unwrap();
+
+                    if let Err(err) = surface.compositor.use_mode(drm_mode) {
+                        warn!("error changing mode: {err:?}");
+                        continue;
+                    }
+                    data.space
+                        .outputs()
+                        .find(|output| output.name() == monitor_name)
+                        .map(|output: &Output| {
+                            output.change_current_state(
+                                Some(Mode {
+                                    size: Size::from((
+                                        monitor_configuration.mode.size.width as i32,
+                                        monitor_configuration.mode.size.height as i32,
+                                    )),
+                                    refresh: monitor_configuration.mode.refresh_rate,
+                                }),
+                                None,
+                                None,
+                                Some(
+                                    (
+                                        monitor_configuration.location.x as i32,
+                                        monitor_configuration.location.y as i32,
+                                    )
+                                        .into(),
+                                ),
+                            );
+                        });
+                }
+            }
+            let monitors = data.space.outputs().cloned().collect::<Vec<_>>();
+            data.flutter_engine_mut().monitor_layout_changed(monitors);
+        },
+    );
     let mut state = State::new(
         display,
         event_loop.handle(),
@@ -278,6 +347,7 @@ pub fn run_drm_backend() {
             highest_hz_crtc: None,
         },
         None,
+        settings_manager,
     );
 
     event_loop
@@ -446,39 +516,42 @@ pub fn run_drm_backend() {
                     if is_touchpad {
                         device.config_tap_set_enabled(true);
                     }
-                },
-                InputEvent::DeviceRemoved { device } => {},
+                }
+                InputEvent::DeviceRemoved { device } => {}
                 InputEvent::Keyboard { event } => {
-                    handle_keyboard_event(
-                        data,
-                        event.key_code(),
-                        event.state(),
-                        event.time_msec(),
-                    );
-                },
-                InputEvent::PointerMotion { event } => data.on_pointer_motion::<LibinputInputBackend>(event),
-                InputEvent::PointerMotionAbsolute { event } => data.on_pointer_motion_absolute::<LibinputInputBackend>(event),
-                InputEvent::PointerButton { event } => data.on_pointer_button::<LibinputInputBackend>(event),
-                InputEvent::PointerAxis { event } => data.on_pointer_axis::<LibinputInputBackend>(event),
-                InputEvent::GestureSwipeBegin { event } => {},
-                InputEvent::GestureSwipeUpdate { event } => {},
-                InputEvent::GestureSwipeEnd { event } => {},
-                InputEvent::GesturePinchBegin { event } => {},
-                InputEvent::GesturePinchUpdate { event } => {},
-                InputEvent::GesturePinchEnd { event } => {},
-                InputEvent::GestureHoldBegin { event } => {},
-                InputEvent::GestureHoldEnd { event } => {},
-                InputEvent::TouchDown { event } => {},
-                InputEvent::TouchMotion { event } => {},
-                InputEvent::TouchUp { event } => {},
-                InputEvent::TouchCancel { event } => {},
-                InputEvent::TouchFrame { event } => {},
-                InputEvent::TabletToolAxis { event } => {},
-                InputEvent::TabletToolProximity { event } => {},
-                InputEvent::TabletToolTip { event } => {},
-                InputEvent::TabletToolButton { event } => {},
-                InputEvent::SwitchToggle { event } => {},
-                InputEvent::Special(_) => {},
+                    handle_keyboard_event(data, event.key_code(), event.state(), event.time_msec());
+                }
+                InputEvent::PointerMotion { event } => {
+                    data.on_pointer_motion::<LibinputInputBackend>(event)
+                }
+                InputEvent::PointerMotionAbsolute { event } => {
+                    data.on_pointer_motion_absolute::<LibinputInputBackend>(event)
+                }
+                InputEvent::PointerButton { event } => {
+                    data.on_pointer_button::<LibinputInputBackend>(event)
+                }
+                InputEvent::PointerAxis { event } => {
+                    data.on_pointer_axis::<LibinputInputBackend>(event)
+                }
+                InputEvent::GestureSwipeBegin { event } => {}
+                InputEvent::GestureSwipeUpdate { event } => {}
+                InputEvent::GestureSwipeEnd { event } => {}
+                InputEvent::GesturePinchBegin { event } => {}
+                InputEvent::GesturePinchUpdate { event } => {}
+                InputEvent::GesturePinchEnd { event } => {}
+                InputEvent::GestureHoldBegin { event } => {}
+                InputEvent::GestureHoldEnd { event } => {}
+                InputEvent::TouchDown { event } => {}
+                InputEvent::TouchMotion { event } => {}
+                InputEvent::TouchUp { event } => {}
+                InputEvent::TouchCancel { event } => {}
+                InputEvent::TouchFrame { event } => {}
+                InputEvent::TabletToolAxis { event } => {}
+                InputEvent::TabletToolProximity { event } => {}
+                InputEvent::TabletToolTip { event } => {}
+                InputEvent::TabletToolButton { event } => {}
+                InputEvent::SwitchToggle { event } => {}
+                InputEvent::Special(_) => {}
             }
             //data.handle_input(&event);
         })
@@ -583,7 +656,7 @@ pub fn run_drm_backend() {
 }
 
 impl State<DrmBackend> {
-    fn monitor_layout_changed(&mut self) {
+    pub fn monitor_layout_changed(&mut self) {
         let monitors = self.space.outputs().cloned().collect::<Vec<_>>();
         self.flutter_engine_mut().monitor_layout_changed(monitors);
     }
@@ -691,17 +764,27 @@ impl State<DrmBackend> {
         // check if there is a file in xdgConfigHome/veshell/persistence/Monitor/<output_name>.json and if so, get mode from there
         // if not, get the preferred mode from the connector
         info!("output_name: {}", output_name);
-        let mode_id = get_mode_id_for_monitor_from_file(&output_name).unwrap_or_else(|| {
+        /*         let mode_id = get_mode_id_for_monitor_from_file(&output_name).unwrap_or_else(|| {
             connector
                 .modes()
                 .iter()
                 .position(|mode| mode.mode_type().contains(ModeTypeFlags::PREFERRED))
                 .unwrap_or(0)
-        });
+        }); */
 
-        let drm_mode = connector.modes()[mode_id];
-        let wl_mode = Mode::from(drm_mode);
+        let monitor_configuration = self
+            .settings_manager
+            .get_monitor_configuration(&output_name);
 
+        info!(
+            "monitor_configuration: {:?}",
+            monitor_configuration.is_some()
+        );
+
+        // Determine DRM mode from the monitor configuration or fallback to the preferred mode
+        let (drm_mode, fallback) = pick_mode(&connector, monitor_configuration).unwrap();
+
+        // Create the DrmSurface
         let surface = match device
             .drm_device
             .create_surface(crtc, drm_mode, &[connector.handle()])
@@ -714,11 +797,12 @@ impl State<DrmBackend> {
         };
 
         let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
+
         let output = Output::new(
-            output_name,
+            output_name.clone(),
             PhysicalProperties {
                 size: (phys_w as i32, phys_h as i32).into(),
-                subpixel: Subpixel::Unknown,
+                subpixel: connector.subpixel().into(),
                 make,
                 model,
             },
@@ -730,7 +814,10 @@ impl State<DrmBackend> {
             acc + self.space.output_geometry(o).unwrap().size.w
         });
         let position = (x, 0).into();
-
+        for iterated_mode in connector.modes() {
+            output.add_mode(Mode::from(*iterated_mode));
+        }
+        let wl_mode = Mode::from(drm_mode);
         output.set_preferred(wl_mode);
         output.change_current_state(Some(wl_mode), None, None, Some(position));
         self.space.map_output(&output, position);
@@ -794,6 +881,8 @@ impl State<DrmBackend> {
         };
 
         let mut surface = SurfaceData {
+            name: output_name.clone(),
+            connector_handle: connector.handle(),
             dh: self.display_handle.clone(),
             device_id: node,
             crtc,
@@ -810,6 +899,7 @@ impl State<DrmBackend> {
             .map(|output| self.space.output_geometry(output).unwrap())
             .reduce(|first, second| first.merge(second))
             .unwrap();
+
         if device.swapchain.is_some() {
             device
                 .swapchain
@@ -817,10 +907,10 @@ impl State<DrmBackend> {
                 .unwrap()
                 .resize(bounding_box.size.w as u32, bounding_box.size.h as u32);
         }
+
         self.flutter_engine()
             .send_window_metrics((bounding_box.size.w as u32, bounding_box.size.h as u32).into())
             .unwrap();
-
         self.determine_highest_hz_crtc();
         self.monitor_layout_changed();
         self.schedule_initial_render(node, crtc, self.loop_handle.clone());
@@ -1305,6 +1395,8 @@ impl State<DrmBackend> {
 
 #[allow(dead_code)]
 struct SurfaceData {
+    name: String,
+    connector_handle: connector::Handle,
     dh: DisplayHandle,
     device_id: DrmNode,
     crtc: crtc::Handle,
@@ -1319,6 +1411,78 @@ pub type GbmDrmCompositor = DrmCompositor<
     Option<OutputPresentationFeedback>,
     DrmDeviceFd,
 >;
+
+fn pick_mode(
+    connector: &connector::Info,
+    target: Option<MonitorConfiguration>,
+) -> Option<(control::Mode, bool)> {
+    let mut mode = None;
+    let mut fallback = false;
+
+    if let Some(target) = target {
+        let refresh = target.mode.refresh_rate;
+
+        for m in connector.modes() {
+            if m.size()
+                != (
+                    target.mode.size.width as u16,
+                    target.mode.size.height as u16,
+                )
+            {
+                continue;
+            }
+
+            // Interlaced modes don't appear to work.
+            if m.flags().contains(ModeFlags::INTERLACE) {
+                continue;
+            }
+            // If refresh is set, only pick modes with matching refresh.
+            let wl_mode = Mode::from(*m);
+            if wl_mode.refresh == refresh {
+                mode = Some(m);
+            }
+
+            /*             if let Some(refresh) = refresh {
+
+            } else if let Some(curr) = mode {
+                // If refresh isn't set, pick the mode with the highest refresh.
+                if curr.vrefresh() < m.vrefresh() {
+                    mode = Some(m);
+                }
+            } else {
+                mode = Some(m);
+            } */
+        }
+
+        if mode.is_none() {
+            fallback = true;
+        }
+    }
+
+    if mode.is_none() {
+        // Pick a preferred mode.
+        for m in connector.modes() {
+            if !m.mode_type().contains(ModeTypeFlags::PREFERRED) {
+                continue;
+            }
+
+            if let Some(curr) = mode {
+                if curr.vrefresh() < m.vrefresh() {
+                    mode = Some(m);
+                }
+            } else {
+                mode = Some(m);
+            }
+        }
+    }
+
+    if mode.is_none() {
+        // Last attempt.
+        mode = connector.modes().first();
+    }
+
+    mode.map(|m| (*m, fallback))
+}
 
 fn get_mode_id_for_monitor_from_file(output_name: &str) -> Option<usize> {
     let path = std::env::var("XDG_CONFIG_HOME")

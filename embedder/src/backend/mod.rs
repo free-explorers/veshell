@@ -3,6 +3,8 @@ use smithay::backend::{
     session::libseat::LibSeatSession,
 };
 
+use crate::state::State;
+
 pub mod drm_backend;
 pub mod render;
 pub mod x11_client;

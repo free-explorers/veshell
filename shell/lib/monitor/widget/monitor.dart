@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/monitor/provider/current_monitor.dart';
-import 'package:shell/monitor/provider/monitor_configuration_state.dart';
+import 'package:shell/monitor/provider/screen_configuration_for_monitor.dart';
 import 'package:shell/screen/provider/current_screen_id.dart';
 import 'package:shell/screen/provider/screen_list.dart';
 import 'package:shell/screen/widget/screen.dart';
@@ -16,8 +16,7 @@ class MonitorWidget extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final monitorName = ref.watch(currentMonitorProvider);
     final screenConfiguration = ref.watch(
-      monitorConfigurationStateProvider(monitorName)
-          .select((value) => value.screenConfiguration),
+      screenConfigurationForMonitorProvider(monitorName),
     );
 
     useEffect(
@@ -27,7 +26,9 @@ class MonitorWidget extends HookConsumerWidget {
             final newScreenId =
                 ref.read(screenListProvider.notifier).createNewScreen();
             ref
-                .read(monitorConfigurationStateProvider(monitorName).notifier)
+                .read(
+                  screenConfigurationForMonitorProvider(monitorName).notifier,
+                )
                 .setScreenList([newScreenId].lock);
           });
         }

@@ -50,8 +50,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     debug!("Starting Veshell");
+
     // Fix XWayland crash when too many file descriptors are open.
     let _ = rlimit::increase_nofile_limit(u64::MAX);
+
     if env::var("DISPLAY").is_ok() || env::var("WAYLAND_DISPLAY").is_ok() {
         backend::x11_client::run_x11_client();
     } else {

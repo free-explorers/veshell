@@ -11,6 +11,7 @@ class SettingProperty<T>
     required String name,
     required String description,
     JsonConverter<T, String>? converter,
+    String? key,
   }) = _SettingProperty;
   const SettingProperty._();
 

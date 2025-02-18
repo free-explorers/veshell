@@ -110,10 +110,11 @@ impl EventSource for NotifySource {
     where
         F: FnMut(Self::Event, &mut Self::Metadata) -> Self::Ret,
     {
-        self.rx.process_events(readiness, token, |event, metadata| match event {
-            ChannelEvent::Msg(msg) => callback(msg, metadata),
-            ChannelEvent::Closed => (),
-        })
+        self.rx
+            .process_events(readiness, token, |event, metadata| match event {
+                ChannelEvent::Msg(msg) => callback(msg, metadata),
+                ChannelEvent::Closed => (),
+            })
     }
 
     fn register(

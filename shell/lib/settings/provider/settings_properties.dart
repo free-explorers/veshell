@@ -1,14 +1,16 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/monitor/model/monitor.serializable.dart';
+import 'package:shell/monitor/provider/monitor_list.dart';
 import 'package:shell/settings/model/setting_group.dart';
 import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/provider/util/config_directory.dart';
 import 'package:shell/settings/provider/util/configured_settings_json.dart';
 import 'package:shell/settings/provider/util/default_settings_json.dart';
+import 'package:shell/shared/util/file.dart';
 import 'package:shell/shared/util/json_converter/color.dart';
 import 'package:shell/shared/util/json_converter/logical_key_set.dart';
 
@@ -18,7 +20,30 @@ part 'settings_properties.g.dart';
 class SettingsProperties extends _$SettingsProperties {
   @override
   Map<String, SettingGroup> build() {
+    final monitors = ref.watch(monitorListProvider);
     return {
+      'monitors': SettingGroup(
+        name: 'Monitors',
+        description: null,
+        icon: MdiIcons.monitor,
+        children: {
+          for (final e in monitors)
+            e.name: SettingGroup(
+              name: e.name,
+              description: e.description,
+              children: {
+                'resolution': const SettingProperty<MonitorResolution>(
+                  name: 'Resolution',
+                  description: 'Monitor resolution',
+                ),
+                'refreshRate': const SettingProperty<MonitorRefreshRate>(
+                  name: 'Refresh Rate',
+                  description: 'Monitor refresh rate',
+                ),
+              },
+            ),
+        },
+      ),
       'keyboard': const SettingGroup(
         name: 'Keyboard',
         description: null,
@@ -103,8 +128,6 @@ class SettingsProperties extends _$SettingsProperties {
     final defaultJson = ref.read(defaultSettingsJsonProvider);
     final json = ref.read(configuredSettingsJsonProvider);
     final configDirectory = ref.read(configDirectoryProvider);
-    final configuredSettingsFile =
-        File('${configDirectory.path}/settings.json');
 
     final parts = path.split('.');
     var currentMap = json;
@@ -148,6 +171,9 @@ class SettingsProperties extends _$SettingsProperties {
 
     // Write the updated JSON back to the file with indentation
     const encoder = JsonEncoder.withIndent('  ');
-    configuredSettingsFile.writeAsStringSync(encoder.convert(json));
+    writeFileAtomically(
+      '${configDirectory.path}/settings.json',
+      encoder.convert(json),
+    );
   }
 }

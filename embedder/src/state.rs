@@ -49,7 +49,7 @@ use smithay::xwayland::{X11Surface, X11Wm};
 use smithay::{
     delegate_compositor, delegate_data_control, delegate_data_device, delegate_output,
     delegate_primary_selection, delegate_relative_pointer, delegate_seat, delegate_shm,
-    delegate_xdg_shell, delegate_xwayland_shell,
+    delegate_xdg_shell, delegate_xwayland_shell, output,
 };
 use tracing::{info, warn};
 
@@ -174,6 +174,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         loop_handle: LoopHandle<'static, State<BackendData>>,
         backend_data: BackendData,
         dmabuf_state: Option<DmabufState>,
+        settings_manager: SettingsManager<BackendData>,
     ) -> State<BackendData> {
         let display_handle = display.handle();
         let clock = Clock::new();
@@ -185,11 +186,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let mut seat_state = SeatState::new();
         let seat_name = backend_data.seat_name();
         let mut seat = seat_state.new_wl_seat(&display_handle, seat_name.clone());
-        let settings_manager =
-            settings::SettingsManager::new(loop_handle.clone(), |data: &mut State<BackendData>| {
-                let settings = data.settings_manager.get_settings();
-                data.apply_veshell_settings(&settings);
-            });
+
         let settings = settings_manager.get_settings();
 
         let repeat_delay: u64 = 200;
@@ -326,7 +323,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .change_repeat_info(repeat_delay as i32, repeat_rate as i32);
     }
 
-    fn apply_veshell_settings(&mut self, settings: &VeshellSettings) {
+    pub fn apply_veshell_settings(&mut self, settings: &VeshellSettings) {
         let keyboard = self.keyboard.clone();
         keyboard
             .set_xkb_config(

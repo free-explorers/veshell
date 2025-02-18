@@ -1,9 +1,15 @@
 import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:shell/monitor/model/monitor.serializable.dart';
+import 'package:shell/overview/widget/search/settings/keyboard/setting_property_hotkey_editor.dart';
+import 'package:shell/overview/widget/search/settings/monitor/monitor_refresh_rate_value.dart';
+import 'package:shell/overview/widget/search/settings/monitor/monitor_resolution_editor.dart';
+import 'package:shell/overview/widget/search/settings/monitor/monitor_resolution_value.dart';
+import 'package:shell/overview/widget/search/settings/primitive/setting_property_color_editor.dart';
+import 'package:shell/overview/widget/search/settings/primitive/setting_property_string_editor.dart';
 import 'package:shell/settings/model/setting_definition.dart';
 import 'package:shell/settings/model/setting_group.dart';
 import 'package:shell/settings/model/setting_property.dart';
@@ -115,7 +121,10 @@ class SettingGroupListSliver extends HookWidget {
                       );
                     } else {
                       if (!searchSetting(
-                          searchText, entry.value, '$path.${entry.key}')) {
+                        searchText,
+                        entry.value,
+                        '$path.${entry.key}',
+                      )) {
                         return const SliverToBoxAdapter();
                       }
                       return SettingPropertySliver(
@@ -197,17 +206,20 @@ class SettingPropertyValue<T> extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final val = ref.watch(jsonValueByPathProvider(path));
-    if (path.startsWith('keyboard.hotkeys')) {
-      return HotkeyViewer(
-        hotkey:
-            (property as SettingProperty<LogicalKeySet>).castValue(val ?? ''),
-      );
-    }
+
     return switch (property) {
       SettingProperty<String>() => Text('$val'),
       SettingProperty<Color>() => ColorIndicator(
           color: (property as SettingProperty<Color>).castValue(val!),
         ),
+      SettingProperty<LogicalKeySet>() => HotkeyViewer(
+          hotkey:
+              (property as SettingProperty<LogicalKeySet>).castValue(val ?? ''),
+        ),
+      SettingProperty<MonitorResolution>() =>
+        MonitorResolutionValue(path: path),
+      SettingProperty<MonitorRefreshRate>() =>
+        MonitorRefreshRateValue(path: path),
       SettingProperty<T>() => throw UnimplementedError(),
     };
   }
@@ -223,191 +235,30 @@ class SettingPropertyEditor<T> extends HookConsumerWidget {
   final SettingProperty<T> property;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final val = ref.watch(jsonValueByPathProvider(path));
-    if (path.startsWith('keyboard.hotkeys')) {
-      return SettingPropertyHotkeyEditor(
-        initialValue:
-            (property as SettingProperty<LogicalKeySet>).castValue(val ?? ''),
-        onChanged: (newValue) {
-          ref.read(settingsPropertiesProvider.notifier).updateProperty(
-                path,
-                (property as SettingProperty<LogicalKeySet>)
-                    .serializeValue(newValue),
-              );
-        },
-      );
-    }
+    void onValueChanged(dynamic value) {}
     return switch (property) {
       SettingProperty<String>() => SettingPropertyStringEditor(
-          initialValue: val ?? '',
-          onChanged: (newValue) {
-            print('newValue: $newValue');
-            ref.read(settingsPropertiesProvider.notifier).updateProperty(
-                  path,
-                  newValue,
-                );
-          },
+          path: path,
+          property: property as SettingProperty<String>,
+          onChanged: onValueChanged,
         ),
       SettingProperty<Color>() => SettingPropertyColorEditor(
-          initialValue:
-              (property as SettingProperty<Color>).castValue(val ?? ''),
-          onChanged: (newValue) {
-            print('newColor: $newValue');
-            ref.read(settingsPropertiesProvider.notifier).updateProperty(
-                  path,
-                  (property as SettingProperty<Color>).serializeValue(newValue),
-                );
-          },
+          path: path,
+          property: property as SettingProperty<Color>,
+          onChanged: onValueChanged,
+        ),
+      SettingProperty<LogicalKeySet>() => SettingPropertyHotkeyEditor(
+          path: path,
+          property: property as SettingProperty<LogicalKeySet>,
+          onChanged: onValueChanged,
+        ),
+      SettingProperty<MonitorResolution>() => MonitorResolutionEditor(
+          path: path,
+          property: property as SettingProperty<MonitorResolution>,
+          onChanged: onValueChanged,
         ),
       SettingProperty<T>() => throw UnimplementedError(),
     };
-  }
-}
-
-class SettingPropertyStringEditor extends HookConsumerWidget {
-  const SettingPropertyStringEditor({
-    required this.initialValue,
-    required this.onChanged,
-    super.key,
-  });
-  final String initialValue;
-  final void Function(String newValue) onChanged;
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final controller = useTextEditingController(text: initialValue);
-    return TextField(
-      controller: controller,
-      autofocus: true,
-      decoration: const InputDecoration(
-        filled: true,
-      ),
-      onSubmitted: onChanged,
-    );
-  }
-}
-
-class SettingPropertyColorEditor extends HookConsumerWidget {
-  const SettingPropertyColorEditor({
-    required this.initialValue,
-    required this.onChanged,
-    super.key,
-  });
-  final Color initialValue;
-  final void Function(Color newValue) onChanged;
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final updatedBy = useState<String?>(null);
-
-    return Row(
-      spacing: 16,
-      children: [
-        SizedBox(
-          width: 150,
-          height: 150,
-          child: ColorWheelPicker(
-            color: initialValue,
-            onChanged: (color) {
-              onChanged(color);
-              updatedBy.value = 'wheel';
-            },
-            onWheel: (value) {},
-            shouldUpdate: updatedBy.value != 'wheel',
-          ),
-        ),
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          spacing: 16,
-          children: [
-            Row(
-              spacing: 8,
-              children: [
-                const Color(0xFF006888),
-                const Color(0xFFB71C1C),
-                const Color(0xFF2E7D32),
-                const Color(0xFFC51162),
-                const Color(0xFFD8DEE9),
-              ]
-                  .map(
-                    (Color color) => ColorIndicator(
-                      color: color,
-                      onSelect: () {
-                        onChanged(color);
-                        updatedBy.value = 'indicator';
-                      },
-                      isSelected: initialValue == color,
-                    ),
-                  )
-                  .toList(),
-            ),
-            ColorCodeField(
-              color: initialValue,
-              onColorChanged: (color) {
-                onChanged(color);
-                updatedBy.value = 'code';
-              },
-              onEditFocused: (bool) {},
-              requestFocus: false,
-              focusedEditHasNoColor: false,
-              colorCodeHasColor: true,
-              shouldUpdate: updatedBy.value != 'code',
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class SettingPropertyHotkeyEditor extends HookConsumerWidget {
-  const SettingPropertyHotkeyEditor({
-    required this.initialValue,
-    required this.onChanged,
-    super.key,
-  });
-  final LogicalKeySet initialValue;
-  final void Function(LogicalKeySet newValue) onChanged;
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final keysPressed = useState<Set<LogicalKeyboardKey>>({});
-    final pressedNum = useState<int>(0);
-    final focusNode = useFocusNode();
-    return Focus(
-      autofocus: true,
-      focusNode: focusNode,
-      onKeyEvent: (node, event) {
-        print(event);
-        if (event.logicalKey == LogicalKeyboardKey.escape &&
-            keysPressed.value.isEmpty) {
-          ExpandableContainer.of(context).toggle();
-          focusNode.unfocus();
-
-          return KeyEventResult.handled;
-        }
-        if (event.logicalKey == LogicalKeyboardKey.enter) {
-          onChanged(LogicalKeySet.fromSet(keysPressed.value));
-          focusNode.unfocus();
-          ExpandableContainer.of(context).toggle();
-          return KeyEventResult.handled;
-        }
-        if (event is KeyDownEvent) {
-          if (pressedNum.value == 0) {
-            keysPressed.value = {};
-          }
-          keysPressed.value = {...keysPressed.value, event.logicalKey};
-          pressedNum.value++;
-        }
-        if (event is KeyUpEvent) {
-          pressedNum.value--;
-        }
-        return KeyEventResult.handled;
-      },
-      child: keysPressed.value.isEmpty
-          ? const Text('Press any key')
-          : HotkeyViewer(
-              hotkey: LogicalKeySet.fromSet(keysPressed.value),
-            ),
-    );
   }
 }
 

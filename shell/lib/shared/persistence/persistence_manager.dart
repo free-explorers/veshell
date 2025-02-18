@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
+import 'package:shell/shared/util/file.dart';
 import 'package:shell/shared/util/logger.dart';
 
 Directory persistenceDirectory = Directory(
@@ -59,19 +60,10 @@ class PersistenceManager {
     Map<String, dynamic> json,
   ) async {
     persistenceLog.info('start storeModelJson for $modelFolder-$modelId');
-    final tempFile = File(
-      path.join(persistenceDirectory.path, modelFolder, '$modelId.temp'),
-    );
-    if (!tempFile.existsSync()) {
-      await tempFile.create(recursive: true);
-    }
-    await tempFile.writeAsString(jsonEncode(json));
-
-    final targetFile = File(
+    await writeFileAtomically(
       path.join(persistenceDirectory.path, modelFolder, '$modelId.json'),
+      jsonEncode(json),
     );
-    await tempFile.rename(targetFile.path);
-    final stack = StackTrace.current;
     persistenceLog.info(
       'end storeModelJson for $modelFolder-$modelId',
     );

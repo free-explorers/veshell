@@ -41,8 +41,8 @@ use tracing::info;
 
 use crate::flutter_engine::FlutterEngine;
 use crate::keyboard::handle_keyboard_event;
-use crate::state;
 use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
+use crate::{settings, state};
 
 use super::Backend;
 
@@ -195,6 +195,16 @@ pub fn run_x11_client() {
         &display.handle(),
         &dmabuf_default_feedback,
     );
+    let settings_manager = settings::SettingsManager::new(
+        event_loop.handle(),
+        |data: &mut State<X11Data>| {
+            let settings = data.settings_manager.get_settings();
+            data.apply_veshell_settings(&settings);
+        },
+        |data, monitor_name| {
+            info!("Monitor settings updated of {}", monitor_name);
+        },
+    );
 
     let mut state = State::new(
         display,
@@ -204,6 +214,7 @@ pub fn run_x11_client() {
             renderer: gles_renderer,
         },
         Some(dmabuf_state),
+        settings_manager,
     );
 
     state.gl = Some(Gles2::load_with(
@@ -297,44 +308,46 @@ pub fn run_x11_client() {
                     }
                 }
 
-                X11Event::Input { event, .. } => {
-                    match event {
-                        InputEvent::DeviceAdded { mut device } => {
-
-                        },
-                        InputEvent::DeviceRemoved { device } => {},
-                        InputEvent::Keyboard { event } => {
-                            handle_keyboard_event(
-                                data,
-                                event.key_code(),
-                                event.state(),
-                                event.time_msec(),
-                            );
-                        },
-                        InputEvent::PointerMotion { event } => data.on_pointer_motion::<X11Input>(event),
-                        InputEvent::PointerMotionAbsolute { event } => data.on_pointer_motion_absolute::<X11Input>(event),
-                        InputEvent::PointerButton { event } => data.on_pointer_button::<X11Input>(event),
-                        InputEvent::PointerAxis { event } => data.on_pointer_axis::<X11Input>(event),
-                        InputEvent::GestureSwipeBegin { event } => {},
-                        InputEvent::GestureSwipeUpdate { event } => {},
-                        InputEvent::GestureSwipeEnd { event } => {},
-                        InputEvent::GesturePinchBegin { event } => {},
-                        InputEvent::GesturePinchUpdate { event } => {},
-                        InputEvent::GesturePinchEnd { event } => {},
-                        InputEvent::GestureHoldBegin { event } => {},
-                        InputEvent::GestureHoldEnd { event } => {},
-                        InputEvent::TouchDown { event } => {},
-                        InputEvent::TouchMotion { event } => {},
-                        InputEvent::TouchUp { event } => {},
-                        InputEvent::TouchCancel { event } => {},
-                        InputEvent::TouchFrame { event } => {},
-                        InputEvent::TabletToolAxis { event } => {},
-                        InputEvent::TabletToolProximity { event } => {},
-                        InputEvent::TabletToolTip { event } => {},
-                        InputEvent::TabletToolButton { event } => {},
-                        InputEvent::SwitchToggle { event } => {},
-                        InputEvent::Special(_) => {},
+                X11Event::Input { event, .. } => match event {
+                    InputEvent::DeviceAdded { mut device } => {}
+                    InputEvent::DeviceRemoved { device } => {}
+                    InputEvent::Keyboard { event } => {
+                        handle_keyboard_event(
+                            data,
+                            event.key_code(),
+                            event.state(),
+                            event.time_msec(),
+                        );
                     }
+                    InputEvent::PointerMotion { event } => {
+                        data.on_pointer_motion::<X11Input>(event)
+                    }
+                    InputEvent::PointerMotionAbsolute { event } => {
+                        data.on_pointer_motion_absolute::<X11Input>(event)
+                    }
+                    InputEvent::PointerButton { event } => {
+                        data.on_pointer_button::<X11Input>(event)
+                    }
+                    InputEvent::PointerAxis { event } => data.on_pointer_axis::<X11Input>(event),
+                    InputEvent::GestureSwipeBegin { event } => {}
+                    InputEvent::GestureSwipeUpdate { event } => {}
+                    InputEvent::GestureSwipeEnd { event } => {}
+                    InputEvent::GesturePinchBegin { event } => {}
+                    InputEvent::GesturePinchUpdate { event } => {}
+                    InputEvent::GesturePinchEnd { event } => {}
+                    InputEvent::GestureHoldBegin { event } => {}
+                    InputEvent::GestureHoldEnd { event } => {}
+                    InputEvent::TouchDown { event } => {}
+                    InputEvent::TouchMotion { event } => {}
+                    InputEvent::TouchUp { event } => {}
+                    InputEvent::TouchCancel { event } => {}
+                    InputEvent::TouchFrame { event } => {}
+                    InputEvent::TabletToolAxis { event } => {}
+                    InputEvent::TabletToolProximity { event } => {}
+                    InputEvent::TabletToolTip { event } => {}
+                    InputEvent::TabletToolButton { event } => {}
+                    InputEvent::SwitchToggle { event } => {}
+                    InputEvent::Special(_) => {}
                 },
                 X11Event::Focus { focused: false, .. } => data.release_all_keys(),
                 _ => {}

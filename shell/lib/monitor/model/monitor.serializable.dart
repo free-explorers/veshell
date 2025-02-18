@@ -8,6 +8,8 @@ part 'monitor.serializable.freezed.dart';
 part 'monitor.serializable.g.dart';
 
 typedef MonitorId = String;
+typedef MonitorResolution = Size;
+typedef MonitorRefreshRate = int;
 
 /// a Monitor represent a physical display device used to render Veshell
 @freezed
@@ -32,8 +34,8 @@ class Monitor with _$Monitor {
 @freezed
 class Mode with _$Mode {
   const factory Mode({
-    @SizeConverter() required Size size,
-    required int refreshRate,
+    @SizeConverter() required MonitorResolution size,
+    required MonitorRefreshRate refreshRate,
   }) = _Mode;
 
   factory Mode.fromJson(Map<String, dynamic> json) => _$ModeFromJson(json);
