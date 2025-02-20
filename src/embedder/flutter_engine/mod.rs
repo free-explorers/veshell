@@ -164,14 +164,17 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         };
 
         // Default build is debug if not specified.
-        let flutter_engine_build = option_env!("FLUTTER_ENGINE_BUILD").unwrap_or("debug");
+        let flutter_engine_build = option_env!("CARGO_PROFILE").unwrap_or("debug");
 
         let executable_path = std::fs::canonicalize("/proc/self/exe")?;
-        let bundle_root = if option_env!("BUNDLE").is_some() {
-            executable_path.parent().unwrap().display().to_string()
-        } else {
-            format!("../shell/build/linux/{arch}/{flutter_engine_build}/bundle")
-        };
+
+        let mut bundle_root = executable_path.parent().unwrap().display().to_string();
+        // check if the bundle_root/data exists
+        if !Path::new(&bundle_root).join("data").exists() {
+            debug!("bundle_root/data does not exist, falling back to src/shell/build/linux/{arch}/{flutter_engine_build}/bundle");
+            // fallback to source
+            bundle_root = format!("src/shell/build/linux/{arch}/{flutter_engine_build}/bundle")
+        }
 
         let host = "127.0.0.1";
         let socket_number: i32 = server_state
@@ -231,6 +234,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     ),
                     post_task_callback: Some(post_task_callback::<BackendData>),
                     identifier: 1,
+                    destruction_callback: None,
                 };
 
                 let task_runners = FlutterCustomTaskRunners {
@@ -510,6 +514,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             physical_view_inset_bottom: 0.0,
             physical_view_inset_left: 0.0,
             display_id: 0,
+            view_id: 0,
         };
 
         let result =
@@ -592,6 +597,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             logical: logical_key,
             character: character,
             synthesized: false,
+            device_type: 1,
         };
 
         let result = unsafe {
@@ -788,7 +794,7 @@ fn propagate_vm_service(host: &str, port: i32) -> Result<(), Box<dyn std::error:
             "uri": format!(r#"http://{host}:{port}/"#),
         });
 
-        let path = "../.temp/vmService.json";
+        let path = ".vscode/vmService.json";
         if let Some(parent) = Path::new(path).parent() {
             fs::create_dir_all(parent)?;
         }

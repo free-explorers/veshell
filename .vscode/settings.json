@@ -12,4 +12,5 @@
         "**/*.freezed.dart": true,
         "**/*.g.dart": true
     },
+    "dart.flutterSdkPath": ".flutter_sdk"
 }

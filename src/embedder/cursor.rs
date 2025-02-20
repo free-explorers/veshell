@@ -30,7 +30,7 @@ use xcursor::{
     CursorTheme,
 };
 
-static FALLBACK_CURSOR_DATA: &[u8] = include_bytes!("../resources/cursor.rgba");
+static FALLBACK_CURSOR_DATA: &[u8] = include_bytes!("resources/cursor.rgba");
 
 pub struct Cursor {
     icons: Vec<Image>,

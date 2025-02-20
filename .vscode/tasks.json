@@ -15,7 +15,6 @@
 			"options": {
 				"cwd": "${workspaceFolder}/embedder",
 			},
-			"dependsOn": "build-flutter"
 		},
 		{
 			"label": "build-flutter",
@@ -70,7 +69,7 @@
 		{
 			"label": "wait-for-vmService",
 			"type": "shell",
-			"command": "while [ ! -f .temp/vmService.json ]; do sleep 0.5; done",
+			"command": "while [ ! -f .vscode/vmService.json ]; do sleep 0.5; done",
 			"presentation": {
 				"reveal": "never",
 				"focus": false,
@@ -81,7 +80,7 @@
 		{
 			"label": "delete-vmService",
 			"type": "shell",
-			"command": "if [ -f '.temp/vmService.json' ]; then rm .temp/vmService.json; fi",
+			"command": "if [ -f '.vscode/vmService.json' ]; then rm .vscode/vmService.json; fi",
 			"presentation": {
 				"reveal": "never",
 				"focus": false,
@@ -91,7 +90,7 @@
 		{
 			"label": "prepare-veshell",
 			"dependsOn": [
-				"build-veshell",
+				"build-embedder",
 				"delete-vmService"
 			],
 		}

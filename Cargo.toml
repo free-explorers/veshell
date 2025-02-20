@@ -1,10 +1,27 @@
 [package]
 name = "veshell"
 version = "0.1.0"
+description = "An innovative not-desktop environment for Linux made with modern technologies like Flutter and Rust."
+authors = ["Adrien Peslerbe <adrien@pesler.be>"]
+license = "GPL-3.0-or-later"
 edition = "2021"
+repository = "https://github.com/free-explorers/veshell"
+build = "extra/build/mod.rs"
+default-run = "veshell"
 
-[workspace]
-members = ["third_party/smithay-drm-extras"]
+[package.metadata]
+flutter_version = "3.29.0"
+
+[[bin]]
+name = "veshell"
+path = "src/embedder/main.rs"
+
+[[bin]]
+name = "helper"
+path = "extra/scripts/helper.rs"
+
+[profile.profile]
+inherits = "release"
 
 [dependencies]
 smithay = { git = "https://github.com/Smithay/smithay", rev = "ace2e6a", features = [
@@ -14,10 +31,15 @@ smithay = { git = "https://github.com/Smithay/smithay", rev = "ace2e6a", feature
     "use_system_lib",
     "xwayland",
 ] }
-smithay-drm-extras = { path = "third_party/smithay-drm-extras" }
+smithay-drm-extras = { path = "extra/third_party/smithay-drm-extras" }
 rustix = "0.38.30"
 input-linux = "0.7.1"
-tracing-subscriber = { version = "0.3.17", features = ["env-filter", "time", "chrono", "ansi"] }
+tracing-subscriber = { version = "0.3.17", features = [
+    "env-filter",
+    "time",
+    "chrono",
+    "ansi",
+] }
 log = "0.4.20"
 tracing = { version = "0.1.37", features = [] }
 profiling = "1.0.11"
@@ -38,6 +60,9 @@ sd-notify = "0.4.3"
 bindgen = "0.69.1"
 bytes = "1.5.0"
 reqwest = { version = "0.11.22", features = ["blocking"] }
-zip = "0.6.6"
+tar = "0.4.43"
+flate2 = "1.0.35"
+sha256 = "1.5.0"
 lazy_static = { version = "1.4.0", features = [] }
+cargo_metadata = "0.19.1"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
