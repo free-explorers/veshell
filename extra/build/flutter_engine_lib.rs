@@ -96,6 +96,7 @@ fn download_flutter_engine_library(
     flutter_engine_revision: &str,
     flutter_engine_build: FlutterEngineBuild,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    println!("cargo:warning=Downloading flutter engine library...");
     let arch = if cfg!(target_arch = "x86_64") {
         "x86_64"
     } else if cfg!(target_arch = "aarch64") {
@@ -121,8 +122,7 @@ fn download_flutter_engine_library(
         String::from_utf8(sha256_bytes.to_vec()).expect("SHA256 checksum is not valid UTF-8");
     let expected_sha256 = sha256_sum.split(' ').next().unwrap().trim();
     let actual_sha256 = sha256::digest(bytes.to_vec()).to_string();
-    println!("Expected SHA256: {}", expected_sha256);
-    println!("Actual SHA256: {}", actual_sha256);
+
     if actual_sha256 != expected_sha256 {
         panic!(
             "SHA256 checksum mismatch. Expected: {}, Got: {}",
@@ -177,6 +177,7 @@ fn download_from_url(url: &str) -> Result<bytes::Bytes, reqwest::Error> {
 fn generate_embedder_bindings() {
     let embedder_header_path = format!("{FLUTTER_ENGINE_LIBS_DIR}/{FLUTTER_ENGINE_HEADER_NAME}");
     println!("cargo:rerun-if-changed={embedder_header_path}");
+    println!("cargo:warning=Generating embedder bindings...");
 
     let bindings = bindgen::Builder::default()
         .header(embedder_header_path)

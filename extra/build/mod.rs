@@ -28,17 +28,17 @@ fn main() {
     // Install flutter and download Engine shared libs
     match install_flutter_sdk() {
         Ok(_) => println!("Flutter SDK installed successfully"),
-        Err(e) => eprintln!("Failed to install Flutter SDK: {}", e),
+        Err(e) => panic!("Failed to install Flutter SDK: {}", e),
     }
 
     match build_shell(flutter_engine_build) {
         Ok(_) => println!("Shell built successfully"),
-        Err(e) => eprintln!("Failed to build shell: {}", e),
+        Err(e) => panic!("Failed to build shell: {}", e),
     }
 
     match link_flutter_engine_shared_library(flutter_engine_build) {
         Ok(_) => println!("Flutter engine shared library linked successfully"),
-        Err(e) => eprintln!("Failed to link Flutter engine shared library: {}", e),
+        Err(e) => panic!("Failed to link Flutter engine shared library: {}", e),
     }
 }
 
