@@ -87,6 +87,7 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
             }
         }
         let default_settings_folder = std::env::var("VESHELL_DEFAULT_CONFIG_DIR").unwrap();
+
         let user_settings_folder: String = std::env::var("VESHELL_CONFIG_DIR")
             .or_else(|_| {
                 std::env::var("XDG_CONFIG_HOME")
@@ -97,6 +98,10 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
                     })
             })
             .unwrap();
+
+        if std::env::var("VESHELL_CONFIG_DIR").is_err() {
+            std::env::set_var("VESHELL_CONFIG_DIR", &user_settings_folder);
+        }
 
         let user_settings_folder_path = Path::new(&user_settings_folder);
         if !user_settings_folder_path.exists() {

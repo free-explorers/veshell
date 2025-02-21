@@ -228,7 +228,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 
         info!(name = socket_name, "Listening on wayland socket");
         // Set the current desktop for xdg-desktop-portal.
-        std::env::set_var("XDG_CURRENT_DESKTOP", "niri");
+        std::env::set_var("XDG_CURRENT_DESKTOP", "veshell");
         // Ensure the session type is set to Wayland for xdg-autostart and Qt apps.
         std::env::set_var("XDG_SESSION_TYPE", "wayland");
         std::env::set_var("GDK_BACKEND", "wayland"); // Force GTK apps to run on Wayland.
