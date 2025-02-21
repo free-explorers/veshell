@@ -201,7 +201,7 @@ pub fn run_x11_client() {
             let settings = data.settings_manager.get_settings();
             data.apply_veshell_settings(&settings);
         },
-        |data, monitor_name| {
+        |_data, monitor_name| {
             info!("Monitor settings updated of {}", monitor_name);
         },
     );
@@ -309,8 +309,8 @@ pub fn run_x11_client() {
                 }
 
                 X11Event::Input { event, .. } => match event {
-                    InputEvent::DeviceAdded { device } => {}
-                    InputEvent::DeviceRemoved { device } => {}
+                    InputEvent::DeviceAdded { device: _ } => {}
+                    InputEvent::DeviceRemoved { device: _ } => {}
                     InputEvent::Keyboard { event } => {
                         handle_keyboard_event(
                             data,
@@ -329,24 +329,24 @@ pub fn run_x11_client() {
                         data.on_pointer_button::<X11Input>(event)
                     }
                     InputEvent::PointerAxis { event } => data.on_pointer_axis::<X11Input>(event),
-                    InputEvent::GestureSwipeBegin { event } => {}
-                    InputEvent::GestureSwipeUpdate { event } => {}
-                    InputEvent::GestureSwipeEnd { event } => {}
-                    InputEvent::GesturePinchBegin { event } => {}
-                    InputEvent::GesturePinchUpdate { event } => {}
-                    InputEvent::GesturePinchEnd { event } => {}
-                    InputEvent::GestureHoldBegin { event } => {}
-                    InputEvent::GestureHoldEnd { event } => {}
-                    InputEvent::TouchDown { event } => {}
-                    InputEvent::TouchMotion { event } => {}
-                    InputEvent::TouchUp { event } => {}
-                    InputEvent::TouchCancel { event } => {}
-                    InputEvent::TouchFrame { event } => {}
-                    InputEvent::TabletToolAxis { event } => {}
-                    InputEvent::TabletToolProximity { event } => {}
-                    InputEvent::TabletToolTip { event } => {}
-                    InputEvent::TabletToolButton { event } => {}
-                    InputEvent::SwitchToggle { event } => {}
+                    InputEvent::GestureSwipeBegin { event: _ } => {}
+                    InputEvent::GestureSwipeUpdate { event: _ } => {}
+                    InputEvent::GestureSwipeEnd { event: _ } => {}
+                    InputEvent::GesturePinchBegin { event: _ } => {}
+                    InputEvent::GesturePinchUpdate { event: _ } => {}
+                    InputEvent::GesturePinchEnd { event: _ } => {}
+                    InputEvent::GestureHoldBegin { event: _ } => {}
+                    InputEvent::GestureHoldEnd { event: _ } => {}
+                    InputEvent::TouchDown { event: _ } => {}
+                    InputEvent::TouchMotion { event: _ } => {}
+                    InputEvent::TouchUp { event: _ } => {}
+                    InputEvent::TouchCancel { event: _ } => {}
+                    InputEvent::TouchFrame { event: _ } => {}
+                    InputEvent::TabletToolAxis { event: _ } => {}
+                    InputEvent::TabletToolProximity { event: _ } => {}
+                    InputEvent::TabletToolTip { event: _ } => {}
+                    InputEvent::TabletToolButton { event: _ } => {}
+                    InputEvent::SwitchToggle { event: _ } => {}
                     InputEvent::Special(_) => {}
                 },
                 X11Event::Focus { focused: false, .. } => data.release_all_keys(),

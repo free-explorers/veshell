@@ -68,7 +68,7 @@ pub struct MonitorConfiguration {
 }
 
 pub struct SettingsManager<BackendData: Backend + 'static> {
-    loop_handle: LoopHandle<'static, State<BackendData>>,
+    _loop_handle: LoopHandle<'static, State<BackendData>>,
     default_settings_folder: String,
     user_settings_folder: String,
 }
@@ -133,7 +133,7 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
             .unwrap();
 
         Self {
-            loop_handle,
+            _loop_handle: loop_handle,
             default_settings_folder,
             user_settings_folder,
         }

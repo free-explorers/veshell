@@ -1,4 +1,4 @@
-build
+/build/
 extra/third_party/flutter_engine
 veshell.log
 .flutter_sdk

@@ -254,7 +254,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 data.flutter_engine
                     .as_mut()
                     .unwrap()
-                    .send_key_event(event, true);
+                    .send_key_event(event, true)
+                    .expect("Failed to send key event");
             },
         );
 

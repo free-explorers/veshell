@@ -14,7 +14,7 @@ use smithay::{
                 utils::{Relocate, RelocateRenderElement},
                 Kind, RenderElement,
             },
-            ImportAll, ImportDma, ImportMem, Renderer, Texture,
+            ImportAll, ImportDma, ImportMem, Renderer,
         },
     },
     input::pointer::CursorImageStatus,
@@ -23,7 +23,6 @@ use smithay::{
 };
 
 pub static CLEAR_COLOR: [f32; 4] = [0.8, 0.8, 0.9, 1.0];
-pub static CLEAR_COLOR_FULLSCREEN: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
 
 smithay::backend::renderer::element::render_elements! {
     pub VeshellRenderElements<R> where

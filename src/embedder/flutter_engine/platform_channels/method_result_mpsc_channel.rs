@@ -9,6 +9,7 @@ use smithay::reexports::calloop::channel;
 use crate::flutter_engine::platform_channels::encodable_value::EncodableValue;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
 
+#[allow(dead_code)]
 pub enum MethodResultEnum<T> {
     Success(Option<T>),
     Error {

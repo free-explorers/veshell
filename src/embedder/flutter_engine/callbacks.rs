@@ -245,10 +245,13 @@ where
     texture_name != 0
 }
 
+#[allow(dead_code)]
 pub struct FlutterKeyEventData {
     pub key_event: VeshellKeyEvent,
     pub tx_flutter_handled_key_event: channel::Sender<(VeshellKeyEvent, bool)>,
 }
+#[allow(dead_code)]
+
 /// It's currently not used because handled is always false it's seems that we will need it when the deprecation of the legacy keyboard handled will be removed we currently listen to the [key_event_channel.send] callback
 pub unsafe extern "C" fn key_event_callback<BackendData>(handled: bool, user_data: *mut c_void)
 where

@@ -1,6 +1,6 @@
+use std::env;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
-use std::{env, io};
 
 use flutter_engine_lib::link_flutter_engine_shared_library;
 use flutter_sdk::install_flutter_sdk;

@@ -1,4 +1,4 @@
-use std::{env, path::Path};
+use std::path::Path;
 
 use crate::{flutter_sdk::FLUTTER_REPO_DIR, FlutterEngineBuild};
 use lazy_static::lazy_static;

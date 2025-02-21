@@ -1,7 +1,7 @@
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use smithay::backend::input::{KeyState, KeyboardKeyEvent};
+use smithay::backend::input::KeyState;
 use smithay::backend::session::Session;
 use smithay::input::keyboard::ModifiersState;
 use smithay::utils::SERIAL_COUNTER;
@@ -83,7 +83,8 @@ pub fn handle_keyboard_event<BackendData: Backend + 'static>(
     data.flutter_engine
         .as_mut()
         .unwrap()
-        .send_key_event(veshell_key_event, false);
+        .send_key_event(veshell_key_event, false)
+        .expect("Failed to send key event to Flutter");
 
     // Initiate key repeat.
     // The callback that gets called repeatedly is defined in the constructor of `State`.

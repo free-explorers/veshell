@@ -414,7 +414,7 @@ pub mod xwayland {
             }
         }
 
-        fn fullscreen_request(&mut self, xwm: XwmId, window: X11Surface) {
+        fn fullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
             let geometry = window.geometry();
             window.configure(geometry).unwrap();
         }

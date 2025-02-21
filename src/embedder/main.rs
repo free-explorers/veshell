@@ -11,7 +11,7 @@ use smithay::{
         with_surface_tree_downward, CompositorClientState, SurfaceAttributes, TraversalAction,
     },
 };
-use tracing_subscriber::{fmt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{fmt, EnvFilter};
 
 use crate::flutter_engine::FlutterEngine;
 use crate::mouse_button_tracker::MouseButtonTracker;

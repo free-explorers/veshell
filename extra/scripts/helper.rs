@@ -15,7 +15,10 @@ fn main() {
 
     // if args --install
     if env::args().any(|arg| arg == "--install") {
-        install(arch, &profile);
+        match install(arch, &profile) {
+            Ok(_) => println!("Installed successfully"),
+            Err(e) => println!("Failed to install: {}", e),
+        }
     }
 }
 
@@ -85,7 +88,7 @@ pub fn bundle(arch: &str, profile: &str) -> Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
-fn install(arch: &str, profile: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn install(_arch: &str, profile: &str) -> Result<(), Box<dyn std::error::Error>> {
     let assets_directory = "extra/assets";
     // Get the current working directory
     let current_dir = env::current_dir().expect("Failed to get current directory");
@@ -155,6 +158,5 @@ fn install(arch: &str, profile: &str) -> Result<(), Box<dyn std::error::Error>> 
         .output()
         .expect("Failed to copy veshell-shutdown.target");
 
-    println!("Installation completed successfully!");
     Ok(())
 }

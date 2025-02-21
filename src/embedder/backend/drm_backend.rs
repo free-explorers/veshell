@@ -23,9 +23,7 @@ use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface}
 use smithay::backend::renderer::element::texture::TextureRenderElement;
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
-use smithay::backend::renderer::multigpu::gbm::GbmGlesBackend;
-use smithay::backend::renderer::multigpu::MultiRenderer;
-use smithay::backend::renderer::{ImportAll, ImportDma, ImportEgl, Renderer, Texture};
+use smithay::backend::renderer::{ImportAll, ImportDma, ImportEgl, Renderer};
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{libseat, Event as SessionEvent, Session};
 use smithay::backend::udev::{all_gpus, primary_gpu, UdevBackend, UdevEvent};
@@ -63,7 +61,7 @@ use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
 
 use super::render::{get_render_elements, CLEAR_COLOR};
 use super::Backend;
-
+/*
 type DrmRenderer<'a> = MultiRenderer<
     'a,
     'a,
@@ -102,7 +100,7 @@ impl<'render> AsGlesRenderer for DrmRenderer<'render> {
     fn as_gles_renderer(&self) -> &GlesRenderer {
         self.as_ref()
     }
-}
+} */
 
 pub struct DrmBackend {
     pub session: LibSeatSession,
@@ -267,8 +265,8 @@ pub fn run_drm_backend() {
         },
         |data, monitor_name| {
             info!("Monitor settings updated of {}", monitor_name);
-            for (&node, gpu_data) in &mut data.backend_data.gpus {
-                for (&handle, surface) in &mut gpu_data.surfaces {
+            for (&_node, gpu_data) in &mut data.backend_data.gpus {
+                for (&_handle, surface) in &mut gpu_data.surfaces {
                     let monitor_name = surface.name.clone();
                     if monitor_name.is_empty() {
                         continue;
@@ -292,7 +290,7 @@ pub fn run_drm_backend() {
                         }
                     };
 
-                    let (drm_mode, fallback) =
+                    let (drm_mode, _fallback) =
                         pick_mode(&connector, Some(monitor_configuration.clone())).unwrap();
 
                     if let Err(err) = surface.compositor.use_mode(drm_mode) {
@@ -506,10 +504,12 @@ pub fn run_drm_backend() {
                 InputEvent::DeviceAdded { mut device } => {
                     let is_touchpad = device.config_tap_finger_count() > 0;
                     if is_touchpad {
-                        device.config_tap_set_enabled(true);
+                        device
+                            .config_tap_set_enabled(true)
+                            .expect("Failed to enable tap");
                     }
                 }
-                InputEvent::DeviceRemoved { device } => {}
+                InputEvent::DeviceRemoved { device: _ } => {}
                 InputEvent::Keyboard { event } => {
                     handle_keyboard_event(data, event.key_code(), event.state(), event.time_msec());
                 }
@@ -525,24 +525,24 @@ pub fn run_drm_backend() {
                 InputEvent::PointerAxis { event } => {
                     data.on_pointer_axis::<LibinputInputBackend>(event)
                 }
-                InputEvent::GestureSwipeBegin { event } => {}
-                InputEvent::GestureSwipeUpdate { event } => {}
-                InputEvent::GestureSwipeEnd { event } => {}
-                InputEvent::GesturePinchBegin { event } => {}
-                InputEvent::GesturePinchUpdate { event } => {}
-                InputEvent::GesturePinchEnd { event } => {}
-                InputEvent::GestureHoldBegin { event } => {}
-                InputEvent::GestureHoldEnd { event } => {}
-                InputEvent::TouchDown { event } => {}
-                InputEvent::TouchMotion { event } => {}
-                InputEvent::TouchUp { event } => {}
-                InputEvent::TouchCancel { event } => {}
-                InputEvent::TouchFrame { event } => {}
-                InputEvent::TabletToolAxis { event } => {}
-                InputEvent::TabletToolProximity { event } => {}
-                InputEvent::TabletToolTip { event } => {}
-                InputEvent::TabletToolButton { event } => {}
-                InputEvent::SwitchToggle { event } => {}
+                InputEvent::GestureSwipeBegin { event: _ } => {}
+                InputEvent::GestureSwipeUpdate { event: _ } => {}
+                InputEvent::GestureSwipeEnd { event: _ } => {}
+                InputEvent::GesturePinchBegin { event: _ } => {}
+                InputEvent::GesturePinchUpdate { event: _ } => {}
+                InputEvent::GesturePinchEnd { event: _ } => {}
+                InputEvent::GestureHoldBegin { event: _ } => {}
+                InputEvent::GestureHoldEnd { event: _ } => {}
+                InputEvent::TouchDown { event: _ } => {}
+                InputEvent::TouchMotion { event: _ } => {}
+                InputEvent::TouchUp { event: _ } => {}
+                InputEvent::TouchCancel { event: _ } => {}
+                InputEvent::TouchFrame { event: _ } => {}
+                InputEvent::TabletToolAxis { event: _ } => {}
+                InputEvent::TabletToolProximity { event: _ } => {}
+                InputEvent::TabletToolTip { event: _ } => {}
+                InputEvent::TabletToolButton { event: _ } => {}
+                InputEvent::SwitchToggle { event: _ } => {}
                 InputEvent::Special(_) => {}
             }
             //data.handle_input(&event);
@@ -552,7 +552,10 @@ pub fn run_drm_backend() {
     event_loop
         .handle()
         .insert_source(udev_backend, move |event, _, data| match event {
-            UdevEvent::Added { device_id, path } => {
+            UdevEvent::Added {
+                device_id: _,
+                path: _,
+            } => {
                 /* debug!("UdevEvent::Added {{ device_id: {device_id}");
                 if let Err(err) = DrmNode::from_dev_id(device_id)
                     .map_err(DeviceAddError::DrmNode)
@@ -567,7 +570,7 @@ pub fn run_drm_backend() {
                     data.device_changed(node)
                 }
             }
-            UdevEvent::Removed { device_id } => {
+            UdevEvent::Removed { device_id: _ } => {
                 /* debug!("UdevEvent::Removed {{ device_id: {device_id} }}");
                 if let Ok(node) = DrmNode::from_dev_id(device_id) {
                     data.device_removed(node)
@@ -774,7 +777,7 @@ impl State<DrmBackend> {
         );
 
         // Determine DRM mode from the monitor configuration or fallback to the preferred mode
-        let (drm_mode, fallback) = pick_mode(&connector, monitor_configuration).unwrap();
+        let (drm_mode, _fallback) = pick_mode(&connector, monitor_configuration).unwrap();
 
         // Create the DrmSurface
         let surface = match device
@@ -1089,6 +1092,7 @@ impl State<DrmBackend> {
         }
     }
 
+    #[allow(dead_code)]
     fn device_removed(&mut self, node: DrmNode) {
         let device = if let Some(device) = self.backend_data.gpus.get_mut(&node) {
             device
@@ -1121,7 +1125,7 @@ impl State<DrmBackend> {
         &mut self,
         node: DrmNode,
         crtc: crtc::Handle,
-        metadata: &mut Option<DrmEventMetadata>,
+        _metadata: &mut Option<DrmEventMetadata>,
     ) {
         let gpu_data = match self.backend_data.gpus.get_mut(&node) {
             Some(gpu_data) => gpu_data,
@@ -1139,7 +1143,7 @@ impl State<DrmBackend> {
             }
         };
 
-        let output = if let Some(output) = self.space.outputs().find(|o| {
+        let _output = if let Some(output) = self.space.outputs().find(|o| {
             o.user_data().get::<UdevOutputId>()
                 == Some(&UdevOutputId {
                     device_id: surface.device_id,
@@ -1166,7 +1170,7 @@ impl State<DrmBackend> {
             .frame_submitted()
             .map_err(Into::<SwapBuffersError>::into)
         {
-            Ok(user_data) => true,
+            Ok(_user_data) => true,
             Err(err) => {
                 warn!("Error during rendering: {:?}", err);
                 match err {
@@ -1273,8 +1277,8 @@ impl State<DrmBackend> {
             None => return,
         };
 
-        let render_node = surface.render_node;
-        /* let primary_gpu = self.backend_data.primary_gpu;
+        /* let render_node = surface.render_node;
+        let primary_gpu = self.backend_data.primary_gpu;
         let mut renderer = if primary_gpu == render_node {
             self.backend_data.gpu_manager.single_renderer(&render_node)
         } else {
@@ -1292,7 +1296,7 @@ impl State<DrmBackend> {
             slot
         } else {
             // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
-            initial_render(surface, renderer);
+            initial_render(surface, renderer).expect("Failed to render initial frame");
             return;
         };
 
@@ -1331,7 +1335,7 @@ impl State<DrmBackend> {
             .render_frame(renderer, &elements, [0.0, 0.0, 0.0, 0.0]);
 
         match rendered {
-            Ok(frame_result) => match surface.compositor.queue_frame(None) {
+            Ok(_frame_result) => match surface.compositor.queue_frame(None) {
                 Ok(()) => {}
                 Err(err) => {
                     warn!("error queueing frame: {err}");
@@ -1476,42 +1480,6 @@ fn pick_mode(
     mode.map(|m| (*m, fallback))
 }
 
-fn get_mode_id_for_monitor_from_file(output_name: &str) -> Option<usize> {
-    let path = std::env::var("XDG_CONFIG_HOME")
-        .unwrap_or_else(|_| std::env::var("HOME").unwrap() + "/.config")
-        + "/veshell/persistence/Monitor/"
-        + output_name
-        + ".json";
-
-    info!("path: {}", path);
-
-    let file = match std::fs::File::open(path) {
-        Ok(file) => file,
-        Err(err) => {
-            error!("Failed to open file: {}", err);
-            return None;
-        }
-    };
-    let reader = std::io::BufReader::new(file);
-    let json: serde_json::Value = match serde_json::from_reader(reader) {
-        Ok(json) => json,
-        Err(err) => {
-            error!("Failed to parse JSON: {}", err);
-            return None;
-        }
-    };
-    info!("json: {:?}", json);
-    let mode = json["selectedMode"].as_u64();
-
-    match mode {
-        Some(mode) => Some(mode as usize),
-        None => {
-            error!("selectedMode not found in JSON");
-            None
-        }
-    }
-}
-
 fn initial_render<R>(surface: &mut SurfaceData, renderer: &mut R) -> Result<(), SwapBuffersError>
 where
     R: Renderer
@@ -1522,7 +1490,7 @@ where
     let render = surface
         .compositor
         .render_frame::<_, TextureRenderElement<_>>(renderer, &[], CLEAR_COLOR);
-    if let Err(err) = render {
+    if let Err(_err) = render {
         return Err(SwapBuffersError::TemporaryFailure(
             "Failed to render".into(),
         ));
