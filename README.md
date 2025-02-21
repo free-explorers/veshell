@@ -14,36 +14,12 @@ By becoming a Free Explorer you can get involve into the project and support it.
 
 # Installation requirements
 
-- Installing flutter and dart https://docs.flutter.dev/get-started/install/linux/desktop#download-then-install-flutter
+- Installing rust and cargo using [rustup](https://rustup.rs/)
 
-# Veshell CLI
-
-You can use our CLI to install Veshell
+# Trying Veshell
 
 ```shell
-dart run veshell install -t release
-```
-
-Or all `dart run veshell` command-line features
-```shell
-This CLI help install and develop Veshell
-
-Usage: dart run veshell <command> [arguments]
-
-Global options:
--h, --help            Print this usage information.
-    --[no-]verbose    Noisy logging, including all shell commands executed.
--t, --target          Specify the build target
-                      [debug (default), profile, release]
-
-Available commands:
-  build     Build and package Veshell
-  clean     Clean the project and restore it to a fresh state
-  dev       Start a build_runner watch and run flutter shell
-  install   Build and install Veshell localy
-  run       run veshell
-
-Run "dart run veshell help <command>" for more information about a command.
+cargo run
 ```
 
 # The innovative workflow
