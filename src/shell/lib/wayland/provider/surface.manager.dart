@@ -160,7 +160,7 @@ class SurfaceManager extends _$SurfaceManager {
 
     try {
       ref.read(wlSurfaceStateProvider(message.surfaceId));
-    } catch (e, stackTrace) {
+    } catch (e) {
       // ignore: avoid_print
       print(e);
       return;
@@ -237,7 +237,7 @@ class SurfaceManager extends _$SurfaceManager {
   void _x11PropertiesChanged(X11PropertiesChangedMessage message) {
     try {
       ref.read(x11SurfaceStateProvider(message.x11SurfaceId));
-    } catch (e, stackTrace) {
+    } catch (e) {
       // ignore: avoid_print
       print(e);
       return;

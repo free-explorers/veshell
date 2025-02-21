@@ -44,11 +44,11 @@ class MonitorSetting extends _$MonitorSetting {
     );
   }
 
-  setMode(Mode mode) {
+  void setMode(Mode mode) {
     updateFile(state.copyWith(mode: mode));
   }
 
-  setLocation(Offset location) {
+  void setLocation(Offset location) {
     updateFile(state.copyWith(location: location));
   }
 

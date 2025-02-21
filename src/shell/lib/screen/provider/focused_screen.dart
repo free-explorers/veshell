@@ -12,7 +12,7 @@ class FocusedScreen extends _$FocusedScreen {
     return ref.read(screenListProvider).first;
   }
 
-  setFocusedScreen(ScreenId screenId) {
+  void setFocusedScreen(ScreenId screenId) {
     state = screenId;
   }
 }

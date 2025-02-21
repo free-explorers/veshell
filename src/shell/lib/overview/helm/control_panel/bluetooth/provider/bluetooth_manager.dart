@@ -22,21 +22,21 @@ class BluetoothManager extends _$BluetoothManager {
     );
   }
 
-  powerOn() async {
+  Future<void> powerOn() async {
     final client = await ref.watch(bluezClientProvider.future);
     for (final adapter in client.adapters) {
       await adapter.setPowered(true);
     }
   }
 
-  powerOff() async {
+  Future<void> powerOff() async {
     final client = await ref.watch(bluezClientProvider.future);
     for (final adapter in client.adapters) {
       await adapter.setPowered(false);
     }
   }
 
-  startDiscovery() async {
+  Future<void> startDiscovery() async {
     final client = await ref.watch(bluezClientProvider.future);
     for (final adapter in client.adapters) {
       if (!adapter.discovering && adapter.powered) {
@@ -45,7 +45,7 @@ class BluetoothManager extends _$BluetoothManager {
     }
   }
 
-  stopDiscovery() async {
+  Future<void> stopDiscovery() async {
     final client = await ref.watch(bluezClientProvider.future);
     for (final adapter in client.adapters) {
       if (adapter.discovering && adapter.powered) {

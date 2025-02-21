@@ -162,7 +162,7 @@ class WorkspaceState extends _$WorkspaceState
     );
   }
 
-  setVisibleLength(int length) {
+  void setVisibleLength(int length) {
     state = state.copyWith(
       visibleLength: length,
     );

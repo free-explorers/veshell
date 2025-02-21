@@ -74,7 +74,7 @@ class X11RootWindow extends ConsumerWidget {
               (value) => value.mapped,
             ),
           );
-        } on Exception catch (e) {
+        } on Exception {
           return false;
         }
       },

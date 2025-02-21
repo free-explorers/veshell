@@ -16,9 +16,9 @@ class WindowProcessLogs extends _$WindowProcessLogs {
     return [];
   }
 
-  setProcess(Process process) {
+  void setProcess(Process process) {
     reset();
-    onEvent(List<int> event) {
+    void onEvent(List<int> event) {
       final string = String.fromCharCodes(event);
       print('process: $string');
       state = [...state, string];
@@ -32,7 +32,7 @@ class WindowProcessLogs extends _$WindowProcessLogs {
     );
   }
 
-  reset() {
+  void reset() {
     _stdoutStreamSubscription?.cancel();
     _stderrStreamSubscription?.cancel();
     _stdoutStreamSubscription = null;

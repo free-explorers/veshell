@@ -85,7 +85,7 @@ class PolkitAuthenticationAgent
     );
   }
 
-  registerAgent(String sessionId) async {
+  Future<void> registerAgent(String sessionId) async {
     await _authority.callMethod(
       'org.freedesktop.PolicyKit1.Authority',
       'RegisterAuthenticationAgent',

@@ -9,7 +9,7 @@ class SingleExpanded extends _$SingleExpanded {
     return null;
   }
 
-  toggleMe(String key) {
+  void toggleMe(String key) {
     if (state == key) {
       state = null;
     } else {
