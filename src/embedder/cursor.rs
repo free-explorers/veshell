@@ -1,30 +1,26 @@
 use std::env;
-use std::{collections::HashMap, io::Read, sync::Mutex, time::Duration};
+use std::{collections::HashMap, io::Read, sync::Mutex};
 
-use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::{
     backend::{
         allocator::Fourcc,
         renderer::{
             element::{
                 memory::{MemoryRenderBuffer, MemoryRenderBufferRenderElement},
-                surface::{self, render_elements_from_surface_tree, WaylandSurfaceRenderElement},
-                texture::{TextureBuffer, TextureRenderElement},
-                Id, Kind,
+                surface::{render_elements_from_surface_tree, WaylandSurfaceRenderElement}, Kind,
             },
-            gles::GlesTexture,
             ImportAll, ImportMem, Renderer,
         },
     },
     input::pointer::{CursorIcon, CursorImageAttributes, CursorImageStatus},
-    reexports::wayland_server::protocol::wl_surface::{self, WlSurface},
+    reexports::wayland_server::protocol::wl_surface::{WlSurface},
     render_elements,
     utils::{
         Buffer as BufferCoords, IsAlive, Logical, Monotonic, Point, Scale, Size, Time, Transform,
     },
     wayland::compositor::with_states,
 };
-use tracing::{info, warn};
+use tracing::warn;
 use xcursor::{
     parser::{parse_xcursor, Image},
     CursorTheme,

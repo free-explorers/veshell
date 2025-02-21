@@ -1,4 +1,3 @@
-use callbacks::{key_event_callback, FlutterKeyEventData};
 use embedder::{
     FlutterKeyEvent, FlutterKeyEventType_kFlutterKeyEventTypeDown,
     FlutterKeyEventType_kFlutterKeyEventTypeRepeat, FlutterKeyEventType_kFlutterKeyEventTypeUp,
@@ -8,7 +7,6 @@ use mouse_cursor::mouse_cursor_channel_method_call_handler;
 use platform_channels::encodable_value::EncodableValue;
 use platform_channels::standard_method_codec::StandardMethodCodec;
 use serde_json::json;
-use smithay::backend::renderer::gles::GlesRenderer;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::{c_int, c_void, CString};
@@ -18,9 +16,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::ptr::{null, null_mut};
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tracing::error;
 
 use smithay::backend::renderer::gles::ffi::RGBA8;
 use smithay::output::Output;
@@ -42,7 +38,7 @@ use smithay::{
     utils::{Physical, Size},
 };
 
-use crate::backend::{render, Backend};
+use crate::backend::Backend;
 use crate::flutter_engine::callbacks::{
     gl_external_texture_frame_callback, platform_message_callback, populate_existing_damage,
     post_task_callback, runs_task_on_current_thread_callback, vsync_callback,

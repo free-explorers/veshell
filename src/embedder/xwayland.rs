@@ -9,7 +9,7 @@ pub mod xwayland {
 
     use smithay::input::pointer::CursorIcon;
     use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-    use smithay::reexports::x11rb::protocol::xproto::Window;
+    
     use smithay::utils::{Logical, Point, Rectangle, Size};
     use smithay::wayland::seat::WaylandFocus;
     use smithay::wayland::selection::data_device::{
@@ -27,7 +27,7 @@ pub mod xwayland {
     use std::borrow::Borrow;
     use std::cell::RefCell;
     use std::os::fd::OwnedFd;
-    use std::time::Duration;
+    
     use tracing::{error, trace};
     pub struct MyX11SurfaceState {
         pub x11_surface_id: u64,
@@ -415,7 +415,7 @@ pub mod xwayland {
         }
 
         fn fullscreen_request(&mut self, xwm: XwmId, window: X11Surface) {
-            let mut geometry = window.geometry();
+            let geometry = window.geometry();
             window.configure(geometry).unwrap();
         }
         

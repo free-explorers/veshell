@@ -309,7 +309,7 @@ pub fn run_x11_client() {
                 }
 
                 X11Event::Input { event, .. } => match event {
-                    InputEvent::DeviceAdded { mut device } => {}
+                    InputEvent::DeviceAdded { device } => {}
                     InputEvent::DeviceRemoved { device } => {}
                     InputEvent::Keyboard { event } => {
                         handle_keyboard_event(

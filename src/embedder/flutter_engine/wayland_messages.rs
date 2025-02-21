@@ -1,5 +1,5 @@
 use serde::ser::SerializeStruct;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use smithay::output::{Mode, Output, PhysicalProperties};
 use smithay::utils::{Buffer as BufferCoords, Logical, Point, Rectangle, Size};
 use std::collections::HashMap;

@@ -1,6 +1,5 @@
-use std::borrow::BorrowMut;
 use std::collections::HashMap;
-use std::fs::{self, File};
+use std::fs::{File};
 use std::io::{self, Write};
 use std::os::fd::FromRawFd;
 
@@ -18,19 +17,15 @@ use smithay::backend::drm::{
     CreateDrmNodeError, DrmAccessError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent,
     DrmEventMetadata, DrmNode, NodeType,
 };
-use smithay::backend::egl::context::ContextPriority;
 use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
 use smithay::backend::input::{Event, InputEvent, KeyboardKeyEvent};
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
-use smithay::backend::renderer::damage::{Error as OutputDamageTrackerError, OutputDamageTracker};
-use smithay::backend::renderer::element::texture::{TextureBuffer, TextureRenderElement};
-use smithay::backend::renderer::element::utils::{Relocate, RelocateRenderElement};
-use smithay::backend::renderer::element::{Kind, RenderElement};
+use smithay::backend::renderer::element::texture::TextureRenderElement;
 use smithay::backend::renderer::gles::ffi::Gles2;
-use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
+use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::renderer::multigpu::gbm::GbmGlesBackend;
-use smithay::backend::renderer::multigpu::{GpuManager, MultiRenderer};
-use smithay::backend::renderer::{ImportAll, ImportDma, ImportEgl, ImportMem, Renderer, Texture};
+use smithay::backend::renderer::multigpu::MultiRenderer;
+use smithay::backend::renderer::{ImportAll, ImportDma, ImportEgl, Renderer, Texture};
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{libseat, Event as SessionEvent, Session};
 use smithay::backend::udev::{all_gpus, primary_gpu, UdevBackend, UdevEvent};
@@ -39,8 +34,7 @@ use smithay::delegate_dmabuf;
 use smithay::desktop::utils::OutputPresentationFeedback;
 use smithay::input::pointer::CursorImageStatus;
 use smithay::output::Mode;
-use smithay::output::{Output, PhysicalProperties, Subpixel};
-use smithay::reexports::ash::khr::swapchain;
+use smithay::output::{Output, PhysicalProperties};
 use smithay::reexports::calloop::channel::Event as CalloopEvent;
 use smithay::reexports::calloop::RegistrationToken;
 use smithay::reexports::calloop::{EventLoop, LoopHandle};
@@ -51,7 +45,7 @@ use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::DisplayHandle;
-use smithay::utils::{DeviceFd, IsAlive, Point, Rectangle, Size, Transform};
+use smithay::utils::{DeviceFd, IsAlive, Rectangle, Size};
 use smithay::wayland::dmabuf::{
     DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier,
 };
@@ -60,16 +54,14 @@ use tracing::{debug, error, info, warn};
 
 use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
 use smithay_drm_extras::edid::EdidInfo;
-use tracing_subscriber::field::debug;
 
-use crate::cursor::{draw_cursor, CursorRenderElement};
 use crate::flutter_engine::FlutterEngine;
 use crate::keyboard::handle_keyboard_event;
 use crate::settings::{self, MonitorConfiguration};
 use crate::state;
 use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
 
-use super::render::{get_render_elements, VeshellRenderElements, CLEAR_COLOR};
+use super::render::{get_render_elements, CLEAR_COLOR};
 use super::Backend;
 
 type DrmRenderer<'a> = MultiRenderer<
@@ -880,7 +872,7 @@ impl State<DrmBackend> {
             }
         };
 
-        let mut surface = SurfaceData {
+        let surface = SurfaceData {
             name: output_name.clone(),
             connector_handle: connector.handle(),
             dh: self.display_handle.clone(),
@@ -1015,7 +1007,7 @@ impl State<DrmBackend> {
             .and_then(|x| x.try_get_render_node().ok().flatten())
             .unwrap_or(node);
 
-        let mut renderer =
+        let renderer =
             unsafe { GlesRenderer::new(EGLContext::new(&egl_display).unwrap()) }.unwrap();
 
         /*         self.backend_data
@@ -1115,7 +1107,7 @@ impl State<DrmBackend> {
         }
 
         // drop the backends on this side
-        if let Some(mut backend_data) = self.backend_data.gpus.remove(&node) {
+        if let Some(backend_data) = self.backend_data.gpus.remove(&node) {
             /*             self.backend_data
             .gpu_manager
             .as_mut()

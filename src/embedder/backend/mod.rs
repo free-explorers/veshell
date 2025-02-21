@@ -1,9 +1,8 @@
 use smithay::backend::{
-    renderer::{gles::GlesRenderer, ImportAll, ImportDma, ImportMem, Renderer},
+    renderer::gles::GlesRenderer,
     session::libseat::LibSeatSession,
 };
 
-use crate::state::State;
 
 pub mod drm_backend;
 pub mod render;

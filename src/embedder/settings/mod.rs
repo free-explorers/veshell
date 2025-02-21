@@ -2,18 +2,12 @@ use crate::backend::Backend;
 use crate::state::State;
 use calloop_notify::notify::{RecursiveMode, Watcher};
 use calloop_notify::NotifySource;
-use notify::event::MetadataKind;
 
-use notify::event::DataChange;
-use notify::event::ModifyKind;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use smithay::output::Mode;
-use smithay::reexports::calloop::EventLoop;
 use smithay::reexports::calloop::LoopHandle;
-use smithay::utils::{Logical, Point};
 use std::path::Path;
-use std::{fs::File, path::PathBuf};
+use std::fs::File;
 use tracing::info;
 
 mod calloop_notify;

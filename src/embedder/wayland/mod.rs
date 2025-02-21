@@ -1,7 +1,3 @@
-use smithay::{
-    backend::renderer::{utils::RendererSurfaceStateUserData, ImportAll, Renderer},
-    wayland::compositor::SurfaceData,
-};
 
 pub mod xdg;
 
@@ -11,26 +7,21 @@ pub mod wayland {
     use serde_json::json;
     use smithay::{
         backend::renderer::{
-            buffer_dimensions,
             gles::GlesRenderer,
             utils::{
-                import_surface, on_commit_buffer_handler, RendererSurfaceStateUserData, SurfaceView,
-            },
-            ImportAll, Renderer, Texture,
+                import_surface, on_commit_buffer_handler, RendererSurfaceStateUserData,
+            }, Renderer, Texture,
         },
         input::pointer::{CursorImageStatus, CursorImageSurfaceData},
         reexports::wayland_server::{protocol::wl_surface::WlSurface, Client},
-        utils::{Buffer as BufferCoords, Logical, Rectangle, Size},
-        wayland::{
-            compositor::{
-                with_states, with_surface_tree_upward, BufferAssignment, CompositorClientState,
-                CompositorHandler, CompositorState, Damage, SurfaceAttributes, TraversalAction,
+        utils::{Buffer as BufferCoords, Size},
+        wayland::compositor::{
+                with_states, with_surface_tree_upward, CompositorClientState,
+                CompositorHandler, CompositorState, SurfaceAttributes, TraversalAction,
             },
-            viewporter,
-        },
         xwayland::XWaylandClientData,
     };
-    use tracing::info;
+    
 
     use crate::{state::State, Backend, ClientState};
 

@@ -49,15 +49,11 @@ use smithay::xwayland::{X11Surface, X11Wm};
 use smithay::{
     delegate_compositor, delegate_data_control, delegate_data_device, delegate_output,
     delegate_primary_selection, delegate_relative_pointer, delegate_seat, delegate_shm,
-    delegate_xdg_shell, delegate_xwayland_shell, output,
+    delegate_xdg_shell, delegate_xwayland_shell,
 };
 use tracing::{info, warn};
 
 use crate::cursor::CursorState;
-use crate::flutter_engine::embedder::{
-    FlutterKeyEvent, FlutterKeyEventType, FlutterKeyEventType_kFlutterKeyEventTypeDown,
-    FlutterKeyEventType_kFlutterKeyEventTypeUp,
-};
 use crate::flutter_engine::wayland_messages::{
     PopupMessage, SubsurfaceMessage, SurfaceMessage, SurfaceRole, ToplevelMessage,
     XdgSurfaceMessage, XdgSurfaceRole,
@@ -69,7 +65,7 @@ use crate::keyboard::key_repeater::KeyRepeater;
 use crate::settings::{SettingsManager, VeshellSettings};
 use crate::texture_swap_chain::TextureSwapChain;
 use crate::wayland::wayland::{get_direct_subsurfaces, get_surface_id};
-use crate::{flutter_engine, settings, Backend, ClientState};
+use crate::{flutter_engine, Backend, ClientState};
 
 pub struct State<BackendData: Backend + 'static> {
     pub backend_data: Box<BackendData>,
