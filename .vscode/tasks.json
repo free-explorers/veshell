@@ -1,70 +1,6 @@
 {
 	"version": "2.0.0",
 	"tasks": [
-		{
-			"label": "build-embedder",
-			"type": "shell",
-			"command": "cargo build",
-			"problemMatcher": [
-				"$rustc"
-			],
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
-			"options": {
-				"cwd": "${workspaceFolder}/embedder",
-			},
-		},
-		{
-			"label": "build-flutter",
-			"type": "dart",
-			"command": "flutter",
-			"args": [
-				"build",
-				"linux",
-				"--debug",
-			],
-			"options": {
-				"cwd": "${workspaceFolder}/shell",
-			},
-			"dependsOn": "build-runner-build"
-		},
-		{
-			"label": "build-runner-build",
-			"type": "dart",
-			"command": "dart",
-			"args": [
-				"run",
-				"build_runner",
-				"build",
-				"--delete-conflicting-outputs"
-			],
-			"problemMatcher": [
-				"$dart-build_runner",
-			],
-			"group": "build",
-			"detail": "shell",
-			"options": {
-				"cwd": "${workspaceFolder}/shell"
-			},
-		},
-		{
-			"label": "build-veshell",
-			"type": "dart",
-			"command": "dart",
-			"args": [
-				"run",
-				"veshell",
-				"build",
-			],
-			"problemMatcher": [
-				"$rustc",
-				"$dart-build_runner",
-			],
-			"group": "build",
-			"detail": "shell",
-		},
 		// Task used by when launch veshell as window for the embedder is started to attach the flutter debugger.
 		{
 			"label": "wait-for-vmService",
@@ -86,21 +22,6 @@
 				"focus": false,
 				"close": true
 			},
-		},
-		{
-			"label": "prepare-veshell",
-			"dependsOn": [
-				"build-embedder",
-				"delete-vmService"
-			],
-		}
-	],
-	"inputs": [
-		{
-			"id": "terminate",
-			"type": "command",
-			"command": "workbench.action.tasks.terminate",
-			"args": "terminateAll"
 		}
 	]
 }

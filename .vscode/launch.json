@@ -6,7 +6,7 @@
     "configurations": [
         {
             "name": "Attach to running Veshell",
-            "cwd": "shell",
+            "cwd": "src/shell",
             "request": "attach",
             "type": "dart",
             "vmServiceUri": "${env:VESHELL_VM_SERVICE_URL}",
@@ -18,7 +18,7 @@
         },
         {
             "name": "window-shell",
-            "cwd": "shell",
+            "cwd": "src/shell",
             "request": "attach",
             "type": "dart",
             "vmServiceInfoFile": "../.vscode/vmService.json",
@@ -43,18 +43,6 @@
                 "VESHELL_VSCODE_DEBUG": "true",
                 "VESHELL_DEFAULT_CONFIG_DIR": "${workspaceFolder}/extra/settings/default",
             },
-            "program": "${workspaceFolder}/target/debug/veshell", // Replace with your binary name
-            "args": [],
-            "presentation": {
-                "hidden": true,
-                "group": "",
-                "order": 2
-            }
-        },
-        {
-            "name": "Launch",
-            "type": "lldb",
-            "request": "launch",
             "cargo": {
                 "args": [
                     "build",
@@ -63,11 +51,10 @@
                 ],
                 "problemMatcher": "$rustc",      
             },
-            "env": {
-                "RUST_LOG": "debug",
-                "WAYLAND_DEBUG": "server",
-                "VESHELL_VSCODE_DEBUG": "true",
-                "VESHELL_DEFAULT_CONFIG_DIR": "${workspaceFolder}/extra/settings/default",
+            "presentation": {
+                "hidden": true,
+                "group": "",
+                "order": 2
             }
         }
     ],
@@ -78,7 +65,7 @@
                 "embedder",
                 "window-shell"
             ],
-            "preLaunchTask": "prepare-veshell",
+            "preLaunchTask": "delete-vmService",
             "stopAll": true,
             "presentation": {
                 "hidden": false,
