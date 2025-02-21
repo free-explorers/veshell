@@ -12,5 +12,10 @@
         "**/*.freezed.dart": true,
         "**/*.g.dart": true
     },
-    "dart.flutterSdkPath": ".flutter_sdk"
+    "dart.sdkPath": ".flutter_sdk",
+    "dart.flutterSdkPath": ".flutter_sdk",
+    "dart.addSdkToTerminalPath": true,
+    "dart.analysisExcludedFolders": [
+        ".flutter_sdk",
+    ],
 }

@@ -5,6 +5,7 @@ pub const FLUTTER_REPO_DIR: &str = ".flutter_sdk";
 
 pub fn install_flutter_sdk() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=extra/build/flutter_sdk.rs");
+    println!("cargo:rerun-if-changed=.flutter_sdk/version");
 
     // Clone the flutter repo if it doesn't exist
     if !std::path::Path::new(FLUTTER_REPO_DIR).exists() {
