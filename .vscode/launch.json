@@ -59,9 +59,7 @@
                 "args": [
                     "build",
                     "--bin",
-                    "veshell",
-                    "--profile",
-                    "release"
+                    "veshell"
                 ],
                 "problemMatcher": "$rustc",      
             },
