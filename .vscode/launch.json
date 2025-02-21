@@ -6,7 +6,7 @@
     "configurations": [
         {
             "name": "Attach to running Veshell",
-            "cwd": "src/shell",
+            "cwd": "${workspaceFolder}/src/shell",
             "request": "attach",
             "type": "dart",
             "vmServiceUri": "${env:VESHELL_VM_SERVICE_URL}",
@@ -18,10 +18,10 @@
         },
         {
             "name": "window-shell",
-            "cwd": "src/shell",
+            "cwd": "${workspaceFolder}/src/shell",
             "request": "attach",
             "type": "dart",
-            "vmServiceInfoFile": "../.vscode/vmService.json",
+            "vmServiceInfoFile": "${workspaceFolder}/.vscode/vmService.json",
             "deleteServiceInfoFile": true,
             "preLaunchTask": "wait-for-vmService",
             "args": [
@@ -49,7 +49,7 @@
                     "--bin",
                     "veshell"
                 ],
-                "problemMatcher": "$rustc",      
+                "problemMatcher": "$rustc",
             },
             "presentation": {
                 "hidden": true,
