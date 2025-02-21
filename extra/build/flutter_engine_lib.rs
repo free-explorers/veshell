@@ -20,7 +20,7 @@ lazy_static! {
 pub fn link_flutter_engine_shared_library(
     flutter_engine_build: FlutterEngineBuild,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!("cargo:rerun-if-changed=build/flutter_engine_lib.rs");
+    println!("cargo:rerun-if-changed=extra/build/flutter_engine_lib.rs");
     println!("cargo:rerun-if-changed={FLUTTER_ENGINE_LIBS_DIR}");
 
     // Get the desired flutter engine revision

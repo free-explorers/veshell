@@ -13,7 +13,7 @@ const SHELL_DIRECTORY: &str = "src/shell";
 pub fn build_shell(
     flutter_engine_build: FlutterEngineBuild,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!("cargo:rerun-if-changed=build/shell.rs");
+    println!("cargo:rerun-if-changed=extra/build/shell.rs");
     let absolute_flutter_bin = Path::new(&*flutter_bin_path).canonicalize()?;
     let absolute_dart_bin = Path::new(&*dart_bin_path).canonicalize()?;
 

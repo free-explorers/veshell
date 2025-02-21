@@ -11,7 +11,8 @@ mod flutter_sdk;
 mod shell;
 
 fn main() {
-    println!("cargo:rerun-if-changed=build/main.rs");
+    println!("cargo:rerun-if-changed=Cargo.toml");
+    println!("cargo:rerun-if-changed=extra/build/mod.rs");
 
     // print env vars
     let flutter_engine_build = match env::var("OUT_DIR") {
