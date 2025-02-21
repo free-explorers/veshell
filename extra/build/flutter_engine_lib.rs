@@ -96,7 +96,7 @@ fn download_flutter_engine_library(
     flutter_engine_revision: &str,
     flutter_engine_build: FlutterEngineBuild,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!("cargo:warning=Downloading flutter engine library...");
+    println!("Downloading flutter engine library...");
     let arch = if cfg!(target_arch = "x86_64") {
         "x86_64"
     } else if cfg!(target_arch = "aarch64") {
@@ -177,7 +177,7 @@ fn download_from_url(url: &str) -> Result<bytes::Bytes, reqwest::Error> {
 fn generate_embedder_bindings() {
     let embedder_header_path = format!("{FLUTTER_ENGINE_LIBS_DIR}/{FLUTTER_ENGINE_HEADER_NAME}");
     println!("cargo:rerun-if-changed={embedder_header_path}");
-    println!("cargo:warning=Generating embedder bindings...");
+    println!("Generating embedder bindings...");
 
     let bindings = bindgen::Builder::default()
         .header(embedder_header_path)

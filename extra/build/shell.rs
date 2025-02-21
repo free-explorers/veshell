@@ -29,7 +29,7 @@ pub fn build_shell(
     }
 
     // run build_runner
-    print!("cargo::warning=Running build_runner...");
+    println!("Running build_runner...");
     let output = std::process::Command::new(absolute_dart_bin)
         .arg("run")
         .arg("build_runner")
@@ -42,7 +42,7 @@ pub fn build_shell(
     }
 
     // build shell
-    print!("cargo::warning=Building shell...");
+    println!("Building shell...");
     let output = std::process::Command::new(absolute_flutter_bin)
         .arg("build")
         .arg("linux")
