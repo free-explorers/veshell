@@ -6,7 +6,7 @@
     "configurations": [
         {
             "name": "Attach to running Veshell",
-            "cwd": "shell",
+            "cwd": "${workspaceFolder}/src/shell",
             "request": "attach",
             "type": "dart",
             "vmServiceUri": "${env:VESHELL_VM_SERVICE_URL}",
@@ -18,10 +18,10 @@
         },
         {
             "name": "window-shell",
-            "cwd": "shell",
+            "cwd": "${workspaceFolder}/src/shell",
             "request": "attach",
             "type": "dart",
-            "vmServiceInfoFile": "../.temp/vmService.json",
+            "vmServiceInfoFile": "${workspaceFolder}/.vscode/vmService.json",
             "deleteServiceInfoFile": true,
             "preLaunchTask": "wait-for-vmService",
             "args": [
@@ -38,15 +38,19 @@
             "request": "launch",
             "name": "embedder",
             "env": {
-                "XDG_CONFIG_HOME": "${workspaceFolder}/shell/.config",
                 "RUST_LOG": "debug",
                 "WAYLAND_DEBUG": "server",
                 "VESHELL_VSCODE_DEBUG": "true",
-                "VESHELL_DEFAULT_CONFIG_DIR": "${workspaceFolder}/settings/default",
+                "VESHELL_DEFAULT_CONFIG_DIR": "${workspaceFolder}/extra/settings/default",
             },
-            "program": "${workspaceFolder}/embedder/target/debug/veshell", // Replace with your binary name
-            "args": [],
-            "cwd": "${workspaceFolder}/embedder/",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin",
+                    "veshell"
+                ],
+                "problemMatcher": "$rustc",
+            },
             "presentation": {
                 "hidden": true,
                 "group": "",
@@ -61,7 +65,7 @@
                 "embedder",
                 "window-shell"
             ],
-            "preLaunchTask": "prepare-veshell",
+            "preLaunchTask": "delete-vmService",
             "stopAll": true,
             "presentation": {
                 "hidden": false,
