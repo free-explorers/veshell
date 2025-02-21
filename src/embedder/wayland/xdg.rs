@@ -223,7 +223,11 @@ pub mod xdg {
             );
         }
 
-        fn fullscreen_request(&mut self, surface: ToplevelSurface, output: Option<smithay::reexports::wayland_server::protocol::wl_output::WlOutput>) {
+        fn fullscreen_request(
+            &mut self,
+            surface: ToplevelSurface,
+            output: Option<smithay::reexports::wayland_server::protocol::wl_output::WlOutput>,
+        ) {
             surface.with_pending_state(|state| {
                 state.states.set(xdg_toplevel::State::Fullscreen);
             });

@@ -9,7 +9,7 @@ pub mod xwayland {
 
     use smithay::input::pointer::CursorIcon;
     use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-    
+
     use smithay::utils::{Logical, Point, Rectangle, Size};
     use smithay::wayland::seat::WaylandFocus;
     use smithay::wayland::selection::data_device::{
@@ -27,7 +27,7 @@ pub mod xwayland {
     use std::borrow::Borrow;
     use std::cell::RefCell;
     use std::os::fd::OwnedFd;
-    
+
     use tracing::{error, trace};
     pub struct MyX11SurfaceState {
         pub x11_surface_id: u64,
@@ -418,7 +418,6 @@ pub mod xwayland {
             let geometry = window.geometry();
             window.configure(geometry).unwrap();
         }
-        
     }
 
     impl<BackendData: Backend> XWaylandShellHandler for State<BackendData> {

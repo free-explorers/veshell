@@ -11,16 +11,16 @@ use smithay::{
         renderer::{
             element::{
                 texture::{TextureBuffer, TextureRenderElement},
-                utils::{Relocate, RelocateRenderElement}, Kind, RenderElement,
-            }, ImportAll, ImportDma, ImportMem, Renderer,
-            Texture,
+                utils::{Relocate, RelocateRenderElement},
+                Kind, RenderElement,
+            },
+            ImportAll, ImportDma, ImportMem, Renderer, Texture,
         },
     },
     input::pointer::CursorImageStatus,
     output::Output,
     utils::{Logical, Monotonic, Point, Rectangle, Time, Transform},
 };
-
 
 pub static CLEAR_COLOR: [f32; 4] = [0.8, 0.8, 0.9, 1.0];
 pub static CLEAR_COLOR_FULLSCREEN: [f32; 4] = [0.0, 0.0, 0.0, 0.0];

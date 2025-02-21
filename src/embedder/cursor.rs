@@ -7,13 +7,14 @@ use smithay::{
         renderer::{
             element::{
                 memory::{MemoryRenderBuffer, MemoryRenderBufferRenderElement},
-                surface::{render_elements_from_surface_tree, WaylandSurfaceRenderElement}, Kind,
+                surface::{render_elements_from_surface_tree, WaylandSurfaceRenderElement},
+                Kind,
             },
             ImportAll, ImportMem, Renderer,
         },
     },
     input::pointer::{CursorIcon, CursorImageAttributes, CursorImageStatus},
-    reexports::wayland_server::protocol::wl_surface::{WlSurface},
+    reexports::wayland_server::protocol::wl_surface::WlSurface,
     render_elements,
     utils::{
         Buffer as BufferCoords, IsAlive, Logical, Monotonic, Point, Scale, Size, Time, Transform,

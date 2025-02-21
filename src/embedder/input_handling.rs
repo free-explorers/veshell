@@ -1,12 +1,10 @@
 use std::mem::size_of;
 
 use smithay::backend::input::{
-    self, AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, KeyboardKeyEvent, PointerAxisEvent,
-    PointerButtonEvent, PointerMotionEvent,
+    self, AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend,
+    KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
 };
-use smithay::input::pointer::{
-    AxisFrame, MotionEvent, RelativeMotionEvent,
-};
+use smithay::input::pointer::{AxisFrame, MotionEvent, RelativeMotionEvent};
 use smithay::utils::{Logical, Point, SERIAL_COUNTER};
 use tracing::info;
 

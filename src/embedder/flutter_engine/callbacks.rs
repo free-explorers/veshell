@@ -14,7 +14,6 @@ use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::flutter_engine::{Baton, FlutterEngine};
 use crate::keyboard::VeshellKeyEvent;
 
-
 pub unsafe extern "C" fn make_current<BackendData>(user_data: *mut c_void) -> bool
 where
     BackendData: Backend + 'static,

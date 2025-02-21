@@ -6,8 +6,8 @@ use calloop_notify::NotifySource;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use smithay::reexports::calloop::LoopHandle;
-use std::path::Path;
 use std::fs::File;
+use std::path::Path;
 use tracing::info;
 
 mod calloop_notify;

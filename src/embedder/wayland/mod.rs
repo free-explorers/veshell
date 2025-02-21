@@ -1,4 +1,3 @@
-
 pub mod xdg;
 
 pub mod wayland {
@@ -8,20 +7,18 @@ pub mod wayland {
     use smithay::{
         backend::renderer::{
             gles::GlesRenderer,
-            utils::{
-                import_surface, on_commit_buffer_handler, RendererSurfaceStateUserData,
-            }, Renderer, Texture,
+            utils::{import_surface, on_commit_buffer_handler, RendererSurfaceStateUserData},
+            Renderer, Texture,
         },
         input::pointer::{CursorImageStatus, CursorImageSurfaceData},
         reexports::wayland_server::{protocol::wl_surface::WlSurface, Client},
         utils::{Buffer as BufferCoords, Size},
         wayland::compositor::{
-                with_states, with_surface_tree_upward, CompositorClientState,
-                CompositorHandler, CompositorState, SurfaceAttributes, TraversalAction,
-            },
+            with_states, with_surface_tree_upward, CompositorClientState, CompositorHandler,
+            CompositorState, SurfaceAttributes, TraversalAction,
+        },
         xwayland::XWaylandClientData,
     };
-    
 
     use crate::{state::State, Backend, ClientState};
 
