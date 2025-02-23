@@ -171,6 +171,7 @@ fn download_flutter_engine_library(
 }
 
 fn download_from_url(url: &str) -> Result<bytes::Bytes, reqwest::Error> {
+    println!("Downloading from {}", url);
     Ok(reqwest::blocking::get(url)?.error_for_status()?.bytes()?)
 }
 
