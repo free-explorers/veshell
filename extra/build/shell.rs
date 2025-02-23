@@ -14,14 +14,15 @@ pub fn build_shell(
     flutter_engine_build: FlutterEngineBuild,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=extra/build/shell.rs");
+    println!("cargo:rerun-if-changed=src/shell/");
     let absolute_flutter_bin = Path::new(&*flutter_bin_path).canonicalize()?;
     let absolute_dart_bin = Path::new(&*dart_bin_path).canonicalize()?;
-
+    let absolute_shell_directory = Path::new(&SHELL_DIRECTORY).canonicalize()?;
     // get pub dependencies
     let output = std::process::Command::new(absolute_flutter_bin.clone())
         .arg("pub")
         .arg("get")
-        .current_dir(Path::new(&SHELL_DIRECTORY))
+        .current_dir(absolute_shell_directory.clone())
         .status()?;
 
     if !output.success() {
@@ -35,7 +36,7 @@ pub fn build_shell(
         .arg("build_runner")
         .arg("build")
         .arg("--delete-conflicting-outputs")
-        .current_dir(Path::new(&SHELL_DIRECTORY))
+        .current_dir(absolute_shell_directory.clone())
         .status()?;
     if !output.success() {
         panic!("Failed to run build_runner");
@@ -51,10 +52,12 @@ pub fn build_shell(
             FlutterEngineBuild::Profile => "--profile",
             FlutterEngineBuild::Release => "--release",
         })
-        .current_dir(Path::new(&SHELL_DIRECTORY))
+        .current_dir(absolute_shell_directory.clone())
         .status()?;
 
     if !output.success() {
+        // print the command executed
+        println!("Command executed: {:?}", output);
         panic!("Failed to build shell");
     }
     Ok(())
