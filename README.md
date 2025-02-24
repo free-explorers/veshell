@@ -22,6 +22,14 @@ By becoming a Free Explorer you can get involve into the project and support it.
 cargo run
 ```
 
+# Installing Veshell
+```shell
+cargo build --profile release
+```
+```shell
+cargo install_veshell
+```
+
 # The innovative workflow
 
 The workflow is designed to synergize with your spatial awareness in order to provide a most intuitive and ergonomic navigation and organization in the digital environment.
