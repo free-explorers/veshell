@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{self, Write};
+use std::io::Write;
 use std::os::fd::FromRawFd;
 
 use std::path::Path;
@@ -14,8 +14,8 @@ use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags};
 use smithay::backend::allocator::{Allocator, Fourcc, Slot, Swapchain};
 use smithay::backend::drm::compositor::DrmCompositor;
 use smithay::backend::drm::{
-    CreateDrmNodeError, DrmAccessError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent,
-    DrmEventMetadata, DrmNode, NodeType,
+    CreateDrmNodeError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent, DrmEventMetadata, DrmNode,
+    NodeType,
 };
 use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
 use smithay::backend::input::{Event, InputEvent, KeyboardKeyEvent};
@@ -756,16 +756,7 @@ impl State<DrmBackend> {
             return;
         }
 
-        // check if there is a file in xdgConfigHome/veshell/persistence/Monitor/<output_name>.json and if so, get mode from there
-        // if not, get the preferred mode from the connector
         info!("output_name: {}", output_name);
-        /*         let mode_id = get_mode_id_for_monitor_from_file(&output_name).unwrap_or_else(|| {
-            connector
-                .modes()
-                .iter()
-                .position(|mode| mode.mode_type().contains(ModeTypeFlags::PREFERRED))
-                .unwrap_or(0)
-        }); */
 
         let monitor_configuration = self
             .settings_manager
@@ -992,7 +983,8 @@ impl State<DrmBackend> {
                 notifier,
                 move |event, metadata, data: &mut State<_>| match event {
                     DrmEvent::VBlank(crtc) => {
-                        data.frame_finish(node, crtc, metadata);
+                        let meta = metadata.expect("VBlank events must have metadata");
+                        data.on_vblank(node, crtc, meta);
                     }
                     DrmEvent::Error(error) => {
                         error!("{:?}", error);
@@ -1121,40 +1113,13 @@ impl State<DrmBackend> {
         }
     }
 
-    fn frame_finish(
-        &mut self,
-        node: DrmNode,
-        crtc: crtc::Handle,
-        _metadata: &mut Option<DrmEventMetadata>,
-    ) {
-        let gpu_data = match self.backend_data.gpus.get_mut(&node) {
-            Some(gpu_data) => gpu_data,
-            None => {
-                error!("Trying to finish frame on non-existent gpu {:?}", node);
-                return;
-            }
-        };
+    fn on_vblank(&mut self, node: DrmNode, crtc: crtc::Handle, _meta: DrmEventMetadata) {
+        // Since the Flutter context is shared among all outputs we need to render all of them at the frequence of the highest Hz output.
+        let gpu_data = self.backend_data.gpus.get_mut(&node).unwrap();
 
-        let surface = match gpu_data.surfaces.get_mut(&crtc) {
-            Some(surface) => surface,
-            None => {
-                error!("Trying to finish frame on non-existent crtc {:?}", crtc);
-                return;
-            }
-        };
-
-        let _output = if let Some(output) = self.space.outputs().find(|o| {
-            o.user_data().get::<UdevOutputId>()
-                == Some(&UdevOutputId {
-                    device_id: surface.device_id,
-                    crtc,
-                })
-        }) {
-            output.clone()
-        } else {
-            // somehow we got called with an invalid output
-            return;
-        };
+        if let Some(surface) = gpu_data.surfaces.get_mut(&crtc) {
+            let _ = surface.compositor.frame_submitted();
+        }
 
         let (mhz, highest_hz_crtc) = match self.backend_data.highest_hz_crtc {
             Some(highest_hz_crtc) => highest_hz_crtc,
@@ -1165,42 +1130,7 @@ impl State<DrmBackend> {
             return;
         }
 
-        let schedule_render = match surface
-            .compositor
-            .frame_submitted()
-            .map_err(Into::<SwapBuffersError>::into)
-        {
-            Ok(_user_data) => true,
-            Err(err) => {
-                warn!("Error during rendering: {:?}", err);
-                match err {
-                    SwapBuffersError::AlreadySwapped => true,
-                    // If the device has been deactivated do not reschedule, this will be done
-                    // by session resume
-                    SwapBuffersError::TemporaryFailure(err)
-                        if matches!(
-                            err.downcast_ref::<DrmError>(),
-                            Some(&DrmError::DeviceInactive)
-                        ) =>
-                    {
-                        false
-                    }
-                    SwapBuffersError::TemporaryFailure(err) => matches!(
-                        err.downcast_ref::<DrmError>(),
-                        Some(DrmError::Access(DrmAccessError {
-                            source,
-                            ..
-                        })) if source.kind() == io::ErrorKind::PermissionDenied
-                    ),
-                    SwapBuffersError::ContextLost(err) => {
-                        panic!("Rendering loop lost: {}", err)
-                    }
-                }
-            }
-        };
-        if schedule_render {
-            self.render(node, Some(crtc));
-        }
+        self.render(node, None);
 
         let drained: Vec<_> = self.batons.drain(..).collect(); // Mutable borrow ends here
 
@@ -1264,6 +1194,7 @@ impl State<DrmBackend> {
     // TODO: I don't think this method should be here.
     // It should probably be in GpuData or SurfaceData.
     pub fn render_surface(&mut self, node: DrmNode, crtc: crtc::Handle) {
+        debug!("render_surface: {}", node);
         let gpu_data = self.backend_data.gpus.get_mut(&node);
         let gpu_data = if let Some(gpu_data) = gpu_data {
             gpu_data
@@ -1296,6 +1227,7 @@ impl State<DrmBackend> {
             slot
         } else {
             // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
+            debug!("Initial render for {}", node);
             initial_render(surface, renderer).expect("Failed to render initial frame");
             return;
         };
@@ -1355,6 +1287,7 @@ impl State<DrmBackend> {
         crtc: crtc::Handle,
         evt_handle: LoopHandle<'static, State<DrmBackend>>,
     ) {
+        debug!("schedule_initial_render: {}", node);
         let device = if let Some(device) = self.backend_data.gpus.get_mut(&node) {
             device
         } else {

@@ -35,11 +35,11 @@ pub fn get_render_elements<R>(
     renderer: &mut R,
     output: &Output,
     slot: &Slot<Dmabuf>,
-    geometry: Rectangle<f64, smithay::utils::Logical>,
+    output_geometry: Rectangle<f64, smithay::utils::Logical>,
     now: Time<Monotonic>,
     cursor_image_status: &Mutex<CursorImageStatus>,
     cursor_state: &Mutex<CursorStateInner>,
-    location: Point<f64, Logical>,
+    cursor_location: Point<f64, Logical>,
     is_surface_under_pointer: bool,
 ) -> Vec<VeshellRenderElements<R>>
 where
@@ -51,28 +51,32 @@ where
     let scale = output.current_scale();
     let mut elements: Vec<VeshellRenderElements<R>> = Vec::new();
 
-    let cursor_element = draw_cursor(
-        renderer,
-        cursor_image_status,
-        cursor_state,
-        scale.fractional_scale().into(),
-        now,
-        location,
-        is_surface_under_pointer,
-    );
+    // check if the cursor is inside the output geometry
+    if output_geometry.contains(cursor_location) {
+        let cursor_element = draw_cursor(
+            renderer,
+            cursor_image_status,
+            cursor_state,
+            scale.fractional_scale().into(),
+            now,
+            cursor_location - output_geometry.loc,
+            is_surface_under_pointer,
+        );
 
-    let cursor_elements: Vec<VeshellRenderElements<R>> = cursor_element
-        .into_iter()
-        .map(|(elem, hotspot)| {
-            VeshellRenderElements::Cursor(RelocateRenderElement::from_element(
-                elem,
-                Point::from((-hotspot.x, -hotspot.y)),
-                Relocate::Relative,
-            ))
-        })
-        .collect();
+        let cursor_elements: Vec<VeshellRenderElements<R>> = cursor_element
+            .into_iter()
+            .map(|(elem, hotspot)| {
+                VeshellRenderElements::Cursor(RelocateRenderElement::from_element(
+                    elem,
+                    Point::from((-hotspot.x, -hotspot.y)),
+                    Relocate::Relative,
+                ))
+            })
+            .collect();
 
-    elements.extend(cursor_elements);
+        elements.extend(cursor_elements);
+    }
+
     let flutter_texture_result = renderer.import_dmabuf(&slot.export().unwrap(), None);
     if flutter_texture_result.is_ok() {
         let flutter_texture = flutter_texture_result.unwrap();
@@ -89,8 +93,11 @@ where
             None,
             // TODO: I don't know why it has to be like this instead of just `geometry`.
             Some(Rectangle::from_loc_and_size(
-                (geometry.loc.x, geometry.size.h - geometry.loc.y),
-                geometry.size,
+                (
+                    output_geometry.loc.x,
+                    output_geometry.size.h - output_geometry.loc.y,
+                ),
+                output_geometry.size,
             )),
             None,
             Kind::Unspecified,
