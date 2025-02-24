@@ -14,6 +14,7 @@ class MonitorList extends _$MonitorList {
       waylandManagerProvider,
       (_, next) {
         if (next case AsyncData(value: final MonitorLayoutChangedEvent event)) {
+          print('MonitorLayoutChangedEvent received : $event');
           state = event.message.monitors;
         }
       },

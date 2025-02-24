@@ -5,6 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/overview/widget/search/settings/keyboard/setting_property_hotkey_editor.dart';
+import 'package:shell/overview/widget/search/settings/monitor/monitor_refresh_rate_editor.dart';
 import 'package:shell/overview/widget/search/settings/monitor/monitor_refresh_rate_value.dart';
 import 'package:shell/overview/widget/search/settings/monitor/monitor_resolution_editor.dart';
 import 'package:shell/overview/widget/search/settings/monitor/monitor_resolution_value.dart';
@@ -255,6 +256,11 @@ class SettingPropertyEditor<T> extends HookConsumerWidget {
       SettingProperty<MonitorResolution>() => MonitorResolutionEditor(
           path: path,
           property: property as SettingProperty<MonitorResolution>,
+          onChanged: onValueChanged,
+        ),
+      SettingProperty<MonitorRefreshRate>() => MonitorRefreshRateEditor(
+          path: path,
+          property: property as SettingProperty<MonitorRefreshRate>,
           onChanged: onValueChanged,
         ),
       SettingProperty<T>() => throw UnimplementedError(),

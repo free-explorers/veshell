@@ -11,7 +11,6 @@ class MonitorByName extends _$MonitorByName {
   @override
   Monitor? build(String monitorName) {
     final monitorList = ref.watch(monitorListProvider);
-    print(monitorList);
     return monitorList
         .firstWhereOrNull((element) => element.name == monitorName);
   }
