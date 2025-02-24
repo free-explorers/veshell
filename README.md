@@ -22,7 +22,7 @@ By becoming a Free Explorer you can get involve into the project and support it.
 cargo run
 ```
 
-# Installing Vshell
+# Installing Veshell
 ```shell
 cargo build --profile release
 ```
