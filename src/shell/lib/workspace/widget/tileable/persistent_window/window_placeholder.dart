@@ -11,7 +11,6 @@ import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
-import 'package:shell/window/provider/window_process_logs.dart';
 
 class WindowPlaceholder extends HookConsumerWidget {
   const WindowPlaceholder({
@@ -40,7 +39,7 @@ class WindowPlaceholder extends HookConsumerWidget {
     useListenable(focusNode ?? Listenable.merge([]));
     final isFocused = focusNode?.hasFocus ?? false;
     final backgroundFocusNode = useFocusNode(debugLabel: 'background InkWell');
-    final logs = ref.watch(windowProcessLogsProvider(window.windowId));
+    final logs = window.executionLogs ?? [];
     return LayoutBuilder(
       builder: (context, constraints) {
         final responsiveRowColumn =

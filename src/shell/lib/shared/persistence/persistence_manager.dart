@@ -8,12 +8,7 @@ import 'package:shell/shared/util/file.dart';
 import 'package:shell/shared/util/logger.dart';
 
 Directory persistenceDirectory = Directory(
-  path.join(
-    Platform.environment['XDG_CONFIG_HOME'] ??
-        '${Platform.environment['HOME']!}/.config',
-    'veshell',
-    'persistence',
-  ),
+  '${Platform.environment['VESHELL_CONFIG_DIR']!}/persistence',
 );
 
 class PersistenceManager {

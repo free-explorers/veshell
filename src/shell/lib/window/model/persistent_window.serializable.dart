@@ -26,6 +26,7 @@ class PersistentWindow extends Window
     @Default(false) bool isWaitingForSurface,
     @Default(DisplayMode.maximized) DisplayMode displayMode,
     String? customExec,
+    List<String>? executionLogs,
   }) = _PersistentWindow;
 
   factory PersistentWindow.fromJson(Map<String, dynamic> json) =>

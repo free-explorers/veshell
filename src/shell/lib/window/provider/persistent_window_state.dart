@@ -10,7 +10,6 @@ import 'package:shell/window/model/matching_info.serializable.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.dart';
 import 'package:shell/window/model/window_properties.serializable.dart';
-import 'package:shell/window/provider/window_process_logs.dart';
 import 'package:shell/window/provider/window_provider.mixin.dart';
 
 part 'persistent_window_state.g.dart';
@@ -29,6 +28,9 @@ class PersistentWindowState extends _$PersistentWindowState
   String getPersistentId() => windowId.toString();
 
   late MatchingInfo _matchingInfo;
+
+  StreamSubscription<List<int>>? _stderrStreamSubscription;
+  StreamSubscription<List<int>>? _stdoutStreamSubscription;
 
   @override
   PersistentWindow build(PersistentWindowId windowId) {
@@ -86,12 +88,7 @@ class PersistentWindowState extends _$PersistentWindowState
     super.onSurfaceIsDestroyed();
     _matchingInfo = MatchingInfo.fromWindowProperties(state.properties);
     print('onSurfaceIsDestroyed');
-
-    ref
-        .read(
-          windowProcessLogsProvider(windowId).notifier,
-        )
-        .reset();
+    stopGatheringProcessLogs();
   }
 
   @override
@@ -105,9 +102,7 @@ class PersistentWindowState extends _$PersistentWindowState
       process = await super.launchSelf();
     }
     if (process != null) {
-      ref
-          .read(windowProcessLogsProvider(windowId).notifier)
-          .setProcess(process);
+      gatherProcessLogs(process);
       state = state.copyWith(isWaitingForSurface: true);
       _matchingInfo = _matchingInfo.copyWith(
         waitingForAppSince: DateTime.now(),
@@ -115,6 +110,29 @@ class PersistentWindowState extends _$PersistentWindowState
       );
     }
     return process;
+  }
+
+  void gatherProcessLogs(Process process) {
+    stopGatheringProcessLogs();
+
+    void onEvent(List<int> event) {
+      final string = String.fromCharCodes(event);
+      state = state.copyWith(
+        executionLogs: [...?state.executionLogs, string],
+      );
+    }
+
+    _stdoutStreamSubscription = process.stdout.listen(
+      onEvent,
+    );
+    _stderrStreamSubscription = process.stderr.listen(
+      onEvent,
+    );
+  }
+
+  void stopGatheringProcessLogs() {
+    _stdoutStreamSubscription?.cancel();
+    _stderrStreamSubscription?.cancel();
   }
 
   void setCustomExec(String? exec) {

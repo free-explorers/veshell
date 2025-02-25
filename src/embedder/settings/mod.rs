@@ -88,30 +88,29 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
         }
         let default_settings_folder = std::env::var("VESHELL_DEFAULT_CONFIG_DIR").unwrap();
 
-        let user_settings_folder: String = std::env::var("VESHELL_CONFIG_DIR")
+        let config_folder = std::env::var("VESHELL_CONFIG_DIR")
             .or_else(|_| {
                 std::env::var("XDG_CONFIG_HOME")
-                    .map(|xdg_config_home| format!("{}/veshell/settings", xdg_config_home))
+                    .map(|xdg_config_home| format!("{}/veshell/", xdg_config_home))
                     .or_else(|_| {
-                        std::env::var("HOME")
-                            .map(|home| format!("{}/.config/veshell/settings", home))
+                        std::env::var("HOME").map(|home| format!("{}/.config/veshell/", home))
                     })
             })
             .unwrap();
 
         if std::env::var("VESHELL_CONFIG_DIR").is_err() {
-            std::env::set_var("VESHELL_CONFIG_DIR", &user_settings_folder);
+            std::env::set_var("VESHELL_CONFIG_DIR", &config_folder);
         }
 
-        let user_settings_folder_path = Path::new(&user_settings_folder);
+        let user_settings_folder_path = Path::new(&config_folder).join("settings");
         if !user_settings_folder_path.exists() {
-            std::fs::create_dir_all(user_settings_folder_path)
+            std::fs::create_dir_all(user_settings_folder_path.clone())
                 .expect("Unable to create user settings folder");
         }
 
         let mut notify_source = NotifySource::new().unwrap();
         notify_source
-            .watch(user_settings_folder_path, RecursiveMode::Recursive)
+            .watch(&user_settings_folder_path.clone(), RecursiveMode::Recursive)
             .unwrap();
 
         loop_handle
@@ -140,7 +139,7 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
         Self {
             _loop_handle: loop_handle,
             default_settings_folder,
-            user_settings_folder,
+            user_settings_folder: user_settings_folder_path.to_str().unwrap().to_string(),
         }
     }
 
