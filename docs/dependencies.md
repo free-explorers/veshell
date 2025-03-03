@@ -32,7 +32,7 @@
       <td>gtk3</td>
       <td>gtk3</td>
       <td>gtk3-devel</td>
-      <td>gtk3-dev</td>
+      <td>libgtk3-dev</td>
     </tr>
     <tr>
       <td>udev</td>
@@ -62,7 +62,7 @@
       <td>openssl</td>
       <td>openssl</td>
       <td>openssl-devel</td>
-      <td>openssl-dev</td>
+      <td>openssl</td>
     </tr>
   </tbody>
 </table>

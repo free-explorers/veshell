@@ -15,6 +15,7 @@ By becoming a Free Explorer you can get involve into the project and support it.
 # Installation requirements
 
 - Installing rust and cargo using [rustup](https://rustup.rs/)
+- [System dependencies](./docs/dependencies.md)
 
 # Trying Veshell
 
