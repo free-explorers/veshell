@@ -56,7 +56,7 @@
       <td>gbm</td>
       <td>libgbm</td>
       <td>libgm-devel</td>
-      <td>libgbm-dev</td>
+      <td>libgbm-dev or mesa-libgbm-devel</td>
     </tr>
     <tr>
       <td>openssl</td>
