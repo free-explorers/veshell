@@ -1,4 +1,5 @@
 use cargo_metadata::MetadataCommand;
+use std::env;
 
 const FLUTTER_REPO_URL: &str = "https://github.com/flutter/flutter.git";
 pub const FLUTTER_REPO_DIR: &str = ".flutter_sdk";
@@ -16,7 +17,7 @@ pub fn install_flutter_sdk() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let _metadata = MetadataCommand::new()
-        .manifest_path(env!("CARGO_MANIFEST_PATH"))
+        .manifest_path(env::var("CARGO_MANIFEST_PATH").unwrap())
         .exec()
         .unwrap();
 
