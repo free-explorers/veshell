@@ -16,8 +16,16 @@ pub fn install_flutter_sdk() -> Result<(), Box<dyn std::error::Error>> {
             .status()?;
     }
 
+    let manifest_path = match env::var("CARGO_MANIFEST_PATH") {
+        Ok(path) => path,
+        Err(_) => {
+            println!("CARGO_MANIFEST_PATH not set, assuming root package");
+            format!("{}/Cargo.toml", env::var("CARGO_MANIFEST_DIR").unwrap())
+        }
+    };
+
     let _metadata = MetadataCommand::new()
-        .manifest_path(env::var("CARGO_MANIFEST_PATH").unwrap())
+        .manifest_path(manifest_path)
         .exec()
         .unwrap();
 
