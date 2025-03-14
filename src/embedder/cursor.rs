@@ -1,6 +1,7 @@
 use std::env;
 use std::{collections::HashMap, io::Read, sync::Mutex};
 
+use smithay::backend::renderer::RendererSuper;
 use smithay::{
     backend::{
         allocator::Fourcc,
@@ -185,7 +186,7 @@ pub fn draw_cursor<R>(
 ) -> Vec<(CursorRenderElement<R>, Point<i32, BufferCoords>)>
 where
     R: Renderer + ImportMem + ImportAll,
-    <R as Renderer>::TextureId: Send + Clone + 'static,
+    <R as RendererSuper>::TextureId: Send + Clone + 'static,
 {
     let cursor_status = {
         let cursor_image_status = cursor_image_status.lock().unwrap();
@@ -269,7 +270,7 @@ pub fn draw_surface_cursor<R>(
 ) -> Vec<(CursorRenderElement<R>, Point<i32, BufferCoords>)>
 where
     R: Renderer + ImportAll,
-    <R as Renderer>::TextureId: Clone + 'static,
+    <R as RendererSuper>::TextureId: Clone + 'static,
 {
     let position = location.into();
     let h: Point<i32, BufferCoords> = with_states(&surface, |states| {

@@ -1,3 +1,5 @@
+use smithay::xwayland::X11Wm;
+
 pub mod xwayland {
     use crate::backend::Backend;
     use crate::cursor::{load_cursor_theme, Cursor};
@@ -10,6 +12,7 @@ pub mod xwayland {
     use smithay::input::pointer::CursorIcon;
     use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 
+    use smithay::reexports::x11rb::rust_connection::{DefaultStream, RustConnection};
     use smithay::utils::{Logical, Point, Rectangle, Size};
     use smithay::wayland::seat::WaylandFocus;
     use smithay::wayland::selection::data_device::{
@@ -286,7 +289,7 @@ pub mod xwayland {
                     None
                 },
                 "startupId": x11_surface.startup_id(),
-                "pid": x11_surface.pid(),
+                "pid": x11_surface.get_client_pid().unwrap_or_else(|_| x11_surface.pid().unwrap_or(0)),
             }))),
             None,
         );

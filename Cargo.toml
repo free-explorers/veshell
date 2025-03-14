@@ -24,7 +24,7 @@ path = "extra/scripts/helper.rs"
 inherits = "release"
 
 [dependencies]
-smithay = { git = "https://github.com/Smithay/smithay", rev = "ace2e6a", features = [
+smithay = { git = "https://github.com/PapyElGringo/smithay", rev = "c3b2701", features = [
     "default",
     "wayland_frontend",
     "backend_egl",

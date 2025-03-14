@@ -369,7 +369,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         } else {
             // TODO: Account for DPI scaling.
             buffer_size
-                .map(|size| Rectangle::from_loc_and_size((0, 0), (size.w, size.h)))
+                .map(|size| Rectangle::new((0, 0).into(), (size.w, size.h).into()))
                 .unwrap_or_default()
         };
 

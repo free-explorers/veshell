@@ -12,7 +12,7 @@ use smithay::backend::allocator::dmabuf::{AnyError, AsDmabuf, Dmabuf, DmabufAllo
 use smithay::backend::allocator::gbm::GbmDevice;
 use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags};
 use smithay::backend::allocator::{Allocator, Fourcc, Slot, Swapchain};
-use smithay::backend::drm::compositor::DrmCompositor;
+use smithay::backend::drm::compositor::{DrmCompositor, FrameFlags};
 use smithay::backend::drm::{
     CreateDrmNodeError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent, DrmEventMetadata, DrmNode,
     NodeType,
@@ -23,7 +23,7 @@ use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface}
 use smithay::backend::renderer::element::texture::TextureRenderElement;
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
-use smithay::backend::renderer::{ImportAll, ImportDma, ImportEgl, Renderer};
+use smithay::backend::renderer::{ImportAll, ImportDma, ImportEgl, Renderer, RendererSuper};
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{libseat, Event as SessionEvent, Session};
 use smithay::backend::udev::{all_gpus, primary_gpu, UdevBackend, UdevEvent};
@@ -854,7 +854,7 @@ impl State<DrmBackend> {
             Some(planes),
             device.gbm_allocator.clone(),
             device.gbm_device.clone(),
-            color_formats,
+            color_formats.iter().copied(),
             render_formats,
             device.drm_device.cursor_size(),
             Some(device.gbm_device.clone()),
@@ -1194,7 +1194,6 @@ impl State<DrmBackend> {
     // TODO: I don't think this method should be here.
     // It should probably be in GpuData or SurfaceData.
     pub fn render_surface(&mut self, node: DrmNode, crtc: crtc::Handle) {
-        debug!("render_surface: {}", node);
         let gpu_data = self.backend_data.gpus.get_mut(&node);
         let gpu_data = if let Some(gpu_data) = gpu_data {
             gpu_data
@@ -1227,7 +1226,6 @@ impl State<DrmBackend> {
             slot
         } else {
             // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
-            debug!("Initial render for {}", node);
             initial_render(surface, renderer).expect("Failed to render initial frame");
             return;
         };
@@ -1262,9 +1260,12 @@ impl State<DrmBackend> {
             self.surface_id_under_cursor != None,
         );
 
-        let rendered = surface
-            .compositor
-            .render_frame(renderer, &elements, [0.0, 0.0, 0.0, 0.0]);
+        let rendered = surface.compositor.render_frame(
+            renderer,
+            &elements,
+            [0.0, 0.0, 0.0, 0.0],
+            FrameFlags::DEFAULT,
+        );
 
         match rendered {
             Ok(_frame_result) => match surface.compositor.queue_frame(None) {
@@ -1418,11 +1419,16 @@ where
     R: Renderer
         + ImportAll
         + smithay::backend::renderer::Bind<smithay::backend::allocator::dmabuf::Dmabuf>,
-    <R as Renderer>::TextureId: Clone + 'static,
+    <R as RendererSuper>::TextureId: Clone + 'static,
 {
     let render = surface
         .compositor
-        .render_frame::<_, TextureRenderElement<_>>(renderer, &[], CLEAR_COLOR);
+        .render_frame::<_, TextureRenderElement<_>>(
+            renderer,
+            &[],
+            CLEAR_COLOR,
+            FrameFlags::DEFAULT,
+        );
     if let Err(_err) = render {
         return Err(SwapBuffersError::TemporaryFailure(
             "Failed to render".into(),

@@ -14,7 +14,7 @@ use smithay::{
                 utils::{Relocate, RelocateRenderElement},
                 Kind, RenderElement,
             },
-            ImportAll, ImportDma, ImportMem, Renderer,
+            ImportAll, ImportDma, ImportMem, Renderer, RendererSuper,
         },
     },
     input::pointer::CursorImageStatus,
@@ -44,8 +44,8 @@ pub fn get_render_elements<R>(
 ) -> Vec<VeshellRenderElements<R>>
 where
     R: Renderer + ImportAll + ImportMem + ImportDma,
-    <R as Renderer>::TextureId: Send + Clone + 'static,
-    <R as Renderer>::Error:,
+    <R as RendererSuper>::TextureId: Send + Clone + 'static,
+    <R as RendererSuper>::Error:,
     VeshellRenderElements<R>: RenderElement<R>,
 {
     let scale = output.current_scale();
@@ -92,11 +92,12 @@ where
             &flutter_texture_buffer,
             None,
             // TODO: I don't know why it has to be like this instead of just `geometry`.
-            Some(Rectangle::from_loc_and_size(
+            Some(Rectangle::new(
                 (
                     output_geometry.loc.x,
                     output_geometry.size.h - output_geometry.loc.y,
-                ),
+                )
+                    .into(),
                 output_geometry.size,
             )),
             None,
