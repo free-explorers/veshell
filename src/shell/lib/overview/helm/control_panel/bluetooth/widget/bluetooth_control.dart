@@ -26,7 +26,7 @@ class BluetoothControl extends HookConsumerWidget {
       (a, b) {
         if (a.connected == b.connected) {
           if (a.paired == b.paired) {
-            return a.name.compareTo(b.name ?? '') ?? 0;
+            return a.name.compareTo(b.name ?? '');
           }
           return (b.paired ?? false) ? 1 : -1;
         }

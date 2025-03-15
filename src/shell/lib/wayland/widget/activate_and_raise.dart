@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/shared/tasks/provider/tasks.dart';
 import 'package:shell/wayland/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
@@ -26,7 +25,6 @@ class ActivateAndRaise extends ConsumerWidget {
                 ),
               ),
             );
-        ref.read(tasksProvider.notifier).putInFront(surfaceId);
       },
       child: child,
     );

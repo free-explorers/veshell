@@ -59,7 +59,6 @@ class DbusNotificationServer extends OrgFreedesktopNotifications {
         'org.freedesktop.Notifications.Notify() failed',
       );
     }
-    print('call callback');
   }
 
   /// Implementation of org.freedesktop.Notifications.CloseNotification()
