@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/settings/provider/state/hotkeys_setting.dart';
@@ -48,6 +49,13 @@ class HotkeysActivator extends _$HotkeysActivator {
       if (activator == null) continue;
       map[activator] = intent;
     }
+
+    // add the dev tools shortcuts
+    map[const SingleActivator(
+      LogicalKeyboardKey.f12,
+      control: true,
+      shift: true,
+    )] = const ToggleDevToolsIntent();
     return map;
   }
 }

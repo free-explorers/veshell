@@ -23,3 +23,9 @@ class DumpDebugFocusTree extends Intent {
   ///
   const DumpDebugFocusTree();
 }
+
+/// An intent to toggle the overview.
+class ToggleDevToolsIntent extends Intent {
+  ///
+  const ToggleDevToolsIntent();
+}

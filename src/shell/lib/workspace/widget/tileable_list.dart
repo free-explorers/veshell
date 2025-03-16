@@ -47,16 +47,29 @@ class TileableListView extends HookConsumerWidget {
 
     Widget buildItem(BuildContext context, Tileable tileable) {
       final index = tileableList.indexOf(tileable);
-      return SizedBox(
-        height: double.infinity,
-        child: InkWell(
-          onTap: () => ref
-              .read(workspaceStateProvider(workspaceId).notifier)
-              .setSelectedIndex(
-                index,
+      return HookBuilder(
+        builder: (context) {
+          final menuController = useMemoized(MenuController.new);
+          final tileableWidget = tileable.buildPanelWidget(context, ref);
+          final tileableMenuChildren = tileable.buildMenuChildren(context, ref);
+          return SizedBox(
+            height: double.infinity,
+            child: InkWell(
+              onTap: () => ref
+                  .read(workspaceStateProvider(workspaceId).notifier)
+                  .setSelectedIndex(
+                    index,
+                  ),
+              onLongPress: menuController.open,
+              onSecondaryTap: menuController.open,
+              child: MenuAnchor(
+                controller: menuController,
+                menuChildren: tileableMenuChildren,
+                child: tileableWidget,
               ),
-          child: tileable.buildPanelWidget(context, ref),
-        ),
+            ),
+          );
+        },
       );
     }
 

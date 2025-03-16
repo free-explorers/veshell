@@ -2,6 +2,8 @@ import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/dev_tools/provider/dev_tools_enabled.dart';
+import 'package:shell/dev_tools/widget/dev_tools_overview.dart';
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/overview/widget/overview.dart';
 import 'package:shell/screen/provider/current_screen_id.dart';
@@ -39,6 +41,12 @@ class ScreenWidget extends HookConsumerWidget {
           onInvoke: (_) {
             print('In DumpDebugFocusTree');
             debugDumpFocusTree();
+            return null;
+          },
+        ),
+        ToggleDevToolsIntent: CallbackAction<ToggleDevToolsIntent>(
+          onInvoke: (_) {
+            ref.read(devToolsEnabledProvider.notifier).toggle();
             return null;
           },
         ),
@@ -121,6 +129,7 @@ class ScreenWidget extends HookConsumerWidget {
                 ),
               ),
               const OverviewWidget(),
+              if (ref.watch(devToolsEnabledProvider)) const DevToolsOverview(),
             ],
           ),
         ),

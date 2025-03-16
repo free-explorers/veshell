@@ -26,6 +26,7 @@ import 'package:shell/window/provider/ephemeral_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/surface_window_map.dart';
 import 'package:shell/window/provider/window_manager/matching_engine.dart';
+import 'package:shell/window/provider/window_properties.dart';
 import 'package:shell/workspace/provider/window_workspace_map.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:uuid/uuid.dart';
@@ -175,20 +176,19 @@ class WindowManager extends _$WindowManager {
 
   void createPersistentWindowForSurface({
     required SurfaceId surfaceId,
-    required String? appId,
-    required String? title,
   }) {
     // create a new window
     final windowId = PersistentWindowId(_uuidGenerator.v4());
     _log.info(
       'Creating new PersistentWindow $windowId for surface $surfaceId',
     );
+
+    final surfaceWindowProperties =
+        ref.read(windowPropertiesStateProvider(surfaceId));
+
     final persistentWindow = PersistentWindow(
       windowId: windowId,
-      properties: WindowProperties(
-        appId: appId ?? '',
-        title: title,
-      ),
+      properties: surfaceWindowProperties,
       surfaceId: surfaceId,
     );
 
@@ -219,12 +219,13 @@ class WindowManager extends _$WindowManager {
     _log.info(
       'Creating new DialogWindow $windowId for surface $surfaceId',
     );
+
+    final surfaceWindowProperties =
+        ref.read(windowPropertiesStateProvider(surfaceId));
+
     final dialogWindow = DialogWindow(
       windowId: windowId,
-      properties: WindowProperties(
-        appId: toplevelState.appId ?? 'unknown',
-        title: toplevelState.title ?? 'unknown',
-      ),
+      properties: surfaceWindowProperties,
       surfaceId: surfaceId,
       parentSurfaceId: toplevelState.parent!,
     );

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/model/launch_config.serializable.dart';
+import 'package:shell/application/provider/logs_for_pid.dart';
 import 'package:shell/wayland/provider/environment_variables.dart';
 
 part 'app_launch.g.dart';
@@ -17,8 +18,8 @@ class AppLaunch extends _$AppLaunch {
       '/bin/sh',
       ['-c', config.command],
       environment: environment.unlockLazy,
-      mode: ProcessStartMode.detachedWithStdio,
     );
+    ref.read(logsForPidProvider(process.pid).notifier).setProcess(process);
     return process;
   }
 }

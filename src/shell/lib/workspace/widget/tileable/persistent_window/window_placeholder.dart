@@ -9,6 +9,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/application/widget/app_icon.dart';
+import 'package:shell/application/widget/logs_viewer.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 
@@ -28,18 +29,16 @@ class WindowPlaceholder extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appId = window.properties.appId;
-    final entry = appId != null
-        ? ref
-            .watch(
-              localizedDesktopEntryForIdProvider(appId),
-            )
-            .value
-        : null;
+    final entry = ref
+        .watch(
+          localizedDesktopEntryForIdProvider(appId),
+        )
+        .value;
 
     useListenable(focusNode ?? Listenable.merge([]));
     final isFocused = focusNode?.hasFocus ?? false;
     final backgroundFocusNode = useFocusNode(debugLabel: 'background InkWell');
-    final logs = window.executionLogs ?? [];
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final responsiveRowColumn =
@@ -76,6 +75,8 @@ class WindowPlaceholder extends HookConsumerWidget {
                 ),
               ),
             ),
+            if (window.isWaitingForSurface && window.pid != null)
+              Positioned.fill(child: LogsViewer(pid: window.pid!)),
             Positioned.fill(
               child: InkWell(
                 focusNode: backgroundFocusNode,
@@ -97,139 +98,121 @@ class WindowPlaceholder extends HookConsumerWidget {
                 child: Card(
                   clipBehavior: Clip.antiAlias,
                   color: Theme.of(context).colorScheme.surface.withAlpha(150),
-                  child: logs.isNotEmpty
-                      ? Padding(
-                          padding: const EdgeInsets.all(8),
-                          child: ListView.builder(
-                            itemBuilder: (context, index) => Text(logs[index]),
-                            itemCount: logs.length,
-                          ),
-                        )
-                      : InkWell(
-                          canRequestFocus: false,
-                          onTap: entry != null ? onTap : null,
-                          splashColor: Theme.of(context)
-                              .colorScheme
-                              .primary
-                              .withAlpha(32),
-                          focusColor: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerLow
-                              .withAlpha(125),
-                          child: Focus(
-                            focusNode: focusNode,
-                            autofocus: true,
-                            child: Column(
+                  child: InkWell(
+                    canRequestFocus: false,
+                    onTap: entry != null ? onTap : null,
+                    splashColor:
+                        Theme.of(context).colorScheme.primary.withAlpha(32),
+                    focusColor: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerLow
+                        .withAlpha(125),
+                    child: Focus(
+                      focusNode: focusNode,
+                      autofocus: true,
+                      child: Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
                               children: [
-                                Padding(
-                                  padding: const EdgeInsets.all(24),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    children: [
-                                      DisplayModeRow(
-                                        selectedMode: window.displayMode,
-                                        onSelectionChanged: (mode) => ref
-                                            .read(
-                                              persistentWindowStateProvider(
-                                                window.windowId,
-                                              ).notifier,
-                                            )
-                                            .setDisplayMode(mode),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: responsiveRowColumn == Row.new ? 4 : 5,
-                                  child: responsiveRowColumn(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      SizedBox(
-                                        height: iconHeight,
-                                        width: iconWidth,
-                                        child: AppIconById(id: appId),
-                                      ),
-                                      SizedBox(
-                                        width: constraints.biggest.longestSide *
-                                            6 /
-                                            sqrt(
-                                              constraints.biggest.longestSide /
-                                                  1.2,
-                                            ) /
-                                            8,
-                                        height: constraints
-                                                .biggest.longestSide *
-                                            6 /
-                                            sqrt(
-                                              constraints.biggest.longestSide /
-                                                  1.2,
-                                            ) /
-                                            8,
-                                      ),
-                                      Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment:
-                                            responsiveRowColumn == Row.new
-                                                ? CrossAxisAlignment.start
-                                                : CrossAxisAlignment.center,
-                                        children: [
-                                          Text(
-                                            entry?.entries[DesktopEntryKey
-                                                    .name.string] ??
-                                                'Unknown',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .displayMedium,
-                                            textAlign: TextAlign.center,
-                                          ),
-                                          const SizedBox(
-                                            height: 16,
-                                          ),
-                                          ExecCommandEditor(
-                                            maxWidth:
-                                                responsiveRowColumn == Row.new
-                                                    ? constraints.maxWidth / 3 -
-                                                        iconWidth
-                                                    : constraints.maxWidth / 4,
-                                            originalExec: entry?.entries[
-                                                    DesktopEntryKey
-                                                        .exec.string] ??
-                                                entry?.entries[DesktopEntryKey
-                                                    .tryExec.string] ??
-                                                'Unknown',
-                                            customExec: window.customExec,
-                                            onChanged: (customExec) => ref
-                                                .read(
-                                                  persistentWindowStateProvider(
-                                                    window.windowId,
-                                                  ).notifier,
-                                                )
-                                                .setCustomExec(customExec),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Text(
-                                    'Click to start the application',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .headlineSmall!
-                                        .copyWith(
-                                          color: isFocused
-                                              ? Theme.of(context)
-                                                  .colorScheme
-                                                  .primary
-                                              : Theme.of(context).disabledColor,
-                                        ),
-                                  ),
+                                DisplayModeRow(
+                                  selectedMode: window.displayMode,
+                                  onSelectionChanged: (mode) => ref
+                                      .read(
+                                        persistentWindowStateProvider(
+                                          window.windowId,
+                                        ).notifier,
+                                      )
+                                      .setDisplayMode(mode),
                                 ),
                               ],
                             ),
                           ),
-                        ),
+                          Expanded(
+                            flex: responsiveRowColumn == Row.new ? 4 : 5,
+                            child: responsiveRowColumn(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SizedBox(
+                                  height: iconHeight,
+                                  width: iconWidth,
+                                  child: AppIconById(id: appId),
+                                ),
+                                SizedBox(
+                                  width: constraints.biggest.longestSide *
+                                      6 /
+                                      sqrt(
+                                        constraints.biggest.longestSide / 1.2,
+                                      ) /
+                                      8,
+                                  height: constraints.biggest.longestSide *
+                                      6 /
+                                      sqrt(
+                                        constraints.biggest.longestSide / 1.2,
+                                      ) /
+                                      8,
+                                ),
+                                Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment:
+                                      responsiveRowColumn == Row.new
+                                          ? CrossAxisAlignment.start
+                                          : CrossAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      entry?.entries[
+                                              DesktopEntryKey.name.string] ??
+                                          'Unknown',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .displayMedium,
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(
+                                      height: 16,
+                                    ),
+                                    ExecCommandEditor(
+                                      maxWidth: responsiveRowColumn == Row.new
+                                          ? constraints.maxWidth / 3 - iconWidth
+                                          : constraints.maxWidth / 4,
+                                      originalExec: entry?.entries[
+                                              DesktopEntryKey.exec.string] ??
+                                          entry?.entries[
+                                              DesktopEntryKey.tryExec.string] ??
+                                          'Unknown',
+                                      customExec: window.customExec,
+                                      onChanged: (customExec) => ref
+                                          .read(
+                                            persistentWindowStateProvider(
+                                              window.windowId,
+                                            ).notifier,
+                                          )
+                                          .setCustomExec(customExec),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              'Click to start the application',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineSmall!
+                                  .copyWith(
+                                    color: isFocused
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Theme.of(context).disabledColor,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),

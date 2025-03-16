@@ -13,5 +13,13 @@ abstract class Tileable extends HookConsumerWidget {
   final VoidCallback? onGrabFocus;
 
   /// Builder to return widget for the workpace panel
-  Widget buildPanelWidget(BuildContext context, WidgetRef ref);
+  Widget buildPanelWidget(
+    BuildContext context,
+    WidgetRef ref,
+  );
+
+  List<Widget> buildMenuChildren(
+    BuildContext context,
+    WidgetRef ref,
+  );
 }

@@ -6,10 +6,11 @@ import 'package:shell/application/model/launch_config.serializable.dart';
 import 'package:shell/application/provider/app_launch.dart';
 import 'package:shell/shared/persistence/persistable_provider.mixin.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
-import 'package:shell/window/model/matching_info.serializable.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.dart';
 import 'package:shell/window/model/window_properties.serializable.dart';
+import 'package:shell/window/provider/matching_info_for_window.dart';
+import 'package:shell/window/provider/window_properties.dart';
 import 'package:shell/window/provider/window_provider.mixin.dart';
 
 part 'persistent_window_state.g.dart';
@@ -27,15 +28,10 @@ class PersistentWindowState extends _$PersistentWindowState
   @override
   String getPersistentId() => windowId.toString();
 
-  late MatchingInfo _matchingInfo;
-
-  StreamSubscription<List<int>>? _stderrStreamSubscription;
-  StreamSubscription<List<int>>? _stdoutStreamSubscription;
-
   @override
   PersistentWindow build(PersistentWindowId windowId) {
     final window = getPersisted(PersistentWindow.fromJson)
-        ?.copyWith(isWaitingForSurface: false, surfaceId: null);
+        ?.copyWith(isWaitingForSurface: false, surfaceId: null, pid: null);
 
     if (window != null) {
       initialize(window);
@@ -44,26 +40,21 @@ class PersistentWindowState extends _$PersistentWindowState
     throw Exception('PersistentWindowState $windowId not yet initialized');
   }
 
-  MatchingInfo getMatchingInfo() => _matchingInfo;
-
   @override
   void initialize(PersistentWindow window) {
-    _matchingInfo = MatchingInfo.fromWindowProperties(
-      window.properties,
-    );
     super.initialize(window);
     persistChanges();
   }
 
   @override
   void setSurface(SurfaceId surfaceId) {
-    _matchingInfo = _matchingInfo.copyWith(
-      matchedAtTime: DateTime.now(),
-      matchedWhileWaiting: state.isWaitingForSurface,
-    );
+    ref
+        .read(matchingInfoForWindowProvider(state.windowId).notifier)
+        .matched(matchedWhileWaiting: state.isWaitingForSurface);
     state = state.copyWith(
       surfaceId: surfaceId,
       isWaitingForSurface: false,
+      pid: ref.read(windowPropertiesStateProvider(surfaceId)).pid,
     );
     super.setSurface(surfaceId);
     persistChanges();
@@ -86,9 +77,7 @@ class PersistentWindowState extends _$PersistentWindowState
   @override
   void onSurfaceIsDestroyed() {
     super.onSurfaceIsDestroyed();
-    _matchingInfo = MatchingInfo.fromWindowProperties(state.properties);
-    print('onSurfaceIsDestroyed');
-    stopGatheringProcessLogs();
+    ref.read(matchingInfoForWindowProvider(state.windowId).notifier).reset();
   }
 
   @override
@@ -102,37 +91,19 @@ class PersistentWindowState extends _$PersistentWindowState
       process = await super.launchSelf();
     }
     if (process != null) {
-      gatherProcessLogs(process);
-      state = state.copyWith(isWaitingForSurface: true);
-      _matchingInfo = _matchingInfo.copyWith(
-        waitingForAppSince: DateTime.now(),
-        pid: process.pid,
+      state = state.copyWith(isWaitingForSurface: true, pid: process.pid);
+      ref
+          .read(matchingInfoForWindowProvider(state.windowId).notifier)
+          .startMatching(process.pid);
+      unawaited(
+        process.exitCode.then((value) {
+          print('process exited with code $value');
+          state = state.copyWith(isWaitingForSurface: false);
+        }),
       );
     }
+
     return process;
-  }
-
-  void gatherProcessLogs(Process process) {
-    stopGatheringProcessLogs();
-
-    void onEvent(List<int> event) {
-      final string = String.fromCharCodes(event);
-      state = state.copyWith(
-        executionLogs: [...?state.executionLogs, string],
-      );
-    }
-
-    _stdoutStreamSubscription = process.stdout.listen(
-      onEvent,
-    );
-    _stderrStreamSubscription = process.stderr.listen(
-      onEvent,
-    );
-  }
-
-  void stopGatheringProcessLogs() {
-    _stdoutStreamSubscription?.cancel();
-    _stderrStreamSubscription?.cancel();
   }
 
   void setCustomExec(String? exec) {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:shell/application/provider/logs_for_pid.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/wayland/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
@@ -128,7 +129,9 @@ class PersistentWindowTileable extends Tileable {
                   onTap: () {
                     primaryFocusNode.requestFocus();
                     ref
-                        .read(persistentWindowStateProvider(windowId).notifier)
+                        .read(
+                          persistentWindowStateProvider(windowId).notifier,
+                        )
                         .launchSelf();
                   },
                 ),
@@ -138,13 +141,17 @@ class PersistentWindowTileable extends Tileable {
   }
 
   @override
-  Widget buildPanelWidget(BuildContext context, WidgetRef ref) {
+  Widget buildPanelWidget(
+    BuildContext context,
+    WidgetRef ref,
+  ) {
     final window = ref.watch(persistentWindowStateProvider(windowId));
     final isRunning = window.surfaceId != null;
     final title = window.properties.title;
     return HookBuilder(
       builder: (context) {
         final isHoverState = useState(false);
+
         return MouseRegion(
           onEnter: (event) => isHoverState.value = true,
           onExit: (event) => isHoverState.value = false,
@@ -209,6 +216,33 @@ class PersistentWindowTileable extends Tileable {
         );
       },
     );
+  }
+
+  @override
+  List<Widget> buildMenuChildren(BuildContext context, WidgetRef ref) {
+    return [
+      MenuItemButton(
+        onPressed: () {
+          final pid = ref.read(persistentWindowStateProvider(windowId)).pid;
+          if (pid != null) {
+            ref.read(logsForPidProvider(pid).notifier).openLogsDialog(context);
+          }
+        },
+        leadingIcon: const Icon(MdiIcons.headCog),
+        child: const Text('Show execution logs'),
+      ),
+      MenuItemButton(
+        onPressed: () {
+          ref
+              .read(
+                windowManagerProvider.notifier,
+              )
+              .closeWindow(windowId);
+        },
+        leadingIcon: const Icon(MdiIcons.close),
+        child: const Text('Close'),
+      ),
+    ];
   }
 }
 
