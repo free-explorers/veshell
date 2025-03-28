@@ -1,17 +1,24 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/application/provider/logs_for_pid.dart';
 import 'package:shell/application/widget/app_icon.dart';
+import 'package:shell/shared/widget/container_with_positionnable_children/container_with_positionnable_children.dart';
+import 'package:shell/wayland/model/event/wayland_event.serializable.dart';
 import 'package:shell/wayland/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
+import 'package:shell/wayland/provider/xdg_surface_state.dart';
+import 'package:shell/wayland/widget/meta_surface.dart';
 import 'package:shell/wayland/widget/x11_surface.dart';
 import 'package:shell/wayland/widget/xdg_toplevel_surface.dart';
 import 'package:shell/window/model/dialog_window.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
+import 'package:shell/window/model/window_base.dart';
 import 'package:shell/window/model/window_id.dart';
 import 'package:shell/window/provider/dialog_list_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
@@ -117,7 +124,7 @@ class PersistentWindowTileable extends Tileable {
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
           child: window.surfaceId != null
-              ? surfacesWidget(
+              ? WithSurfacesWidget(
                   focusNode: primaryFocusNode,
                   window: window,
                   dialogWindowList: dialogWindowList,
@@ -246,8 +253,8 @@ class PersistentWindowTileable extends Tileable {
   }
 }
 
-class surfacesWidget extends HookConsumerWidget {
-  const surfacesWidget({
+class WithSurfacesWidget extends HookConsumerWidget {
+  const WithSurfacesWidget({
     required this.window,
     required this.dialogWindowList,
     this.focusNode,
@@ -260,6 +267,24 @@ class surfacesWidget extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final displayMode = window.displayMode;
+
+    return switch (displayMode) {
+      DisplayMode.maximized ||
+      DisplayMode
+            .fullscreen => // TODO: fix this, it's not working with the new wayland stack, need to find a way to get the surface id from the meta surface and then use that to get the surface from the wayland stack, or just use the meta surface directly, but that would mean we need to change the way we handle surfaces in flutte
+        MetaSurfaceWidget(
+          surfaceId: window.surfaceId!,
+        ),
+      DisplayMode.game => throw UnimplementedError(),
+      DisplayMode.floating => ContainerWithPositionnableChildren(
+          children: [
+            FloatableWindow(window: window),
+            for (final dialogWindow in dialogWindowList)
+              FloatableWindow(window: dialogWindow),
+          ],
+        ),
+    };
     return LayoutBuilder(
       builder: (context, constraints) {
         return HookBuilder(
@@ -287,27 +312,29 @@ class surfacesWidget extends HookConsumerWidget {
 
                 if (role == SurfaceRole.xdgToplevel) {
                   return Stack(
-                    fit: StackFit.expand,
+                    fit: StackFit.passthrough,
                     children: [
-                      XdgToplevelSurfaceWidget(
-                        focusNode: dialogWindowList.isEmpty ? focusNode : null,
-                        surfaceId: window.surfaceId!,
+                      Positioned.fill(
+                        child: XdgToplevelSurfaceWidget(
+                          focusNode:
+                              dialogWindowList.isEmpty ? focusNode : null,
+                          surfaceId: window.surfaceId!,
+                        ),
                       ),
                       if (dialogWindowList.isNotEmpty)
                         const ColoredBox(color: Colors.black38),
                       if (dialogWindowList.isNotEmpty)
-                        for (final dialog in dialogWindowList)
-                          Center(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: XdgToplevelSurfaceWidget(
-                                focusNode: dialog == dialogWindowList.last
-                                    ? focusNode
-                                    : null,
-                                surfaceId: dialog.surfaceId,
-                              ),
-                            ),
+                        Positioned(
+                          child: ContainerWithPositionnableChildren(
+                            children: dialogWindowList
+                                .map(
+                                  (e) => FloatableWindow(
+                                    window: e,
+                                  ),
+                                )
+                                .toList(),
                           ),
+                        ),
                     ],
                   );
                 } else if (role == SurfaceRole.x11Surface) {
@@ -324,6 +351,123 @@ class surfacesWidget extends HookConsumerWidget {
           },
         );
       },
+    );
+  }
+}
+
+class FloatableWindow extends HookConsumerWidget {
+  const FloatableWindow({required this.window, super.key});
+  final Window window;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDragInProgress = useState(false);
+    final surfaceState = ref.watch(
+      xdgSurfaceStateProvider(
+        window.surfaceId!,
+      ),
+    );
+
+    final repositionnableControllerWidget =
+        RepositionnableControllerWidget.of(context);
+    final size = useState(Size.zero);
+    final origin = useState<Offset?>(
+      Offset(
+        ((repositionnableControllerWidget.constraints.maxWidth -
+                    size.value.width) /
+                2)
+            .roundToDouble(),
+        ((repositionnableControllerWidget.constraints.maxHeight -
+                    size.value.height) /
+                2)
+            .roundToDouble(),
+      ),
+    );
+    useEffect(
+      () {
+        if (size.value == Size.zero) {
+          if (surfaceState.geometry != null &&
+              surfaceState.geometry!.size != Size.zero) {
+            final maxSize = repositionnableControllerWidget.constraints.biggest;
+            size.value = Size(
+              min(surfaceState.geometry!.size.width, maxSize.width),
+              min(surfaceState.geometry!.size.height, maxSize.height),
+            );
+            origin.value = Offset(
+              ((repositionnableControllerWidget.constraints.maxWidth -
+                          size.value.width) /
+                      2)
+                  .roundToDouble(),
+              ((repositionnableControllerWidget.constraints.maxHeight -
+                          size.value.height) /
+                      2)
+                  .roundToDouble(),
+            );
+          }
+        }
+        // if size is greater than constraints, set size to constraints
+        return null;
+      },
+      [surfaceState.geometry],
+    );
+
+    useEffect(
+      () {
+        if (isDragInProgress.value) {
+          void onDragChange() {
+            origin.value = (origin.value ?? Offset.zero).translate(
+              repositionnableControllerWidget
+                  .dragUpdateController.value.delta.dx,
+              repositionnableControllerWidget
+                  .dragUpdateController.value.delta.dy,
+            );
+          }
+
+          void onDragEnd() {
+            isDragInProgress.value = false;
+          }
+
+          repositionnableControllerWidget.dragUpdateController
+              .addListener(onDragChange);
+
+          repositionnableControllerWidget.dragEndController
+              .addListener(onDragEnd);
+
+          return () {
+            repositionnableControllerWidget.dragUpdateController
+                .removeListener(onDragChange);
+            repositionnableControllerWidget.dragEndController
+                .removeListener(onDragEnd);
+          };
+        } else {
+          return null;
+        }
+      },
+      [
+        repositionnableControllerWidget.dragUpdateController,
+        repositionnableControllerWidget.dragEndController,
+        isDragInProgress.value,
+      ],
+    );
+
+    ref.listen(waylandManagerProvider, (_, next) {
+      switch (next) {
+        case AsyncData(value: final InteractiveMoveEvent event):
+          {
+            if (event.message.surfaceId == window.surfaceId) {
+              isDragInProgress.value = true;
+            }
+          }
+      }
+    });
+
+    return Positioned(
+      left: origin.value?.dx,
+      top: origin.value?.dy,
+      width: size.value.width,
+      height: size.value.height,
+      child: MetaSurfaceWidget(
+        surfaceId: window.surfaceId!,
+      ),
     );
   }
 }

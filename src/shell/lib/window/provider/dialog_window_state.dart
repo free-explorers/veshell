@@ -1,4 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/window/model/dialog_window.dart';
 import 'package:shell/window/model/window_id.dart';
 import 'package:shell/window/model/window_properties.serializable.dart';
@@ -8,18 +9,24 @@ part 'dialog_window_state.g.dart';
 
 /// Workspace provider
 @riverpod
-class DialogWindowState extends _$DialogWindowState with WindowProviderMixin {
+class DialogWindowState extends _$DialogWindowState
+    with WindowProviderMixin<DialogWindow> {
   @override
   DialogWindow build(DialogWindowId windowId) {
     throw Exception('DialogWindowState $windowId not yet initialized');
   }
 
-  @override
-  void onSurfaceChanged(WindowProperties next) {
-    state = state.copyWith(properties: next);
-  }
-
   void update(DialogWindow window) {
     state = window;
+  }
+
+  @override
+  void displayedSurfaceChanged(SurfaceId? surfaceId) {
+    if (surfaceId != null) state = state.copyWith(surfaceId: surfaceId);
+  }
+
+  @override
+  void onDisplayedSurfacePropertiesChanged(WindowProperties windowProperties) {
+    state = state.copyWith(properties: windowProperties);
   }
 }

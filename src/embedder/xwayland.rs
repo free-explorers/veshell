@@ -341,6 +341,15 @@ pub mod xwayland {
 
         fn move_request(&mut self, _xwm: XwmId, _window: X11Surface, _button: u32) {
             print!("move_request");
+            /*  let surface_id = get_surface_id(surface.wl_surface());
+            let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+            platform_method_channel.invoke_method(
+                "interactive_move",
+                Some(Box::new(json!({
+                        "surfaceId": surface_id,
+                }))),
+                None,
+            ); */
         }
 
         fn allow_selection_access(&mut self, xwm: XwmId, _selection: SelectionTarget) -> bool {

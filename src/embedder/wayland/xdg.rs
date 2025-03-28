@@ -1,18 +1,21 @@
+use crate::state::State;
+
 pub mod xdg {
     use std::cell::RefCell;
 
     use serde_json::json;
     use smithay::{
+        desktop::{find_popup_root_surface, PopupKind},
         reexports::{
             wayland_protocols::xdg::shell::server::xdg_toplevel,
             wayland_server::{protocol::wl_seat::WlSeat, Resource},
         },
-        utils::{Logical, Serial},
+        utils::{Logical, Rectangle, Serial},
         wayland::{
             compositor::with_states,
             shell::xdg::{
-                PopupSurface, PositionerState, ToplevelSurface, XdgPopupSurfaceData,
-                XdgShellHandler, XdgShellState, XdgToplevelSurfaceData,
+                PopupSurface, PositionerState, SurfaceCachedState, ToplevelSurface,
+                XdgPopupSurfaceData, XdgShellHandler, XdgShellState, XdgToplevelSurfaceData,
             },
         },
     };
@@ -57,10 +60,7 @@ pub mod xdg {
         }
 
         fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {
-            surface.with_pending_state(|state| {
-                state.geometry = positioner.get_geometry();
-                state.positioner = positioner;
-            });
+            self.constrain_popup_to_parent(&PopupKind::Xdg(surface.clone()));
 
             let (surface_id, parent) = with_states(surface.wl_surface(), |surface_data| {
                 let surface_id = surface_data
@@ -139,9 +139,15 @@ pub mod xdg {
         fn reposition_request(
             &mut self,
             surface: PopupSurface,
-            _positioner: PositionerState,
+            positioner: PositionerState,
             token: u32,
         ) {
+            surface.with_pending_state(|state| {
+                let geometry = positioner.get_geometry();
+                state.geometry = geometry;
+                state.positioner = positioner;
+            });
+            self.constrain_popup_to_parent(&PopupKind::Xdg(surface.clone()));
             surface.send_repositioned(token);
         }
 
@@ -239,6 +245,29 @@ pub mod xdg {
                 state.states.unset(xdg_toplevel::State::Fullscreen);
             });
             surface.send_configure();
+        }
+    }
+    impl<BackendData: Backend> State<BackendData> {
+        fn constrain_popup_to_parent(&mut self, popup: &PopupKind) {
+            let Ok(root) = find_popup_root_surface(popup) else {
+                return;
+            };
+            if let PopupKind::Xdg(popup) = popup {
+                let target: Option<Rectangle<i32, Logical>> = with_states(&root, |surface_data| {
+                    surface_data
+                        .cached_state
+                        .get::<SurfaceCachedState>()
+                        .current()
+                        .geometry
+                        .map(|geometry| geometry.into())
+                });
+
+                if let Some(target) = target {
+                    popup.with_pending_state(|state| {
+                        state.geometry = state.positioner.get_unconstrained_geometry(target)
+                    });
+                }
+            }
         }
     }
 }

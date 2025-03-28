@@ -4,8 +4,8 @@ import 'package:shell/shared/persistence/persistence_manager.dart';
 import 'package:shell/shared/provider/persistent_json_by_folder.dart';
 import 'package:shell/shared/util/logger.dart';
 
-mixin PersistableProvider<T extends PersistableModel, RefT extends Ref<T>> {
-  RefT get ref;
+mixin PersistableProvider<T extends PersistableModel> {
+  AutoDisposeNotifierProviderRef<T> get ref;
 
   String getPersistentFolder();
   String getPersistentId();

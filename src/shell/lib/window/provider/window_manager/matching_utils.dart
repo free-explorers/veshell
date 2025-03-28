@@ -50,15 +50,21 @@ int windowMatchingCost(
   cost += matchingCost(windowMatchInfo.title, surfaceMatchInfo.title, 50, 1);
   cost +=
       matchingCost(windowMatchInfo.startupId, surfaceMatchInfo.startupId, 1, 1);
-  cost += matchingCost(windowMatchInfo.pid, surfaceMatchInfo.pid, 1, 1);
-  // Prefer to keep existing matchings
-  cost += window.surfaceId == surfaceId ? 0 : 5;
 
-  final waiting = window.surfaceId == null
-      ? windowMatchInfo.waitingForAppSince != null
-      : windowMatchInfo.matchedWhileWaiting ?? false;
-  // Prefer matching to MsWindows which are waiting for an app to open
-  cost += waiting ? 0 : 200;
+  cost += matchingCost(windowMatchInfo.pid, surfaceMatchInfo.pid, 1, 1);
+
+  cost += windowMatchInfo.waitingForAppSince != null
+      ? 100 -
+          (DateTime.now()
+                      .difference(windowMatchInfo.waitingForAppSince!)
+                      .inMilliseconds
+                      .clamp(
+                        0,
+                        1000,
+                      ) /
+                  100)
+              .round() // Clamp the difference to be between 0 and 1000 milliseconds
+      : 200;
 
   return cost;
 }

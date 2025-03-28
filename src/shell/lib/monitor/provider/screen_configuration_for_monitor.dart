@@ -10,9 +10,7 @@ part 'screen_configuration_for_monitor.g.dart';
 /// Monitor provider
 @riverpod
 class ScreenConfigurationForMonitor extends _$ScreenConfigurationForMonitor
-    with
-        PersistableProvider<ScreenConfiguration,
-            AutoDisposeNotifierProviderRef<ScreenConfiguration>> {
+    with PersistableProvider<ScreenConfiguration> {
   @override
   ScreenConfiguration build(MonitorId monitorId) {
     persistChanges(clearOnDispose: false);

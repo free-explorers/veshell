@@ -7,11 +7,8 @@ import 'package:shell/window/model/window_base.dart';
 import 'package:shell/window/model/window_id.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
-import 'package:shell/window/provider/matching_info_for_window.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
-import 'package:shell/window/provider/surface_window_map.dart';
 import 'package:shell/window/provider/window_manager/matching_utils.dart';
-import 'package:shell/window/provider/window_manager/weighted_matching.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/window/provider/window_properties.dart';
 
@@ -37,13 +34,14 @@ class MatchingEngine extends _$MatchingEngine {
         EphemeralWindowId() => ref
             .read(ephemeralWindowStateProvider(windowId).notifier)
             .getMatchingInfo(),
-        PersistentWindowId() =>
-          ref.read(matchingInfoForWindowProvider(windowId)),
+        PersistentWindowId() => ref
+            .read(persistentWindowStateProvider(windowId).notifier)
+            .getMatchingInfo(),
         DialogWindowId() => throw Exception("Dialog don't have matching infos"),
       };
 
   /// Routine to match surfaces to windows.
-  void checkMatching() {
+  /*  void checkMatching() {
     if (_surfaceToMatchSet.isEmpty) {
       return;
     }
@@ -157,11 +155,11 @@ class MatchingEngine extends _$MatchingEngine {
             case PersistentWindowId():
               ref
                   .read(persistentWindowStateProvider(windowId).notifier)
-                  .unsetSurface();
+                  .removeSurface(windowState.surfaceId!);
             case EphemeralWindowId():
               ref
                   .read(ephemeralWindowStateProvider(windowId).notifier)
-                  .unsetSurface();
+                  .removeSurface(windowState.surfaceId!);
             case _: // ignore: no_default_cases
           }
         }
@@ -185,11 +183,11 @@ class MatchingEngine extends _$MatchingEngine {
               case PersistentWindowId():
                 ref
                     .read(persistentWindowStateProvider(windowId).notifier)
-                    .setSurface(surfaceIdList[i]);
+                    .addSurface(surfaceIdList[i]);
               case EphemeralWindowId():
                 ref
                     .read(ephemeralWindowStateProvider(windowId).notifier)
-                    .setSurface(surfaceIdList[i]);
+                    .addSurface(surfaceIdList[i]);
               case _: // ignore: no_default_cases
             }
           } else {
@@ -210,6 +208,61 @@ class MatchingEngine extends _$MatchingEngine {
         }
       }
     }
+  } */
+
+  (WindowId?, int?) findBestWindowCandidateForSurface(
+    SurfaceId surfaceId, {
+    List<WindowId> excludedWindowIds = const [],
+  }) {
+    final surfaceWindowProperties =
+        ref.read(windowPropertiesStateProvider(surfaceId));
+    final surfaceMatchInfo =
+        MatchingInfo.fromWindowProperties(surfaceWindowProperties);
+
+    final candidateWindowSet =
+        ref.read(windowManagerProvider).where((windowId) {
+      if (windowId is DialogWindowId) return false;
+      if (excludedWindowIds.contains(windowId)) return false;
+      final windowState = _getWindowState(windowId);
+      return windowState.properties.appId == surfaceWindowProperties.appId;
+    });
+
+    if (candidateWindowSet.isEmpty) {
+      return (null, null);
+    }
+
+    final costs = candidateWindowSet.map((windowId) {
+      return windowMatchingCost(
+        surfaceMatchInfo,
+        _getWindowMatchingInfo(windowId),
+        surfaceId,
+        _getWindowState(windowId),
+      );
+    }).toList();
+
+    // Find the index of the minimum cost
+    final minCostIndex = costs.indexOf(costs.reduce((a, b) => a < b ? a : b));
+
+    // Return the candidate window with the least cost
+    return (candidateWindowSet.elementAt(minCostIndex), costs[minCostIndex]);
+  }
+
+  void matchSurfaceToBestWindowCandidate(SurfaceId surfaceId) {
+    final (leastCostCandidate, cost) =
+        findBestWindowCandidateForSurface(surfaceId);
+
+    print(leastCostCandidate);
+    switch (leastCostCandidate) {
+      case PersistentWindowId():
+        ref
+            .read(persistentWindowStateProvider(leastCostCandidate).notifier)
+            .addSurface(surfaceId);
+      case EphemeralWindowId():
+        ref
+            .read(ephemeralWindowStateProvider(leastCostCandidate).notifier)
+            .addSurface(surfaceId);
+      case _: // ignore: no_default_cases
+    }
   }
 
   /// Add a new Surface to the matching engine.
@@ -217,8 +270,8 @@ class MatchingEngine extends _$MatchingEngine {
     ref
         .read(matchingLogsProvider.notifier)
         .print('Add surface $surfaceId to matching engine');
-    _surfaceToMatchSet = _surfaceToMatchSet.add(surfaceId);
-    checkMatching();
+    /* _surfaceToMatchSet = _surfaceToMatchSet.add(surfaceId); */
+    matchSurfaceToBestWindowCandidate(surfaceId);
   }
 
   /// Remove a Surface from the matching engine.

@@ -12,9 +12,7 @@ part 'notification_manager.g.dart';
 
 @riverpod
 class NotificationManager extends _$NotificationManager
-    with
-        PersistableProvider<NotificationManagerState,
-            AutoDisposeNotifierProviderRef<NotificationManagerState>> {
+    with PersistableProvider<NotificationManagerState> {
   late DbusNotificationServer _server;
 
   @override

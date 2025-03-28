@@ -174,7 +174,7 @@ class WindowManager extends _$WindowManager {
     ref.read(matchingEngineProvider.notifier).addSurface(surfaceId);
   }
 
-  void createPersistentWindowForSurface({
+  PersistentWindowId createPersistentWindowForSurface({
     required SurfaceId surfaceId,
   }) {
     // create a new window
@@ -208,6 +208,36 @@ class WindowManager extends _$WindowManager {
           ).notifier,
         )
         .addWindow(windowId);
+
+    return windowId;
+  }
+
+  EphemeralWindowId createEphemeralWindowForSurface({
+    required SurfaceId surfaceId,
+    required ScreenId screenId,
+  }) {
+    // create a new window
+    final windowId = EphemeralWindowId(_uuidGenerator.v4());
+    _log.info(
+      'Creating new EphemeralWindow $windowId for surface $surfaceId',
+    );
+
+    final surfaceWindowProperties =
+        ref.read(windowPropertiesStateProvider(surfaceId));
+
+    final ephemeralWindow = EphemeralWindow(
+      windowId: windowId,
+      screenId: screenId,
+      properties: surfaceWindowProperties,
+      surfaceId: surfaceId,
+    );
+
+    ref
+        .read(ephemeralWindowStateProvider(windowId).notifier)
+        .initialize(ephemeralWindow);
+
+    state = state.add(windowId);
+    return windowId;
   }
 
   void _createDialogWindowForSurface(
@@ -255,7 +285,7 @@ class WindowManager extends _$WindowManager {
         case PersistentWindowId():
           ref
               .read(persistentWindowStateProvider(windowId).notifier)
-              .onSurfaceIsDestroyed();
+              .onSurfaceIsDestroyed(surfaceId);
         case DialogWindowId():
           final dialogWindow = ref.read(dialogWindowStateProvider(windowId));
 
@@ -267,12 +297,12 @@ class WindowManager extends _$WindowManager {
               );
           ref
               .read(dialogWindowStateProvider(windowId).notifier)
-              .onSurfaceIsDestroyed();
+              .onSurfaceIsDestroyed(surfaceId);
           _removeWindow(windowId);
         case EphemeralWindowId():
           ref
               .read(ephemeralWindowStateProvider(windowId).notifier)
-              .onSurfaceIsDestroyed();
+              .onSurfaceIsDestroyed(surfaceId);
 
           _removeWindow(windowId);
       }

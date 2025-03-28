@@ -12,9 +12,7 @@ abstract class MatchingInfo with _$MatchingInfo {
     String? windowClass,
     String? startupId,
     int? pid,
-    DateTime? matchedAtTime,
     DateTime? waitingForAppSince,
-    bool? matchedWhileWaiting,
   }) = _MatchingInfo;
 
   factory MatchingInfo.fromWindowProperties(WindowProperties props) =>

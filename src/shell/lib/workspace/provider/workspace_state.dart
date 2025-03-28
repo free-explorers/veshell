@@ -40,9 +40,7 @@ enum MeaningfulApplicationCategory { IDE, WebBrowser, Player }
 /// Workspace provider
 @riverpod
 class WorkspaceState extends _$WorkspaceState
-    with
-        PersistableProvider<Workspace,
-            AutoDisposeNotifierProviderRef<Workspace>> {
+    with PersistableProvider<Workspace> {
   @override
   String getPersistentFolder() => 'Workspace';
 
