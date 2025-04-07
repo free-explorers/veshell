@@ -1,4 +1,5 @@
 import 'package:arena_listener/arena_listener.dart';
+import 'package:defer_pointer/defer_pointer.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -33,90 +34,92 @@ class ViewInputListener extends HookConsumerWidget {
         .watch(wlSurfaceStateProvider(surfaceId).select((v) => v.inputRegion));
 
     final globalKey = useMemoized(GlobalKey.new);
-    return GestureDetector(
-      child: Stack(
-        key: globalKey,
-        clipBehavior: Clip.none,
-        children: [
-          IgnorePointer(
-            child: child,
-          ),
-          Positioned.fromRect(
-            rect: inputRegion,
-            child: ArenaListener(
-              onPointerDown: (PointerDownEvent event) {
-                final renderBox =
-                    globalKey.currentContext!.findRenderObject() as RenderBox?;
-                final globalOffset =
-                    renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
-                _onPointerDown(ref, event, globalOffset);
-                return null;
-              },
-              onPointerMove:
-                  (PointerMoveEvent event, GestureDisposition? disposition) {
-                if (disposition == GestureDisposition.rejected) {
-                  return;
-                }
-                final renderBox =
-                    globalKey.currentContext!.findRenderObject() as RenderBox?;
-                final globalOffset =
-                    renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
-                _onPointerMove(ref, event, globalOffset);
-                return null;
-              },
-              onPointerUp:
-                  (PointerUpEvent event, GestureDisposition? disposition) {
-                if (disposition == GestureDisposition.rejected) {
+    return DeferPointer(
+      child: GestureDetector(
+        child: Stack(
+          key: globalKey,
+          clipBehavior: Clip.none,
+          children: [
+            IgnorePointer(
+              child: child,
+            ),
+            Positioned.fromRect(
+              rect: inputRegion,
+              child: ArenaListener(
+                onPointerDown: (PointerDownEvent event) {
+                  final renderBox = globalKey.currentContext!.findRenderObject()
+                      as RenderBox?;
+                  final globalOffset =
+                      renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+                  _onPointerDown(ref, event, globalOffset);
                   return null;
-                }
-                _onPointerUp(ref, event);
-                return GestureDisposition.accepted;
-              },
-              onPointerCancel: (_, __) {
-                return GestureDisposition.rejected;
-              },
-              onLose: (event) => _onLoseArena(ref, event),
-              child: Listener(
-                onPointerHover: (PointerHoverEvent event) {
-                  if (event.kind == PointerDeviceKind.mouse) {
-                    final renderBox = globalKey.currentContext!
-                        .findRenderObject() as RenderBox?;
-                    final globalOffset =
-                        renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
-
-                    _pointerMoved(ref, globalOffset);
+                },
+                onPointerMove:
+                    (PointerMoveEvent event, GestureDisposition? disposition) {
+                  if (disposition == GestureDisposition.rejected) {
+                    return;
                   }
+                  final renderBox = globalKey.currentContext!.findRenderObject()
+                      as RenderBox?;
+                  final globalOffset =
+                      renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+                  _onPointerMove(ref, event, globalOffset);
+                  return null;
                 },
-                onPointerSignal: (PointerSignalEvent event) {
-                  // https://api.flutter.dev/flutter/gestures/PointerSignalResolver-class.html
-                  // Don't propagate scroll events to parent widgets.
-                  // Just register an empty handler because dispatching of
-                  // scroll events is handled by the Wayland server.
-                  GestureBinding.instance.pointerSignalResolver.register(
-                    event,
-                    (PointerSignalEvent event) {},
-                  );
+                onPointerUp:
+                    (PointerUpEvent event, GestureDisposition? disposition) {
+                  if (disposition == GestureDisposition.rejected) {
+                    return null;
+                  }
+                  _onPointerUp(ref, event);
+                  return GestureDisposition.accepted;
                 },
-                child: MouseRegion(
-                  onEnter: (_) {
-                    final renderBox = globalKey.currentContext!
-                        .findRenderObject() as RenderBox?;
-                    final globalOffset =
-                        renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+                onPointerCancel: (_, __) {
+                  return GestureDisposition.rejected;
+                },
+                onLose: (event) => _onLoseArena(ref, event),
+                child: Listener(
+                  onPointerHover: (PointerHoverEvent event) {
+                    if (event.kind == PointerDeviceKind.mouse) {
+                      final renderBox = globalKey.currentContext!
+                          .findRenderObject() as RenderBox?;
+                      final globalOffset =
+                          renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
 
-                    pointerFocusManager.enterSurface(
-                      PointerFocus(
-                        surfaceId: surfaceId,
-                        globalOffset: globalOffset,
-                      ),
+                      _pointerMoved(ref, globalOffset);
+                    }
+                  },
+                  onPointerSignal: (PointerSignalEvent event) {
+                    // https://api.flutter.dev/flutter/gestures/PointerSignalResolver-class.html
+                    // Don't propagate scroll events to parent widgets.
+                    // Just register an empty handler because dispatching of
+                    // scroll events is handled by the Wayland server.
+                    GestureBinding.instance.pointerSignalResolver.register(
+                      event,
+                      (PointerSignalEvent event) {},
                     );
                   },
-                  onExit: (_) => pointerFocusManager.exitSurface(),
+                  child: MouseRegion(
+                    onEnter: (_) {
+                      final renderBox = globalKey.currentContext!
+                          .findRenderObject() as RenderBox?;
+                      final globalOffset =
+                          renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+
+                      pointerFocusManager.enterSurface(
+                        PointerFocus(
+                          surfaceId: surfaceId,
+                          globalOffset: globalOffset,
+                        ),
+                      );
+                    },
+                    onExit: (_) => pointerFocusManager.exitSurface(),
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

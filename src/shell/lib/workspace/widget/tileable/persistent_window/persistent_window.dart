@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:defer_pointer/defer_pointer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -269,22 +270,24 @@ class WithSurfacesWidget extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final displayMode = window.displayMode;
 
-    return switch (displayMode) {
-      DisplayMode.maximized ||
-      DisplayMode
-            .fullscreen => // TODO: fix this, it's not working with the new wayland stack, need to find a way to get the surface id from the meta surface and then use that to get the surface from the wayland stack, or just use the meta surface directly, but that would mean we need to change the way we handle surfaces in flutte
-        MetaSurfaceWidget(
-          surfaceId: window.surfaceId!,
-        ),
-      DisplayMode.game => throw UnimplementedError(),
-      DisplayMode.floating => ContainerWithPositionnableChildren(
-          children: [
-            FloatableWindow(window: window),
-            for (final dialogWindow in dialogWindowList)
-              FloatableWindow(window: dialogWindow),
-          ],
-        ),
-    };
+    return DeferredPointerHandler(
+      child: switch (displayMode) {
+        DisplayMode.maximized ||
+        DisplayMode
+              .fullscreen => // TODO: fix this, it's not working with the new wayland stack, need to find a way to get the surface id from the meta surface and then use that to get the surface from the wayland stack, or just use the meta surface directly, but that would mean we need to change the way we handle surfaces in flutte
+          MetaSurfaceWidget(
+            surfaceId: window.surfaceId!,
+          ),
+        DisplayMode.game => throw UnimplementedError(),
+        DisplayMode.floating => ContainerWithPositionnableChildren(
+            children: [
+              FloatableWindow(window: window),
+              for (final dialogWindow in dialogWindowList)
+                FloatableWindow(window: dialogWindow),
+            ],
+          ),
+      },
+    );
     return LayoutBuilder(
       builder: (context, constraints) {
         return HookBuilder(

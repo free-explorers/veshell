@@ -41,15 +41,22 @@ class XdgToplevelSurfaceWidget extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final popupList = <SurfaceId>[];
     _collectPopupList(popupList, ref, surfaceId);
-
+    final xdgState = ref.watch(xdgSurfaceStateProvider(surfaceId));
+    final offset = Offset(
+      -1 * (xdgState.geometry?.left ?? 0),
+      -1 * (xdgState.geometry?.top ?? 0),
+    );
     return SurfaceFocus(
       focusNode: focusNode,
       child: Stack(
         children: [
-          ActivateSurfaceOnPointerDown(
-            surfaceId: surfaceId,
-            child: SurfaceWidget(
+          Positioned.fromRect(
+            rect: offset & (xdgState.geometry?.size ?? Size.zero),
+            child: ActivateSurfaceOnPointerDown(
               surfaceId: surfaceId,
+              child: SurfaceWidget(
+                surfaceId: surfaceId,
+              ),
             ),
           ),
           for (final popupSurfaceId in popupList)
