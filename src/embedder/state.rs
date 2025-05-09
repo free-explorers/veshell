@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::os::fd::OwnedFd;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
@@ -115,6 +115,7 @@ pub struct State<BackendData: Backend + 'static> {
     pub xdg_popups: HashMap<u64, PopupSurface>,
     pub xdg_shell_state: XdgShellState,
     pub xdg_toplevels: HashMap<u64, ToplevelSurface>,
+    pub xdg_mapped_surface_ids: HashSet<u64>,
     pub meta_window_state: MetaWindowState,
     pub xwayland_display: Option<u32>,
     pub xwayland_shell_state: xwayland_shell::XWaylandShellState,
@@ -308,6 +309,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             gl: None,
             surfaces: HashMap::new(),
             subsurfaces: HashMap::new(),
+            xdg_mapped_surface_ids: HashSet::new(),
             xdg_toplevels: HashMap::new(),
             xdg_popups: HashMap::new(),
             meta_window_state: MetaWindowState::new(),

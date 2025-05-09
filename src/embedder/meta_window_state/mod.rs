@@ -114,7 +114,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             pid,
             parent: meta_window_parent.cloned(),
             title: title.clone(),
-            mapped: false,
+            mapped: true,
             display_mode: None,
             window_class: None,
             startup_id: None,
