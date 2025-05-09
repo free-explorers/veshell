@@ -13,7 +13,7 @@ use smithay::wayland::xwayland_shell::XWAYLAND_SHELL_ROLE;
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct CloseWindowPayload {
-    pub(crate) surface_id: u64,
+    pub(crate) meta_window_id: String,
 }
 
 pub fn close_window<BackendData: Backend + 'static>(
@@ -24,24 +24,37 @@ pub fn close_window<BackendData: Backend + 'static>(
     let args = method_call.arguments().unwrap().clone();
     let payload: CloseWindowPayload = serde_json::from_value(args).unwrap();
 
-    let Some(wl_surface) = data.surfaces.get(&payload.surface_id).cloned() else {
+    let Some(meta_window) = data
+        .meta_window_state
+        .meta_windows
+        .get(&payload.meta_window_id)
+        .cloned()
+    else {
         result.error(
-            "surface_doesnt_exist".to_string(),
-            format!("Surface {} doesn't exist", payload.surface_id),
+            "meta_window_doesnt_exist".to_string(),
+            format!("MetaWindow {} doesn't exist", payload.meta_window_id),
             None,
         );
         return;
     };
 
+    let Some(wl_surface) = data.surfaces.get(&meta_window.surface_id).cloned() else {
+        result.error(
+            "surface_doesnt_exist".to_string(),
+            format!("Surface {} doesn't exist", meta_window.surface_id),
+            None,
+        );
+        return;
+    };
     let role = with_states(&wl_surface, |states| states.role);
     match role {
         Some(xdg::XDG_TOPLEVEL_ROLE) => {
-            let toplevel = data.xdg_toplevels.get(&payload.surface_id).cloned();
+            let toplevel = data.xdg_toplevels.get(&meta_window.surface_id).cloned();
 
             let Some(toplevel) = toplevel else {
                 result.error(
                     "toplevel_doesnt_exist".to_string(),
-                    format!("Toplevel {} doesn't exist", payload.surface_id),
+                    format!("Toplevel {} doesn't exist", meta_window.surface_id),
                     None,
                 );
                 return;
@@ -54,7 +67,7 @@ pub fn close_window<BackendData: Backend + 'static>(
             let Some(x11_surface) = data.x11_surface_per_wl_surface.get(&wl_surface) else {
                 result.error(
                     "x11_surface_doesnt_exist".to_string(),
-                    format!("X11 Surface {} doesn't exist", payload.surface_id),
+                    format!("X11 Surface {} doesn't exist", meta_window.surface_id),
                     None,
                 );
                 return;
@@ -66,7 +79,7 @@ pub fn close_window<BackendData: Backend + 'static>(
         _ => {
             result.error(
                 "invalid_surface_role".to_string(),
-                format!("Surface {} has an invalid role", payload.surface_id),
+                format!("Surface {} has an invalid role", meta_window.surface_id),
                 None,
             );
             return;

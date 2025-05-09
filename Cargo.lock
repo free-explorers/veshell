@@ -2426,7 +2426,6 @@ checksum = "7fcf8323ef1faaee30a44a340193b1ac6814fd9b7b4e88e9d4519a3e4abe1cfd"
 [[package]]
 name = "smithay"
 version = "0.5.0"
-source = "git+https://github.com/PapyElGringo/smithay?rev=c3b2701#c3b27011f1cd015e747aefcda842bee9c87dec47"
 dependencies = [
  "aliasable",
  "appendlist",
@@ -2894,6 +2893,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 
 [[package]]
+name = "uuid"
+version = "1.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "458f7a779bf54acc9f347480ac654f68407d3aab21269a6e3c9f922acd9e2da9"
+dependencies = [
+ "getrandom 0.3.1",
+]
+
+[[package]]
 name = "valuable"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2917,6 +2925,7 @@ version = "0.1.0"
 dependencies = [
  "backtrace",
  "bindgen",
+ "bitflags 2.8.0",
  "bytes",
  "cargo_metadata",
  "chrono",
@@ -2940,6 +2949,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "uuid",
  "xcursor",
  "xkbcommon",
 ]

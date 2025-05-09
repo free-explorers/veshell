@@ -1,12 +1,12 @@
 import 'package:dbus/dbus.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/meta_window/provider/meta_window_state.dart';
+import 'package:shell/meta_window/provider/pid_to_meta_window_id.dart';
 import 'package:shell/notification/model/dbus_notification_server.dart';
 import 'package:shell/notification/model/notification.serializable.dart';
 import 'package:shell/notification/model/notification_manager_state.serializable.dart';
 import 'package:shell/shared/persistence/persistable_provider.mixin.dart';
-import 'package:shell/wayland/provider/pid_to_surface_id.dart';
-import 'package:shell/window/provider/window_properties.dart';
 
 part 'notification_manager.g.dart';
 
@@ -52,14 +52,13 @@ class NotificationManager extends _$NotificationManager
           var appId = newNotification.hints.desktopEntry;
           if (appId == null &&
               newNotification.pid != null &&
-              ref
-                  .read(pidToSurfaceIdProvider)
-                  .containsKey(newNotification.pid)) {
+              ref.read(pidToMetaWindowIdProvider(newNotification.pid!)) !=
+                  null) {
+            final metaWindowId =
+                ref.read(pidToMetaWindowIdProvider(newNotification.pid!));
             appId = ref
                 .read(
-                  windowPropertiesStateProvider(
-                    ref.read(pidToSurfaceIdProvider).get(newNotification.pid!)!,
-                  ),
+                  metaWindowStateProvider(metaWindowId!),
                 )
                 .appId;
           }

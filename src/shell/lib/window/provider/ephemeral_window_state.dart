@@ -1,7 +1,9 @@
 import 'dart:io';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/wayland/model/wl_surface.dart';
+import 'package:shell/meta_window/model/meta_window.serializable.dart';
+import 'package:shell/meta_window/provider/meta_window_state.dart';
+import 'package:shell/wayland/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/window/model/ephemeral_window.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
 import 'package:shell/window/model/window_id.dart';
@@ -42,16 +44,23 @@ class EphemeralWindowState extends _$EphemeralWindowState
   }
 
   @override
-  void displayedSurfaceChanged(SurfaceId? surfaceId) {
+  void onCurrentlyDisplayedMetaWindowChanged(MetaWindowId? metaWindowId) {
     state = state.copyWith(
-      surfaceId: surfaceId,
+      metaWindowId: metaWindowId,
     );
+
+    ref.read(metaWindowStateProvider(metaWindowId!).notifier).patch(
+          MetaWindowPatchMessage.updateDisplayMode(
+            id: metaWindowId,
+            value: MetaWindowDisplayMode.maximized,
+          ),
+        );
   }
 
   @override
-  void onDisplayedSurfacePropertiesChanged(WindowProperties windowProperties) {
+  void onMetaWindowDisplayedPropertiesChanged(MetaWindow metaWindow) {
     state = state.copyWith(
-      properties: windowProperties,
+      properties: WindowProperties.fromMetaWindow(metaWindow),
     );
   }
 }

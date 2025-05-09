@@ -1,7 +1,8 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/dev_tools/provider/matching_logs.dart';
-import 'package:shell/wayland/model/wl_surface.dart';
+import 'package:shell/meta_window/model/meta_window.serializable.dart';
+import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
 import 'package:shell/window/model/window_base.dart';
 import 'package:shell/window/model/window_id.dart';
@@ -10,16 +11,15 @@ import 'package:shell/window/provider/ephemeral_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/matching_utils.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
-import 'package:shell/window/provider/window_properties.dart';
 
 part 'matching_engine.g.dart';
 
 /// MatchingEngine is responsible for matching surfaces to windows.
 @Riverpod(keepAlive: true)
 class MatchingEngine extends _$MatchingEngine {
-  ISet<SurfaceId> _surfaceToMatchSet = ISet<SurfaceId>();
+  final ISet<MetaWindowId> _surfaceToMatchSet = ISet<MetaWindowId>();
   @override
-  IMap<SurfaceId, WindowId> build() {
+  IMap<MetaWindowId, WindowId> build() {
     return IMap();
   }
 
@@ -210,21 +210,20 @@ class MatchingEngine extends _$MatchingEngine {
     }
   } */
 
-  (WindowId?, int?) findBestWindowCandidateForSurface(
-    SurfaceId surfaceId, {
+  (WindowId?, int?) findBestWindowCandidateForMetaWindow(
+    MetaWindowId metaWindowId, {
     List<WindowId> excludedWindowIds = const [],
   }) {
-    final surfaceWindowProperties =
-        ref.read(windowPropertiesStateProvider(surfaceId));
-    final surfaceMatchInfo =
-        MatchingInfo.fromWindowProperties(surfaceWindowProperties);
+    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+
+    final metaWindowMatchInfo = MatchingInfo.fromMetaWindow(metaWindow);
 
     final candidateWindowSet =
         ref.read(windowManagerProvider).where((windowId) {
       if (windowId is DialogWindowId) return false;
       if (excludedWindowIds.contains(windowId)) return false;
       final windowState = _getWindowState(windowId);
-      return windowState.properties.appId == surfaceWindowProperties.appId;
+      return windowState.properties.appId == metaWindowMatchInfo.appId;
     });
 
     if (candidateWindowSet.isEmpty) {
@@ -233,9 +232,8 @@ class MatchingEngine extends _$MatchingEngine {
 
     final costs = candidateWindowSet.map((windowId) {
       return windowMatchingCost(
-        surfaceMatchInfo,
+        metaWindowMatchInfo,
         _getWindowMatchingInfo(windowId),
-        surfaceId,
         _getWindowState(windowId),
       );
     }).toList();
@@ -247,40 +245,34 @@ class MatchingEngine extends _$MatchingEngine {
     return (candidateWindowSet.elementAt(minCostIndex), costs[minCostIndex]);
   }
 
-  void matchSurfaceToBestWindowCandidate(SurfaceId surfaceId) {
+  void matchMetaWindowToBestWindowCandidate(MetaWindowId metaWindowId) {
     final (leastCostCandidate, cost) =
-        findBestWindowCandidateForSurface(surfaceId);
+        findBestWindowCandidateForMetaWindow(metaWindowId);
 
     print(leastCostCandidate);
     switch (leastCostCandidate) {
       case PersistentWindowId():
         ref
             .read(persistentWindowStateProvider(leastCostCandidate).notifier)
-            .addSurface(surfaceId);
+            .addMetaWindow(metaWindowId);
       case EphemeralWindowId():
         ref
             .read(ephemeralWindowStateProvider(leastCostCandidate).notifier)
-            .addSurface(surfaceId);
-      case _: // ignore: no_default_cases
+            .addMetaWindow(metaWindowId);
+      case _:
+        ref
+            .read(windowManagerProvider.notifier)
+            .createPersistentWindowForMetaWindow(
+              metaWindowId: metaWindowId,
+            );
     }
   }
 
   /// Add a new Surface to the matching engine.
-  void addSurface(SurfaceId surfaceId) {
+  void addMetaWindow(MetaWindowId metaWindowId) {
     ref
         .read(matchingLogsProvider.notifier)
-        .print('Add surface $surfaceId to matching engine');
-    /* _surfaceToMatchSet = _surfaceToMatchSet.add(surfaceId); */
-    matchSurfaceToBestWindowCandidate(surfaceId);
-  }
-
-  /// Remove a Surface from the matching engine.
-  void removeSurface(SurfaceId surfaceId) {
-    ref
-        .read(matchingLogsProvider.notifier)
-        .print('Remove surface $surfaceId from matching engine');
-    if (_surfaceToMatchSet.contains(surfaceId)) {
-      _surfaceToMatchSet = _surfaceToMatchSet.remove(surfaceId);
-    }
+        .print('Add MetaWindow $metaWindowId to matching engine');
+    matchMetaWindowToBestWindowCandidate(metaWindowId);
   }
 }

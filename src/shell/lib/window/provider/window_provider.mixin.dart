@@ -7,19 +7,18 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/application/model/launch_config.serializable.dart';
 import 'package:shell/application/provider/app_launch.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
-import 'package:shell/wayland/model/wl_surface.dart';
+import 'package:shell/meta_window/model/meta_window.serializable.dart';
+import 'package:shell/meta_window/provider/meta_window_state.dart';
+import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/window/model/ephemeral_window.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
 import 'package:shell/window/model/window_base.dart';
 import 'package:shell/window/model/window_id.dart';
-import 'package:shell/window/model/window_properties.serializable.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
-import 'package:shell/window/provider/surface_window_map.dart';
 import 'package:shell/window/provider/window_manager/matching_engine.dart';
 import 'package:shell/window/provider/window_manager/matching_utils.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
-import 'package:shell/window/provider/window_properties.dart';
 
 mixin WindowProviderMixin<T extends Window> {
   T get state;
@@ -27,10 +26,10 @@ mixin WindowProviderMixin<T extends Window> {
   AutoDisposeNotifierProviderRef<T> get ref;
   KeepAliveLink? _keepAliveLink;
 
-  final Map<SurfaceId, ProviderSubscription<WindowProperties>>
-      _surfaceSubscriptions = {};
+  final Map<MetaWindowId, ProviderSubscription<MetaWindow>>
+      _metaWindowSubscriptions = {};
 
-  SurfaceId? _displayedSurfaceId;
+  MetaWindowId? _displayedMetaWindowId;
 
   late MatchingInfo _matchingInfo;
 
@@ -44,53 +43,50 @@ mixin WindowProviderMixin<T extends Window> {
     _matchingInfo = MatchingInfo.fromWindowProperties(
       window.properties,
     );
-    if (state.surfaceId != null) {
-      addSurface(state.surfaceId!);
+    if (state.metaWindowId != null) {
+      addMetaWindow(state.metaWindowId!);
     }
   }
 
   /// Assign a surface to a Window subscribing to any changes
-  void addSurface(SurfaceId surfaceId) {
+  void addMetaWindow(MetaWindowId metaWindowId) {
     _matchingInfo = _matchingInfo.copyWith(
       waitingForAppSince: null,
     );
-    ref.read(surfaceWindowMapProvider.notifier).set(
-          surfaceId,
+    ref.read(metaWindowWindowMapProvider.notifier).set(
+          metaWindowId,
           state.windowId,
         );
-    _listenForSurfaceChanges(surfaceId);
-    _onSurfacesChanges();
+    _listenForMetaWindowChanges(metaWindowId);
+    _onMetaWindowsChanges();
   }
 
   /// When surfaces are added, removed or updated
   /// we need to determine which surface should be displayed
   /// and try to find best matches for the other surfaces
-  void _onSurfacesChanges() {
-    SurfaceId? newDisplayedSurfaceId;
+  void _onMetaWindowsChanges() {
+    MetaWindowId? newDisplayedMetaWindowId;
     // Reset the timer if changes occurs while we are waiting
 
     _debouncedTimer?.cancel();
 
-    if (_surfaceSubscriptions.isNotEmpty) {
-      if (_surfaceSubscriptions.length == 1) {
-        newDisplayedSurfaceId = _surfaceSubscriptions.keys.first;
+    if (_metaWindowSubscriptions.isNotEmpty) {
+      if (_metaWindowSubscriptions.length == 1) {
+        newDisplayedMetaWindowId = _metaWindowSubscriptions.keys.first;
       } else {
         // pick the surface with the lest matching cost
-        final surfaceIdList = _surfaceSubscriptions.keys.toList();
-        final costs = surfaceIdList.map((surfaceId) {
-          final surfaceWindowProperties =
-              ref.read(windowPropertiesStateProvider(surfaceId));
-          final surfaceMatchInfo =
-              MatchingInfo.fromWindowProperties(surfaceWindowProperties);
+        final metaWindowIdList = _metaWindowSubscriptions.keys.toList();
+        final costs = metaWindowIdList.map((metaWindowId) {
+          final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+          final metaWindowMatchInfo = MatchingInfo.fromMetaWindow(metaWindow);
           return windowMatchingCost(
-            surfaceMatchInfo,
+            metaWindowMatchInfo,
             getMatchingInfo(),
-            surfaceId,
             state,
           );
         }).toList();
         final minCost = costs.reduce(min);
-        newDisplayedSurfaceId = surfaceIdList[costs.indexOf(minCost)];
+        newDisplayedMetaWindowId = metaWindowIdList[costs.indexOf(minCost)];
       }
 
       // after this timer we need to dispatch any extra surfaces
@@ -98,116 +94,118 @@ mixin WindowProviderMixin<T extends Window> {
       _debouncedTimer = Timer(
         const Duration(milliseconds: 100),
         () {
-          if (_surfaceSubscriptions.length > 1) {
-            _dispatchExtraSurfaces();
+          if (_metaWindowSubscriptions.length > 1) {
+            _dispatchExtraMetaWindows();
           }
         },
       );
     }
-    if (newDisplayedSurfaceId != _displayedSurfaceId) {
-      _displayedSurfaceId = newDisplayedSurfaceId;
-      print('new displayed surface: $_displayedSurfaceId');
-      displayedSurfaceChanged(_displayedSurfaceId);
+
+    if (newDisplayedMetaWindowId != _displayedMetaWindowId) {
+      _displayedMetaWindowId = newDisplayedMetaWindowId;
+      print('new displayed meta window: $_displayedMetaWindowId');
+      onCurrentlyDisplayedMetaWindowChanged(_displayedMetaWindowId);
     }
   }
 
   // For each surface that is not the displayed surface
   // either find a better match or create a new window for it
-  void _dispatchExtraSurfaces() {
-    final surfacesToDispatch = _surfaceSubscriptions.keys
-        .where((surfaceId) => surfaceId != _displayedSurfaceId)
+  Future<void> _dispatchExtraMetaWindows() async {
+    final metaWindowsToDispatch = _metaWindowSubscriptions.keys
+        .where((metaWindowId) => metaWindowId != _displayedMetaWindowId)
         .toSet();
 
     final excludedWindowIds = [state.windowId];
-    print('Dispatching extra surfaces $surfacesToDispatch');
+    print('Dispatching extra surfaces $metaWindowsToDispatch');
 
-    while (surfacesToDispatch.isNotEmpty) {
-      final bestMatchForSurfaceMap = <SurfaceId, (WindowId?, int?)>{};
-      for (final surfaceId in surfacesToDispatch) {
-        bestMatchForSurfaceMap[surfaceId] = ref
+    while (metaWindowsToDispatch.isNotEmpty) {
+      final bestMatchForMetaWindowMap = <MetaWindowId, (WindowId?, int?)>{};
+      for (final metaWindowId in metaWindowsToDispatch) {
+        bestMatchForMetaWindowMap[metaWindowId] = ref
             .read(matchingEngineProvider.notifier)
-            .findBestWindowCandidateForSurface(
-              surfaceId,
+            .findBestWindowCandidateForMetaWindow(
+              metaWindowId,
               excludedWindowIds: excludedWindowIds,
             );
       }
-
-      bestMatchForSurfaceMap.entries
-          .sorted(
+      final sortedEntries = bestMatchForMetaWindowMap.entries.sorted(
         (entry1, entry2) =>
             (entry2.value.$2 ?? 0).compareTo(entry1.value.$2 ?? 0),
-      )
-          .forEach((entry) {
-        final surfaceId = entry.key;
+      );
+
+      for (final entry in sortedEntries) {
+        final metaWindowId = entry.key;
         final (windowId, score) = entry.value;
 
         // If there is no windowId, create a new one
         if (windowId == null) {
-          print('Creating new window for surface $surfaceId');
-          removeSurface(surfaceId, shouldNotify: false);
+          print('Creating new window for metaWindow $metaWindowId');
+          removeMetaWindow(metaWindowId, shouldNotify: false);
 
-          final newWindowId = switch (state.windowId) {
+          final newWindowId = await switch (state.windowId) {
             PersistentWindowId() => ref
                 .read(windowManagerProvider.notifier)
-                .createPersistentWindowForSurface(
-                  surfaceId: surfaceId,
+                .createPersistentWindowForMetaWindow(
+                  metaWindowId: metaWindowId,
                 ),
-            EphemeralWindowId() => ref
-                .read(windowManagerProvider.notifier)
-                .createEphemeralWindowForSurface(
-                  surfaceId: surfaceId,
-                  screenId: (state as EphemeralWindow).screenId,
-                ),
+            EphemeralWindowId() => Future.value(
+                ref
+                    .read(windowManagerProvider.notifier)
+                    .createEphemeralWindowForMetaWindow(
+                      metaWindowId: metaWindowId,
+                      screenId: (state as EphemeralWindow).screenId,
+                    ),
+              ),
             _ => throw UnimplementedError(),
           };
 
           excludedWindowIds.add(newWindowId);
-          surfacesToDispatch.remove(surfaceId);
+          metaWindowsToDispatch.remove(metaWindowId);
         } else {
           // If a bestmatch was already found skip to next iteration
           // Else
           if (!excludedWindowIds.contains(windowId)) {
-            print('Adding surface $surfaceId to window $windowId');
-            removeSurface(surfaceId, shouldNotify: false);
+            print('Adding metaWindow $metaWindowId to window $windowId');
+            removeMetaWindow(metaWindowId, shouldNotify: false);
             switch (windowId) {
               case PersistentWindowId():
                 ref
                     .read(
                       persistentWindowStateProvider(windowId).notifier,
                     )
-                    .addSurface(surfaceId);
+                    .addMetaWindow(metaWindowId);
               case EphemeralWindowId():
                 ref
                     .read(
                       ephemeralWindowStateProvider(windowId).notifier,
                     )
-                    .addSurface(surfaceId);
+                    .addMetaWindow(metaWindowId);
               case _: // ignore: no_default_cases
             }
             excludedWindowIds.add(windowId);
-            surfacesToDispatch.remove(surfaceId);
+            metaWindowsToDispatch.remove(metaWindowId);
           }
         }
-      });
+      }
     }
   }
 
-  void removeSurface(SurfaceId surfaceId, {bool shouldNotify = true}) {
-    _closeSurfaceSubscription(surfaceId);
-    ref.read(surfaceWindowMapProvider.notifier).unset(surfaceId);
+  void removeMetaWindow(MetaWindowId metaWindowId, {bool shouldNotify = true}) {
+    _closeMetaWindowSubscription(metaWindowId);
+    ref.read(metaWindowWindowMapProvider.notifier).unset(metaWindowId);
     if (shouldNotify) {
-      _onSurfacesChanges();
+      _onMetaWindowsChanges();
     }
   }
 
-  void _listenForSurfaceChanges(SurfaceId surfaceId) {
-    _closeSurfaceSubscription(surfaceId);
+  void _listenForMetaWindowChanges(MetaWindowId surfaceId) {
+    _closeMetaWindowSubscription(surfaceId);
 
-    _surfaceSubscriptions[surfaceId] =
-        ref.listen(windowPropertiesStateProvider(surfaceId), (_, next) {
-      _onSurfacesChanges();
-      if (surfaceId == _displayedSurfaceId) {
-        onDisplayedSurfacePropertiesChanged(next);
+    _metaWindowSubscriptions[surfaceId] =
+        ref.listen(metaWindowStateProvider(surfaceId), (_, next) {
+      _onMetaWindowsChanges();
+      if (surfaceId == _displayedMetaWindowId) {
+        onMetaWindowDisplayedPropertiesChanged(next);
       }
       //ref.read(matchingEngineProvider.notifier).checkMatching();
     });
@@ -226,9 +224,9 @@ mixin WindowProviderMixin<T extends Window> {
         );
   }
 
-  void onDisplayedSurfacePropertiesChanged(WindowProperties windowProperties);
+  void onMetaWindowDisplayedPropertiesChanged(MetaWindow metaWindow);
 
-  void displayedSurfaceChanged(SurfaceId? surfaceId);
+  void onCurrentlyDisplayedMetaWindowChanged(MetaWindowId? metaWindowId);
 
   MatchingInfo getMatchingInfo() => _matchingInfo;
 
@@ -239,15 +237,15 @@ mixin WindowProviderMixin<T extends Window> {
     );
   }
 
-  void onSurfaceIsDestroyed(SurfaceId surfaceId) {
-    removeSurface(surfaceId);
+  void onMetaWindowIsDestroyed(MetaWindowId metaWindowId) {
+    removeMetaWindow(metaWindowId);
   }
 
-  void _closeSurfaceSubscription(SurfaceId surfaceId) {
-    final subscription = _surfaceSubscriptions[surfaceId];
+  void _closeMetaWindowSubscription(MetaWindowId metaWindowId) {
+    final subscription = _metaWindowSubscriptions[metaWindowId];
     if (subscription != null) {
       subscription.close();
-      _surfaceSubscriptions.remove(surfaceId);
+      _metaWindowSubscriptions.remove(metaWindowId);
     }
   }
 

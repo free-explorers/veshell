@@ -20,7 +20,6 @@ class SurfaceSize extends ConsumerWidget {
         (v) => v.texture!.size,
       ),
     );
-
     return SizedBox(
       width: surfaceSize.width,
       height: surfaceSize.height,

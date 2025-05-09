@@ -4,8 +4,6 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/application/provider/image_from_icon_query.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
-import 'package:shell/wayland/model/wl_surface.dart';
-import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
 
 class AppIconByPath extends StatelessWidget {
   const AppIconByPath({
@@ -107,21 +105,5 @@ class AppIconById extends ConsumerWidget {
           },
           orElse: () => const Icon(MdiIcons.helpCircle),
         );
-  }
-}
-
-class AppIconByViewId extends ConsumerWidget {
-  const AppIconByViewId({
-    required this.surfaceId,
-    super.key,
-  });
-
-  final SurfaceId surfaceId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final appId =
-        ref.watch(xdgToplevelStateProvider(surfaceId).select((v) => v.appId));
-    return AppIconById(id: appId);
   }
 }

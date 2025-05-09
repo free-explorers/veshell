@@ -1,6 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/wayland/model/request/wayland_request.dart';
-import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
 part 'close_window.serializable.freezed.dart';
@@ -20,7 +20,7 @@ class CloseWindowRequest extends WaylandRequest {
 class CloseWindowMessage with _$CloseWindowMessage implements WaylandMessage {
   /// Factory
   factory CloseWindowMessage({
-    required SurfaceId surfaceId,
+    required MetaWindowId metaWindowId,
   }) = _CloseWindowMessage;
 
   /// Creates a new [CloseWindowMessage] instance from a map.

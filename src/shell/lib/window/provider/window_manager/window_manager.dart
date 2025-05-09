@@ -2,31 +2,26 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:logging/logging.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/application/provider/localized_desktop_entries.dart';
+import 'package:shell/meta_window/model/meta_window.serializable.dart';
+import 'package:shell/meta_window/provider/meta_window_children.dart';
+import 'package:shell/meta_window/provider/meta_window_state.dart';
+import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/shared/provider/persistent_json_by_folder.dart';
 import 'package:shell/wayland/model/request/close_window/close_window.serializable.dart';
-import 'package:shell/wayland/model/wl_surface.dart';
-import 'package:shell/wayland/model/xdg_toplevel.dart';
-import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
-import 'package:shell/wayland/provider/wl_surface_state.dart';
-import 'package:shell/wayland/provider/x11_surface_state.dart';
-import 'package:shell/wayland/provider/xdg_toplevel_state.dart';
 import 'package:shell/window/model/dialog_window.dart';
 import 'package:shell/window/model/ephemeral_window.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.dart';
 import 'package:shell/window/model/window_properties.serializable.dart';
-import 'package:shell/window/provider/dialog_list_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
-import 'package:shell/window/provider/surface_window_map.dart';
-import 'package:shell/window/provider/window_manager/matching_engine.dart';
-import 'package:shell/window/provider/window_properties.dart';
 import 'package:shell/workspace/provider/window_workspace_map.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:uuid/uuid.dart';
@@ -48,18 +43,6 @@ class WindowManager extends _$WindowManager {
 
   @override
   ISet<WindowId> build() {
-    ref.listen(
-      surfaceMappedProvider,
-      (_, next) async {
-        switch (next) {
-          case AsyncData(value: final SurfaceMappedEvent event):
-            _onSurfaceMapped(event.surfaceId);
-          case AsyncData(value: final SurfaceUnmappedEvent event):
-            _onSurfaceUnmapped(event.surfaceId);
-        }
-      },
-    );
-
     final intialSet = ref
             .read(persistentJsonByFolderProvider)
             .requireValue['Window']
@@ -129,67 +112,28 @@ class WindowManager extends _$WindowManager {
     return windowId;
   }
 
-  /// Surface mapped handler
-  ///
-  /// This is called when a toplevel or X11 surface is mapped.
-  /// It searches for a waiting persistent window.
-  void _onSurfaceMapped(SurfaceId surfaceId) {
-    _log.fine(
-      'New surface mapped: $surfaceId',
-    );
-    final role = ref.read(wlSurfaceStateProvider(surfaceId)).role;
-
-    if (role case SurfaceRole.xdgToplevel) {
-      _onToplevelMapped(surfaceId);
-    } else if (role case SurfaceRole.x11Surface) {
-      _onX11SurfaceMapped(surfaceId);
-    }
-  }
-
-  void _onToplevelMapped(SurfaceId surfaceId) {
-    _log.info(
-      'Toplevel surface mapped: $surfaceId',
-    );
-    final toplevelState = ref.read(xdgToplevelStateProvider(surfaceId));
-
-    if (toplevelState.parent != null) {
-      _createDialogWindowForSurface(surfaceId, toplevelState);
-      return;
-    }
-
-    ref.read(matchingEngineProvider.notifier).addSurface(surfaceId);
-  }
-
-  void _onX11SurfaceMapped(SurfaceId surfaceId) {
-    _log.info(
-      'X11 surface mapped: $surfaceId',
-    );
-    final x11SurfaceId = ref.read(x11SurfaceIdByWlSurfaceIdProvider(surfaceId));
-    final x11SurfaceState = ref.read(x11SurfaceStateProvider(x11SurfaceId));
-
-    if (x11SurfaceState.overrideRedirect) {
-      // Override redirect surfaces should not be managed by the window manager.
-      return;
-    }
-    ref.read(matchingEngineProvider.notifier).addSurface(surfaceId);
-  }
-
-  PersistentWindowId createPersistentWindowForSurface({
-    required SurfaceId surfaceId,
-  }) {
+  Future<PersistentWindowId> createPersistentWindowForMetaWindow({
+    required MetaWindowId metaWindowId,
+  }) async {
     // create a new window
     final windowId = PersistentWindowId(_uuidGenerator.v4());
+
     _log.info(
-      'Creating new PersistentWindow $windowId for surface $surfaceId',
+      'Creating new PersistentWindow $windowId for surface $metaWindowId',
     );
 
-    final surfaceWindowProperties =
-        ref.read(windowPropertiesStateProvider(surfaceId));
+    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+
+    final desktopEntryForSurface = await ref.read(
+      localizedDesktopEntryForIdProvider(metaWindow.appId!).future,
+    );
 
     final persistentWindow = PersistentWindow(
       windowId: windowId,
-      properties: surfaceWindowProperties,
-      surfaceId: surfaceId,
+      properties: WindowProperties.fromMetaWindow(metaWindow).copyWith(
+        appId: desktopEntryForSurface?.desktopEntry.id ?? metaWindow.appId!,
+      ),
+      metaWindowId: metaWindowId,
     );
 
     ref
@@ -201,7 +145,7 @@ class WindowManager extends _$WindowManager {
     final currentScreenId = ref.read(focusedScreenProvider);
     final screenState = ref.read(screenStateProvider(currentScreenId));
 
-    ref
+    await ref
         .read(
           workspaceStateProvider(
             screenState.workspaceList[screenState.selectedIndex],
@@ -212,24 +156,22 @@ class WindowManager extends _$WindowManager {
     return windowId;
   }
 
-  EphemeralWindowId createEphemeralWindowForSurface({
-    required SurfaceId surfaceId,
+  EphemeralWindowId createEphemeralWindowForMetaWindow({
+    required MetaWindowId metaWindowId,
     required ScreenId screenId,
   }) {
     // create a new window
     final windowId = EphemeralWindowId(_uuidGenerator.v4());
     _log.info(
-      'Creating new EphemeralWindow $windowId for surface $surfaceId',
+      'Creating new EphemeralWindow $windowId for surface $metaWindowId',
     );
 
-    final surfaceWindowProperties =
-        ref.read(windowPropertiesStateProvider(surfaceId));
-
+    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
     final ephemeralWindow = EphemeralWindow(
       windowId: windowId,
       screenId: screenId,
-      properties: surfaceWindowProperties,
-      surfaceId: surfaceId,
+      properties: WindowProperties.fromMetaWindow(metaWindow),
+      metaWindowId: metaWindowId,
     );
 
     ref
@@ -240,24 +182,20 @@ class WindowManager extends _$WindowManager {
     return windowId;
   }
 
-  void _createDialogWindowForSurface(
-    SurfaceId surfaceId,
-    XdgToplevel toplevelState,
+  void createDialogWindowForMetaWindow(
+    MetaWindow metaWindow,
   ) {
     // create a new window
     final windowId = DialogWindowId(_uuidGenerator.v4());
     _log.info(
-      'Creating new DialogWindow $windowId for surface $surfaceId',
+      'Creating new DialogWindow $windowId for MetaWindow $metaWindow',
     );
-
-    final surfaceWindowProperties =
-        ref.read(windowPropertiesStateProvider(surfaceId));
 
     final dialogWindow = DialogWindow(
       windowId: windowId,
-      properties: surfaceWindowProperties,
-      surfaceId: surfaceId,
-      parentSurfaceId: toplevelState.parent!,
+      metaWindowId: metaWindow.id,
+      properties: WindowProperties.fromMetaWindow(metaWindow),
+      parentMetaWindowId: metaWindow.parent!,
     );
 
     ref
@@ -265,44 +203,57 @@ class WindowManager extends _$WindowManager {
         .initialize(dialogWindow);
 
     state = state.add(windowId);
-    final parentWindowId =
-        ref.read(surfaceWindowMapProvider).get(toplevelState.parent!)!;
 
-    ref.read(dialogListForWindowProvider.notifier).add(
-          parentWindowId,
-          windowId,
+    ref.read(metaWindowChildrenProvider(metaWindow.parent!).notifier).add(
+          metaWindow.id,
         );
   }
 
-  void _onSurfaceUnmapped(SurfaceId surfaceId) {
+  Future<void> onMetaWindowUnmapped(MetaWindowId metaWindowId) async {
     _log.info(
-      'Surface unmapped: $surfaceId',
+      'MetaWindow unmapped: $metaWindowId',
     );
-    ref.read(matchingEngineProvider.notifier).removeSurface(surfaceId);
-    if (ref.read(surfaceWindowMapProvider).get(surfaceId)
+    if (ref.read(metaWindowWindowMapProvider).get(metaWindowId)
         case final WindowId windowId) {
       switch (windowId) {
         case PersistentWindowId():
           ref
               .read(persistentWindowStateProvider(windowId).notifier)
-              .onSurfaceIsDestroyed(surfaceId);
+              .onMetaWindowIsDestroyed(metaWindowId);
+
+          final window = ref.read(persistentWindowStateProvider(windowId));
+
+          if (window.metaWindowId == null) {
+            final desktopEntryForSurface = await ref.read(
+              localizedDesktopEntryForIdProvider(window.properties.appId)
+                  .future,
+            );
+
+            if (desktopEntryForSurface == null) {
+              _removeWindow(windowId);
+            }
+          }
+
         case DialogWindowId():
           final dialogWindow = ref.read(dialogWindowStateProvider(windowId));
 
-          ref.read(dialogListForWindowProvider.notifier).remove(
-                ref
-                    .read(surfaceWindowMapProvider)
-                    .get(dialogWindow.parentSurfaceId)!,
-                dialogWindow.windowId,
+          ref
+              .read(
+                metaWindowChildrenProvider(dialogWindow.parentMetaWindowId)
+                    .notifier,
+              )
+              .remove(
+                metaWindowId,
               );
+
           ref
               .read(dialogWindowStateProvider(windowId).notifier)
-              .onSurfaceIsDestroyed(surfaceId);
+              .onMetaWindowIsDestroyed(metaWindowId);
           _removeWindow(windowId);
         case EphemeralWindowId():
           ref
               .read(ephemeralWindowStateProvider(windowId).notifier)
-              .onSurfaceIsDestroyed(surfaceId);
+              .onMetaWindowIsDestroyed(metaWindowId);
 
           _removeWindow(windowId);
       }
@@ -343,20 +294,20 @@ class WindowManager extends _$WindowManager {
       case PersistentWindowId():
         final persistentWindow =
             ref.read(persistentWindowStateProvider(windowId));
-        if (persistentWindow.surfaceId != null) {
-          closeWindowSurface(persistentWindow.surfaceId!);
+        if (persistentWindow.metaWindowId != null) {
+          closeWindowSurface(persistentWindow.metaWindowId!);
         } else {
           _removeWindow(windowId);
         }
       case DialogWindowId():
         closeWindowSurface(
-          ref.read(dialogWindowStateProvider(windowId)).surfaceId,
+          ref.read(dialogWindowStateProvider(windowId)).metaWindowId,
         );
       case EphemeralWindowId():
         final ephemeralWindow =
             ref.read(ephemeralWindowStateProvider(windowId));
-        if (ephemeralWindow.surfaceId != null) {
-          closeWindowSurface(ephemeralWindow.surfaceId!);
+        if (ephemeralWindow.metaWindowId != null) {
+          closeWindowSurface(ephemeralWindow.metaWindowId!);
         } else {
           _removeWindow(windowId);
         }
@@ -364,14 +315,15 @@ class WindowManager extends _$WindowManager {
   }
 
   /// Close surface for window
-  void closeWindowSurface(SurfaceId surfaceId) {
+  void closeWindowSurface(MetaWindowId metaWindowId) {
     _log.info(
-      'Closing surface: $surfaceId',
+      'Closing surface: $metaWindowId',
     );
+
     ref.read(waylandManagerProvider.notifier).request(
           CloseWindowRequest(
             message: CloseWindowMessage(
-              surfaceId: surfaceId,
+              metaWindowId: metaWindowId,
             ),
           ),
         );

@@ -1,4 +1,3 @@
-import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
 import 'package:shell/window/model/window_base.dart';
 
@@ -34,24 +33,23 @@ const WINDOW_RECENTLY_CREATED_TIME_MS = 2000;
 ///
 /// A higher returned cost means the match is less desirable.
 int windowMatchingCost(
-  MatchingInfo surfaceMatchInfo,
+  MatchingInfo metaWindowMatchInfo,
   MatchingInfo windowMatchInfo,
-  SurfaceId surfaceId,
   Window window,
 ) {
   var cost = 0;
   // The wmClass *must* match if specified
   cost += matchingCost(
     windowMatchInfo.windowClass,
-    surfaceMatchInfo.windowClass,
+    metaWindowMatchInfo.windowClass,
     INF_COST,
     1,
   );
-  cost += matchingCost(windowMatchInfo.title, surfaceMatchInfo.title, 50, 1);
-  cost +=
-      matchingCost(windowMatchInfo.startupId, surfaceMatchInfo.startupId, 1, 1);
+  cost += matchingCost(windowMatchInfo.title, metaWindowMatchInfo.title, 50, 1);
+  cost += matchingCost(
+      windowMatchInfo.startupId, metaWindowMatchInfo.startupId, 1, 1);
 
-  cost += matchingCost(windowMatchInfo.pid, surfaceMatchInfo.pid, 1, 1);
+  cost += matchingCost(windowMatchInfo.pid, metaWindowMatchInfo.pid, 1, 1);
 
   cost += windowMatchInfo.waitingForAppSince != null
       ? 100 -

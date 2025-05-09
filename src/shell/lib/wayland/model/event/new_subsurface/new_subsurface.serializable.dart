@@ -3,7 +3,6 @@ import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
 part 'new_subsurface.serializable.freezed.dart';
-
 part 'new_subsurface.serializable.g.dart';
 
 /// Model for NewSubsurfaceMessage

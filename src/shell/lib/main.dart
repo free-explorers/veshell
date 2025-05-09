@@ -3,6 +3,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/display/widget/display.dart';
+import 'package:shell/meta_window/provider/meta_window_manager.dart';
 import 'package:shell/monitor/provider/monitor_list.dart';
 import 'package:shell/notification/provider/notification_manager.dart';
 import 'package:shell/polkit/provider/authentication_agent.dart';
@@ -105,6 +106,7 @@ class _EagerInitialization extends ConsumerWidget {
     ref
       ..watch(screenListProvider)
       ..watch(windowManagerProvider)
+      ..watch(metaWindowManagerProvider)
       ..watch(polkitAuthenticationAgentStateProvider)
       ..watch(notificationManagerProvider);
 
@@ -143,6 +145,7 @@ class Veshell extends ConsumerWidget {
                   },
                   [],
                 );
+
                 return Stack(
                   children: [
                     const Positioned.fill(child: DisplayWidget()),

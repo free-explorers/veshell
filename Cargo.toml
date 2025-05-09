@@ -24,7 +24,7 @@ path = "extra/scripts/helper.rs"
 inherits = "release"
 
 [dependencies]
-smithay = { git = "https://github.com/PapyElGringo/smithay", rev = "c3b2701", features = [
+smithay = { path = "../smithay-fork", features = [
     "default",
     "wayland_frontend",
     "backend_egl",
@@ -55,6 +55,9 @@ xkbcommon = "0.8.0"
 backtrace = "0.3"
 notify = "8.0.0"
 sd-notify = "0.4.3"
+uuid = { version = "1.16.0", features = ["v4"] }
+bitflags = "2.2.1"
+
 
 [build-dependencies]
 bindgen = "0.69.1"

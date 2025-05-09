@@ -121,12 +121,6 @@ impl Backend for DrmBackend {
         self.session.clone()
     }
 
-    fn with_primary_renderer<T>(&mut self, f: impl FnOnce(&GlesRenderer) -> T) -> Option<T> {
-        /*  let renderer = self.gpu_manager.single_renderer(&self.primary_gpu).ok()?;
-        Some(f(renderer.as_gles_renderer())) */
-        Some(f(&self.get_gpu_data_mut().renderer))
-    }
-
     fn with_primary_renderer_mut<T>(
         &mut self,
         f: impl FnOnce(&mut GlesRenderer) -> T,
@@ -618,7 +612,6 @@ pub fn run_drm_backend() {
             let gpu_data = data.backend_data.get_gpu_data_mut();
             gpu_data.last_rendered_slot = gpu_data.current_slot.take();
 
-            let gpu_data = data.backend_data.get_gpu_data_mut();
             if let Some(ref slot) = gpu_data.last_rendered_slot {
                 gpu_data.swapchain.as_mut().unwrap().submitted(slot);
             }
@@ -1258,6 +1251,7 @@ impl State<DrmBackend> {
             &self.cursor_state,
             self.pointer.current_location(),
             self.surface_id_under_cursor != None,
+            true,
         );
 
         let rendered = surface.compositor.render_frame(

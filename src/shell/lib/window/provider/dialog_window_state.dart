@@ -1,5 +1,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/wayland/model/wl_surface.dart';
+import 'package:shell/meta_window/model/meta_window.serializable.dart';
+import 'package:shell/meta_window/provider/meta_window_state.dart';
+import 'package:shell/wayland/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/window/model/dialog_window.dart';
 import 'package:shell/window/model/window_id.dart';
 import 'package:shell/window/model/window_properties.serializable.dart';
@@ -21,12 +23,21 @@ class DialogWindowState extends _$DialogWindowState
   }
 
   @override
-  void displayedSurfaceChanged(SurfaceId? surfaceId) {
-    if (surfaceId != null) state = state.copyWith(surfaceId: surfaceId);
+  void onCurrentlyDisplayedMetaWindowChanged(MetaWindowId? metaWindowId) {
+    if (metaWindowId != null) {
+      state = state.copyWith(metaWindowId: metaWindowId);
+      ref.read(metaWindowStateProvider(state.metaWindowId).notifier).patch(
+            MetaWindowPatchMessage.updateDisplayMode(
+              id: state.metaWindowId,
+              value: MetaWindowDisplayMode.floating,
+            ),
+          );
+    }
   }
 
   @override
-  void onDisplayedSurfacePropertiesChanged(WindowProperties windowProperties) {
-    state = state.copyWith(properties: windowProperties);
+  void onMetaWindowDisplayedPropertiesChanged(MetaWindow metaWindow) {
+    state =
+        state.copyWith(properties: WindowProperties.fromMetaWindow(metaWindow));
   }
 }

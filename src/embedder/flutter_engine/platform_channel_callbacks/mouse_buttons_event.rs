@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use smithay::backend::input::ButtonState;
 use smithay::input::pointer::ButtonEvent;
+use tracing::info;
 
 use crate::backend::Backend;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
@@ -13,7 +14,7 @@ use smithay::utils::SERIAL_COUNTER;
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct MouseButtonsPayload {
-    _surface_id: u64,
+    surface_id: u64,
     buttons: Vec<Button>,
 }
 
@@ -34,6 +35,7 @@ pub fn mouse_buttons_event<BackendData: Backend + 'static>(
 
     let args = method_call.arguments().unwrap().clone();
     let payload: MouseButtonsPayload = serde_json::from_value(args).unwrap();
+    info!("mouse_buttons_event: for  {:?}", payload.surface_id);
 
     for button in payload.buttons {
         pointer.button(

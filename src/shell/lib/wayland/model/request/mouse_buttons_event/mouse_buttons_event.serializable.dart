@@ -5,7 +5,6 @@ import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
 part 'mouse_buttons_event.serializable.freezed.dart';
-
 part 'mouse_buttons_event.serializable.g.dart';
 
 /// [MouseButtonsEventRequest]
@@ -43,6 +42,5 @@ class Button with _$Button {
     required bool isPressed,
   }) = _Button;
 
-  factory Button.fromJson(Map<String, dynamic> json) =>
-      _$ButtonFromJson(json);
+  factory Button.fromJson(Map<String, dynamic> json) => _$ButtonFromJson(json);
 }

@@ -29,7 +29,7 @@ class LocalizedDesktopEntryForId extends _$LocalizedDesktopEntryForId {
 }
 
 @riverpod
-class binaryToAppId extends _$binaryToAppId {
+class BinaryToAppId extends _$BinaryToAppId {
   @override
   FutureOr<Map<String, String?>> build() async {
     final desktopEntries =
@@ -37,7 +37,7 @@ class binaryToAppId extends _$binaryToAppId {
     // extract the binary name of and exec string
     return desktopEntries.map(
       (key, value) => MapEntry(
-        path.basenameWithoutExtension(
+        path.basename(
           (value.entries[DesktopEntryKey.exec.string] ??
                       value.entries[DesktopEntryKey.tryExec.string])
                   ?.split(' ')

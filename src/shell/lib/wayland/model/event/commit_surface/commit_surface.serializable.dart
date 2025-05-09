@@ -35,35 +35,11 @@ sealed class CommitSurfaceMessage
 
 @Freezed(unionKey: 'type')
 sealed class SurfaceRoleMessage with _$SurfaceRoleMessage {
-  const factory SurfaceRoleMessage.xdgSurface({
-    @RectConverter() required Rect? geometry,
-    required XdgSurfaceMessage? role,
-  }) = XdgSurfaceRoleMessage;
-
   const factory SurfaceRoleMessage.subsurface({
     required SurfaceId parent,
     @OffsetConverter() required Offset position,
   }) = SubsurfaceRoleMessage;
 
-  const factory SurfaceRoleMessage.x11Surface() = X11SurfaceRoleMessage;
-
   factory SurfaceRoleMessage.fromJson(Map<String, dynamic> json) =>
       _$SurfaceRoleMessageFromJson(json);
-}
-
-@Freezed(unionKey: 'type')
-sealed class XdgSurfaceMessage with _$XdgSurfaceMessage {
-  const factory XdgSurfaceMessage.xdgToplevel({
-    required SurfaceId? parentSurfaceId,
-    required String? appId,
-    required String? title,
-  }) = XdgToplevelMessage;
-
-  const factory XdgSurfaceMessage.xdgPopup({
-    required SurfaceId parent,
-    @OffsetConverter() required Offset position,
-  }) = XdgPopupMessage;
-
-  factory XdgSurfaceMessage.fromJson(Map<String, dynamic> json) =>
-      _$XdgSurfaceMessageFromJson(json);
 }

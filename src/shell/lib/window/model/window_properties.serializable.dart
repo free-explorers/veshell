@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:shell/meta_window/model/meta_window.serializable.dart';
 
 part 'window_properties.serializable.freezed.dart';
 part 'window_properties.serializable.g.dart';
@@ -16,6 +17,15 @@ class WindowProperties with _$WindowProperties {
     String? windowClass,
     String? startupId,
   }) = _WindowProperties;
+
+  factory WindowProperties.fromMetaWindow(MetaWindow metaWindow) =>
+      WindowProperties(
+        appId: metaWindow.appId!,
+        title: metaWindow.title,
+        windowClass: metaWindow.windowClass,
+        startupId: metaWindow.startupId,
+        pid: metaWindow.pid,
+      );
 
   factory WindowProperties.fromJson(Map<String, dynamic> json) =>
       _$WindowPropertiesFromJson(json);

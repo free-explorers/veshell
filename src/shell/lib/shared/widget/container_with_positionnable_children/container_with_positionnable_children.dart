@@ -19,14 +19,18 @@ class ContainerWithPositionnableChildren extends HookConsumerWidget {
           dragUpdateController: dragUpdateController,
           dragEndController: dragEndController,
           constraints: constraints,
-          child: GestureDetector(
-            onPanUpdate: (details) => dragUpdateController.value = details,
-            onPanEnd: (details) => dragEndController.value = details,
-            child: Material(
-              child: Stack(
-                alignment: Alignment.center,
-                children: children,
-              ),
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerMove: (event) {
+              dragUpdateController.value = event;
+            },
+            onPointerUp: (event) {
+              dragEndController.value = event;
+            },
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: children,
             ),
           ),
         );
@@ -85,11 +89,10 @@ class RepositionnableControllerWidget extends InheritedWidget {
   }
 }
 
-class DragUpdateController extends ValueNotifier<DragUpdateDetails> {
-  DragUpdateController()
-      : super(DragUpdateDetails(globalPosition: Offset.zero));
+class DragUpdateController extends ValueNotifier<PointerMoveEvent> {
+  DragUpdateController() : super(const PointerMoveEvent());
 }
 
-class DragEndController extends ValueNotifier<DragEndDetails> {
-  DragEndController() : super(DragEndDetails());
+class DragEndController extends ValueNotifier<PointerUpEvent> {
+  DragEndController() : super(const PointerUpEvent());
 }

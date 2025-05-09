@@ -24,6 +24,7 @@ mod focus;
 mod gles_framebuffer_importer;
 mod input_handling;
 mod keyboard;
+mod meta_window_state;
 mod mouse_button_tracker;
 mod settings;
 mod state;
