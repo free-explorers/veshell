@@ -1,7 +1,7 @@
 pub mod xdg;
 
 pub mod wayland {
-    use std::{cell::RefCell, ops::Index};
+    use std::cell::RefCell;
 
     use serde_json::json;
     use smithay::{
@@ -34,8 +34,6 @@ pub mod wayland {
     use crate::{
         meta_window_state::meta_window::MetaWindowPatch, state::State, Backend, ClientState,
     };
-
-    use super::xdg::xdg::XdgShellHandlerExt;
 
     pub struct WlSurfaceVeshellState {
         pub surface_id: u64,
@@ -182,14 +180,17 @@ pub mod wayland {
 
             let surface_id = get_surface_id(surface);
 
-            if let Some(top_level) = self.xdg_toplevels.get(&surface_id) {
+            if let Some(meta_window) = self.get_meta_window(surface_id) {
                 let mapped = with_renderer_surface_state(surface, |state| state.buffer().is_some())
                     .unwrap_or(false);
 
-                if mapped && !self.xdg_mapped_surface_ids.contains(&surface_id) {
-                    self.xdg_mapped_surface_ids.insert(surface_id.clone());
-                    self.toplevel_mapped(top_level.clone());
-                }
+                self.patch_meta_window(
+                    MetaWindowPatch::UpdateMapped {
+                        id: meta_window.id,
+                        value: mapped,
+                    },
+                    true,
+                );
             }
 
             with_states(surface, |surface_data| {

@@ -39,10 +39,6 @@ pub mod xdg {
         Backend,
     };
 
-    pub trait XdgShellHandlerExt: XdgShellHandler {
-        fn toplevel_mapped(&mut self, surface: ToplevelSurface);
-    }
-
     impl<BackendData: Backend> XdgShellHandler for State<BackendData> {
         fn xdg_shell_state(&mut self) -> &mut XdgShellState {
             &mut self.xdg_shell_state
@@ -56,6 +52,11 @@ pub mod xdg {
             surface.with_pending_state(|state| {
                 state.states.set(xdg_toplevel::State::Activated);
             });
+
+            let meta_window = self.new_meta_window_for_toplevel(surface.clone());
+            self.meta_window_state
+                .meta_window_id_per_surface_id
+                .insert(surface_id, meta_window.id.clone());
 
             compositor::add_post_commit_hook(
                 surface.wl_surface(),
@@ -267,7 +268,7 @@ pub mod xdg {
         fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
             let surface_id = get_surface_id(surface.wl_surface());
             self.xdg_toplevels.remove(&surface_id);
-            self.xdg_mapped_surface_ids.remove(&surface_id);
+
             if let Some(meta_window_id) = self
                 .meta_window_state
                 .meta_window_id_per_surface_id
@@ -380,7 +381,6 @@ pub mod xdg {
                 }
             }
         }
-
         fn parent_changed(&mut self, surface: ToplevelSurface) {
             info!("parent changed");
             if let Some(meta_window) = self.get_meta_window(get_surface_id(surface.wl_surface())) {
@@ -395,16 +395,6 @@ pub mod xdg {
                     true,
                 );
             }
-        }
-    }
-
-    impl<BackendData: Backend> XdgShellHandlerExt for State<BackendData> {
-        fn toplevel_mapped(&mut self, surface: ToplevelSurface) {
-            let surface_id = get_surface_id(surface.wl_surface());
-            let meta_window = self.new_meta_window_for_toplevel(surface.clone());
-            self.meta_window_state
-                .meta_window_id_per_surface_id
-                .insert(surface_id, meta_window.id.clone());
         }
     }
 
