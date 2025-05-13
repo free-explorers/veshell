@@ -495,6 +495,18 @@ pub fn run_x11_client() {
                 state.pointer.current_location(),
                 state.surface_id_under_cursor != None,
                 false,
+                state
+                    .meta_window_state
+                    .meta_windows
+                    .values()
+                    .filter_map(|meta_window| {
+                        if meta_window.game_mode_activated {
+                            Some(state.surfaces.get(&meta_window.surface_id).unwrap())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>(),
             );
 
             let mut elements2: Vec<VeshellRenderElements<GlesRenderer>> = Vec::new();

@@ -12,7 +12,10 @@ use smithay::{
 };
 use tracing::warn;
 
-use crate::{backend::Backend, flutter_engine::wayland_messages::MyRectangle, state::State};
+use crate::{
+    backend::Backend, flutter_engine::wayland_messages::MyRectangle, focus::PointerFocusTarget,
+    state::State,
+};
 
 use super::{determine_desktop_file_app_id_from_pid, meta_popup::MetaPopup};
 
@@ -67,6 +70,10 @@ pub enum MetaWindowPatch {
         id: String,
         value: bool,
     },
+    UpdateGameModeActivated {
+        id: String,
+        value: bool,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -84,6 +91,7 @@ pub struct MetaWindow {
     pub startup_id: Option<String>,
     pub geometry: Option<MyRectangle<i32, Logical>>,
     pub need_decoration: bool,
+    pub game_mode_activated: bool,
 }
 
 impl<BackendData: Backend + 'static> State<BackendData> {
@@ -106,6 +114,11 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .meta_windows
             .remove(meta_window_id)
             .unwrap();
+
+        if self.meta_window_state.meta_window_in_gaming_mode == Some(meta_window_id.clone()) {
+            self.meta_window_state.meta_window_in_gaming_mode = None;
+        }
+
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "meta_window_removed",
@@ -302,6 +315,31 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         return;
                     }
                     meta_window.need_decoration = value.clone();
+                }
+            }
+            MetaWindowPatch::UpdateGameModeActivated { id, value } => {
+                if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
+                    if meta_window.game_mode_activated == value.clone() {
+                        return;
+                    }
+                    meta_window.game_mode_activated = value.clone();
+                    if value {
+                        self.meta_window_state.meta_window_in_gaming_mode = Some(id);
+
+                        if let Some(surface) = self.surfaces.get(&meta_window.surface_id) {
+                            if let Some(x11_surface) =
+                                self.x11_surface_per_wl_surface.get(surface).cloned()
+                            {
+                                let _ = self.x11_wm.as_mut().unwrap().raise_window(&x11_surface);
+                            }
+                            self.pointer_focus =
+                                Some((PointerFocusTarget::from(surface), (0.0, 0.0).into()));
+                        }
+                    } else {
+                        if self.meta_window_state.meta_window_in_gaming_mode == Some(id) {
+                            self.meta_window_state.meta_window_in_gaming_mode = None;
+                        }
+                    }
                 }
             }
         }

@@ -66,6 +66,11 @@ sealed class MetaWindowPatchMessage
     required bool value,
   }) = UpdateNeedDecoration;
 
+  const factory MetaWindowPatchMessage.updateGameModeActivated({
+    required String id,
+    required bool value,
+  }) = UpdateGameModeActivated;
+
   factory MetaWindowPatchMessage.fromJson(Map<String, dynamic> json) =>
       _$MetaWindowPatchMessageFromJson(json);
 }

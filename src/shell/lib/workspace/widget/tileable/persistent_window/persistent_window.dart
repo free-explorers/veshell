@@ -9,7 +9,9 @@ import 'package:shell/meta_window/provider/meta_window_children.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/meta_window/widget/meta_surface.dart';
+import 'package:shell/meta_window/widget/meta_surface_gaming_overlay.dart';
 import 'package:shell/shared/widget/container_with_positionnable_children/container_with_positionnable_children.dart';
+import 'package:shell/wayland/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/wayland/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
@@ -330,10 +332,59 @@ class WithSurfacesWidget extends HookConsumerWidget {
             .fullscreen => // TODO: fix this, it's not working with the new wayland stack, need to find a way to get the surface id from the meta surface and then use that to get the surface from the wayland stack, or just use the meta surface directly, but that would mean we need to change the way we handle surfaces in flutte
         Stack(
           children: [
-            MetaSurfaceWidget(
-              focusNode: focusNode,
-              metaWindowId: window.metaWindowId!,
-              decorated: false,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return HookBuilder(
+                  builder: (context) {
+                    useEffect(
+                      () {
+                        if (constraints
+                                .widthConstraints()
+                                .maxWidth
+                                .isInfinite ||
+                            constraints
+                                .heightConstraints()
+                                .maxHeight
+                                .isInfinite) {
+                          return null;
+                        }
+                        WidgetsBinding.instance
+                            .addPostFrameCallback((timeStamp) {
+                          final geometry = ref.read(
+                            metaWindowStateProvider(window.metaWindowId!)
+                                .select((value) => value.geometry),
+                          );
+
+                          ref
+                              .read(
+                                metaWindowStateProvider(window.metaWindowId!)
+                                    .notifier,
+                              )
+                              .patch(
+                                UpdateGeometry(
+                                  id: window.metaWindowId!,
+                                  value: Rect.fromLTWH(
+                                    geometry!.left,
+                                    geometry.top,
+                                    constraints.maxWidth,
+                                    constraints.maxHeight,
+                                  ),
+                                ),
+                              );
+                        });
+                        return null;
+                      },
+                      [constraints],
+                    );
+
+                    return MetaSurfaceWidget(
+                      focusNode: focusNode,
+                      metaWindowId: window.metaWindowId!,
+                      decorated: false,
+                    );
+                  },
+                );
+              },
             ),
             if (dialogWindowList.isNotEmpty) ...[
               const Positioned.fill(child: ColoredBox(color: Colors.black38)),
@@ -349,7 +400,9 @@ class WithSurfacesWidget extends HookConsumerWidget {
             ],
           ],
         ),
-      DisplayMode.game => throw UnimplementedError(),
+      DisplayMode.game => MetaSurfaceGamingOverlay(
+          metaWindowId: window.metaWindowId!,
+        ),
       DisplayMode.floating => ContainerWithPositionnableChildren(
           children: [
             FloatableWindow(window: window),

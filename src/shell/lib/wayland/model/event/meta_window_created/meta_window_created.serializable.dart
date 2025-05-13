@@ -1,7 +1,6 @@
 import 'dart:ui';
 
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/shared/util/json_converter/rect.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 
@@ -20,6 +19,7 @@ sealed class MetaWindowCreatedMessage
     required bool mapped,
     required int surfaceId,
     required bool needDecoration,
+    required bool gameModeActivated,
     String? appId,
     String? parent,
     String? displayMode,

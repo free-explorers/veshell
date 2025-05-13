@@ -43,6 +43,7 @@ class MetaWindowState extends _$MetaWindowState {
       startupId: message.startupId,
       geometry: message.geometry,
       needDecoration: message.needDecoration,
+      gameModeActivated: message.gameModeActivated,
     );
 
     ref
@@ -88,6 +89,8 @@ class MetaWindowState extends _$MetaWindowState {
         state = state.copyWith(geometry: patch.value);
       case UpdateNeedDecoration():
         state = state.copyWith(needDecoration: patch.value);
+      case UpdateGameModeActivated():
+        state = state.copyWith(gameModeActivated: patch.value);
     }
     if (propagate == true) {
       await ref.read(waylandManagerProvider.notifier).request(

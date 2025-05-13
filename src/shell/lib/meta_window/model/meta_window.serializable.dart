@@ -23,6 +23,7 @@ class MetaWindow with _$MetaWindow {
     required bool mapped,
     required SurfaceId surfaceId,
     required bool needDecoration,
+    required bool gameModeActivated,
     String? appId,
     String? parent,
     MetaWindowDisplayMode? displayMode,

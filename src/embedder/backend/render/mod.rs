@@ -1,6 +1,9 @@
 use std::sync::Mutex;
 
-use crate::cursor::{draw_cursor, CursorRenderElement, CursorStateInner};
+use crate::{
+    cursor::{draw_cursor, CursorRenderElement, CursorStateInner},
+    meta_window_state::meta_window::MetaWindow,
+};
 
 use smithay::{
     backend::{
@@ -45,6 +48,7 @@ pub fn get_render_elements<R>(
     cursor_location: Point<f64, Logical>,
     is_surface_under_pointer: bool,
     flip_flutter_texture: bool,
+    surfaces_in_gaming_mode: Vec<&WlSurface>,
 ) -> Vec<VeshellRenderElements<R>>
 where
     R: Renderer + ImportAll + ImportMem + ImportDma,
@@ -79,6 +83,10 @@ where
             .collect();
 
         elements.extend(cursor_elements);
+    }
+
+    for surface in surfaces_in_gaming_mode {
+        elements.extend(get_surface_elements(renderer, surface));
     }
 
     let flutter_texture_result = renderer.import_dmabuf(&slot.export().unwrap(), None);
@@ -120,5 +128,5 @@ where
     <R as RendererSuper>::Error:,
     VeshellRenderElements<R>: RenderElement<R>,
 {
-    render_elements_from_surface_tree(renderer, surface, (50, 50), 1.0, 0.9, Kind::Unspecified)
+    render_elements_from_surface_tree(renderer, surface, (0, 0), 1.0, 1.0, Kind::Unspecified)
 }

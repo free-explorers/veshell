@@ -38,6 +38,7 @@ pub struct MetaWindowState {
     pub meta_window_id_per_surface_id: HashMap<u64, String>,
     pub meta_popups: HashMap<String, MetaPopup>,
     pub meta_popup_id_per_surface_id: HashMap<u64, String>,
+    pub meta_window_in_gaming_mode: Option<String>,
 }
 
 impl MetaWindowState {
@@ -47,6 +48,7 @@ impl MetaWindowState {
             meta_window_id_per_surface_id: HashMap::new(),
             meta_popups: HashMap::new(),
             meta_popup_id_per_surface_id: HashMap::new(),
+            meta_window_in_gaming_mode: None,
         }
     }
 }
@@ -120,6 +122,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             startup_id: None,
             geometry,
             need_decoration: !is_decorated,
+            game_mode_activated: false,
         });
         info!("new meta window from toplevel: {:?}", meta_window);
         meta_window
@@ -166,6 +169,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             startup_id: None,
             geometry: Some(x11_surface.geometry().into()),
             need_decoration: !x11_surface.is_decorated(),
+            game_mode_activated: false,
         });
         info!("new meta window from x11: {:?}", meta_window);
         meta_window
