@@ -6,7 +6,7 @@ pub mod wayland {
     use serde_json::json;
     use smithay::{
         backend::renderer::{
-            gles::GlesRenderer,
+            gles::{GlesRenderer, GlesTexture},
             utils::{
                 import_surface, on_commit_buffer_handler, with_renderer_surface_state,
                 RendererSurfaceStateUserData,
@@ -219,7 +219,7 @@ pub mod wayland {
                     let texture = self
                         .backend_data
                         .with_primary_renderer_mut(|renderer| {
-                            renderer_state.texture::<GlesRenderer>(renderer.id())
+                            renderer_state.texture::<GlesTexture>(renderer.context_id())
                         })
                         .unwrap();
 

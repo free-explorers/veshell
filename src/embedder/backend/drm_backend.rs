@@ -13,6 +13,7 @@ use smithay::backend::allocator::gbm::GbmDevice;
 use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags};
 use smithay::backend::allocator::{Allocator, Fourcc, Slot, Swapchain};
 use smithay::backend::drm::compositor::{DrmCompositor, FrameFlags};
+use smithay::backend::drm::exporter::gbm::GbmFramebufferExporter;
 use smithay::backend::drm::{
     CreateDrmNodeError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent, DrmEventMetadata, DrmNode,
     NodeType,
@@ -846,7 +847,7 @@ impl State<DrmBackend> {
             surface,
             Some(planes),
             device.gbm_allocator.clone(),
-            device.gbm_device.clone(),
+            GbmFramebufferExporter::new(device.gbm_device.clone()),
             color_formats.iter().copied(),
             render_formats,
             device.drm_device.cursor_size(),
@@ -1342,7 +1343,7 @@ struct SurfaceData {
 
 pub type GbmDrmCompositor = DrmCompositor<
     GbmAllocator<DrmDeviceFd>,
-    GbmDevice<DrmDeviceFd>,
+    GbmFramebufferExporter<DrmDeviceFd>,
     Option<OutputPresentationFeedback>,
     DrmDeviceFd,
 >;

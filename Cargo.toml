@@ -23,14 +23,23 @@ path = "extra/scripts/helper.rs"
 [profile.profile]
 inherits = "release"
 
-[dependencies]
-smithay = { path = "../smithay-fork", features = [
+[dependencies.smithay]
+# git = "https://github.com/Smithay/smithay.git"
+git = "https://github.com/PapyElGringo/smithay.git"
+branch = "veshell_changes"
+
+# path = "../smithay-fork"
+
+features = [
     "default",
     "wayland_frontend",
     "backend_egl",
     "use_system_lib",
     "xwayland",
-] }
+]
+
+[dependencies]
+
 smithay-drm-extras = { path = "extra/third_party/smithay-drm-extras" }
 rustix = "0.38.30"
 input-linux = "0.7.1"
