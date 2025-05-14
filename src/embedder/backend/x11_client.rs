@@ -3,7 +3,7 @@ use std::sync::atomic::Ordering;
 use log::{error, warn};
 use smithay::backend::allocator::dmabuf::{AnyError, AsDmabuf, Dmabuf};
 use smithay::backend::allocator::{Allocator, Fourcc, Slot, Swapchain};
-use smithay::backend::input::{Event, InputEvent, KeyboardKeyEvent};
+use smithay::backend::input::{Event, InputEvent, KeyState, KeyboardKeyEvent};
 use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::element::surface::{
     render_elements_from_surface_tree, WaylandSurfaceRenderElement,
@@ -49,7 +49,7 @@ use smithay::{
 use tracing::{debug, info};
 
 use crate::flutter_engine::FlutterEngine;
-use crate::keyboard::handle_keyboard_event;
+use crate::keyboard::{self, handle_keyboard_event};
 use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
 use crate::{settings, state};
 
@@ -339,6 +339,20 @@ pub fn run_x11_client() {
                     InputEvent::DeviceAdded { device: _ } => {}
                     InputEvent::DeviceRemoved { device: _ } => {}
                     InputEvent::Keyboard { event } => {
+                        let keyboard = data.keyboard.clone();
+
+                        // Ignore release events for keys that are not pressed.
+                        // This can happen when using Alt+Tab to switch windows and focus the compositor
+                        // Flutter doesn't expect to receive release events for keys that are not pressed.
+                        if event.state() == KeyState::Released
+                            && !keyboard.pressed_keys().contains(&event.key_code())
+                        {
+                            info!(
+                                "Ignoring key {:?} release event because it was not pressed.",
+                                event.key_code()
+                            );
+                            return;
+                        }
                         handle_keyboard_event(
                             data,
                             event.key_code(),
