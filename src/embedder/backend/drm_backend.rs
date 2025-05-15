@@ -317,8 +317,21 @@ pub fn run_drm_backend() {
                         });
                 }
             }
-            let monitors = data.space.outputs().cloned().collect::<Vec<_>>();
-            data.flutter_engine_mut().monitor_layout_changed(monitors);
+            let bounding_box = data
+                .space
+                .outputs()
+                .map(|output| data.space.output_geometry(output).unwrap())
+                .reduce(|first, second| first.merge(second))
+                .unwrap();
+
+            data.flutter_engine()
+                .send_window_metrics(
+                    (bounding_box.size.w as u32, bounding_box.size.h as u32).into(),
+                )
+                .unwrap();
+
+            data.determine_highest_hz_crtc();
+            data.monitor_layout_changed();
         },
     );
     let mut state = State::new(

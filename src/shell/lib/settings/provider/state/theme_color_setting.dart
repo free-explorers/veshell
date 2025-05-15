@@ -8,11 +8,10 @@ import 'package:shell/settings/provider/util/setting_definition_by_path.dart';
 
 part 'theme_color_setting.g.dart';
 
+const path = 'theme.color';
+const fallback = Color(0xFF434C5E);
 @riverpod
 Color themeColorSetting(Ref ref) {
-  const path = 'theme.color';
-  const fallback = Color(0xFF434C5E);
-
   final property = ref.watch(settingDefinitionByPathProvider(path));
   final jsonValue = ref.watch(jsonValueByPathProvider(path));
   if (property == null ||

@@ -70,7 +70,7 @@ pub struct MonitorConfiguration {
 pub struct SettingsManager<BackendData: Backend + 'static> {
     _loop_handle: LoopHandle<'static, State<BackendData>>,
     default_settings_folder: String,
-    user_settings_folder: String,
+    config_folder_path: String,
 }
 impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
     pub fn new(
@@ -88,7 +88,7 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
         }
         let default_settings_folder = std::env::var("VESHELL_DEFAULT_CONFIG_DIR").unwrap();
 
-        let config_folder = std::env::var("VESHELL_CONFIG_DIR")
+        let config_folder_path = std::env::var("VESHELL_CONFIG_DIR")
             .or_else(|_| {
                 std::env::var("XDG_CONFIG_HOME")
                     .map(|xdg_config_home| format!("{}/veshell/", xdg_config_home))
@@ -99,22 +99,53 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
             .unwrap();
 
         if std::env::var("VESHELL_CONFIG_DIR").is_err() {
-            std::env::set_var("VESHELL_CONFIG_DIR", &config_folder);
+            std::env::set_var("VESHELL_CONFIG_DIR", &config_folder_path);
         }
+        let config_folder = Path::new(&config_folder_path);
 
-        let user_settings_folder_path = Path::new(&config_folder).join("settings");
-        if !user_settings_folder_path.exists() {
-            std::fs::create_dir_all(user_settings_folder_path.clone())
+        if !config_folder.exists() {
+            std::fs::create_dir_all(config_folder.clone())
                 .expect("Unable to create user settings folder");
         }
 
-        let mut notify_source = NotifySource::new().unwrap();
-        notify_source
-            .watch(&user_settings_folder_path.clone(), RecursiveMode::Recursive)
+        let mut config_source = NotifySource::new().unwrap();
+        config_source
+            .watch(config_folder, RecursiveMode::NonRecursive)
             .unwrap();
 
+        let settings_path = config_folder.join("settings.json");
+
+        let monitor_path = config_folder.join("monitor");
+        if monitor_path.exists() {
+            watch_monitors_changes(
+                config_folder_path.clone(),
+                loop_handle.clone(),
+                on_monitor_settings_changed,
+            );
+        }
+
         loop_handle
-            .insert_source(notify_source, move |event, _, data| match event.kind {
+            .clone()
+            .insert_source(config_source, move |event, _, data| match event.kind {
+                notify::EventKind::Create(_) | notify::EventKind::Modify(_) => {
+                    if event.paths.contains(&settings_path) {
+                        on_settings_changed(data);
+                    }
+                    if event.paths.contains(&monitor_path) {
+                        watch_monitors_changes(
+                            data.settings_manager.config_folder_path.clone(),
+                            data.loop_handle.clone(),
+                            on_monitor_settings_changed,
+                        );
+                    }
+                }
+                _ => {}
+            })
+            .unwrap();
+
+        /*         loop_handle
+        .insert_source(settings_source, move |event, _, data| {
+            match event.kind {
                 notify::EventKind::Create(_) | notify::EventKind::Modify(_) => {
                     // if path contain monitor directory, reload monitors
                     for path in event.paths {
@@ -133,13 +164,14 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
                     }
                 }
                 _ => {}
-            })
-            .unwrap();
+            }
+        })
+        .unwrap(); */
 
         Self {
-            _loop_handle: loop_handle,
+            _loop_handle: loop_handle.clone(),
             default_settings_folder,
-            user_settings_folder: user_settings_folder_path.to_str().unwrap().to_string(),
+            config_folder_path: config_folder.to_str().unwrap().to_string(),
         }
     }
 
@@ -149,7 +181,7 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
         let mut default_settings_json: Value =
             serde_json::from_reader(default_settings_file).expect("Unable to parse JSON");
 
-        let configured_settings_path = Path::new(&self.user_settings_folder).join("settings.json");
+        let configured_settings_path = Path::new(&self.config_folder_path).join("settings.json");
 
         if configured_settings_path.exists() {
             let configured_settings_file =
@@ -165,7 +197,7 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
     }
 
     pub fn get_monitor_configuration(&self, monitor_id: &str) -> Option<MonitorConfiguration> {
-        let monitor_configuration_path = Path::new(&self.user_settings_folder)
+        let monitor_configuration_path = Path::new(&self.config_folder_path)
             .join("monitor")
             .join(format!("{}.json", monitor_id));
         if !monitor_configuration_path.exists() {
@@ -203,5 +235,35 @@ fn merge_json(target: &mut Value, source: Value) {
         (target, source) => {
             *target = source;
         }
+    }
+}
+
+fn watch_monitors_changes<BackendData: Backend + 'static>(
+    config_folder_path: String,
+    loop_handle: LoopHandle<'static, State<BackendData>>,
+    on_monitor_settings_changed: MonitorSettingsCallback<BackendData>,
+) {
+    let config_folder = Path::new(&config_folder_path);
+    let monitor_path = config_folder.join("monitor");
+    if monitor_path.exists() {
+        let mut monitor_source = NotifySource::new().unwrap();
+        monitor_source
+            .watch(&monitor_path, RecursiveMode::Recursive)
+            .unwrap();
+        loop_handle
+            .insert_source(monitor_source, move |event, _, data| match event.kind {
+                notify::EventKind::Create(_) | notify::EventKind::Modify(_) => {
+                    for path in event.paths {
+                        // only check json files to ignore temp files
+                        if path.extension().is_some() && path.extension().unwrap() == "json" {
+                            info!("Settings file changed, reloading..., {:?}", event.kind);
+                            let monitor_name = path.file_stem().unwrap().to_str().unwrap();
+                            on_monitor_settings_changed(data, monitor_name);
+                        }
+                    }
+                }
+                _ => {}
+            })
+            .unwrap();
     }
 }

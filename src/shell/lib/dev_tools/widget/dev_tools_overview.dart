@@ -2,19 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/dev_tools/provider/matching_logs.dart';
+import 'package:shell/dev_tools/widget/state_dev_view.dart';
 import 'package:shell/dev_tools/widget/surface_list_dev_view.dart';
 import 'package:shell/dev_tools/widget/window_list_dev_view.dart';
 
-enum DevToolCategories { matching, surfaces, windows }
+enum DevToolCategories { state, matching, surfaces, windows }
 
 class DevToolsOverview extends HookConsumerWidget {
   const DevToolsOverview({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selectedCategory = useState(DevToolCategories.matching);
+    final selectedCategory = useState(DevToolCategories.state);
     return Material(
       color: Theme.of(context).colorScheme.surface.withAlpha(240),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SizedBox(
             width: 300,
@@ -24,6 +26,7 @@ class DevToolsOverview extends HookConsumerWidget {
                     (e) => ListTile(
                       selected: selectedCategory.value == e,
                       title: switch (e) {
+                        DevToolCategories.state => const Text('State'),
                         DevToolCategories.matching => const Text('Matching'),
                         DevToolCategories.surfaces => const Text('Surfaces'),
                         DevToolCategories.windows => const Text('Windows'),
@@ -38,6 +41,7 @@ class DevToolsOverview extends HookConsumerWidget {
             child: ColoredBox(
               color: Theme.of(context).colorScheme.surface.withAlpha(240),
               child: switch (selectedCategory.value) {
+                DevToolCategories.state => const StateDevView(),
                 DevToolCategories.matching => const MatchingDebugguer(),
                 DevToolCategories.surfaces => const SurfaceListDevView(),
                 DevToolCategories.windows => const WindowListDevView(),
