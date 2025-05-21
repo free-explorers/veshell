@@ -4,6 +4,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_popup_state.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
+import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/wayland/model/event/wayland_event.serializable.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/window/provider/window_manager/matching_engine.dart';
@@ -72,13 +73,24 @@ class MetaWindowManager extends _$MetaWindowManager {
     }
   }
 
-  void onMetaWindowMapped(MetaWindowId id) {
+  void onMetaWindowMapped(MetaWindowId id, {int retryCount = 0}) {
     final metaWindow = ref.read(metaWindowStateProvider(id));
 
     if (metaWindow.parent != null) {
+      final parentWindowId =
+          ref.read(metaWindowWindowMapProvider).get(metaWindow.parent!);
+      if (parentWindowId == null) {
+        // try again after a short delay because the parent window might not be mapped yet
+        if (retryCount > 10) {
+          Future.delayed(const Duration(milliseconds: 100), () {
+            onMetaWindowMapped(id, retryCount: retryCount + 1);
+          });
+        }
+        return;
+      }
       ref
           .read(windowManagerProvider.notifier)
-          .createDialogWindowForMetaWindow(metaWindow);
+          .createDialogWindowForMetaWindow(metaWindow.id, parentWindowId);
       return;
     }
 

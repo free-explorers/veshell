@@ -6,9 +6,9 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
-import 'package:shell/screen/provider/current_screen_id.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/screen/provider/workspace_display_mode.dart';
+import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/shared/widget/cross_reorderable_list.dart';
 import 'package:shell/theme//provider/theme.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
@@ -19,7 +19,7 @@ class WorkspaceListView extends HookConsumerWidget {
   const WorkspaceListView({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final screenId = ref.watch(currentScreenIdProvider);
+    final screenId = CurrentScreenId.of(context);
     final screenState = ref.watch(screenStateProvider(screenId));
     final animationController = useAnimationController(
       duration: const Duration(milliseconds: 200),

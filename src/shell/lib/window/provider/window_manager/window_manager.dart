@@ -4,7 +4,6 @@ import 'package:logging/logging.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
-import 'package:shell/meta_window/provider/meta_window_children.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/overview/provider/overview_state.dart';
@@ -19,6 +18,7 @@ import 'package:shell/window/model/ephemeral_window.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.dart';
 import 'package:shell/window/model/window_properties.serializable.dart';
+import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
@@ -182,11 +182,14 @@ class WindowManager extends _$WindowManager {
     return windowId;
   }
 
-  void createDialogWindowForMetaWindow(
-    MetaWindow metaWindow,
+  DialogWindowId createDialogWindowForMetaWindow(
+    MetaWindowId metaWindowId,
+    WindowId parentWindowId,
   ) {
     // create a new window
     final windowId = DialogWindowId(_uuidGenerator.v4());
+    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+
     _log.info(
       'Creating new DialogWindow $windowId for MetaWindow $metaWindow',
     );
@@ -195,7 +198,7 @@ class WindowManager extends _$WindowManager {
       windowId: windowId,
       metaWindowId: metaWindow.id,
       properties: WindowProperties.fromMetaWindow(metaWindow),
-      parentMetaWindowId: metaWindow.parent!,
+      parentWindowId: parentWindowId,
     );
 
     ref
@@ -204,9 +207,8 @@ class WindowManager extends _$WindowManager {
 
     state = state.add(windowId);
 
-    ref.read(metaWindowChildrenProvider(metaWindow.parent!).notifier).add(
-          metaWindow.id,
-        );
+    ref.read(dialogSetForWindowProvider(parentWindowId).notifier).add(windowId);
+    return windowId;
   }
 
   Future<void> onMetaWindowUnmapped(MetaWindowId metaWindowId) async {
@@ -239,11 +241,11 @@ class WindowManager extends _$WindowManager {
 
           ref
               .read(
-                metaWindowChildrenProvider(dialogWindow.parentMetaWindowId)
+                dialogSetForWindowProvider(dialogWindow.parentWindowId)
                     .notifier,
               )
               .remove(
-                metaWindowId,
+                windowId,
               );
 
           ref

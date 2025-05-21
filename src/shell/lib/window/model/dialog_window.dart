@@ -12,6 +12,6 @@ class DialogWindow with _$DialogWindow implements Window {
     required DialogWindowId windowId,
     required WindowProperties properties,
     required MetaWindowId metaWindowId,
-    required MetaWindowId parentMetaWindowId,
+    required WindowId parentWindowId,
   }) = _DialogWindow;
 }

@@ -5,9 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/application/provider/logs_for_pid.dart';
 import 'package:shell/application/widget/app_icon.dart';
-import 'package:shell/meta_window/provider/meta_window_children.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
-import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/meta_window/widget/meta_surface.dart';
 import 'package:shell/meta_window/widget/meta_surface_gaming_overlay.dart';
 import 'package:shell/shared/widget/container_with_positionnable_children/container_with_positionnable_children.dart';
@@ -16,6 +14,7 @@ import 'package:shell/wayland/model/request/activate_window/activate_window.seri
 import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
@@ -258,33 +257,18 @@ class WithSurfacesWidget extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final displayMode = window.displayMode;
 
-    final metaWindowChildrenSet = ref.watch(
-      metaWindowChildrenProvider(
-        window.metaWindowId!,
-      ),
-    );
-
-    final dialogWindowList = useMemoized(
-      () {
-        return metaWindowChildrenSet.map(
-          (metaWindowId) {
-            final dialogId = ref
-                .read(
-                  metaWindowWindowMapProvider,
-                )
-                .get(metaWindowId);
-            return ref
-                .read(dialogWindowStateProvider(dialogId! as DialogWindowId));
-          },
-        ).toList();
-      },
-      [metaWindowChildrenSet],
-    );
+    final dialogWindowList = ref
+        .watch(
+      dialogSetForWindowProvider(window.windowId),
+    )
+        .map((element) {
+      return ref.watch(dialogWindowStateProvider(element));
+    }).toList();
 
     final activateWindow = useCallback(
       (bool value) {
         final metaWindowToActivate =
-            metaWindowChildrenSet.lastOrNull ?? window.metaWindowId;
+            dialogWindowList.lastOrNull?.metaWindowId ?? window.metaWindowId;
         if (metaWindowToActivate != null) {
           final metaWindow =
               ref.read(metaWindowStateProvider(metaWindowToActivate));
@@ -299,7 +283,7 @@ class WithSurfacesWidget extends HookConsumerWidget {
               );
         }
       },
-      [window.metaWindowId, metaWindowChildrenSet],
+      [window.metaWindowId, dialogWindowList],
     );
 
     useEffect(
@@ -309,7 +293,7 @@ class WithSurfacesWidget extends HookConsumerWidget {
         }
         return null;
       },
-      [window.metaWindowId, metaWindowChildrenSet],
+      [window.metaWindowId],
     );
 
     useEffect(

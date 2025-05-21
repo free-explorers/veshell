@@ -5,8 +5,8 @@ import 'package:shell/display/provider/display.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/widget/meta_surface.dart';
+import 'package:shell/monitor/provider/monitor_configuration_state.dart';
 import 'package:shell/monitor/provider/monitor_list.dart';
-import 'package:shell/monitor/provider/screen_configuration_for_monitor.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/window/model/window_id.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
@@ -101,21 +101,32 @@ class MonitorStateViewer extends HookConsumerWidget {
                   builder: (context) {
                     return Consumer(
                       builder: (context, ref, child) {
-                        final screenConfiguration = ref.watch(
-                          screenConfigurationForMonitorProvider(e.name),
+                        final monitorConfiguration = ref.watch(
+                          monitorConfigurationStateProvider(e.name),
                         );
                         return DataContainer(
-                          children: screenConfiguration.screenList
-                              .map(
-                                (screenId) => ExpandableDataRow(
+                          children: [
+                            for (final screenConfiguration
+                                in monitorConfiguration.screenList) ...[
+                              DataRow(
+                                value: screenConfiguration.flex.toString(),
+                                property: 'flex',
+                              ),
+                              if (screenConfiguration.screenId != null)
+                                ExpandableDataRow(
                                   isExpanded: true,
-                                  property: screenId,
+                                  property: screenConfiguration.screenId!,
                                   builder: (context) => ScreenStateViewer(
-                                    screenId: screenId,
+                                    screenId: screenConfiguration.screenId!,
                                   ),
                                 ),
-                              )
-                              .toList(),
+                              if (screenConfiguration.screenId == null)
+                                const DataRow(
+                                  value: 'null',
+                                  property: 'screenId',
+                                ),
+                            ],
+                          ],
                         );
                       },
                     );

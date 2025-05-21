@@ -18,6 +18,7 @@ class Screen with _$Screen implements PersistableModel {
     required ScreenId screenId,
     required IList<WorkspaceId> workspaceList,
     required int selectedIndex,
+    String? label,
   }) = _Screen;
   Screen._();
   factory Screen.fromJson(Map<String, dynamic> json) => _$ScreenFromJson(json);

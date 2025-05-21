@@ -354,13 +354,6 @@ pub mod xwayland {
                 }))),
                 None,
             );
-
-            /* let pointer = self.seat.get_pointer().unwrap();
-            pointer.unset_grab(
-                self,
-                SERIAL_COUNTER.next_serial(),
-                self.clock.now().as_millis() as u32,
-            ); */
         }
 
         fn move_request(&mut self, _xwm: XwmId, x11_surface: X11Surface, _button: u32) {
@@ -482,8 +475,10 @@ pub mod xwayland {
             self.x11_surface_per_wl_surface
                 .insert(wl_surface.clone(), surface.clone());
             info!(
-                "Associating X11 surface {:?} with wl_surface {:?}",
-                x11_surface_id, wl_surface
+                "Associating X11 surface {:?} with wl_surface {:?} transient_for {:?}",
+                x11_surface_id,
+                wl_surface,
+                surface.is_transient_for()
             );
             let parent_surface = surface
                 .is_transient_for()

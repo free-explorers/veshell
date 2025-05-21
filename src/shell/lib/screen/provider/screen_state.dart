@@ -169,4 +169,8 @@ class ScreenState extends _$ScreenState with PersistableProvider<Screen> {
           workspaceList.removeAt(oldIndex).insert(newIndex, workspaceId),
     );
   }
+
+  void setCustomLabel(String? label) {
+    state = state.copyWith(label: label);
+  }
 }

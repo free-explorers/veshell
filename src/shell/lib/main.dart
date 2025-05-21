@@ -9,7 +9,6 @@ import 'package:shell/notification/provider/notification_manager.dart';
 import 'package:shell/polkit/provider/authentication_agent.dart';
 import 'package:shell/screen/provider/screen_list.dart';
 import 'package:shell/shared/provider/persistent_json_by_folder.dart';
-import 'package:shell/shared/provider/root_overlay.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_audio.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_server_info.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_sink_list.dart';
@@ -130,6 +129,7 @@ class Veshell extends ConsumerWidget {
       home: _EagerInitialization(
         child: VeshellShortcutManager(
           child: Material(
+            color: Colors.black,
             child: HookConsumer(
               builder: (
                 BuildContext context,
@@ -146,14 +146,7 @@ class Veshell extends ConsumerWidget {
                   [],
                 );
 
-                return Stack(
-                  children: [
-                    const Positioned.fill(child: DisplayWidget()),
-                    Overlay(
-                      key: ref.watch(rootOverlayKeyProvider),
-                    ),
-                  ],
-                );
+                return const DisplayWidget();
               },
             ),
           ),

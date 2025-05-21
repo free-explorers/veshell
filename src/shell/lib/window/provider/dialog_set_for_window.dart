@@ -1,25 +1,25 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/meta_window/model/meta_window.serializable.dart';
+import 'package:shell/window/model/window_id.dart';
 
-part 'meta_window_children.g.dart';
+part 'dialog_set_for_window.g.dart';
 
 @riverpod
-class MetaWindowChildren extends _$MetaWindowChildren {
+class DialogSetForWindow extends _$DialogSetForWindow {
   KeepAliveLink? _keepAliveLink;
   @override
-  ISet<MetaWindowId> build(MetaWindowId parentId) {
+  ISet<DialogWindowId> build(WindowId parentId) {
     return ISet();
   }
 
-  void add(MetaWindowId childId) {
+  void add(DialogWindowId dialogId) {
     _keepAliveLink ??= ref.keepAlive();
-    state = state.add(childId);
+    state = state.add(dialogId);
   }
 
-  void remove(MetaWindowId childId) {
-    state = state.remove(childId);
+  void remove(DialogWindowId dialogId) {
+    state = state.remove(dialogId);
     if (state.isEmpty) {
       _keepAliveLink?.close();
       _keepAliveLink = null;

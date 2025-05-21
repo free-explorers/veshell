@@ -10,7 +10,6 @@ import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/meta_window_window_map.dart';
-import 'package:shell/window/model/ephemeral_window.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
 import 'package:shell/window/model/window_base.dart';
 import 'package:shell/window/model/window_id.dart';
@@ -137,27 +136,13 @@ mixin WindowProviderMixin<T extends Window> {
         final metaWindowId = entry.key;
         final (windowId, score) = entry.value;
 
-        // If there is no windowId, create a new one
+        // If there is no windowId, create a new dialog window for it
         if (windowId == null) {
-          print('Creating new window for metaWindow $metaWindowId');
+          print('Creating new dialog window for metaWindow $metaWindowId');
           removeMetaWindow(metaWindowId, shouldNotify: false);
-
-          final newWindowId = await switch (state.windowId) {
-            PersistentWindowId() => ref
-                .read(windowManagerProvider.notifier)
-                .createPersistentWindowForMetaWindow(
-                  metaWindowId: metaWindowId,
-                ),
-            EphemeralWindowId() => Future.value(
-                ref
-                    .read(windowManagerProvider.notifier)
-                    .createEphemeralWindowForMetaWindow(
-                      metaWindowId: metaWindowId,
-                      screenId: (state as EphemeralWindow).screenId,
-                    ),
-              ),
-            _ => throw UnimplementedError(),
-          };
+          final newWindowId = ref
+              .read(windowManagerProvider.notifier)
+              .createDialogWindowForMetaWindow(metaWindowId, state.windowId);
 
           excludedWindowIds.add(newWindowId);
           metaWindowsToDispatch.remove(metaWindowId);
@@ -165,7 +150,6 @@ mixin WindowProviderMixin<T extends Window> {
           // If a bestmatch was already found skip to next iteration
           // Else
           if (!excludedWindowIds.contains(windowId)) {
-            print('Adding metaWindow $metaWindowId to window $windowId');
             removeMetaWindow(metaWindowId, shouldNotify: false);
             switch (windowId) {
               case PersistentWindowId():
@@ -207,7 +191,6 @@ mixin WindowProviderMixin<T extends Window> {
       if (surfaceId == _displayedMetaWindowId) {
         onMetaWindowDisplayedPropertiesChanged(next);
       }
-      //ref.read(matchingEngineProvider.notifier).checkMatching();
     });
   }
 

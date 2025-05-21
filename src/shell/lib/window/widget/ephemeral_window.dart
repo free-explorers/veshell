@@ -1,11 +1,9 @@
-import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/meta_window/provider/meta_window_children.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
-import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/window/model/dialog_window.dart';
 import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
 
@@ -27,26 +25,12 @@ class EphemeralWindowWidget extends HookConsumerWidget {
     final metaWindow = ref.watch(metaWindowStateProvider(window.metaWindowId!));
 
     final dialogWindowIdSet = ref.watch(
-      metaWindowChildrenProvider(
-        window.metaWindowId!,
-      ).select(
-        (value) {
-          return value
-              .map(
-                (metaWindowId) => ref
-                    .read(
-                      metaWindowWindowMapProvider,
-                    )
-                    .get(metaWindowId),
-              )
-              .toISet();
-        },
-      ),
+      dialogSetForWindowProvider(window.windowId),
     );
+
     final dialogWindowList = <DialogWindow>[];
     for (final windowId in dialogWindowIdSet) {
-      final dialogWindow =
-          ref.read(dialogWindowStateProvider(windowId! as DialogWindowId));
+      final dialogWindow = ref.read(dialogWindowStateProvider(windowId));
       dialogWindowList.add(dialogWindow);
     }
 /* 
