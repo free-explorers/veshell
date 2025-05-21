@@ -1,7 +1,9 @@
 import 'dart:io';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/wayland/model/wl_surface.dart';
+import 'package:shell/meta_window/model/meta_window.serializable.dart';
+import 'package:shell/meta_window/provider/meta_window_state.dart';
+import 'package:shell/wayland/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/window/model/ephemeral_window.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
 import 'package:shell/window/model/window_id.dart';
@@ -13,7 +15,7 @@ part 'ephemeral_window_state.g.dart';
 /// Workspace provider
 @riverpod
 class EphemeralWindowState extends _$EphemeralWindowState
-    with WindowProviderMixin {
+    with WindowProviderMixin<EphemeralWindow> {
   late MatchingInfo _matchingInfo;
 
   @override
@@ -21,6 +23,7 @@ class EphemeralWindowState extends _$EphemeralWindowState
     throw Exception('EphemeralWindowState $windowId not yet initialized');
   }
 
+  @override
   MatchingInfo getMatchingInfo() => _matchingInfo;
 
   @override
@@ -32,46 +35,32 @@ class EphemeralWindowState extends _$EphemeralWindowState
   }
 
   @override
-  void setSurface(SurfaceId surfaceId) {
-    _matchingInfo = _matchingInfo.copyWith(
-      matchedAtTime: DateTime.now(),
-      matchedWhileWaiting: true,
-    );
-    state = state.copyWith(
-      surfaceId: surfaceId,
-    );
-    super.setSurface(surfaceId);
-  }
-
-  @override
-  void onSurfaceChanged(WindowProperties next) {
-    state = state.copyWith(
-      properties: next,
-    );
-  }
-
-  @override
-  void unsetSurface() {
-    super.unsetSurface();
-    state = state.copyWith(surfaceId: null);
-  }
-
-  @override
-  void onSurfaceIsDestroyed() {
-    super.onSurfaceIsDestroyed();
-    state = state.copyWith(surfaceId: null);
-    _matchingInfo = MatchingInfo.fromWindowProperties(state.properties);
-  }
-
-  @override
   Future<Process?> launchSelf() async {
     final process = await super.launchSelf();
     if (process != null) {
-      _matchingInfo = _matchingInfo.copyWith(
-        waitingForAppSince: DateTime.now(),
-        pid: process.pid,
-      );
+      waitForSurface(process.pid);
     }
     return process;
+  }
+
+  @override
+  void onCurrentlyDisplayedMetaWindowChanged(MetaWindowId? metaWindowId) {
+    state = state.copyWith(
+      metaWindowId: metaWindowId,
+    );
+
+    ref.read(metaWindowStateProvider(metaWindowId!).notifier).patch(
+          MetaWindowPatchMessage.updateDisplayMode(
+            id: metaWindowId,
+            value: MetaWindowDisplayMode.maximized,
+          ),
+        );
+  }
+
+  @override
+  void onMetaWindowDisplayedPropertiesChanged(MetaWindow metaWindow) {
+    state = state.copyWith(
+      properties: WindowProperties.fromMetaWindow(metaWindow),
+    );
   }
 }

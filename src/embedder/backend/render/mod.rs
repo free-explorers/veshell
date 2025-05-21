@@ -1,6 +1,9 @@
 use std::sync::Mutex;
 
-use crate::cursor::{draw_cursor, CursorRenderElement, CursorStateInner};
+use crate::{
+    cursor::{draw_cursor, CursorRenderElement, CursorStateInner},
+    meta_window_state::meta_window::MetaWindow,
+};
 
 use smithay::{
     backend::{
@@ -10,6 +13,7 @@ use smithay::{
         },
         renderer::{
             element::{
+                surface::{render_elements_from_surface_tree, WaylandSurfaceRenderElement},
                 texture::{TextureBuffer, TextureRenderElement},
                 utils::{Relocate, RelocateRenderElement},
                 Kind, RenderElement,
@@ -19,6 +23,7 @@ use smithay::{
     },
     input::pointer::CursorImageStatus,
     output::Output,
+    reexports::wayland_server::protocol::wl_surface::WlSurface,
     utils::{Logical, Monotonic, Point, Rectangle, Time, Transform},
 };
 
@@ -29,6 +34,7 @@ smithay::backend::renderer::element::render_elements! {
         R: ImportAll + ImportMem;
     Cursor=RelocateRenderElement<CursorRenderElement<R>>,
     Flutter=TextureRenderElement<R::TextureId>,
+    Surface=WaylandSurfaceRenderElement<R>
 }
 
 pub fn get_render_elements<R>(
@@ -41,6 +47,8 @@ pub fn get_render_elements<R>(
     cursor_state: &Mutex<CursorStateInner>,
     cursor_location: Point<f64, Logical>,
     is_surface_under_pointer: bool,
+    flip_flutter_texture: bool,
+    surfaces_in_gaming_mode: Vec<&WlSurface>,
 ) -> Vec<VeshellRenderElements<R>>
 where
     R: Renderer + ImportAll + ImportMem + ImportDma,
@@ -77,29 +85,30 @@ where
         elements.extend(cursor_elements);
     }
 
+    for surface in surfaces_in_gaming_mode {
+        elements.extend(get_surface_elements(renderer, surface));
+    }
+
     let flutter_texture_result = renderer.import_dmabuf(&slot.export().unwrap(), None);
+    let transform = if flip_flutter_texture {
+        Transform::Flipped180
+    } else {
+        Transform::Normal
+    };
     if flutter_texture_result.is_ok() {
         let flutter_texture = flutter_texture_result.unwrap();
         let flutter_texture_buffer = TextureBuffer::from_texture(
             renderer,
             flutter_texture,
             scale.integer_scale(),
-            Transform::Flipped180,
+            transform,
             None,
         );
         let flutter_texture_element = TextureRenderElement::from_texture_buffer(
             Point::from((0.0, 0.0)),
             &flutter_texture_buffer,
             None,
-            // TODO: I don't know why it has to be like this instead of just `geometry`.
-            Some(Rectangle::new(
-                (
-                    output_geometry.loc.x,
-                    output_geometry.size.h - output_geometry.loc.y,
-                )
-                    .into(),
-                output_geometry.size,
-            )),
+            Some(output_geometry),
             None,
             Kind::Unspecified,
         );
@@ -107,4 +116,17 @@ where
     }
 
     return elements;
+}
+
+pub fn get_surface_elements<R>(
+    renderer: &mut R,
+    surface: &WlSurface,
+) -> Vec<VeshellRenderElements<R>>
+where
+    R: Renderer + ImportAll + ImportMem + ImportDma,
+    <R as RendererSuper>::TextureId: Send + Clone + 'static,
+    <R as RendererSuper>::Error:,
+    VeshellRenderElements<R>: RenderElement<R>,
+{
+    render_elements_from_surface_tree(renderer, surface, (0, 0), 1.0, 1.0, Kind::Unspecified)
 }

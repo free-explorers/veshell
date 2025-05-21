@@ -75,10 +75,12 @@ class _Subsurfaces extends ConsumerWidget {
         .map((id) => SubsurfaceWidget(surfaceId: id))
         .toList();
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: subsurfaces,
-    );
+    return subsurfaces.isEmpty
+        ? const SizedBox.shrink()
+        : Stack(
+            clipBehavior: Clip.none,
+            children: subsurfaces,
+          );
   }
 }
 

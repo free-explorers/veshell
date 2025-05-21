@@ -5,7 +5,7 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/overview/helm/widget/helm.dart';
 import 'package:shell/overview/provider/overview_state.dart';
-import 'package:shell/screen/provider/current_screen_id.dart';
+import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/theme//provider/theme.dart';
 import 'package:shell/window/model/window_id.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
@@ -16,7 +16,7 @@ class OverviewContent extends HookConsumerWidget {
   const OverviewContent({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final screenId = ref.watch(currentScreenIdProvider);
+    final screenId = CurrentScreenId.of(context);
     final windowList = ref.watch(
       overviewStateProvider(screenId).select((state) => state.windowList),
     );
@@ -55,7 +55,7 @@ class _OverviewContentPanel extends HookConsumerWidget {
   const _OverviewContentPanel();
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final screenId = ref.watch(currentScreenIdProvider);
+    final screenId = CurrentScreenId.of(context);
 
     final windowList = ref.watch(
       overviewStateProvider(screenId).select((state) => state.windowList),

@@ -11,8 +11,7 @@ part 'screen_state.g.dart';
 
 /// Screen provider
 @riverpod
-class ScreenState extends _$ScreenState
-    with PersistableProvider<Screen, AutoDisposeNotifierProviderRef<Screen>> {
+class ScreenState extends _$ScreenState with PersistableProvider<Screen> {
   late final KeepAliveLink _keepAliveLink;
   final _uuidGenerator = const Uuid();
   final _workspaceListenerMap =
@@ -169,5 +168,9 @@ class ScreenState extends _$ScreenState
       workspaceList:
           workspaceList.removeAt(oldIndex).insert(newIndex, workspaceId),
     );
+  }
+
+  void setCustomLabel(String? label) {
+    state = state.copyWith(label: label);
   }
 }

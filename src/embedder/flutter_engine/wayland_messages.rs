@@ -1,7 +1,7 @@
 use serde::ser::SerializeStruct;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use smithay::output::{Mode, Output, PhysicalProperties};
-use smithay::utils::{Buffer as BufferCoords, Logical, Point, Rectangle, Size};
+use smithay::utils::{Buffer as BufferCoords, Coordinate, Logical, Point, Rectangle, Size};
 use std::collections::HashMap;
 
 #[derive(Debug, Serialize)]
@@ -110,6 +110,35 @@ where
     }
 }
 
+impl<'de, N, Kind> Deserialize<'de> for MyPoint<N, Kind>
+where
+    N: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct PointFields<N> {
+            x: N,
+            y: N,
+        }
+
+        let fields = PointFields::<N>::deserialize(deserializer)?;
+
+        Ok(MyPoint((fields.x, fields.y).into()))
+    }
+}
+
+impl<N, Kind> Clone for MyPoint<N, Kind>
+where
+    N: Clone + Coordinate,
+{
+    fn clone(&self) -> Self {
+        MyPoint((self.0.x, self.0.y).into())
+    }
+}
+
 #[repr(transparent)]
 #[derive(Debug)]
 pub struct MySize<N, Kind>(pub Size<N, Kind>);
@@ -145,6 +174,12 @@ impl<N, Kind> From<Rectangle<N, Kind>> for MyRectangle<N, Kind> {
     }
 }
 
+impl<N, Kind> From<MyRectangle<N, Kind>> for Rectangle<N, Kind> {
+    fn from(rectangle: MyRectangle<N, Kind>) -> Self {
+        rectangle.0
+    }
+}
+
 impl<N, Kind> Serialize for MyRectangle<N, Kind>
 where
     N: Serialize,
@@ -159,6 +194,43 @@ where
         state.serialize_field("width", &self.0.size.w)?;
         state.serialize_field("height", &self.0.size.h)?;
         state.end()
+    }
+}
+
+impl<'de, N, Kind> Deserialize<'de> for MyRectangle<N, Kind>
+where
+    N: Deserialize<'de> + Coordinate,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct RectangleFields<N> {
+            x: N,
+            y: N,
+            width: N,
+            height: N,
+        }
+
+        let fields = RectangleFields::<N>::deserialize(deserializer)?;
+
+        Ok(MyRectangle(Rectangle {
+            loc: (fields.x, fields.y).into(),
+            size: (fields.width, fields.height).into(),
+        }))
+    }
+}
+
+impl<N, Kind> Clone for MyRectangle<N, Kind>
+where
+    N: Clone + Coordinate,
+{
+    fn clone(&self) -> Self {
+        MyRectangle(Rectangle {
+            loc: (self.0.loc.x, self.0.loc.y).into(),
+            size: (self.0.size.w, self.0.size.h).into(),
+        })
     }
 }
 

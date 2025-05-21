@@ -14,6 +14,7 @@ use smithay::reexports::calloop::generic::Generic;
 use smithay::reexports::calloop::{channel, Interest, LoopHandle, Mode, PostAction};
 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
+use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::WmCapabilities;
 use smithay::reexports::wayland_server::protocol::wl_buffer;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::{Display, DisplayHandle, Resource};
@@ -38,6 +39,7 @@ use smithay::wayland::selection::primary_selection::{
 use smithay::wayland::selection::wlr_data_control::{DataControlHandler, DataControlState};
 use smithay::wayland::selection::{SelectionHandler, SelectionSource, SelectionTarget};
 use smithay::wayland::shell::xdg;
+use smithay::wayland::shell::xdg::decoration::XdgDecorationState;
 use smithay::wayland::shell::xdg::{
     PopupSurface, SurfaceCachedState, ToplevelSurface, XdgPopupSurfaceData, XdgShellState,
     XdgToplevelSurfaceData,
@@ -49,7 +51,7 @@ use smithay::xwayland::{X11Surface, X11Wm};
 use smithay::{
     delegate_compositor, delegate_data_control, delegate_data_device, delegate_output,
     delegate_primary_selection, delegate_relative_pointer, delegate_seat, delegate_shm,
-    delegate_xdg_shell, delegate_xwayland_shell,
+    delegate_xdg_decoration, delegate_xdg_shell, delegate_xwayland_shell,
 };
 use tracing::{info, warn};
 
@@ -62,6 +64,7 @@ use crate::flutter_engine::FlutterEngine;
 use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
 use crate::keyboard::handle_keyboard_event;
 use crate::keyboard::key_repeater::KeyRepeater;
+use crate::meta_window_state::MetaWindowState;
 use crate::settings::{SettingsManager, VeshellSettings};
 use crate::texture_swap_chain::TextureSwapChain;
 use crate::wayland::wayland::{get_direct_subsurfaces, get_surface_id};
@@ -105,17 +108,20 @@ pub struct State<BackendData: Backend + 'static> {
     pub texture_swapchains: HashMap<i64, TextureSwapChain>,
     pub tx_fbo: Option<channel::Sender<Option<Dmabuf>>>,
     pub wayland_socket_name: Option<String>,
+    pub x11_surfaces: HashMap<u64, X11Surface>,
     pub x11_surface_per_wl_surface: HashMap<WlSurface, X11Surface>,
     pub x11_surface_per_x11_window: HashMap<X11Window, X11Surface>,
     pub x11_wm: Option<X11Wm>,
     pub xdg_popups: HashMap<u64, PopupSurface>,
     pub xdg_shell_state: XdgShellState,
     pub xdg_toplevels: HashMap<u64, ToplevelSurface>,
+    pub meta_window_state: MetaWindowState,
     pub xwayland_display: Option<u32>,
     pub xwayland_shell_state: xwayland_shell::XWaylandShellState,
     pub cursor_state: CursorState,
     pub cursor_image_status: Mutex<CursorImageStatus>,
     pub settings_manager: SettingsManager<BackendData>,
+    pub xdg_decoration_state: XdgDecorationState,
 }
 
 impl<BackendData: Backend + 'static> State<BackendData> {
@@ -157,6 +163,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 // Macros used to delegate protocol handling to types in the app state.
 delegate_compositor!(@<BackendData: Backend + 'static> State<BackendData>);
 delegate_xdg_shell!(@<BackendData: Backend + 'static> State<BackendData>);
+delegate_xdg_decoration!(@<BackendData: Backend + 'static> State<BackendData>);
 delegate_shm!(@<BackendData: Backend + 'static> State<BackendData>);
 delegate_output!(@<BackendData: Backend + 'static> State<BackendData>);
 delegate_seat!(@<BackendData: Backend + 'static> State<BackendData>);
@@ -175,7 +182,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let display_handle = display.handle();
         let clock = Clock::new();
         let compositor_state = CompositorState::new::<Self>(&display_handle);
-        let xdg_shell_state = XdgShellState::new::<Self>(&display_handle);
+        let xdg_shell_state = XdgShellState::new_with_capabilities::<Self>(
+            &display_handle,
+            [WmCapabilities::Fullscreen],
+        );
         let shm_state = ShmState::new::<Self>(&display_handle, vec![]);
 
         // init input
@@ -260,6 +270,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         );
 
         let xwayland_shell_state = xwayland_shell::XWaylandShellState::new::<Self>(&display_handle);
+        let xdg_decoration_state = XdgDecorationState::new::<Self>(&display_handle);
 
         Self {
             running: Arc::new(AtomicBool::new(true)),
@@ -299,6 +310,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             subsurfaces: HashMap::new(),
             xdg_toplevels: HashMap::new(),
             xdg_popups: HashMap::new(),
+            meta_window_state: MetaWindowState::new(),
+            x11_surfaces: HashMap::new(),
             x11_surface_per_x11_window: HashMap::new(),
             x11_surface_per_wl_surface: HashMap::new(),
             texture_ids_per_surface_id: HashMap::new(),
@@ -310,6 +323,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             cursor_state: CursorState::default(),
             cursor_image_status: Mutex::new(CursorImageStatus::default_named()),
             settings_manager,
+            xdg_decoration_state,
         }
     }
 
@@ -391,46 +405,12 @@ impl<BackendData: Backend + 'static> State<BackendData> {
     fn construct_surface_role_message(&self, surface: &WlSurface) -> Option<SurfaceRole> {
         let role = with_states(surface, |surface_data| surface_data.role);
         match role {
-            Some(role @ (xdg::XDG_TOPLEVEL_ROLE | xdg::XDG_POPUP_ROLE)) => {
-                let xdg_surface_message = self.construct_xdg_surface_role_message(surface, role);
-                Some(SurfaceRole::XdgSurface(xdg_surface_message))
-            }
             Some(compositor::SUBSURFACE_ROLE) => {
                 let subsurface_message = Self::construct_subsurface_role_message(surface);
                 Some(SurfaceRole::Subsurface(subsurface_message))
             }
-            Some(XWAYLAND_SHELL_ROLE) => Some(SurfaceRole::X11Surface),
             _ => None,
         }
-    }
-
-    fn construct_xdg_surface_role_message(
-        &self,
-        surface: &WlSurface,
-        role: &str,
-    ) -> XdgSurfaceMessage {
-        let geometry = with_states(surface, |surface_data| {
-            surface_data
-                .cached_state
-                .get::<SurfaceCachedState>()
-                .current()
-                .geometry
-                .map(|geometry| geometry.into())
-        });
-
-        let role = (|| match role {
-            xdg::XDG_TOPLEVEL_ROLE => {
-                let toplevel_message = self.construct_toplevel_role_message(surface)?;
-                Some(XdgSurfaceRole::XdgToplevel(toplevel_message))
-            }
-            xdg::XDG_POPUP_ROLE => {
-                let popup_message = self.construct_popup_role_message(surface)?;
-                Some(XdgSurfaceRole::XdgPopup(popup_message))
-            }
-            _ => unreachable!("This function must only be called with xdg roles"),
-        })();
-
-        XdgSurfaceMessage { geometry, role }
     }
 
     pub fn construct_subsurface_role_message(surface: &WlSurface) -> SubsurfaceMessage {
@@ -446,79 +426,6 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             position: location.into(),
             parent: get_surface_id(&get_parent(surface).unwrap()),
         }
-    }
-
-    fn construct_toplevel_role_message(&self, surface: &WlSurface) -> Option<ToplevelMessage> {
-        let surface_id = get_surface_id(surface);
-        let toplevel = self.xdg_toplevels.get(&surface_id)?;
-
-        let (initial_configure_sent, parent, app_id, title) =
-            with_states(surface, |surface_data| {
-                let surface_state = surface_data
-                    .data_map
-                    .get::<XdgToplevelSurfaceData>()
-                    .unwrap()
-                    .lock()
-                    .unwrap();
-                (
-                    surface_state.initial_configure_sent,
-                    surface_state.parent.clone(),
-                    surface_state.app_id.clone(),
-                    surface_state.title.clone(),
-                )
-            });
-
-        toplevel.with_pending_state(|state| {
-            state.states.set(xdg_toplevel::State::Maximized);
-            state.decoration_mode = Some(zxdg_toplevel_decoration_v1::Mode::ServerSide);
-        });
-
-        if !initial_configure_sent {
-            toplevel.send_configure();
-            return None;
-        }
-
-        let parent_id = if let Some(ref parent) = parent {
-            Some(get_surface_id(&parent))
-        } else {
-            None
-        };
-
-        Some(ToplevelMessage {
-            parent_surface_id: parent_id,
-            app_id,
-            title,
-        })
-    }
-
-    pub fn construct_popup_role_message(&self, surface: &WlSurface) -> Option<PopupMessage> {
-        let surface_id = get_surface_id(surface);
-        let popup = self.xdg_popups.get(&surface_id)?;
-        let (initial_configure_sent, parent, position) = with_states(surface, |surface_data| {
-            let surface_state = surface_data
-                .data_map
-                .get::<XdgPopupSurfaceData>()
-                .unwrap()
-                .lock()
-                .unwrap();
-
-            (
-                surface_state.initial_configure_sent,
-                surface_state.parent.clone(),
-                surface_state.current.geometry.loc.into(),
-            )
-        });
-
-        if !initial_configure_sent {
-            // NOTE: This should never fail as the initial configure is always
-            // allowed.
-            popup.send_configure().expect("initial configure failed");
-            return None;
-        }
-
-        let parent = get_surface_id(&parent?);
-
-        Some(PopupMessage { parent, position })
     }
 }
 

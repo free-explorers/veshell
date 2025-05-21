@@ -27,4 +27,8 @@ class ScreenList extends _$ScreenList {
     state = state.add(screenId);
     return screenId;
   }
+
+  void removeScreen(ScreenId screenId) {
+    state = state.remove(screenId);
+  }
 }

@@ -23,14 +23,23 @@ path = "extra/scripts/helper.rs"
 [profile.profile]
 inherits = "release"
 
-[dependencies]
-smithay = { git = "https://github.com/PapyElGringo/smithay", rev = "c3b2701", features = [
+[dependencies.smithay]
+# git = "https://github.com/Smithay/smithay.git"
+git = "https://github.com/PapyElGringo/smithay.git"
+branch = "veshell_changes"
+
+# path = "../smithay-fork"
+
+features = [
     "default",
     "wayland_frontend",
     "backend_egl",
     "use_system_lib",
     "xwayland",
-] }
+]
+
+[dependencies]
+
 smithay-drm-extras = { path = "extra/third_party/smithay-drm-extras" }
 rustix = "0.38.30"
 input-linux = "0.7.1"
@@ -55,6 +64,9 @@ xkbcommon = "0.8.0"
 backtrace = "0.3"
 notify = "8.0.0"
 sd-notify = "0.4.3"
+uuid = { version = "1.16.0", features = ["v4"] }
+bitflags = "2.2.1"
+
 
 [build-dependencies]
 bindgen = "0.69.1"

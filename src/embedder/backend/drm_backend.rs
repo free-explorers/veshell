@@ -13,6 +13,7 @@ use smithay::backend::allocator::gbm::GbmDevice;
 use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags};
 use smithay::backend::allocator::{Allocator, Fourcc, Slot, Swapchain};
 use smithay::backend::drm::compositor::{DrmCompositor, FrameFlags};
+use smithay::backend::drm::exporter::gbm::GbmFramebufferExporter;
 use smithay::backend::drm::{
     CreateDrmNodeError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent, DrmEventMetadata, DrmNode,
     NodeType,
@@ -119,12 +120,6 @@ impl Backend for DrmBackend {
 
     fn get_session(&self) -> LibSeatSession {
         self.session.clone()
-    }
-
-    fn with_primary_renderer<T>(&mut self, f: impl FnOnce(&GlesRenderer) -> T) -> Option<T> {
-        /*  let renderer = self.gpu_manager.single_renderer(&self.primary_gpu).ok()?;
-        Some(f(renderer.as_gles_renderer())) */
-        Some(f(&self.get_gpu_data_mut().renderer))
     }
 
     fn with_primary_renderer_mut<T>(
@@ -322,8 +317,21 @@ pub fn run_drm_backend() {
                         });
                 }
             }
-            let monitors = data.space.outputs().cloned().collect::<Vec<_>>();
-            data.flutter_engine_mut().monitor_layout_changed(monitors);
+            let bounding_box = data
+                .space
+                .outputs()
+                .map(|output| data.space.output_geometry(output).unwrap())
+                .reduce(|first, second| first.merge(second))
+                .unwrap();
+
+            data.flutter_engine()
+                .send_window_metrics(
+                    (bounding_box.size.w as u32, bounding_box.size.h as u32).into(),
+                )
+                .unwrap();
+
+            data.determine_highest_hz_crtc();
+            data.monitor_layout_changed();
         },
     );
     let mut state = State::new(
@@ -618,7 +626,6 @@ pub fn run_drm_backend() {
             let gpu_data = data.backend_data.get_gpu_data_mut();
             gpu_data.last_rendered_slot = gpu_data.current_slot.take();
 
-            let gpu_data = data.backend_data.get_gpu_data_mut();
             if let Some(ref slot) = gpu_data.last_rendered_slot {
                 gpu_data.swapchain.as_mut().unwrap().submitted(slot);
             }
@@ -853,7 +860,7 @@ impl State<DrmBackend> {
             surface,
             Some(planes),
             device.gbm_allocator.clone(),
-            device.gbm_device.clone(),
+            GbmFramebufferExporter::new(device.gbm_device.clone()),
             color_formats.iter().copied(),
             render_formats,
             device.drm_device.cursor_size(),
@@ -1258,6 +1265,18 @@ impl State<DrmBackend> {
             &self.cursor_state,
             self.pointer.current_location(),
             self.surface_id_under_cursor != None,
+            true,
+            self.meta_window_state
+                .meta_windows
+                .values()
+                .filter_map(|meta_window| {
+                    if meta_window.game_mode_activated {
+                        Some(self.surfaces.get(&meta_window.surface_id).unwrap())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>(),
         );
 
         let rendered = surface.compositor.render_frame(
@@ -1337,7 +1356,7 @@ struct SurfaceData {
 
 pub type GbmDrmCompositor = DrmCompositor<
     GbmAllocator<DrmDeviceFd>,
-    GbmDevice<DrmDeviceFd>,
+    GbmFramebufferExporter<DrmDeviceFd>,
     Option<OutputPresentationFeedback>,
     DrmDeviceFd,
 >;

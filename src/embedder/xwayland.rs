@@ -3,8 +3,11 @@ use smithay::xwayland::X11Wm;
 pub mod xwayland {
     use crate::backend::Backend;
     use crate::cursor::{load_cursor_theme, Cursor};
-    use crate::flutter_engine::wayland_messages::{MapX11Surface, NewX11Surface};
+    use crate::flutter_engine::wayland_messages::{MapX11Surface, MyPoint, NewX11Surface};
     use crate::focus::KeyboardFocusTarget;
+    use crate::meta_window_state::meta_popup::{self, MetaPopup, MetaPopupPatch};
+    use crate::meta_window_state::meta_resize_edge::MetaResizeEdge;
+    use crate::meta_window_state::meta_window::MetaWindowPatch;
     use crate::state::State;
     use crate::wayland::wayland::get_surface_id;
     use serde_json::json;
@@ -13,7 +16,7 @@ pub mod xwayland {
     use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 
     use smithay::reexports::x11rb::rust_connection::{DefaultStream, RustConnection};
-    use smithay::utils::{Logical, Point, Rectangle, Size};
+    use smithay::utils::{Logical, Point, Rectangle, Size, SERIAL_COUNTER};
     use smithay::wayland::seat::WaylandFocus;
     use smithay::wayland::selection::data_device::{
         clear_data_device_selection, current_data_device_selection_userdata,
@@ -30,8 +33,9 @@ pub mod xwayland {
     use std::borrow::Borrow;
     use std::cell::RefCell;
     use std::os::fd::OwnedFd;
+    use uuid::Uuid;
 
-    use tracing::{error, trace};
+    use tracing::{error, info, trace};
     pub struct MyX11SurfaceState {
         pub x11_surface_id: u64,
     }
@@ -115,21 +119,14 @@ pub mod xwayland {
             self.x11_surface_per_x11_window
                 .insert(surface.window_id(), surface.clone());
 
+            let x11_surface_id = self.get_new_x11_surface_id();
             surface.user_data().insert_if_missing(|| {
                 RefCell::new(MyX11SurfaceState {
-                    x11_surface_id: self.get_new_x11_surface_id(),
+                    x11_surface_id: x11_surface_id,
                 })
             });
 
-            let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-            platform_method_channel.invoke_method(
-                "new_x11_surface",
-                Some(Box::new(json!(NewX11Surface {
-                    x11_surface_id: Self::get_x11_surface_id(&surface),
-                    override_redirect: surface.is_override_redirect(),
-                }))),
-                None,
-            );
+            self.x11_surfaces.insert(x11_surface_id, surface.clone());
         }
 
         pub fn map_x11_surface(&mut self, surface: X11Surface) {
@@ -152,16 +149,10 @@ pub mod xwayland {
                     .and_then(|x11_surface| self.x11_surface_per_x11_window.get(&x11_surface))
                     .map(|x11_surface| Self::get_x11_surface_id(&x11_surface))
             };
-
-            let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-            platform_method_channel.invoke_method(
-                "map_x11_surface",
-                Some(Box::new(json!(MapX11Surface {
-                    x11_surface_id: Self::get_x11_surface_id(&surface),
-                    geometry: surface.geometry().into(),
-                    parent,
-                }))),
-                None,
+            info!(
+                "map_x11_surface: {:?} parent: {:?}",
+                Self::get_x11_surface_id(&surface),
+                parent
             );
         }
     }
@@ -172,6 +163,8 @@ pub mod xwayland {
         }
 
         fn new_window(&mut self, _xwm: XwmId, surface: X11Surface) {
+            info!("X11 new_window {:?}", surface);
+
             let mut geometry = surface.geometry();
             geometry.loc = Point::from((0, 0));
             surface.configure(geometry).unwrap();
@@ -180,6 +173,7 @@ pub mod xwayland {
         }
 
         fn new_override_redirect_window(&mut self, _xwm: XwmId, surface: X11Surface) {
+            info!("X11 new_override_redirect_window {:?}", surface);
             self.new_x11_surface(surface);
         }
 
@@ -205,15 +199,20 @@ pub mod xwayland {
             self.x11_surface_per_wl_surface.remove(&wl_surface);
 
             let x11_surface_id = Self::get_x11_surface_id(&surface);
-
-            let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-            platform_method_channel.invoke_method(
-                "unmap_x11_surface",
-                Some(Box::new(json!({
-                    "x11SurfaceId": x11_surface_id,
-                }))),
-                None,
-            );
+            let surface_id = get_surface_id(&wl_surface);
+            if surface.is_override_redirect() {
+                if let Some(meta_popup_id) = self
+                    .meta_window_state
+                    .meta_popup_id_per_surface_id
+                    .remove(&surface_id)
+                {
+                    self.remove_meta_popup(&meta_popup_id);
+                }
+            } else {
+                if let Some(meta_window) = self.get_meta_window(surface_id) {
+                    self.remove_meta_window(&meta_window.id);
+                }
+            }
 
             if !surface.is_override_redirect() {
                 surface.set_mapped(false).unwrap();
@@ -223,16 +222,8 @@ pub mod xwayland {
         fn destroyed_window(&mut self, _xwm: XwmId, surface: X11Surface) {
             let x11_surface_id = Self::get_x11_surface_id(&surface);
 
-            let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-            platform_method_channel.invoke_method(
-                "destroy_x11_surface",
-                Some(Box::new(json!({
-                    "x11SurfaceId": x11_surface_id,
-                }))),
-                None,
-            );
-
             self.x11_surface_per_x11_window.remove(&surface.window_id());
+            self.x11_surfaces.remove(&x11_surface_id);
         }
 
         fn configure_request(
@@ -260,87 +251,123 @@ pub mod xwayland {
         fn configure_notify(
             &mut self,
             _xwm: XwmId,
-            _window: X11Surface,
-            _geometry: Rectangle<i32, Logical>,
+            x11_surface: X11Surface,
+            geometry: Rectangle<i32, Logical>,
             _above: Option<u32>,
         ) {
+            info!("configure_notify: {:?}", geometry);
+            let surface_id = Self::get_x11_surface_id(&x11_surface);
+            if x11_surface.is_override_redirect() && x11_surface.wl_surface().is_some() {
+                if let Some(meta_popup_id) = self
+                    .meta_window_state
+                    .meta_popup_id_per_surface_id
+                    .get(&get_surface_id(&x11_surface.wl_surface().unwrap()))
+                    .cloned()
+                {
+                    self.patch_meta_popup(MetaPopupPatch::UpdatePosition {
+                        id: meta_popup_id,
+                        value: geometry.loc.into(),
+                    });
+                }
+            }
+            if let Some(meta_window) = self.get_meta_window(surface_id) {
+                self.patch_meta_window(
+                    MetaWindowPatch::UpdateGeometry {
+                        id: meta_window.id,
+                        value: Some(geometry.into()),
+                    },
+                    true,
+                );
+            }
         }
 
         fn property_notify(
             &mut self,
             _xwm: XwmId,
             x11_surface: X11Surface,
-            _property: WmWindowProperty,
+            property: WmWindowProperty,
         ) {
-            let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+            info!("property_notify: {:?}", property);
+            let surface_id = Self::get_x11_surface_id(&x11_surface);
+            if let Some(meta_window) = self.get_meta_window(surface_id) {
+                match property {
+                    WmWindowProperty::Title => {
+                        let title = x11_surface.title();
+                        let title = if !title.is_empty() { Some(title) } else { None };
+                        info!("title changed: {:?}", title);
+                        self.patch_meta_window(
+                            MetaWindowPatch::UpdateTitle {
+                                id: meta_window.id,
+                                value: title,
+                            },
+                            true,
+                        );
+                    }
+                    WmWindowProperty::Pid => {
+                        let pid = x11_surface.pid().unwrap_or(0);
+                        info!("pid changed: {}", pid);
+                        self.patch_meta_window(
+                            MetaWindowPatch::UpdatePid {
+                                id: meta_window.id,
+                                value: pid as i32,
+                            },
+                            true,
+                        );
+                    }
+                    WmWindowProperty::Class => {
+                        let class = x11_surface.class();
+                        info!("class changed: {}", class);
+                    }
+                    WmWindowProperty::TransientFor => {
+                        let transient_for = x11_surface.is_transient_for();
+                        info!("transient_for changed: {:?}", transient_for);
+                    }
+                    WmWindowProperty::MotifHints => {
+                        let hints = x11_surface.size_hints();
+                        info!("motif_hints changed: {:?}", hints);
+                    }
 
-            // to simplify we sent all properties to flutter when any changes
-            // TODO: split each property to channel
-
-            platform_method_channel.invoke_method(
-            "x11_properties_changed",
-            Some(Box::new(json!({
-                "x11SurfaceId": Self::get_x11_surface_id(&x11_surface),
-                "title": if !x11_surface.title().is_empty() { Some(x11_surface.title()) } else { None },
-                "windowClass": x11_surface.class(),
-                "instance": if !x11_surface.instance().is_empty() {
-                    Some(x11_surface.instance())
-                } else {
-                    None
-                },
-                "startupId": x11_surface.startup_id(),
-                "pid": x11_surface.get_client_pid().unwrap_or_else(|_| x11_surface.pid().unwrap_or(0)),
-            }))),
-            None,
-        );
-
-            /* match property {
-                WmWindowProperty::Title => {
-                    let title = window.title();
-                    let title = if !title.is_empty() { Some(title) } else { None };
-
-                    platform_method_channel.invoke_method(
-                        "title_changed",
-                        Some(Box::new(json!({
-                            "surfaceId": surface_id,
-                            "title": title,
-                        }))),
-                        None,
-                    );
+                    _ => {}
                 }
-                WmWindowProperty::Class => {
-                    let instance = window.instance();
-                    let instance = if !instance.is_empty() {
-                        Some(instance)
-                    } else {
-                        None
-                    };
-
-                    platform_method_channel.invoke_method(
-                        "app_id_changed",
-                        Some(Box::new(json!({
-                            "surfaceId": surface_id,
-                            "appId": instance,
-                        }))),
-                        None,
-                    );
-                }
-                _ => {}
-            } */
+            }
         }
 
         fn resize_request(
             &mut self,
             _xwm: XwmId,
-            _window: X11Surface,
+            x11_surface: X11Surface,
             _button: u32,
-            _resize_edge: xwm::ResizeEdge,
+            resize_edge: xwm::ResizeEdge,
         ) {
             print!("resize_request");
+            let surface_id = get_surface_id(&x11_surface.wl_surface().unwrap());
+            let meta_window = self.get_meta_window(surface_id).unwrap();
+            let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+            let resize_edge = MetaResizeEdge::from(resize_edge);
+
+            platform_method_channel.invoke_method(
+                "interactive_resize",
+                Some(Box::new(json!({
+                    "metaWindowId": meta_window.id,
+                    "edge": resize_edge.bits()
+                    ,
+                }))),
+                None,
+            );
         }
 
-        fn move_request(&mut self, _xwm: XwmId, _window: X11Surface, _button: u32) {
+        fn move_request(&mut self, _xwm: XwmId, x11_surface: X11Surface, _button: u32) {
             print!("move_request");
+            let surface_id = get_surface_id(&x11_surface.wl_surface().unwrap());
+            let meta_window = self.get_meta_window(surface_id).unwrap();
+            let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+            platform_method_channel.invoke_method(
+                "interactive_move",
+                Some(Box::new(json!({
+                        "metaWindowId": meta_window.id,
+                }))),
+                None,
+            );
         }
 
         fn allow_selection_access(&mut self, xwm: XwmId, _selection: SelectionTarget) -> bool {
@@ -419,7 +446,22 @@ pub mod xwayland {
 
         fn fullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
             let geometry = window.geometry();
+
+            info!("is_fullscreen {:?}", window.is_fullscreen());
+            window.set_fullscreen(true).unwrap();
             window.configure(geometry).unwrap();
+        }
+        fn unfullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
+            info!("unfullscreen_request");
+            window.set_fullscreen(false).unwrap();
+        }
+        fn maximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
+            info!("maximize_request");
+            window.set_maximized(true).unwrap();
+        }
+        fn unmaximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
+            info!("unmaximize_request");
+            window.set_maximized(false).unwrap();
         }
     }
 
@@ -432,16 +474,87 @@ pub mod xwayland {
             let x11_surface_id = Self::get_x11_surface_id(&surface);
             self.x11_surface_per_wl_surface
                 .insert(wl_surface.clone(), surface.clone());
-            let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-
-            platform_method_channel.invoke_method(
-                "surface_associated",
-                Some(Box::new(json!({
-                    "surfaceId": get_surface_id(wl_surface.borrow()),
-                    "x11SurfaceId": x11_surface_id,
-                }))),
-                None,
+            info!(
+                "Associating X11 surface {:?} with wl_surface {:?} transient_for {:?}",
+                x11_surface_id,
+                wl_surface,
+                surface.is_transient_for()
             );
+            let parent_surface = surface
+                .is_transient_for()
+                .and_then(|parent_window| self.x11_surface_per_x11_window.get(&parent_window));
+
+            let mapped_id = surface.mapped_window_id();
+            info!("mapped_id: {:?}", mapped_id);
+            let hints = surface.hints();
+            info!("hints: {:?}", hints);
+            if surface.is_override_redirect() {
+                if let Some(parent_meta_window_id) = parent_surface
+                    .and_then(|parent_surface| {
+                        parent_surface.wl_surface().and_then(|parent_surface| {
+                            self.meta_window_state
+                                .meta_window_id_per_surface_id
+                                .get(&get_surface_id(&parent_surface))
+                        })
+                    })
+                    .or_else(|| {
+                        self.keyboard.current_focus().and_then(|focus| {
+                            focus.wl_surface().and_then(|focus| {
+                                self.x11_surface_per_wl_surface
+                                    .get(&focus.into_owned())
+                                    .and_then(|parent_surface| {
+                                        parent_surface.wl_surface().and_then(|parent_surface| {
+                                            self.meta_window_state
+                                                .meta_window_id_per_surface_id
+                                                .get(&get_surface_id(&(parent_surface)))
+                                        })
+                                    })
+                            })
+                        })
+                    })
+                {
+                    let meta_popup = self.create_meta_popup(MetaPopup {
+                        id: Uuid::new_v4().hyphenated().to_string(),
+                        position: surface.geometry().loc.into(),
+                        parent: parent_meta_window_id.clone(),
+                        surface_id: get_surface_id(wl_surface.borrow()),
+                    });
+                    self.meta_window_state
+                        .meta_popup_id_per_surface_id
+                        .insert(get_surface_id(wl_surface.borrow()), meta_popup.id);
+                }
+            } else {
+                let meta_window = self.new_meta_window_for_x11_surface(
+                    surface.clone(),
+                    get_surface_id(wl_surface.borrow()),
+                    parent_surface.and_then(|parent_x11_surface| {
+                        info!("parent_x11_surface: {:?}", parent_x11_surface);
+                        info!(
+                            "parent_x11_surface.wl_surface(): {:?}",
+                            parent_x11_surface.wl_surface()
+                        );
+                        parent_x11_surface
+                            .wl_surface()
+                            .and_then(|parent_surface| Some(get_surface_id(&parent_surface)))
+                            .or_else(|| {
+                                self.keyboard.current_focus().and_then(|focus| {
+                                    focus.wl_surface().and_then(|focus_surface| {
+                                        self.x11_surface_per_wl_surface
+                                            .get(&focus_surface.into_owned())
+                                            .and_then(|parent_surface| {
+                                                parent_surface.wl_surface().map(|parent_surface| {
+                                                    get_surface_id(&(parent_surface))
+                                                })
+                                            })
+                                    })
+                                })
+                            })
+                    }),
+                );
+                self.meta_window_state
+                    .meta_window_id_per_surface_id
+                    .insert(get_surface_id(wl_surface.borrow()), meta_window.id);
+            }
         }
     }
 }

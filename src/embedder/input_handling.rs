@@ -4,7 +4,8 @@ use smithay::backend::input::{
     self, AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend,
     PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
 };
-use smithay::input::pointer::{AxisFrame, MotionEvent, RelativeMotionEvent};
+use smithay::input::pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent};
+use smithay::reexports::wayland_server::protocol::wl_pointer;
 use smithay::utils::{Logical, Point, SERIAL_COUNTER};
 use tracing::info;
 
@@ -54,6 +55,10 @@ impl<BackendData: Backend> State<BackendData> {
         );
         self.register_frame();
 
+        if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
+            return;
+        }
+
         self.send_motion_event(pointer_location)
     }
 
@@ -94,7 +99,9 @@ impl<BackendData: Backend> State<BackendData> {
             },
         );
         self.register_frame();
-
+        if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
+            return;
+        }
         self.send_motion_event(pointer_location)
     }
 
@@ -132,6 +139,22 @@ impl<BackendData: Backend> State<BackendData> {
             }
         };
         info!("PointerButton {:?}", event.button_code());
+        if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
+            let state = wl_pointer::ButtonState::from(event.state());
+
+            let pointer = self.pointer.clone();
+            pointer.button(
+                self,
+                &ButtonEvent {
+                    button: event.button_code(),
+                    state: state.try_into().unwrap(),
+                    serial: SERIAL_COUNTER.next_serial(),
+                    time: event.time_msec(),
+                },
+            );
+            pointer.frame(self);
+            return;
+        }
         self.flutter_engine()
             .send_pointer_event(FlutterPointerEvent {
                 struct_size: size_of::<FlutterPointerEvent>(),

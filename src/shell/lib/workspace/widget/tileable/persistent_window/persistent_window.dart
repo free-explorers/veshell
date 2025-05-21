@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:flutter_svg/svg.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/application/provider/logs_for_pid.dart';
 import 'package:shell/application/widget/app_icon.dart';
+import 'package:shell/meta_window/provider/meta_window_state.dart';
+import 'package:shell/meta_window/widget/meta_surface.dart';
+import 'package:shell/meta_window/widget/meta_surface_gaming_overlay.dart';
+import 'package:shell/shared/widget/container_with_positionnable_children/container_with_positionnable_children.dart';
+import 'package:shell/wayland/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/wayland/model/request/activate_window/activate_window.serializable.dart';
-import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wayland.manager.dart';
-import 'package:shell/wayland/provider/wl_surface_state.dart';
-import 'package:shell/wayland/widget/x11_surface.dart';
-import 'package:shell/wayland/widget/xdg_toplevel_surface.dart';
-import 'package:shell/window/model/dialog_window.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.dart';
-import 'package:shell/window/provider/dialog_list_for_window.dart';
+import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
+import 'package:shell/window/widget/floatable_window.dart';
 import 'package:shell/workspace/widget/tileable/persistent_window/window_placeholder.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
 
@@ -61,32 +63,6 @@ class PersistentWindowTileable extends Tileable {
       [isSelected],
     );
 
-    final dialogWindowIdSet = ref.watch(
-      dialogListForWindowProvider.select((value) => value.get(windowId)),
-    );
-    final dialogWindowList = <DialogWindow>[];
-    for (final windowId in dialogWindowIdSet) {
-      final dialogWindow = ref.read(dialogWindowStateProvider(windowId));
-      dialogWindowList.add(dialogWindow);
-    }
-
-    useEffect(
-      () {
-        if (isSelected && window.surfaceId != null) {
-          ref.read(waylandManagerProvider.notifier).request(
-                ActivateWindowRequest(
-                  message: ActivateWindowMessage(
-                    surfaceId: window.surfaceId!,
-                    activate: true,
-                  ),
-                ),
-              );
-        }
-        return null;
-      },
-      [window.surfaceId],
-    );
-
     return ClipRect(
       child: FocusScope(
         node: persistentFocusNode,
@@ -95,32 +71,13 @@ class PersistentWindowTileable extends Tileable {
           if (value) {
             persistentFocusNode.autofocus(primaryFocusNode);
           }
-          /*  focusLog.info(
-            'persistentFocusNode.onFocusChange for ${window.properties.title} $persistentFocusNode',
-          ); */
-
-          /* if (value && !isSelected) {
-            focusLog.info('onGrabFocus for ${window.properties.title}');
-            onGrabFocus?.call();
-          } */
-          if (window.surfaceId != null) {
-            ref.read(waylandManagerProvider.notifier).request(
-                  ActivateWindowRequest(
-                    message: ActivateWindowMessage(
-                      surfaceId: window.surfaceId!,
-                      activate: value,
-                    ),
-                  ),
-                );
-          }
         },
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
-          child: window.surfaceId != null
-              ? surfacesWidget(
+          child: window.metaWindowId != null
+              ? WithSurfacesWidget(
                   focusNode: primaryFocusNode,
                   window: window,
-                  dialogWindowList: dialogWindowList,
                 )
               : WindowPlaceholder(
                   isSelected: isSelected,
@@ -146,7 +103,7 @@ class PersistentWindowTileable extends Tileable {
     WidgetRef ref,
   ) {
     final window = ref.watch(persistentWindowStateProvider(windowId));
-    final isRunning = window.surfaceId != null;
+    final isRunning = window.metaWindowId != null;
     final title = window.properties.title;
     return HookBuilder(
       builder: (context) {
@@ -231,6 +188,46 @@ class PersistentWindowTileable extends Tileable {
         leadingIcon: const Icon(MdiIcons.headCog),
         child: const Text('Show execution logs'),
       ),
+      Consumer(
+        builder: (context, subref, child) {
+          final displayMode = subref.watch(
+            persistentWindowStateProvider(windowId).select(
+              (value) => value.displayMode,
+            ),
+          );
+          return SubmenuButton(
+            menuChildren: [
+              ...DisplayMode.values.map(
+                (e) => MenuItemButton(
+                  leadingIcon: switch (e) {
+                    DisplayMode.maximized =>
+                      const Icon(MdiIcons.windowMaximize),
+                    DisplayMode.fullscreen => const Icon(MdiIcons.fullscreen),
+                    DisplayMode.game => const Icon(MdiIcons.controller),
+                    DisplayMode.floating => SvgPicture.asset(
+                        'assets/float-symbolic.svg',
+                        width: 24,
+                        height: 24,
+                      ),
+                  },
+                  onPressed: () {
+                    ref
+                        .read(persistentWindowStateProvider(windowId).notifier)
+                        .setDisplayMode(e);
+                  },
+                  style: MenuItemButton.styleFrom(
+                    foregroundColor: e == displayMode
+                        ? Theme.of(context).colorScheme.primary
+                        : null,
+                  ),
+                  child: Text(e.name),
+                ),
+              ),
+            ],
+            child: const Text('Display mode'),
+          );
+        },
+      ),
       MenuItemButton(
         onPressed: () {
           ref
@@ -246,84 +243,157 @@ class PersistentWindowTileable extends Tileable {
   }
 }
 
-class surfacesWidget extends HookConsumerWidget {
-  const surfacesWidget({
+class WithSurfacesWidget extends HookConsumerWidget {
+  const WithSurfacesWidget({
     required this.window,
-    required this.dialogWindowList,
-    this.focusNode,
+    required this.focusNode,
     super.key,
   });
-  final FocusNode? focusNode;
+  final FocusNode focusNode;
 
   final PersistentWindow window;
-  final List<DialogWindow> dialogWindowList;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return HookBuilder(
-          builder: (context) {
-            useEffect(
-              () {
-                ref
-                    .read(
-                      wlSurfaceStateProvider(window.surfaceId!).notifier,
-                    )
-                    .resizeSurface(
-                      width: constraints.widthConstraints().maxWidth.round(),
-                      height: constraints.heightConstraints().maxHeight.round(),
-                    );
-                return null;
-              },
-              [constraints],
-            );
-            return Builder(
-              builder: (context) {
-                final role = ref.read(
-                  wlSurfaceStateProvider(window.surfaceId!)
-                      .select((value) => value.role),
-                );
+    final displayMode = window.displayMode;
 
-                if (role == SurfaceRole.xdgToplevel) {
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      XdgToplevelSurfaceWidget(
-                        focusNode: dialogWindowList.isEmpty ? focusNode : null,
-                        surfaceId: window.surfaceId!,
-                      ),
-                      if (dialogWindowList.isNotEmpty)
-                        const ColoredBox(color: Colors.black38),
-                      if (dialogWindowList.isNotEmpty)
-                        for (final dialog in dialogWindowList)
-                          Center(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: XdgToplevelSurfaceWidget(
-                                focusNode: dialog == dialogWindowList.last
-                                    ? focusNode
-                                    : null,
-                                surfaceId: dialog.surfaceId,
-                              ),
-                            ),
-                          ),
-                    ],
-                  );
-                } else if (role == SurfaceRole.x11Surface) {
-                  return X11SurfaceWidget(
-                    focusNode: focusNode,
-                    surfaceId: window.surfaceId!,
-                  );
-                } else {
-                  assert(false, 'Unsupported role: $role');
-                  return const SizedBox();
-                }
-              },
-            );
-          },
-        );
+    final dialogWindowList = ref
+        .watch(
+      dialogSetForWindowProvider(window.windowId),
+    )
+        .map((element) {
+      return ref.watch(dialogWindowStateProvider(element));
+    }).toList();
+
+    final activateWindow = useCallback(
+      (bool value) {
+        final metaWindowToActivate =
+            dialogWindowList.lastOrNull?.metaWindowId ?? window.metaWindowId;
+        if (metaWindowToActivate != null) {
+          final metaWindow =
+              ref.read(metaWindowStateProvider(metaWindowToActivate));
+
+          ref.read(waylandManagerProvider.notifier).request(
+                ActivateWindowRequest(
+                  message: ActivateWindowMessage(
+                    surfaceId: metaWindow.surfaceId,
+                    activate: value,
+                  ),
+                ),
+              );
+        }
       },
+      [window.metaWindowId, dialogWindowList],
     );
+
+    useEffect(
+      () {
+        if (focusNode.hasFocus) {
+          activateWindow(true);
+        }
+        return null;
+      },
+      [window.metaWindowId],
+    );
+
+    useEffect(
+      () {
+        void callback() {
+          activateWindow(focusNode.hasFocus);
+        }
+
+        focusNode.addListener(callback);
+        return () {
+          focusNode.removeListener(callback);
+        };
+      },
+      [focusNode],
+    );
+
+    return switch (displayMode) {
+      DisplayMode.maximized ||
+      DisplayMode
+            .fullscreen => // TODO: fix this, it's not working with the new wayland stack, need to find a way to get the surface id from the meta surface and then use that to get the surface from the wayland stack, or just use the meta surface directly, but that would mean we need to change the way we handle surfaces in flutte
+        Stack(
+          children: [
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return HookBuilder(
+                  builder: (context) {
+                    useEffect(
+                      () {
+                        if (constraints
+                                .widthConstraints()
+                                .maxWidth
+                                .isInfinite ||
+                            constraints
+                                .heightConstraints()
+                                .maxHeight
+                                .isInfinite) {
+                          return null;
+                        }
+                        WidgetsBinding.instance
+                            .addPostFrameCallback((timeStamp) {
+                          final geometry = ref.read(
+                            metaWindowStateProvider(window.metaWindowId!)
+                                .select((value) => value.geometry),
+                          );
+
+                          ref
+                              .read(
+                                metaWindowStateProvider(window.metaWindowId!)
+                                    .notifier,
+                              )
+                              .patch(
+                                UpdateGeometry(
+                                  id: window.metaWindowId!,
+                                  value: Rect.fromLTWH(
+                                    geometry!.left,
+                                    geometry.top,
+                                    constraints.maxWidth,
+                                    constraints.maxHeight,
+                                  ),
+                                ),
+                              );
+                        });
+                        return null;
+                      },
+                      [constraints],
+                    );
+
+                    return MetaSurfaceWidget(
+                      focusNode: focusNode,
+                      metaWindowId: window.metaWindowId!,
+                      decorated: false,
+                    );
+                  },
+                );
+              },
+            ),
+            if (dialogWindowList.isNotEmpty) ...[
+              const Positioned.fill(child: ColoredBox(color: Colors.black38)),
+              ContainerWithPositionnableChildren(
+                children: dialogWindowList
+                    .map(
+                      (e) => FloatableWindow(
+                        window: e,
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
+          ],
+        ),
+      DisplayMode.game => MetaSurfaceGamingOverlay(
+          metaWindowId: window.metaWindowId!,
+        ),
+      DisplayMode.floating => ContainerWithPositionnableChildren(
+          children: [
+            FloatableWindow(window: window),
+            for (final dialogWindow in dialogWindowList)
+              FloatableWindow(window: dialogWindow),
+          ],
+        ),
+    };
   }
 }

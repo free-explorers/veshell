@@ -1,14 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/wayland/provider/surface.manager.dart';
-import 'package:shell/wayland/provider/x11_surface_state.dart';
-import 'package:shell/wayland/provider/xdg_surface_state.dart';
-import 'package:shell/wayland/widget/x11_surface.dart';
-import 'package:shell/wayland/widget/xdg_toplevel_surface.dart';
-import 'package:shell/window/model/window_properties.serializable.dart';
-import 'package:shell/window/provider/surface_window_map.dart';
-import 'package:shell/window/provider/window_properties.dart';
 
 enum SurfaceType { xdgToplevel, x11Surface }
 
@@ -41,10 +33,11 @@ class SurfaceListDevView extends HookConsumerWidget {
           Expanded(
             child: ColoredBox(
               color: Theme.of(context).colorScheme.surface.withAlpha(240),
-              child: switch (selectedCategory.value) {
+              child: /*  switch (selectedCategory.value) {
                 SurfaceType.xdgToplevel => const XdgTopLevelDevView(),
                 SurfaceType.x11Surface => const X11SurfaceDevView(),
-              },
+              }, */
+                  Container(),
             ),
           ),
         ],
@@ -53,7 +46,7 @@ class SurfaceListDevView extends HookConsumerWidget {
   }
 }
 
-class XdgTopLevelDevView extends HookConsumerWidget {
+/* class XdgTopLevelDevView extends HookConsumerWidget {
   const XdgTopLevelDevView({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -93,8 +86,10 @@ class XdgTopLevelDevView extends HookConsumerWidget {
               child: AspectRatio(
                 aspectRatio: 16 / 9,
                 child: FittedBox(
-                  child: XdgToplevelSurfaceWidget(
-                    surfaceId: surfaceId,
+                  child: DeferredPointerHandler(
+                    child: SurfaceWidget(
+                      surfaceId: surfaceId,
+                    ),
                   ),
                 ),
               ),
@@ -106,9 +101,9 @@ class XdgTopLevelDevView extends HookConsumerWidget {
       itemCount: topLevelList.length,
     );
   }
-}
+} */
 
-class X11SurfaceDevView extends HookConsumerWidget {
+/* class X11SurfaceDevView extends HookConsumerWidget {
   const X11SurfaceDevView({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -125,6 +120,8 @@ class X11SurfaceDevView extends HookConsumerWidget {
         final matchedWindowId = x11SurfaceState.surfaceId != null
             ? ref.read(surfaceWindowMapProvider).get(x11SurfaceState.surfaceId!)
             : null;
+        final metaWindowId =
+            ref.read(metaWindowIdPerX11SurfaceIdProvider(x11SurfaceId));
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -157,9 +154,10 @@ class X11SurfaceDevView extends HookConsumerWidget {
               child: AspectRatio(
                 aspectRatio: 16 / 9,
                 child: FittedBox(
-                  child: x11SurfaceState.mapped
-                      ? X11SurfaceWidget(
-                          surfaceId: x11SurfaceState.surfaceId!,
+                  child: metaWindowId != null
+                      ? MetaSurfaceWidget(
+                          metaWindowId: metaWindowId,
+                          decorated: false,
                         )
                       : null,
                 ),
@@ -172,4 +170,4 @@ class X11SurfaceDevView extends HookConsumerWidget {
       itemCount: x11SurfaceList.length,
     );
   }
-}
+} */

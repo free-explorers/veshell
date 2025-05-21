@@ -7,7 +7,7 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/overview/widget/overview_content.dart';
 import 'package:shell/overview/widget/search/search_engine.dart';
-import 'package:shell/screen/provider/current_screen_id.dart';
+import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/shared/widget/clock.dart';
 import 'package:shell/theme//provider/theme.dart';
 
@@ -15,7 +15,7 @@ class OverviewWidget extends HookConsumerWidget {
   const OverviewWidget({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final screenId = ref.watch(currentScreenIdProvider);
+    final screenId = CurrentScreenId.of(context);
 
     final overviewAnimationController = useAnimationController(
       duration: const Duration(milliseconds: 200),

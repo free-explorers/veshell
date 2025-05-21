@@ -12,11 +12,11 @@ class SurfaceWindowMap extends _$SurfaceWindowMap {
     return IMap();
   }
 
-  void add(SurfaceId surfaceId, WindowId windowId) {
+  void set(SurfaceId surfaceId, WindowId windowId) {
     state = state.add(surfaceId, windowId);
   }
 
-  void remove(SurfaceId surfaceId) {
+  void unset(SurfaceId surfaceId) {
     state = state.remove(surfaceId);
   }
 }

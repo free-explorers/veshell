@@ -4,7 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/application/provider/app_drawer.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/overview/provider/overview_state.dart';
-import 'package:shell/screen/provider/current_screen_id.dart';
+import 'package:shell/screen/widget/current_screen_id.dart';
 
 /// List of applications for the given searchText
 class ApplicationSearchResult extends HookConsumerWidget {
@@ -44,8 +44,7 @@ class ApplicationSearchResult extends HookConsumerWidget {
             );
             ref
                 .read(
-                  overviewStateProvider(ref.read(currentScreenIdProvider))
-                      .notifier,
+                  overviewStateProvider(CurrentScreenId.of(context)).notifier,
                 )
                 .startEphemeralApplication(desktopEntry);
           },

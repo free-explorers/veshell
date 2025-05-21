@@ -1,16 +1,25 @@
 use std::sync::atomic::Ordering;
 
 use log::{error, warn};
-use smithay::backend::allocator::dmabuf::Dmabuf;
-use smithay::backend::input::{Event, InputEvent, KeyboardKeyEvent};
+use smithay::backend::allocator::dmabuf::{AnyError, AsDmabuf, Dmabuf};
+use smithay::backend::allocator::{Allocator, Fourcc, Slot, Swapchain};
+use smithay::backend::input::{Event, InputEvent, KeyState, KeyboardKeyEvent};
+use smithay::backend::renderer::damage::OutputDamageTracker;
+use smithay::backend::renderer::element::surface::{
+    render_elements_from_surface_tree, WaylandSurfaceRenderElement,
+};
+use smithay::backend::renderer::element::texture::TextureRenderElement;
+use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
-use smithay::backend::renderer::{ImportDma, ImportEgl};
+use smithay::backend::renderer::{Bind, ImportDma, ImportEgl};
 use smithay::backend::x11::X11Input;
 use smithay::delegate_dmabuf;
 use smithay::output::{Output, PhysicalProperties, Subpixel};
 use smithay::reexports::ash::ext;
+use smithay::reexports::calloop::channel::Event as CalloopEvent;
 use smithay::reexports::calloop::channel::Event::Msg;
+use smithay::reexports::gbm::Format;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::x11rb::protocol::xproto::{
     AutoRepeatMode, ChangeKeyboardControlAux, ConnectionExt,
@@ -37,13 +46,14 @@ use smithay::{
     },
     utils::DeviceFd,
 };
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::flutter_engine::FlutterEngine;
-use crate::keyboard::handle_keyboard_event;
+use crate::keyboard::{self, handle_keyboard_event};
 use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
 use crate::{settings, state};
 
+use super::render::{get_render_elements, get_surface_elements, VeshellRenderElements};
 use super::Backend;
 
 impl DmabufHandler for State<X11Data> {
@@ -119,6 +129,7 @@ pub fn run_x11_client() {
     let _global = output.create_global::<State<X11Data>>(&display_handle);
     output.change_current_state(Some(mode), None, None, Some((0, 0).into()));
     output.set_preferred(mode);
+    let damage_tracker = OutputDamageTracker::from_output(&output);
 
     let skip_vulkan = std::env::var("ANVIL_NO_VULKAN")
         .map(|x| {
@@ -170,7 +181,10 @@ pub fn run_x11_client() {
         None => x11_handle
             .create_surface(
                 &window,
-                DmabufAllocator(GbmAllocator::new(gbm_device, GbmBufferFlags::RENDERING)),
+                DmabufAllocator(GbmAllocator::new(
+                    gbm_device.clone(),
+                    GbmBufferFlags::RENDERING,
+                )),
                 egl_context
                     .dmabuf_render_formats()
                     .iter()
@@ -187,7 +201,7 @@ pub fn run_x11_client() {
     }
 
     let dmabuf_formats = gles_renderer.dmabuf_formats();
-    let dmabuf_default_feedback = DmabufFeedbackBuilder::new(node.dev_id(), dmabuf_formats)
+    let dmabuf_default_feedback = DmabufFeedbackBuilder::new(node.dev_id(), dmabuf_formats.clone())
         .build()
         .unwrap();
     let mut dmabuf_state = DmabufState::new();
@@ -195,6 +209,26 @@ pub fn run_x11_client() {
         &display.handle(),
         &dmabuf_default_feedback,
     );
+
+    let dmabuf_allocator: Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>> = {
+        let gbm_allocator = GbmAllocator::new(gbm_device.clone(), GbmBufferFlags::RENDERING);
+        Box::new(DmabufAllocator(gbm_allocator))
+    };
+
+    let modifiers = dmabuf_formats
+        .iter()
+        .map(|format| format.modifier)
+        .collect::<Vec<_>>();
+    let size = window.size();
+
+    let swapchain = Swapchain::new(
+        dmabuf_allocator,
+        size.w as u32,
+        size.h as u32,
+        Fourcc::Argb8888,
+        modifiers,
+    );
+
     let settings_manager = settings::SettingsManager::new(
         event_loop.handle(),
         |data: &mut State<X11Data>| {
@@ -210,8 +244,13 @@ pub fn run_x11_client() {
         display,
         event_loop.handle(),
         X11Data {
+            render: false,
             x11_surface,
             renderer: gles_renderer,
+            swapchain,
+            current_slot: None,
+            last_rendered_slot: None,
+            damage_tracker,
         },
         Some(dmabuf_state),
         settings_manager,
@@ -235,7 +274,6 @@ pub fn run_x11_client() {
 
     state.flutter_engine = Some(flutter_engine);
 
-    let size = window.size();
     tx_output_height.send(size.h).unwrap();
     state.space.map_output(&output, (0, 0));
     let output_clone = output.clone();
@@ -280,31 +318,20 @@ pub fn run_x11_client() {
                         .unwrap();
 
                     let monitors = data.space.outputs().cloned().collect::<Vec<_>>();
+                    data.backend_data
+                        .swapchain
+                        .resize(size.w as u32, size.h as u32);
                     data.flutter_engine_mut().monitor_layout_changed(monitors);
+                    data.backend_data.render = true;
                 }
 
                 X11Event::PresentCompleted { .. } | X11Event::Refresh { .. } => {
                     data.is_next_flutter_frame_scheduled = false;
+                    data.backend_data.render = true;
                     let drained: Vec<_> = data.batons.drain(..).collect(); // Mutable borrow ends here
 
                     for baton in drained {
                         data.flutter_engine().on_vsync(baton, 144_000).unwrap();
-                    }
-                    let start_time = std::time::Instant::now();
-                    for surface in data.xdg_shell_state.toplevel_surfaces() {
-                        send_frames_surface_tree(
-                            surface.wl_surface(),
-                            start_time.elapsed().as_millis() as u32,
-                        );
-                    }
-                    for surface in data.xdg_popups.values() {
-                        send_frames_surface_tree(
-                            surface.wl_surface(),
-                            start_time.elapsed().as_millis() as u32,
-                        );
-                    }
-                    for surface in data.x11_surface_per_wl_surface.keys() {
-                        send_frames_surface_tree(surface, start_time.elapsed().as_millis() as u32);
                     }
                 }
 
@@ -312,6 +339,20 @@ pub fn run_x11_client() {
                     InputEvent::DeviceAdded { device: _ } => {}
                     InputEvent::DeviceRemoved { device: _ } => {}
                     InputEvent::Keyboard { event } => {
+                        let keyboard = data.keyboard.clone();
+
+                        // Ignore release events for keys that are not pressed.
+                        // This can happen when using Alt+Tab to switch windows and focus the compositor
+                        // Flutter doesn't expect to receive release events for keys that are not pressed.
+                        if event.state() == KeyState::Released
+                            && !keyboard.pressed_keys().contains(&event.key_code())
+                        {
+                            info!(
+                                "Ignoring key {:?} release event because it was not pressed.",
+                                event.key_code()
+                            );
+                            return;
+                        }
                         handle_keyboard_event(
                             data,
                             event.key_code(),
@@ -358,12 +399,8 @@ pub fn run_x11_client() {
     event_loop
         .handle()
         .insert_source(rx_baton, move |baton, _, data| {
-            if let Msg(baton) = baton {
-                if data.is_next_flutter_frame_scheduled {
-                    data.batons.push(baton);
-                    return;
-                }
-                data.flutter_engine().on_vsync(baton, 144_000).unwrap();
+            if let CalloopEvent::Msg(baton) = baton {
+                data.batons.push(baton);
             }
         })
         .unwrap();
@@ -371,15 +408,20 @@ pub fn run_x11_client() {
     event_loop
         .handle()
         .insert_source(rx_request_fbo, move |_, _, data| {
-            match data.backend_data.x11_surface.buffer() {
-                Ok((dmabuf, _age)) => {
-                    let _ = data.tx_fbo.as_ref().unwrap().send(Some(dmabuf));
+            let slot = match data.backend_data.swapchain.acquire() {
+                Ok(Some(slot)) => slot,
+                Ok(None) => {
+                    error!("Failed to acquire swapchain slot: no available slots");
+                    return;
                 }
                 Err(err) => {
-                    error!("{err}");
-                    let _ = data.tx_fbo.as_ref().unwrap().send(None);
+                    error!("Error while acquiring swapchain slot: {}", err);
+                    return;
                 }
-            }
+            };
+            let dmabuf = slot.export().unwrap();
+            data.backend_data.current_slot = Some(slot);
+            data.tx_fbo.as_ref().unwrap().send(Some(dmabuf)).unwrap();
         })
         .unwrap();
 
@@ -387,16 +429,162 @@ pub fn run_x11_client() {
         .handle()
         .insert_source(rx_present, move |_, _, data| {
             data.is_next_flutter_frame_scheduled = true;
-            if let Err(err) = data.backend_data.x11_surface.submit() {
-                data.backend_data.x11_surface.reset_buffers();
-                warn!("Failed to submit buffer: {}. Retrying", err);
-            };
+
+            data.backend_data.last_rendered_slot = data.backend_data.current_slot.take();
+
+            if let Some(ref slot) = data.backend_data.last_rendered_slot {
+                data.backend_data.swapchain.submitted(slot);
+            }
         })
         .unwrap();
 
     state::State::<X11Data>::start_xwayland(&mut state);
 
     while state.running.load(Ordering::SeqCst) {
+        if state.backend_data.render {
+            let last_rendered_slot = state.backend_data.last_rendered_slot.as_mut();
+
+            let (mut buffer, age) = state
+                .backend_data
+                .x11_surface
+                .buffer()
+                .expect("gbm device was destroyed");
+            let mut fb = match state.backend_data.renderer.bind(&mut buffer) {
+                Ok(fb) => fb,
+                Err(err) => {
+                    error!("Error while binding buffer: {}", err);
+                    profiling::finish_frame!();
+                    continue;
+                }
+            };
+
+            let slot = if let Some(ref slot) = last_rendered_slot {
+                slot
+            } else {
+                // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
+                let render_res = state
+                    .backend_data
+                    .damage_tracker
+                    .render_output::<TextureRenderElement<_>, _>(
+                        &mut state.backend_data.renderer,
+                        &mut fb,
+                        age.into(),
+                        &[],
+                        [0.0, 0.0, 0.0, 0.0],
+                    );
+                match render_res {
+                    Ok(render_output_result) => {
+                        let submitted = if let Err(err) = state.backend_data.x11_surface.submit() {
+                            state.backend_data.x11_surface.reset_buffers();
+                            warn!("Failed to submit buffer: {}. Retrying", err);
+                            false
+                        } else {
+                            true
+                        };
+
+                        state.backend_data.render = !submitted;
+                    }
+                    Err(err) => {
+                        state.backend_data.x11_surface.reset_buffers();
+                        error!("Rendering error: {}", err);
+                        // TODO: convert RenderError into SwapBuffersError and skip temporary (will retry) and panic on ContextLost or recreate
+                    }
+                }
+                continue;
+            };
+
+            let geometry = match state.space.output_geometry(&output.clone()) {
+                Some(geometry) => geometry.to_f64(),
+                None => return,
+            };
+
+            let elements = get_render_elements(
+                &mut state.backend_data.renderer,
+                &output.clone(),
+                slot,
+                geometry,
+                state.clock.now(),
+                &state.cursor_image_status,
+                &state.cursor_state,
+                state.pointer.current_location(),
+                state.surface_id_under_cursor != None,
+                false,
+                state
+                    .meta_window_state
+                    .meta_windows
+                    .values()
+                    .filter_map(|meta_window| {
+                        if meta_window.game_mode_activated {
+                            Some(state.surfaces.get(&meta_window.surface_id).unwrap())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            );
+
+            let mut elements2: Vec<VeshellRenderElements<GlesRenderer>> = Vec::new();
+
+            /* for surface in state.xdg_shell_state.toplevel_surfaces() {
+                let surface = surface.wl_surface();
+                let element = get_surface_elements(&mut state.backend_data.renderer, surface);
+                elements2.extend(element);
+            } */
+            // merge both elements
+            elements2.extend(elements);
+
+            let render_res = state.backend_data.damage_tracker.render_output(
+                &mut state.backend_data.renderer,
+                &mut fb,
+                age.into(),
+                &elements2,
+                [0.0, 0.0, 0.0, 0.0],
+            );
+
+            match render_res {
+                Ok(render_output_result) => {
+                    let submitted = if let Err(err) = state.backend_data.x11_surface.submit() {
+                        state.backend_data.x11_surface.reset_buffers();
+                        warn!("Failed to submit buffer: {}. Retrying", err);
+                        false
+                    } else {
+                        true
+                    };
+
+                    state.backend_data.render = !submitted;
+                }
+                Err(err) => {
+                    #[cfg(feature = "debug")]
+                    if let Some(renderdoc) = state.renderdoc.as_mut() {
+                        renderdoc.discard_frame_capture(
+                            backend_data.renderer.egl_context().get_context_handle(),
+                            std::ptr::null(),
+                        );
+                    }
+
+                    state.backend_data.x11_surface.reset_buffers();
+                    error!("Rendering error: {}", err);
+                    // TODO: convert RenderError into SwapBuffersError and skip temporary (will retry) and panic on ContextLost or recreate
+                }
+            }
+
+            let start_time = std::time::Instant::now();
+            for surface in state.xdg_shell_state.toplevel_surfaces() {
+                send_frames_surface_tree(
+                    surface.wl_surface(),
+                    start_time.elapsed().as_millis() as u32,
+                );
+            }
+            for surface in state.xdg_popups.values() {
+                send_frames_surface_tree(
+                    surface.wl_surface(),
+                    start_time.elapsed().as_millis() as u32,
+                );
+            }
+            for surface in state.x11_surface_per_wl_surface.keys() {
+                send_frames_surface_tree(surface, start_time.elapsed().as_millis() as u32);
+            }
+        }
         let result = event_loop.dispatch(None, &mut state);
 
         if result.is_err() {
@@ -411,8 +599,13 @@ pub fn run_x11_client() {
 }
 
 pub struct X11Data {
+    render: bool,
     pub x11_surface: X11Surface,
     renderer: GlesRenderer,
+    swapchain: Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>>,
+    current_slot: Option<Slot<Dmabuf>>,
+    last_rendered_slot: Option<Slot<Dmabuf>>,
+    damage_tracker: OutputDamageTracker,
 }
 
 impl Backend for X11Data {
@@ -422,10 +615,6 @@ impl Backend for X11Data {
 
     fn get_session(&self) -> smithay::backend::session::libseat::LibSeatSession {
         unreachable!("X11 backend does not support libseat")
-    }
-
-    fn with_primary_renderer<T>(&mut self, f: impl FnOnce(&GlesRenderer) -> T) -> Option<T> {
-        Some(f(&self.renderer))
     }
 
     fn with_primary_renderer_mut<T>(

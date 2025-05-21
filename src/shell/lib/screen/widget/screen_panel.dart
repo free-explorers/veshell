@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/overview/provider/overview_state.dart';
-import 'package:shell/screen/provider/current_screen_id.dart';
+import 'package:shell/screen/widget/current_screen_id.dart';
+import 'package:shell/screen/widget/screen_configuration_menu.dart';
 import 'package:shell/screen/widget/workspace_list.dart';
 import 'package:shell/theme//provider/theme.dart';
 
@@ -36,7 +37,7 @@ class ScreenPanel extends HookConsumerWidget implements PreferredSizeWidget {
                 ref
                     .read(
                       overviewStateProvider(
-                        ref.read(currentScreenIdProvider),
+                        CurrentScreenId.of(context),
                       ).notifier,
                     )
                     .toggle();
@@ -44,6 +45,7 @@ class ScreenPanel extends HookConsumerWidget implements PreferredSizeWidget {
               icon: const Icon(MdiIcons.shipWheel),
             ),
             const Expanded(child: WorkspaceListView()),
+            const ScreenConfigurationMenu(),
           ],
         ),
       ),

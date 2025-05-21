@@ -100,7 +100,7 @@ class TileableListView extends HookConsumerWidget {
             key: tileableKeyList[index],
             builder: (context, constraints) {
               // call with delay to prevent FlutterError (setState() or markNeedsBuild() called during build.
-              Future.delayed(Duration.zero, () {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
                 final renderBox = tileableKeyList[index]
                     .currentContext!
                     .findRenderObject()! as RenderBox;

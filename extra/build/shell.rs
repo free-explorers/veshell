@@ -14,7 +14,9 @@ pub fn build_shell(
     flutter_engine_build: FlutterEngineBuild,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=extra/build/shell.rs");
-    println!("cargo:rerun-if-changed=src/shell/");
+    println!("cargo:rerun-if-changed=src/shell/pubspec.yaml");
+    println!("cargo:rerun-if-changed=src/shell/lib");
+
     let absolute_flutter_bin = Path::new(&*flutter_bin_path).canonicalize()?;
     let absolute_dart_bin = Path::new(&*dart_bin_path).canonicalize()?;
     let absolute_shell_directory = Path::new(&SHELL_DIRECTORY).canonicalize()?;

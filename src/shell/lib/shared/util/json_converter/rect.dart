@@ -16,9 +16,9 @@ class RectConverter extends JsonConverter<Rect, Map<dynamic, dynamic>> {
 
   @override
   Map<dynamic, dynamic> toJson(Rect object) => {
-        'x': object.left,
-        'y': object.top,
-        'width': object.width,
-        'height': object.height,
+        'x': object.left.round(),
+        'y': object.top.round(),
+        'width': object.width.round(),
+        'height': object.height.round(),
       };
 }

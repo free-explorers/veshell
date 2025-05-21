@@ -20,9 +20,11 @@ class ConfiguredSettingsJson extends _$ConfiguredSettingsJson {
 
     if (!configuredSettingsFile.existsSync()) {
       _subscription =
-          configDirectory.watch(events: FileSystemEvent.create).listen((event) {
-        if (event.path == configuredSettingsFile.path) {
-          ref.invalidateSelf();
+          configDirectory.watch(events: FileSystemEvent.move).listen((event) {
+        if (event is FileSystemMoveEvent) {
+          if (event.destination == configuredSettingsFile.path) {
+            ref.invalidateSelf();
+          }
         }
       });
       return {};

@@ -216,7 +216,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
 
         server_state
             .backend_data
-            .with_primary_renderer(|renderer| {
+            .with_primary_renderer_mut(|renderer| {
                 let root_egl_context = renderer.egl_context();
 
                 // We need a pointer to the memory location before initializing the struct.

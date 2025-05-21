@@ -36,12 +36,13 @@ pub fn handle_keyboard_event<BackendData: Backend + 'static>(
     // so that Smithay knows what keys are pressed.
     let keyboard = data.keyboard.clone();
     let mut linux_code = key_code.raw() - 8;
-
-    // Swap Meta ant leftAlt keycode
-    if linux_code == input_linux::sys::KEY_LEFTMETA as u32 {
-        linux_code = input_linux::sys::KEY_LEFTALT as u32
-    } else if linux_code == input_linux::sys::KEY_LEFTALT as u32 {
-        linux_code = input_linux::sys::KEY_LEFTMETA as u32
+    if data.meta_window_state.meta_window_in_gaming_mode.is_none() {
+        // Swap Meta ant leftAlt keycode
+        if linux_code == input_linux::sys::KEY_LEFTMETA as u32 {
+            linux_code = input_linux::sys::KEY_LEFTALT as u32
+        } else if linux_code == input_linux::sys::KEY_LEFTALT as u32 {
+            linux_code = input_linux::sys::KEY_LEFTMETA as u32
+        }
     }
 
     key_code = Keycode::new(linux_code + 8);
@@ -77,6 +78,18 @@ pub fn handle_keyboard_event<BackendData: Backend + 'static>(
 
     // 3. Check if the keystroke result in compositor hotkeys shortcuts
     if handle_embedder_hotkeys(data, veshell_key_event) {
+        return;
+    }
+
+    if data.meta_window_state.meta_window_in_gaming_mode.is_some() {
+        keyboard.input_forward(
+            data,
+            key_code,
+            state,
+            SERIAL_COUNTER.next_serial(),
+            time,
+            mods_changed,
+        );
         return;
     }
 
@@ -128,6 +141,20 @@ fn handle_embedder_hotkeys<BackendData: Backend + 'static>(
     // Exiting the compositor
     if event.keysym == Keysym::Escape && event.mods.alt {
         data.running.store(false, Ordering::SeqCst);
+        return true;
+    }
+
+    // disable gaming mode
+    if event.keysym == Keysym::Escape && event.mods.ctrl {
+        if let Some(meta_window_id) = data.meta_window_state.meta_window_in_gaming_mode.clone() {
+            data.patch_meta_window(
+                crate::meta_window_state::meta_window::MetaWindowPatch::UpdateGameModeActivated {
+                    id: meta_window_id,
+                    value: false,
+                },
+                true,
+            );
+        }
         return true;
     }
 

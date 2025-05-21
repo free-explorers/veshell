@@ -39,7 +39,7 @@ class PersistentApplicationSelector extends Tileable {
         print('PersistentApplicationSelector focus $value');
       },
       child: ColoredBox(
-        color: Colors.black26,
+        color: Theme.of(context).colorScheme.surfaceContainerLowest,
         child: AppDrawer(
           onSelect: onSelect,
         ),

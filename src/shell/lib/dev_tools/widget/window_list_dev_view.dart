@@ -37,7 +37,7 @@ class WindowListDevView extends HookConsumerWidget {
                     Text('Title: ${state.properties.title}'),
                     Text('AppId: ${state.properties.appId}'),
                     Text('Pid: ${state.properties.pid}'),
-                    Text('surfaceId: ${state.surfaceId}'),
+                    Text('surfaceId: ${state.metaWindowId}'),
                   ],
                 ),
               ),

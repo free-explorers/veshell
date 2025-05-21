@@ -6,21 +6,34 @@ pub mod wayland {
     use serde_json::json;
     use smithay::{
         backend::renderer::{
-            gles::GlesRenderer,
-            utils::{import_surface, on_commit_buffer_handler, RendererSurfaceStateUserData},
+            gles::{GlesRenderer, GlesTexture},
+            utils::{
+                import_surface, on_commit_buffer_handler, with_renderer_surface_state,
+                RendererSurfaceStateUserData,
+            },
             Renderer, Texture,
         },
         input::pointer::{CursorImageStatus, CursorImageSurfaceData},
         reexports::wayland_server::{protocol::wl_surface::WlSurface, Client},
         utils::{Buffer as BufferCoords, Size},
-        wayland::compositor::{
-            with_states, with_surface_tree_upward, CompositorClientState, CompositorHandler,
-            CompositorState, SurfaceAttributes, TraversalAction,
+        wayland::{
+            compositor::{
+                with_states, with_surface_tree_upward, CompositorClientState, CompositorHandler,
+                CompositorState, SurfaceAttributes, TraversalAction,
+            },
+            shell::xdg::{
+                self, ToplevelSurface, XdgPopupSurfaceData, XdgToplevelSurfaceData,
+                XDG_TOPLEVEL_ROLE,
+            },
+            xwayland_shell::XWAYLAND_SHELL_ROLE,
         },
         xwayland::XWaylandClientData,
     };
+    use tracing::info;
 
-    use crate::{state::State, Backend, ClientState};
+    use crate::{
+        meta_window_state::meta_window::MetaWindowPatch, state::State, Backend, ClientState,
+    };
 
     pub struct WlSurfaceVeshellState {
         pub surface_id: u64,
@@ -165,6 +178,21 @@ pub mod wayland {
                 let _ = self.commit(&surface);
             }
 
+            let surface_id = get_surface_id(surface);
+
+            if let Some(meta_window) = self.get_meta_window(surface_id) {
+                let mapped = with_renderer_surface_state(surface, |state| state.buffer().is_some())
+                    .unwrap_or(false);
+
+                self.patch_meta_window(
+                    MetaWindowPatch::UpdateMapped {
+                        id: meta_window.id,
+                        value: mapped,
+                    },
+                    true,
+                );
+            }
+
             with_states(surface, |surface_data| {
                 self.backend_data.with_primary_renderer_mut(|renderer| {
                     if let Err(err) = import_surface(renderer, surface_data) {
@@ -190,14 +218,13 @@ pub mod wayland {
                     let renderer_state = &mut *data_ref;
                     let texture = self
                         .backend_data
-                        .with_primary_renderer(|renderer| {
-                            renderer_state.texture::<GlesRenderer>(renderer.id())
+                        .with_primary_renderer_mut(|renderer| {
+                            renderer_state.texture::<GlesTexture>(renderer.context_id())
                         })
                         .unwrap();
 
                     if let Some(texture) = texture {
                         let size = texture.size();
-
                         let size_changed = match old_texture_size {
                             Some(old_size) => old_size != size,
                             None => true,
@@ -270,6 +297,45 @@ pub mod wayland {
                     attributes.input_region.clone(),
                 )
             });
+
+            let role = with_states(surface, |surface_data| surface_data.role);
+            match role {
+                Some(xdg::XDG_TOPLEVEL_ROLE) => {
+                    let initial_configure_sent = with_states(surface, |surface_data| {
+                        let surface_state = surface_data
+                            .data_map
+                            .get::<XdgToplevelSurfaceData>()
+                            .unwrap()
+                            .lock()
+                            .unwrap();
+
+                        surface_state.initial_configure_sent
+                    });
+                    if !initial_configure_sent {
+                        if let Some(toplevel) = self.xdg_toplevels.get(&surface_id) {
+                            toplevel.send_configure();
+                        }
+                    }
+                }
+                Some(xdg::XDG_POPUP_ROLE) => {
+                    let initial_configure_sent = with_states(surface, |surface_data| {
+                        let surface_state = surface_data
+                            .data_map
+                            .get::<XdgPopupSurfaceData>()
+                            .unwrap()
+                            .lock()
+                            .unwrap();
+                        surface_state.initial_configure_sent
+                    });
+                    if !initial_configure_sent {
+                        if let Some(popup) = self.xdg_popups.get(&surface_id) {
+                            popup.send_configure().expect("Failed to send configure");
+                        }
+                    }
+                }
+                _ => {}
+            }
+
             let surface_message = self.construct_surface_message(surface);
 
             let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;

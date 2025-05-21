@@ -11,6 +11,7 @@ mod activate_window;
 mod close_window;
 mod get_environment_variables;
 mod get_monitor_layout;
+mod meta_window_patches;
 mod mouse_buttons_event;
 mod on_shell_ready;
 mod pointer_exit;
@@ -21,6 +22,7 @@ use self::activate_window::activate_window;
 use self::close_window::close_window;
 use self::get_environment_variables::get_environment_variables;
 use self::get_monitor_layout::get_monitor_layout;
+use self::meta_window_patches::meta_window_patches;
 use self::mouse_buttons_event::mouse_buttons_event;
 use self::on_shell_ready::on_shell_ready;
 use self::pointer_exit::pointer_exit;
@@ -45,6 +47,7 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             "close_window" => close_window(method_call, result, data),
             "get_monitor_layout" => get_monitor_layout(method_call, result, data),
             "get_environment_variables" => get_environment_variables(method_call, result, data),
+            "meta_window_patches" => meta_window_patches(method_call, result, data),
             "shell_ready" => on_shell_ready(method_call, result, data),
             _ => result.error(
                 "method_not_found".to_string(),

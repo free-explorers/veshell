@@ -1,4 +1,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/meta_window/model/meta_window.serializable.dart';
+import 'package:shell/meta_window/provider/meta_window_state.dart';
+import 'package:shell/wayland/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/window/model/dialog_window.dart';
 import 'package:shell/window/model/window_id.dart';
 import 'package:shell/window/model/window_properties.serializable.dart';
@@ -8,18 +11,33 @@ part 'dialog_window_state.g.dart';
 
 /// Workspace provider
 @riverpod
-class DialogWindowState extends _$DialogWindowState with WindowProviderMixin {
+class DialogWindowState extends _$DialogWindowState
+    with WindowProviderMixin<DialogWindow> {
   @override
   DialogWindow build(DialogWindowId windowId) {
     throw Exception('DialogWindowState $windowId not yet initialized');
   }
 
-  @override
-  void onSurfaceChanged(WindowProperties next) {
-    state = state.copyWith(properties: next);
-  }
-
   void update(DialogWindow window) {
     state = window;
+  }
+
+  @override
+  void onCurrentlyDisplayedMetaWindowChanged(MetaWindowId? metaWindowId) {
+    if (metaWindowId != null) {
+      state = state.copyWith(metaWindowId: metaWindowId);
+      ref.read(metaWindowStateProvider(state.metaWindowId).notifier).patch(
+            MetaWindowPatchMessage.updateDisplayMode(
+              id: state.metaWindowId,
+              value: MetaWindowDisplayMode.floating,
+            ),
+          );
+    }
+  }
+
+  @override
+  void onMetaWindowDisplayedPropertiesChanged(MetaWindow metaWindow) {
+    state =
+        state.copyWith(properties: WindowProperties.fromMetaWindow(metaWindow));
   }
 }
