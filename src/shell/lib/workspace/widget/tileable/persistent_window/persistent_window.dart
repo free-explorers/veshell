@@ -109,63 +109,72 @@ class PersistentWindowTileable extends Tileable {
       builder: (context) {
         final isHoverState = useState(false);
 
-        return MouseRegion(
-          onEnter: (event) => isHoverState.value = true,
-          onExit: (event) => isHoverState.value = false,
-          child: Padding(
-            padding: const EdgeInsets.only(left: 16, right: 8),
-            child: Opacity(
-              opacity: isRunning ? 1 : 0.7,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 300),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      height: 24,
-                      width: 24,
-                      child: isRunning
-                          ? AppIconById(id: window.properties.appId)
-                          : ColorFiltered(
-                              colorFilter: const ColorFilter.matrix(<double>[
-                                0.2126, 0.7152, 0.0722, 0, 0, //
-                                0.2126, 0.7152, 0.0722, 0, 0,
-                                0.2126, 0.7152, 0.0722, 0, 0,
-                                0, 0, 0, 1, 0,
-                              ]),
-                              child: AppIconById(id: window.properties.appId),
-                            ),
-                    ),
-                    const SizedBox(
-                      width: 16,
-                    ),
-                    Flexible(
-                      child: Text(
-                        title ?? 'Unknown',
-                        overflow: TextOverflow.ellipsis,
+        return GestureDetector(
+          onTertiaryTapUp: (_) {
+            ref
+                .read(
+                  windowManagerProvider.notifier,
+                )
+                .closeWindow(window.windowId);
+          },
+          child: MouseRegion(
+            onEnter: (event) => isHoverState.value = true,
+            onExit: (event) => isHoverState.value = false,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 16, right: 8),
+              child: Opacity(
+                opacity: isRunning ? 1 : 0.7,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 300),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: isRunning
+                            ? AppIconById(id: window.properties.appId)
+                            : ColorFiltered(
+                                colorFilter: const ColorFilter.matrix(<double>[
+                                  0.2126, 0.7152, 0.0722, 0, 0, //
+                                  0.2126, 0.7152, 0.0722, 0, 0,
+                                  0.2126, 0.7152, 0.0722, 0, 0,
+                                  0, 0, 0, 1, 0,
+                                ]),
+                                child: AppIconById(id: window.properties.appId),
+                              ),
                       ),
-                    ),
-                    const SizedBox(
-                      width: 8,
-                    ),
-                    SizedBox(
-                      width: 32,
-                      child: isSelected || isHoverState.value
-                          ? IconButton(
-                              visualDensity: VisualDensity.compact,
-                              iconSize: 16,
-                              onPressed: () {
-                                ref
-                                    .read(
-                                      windowManagerProvider.notifier,
-                                    )
-                                    .closeWindow(window.windowId);
-                              },
-                              icon: const Icon(MdiIcons.close),
-                            )
-                          : null,
-                    ),
-                  ],
+                      const SizedBox(
+                        width: 16,
+                      ),
+                      Flexible(
+                        child: Text(
+                          title ?? 'Unknown',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(
+                        width: 8,
+                      ),
+                      SizedBox(
+                        width: 32,
+                        child: isSelected || isHoverState.value
+                            ? IconButton(
+                                visualDensity: VisualDensity.compact,
+                                iconSize: 16,
+                                onPressed: () {
+                                  ref
+                                      .read(
+                                        windowManagerProvider.notifier,
+                                      )
+                                      .closeWindow(window.windowId);
+                                },
+                                icon: const Icon(MdiIcons.close),
+                              )
+                            : null,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -200,8 +209,7 @@ class PersistentWindowTileable extends Tileable {
               ...DisplayMode.values.map(
                 (e) => MenuItemButton(
                   leadingIcon: switch (e) {
-                    DisplayMode.maximized =>
-                      const Icon(MdiIcons.windowMaximize),
+                    DisplayMode.maximized => const Icon(MdiIcons.windowMaximize),
                     DisplayMode.fullscreen => const Icon(MdiIcons.fullscreen),
                     DisplayMode.game => const Icon(MdiIcons.controller),
                     DisplayMode.floating => SvgPicture.asset(
@@ -211,14 +219,10 @@ class PersistentWindowTileable extends Tileable {
                       ),
                   },
                   onPressed: () {
-                    ref
-                        .read(persistentWindowStateProvider(windowId).notifier)
-                        .setDisplayMode(e);
+                    ref.read(persistentWindowStateProvider(windowId).notifier).setDisplayMode(e);
                   },
                   style: MenuItemButton.styleFrom(
-                    foregroundColor: e == displayMode
-                        ? Theme.of(context).colorScheme.primary
-                        : null,
+                    foregroundColor: e == displayMode ? Theme.of(context).colorScheme.primary : null,
                   ),
                   child: Text(e.name),
                 ),
@@ -267,11 +271,9 @@ class WithSurfacesWidget extends HookConsumerWidget {
 
     final activateWindow = useCallback(
       (bool value) {
-        final metaWindowToActivate =
-            dialogWindowList.lastOrNull?.metaWindowId ?? window.metaWindowId;
+        final metaWindowToActivate = dialogWindowList.lastOrNull?.metaWindowId ?? window.metaWindowId;
         if (metaWindowToActivate != null) {
-          final metaWindow =
-              ref.read(metaWindowStateProvider(metaWindowToActivate));
+          final metaWindow = ref.read(metaWindowStateProvider(metaWindowToActivate));
 
           ref.read(waylandManagerProvider.notifier).request(
                 ActivateWindowRequest(
@@ -322,27 +324,17 @@ class WithSurfacesWidget extends HookConsumerWidget {
                   builder: (context) {
                     useEffect(
                       () {
-                        if (constraints
-                                .widthConstraints()
-                                .maxWidth
-                                .isInfinite ||
-                            constraints
-                                .heightConstraints()
-                                .maxHeight
-                                .isInfinite) {
+                        if (constraints.widthConstraints().maxWidth.isInfinite || constraints.heightConstraints().maxHeight.isInfinite) {
                           return null;
                         }
-                        WidgetsBinding.instance
-                            .addPostFrameCallback((timeStamp) {
+                        WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
                           final geometry = ref.read(
-                            metaWindowStateProvider(window.metaWindowId!)
-                                .select((value) => value.geometry),
+                            metaWindowStateProvider(window.metaWindowId!).select((value) => value.geometry),
                           );
 
                           ref
                               .read(
-                                metaWindowStateProvider(window.metaWindowId!)
-                                    .notifier,
+                                metaWindowStateProvider(window.metaWindowId!).notifier,
                               )
                               .patch(
                                 UpdateGeometry(
@@ -390,8 +382,7 @@ class WithSurfacesWidget extends HookConsumerWidget {
       DisplayMode.floating => ContainerWithPositionnableChildren(
           children: [
             FloatableWindow(window: window),
-            for (final dialogWindow in dialogWindowList)
-              FloatableWindow(window: dialogWindow),
+            for (final dialogWindow in dialogWindowList) FloatableWindow(window: dialogWindow),
           ],
         ),
     };
