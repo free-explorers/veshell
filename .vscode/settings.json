@@ -18,4 +18,10 @@
     "dart.analysisExcludedFolders": [
         ".flutter_sdk",
     ],
+    "dart.lineLength": 80,
+    "[dart]": {
+        "editor.formatOnSave": true,
+        "editor.insertSpaces": false,
+        "editor.rulers": [80],
+    },
 }

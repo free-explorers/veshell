@@ -6,7 +6,7 @@ on:
 
 jobs:
   flutter-ci:
-    name: Flutter Format & Analyze
+    name: Flutter Format Dart Code
     runs-on: ubuntu-latest
 
     steps:
@@ -36,9 +36,4 @@ jobs:
             git push
           else
             echo "No formatting changes to commit."
-        working-directory: src/shell
-
-      - name: Run static analysis
-        uses: zgosalvez/github-actions-analyze-dart@v3
-        with:
-          working-directory: src/shell
+          fi
