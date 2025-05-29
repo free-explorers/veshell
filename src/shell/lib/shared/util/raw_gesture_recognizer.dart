@@ -26,8 +26,7 @@ class RawGestureRecognizer extends GestureRecognizer {
 
     GestureBinding.instance.pointerRouter
         .addRoute(event.pointer, _handleEvent, event.transform);
-    final entry =
-        GestureBinding.instance.gestureArena.add(event.pointer, this);
+    final entry = GestureBinding.instance.gestureArena.add(event.pointer, this);
     final pointerData = _PointerData(entry, event);
     _pointers![event.pointer] = pointerData;
   }
@@ -43,7 +42,9 @@ class RawGestureRecognizer extends GestureRecognizer {
           return onPointerDown!(event);
         });
         _resolveGestureArenaEntry(
-            pointerData.gestureArenaEntry, gestureDisposition,);
+          pointerData.gestureArenaEntry,
+          gestureDisposition,
+        );
       }
     } else if (event is PointerMoveEvent) {
       _pointers![event.pointer]!.lastPointerEvent = event;
@@ -52,7 +53,9 @@ class RawGestureRecognizer extends GestureRecognizer {
           return onPointerMove!(event, pointerData.gestureDisposition);
         });
         _resolveGestureArenaEntry(
-            pointerData.gestureArenaEntry, gestureDisposition,);
+          pointerData.gestureArenaEntry,
+          gestureDisposition,
+        );
       }
     } else if (event is PointerUpEvent) {
       GestureDisposition? gestureDisposition = GestureDisposition.accepted;
@@ -119,7 +122,9 @@ class RawGestureRecognizer extends GestureRecognizer {
   }
 
   void _resolveGestureArenaEntry(
-      GestureArenaEntry entry, GestureDisposition? gestureDisposition,) {
+    GestureArenaEntry entry,
+    GestureDisposition? gestureDisposition,
+  ) {
     if (gestureDisposition != null) {
       entry.resolve(gestureDisposition);
     }
@@ -128,7 +133,8 @@ class RawGestureRecognizer extends GestureRecognizer {
   @override
   void dispose() {
     _pointers!.keys.toList().forEach(
-        (int pointer) => _removeState(pointer, GestureDisposition.rejected),);
+          (int pointer) => _removeState(pointer, GestureDisposition.rejected),
+        );
     assert(_pointers!.isEmpty);
     _pointers = null;
     super.dispose();
@@ -139,7 +145,6 @@ class RawGestureRecognizer extends GestureRecognizer {
 }
 
 class _PointerData {
-
   _PointerData(this.gestureArenaEntry, this.lastPointerEvent);
   GestureArenaEntry gestureArenaEntry;
   PointerEvent lastPointerEvent;
