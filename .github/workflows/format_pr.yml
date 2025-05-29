@@ -33,7 +33,7 @@ jobs:
           git add src/shell
           if ! git diff --cached --quiet; then
             git commit -m "chore: auto-format Dart code"
-            git push
+            git push origin HEAD:${{ github.head_ref || github.ref }}
           else
             echo "No formatting changes to commit."
           fi
