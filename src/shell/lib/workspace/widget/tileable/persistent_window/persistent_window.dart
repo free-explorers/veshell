@@ -163,7 +163,9 @@ class PersistentWindowTileable extends Tileable {
                                 visualDensity: VisualDensity.compact,
                                 iconSize: 16,
                                 onPressed: () {
-                                  ref.read(windowManagerProvider.notifier).closeWindow(window.windowId);
+                                  ref
+                                      .read(windowManagerProvider.notifier)
+                                      .closeWindow(window.windowId);
                                 },
                                 icon: const Icon(MdiIcons.close),
                               )
@@ -205,7 +207,8 @@ class PersistentWindowTileable extends Tileable {
               ...DisplayMode.values.map(
                 (e) => MenuItemButton(
                   leadingIcon: switch (e) {
-                    DisplayMode.maximized => const Icon(MdiIcons.windowMaximize),
+                    DisplayMode.maximized =>
+                      const Icon(MdiIcons.windowMaximize),
                     DisplayMode.fullscreen => const Icon(MdiIcons.fullscreen),
                     DisplayMode.game => const Icon(MdiIcons.controller),
                     DisplayMode.floating => SvgPicture.asset(
@@ -215,10 +218,14 @@ class PersistentWindowTileable extends Tileable {
                       ),
                   },
                   onPressed: () {
-                    ref.read(persistentWindowStateProvider(windowId).notifier).setDisplayMode(e);
+                    ref
+                        .read(persistentWindowStateProvider(windowId).notifier)
+                        .setDisplayMode(e);
                   },
                   style: MenuItemButton.styleFrom(
-                    foregroundColor: e == displayMode ? Theme.of(context).colorScheme.primary : null,
+                    foregroundColor: e == displayMode
+                        ? Theme.of(context).colorScheme.primary
+                        : null,
                   ),
                   child: Text(e.name),
                 ),
@@ -230,8 +237,7 @@ class PersistentWindowTileable extends Tileable {
       ),
       MenuItemButton(
         onPressed: () {
-          ref
-              .read(windowManagerProvider.notifier).closeWindow(windowId);
+          ref.read(windowManagerProvider.notifier).closeWindow(windowId);
         },
         leadingIcon: const Icon(MdiIcons.close),
         child: const Text('Close'),
@@ -264,9 +270,11 @@ class WithSurfacesWidget extends HookConsumerWidget {
 
     final activateWindow = useCallback(
       (bool value) {
-        final metaWindowToActivate = dialogWindowList.lastOrNull?.metaWindowId ?? window.metaWindowId;
+        final metaWindowToActivate =
+            dialogWindowList.lastOrNull?.metaWindowId ?? window.metaWindowId;
         if (metaWindowToActivate != null) {
-          final metaWindow = ref.read(metaWindowStateProvider(metaWindowToActivate));
+          final metaWindow =
+              ref.read(metaWindowStateProvider(metaWindowToActivate));
 
           ref.read(waylandManagerProvider.notifier).request(
                 ActivateWindowRequest(
@@ -317,18 +325,27 @@ class WithSurfacesWidget extends HookConsumerWidget {
                   builder: (context) {
                     useEffect(
                       () {
-                        if (constraints.widthConstraints().maxWidth.isInfinite ||
-                            constraints.heightConstraints().maxHeight.isInfinite) {
+                        if (constraints
+                                .widthConstraints()
+                                .maxWidth
+                                .isInfinite ||
+                            constraints
+                                .heightConstraints()
+                                .maxHeight
+                                .isInfinite) {
                           return null;
                         }
-                        WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
+                        WidgetsBinding.instance
+                            .addPostFrameCallback((timeStamp) {
                           final geometry = ref.read(
-                            metaWindowStateProvider(window.metaWindowId!).select((value) => value.geometry),
+                            metaWindowStateProvider(window.metaWindowId!)
+                                .select((value) => value.geometry),
                           );
 
                           ref
                               .read(
-                                metaWindowStateProvider(window.metaWindowId!).notifier,
+                                metaWindowStateProvider(window.metaWindowId!)
+                                    .notifier,
                               )
                               .patch(
                                 UpdateGeometry(
@@ -376,10 +393,10 @@ class WithSurfacesWidget extends HookConsumerWidget {
       DisplayMode.floating => ContainerWithPositionnableChildren(
           children: [
             FloatableWindow(window: window),
-            for (final dialogWindow in dialogWindowList) FloatableWindow(window: dialogWindow),
+            for (final dialogWindow in dialogWindowList)
+              FloatableWindow(window: dialogWindow),
           ],
         ),
     };
   }
 }
-
