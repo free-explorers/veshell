@@ -1,0 +1,44 @@
+name: Flutter CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  flutter-ci:
+    name: Flutter Format & Analyze
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Flutter environment
+        uses: subosito/flutter-action@v2
+
+      - name: Install dependencies
+        run: flutter pub get
+        working-directory: src/shell
+
+      - name: Format Dart code
+        run: dart format .
+        working-directory: src/shell
+
+      - name: Commit and push formatted code
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add src/shell
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: auto-format Dart code"
+            git push
+          else
+            echo "No formatting changes to commit."
+        working-directory: src/shell
+
+      - name: Run static analysis
+        uses: zgosalvez/github-actions-analyze-dart@v3
+        with:
+          working-directory: src/shell
