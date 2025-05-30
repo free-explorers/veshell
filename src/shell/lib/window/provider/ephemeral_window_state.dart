@@ -50,8 +50,10 @@ class EphemeralWindowState extends _$EphemeralWindowState
     state = state.copyWith(
       metaWindowId: metaWindowId,
     );
-
-    ref.read(metaWindowStateProvider(metaWindowId!).notifier).patch(
+    if (metaWindowId == null) {
+      return;
+    }
+    ref.read(metaWindowStateProvider(metaWindowId).notifier).patch(
           MetaWindowPatchMessage.updateDisplayMode(
             id: metaWindowId,
             value: MetaWindowDisplayMode.maximized,
@@ -74,7 +76,7 @@ class EphemeralWindowState extends _$EphemeralWindowState
 
   @override
   void removeWindow({bool forceRemove = false}) {
-    final screenId = ref.read(ephemeralWindowStateProvider(windowId)).screenId;
+    final screenId = state.screenId;
     ref.read(overviewStateProvider(screenId).notifier).removeWindow(windowId);
     ref.read(windowManagerProvider.notifier).removeWindow(state.windowId);
     dispose();

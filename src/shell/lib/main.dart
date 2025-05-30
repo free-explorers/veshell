@@ -21,6 +21,7 @@ import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shortcut_manager/widget/shortcut_manager.dart';
 import 'package:shell/theme/provider/theme.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
+import 'package:shell/window/provider/window_manager/matching_engine.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
 
 void main() async {
@@ -88,6 +89,7 @@ class _EagerInitialization extends ConsumerWidget {
       ..watch(windowManagerProvider)
       ..watch(metaWindowManagerProvider)
       ..watch(polkitAuthenticationAgentStateProvider)
+      ..watch(matchingEngineProvider)
       ..watch(notificationManagerProvider);
 
     return child;
