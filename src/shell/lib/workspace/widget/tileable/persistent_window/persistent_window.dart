@@ -111,11 +111,10 @@ class PersistentWindowTileable extends Tileable {
         return GestureDetector(
           onTertiaryTapUp: (_) {
             ref
-              .read(
-                persistentWindowStateProvider(windowId)
-                    .notifier,
-              )
-              .closeWindow();
+                .read(
+                  persistentWindowStateProvider(windowId).notifier,
+                )
+                .closeWindow();
           },
           child: MouseRegion(
             onEnter: (event) => isHoverState.value = true,
@@ -153,29 +152,29 @@ class PersistentWindowTileable extends Tileable {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ),
-                    const SizedBox(
-                      width: 8,
-                    ),
-                    SizedBox(
-                      width: 32,
-                      child: isSelected || isHoverState.value
-                          ? IconButton(
-                              visualDensity: VisualDensity.compact,
-                              iconSize: 16,
-                              onPressed: () {
-                                ref
-                                    .read(
-                                      persistentWindowStateProvider(windowId)
-                                          .notifier,
-                                    )
-                                    .closeWindow();
-                              },
-                              icon: const Icon(MdiIcons.close),
-                            )
-                          : null,
-                    ),
-                  ],
+                      const SizedBox(
+                        width: 8,
+                      ),
+                      SizedBox(
+                        width: 32,
+                        child: isSelected || isHoverState.value
+                            ? IconButton(
+                                visualDensity: VisualDensity.compact,
+                                iconSize: 16,
+                                onPressed: () {
+                                  ref
+                                      .read(
+                                        persistentWindowStateProvider(windowId)
+                                            .notifier,
+                                      )
+                                      .closeWindow();
+                                },
+                                icon: const Icon(MdiIcons.close),
+                              )
+                            : null,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
