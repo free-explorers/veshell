@@ -16,6 +16,7 @@ class ProcessesCpuStats extends _$ProcessesCpuStats {
   IMap<int, double> build() {
     final timer =
         Timer.periodic(const Duration(milliseconds: 500), (Timer t) async {
+      if (!ref.mounted) return;
       final snapshot = await takeSnapshot();
       if (_prevSnapshot != null) {
         state = calculateCpuStatsForEachProcesses(_prevSnapshot!, snapshot);

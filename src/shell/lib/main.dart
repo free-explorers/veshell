@@ -5,6 +5,7 @@ import 'package:shell/display/widget/display.dart';
 import 'package:shell/meta_window/provider/meta_window_manager.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/notification/provider/notification_manager.dart';
+import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_client.dart';
 import 'package:shell/platform/model/request/get_environment_variables/get_environment_variables.serializable.dart';
 import 'package:shell/platform/model/request/get_monitor_layout/get_monitor_layout.serializable.dart';
 import 'package:shell/platform/model/request/shell_ready/shell_ready.serializable.dart';
@@ -57,6 +58,7 @@ class _EagerInitialization extends ConsumerWidget {
       ref.watch(pulseServerInfoProvider),
       ref.watch(pulseSinkListProvider),
       ref.watch(pulseSourceListProvider),
+      ref.watch(upowerClientProvider),
     ];
 
     ref.watch(connectedMonitorListProvider);
