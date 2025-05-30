@@ -7,9 +7,8 @@ import 'package:shell/overview/helm/widget/helm.dart';
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/theme//provider/theme.dart';
-import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
-import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/window/widget/ephemeral_window.dart';
 
 class OverviewContent extends HookConsumerWidget {
@@ -99,6 +98,7 @@ class _EphemeralWindowPanelButton extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final window = ref.watch(ephemeralWindowStateProvider(windowId));
+
     return Material(
       borderRadius: BorderRadius.circular(24),
       color: isFocused
@@ -129,9 +129,9 @@ class _EphemeralWindowPanelButton extends HookConsumerWidget {
                   onPressed: () {
                     ref
                         .read(
-                          windowManagerProvider.notifier,
+                          ephemeralWindowStateProvider(windowId).notifier,
                         )
-                        .closeWindow(window.windowId);
+                        .closeWindow();
                   },
                   icon: const Icon(MdiIcons.close),
                 ),

@@ -14,7 +14,6 @@ import 'package:shell/screen/widget/screen_panel.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
 import 'package:shell/shortcut_manager/model/screen_shortcuts.dart';
-import 'package:shell/workspace/provider/current_workspace_id.dart';
 import 'package:shell/workspace/widget/workspace.dart';
 
 /// Widget that represent the Screen in the widget tree
@@ -110,16 +109,10 @@ class ScreenWidget extends HookConsumerWidget {
                           index: screenState.selectedIndex,
                           children: screenState.workspaceList
                               .mapIndexed(
-                                (index, workspaceId) => ProviderScope(
-                                  key: Key(workspaceId),
-                                  overrides: [
-                                    currentWorkspaceIdProvider
-                                        .overrideWith((ref) => workspaceId),
-                                  ],
-                                  child: WorkspaceWidget(
-                                    isSelected:
-                                        screenState.selectedIndex == index,
-                                  ),
+                                (index, workspaceId) => WorkspaceWidget(
+                                  workspaceId: workspaceId,
+                                  isSelected:
+                                      screenState.selectedIndex == index,
                                 ),
                               )
                               .toList(),

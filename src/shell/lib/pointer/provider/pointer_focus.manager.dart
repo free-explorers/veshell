@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/platform/model/request/pointer_focus/pointer_focus.serializable.dart';
+import 'package:shell/platform/provider/wayland.manager.dart';
 import 'package:shell/pointer/model/pointer_focus.serializable.dart';
-import 'package:shell/wayland/model/request/pointer_focus/pointer_focus.serializable.dart';
-import 'package:shell/wayland/provider/wayland.manager.dart';
 
 part 'pointer_focus.manager.g.dart';
 
@@ -21,7 +21,7 @@ part 'pointer_focus.manager.g.dart';
 class PointerFocusManager extends _$PointerFocusManager {
   @override
   PointerFocus? build() {
-    ref.listenSelf(
+    listenSelf(
       (previous, next) {
         if (previous != next) {
           _notifyWayland();

@@ -1,5 +1,5 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:hooks_riverpod/misc.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/meta_window/model/meta_popup.serializable.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';

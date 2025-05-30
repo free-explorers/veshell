@@ -7,7 +7,7 @@ part 'localized_desktop_entries.g.dart';
 
 @Riverpod(keepAlive: true)
 Future<Map<String, LocalizedDesktopEntry>> localizedDesktopEntries(
-  LocalizedDesktopEntriesRef ref,
+  Ref ref,
 ) async {
   final desktopEntries =
       await ref.watch(installedDesktopEntriesProvider.future);

@@ -4,7 +4,7 @@ import 'package:shell/settings/model/setting_definition.dart';
 part 'setting_property.freezed.dart';
 
 @freezed
-class SettingProperty<T>
+abstract class SettingProperty<T>
     with _$SettingProperty<T>
     implements SettingDefinition {
   const factory SettingProperty({

@@ -1,7 +1,7 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
-import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
 
 part 'meta_window_window_map.g.dart';
 

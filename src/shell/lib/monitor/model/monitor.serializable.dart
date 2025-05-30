@@ -13,7 +13,7 @@ typedef MonitorRefreshRate = int;
 
 /// a Monitor represent a physical display device used to render Veshell
 @freezed
-class Monitor with _$Monitor {
+abstract class Monitor with _$Monitor {
   /// Factory
   factory Monitor({
     required MonitorId name,
@@ -32,7 +32,7 @@ class Monitor with _$Monitor {
 }
 
 @freezed
-class Mode with _$Mode {
+abstract class Mode with _$Mode {
   const factory Mode({
     @SizeConverter() required MonitorResolution size,
     required MonitorRefreshRate refreshRate,
@@ -42,7 +42,7 @@ class Mode with _$Mode {
 }
 
 @freezed
-class PhysicalProperties with _$PhysicalProperties {
+abstract class PhysicalProperties with _$PhysicalProperties {
   const factory PhysicalProperties({
     @SizeConverter() required Size size,
     required String make,

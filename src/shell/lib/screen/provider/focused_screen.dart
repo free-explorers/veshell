@@ -1,6 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
-import 'package:shell/screen/provider/screen_list.dart';
+import 'package:shell/screen/provider/screen_manager.dart';
 
 part 'focused_screen.g.dart';
 
@@ -9,7 +9,13 @@ part 'focused_screen.g.dart';
 class FocusedScreen extends _$FocusedScreen {
   @override
   ScreenId build() {
-    return ref.read(screenListProvider).first;
+    return ref
+        .read(
+          screenManagerProvider.select(
+            (value) => value.screenIds,
+          ),
+        )
+        .first;
   }
 
   void setFocusedScreen(ScreenId screenId) {

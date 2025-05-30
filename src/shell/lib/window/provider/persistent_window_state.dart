@@ -1,48 +1,60 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:hooks_riverpod/experimental/persist.dart';
+import 'package:riverpod_annotation/experimental/json_persist.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/model/launch_config.serializable.dart';
 import 'package:shell/application/provider/app_launch.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
-import 'package:shell/shared/persistence/persistable_provider.mixin.dart';
-import 'package:shell/wayland/model/event/meta_window_patches/meta_window_patches.serializable.dart';
+import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
+import 'package:shell/shared/provider/persistent_storage_state.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
-import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/model/window_properties.serializable.dart';
+import 'package:shell/window/provider/dialog_set_for_window.dart';
+import 'package:shell/window/provider/dialog_window_state.dart';
+import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/window/provider/window_provider.mixin.dart';
+import 'package:shell/workspace/provider/window_workspace_map.dart';
+import 'package:shell/workspace/provider/workspace_state.dart';
 
 part 'persistent_window_state.g.dart';
 
 /// Workspace provider
 @riverpod
+@JsonPersist()
 class PersistentWindowState extends _$PersistentWindowState
-    with
-        WindowProviderMixin<PersistentWindow>,
-        PersistableProvider<PersistentWindow> {
-  @override
-  String getPersistentFolder() => 'Window';
-
-  @override
-  String getPersistentId() => windowId.toString();
-
+    with WindowProviderMixin<PersistentWindow> {
+  String get _persistKey => 'persistent_window_${windowId.uuid}';
   @override
   PersistentWindow build(PersistentWindowId windowId) {
-    final window = getPersisted(PersistentWindow.fromJson)
-        ?.copyWith(isWaitingForSurface: false, metaWindowId: null, pid: null);
+    persist(
+      key: _persistKey,
+      storage: ref.watch(persistentStorageStateProvider).requireValue,
+      options: const StorageOptions(cacheTime: StorageCacheTime.unsafe_forever),
+    );
 
-    if (window != null) {
-      initialize(window);
-      return window;
+    if (stateOrNull != null) {
+      initialize(
+        state.copyWith(
+          isWaitingForSurface: false,
+          metaWindowId: null,
+          pid: null,
+        ),
+      );
+      return state;
     }
     throw Exception('PersistentWindowState $windowId not yet initialized');
   }
 
-  @override
-  void initialize(PersistentWindow window) {
-    super.initialize(window);
-    persistChanges();
+  Future<void> deletePersistedState() async {
+    final storage = ref.read(persistentStorageStateProvider).requireValue;
+    ref.onDispose(() {
+      storage.delete(_persistKey);
+    });
+    dispose();
   }
 
   @override
@@ -106,7 +118,6 @@ class PersistentWindowState extends _$PersistentWindowState
           : state.pid,
     );
     updateMetaWindowDisplayMode();
-    persistChanges();
   }
 
   @override
@@ -114,7 +125,35 @@ class PersistentWindowState extends _$PersistentWindowState
     state = state.copyWith(
       properties: WindowProperties.fromMetaWindow(metaWindow),
     );
+  }
 
-    persistChanges();
+  @override
+  void closeWindow({bool forceRemove = false}) {
+    if (state.metaWindowId == null) {
+      removeWindow();
+      return;
+    }
+    super.closeWindow();
+    for (final dialogWindowId
+        in ref.read(dialogSetForWindowProvider(windowId))) {
+      ref
+          .read(dialogWindowStateProvider(dialogWindowId).notifier)
+          .closeWindow();
+    }
+    if (forceRemove) {
+      removeWindow();
+    }
+  }
+
+  @override
+  void removeWindow() {
+    final workspaceId = ref.read(windowWorkspaceMapProvider).get(windowId);
+    if (workspaceId != null) {
+      ref
+          .read(workspaceStateProvider(workspaceId).notifier)
+          .removeWindow(windowId);
+    }
+    ref.read(windowManagerProvider.notifier).removeWindow(state.windowId);
+    deletePersistedState();
   }
 }

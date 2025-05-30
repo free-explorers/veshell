@@ -5,13 +5,13 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/platform/model/request/mouse_buttons_event/mouse_buttons_event.serializable.dart';
+import 'package:shell/platform/model/request/touch/touch.serializable.dart';
+import 'package:shell/platform/provider/wayland.manager.dart';
 import 'package:shell/pointer/model/pointer_focus.serializable.dart';
 import 'package:shell/pointer/provider/pointer_focus.manager.dart';
 import 'package:shell/shared/provider/mouse_button_tracker.dart';
-import 'package:shell/wayland/model/request/mouse_buttons_event/mouse_buttons_event.serializable.dart';
-import 'package:shell/wayland/model/request/touch/touch.serializable.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
-import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 
 /// Handles all input events for a given window or popup, and redirects them to the platform which will then be

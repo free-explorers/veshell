@@ -225,7 +225,7 @@ class WorkspaceListButton extends HookConsumerWidget {
       onWillAcceptWithDetails: (data) => data is PersistentWindowTileable,
       onAcceptWithDetails: (details) {
         ref
-            .read(WorkspaceStateProvider(workspaceId).notifier)
+            .read(workspaceStateProvider(workspaceId).notifier)
             .addWindow(details.data.windowId);
       },
       builder: (
@@ -279,7 +279,7 @@ class WorkspaceIcon extends HookConsumerWidget {
       () => workspaceState.tileableWindowList
           .map(
             (windowId) => ref.read(
-              PersistentWindowStateProvider(windowId)
+              persistentWindowStateProvider(windowId)
                   .select((value) => value.properties.appId),
             ),
           )

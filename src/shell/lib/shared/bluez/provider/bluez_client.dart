@@ -4,7 +4,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'bluez_client.g.dart';
 
 @riverpod
-Future<BlueZClient> BluezClient(BluezClientRef ref) async {
+Future<BlueZClient> BluezClient(Ref ref) async {
   final client = BlueZClient();
 
   await client.connect();

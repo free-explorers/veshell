@@ -5,21 +5,13 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/application/provider/logs_for_pid.dart';
 import 'package:shell/application/widget/app_icon.dart';
-import 'package:shell/meta_window/provider/meta_window_state.dart';
-import 'package:shell/meta_window/widget/meta_surface.dart';
-import 'package:shell/meta_window/widget/meta_surface_gaming_overlay.dart';
-import 'package:shell/shared/widget/container_with_positionnable_children/container_with_positionnable_children.dart';
-import 'package:shell/wayland/model/event/meta_window_patches/meta_window_patches.serializable.dart';
-import 'package:shell/wayland/model/request/activate_window/activate_window.serializable.dart';
-import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
-import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
-import 'package:shell/window/provider/window_manager/window_manager.dart';
-import 'package:shell/window/widget/floatable_window.dart';
-import 'package:shell/workspace/widget/tileable/persistent_window/window_placeholder.dart';
+import 'package:shell/window/widget/window.dart';
+import 'package:shell/window/widget/window_placeholder.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
 
 /// Tileable Window that persist when closed
@@ -75,9 +67,19 @@ class PersistentWindowTileable extends Tileable {
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
           child: window.metaWindowId != null
-              ? WithSurfacesWidget(
+              ? WindowWidget(
+                  metaWindowId: window.metaWindowId!,
                   focusNode: primaryFocusNode,
-                  window: window,
+                  displayMode: window.displayMode,
+                  dialogMetaWindowList: ref
+                      .watch(
+                    dialogSetForWindowProvider(window.windowId),
+                  )
+                      .map((element) {
+                    return ref
+                        .read(dialogWindowStateProvider(element))
+                        .metaWindowId;
+                  }).toList(),
                 )
               : WindowPlaceholder(
                   isSelected: isSelected,
@@ -113,9 +115,9 @@ class PersistentWindowTileable extends Tileable {
           onTertiaryTapUp: (_) {
             ref
                 .read(
-                  windowManagerProvider.notifier,
+                  persistentWindowStateProvider(windowId).notifier,
                 )
-                .closeWindow(window.windowId);
+                .closeWindow();
           },
           child: MouseRegion(
             onEnter: (event) => isHoverState.value = true,
@@ -165,9 +167,10 @@ class PersistentWindowTileable extends Tileable {
                                 onPressed: () {
                                   ref
                                       .read(
-                                        windowManagerProvider.notifier,
+                                        persistentWindowStateProvider(windowId)
+                                            .notifier,
                                       )
-                                      .closeWindow(window.windowId);
+                                      .closeWindow();
                                 },
                                 icon: const Icon(MdiIcons.close),
                               )
@@ -241,168 +244,13 @@ class PersistentWindowTileable extends Tileable {
         onPressed: () {
           ref
               .read(
-                windowManagerProvider.notifier,
+                persistentWindowStateProvider(windowId).notifier,
               )
-              .closeWindow(windowId);
+              .closeWindow();
         },
         leadingIcon: const Icon(MdiIcons.close),
         child: const Text('Close'),
       ),
     ];
-  }
-}
-
-class WithSurfacesWidget extends HookConsumerWidget {
-  const WithSurfacesWidget({
-    required this.window,
-    required this.focusNode,
-    super.key,
-  });
-  final FocusNode focusNode;
-
-  final PersistentWindow window;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final displayMode = window.displayMode;
-
-    final dialogWindowList = ref
-        .watch(
-      dialogSetForWindowProvider(window.windowId),
-    )
-        .map((element) {
-      return ref.watch(dialogWindowStateProvider(element));
-    }).toList();
-
-    final activateWindow = useCallback(
-      (bool value) {
-        final metaWindowToActivate =
-            dialogWindowList.lastOrNull?.metaWindowId ?? window.metaWindowId;
-        if (metaWindowToActivate != null) {
-          final metaWindow =
-              ref.read(metaWindowStateProvider(metaWindowToActivate));
-
-          ref.read(waylandManagerProvider.notifier).request(
-                ActivateWindowRequest(
-                  message: ActivateWindowMessage(
-                    surfaceId: metaWindow.surfaceId,
-                    activate: value,
-                  ),
-                ),
-              );
-        }
-      },
-      [window.metaWindowId, dialogWindowList],
-    );
-
-    useEffect(
-      () {
-        if (focusNode.hasFocus) {
-          activateWindow(true);
-        }
-        return null;
-      },
-      [window.metaWindowId],
-    );
-
-    useEffect(
-      () {
-        void callback() {
-          activateWindow(focusNode.hasFocus);
-        }
-
-        focusNode.addListener(callback);
-        return () {
-          focusNode.removeListener(callback);
-        };
-      },
-      [focusNode],
-    );
-
-    return switch (displayMode) {
-      DisplayMode.maximized ||
-      DisplayMode
-            .fullscreen => // TODO: fix this, it's not working with the new wayland stack, need to find a way to get the surface id from the meta surface and then use that to get the surface from the wayland stack, or just use the meta surface directly, but that would mean we need to change the way we handle surfaces in flutte
-        Stack(
-          children: [
-            LayoutBuilder(
-              builder: (context, constraints) {
-                return HookBuilder(
-                  builder: (context) {
-                    useEffect(
-                      () {
-                        if (constraints
-                                .widthConstraints()
-                                .maxWidth
-                                .isInfinite ||
-                            constraints
-                                .heightConstraints()
-                                .maxHeight
-                                .isInfinite) {
-                          return null;
-                        }
-                        WidgetsBinding.instance
-                            .addPostFrameCallback((timeStamp) {
-                          final geometry = ref.read(
-                            metaWindowStateProvider(window.metaWindowId!)
-                                .select((value) => value.geometry),
-                          );
-
-                          ref
-                              .read(
-                                metaWindowStateProvider(window.metaWindowId!)
-                                    .notifier,
-                              )
-                              .patch(
-                                UpdateGeometry(
-                                  id: window.metaWindowId!,
-                                  value: Rect.fromLTWH(
-                                    geometry!.left,
-                                    geometry.top,
-                                    constraints.maxWidth,
-                                    constraints.maxHeight,
-                                  ),
-                                ),
-                              );
-                        });
-                        return null;
-                      },
-                      [constraints],
-                    );
-
-                    return MetaSurfaceWidget(
-                      focusNode: focusNode,
-                      metaWindowId: window.metaWindowId!,
-                      decorated: false,
-                    );
-                  },
-                );
-              },
-            ),
-            if (dialogWindowList.isNotEmpty) ...[
-              const Positioned.fill(child: ColoredBox(color: Colors.black38)),
-              ContainerWithPositionnableChildren(
-                children: dialogWindowList
-                    .map(
-                      (e) => FloatableWindow(
-                        window: e,
-                      ),
-                    )
-                    .toList(),
-              ),
-            ],
-          ],
-        ),
-      DisplayMode.game => MetaSurfaceGamingOverlay(
-          metaWindowId: window.metaWindowId!,
-        ),
-      DisplayMode.floating => ContainerWithPositionnableChildren(
-          children: [
-            FloatableWindow(window: window),
-            for (final dialogWindow in dialogWindowList)
-              FloatableWindow(window: dialogWindow),
-          ],
-        ),
-    };
   }
 }

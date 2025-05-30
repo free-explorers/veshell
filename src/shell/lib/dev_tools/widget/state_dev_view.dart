@@ -5,10 +5,10 @@ import 'package:shell/display/provider/display.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/widget/meta_surface.dart';
+import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/monitor/provider/monitor_configuration_state.dart';
-import 'package:shell/monitor/provider/monitor_list.dart';
 import 'package:shell/screen/provider/screen_state.dart';
-import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 
@@ -53,7 +53,7 @@ class MonitorStateViewer extends HookConsumerWidget {
   const MonitorStateViewer({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final monitorList = ref.watch(monitorListProvider);
+    final monitorList = ref.watch(connectedMonitorListProvider);
     return DataContainer(
       title: 'Monitors',
       children: [
@@ -112,19 +112,13 @@ class MonitorStateViewer extends HookConsumerWidget {
                                 value: screenConfiguration.flex.toString(),
                                 property: 'flex',
                               ),
-                              if (screenConfiguration.screenId != null)
-                                ExpandableDataRow(
-                                  isExpanded: true,
-                                  property: screenConfiguration.screenId!,
-                                  builder: (context) => ScreenStateViewer(
-                                    screenId: screenConfiguration.screenId!,
-                                  ),
+                              ExpandableDataRow(
+                                isExpanded: true,
+                                property: screenConfiguration.screenId,
+                                builder: (context) => ScreenStateViewer(
+                                  screenId: screenConfiguration.screenId,
                                 ),
-                              if (screenConfiguration.screenId == null)
-                                const DataRow(
-                                  value: 'null',
-                                  property: 'screenId',
-                                ),
+                              ),
                             ],
                           ],
                         );
@@ -267,7 +261,7 @@ class PersistentWindowStateViewer extends HookConsumerWidget {
           const DataRow(value: null, property: 'metaWindowId')
         else
           ExpandableDataRow(
-            property: 'metaWindowId',
+            property: 'metaWindow ${persistentWindowState.metaWindowId}',
             builder: (context) => MetaWindowStateViewer(
               metaWindowId: persistentWindowState.metaWindowId!,
             ),

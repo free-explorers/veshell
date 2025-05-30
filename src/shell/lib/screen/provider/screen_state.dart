@@ -1,8 +1,11 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:hooks_riverpod/experimental/persist.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:hooks_riverpod/misc.dart';
+import 'package:riverpod_annotation/experimental/json_persist.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
-import 'package:shell/shared/persistence/persistable_provider.mixin.dart';
+import 'package:shell/shared/provider/persistent_storage_state.dart';
 import 'package:shell/workspace/model/workspace.serializable.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:uuid/uuid.dart';
@@ -11,65 +14,77 @@ part 'screen_state.g.dart';
 
 /// Screen provider
 @riverpod
-class ScreenState extends _$ScreenState with PersistableProvider<Screen> {
-  late final KeepAliveLink _keepAliveLink;
-  final _uuidGenerator = const Uuid();
+@JsonPersist()
+class ScreenState extends _$ScreenState {
+  String get persistKey => 'screen_$screenId';
+
+  KeepAliveLink? _keepAliveLink;
   final _workspaceListenerMap =
       <WorkspaceId, ProviderSubscription<Workspace>>{};
-
-  @override
-  String getPersistentFolder() => 'Screen';
-
-  @override
-  String getPersistentId() => screenId;
-
   @override
   Screen build(ScreenId screenId) {
     _keepAliveLink = ref.keepAlive();
-    persistChanges();
+    final storage = ref.watch(persistentStorageStateProvider).requireValue;
 
-    final screen = getPersisted(Screen.fromJson) ??
+    persist(
+      key: persistKey,
+      storage: storage,
+      options: const StorageOptions(cacheTime: StorageCacheTime.unsafe_forever),
+    );
+
+    if (stateOrNull != null) {
+      state = stateOrNull!;
+    } else {
+      state = Screen(
+        screenId: screenId,
+        workspaceList: IList([const Uuid().v4()]),
+        selectedIndex: 0,
+      );
+    }
+/*     state = stateOrNull ??
         Screen(
           screenId: screenId,
-          workspaceList: IList([_uuidGenerator.v4()]),
+          workspaceList: IList([const Uuid().v4()]),
           selectedIndex: 0,
-        );
-
-    // When the last workspace got a new window open in it
+        ); */
+// When the last workspace got a new window open in it
     // we create a new blank workspace
-    ref.listenSelf((prev, next) {
-      final newWorkspaceList = prev == null
-          ? next.workspaceList
-          : next.workspaceList.where(
-              (workspaceId) => !prev.workspaceList.contains(workspaceId),
-            );
-
-      final removedWorkspaceList = prev == null
-          ? const <WorkspaceId>[]
-          : prev.workspaceList.where(
-              (workspaceId) => !next.workspaceList.contains(workspaceId),
-            );
-
-      for (final workspaceId in newWorkspaceList) {
+    listenSelf((prev, next) {
+      if (next.workspaceList == prev?.workspaceList) return;
+      for (final element in _workspaceListenerMap.values) {
+        element.close();
+      }
+      _workspaceListenerMap.clear();
+      for (final workspaceId in next.workspaceList) {
         _listenToWorkspaceChanges(workspaceId);
       }
-
-      for (final workspaceId in removedWorkspaceList) {
-        _workspaceListenerMap[workspaceId]?.close();
-        _workspaceListenerMap.remove(workspaceId);
-      }
     });
-    return screen;
+
+    return state;
+  }
+
+  Future<void> delete() async {
+    _keepAliveLink?.close();
+    for (final workspaceId in state.workspaceList) {
+      await ref.read(workspaceStateProvider(workspaceId).notifier).delete();
+    }
+    await ref
+        .read(persistentStorageStateProvider)
+        .requireValue
+        .delete(persistKey);
+    ref.invalidateSelf();
   }
 
   /// Listen to workspace changes in order to always have a blank workspace
   /// at the end of the list
   void _listenToWorkspaceChanges(WorkspaceId workspaceId) {
+    print('Listening to workspace changes for $workspaceId');
     if (_workspaceListenerMap.containsKey(workspaceId)) {
       return;
     }
     final workspaceListener =
         ref.listen(workspaceStateProvider(workspaceId), (_, workspace) {
+      print('Workspace $workspaceId changed');
       final isLast = state.workspaceList.last == workspaceId;
       final isBeforeLast = state.workspaceList.length > 1 &&
           state.workspaceList[state.workspaceList.length - 2] == workspaceId;
@@ -91,10 +106,13 @@ class ScreenState extends _$ScreenState with PersistableProvider<Screen> {
         final workspaceIdToCheck = state.workspaceList.last;
         Future.delayed(Duration.zero, () {
           if (ref
-              .read(WorkspaceStateProvider(workspaceIdToCheck))
+              .read(workspaceStateProvider(workspaceIdToCheck))
               .tileableWindowList
               .isEmpty) {
             removeWorkspace(workspaceIdToCheck);
+            ref
+                .read(workspaceStateProvider(workspaceIdToCheck).notifier)
+                .delete();
           }
         });
       }
@@ -134,7 +152,7 @@ class ScreenState extends _$ScreenState with PersistableProvider<Screen> {
   }
 
   WorkspaceId createNewWorkspace() {
-    final workspaceId = _uuidGenerator.v4();
+    final workspaceId = const Uuid().v4();
     state = state.copyWith(workspaceList: state.workspaceList.add(workspaceId));
     return workspaceId;
   }

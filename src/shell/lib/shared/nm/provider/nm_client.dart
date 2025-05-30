@@ -5,7 +5,7 @@ part 'nm_client.g.dart';
 
 @riverpod
 Future<NetworkManagerClient> NmClient(
-  NmClientRef ref,
+  Ref ref,
 ) async {
   final client = NetworkManagerClient();
 

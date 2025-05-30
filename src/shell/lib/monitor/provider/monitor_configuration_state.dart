@@ -1,24 +1,27 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:hooks_riverpod/experimental/persist.dart';
+import 'package:riverpod_annotation/experimental/json_persist.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/model/monitor_configuration.serializable.dart';
 import 'package:shell/monitor/model/screen_configuration.serializable.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
-import 'package:shell/screen/provider/screen_list.dart';
-import 'package:shell/screen/provider/screen_state.dart';
-import 'package:shell/shared/persistence/persistable_provider.mixin.dart';
-import 'package:shell/workspace/provider/workspace_state.dart';
+import 'package:shell/screen/provider/screen_manager.dart';
+import 'package:shell/shared/provider/persistent_storage_state.dart';
 
 part 'monitor_configuration_state.g.dart';
 
 /// Monitor provider
-@riverpod
-class MonitorConfigurationState extends _$MonitorConfigurationState
-    with PersistableProvider<MonitorConfiguration> {
+@Riverpod(keepAlive: true)
+@JsonPersist()
+class MonitorConfigurationState extends _$MonitorConfigurationState {
   @override
   MonitorConfiguration build(MonitorId monitorId) {
-    persistChanges(clearOnDispose: false);
-    return getPersisted(MonitorConfiguration.fromJson) ??
+    persist(
+      storage: ref.watch(persistentStorageStateProvider).requireValue,
+      options: const StorageOptions(cacheTime: StorageCacheTime.unsafe_forever),
+    );
+    return stateOrNull ??
         MonitorConfiguration(
           screenList: IList(),
           displayMode: ScreenDisplayMode.splitHorizontal,
@@ -58,16 +61,9 @@ class MonitorConfigurationState extends _$MonitorConfigurationState
 
   void removeLastScreenConfiguration() {
     final configuration = state.screenList.last;
-    final screen = ref.read(screenStateProvider(configuration.screenId));
-    if (screen.workspaceList.length == 1) {
-      final workspace =
-          ref.read(workspaceStateProvider(screen.workspaceList.first));
-      if (workspace.tileableWindowList.isEmpty) {
-        ref
-            .read(screenListProvider.notifier)
-            .removeScreen(configuration.screenId);
-      }
-    }
+    ref
+        .read(screenManagerProvider.notifier)
+        .removeIfEmpty(configuration.screenId);
     state = state.copyWith(
       screenList: state.screenList
           .removeLast()
@@ -141,10 +137,4 @@ class MonitorConfigurationState extends _$MonitorConfigurationState
   void setDisplayMode(ScreenDisplayMode displayMode) {
     state = state.copyWith(displayMode: displayMode);
   }
-
-  @override
-  String getPersistentFolder() => 'Monitor';
-
-  @override
-  String getPersistentId() => monitorId;
 }

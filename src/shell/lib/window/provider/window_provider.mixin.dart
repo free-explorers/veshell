@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:collection/collection.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:hooks_riverpod/misc.dart';
 import 'package:shell/application/model/launch_config.serializable.dart';
 import 'package:shell/application/provider/app_launch.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
@@ -12,7 +13,7 @@ import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
 import 'package:shell/window/model/window_base.dart';
-import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/matching_engine.dart';
@@ -22,7 +23,7 @@ import 'package:shell/window/provider/window_manager/window_manager.dart';
 mixin WindowProviderMixin<T extends Window> {
   T get state;
   set state(T value);
-  AutoDisposeNotifierProviderRef<T> get ref;
+  Ref get ref;
   KeepAliveLink? _keepAliveLink;
 
   final Map<MetaWindowId, ProviderSubscription<MetaWindow>>
@@ -220,7 +221,7 @@ mixin WindowProviderMixin<T extends Window> {
     );
   }
 
-  void onMetaWindowIsDestroyed(MetaWindowId metaWindowId) {
+  void onMetaWindowRemoved(MetaWindowId metaWindowId) {
     removeMetaWindow(metaWindowId);
   }
 
@@ -235,4 +236,12 @@ mixin WindowProviderMixin<T extends Window> {
   void dispose() {
     _keepAliveLink?.close();
   }
+
+  void closeWindow() {
+    for (final metaWindowId in _metaWindowSubscriptions.keys) {
+      ref.read(metaWindowStateProvider(metaWindowId).notifier).requestToClose();
+    }
+  }
+
+  void removeWindow();
 }

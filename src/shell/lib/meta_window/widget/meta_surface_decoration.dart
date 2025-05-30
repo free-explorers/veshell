@@ -3,7 +3,6 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/meta_window/provider/meta_window_dragging_state.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
-import 'package:shell/window/provider/window_manager/window_manager.dart';
 
 class MetaSurfaceDecoration extends HookConsumerWidget {
   const MetaSurfaceDecoration({
@@ -88,9 +87,9 @@ class WindowTitleBar extends HookConsumerWidget {
               const Spacer(),
               InkWell(
                 onTap: () {
-                  ref.read(windowManagerProvider.notifier).closeWindowSurface(
-                        metaWindowId,
-                      );
+                  ref
+                      .read(metaWindowStateProvider(metaWindowId).notifier)
+                      .requestToClose();
                 },
                 child: Padding(
                   padding: const EdgeInsets.all(12),

@@ -1,8 +1,8 @@
 import 'package:flutter/widgets.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/wayland/model/request/activate_window/activate_window.serializable.dart';
+import 'package:shell/platform/model/request/activate_window/activate_window.serializable.dart';
+import 'package:shell/platform/provider/wayland.manager.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
-import 'package:shell/wayland/provider/wayland.manager.dart';
 
 class ActivateSurfaceOnPointerDown extends ConsumerWidget {
   const ActivateSurfaceOnPointerDown({

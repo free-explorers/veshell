@@ -3,7 +3,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'cpu_line.freezed.dart';
 
 @freezed
-class CpuLine with _$CpuLine {
+abstract class CpuLine with _$CpuLine {
   factory CpuLine({
     required String label,
     required int user,

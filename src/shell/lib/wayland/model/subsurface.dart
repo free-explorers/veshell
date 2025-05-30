@@ -5,7 +5,7 @@ import 'package:shell/wayland/model/wl_surface.dart';
 part 'subsurface.freezed.dart';
 
 @freezed
-class Subsurface with _$Subsurface {
+abstract class Subsurface with _$Subsurface {
   const factory Subsurface({
     required bool committed,
     required bool mapped,

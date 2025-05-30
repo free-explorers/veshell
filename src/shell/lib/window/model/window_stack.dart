@@ -6,7 +6,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'window_stack.freezed.dart';
 
 @freezed
-class WindowStackState with _$WindowStackState {
+abstract class WindowStackState with _$WindowStackState {
   const factory WindowStackState({
     required IList<int> stack,
     required ISet<int> animateClosing,

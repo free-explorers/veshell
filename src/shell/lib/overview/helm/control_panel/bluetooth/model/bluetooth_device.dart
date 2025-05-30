@@ -4,7 +4,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'bluetooth_device.freezed.dart';
 
 @freezed
-class BluetoothDevice with _$BluetoothDevice {
+abstract class BluetoothDevice with _$BluetoothDevice {
   factory BluetoothDevice({
     required BlueZDevice bluezDevice,
     required bool connecting,

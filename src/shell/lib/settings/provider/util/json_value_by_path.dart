@@ -1,4 +1,3 @@
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/settings/provider/util/merged_settings_json.dart';
 

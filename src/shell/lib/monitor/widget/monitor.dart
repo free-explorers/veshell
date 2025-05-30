@@ -6,7 +6,7 @@ import 'package:shell/monitor/model/screen_configuration.serializable.dart';
 import 'package:shell/monitor/provider/current_monitor.dart';
 import 'package:shell/monitor/provider/monitor_by_name.dart';
 import 'package:shell/monitor/provider/monitor_configuration_state.dart';
-import 'package:shell/screen/provider/screen_list.dart';
+import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/screen/widget/screen.dart';
 
 /// Widget that represent the Monitor in the widget tree
@@ -25,7 +25,7 @@ class MonitorWidget extends HookConsumerWidget {
         if (monitorConfiguration.screenList.isEmpty) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             final newScreenId =
-                ref.read(screenListProvider.notifier).createNewScreen();
+                ref.read(screenManagerProvider.notifier).createNewScreen();
             ref
                 .read(
                   monitorConfigurationStateProvider(monitorName).notifier,

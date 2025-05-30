@@ -8,7 +8,7 @@ part 'monitor_configuration.serializable.freezed.dart';
 part 'monitor_configuration.serializable.g.dart';
 
 @freezed
-class MonitorConfiguration with _$MonitorConfiguration {
+abstract class MonitorConfiguration with _$MonitorConfiguration {
   const factory MonitorConfiguration({
     required Mode mode,
     @OffsetConverter() required Offset location,

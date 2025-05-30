@@ -1,7 +1,7 @@
 import 'package:collection/collection.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
-import 'package:shell/monitor/provider/monitor_list.dart';
+import 'package:shell/monitor/provider/connected_monitor_list.dart';
 
 part 'monitor_by_name.g.dart';
 
@@ -10,7 +10,7 @@ part 'monitor_by_name.g.dart';
 class MonitorByName extends _$MonitorByName {
   @override
   Monitor? build(String monitorName) {
-    final monitorList = ref.watch(monitorListProvider);
+    final monitorList = ref.watch(connectedMonitorListProvider);
     return monitorList
         .firstWhereOrNull((element) => element.name == monitorName);
   }

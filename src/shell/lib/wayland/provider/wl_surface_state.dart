@@ -1,6 +1,6 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
-import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:hooks_riverpod/misc.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/meta_window/provider/meta_window_id_per_surface_id.dart';
 import 'package:shell/wayland/model/wl_surface.dart';

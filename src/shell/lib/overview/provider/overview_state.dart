@@ -3,7 +3,7 @@ import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/overview/model/overview.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
-import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
 

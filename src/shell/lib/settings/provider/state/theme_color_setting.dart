@@ -1,6 +1,5 @@
 import 'dart:ui';
 
-import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/provider/util/json_value_by_path.dart';

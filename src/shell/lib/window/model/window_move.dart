@@ -4,7 +4,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'window_move.freezed.dart';
 
 @freezed
-class WindowMoveState with _$WindowMoveState {
+abstract class WindowMoveState with _$WindowMoveState {
   const factory WindowMoveState({
     required bool moving,
     required Offset startPosition,

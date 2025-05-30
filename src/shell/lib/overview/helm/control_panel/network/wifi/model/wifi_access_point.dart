@@ -4,7 +4,7 @@ import 'package:nm/nm.dart';
 part 'wifi_access_point.freezed.dart';
 
 @freezed
-class WifiAccessPoint with _$WifiAccessPoint {
+abstract class WifiAccessPoint with _$WifiAccessPoint {
   const factory WifiAccessPoint({
     required String ssid,
     required List<NetworkManagerAccessPoint> accessPoints,

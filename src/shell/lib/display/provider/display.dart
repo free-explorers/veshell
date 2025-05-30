@@ -6,7 +6,7 @@ part 'display.g.dart';
 
 /// Provide the only Display to all his childrens
 @riverpod
-Display currentDisplay(CurrentDisplayRef ref) {
+Display currentDisplay(Ref ref) {
   final viewSize =
       WidgetsBinding.instance.platformDispatcher.views.first.physicalSize;
   return Display(size: viewSize);

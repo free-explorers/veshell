@@ -5,7 +5,7 @@ part 'notification_hints.serializable.freezed.dart';
 part 'notification_hints.serializable.g.dart';
 
 @freezed
-class NotificationHints with _$NotificationHints {
+abstract class NotificationHints with _$NotificationHints {
   const factory NotificationHints({
     bool? actionIcons,
     String? category,

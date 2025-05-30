@@ -1,5 +1,5 @@
 import 'package:json_annotation/json_annotation.dart';
-import 'package:shell/wayland/model/event/interactive_resize/interactive_resize.serializable.dart';
+import 'package:shell/platform/model/event/interactive_resize/interactive_resize.serializable.dart';
 
 class ResizeEdgeConverter extends JsonConverter<ResizeEdge, int> {
   /// Serialize [ResizeEdge] to [int].

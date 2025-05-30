@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/monitor/provider/current_monitor.dart';
-import 'package:shell/monitor/provider/monitor_list.dart';
 import 'package:shell/monitor/widget/monitor.dart';
 
 /// Widget that represent the Display in the widget tree
@@ -12,7 +12,7 @@ class DisplayWidget extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final monitorList = ref
-        .watch(monitorListProvider)
+        .watch(connectedMonitorListProvider)
         // Ignore monitors that are connected but not yet configured
         // with a resolution.
         .where((element) => element.currentMode != null);

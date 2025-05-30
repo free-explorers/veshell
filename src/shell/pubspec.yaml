@@ -30,26 +30,22 @@ dependencies:
   async: ^2.11.0
   flutter:
     sdk: flutter
-
-  hooks_riverpod: ^2.4.6
-  flutter_hooks: ^0.20.3
-  riverpod_annotation: ^2.3.1
+  hooks_riverpod: ^3.0.0-dev.15
+  flutter_hooks: ^0.21.2
+  riverpod_annotation: ^3.0.0-dev.15
   intl: ^0.20.1
-  freezed: ^2.4.5
-  freezed_annotation: ^2.4.1
+  freezed: ^3.0.6
+  freezed_annotation: ^3.0.0
   tuple: ^2.0.2
   freedesktop_desktop_entry:
     git:
       url: https://github.com/free-explorers/freedesktop_desktop_entry.git
-      ref: f412a17bab2475dca602b2abc494982349bff551
+      ref: 8d227217166bd65d1117fce4cb9db6bffaebe75c
 
   jovial_svg: ^1.1.15
   flutter_svg: ^2.0.9
 
-  visibility_detector: ^0.4.0+2
-  flutter_portal: ^1.1.4
-  glissando: ^0.0.3
-  arena_listener: ^0.0.1
+  arena_listener: ^0.0.2
   fast_immutable_collections: ^9.2.0
   material_design_icons_flutter: 
     git:
@@ -75,7 +71,7 @@ dependencies:
   nm: 
     git:
       url: https://github.com/free-explorers/nm.dart
-  pulseaudio: ^0.0.7
+  pulseaudio: ^0.0.8
   flex_color_picker: ^3.7.0
   defer_pointer: ^0.0.2
   
@@ -87,10 +83,10 @@ dev_dependencies:
   # rules and activating additional ones.
   build_runner: ^2.4.13
   flutter_lints: ^5.0.0
-  riverpod_generator: ^2.3.6
+  riverpod_generator: ^3.0.0-dev.15
   very_good_analysis: ^7.0.0
   custom_lint: ^0.7.0
-  riverpod_lint: ^2.3.4
+  riverpod_lint: ^3.0.0-dev.15
   json_serializable: ^6.7.1
 
 # For information on the generic Dart part of this file, see the

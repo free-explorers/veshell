@@ -6,7 +6,7 @@ part 'app_drawer.g.dart';
 
 @Riverpod(keepAlive: true)
 Future<List<LocalizedDesktopEntry>> appDrawerFilteredDesktopEntries(
-  AppDrawerFilteredDesktopEntriesRef ref,
+  Ref ref,
   String filter,
 ) async {
   final desktopEntries =

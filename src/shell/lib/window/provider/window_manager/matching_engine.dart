@@ -5,17 +5,18 @@ import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
 import 'package:shell/window/model/window_base.dart';
-import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/matching_utils.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
+import 'package:shell/window/provider/window_manager/windows_available_for_matching.dart';
 
 part 'matching_engine.g.dart';
 
 /// MatchingEngine is responsible for matching surfaces to windows.
-@Riverpod(keepAlive: true)
+@riverpod
 class MatchingEngine extends _$MatchingEngine {
   final ISet<MetaWindowId> _surfaceToMatchSet = ISet<MetaWindowId>();
   @override
@@ -219,8 +220,7 @@ class MatchingEngine extends _$MatchingEngine {
     final metaWindowMatchInfo = MatchingInfo.fromMetaWindow(metaWindow);
 
     final candidateWindowSet =
-        ref.read(windowManagerProvider).where((windowId) {
-      if (windowId is DialogWindowId) return false;
+        ref.read(windowsAvailableForMatchingProvider).where((windowId) {
       if (excludedWindowIds.contains(windowId)) return false;
       final windowState = _getWindowState(windowId);
       return windowState.properties.appId == metaWindowMatchInfo.appId;

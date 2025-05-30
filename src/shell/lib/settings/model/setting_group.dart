@@ -5,7 +5,7 @@ import 'package:shell/settings/model/setting_definition.dart';
 part 'setting_group.freezed.dart';
 
 @freezed
-class SettingGroup with _$SettingGroup implements SettingDefinition {
+abstract class SettingGroup with _$SettingGroup implements SettingDefinition {
   const factory SettingGroup({
     required String name,
     required String? description,

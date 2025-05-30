@@ -3,7 +3,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'process_stat.freezed.dart';
 
 @freezed
-class ProcessStat with _$ProcessStat {
+abstract class ProcessStat with _$ProcessStat {
   factory ProcessStat({
     required int pid,
     required String name,
