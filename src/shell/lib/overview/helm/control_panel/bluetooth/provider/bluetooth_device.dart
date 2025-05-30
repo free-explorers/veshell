@@ -7,32 +7,36 @@ part 'bluetooth_device.g.dart';
 @riverpod
 class BluetoothDeviceState extends _$BluetoothDeviceState {
   @override
-  BluetoothDevice build(String address) {
+  BluetoothDevice? build(String address) {
+    final device = ref.watch(bluezDeviceProvider(address));
+    if (device == null) {
+      return null;
+    }
     return BluetoothDevice(
-      bluezDevice: ref.watch(bluezDeviceProvider(address)),
+      bluezDevice: device,
       connecting: false,
       pairing: false,
     );
   }
 
   Future<void> connect() async {
-    state = state.copyWith(connecting: true);
+    state = state?.copyWith(connecting: true);
     try {
-      await state.bluezDevice.connect();
+      await state?.bluezDevice.connect();
     } catch (e) {
       print('connect error $e');
     }
-    state = state.copyWith(connecting: false);
+    state = state?.copyWith(connecting: false);
   }
 
   Future<void> pair() async {
-    state = state.copyWith(pairing: true);
+    state = state?.copyWith(pairing: true);
     try {
-      await state.bluezDevice.pair();
+      await state?.bluezDevice.pair();
     } catch (e) {
       print('pair error $e');
     }
-    state = state.copyWith(pairing: false);
+    state = state?.copyWith(pairing: false);
     await connect();
   }
 }

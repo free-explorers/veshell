@@ -52,12 +52,11 @@ packages:
   bluez:
     dependency: "direct main"
     description:
-      path: "."
-      ref: HEAD
-      resolved-ref: "480fa24dc4144570fe08619d4ae4683fcc033e05"
-      url: "https://github.com/free-explorers/bluez.dart"
-    source: git
-    version: "0.8.2"
+      name: bluez
+      sha256: "61a7204381925896a374301498f2f5399e59827c6498ae1e924aaa598751b545"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.8.3"
   boolean_selector:
     dependency: transitive
     description:
@@ -261,12 +260,11 @@ packages:
   dbus:
     dependency: "direct main"
     description:
-      path: "."
-      ref: HEAD
-      resolved-ref: "04eb805175dfb1e4a4f3d025c9b1134285bc1f61"
-      url: "https://github.com/free-explorers/dbus.dart"
-    source: git
-    version: "0.7.10"
+      name: dbus
+      sha256: "79e0c23480ff85dc68de79e2cd6334add97e48f7f4865d17686dd6ea81a47e8c"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.11"
   defer_pointer:
     dependency: "direct main"
     description:
@@ -605,11 +603,10 @@ packages:
   nm:
     dependency: "direct main"
     description:
-      path: "."
-      ref: HEAD
-      resolved-ref: "3d4dc2f4bcd73d0d142862c67c403ebb3e5244b1"
-      url: "https://github.com/free-explorers/nm.dart"
-    source: git
+      name: nm
+      sha256: "2c9aae4127bdc8993206464fcc063611e0e36e72018696cd9631023a31b24254"
+      url: "https://pub.dev"
+    source: hosted
     version: "0.5.0"
   node_preamble:
     dependency: transitive
@@ -917,7 +914,7 @@ packages:
     description:
       path: "."
       ref: HEAD
-      resolved-ref: "192657d1ee349c1551392d45d1b99dac470df6ef"
+      resolved-ref: "762f3bc91e817f3584d427357d51075e3512d49f"
       url: "https://github.com/free-explorers/ubuntu_session.dart"
     source: git
     version: "0.0.4"
@@ -937,6 +934,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.2"
+  upower:
+    dependency: "direct main"
+    description:
+      name: upower
+      sha256: cf042403154751180affa1d15614db7fa50234bc2373cd21c3db666c38543ebf
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.0"
   uuid:
     dependency: "direct main"
     description:

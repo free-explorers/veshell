@@ -15,6 +15,7 @@ class ProcessesMemoryStats extends _$ProcessesMemoryStats {
   IMap<int, double> build() {
     final timer =
         Timer.periodic(const Duration(milliseconds: 500), (Timer t) async {
+      if (!ref.mounted) return;
       final snapshot = await takeSnapshot();
       if (_prevSnapshot != null) {
         state = calculateMemoryStatsForEachProcesses(snapshot);

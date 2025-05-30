@@ -14,7 +14,7 @@ class BluetoothDeviceListTile extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final device = ref.watch(bluetoothDeviceStateProvider(address));
+    final device = ref.watch(bluetoothDeviceStateProvider(address))!;
     final bluezDevice = device.bluezDevice;
     if (bluezDevice.paired) {
       return ListTile(
