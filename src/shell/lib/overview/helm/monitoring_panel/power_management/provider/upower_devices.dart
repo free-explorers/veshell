@@ -7,11 +7,17 @@ part 'upower_devices.g.dart';
 @riverpod
 Future<List<UPowerDevice>> upowerDevices(Ref ref) async {
   final upower = await ref.watch(upowerClientProvider.future);
-  upower.deviceAdded.listen((event) {
+
+  final addedListener = upower.deviceAdded.listen((event) {
     ref.invalidateSelf();
   });
-  upower.deviceRemoved.listen((event) {
+  final removedListener = upower.deviceRemoved.listen((event) {
     ref.invalidateSelf();
+  });
+
+  ref.onDispose(() {
+    addedListener.cancel();
+    removedListener.cancel();
   });
   return upower.devices;
 }
