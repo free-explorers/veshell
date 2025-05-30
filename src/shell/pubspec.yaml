@@ -62,19 +62,14 @@ dependencies:
   ubuntu_session: 
     git:
       url: https://github.com/free-explorers/ubuntu_session.dart
-  dbus: 
-    git:
-      url: https://github.com/free-explorers/dbus.dart
-  bluez: 
-    git:
-      url: https://github.com/free-explorers/bluez.dart
-  nm: 
-    git:
-      url: https://github.com/free-explorers/nm.dart
+  dbus: ^0.7.11
+  bluez: ^0.8.3
+  nm: ^0.5.0
   pulseaudio: ^0.0.8
   flex_color_picker: ^3.7.0
   defer_pointer: ^0.0.2
-  
+  upower: ^0.7.0
+
 dev_dependencies:
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
