@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
-import 'package:shell/monitor/provider/monitor_list.dart';
+import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/settings/model/setting_group.dart';
 import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/provider/util/config_directory.dart';
@@ -20,7 +20,7 @@ part 'settings_properties.g.dart';
 class SettingsProperties extends _$SettingsProperties {
   @override
   Map<String, SettingGroup> build() {
-    final monitors = ref.watch(monitorListProvider);
+    final monitors = ref.watch(connectedMonitorListProvider);
     return {
       'monitors': SettingGroup(
         name: 'Monitors',

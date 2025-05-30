@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/display/widget/display.dart';
 import 'package:shell/meta_window/provider/meta_window_manager.dart';
-import 'package:shell/monitor/provider/monitor_list.dart';
+import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/notification/provider/notification_manager.dart';
+import 'package:shell/platform/model/request/get_environment_variables/get_environment_variables.serializable.dart';
+import 'package:shell/platform/model/request/get_monitor_layout/get_monitor_layout.serializable.dart';
+import 'package:shell/platform/model/request/shell_ready/shell_ready.serializable.dart';
+import 'package:shell/platform/provider/environment_variables.dart';
+import 'package:shell/platform/provider/wayland.manager.dart';
 import 'package:shell/polkit/provider/authentication_agent.dart';
-import 'package:shell/screen/provider/screen_list.dart';
-import 'package:shell/shared/provider/persistent_json_by_folder.dart';
+import 'package:shell/screen/provider/screen_manager.dart';
+import 'package:shell/shared/provider/persistent_storage_state.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_audio.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_server_info.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_sink_list.dart';
@@ -16,49 +20,23 @@ import 'package:shell/shared/pulseaudio/provider/pulse_source_list.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shortcut_manager/widget/shortcut_manager.dart';
 import 'package:shell/theme/provider/theme.dart';
-import 'package:shell/wayland/model/request/get_environment_variables/get_environment_variables.serializable.dart';
-import 'package:shell/wayland/model/request/get_monitor_layout/get_monitor_layout.serializable.dart';
-import 'package:shell/wayland/model/request/shell_ready/shell_ready.serializable.dart';
-import 'package:shell/wayland/provider/environment_variables.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
-import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
-import 'package:visibility_detector/visibility_detector.dart';
 
 void main() async {
   configureLogs();
   // debugRepaintRainbowEnabled = true;
   // debugPrintGestureArenaDiagnostics = true;
   WidgetsFlutterBinding.ensureInitialized();
-  final container = ProviderContainer()
-    ..read(environmentVariablesProvider)
-    ..read(waylandManagerProvider)
-    ..read(surfaceManagerProvider);
 
-  SchedulerBinding.instance.addPostFrameCallback((_) {
-    container.read(waylandManagerProvider.notifier)
-      ..request(
-        GetEnvironmentVariablesRequest(
-          message: GetEnvironmentVariablesMessage(),
-        ),
-      )
-      ..request(
-        GetMonitorLayoutRequest(
-          message: GetMonitorLayoutMessage(),
-        ),
-      );
-  });
-
-  VisibilityDetectorController.instance.updateInterval = Duration.zero;
   FocusManager.instance.addListener(() {
     focusLog.info(
       'FocusManager.instance.primaryFocus ${FocusManager.instance.primaryFocus}',
     );
   });
   runApp(
-    UncontrolledProviderScope(
-      container: container,
-      child: const Veshell(),
+    const ProviderScope(
+      child: Veshell(),
     ),
   );
 }
@@ -73,14 +51,14 @@ class _EagerInitialization extends ConsumerWidget {
     // Eagerly initialize providers by watching them.
     // By using "watch", the provider will stay alive and not be disposed.
     final results = [
-      ref.watch(persistentJsonByFolderProvider),
+      ref.watch(persistentStorageStateProvider),
       ref.watch(pulseClientProvider),
       ref.watch(pulseServerInfoProvider),
       ref.watch(pulseSinkListProvider),
       ref.watch(pulseSourceListProvider),
     ];
 
-    ref.watch(monitorListProvider);
+    ref.watch(connectedMonitorListProvider);
 
     // Handle error states and loading states
     if (results.any(
@@ -103,7 +81,10 @@ class _EagerInitialization extends ConsumerWidget {
     }
 
     ref
-      ..watch(screenListProvider)
+      ..watch(waylandManagerProvider)
+      ..watch(environmentVariablesProvider)
+      ..watch(surfaceManagerProvider)
+      ..watch(screenManagerProvider)
       ..watch(windowManagerProvider)
       ..watch(metaWindowManagerProvider)
       ..watch(polkitAuthenticationAgentStateProvider)
@@ -138,9 +119,18 @@ class Veshell extends ConsumerWidget {
               ) {
                 useEffect(
                   () {
-                    ref
-                        .read(waylandManagerProvider.notifier)
-                        .request(const ShellReadyRequest());
+                    ref.read(waylandManagerProvider.notifier)
+                      ..request(
+                        GetEnvironmentVariablesRequest(
+                          message: GetEnvironmentVariablesMessage(),
+                        ),
+                      )
+                      ..request(
+                        GetMonitorLayoutRequest(
+                          message: GetMonitorLayoutMessage(),
+                        ),
+                      )
+                      ..request(const ShellReadyRequest());
                     return null;
                   },
                   [],

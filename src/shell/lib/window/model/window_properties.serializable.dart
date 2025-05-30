@@ -9,7 +9,7 @@ part 'window_properties.serializable.g.dart';
 /// For example, the task manager should be able to list all windows, regardless
 /// of their type.
 @freezed
-class WindowProperties with _$WindowProperties {
+abstract class WindowProperties with _$WindowProperties {
   const factory WindowProperties({
     required String appId,
     int? pid,

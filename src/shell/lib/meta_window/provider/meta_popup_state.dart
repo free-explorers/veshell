@@ -1,9 +1,9 @@
-import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:hooks_riverpod/misc.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/meta_window/model/meta_popup.serializable.dart';
 import 'package:shell/meta_window/provider/meta_popup_for_id.dart';
-import 'package:shell/wayland/model/event/meta_popup_created/meta_popup_created.serializable.dart';
-import 'package:shell/wayland/model/event/meta_popup_patches/meta_popup_patches.serializable.dart';
+import 'package:shell/platform/model/event/meta_popup_created/meta_popup_created.serializable.dart';
+import 'package:shell/platform/model/event/meta_popup_patches/meta_popup_patches.serializable.dart';
 
 part 'meta_popup_state.g.dart';
 

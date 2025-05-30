@@ -20,26 +20,26 @@ class PulseClient extends _$PulseClient {
   }
 
   void setDefaultSink(String name) {
-    state.valueOrNull?.setDefaultSink(name);
+    state.value?.setDefaultSink(name);
   }
 
   void setDefaultSource(String name) {
-    state.valueOrNull?.setDefaultSource(name);
+    state.value?.setDefaultSource(name);
   }
 
   void setSinkVolume(String name, double value) {
-    state.valueOrNull?.setSinkVolume(name, value);
+    state.value?.setSinkVolume(name, value);
   }
 
   void setSinkMute(String name, bool value) {
-    state.valueOrNull?.setSinkMute(name, value);
+    state.value?.setSinkMute(name, value);
   }
 
   void setSourceVolume(String name, double value) {
-    state.valueOrNull?.setSourceVolume(name, value);
+    state.value?.setSourceVolume(name, value);
   }
 
   void setSourceMute(String name, bool value) {
-    state.valueOrNull?.setSourceMute(name, value);
+    state.value?.setSourceMute(name, value);
   }
 }

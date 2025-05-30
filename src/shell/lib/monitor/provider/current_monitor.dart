@@ -5,7 +5,7 @@ part 'current_monitor.g.dart';
 
 /// Provide the current Monitor to all his childrens
 @Riverpod(dependencies: [])
-MonitorId currentMonitor(CurrentMonitorRef ref) {
+MonitorId currentMonitor(Ref ref) {
   // This provider is instentatied in Children Scope
   throw Exception('Provider was not initialized');
 }

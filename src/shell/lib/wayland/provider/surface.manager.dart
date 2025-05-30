@@ -3,39 +3,41 @@ import 'dart:ui';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/wayland/model/event/commit_surface/commit_surface.serializable.dart';
-import 'package:shell/wayland/model/event/destroy_subsurface/destroy_subsurface.serializable.dart';
-import 'package:shell/wayland/model/event/destroy_surface/destroy_surface.serializable.dart';
-import 'package:shell/wayland/model/event/new_subsurface/new_subsurface.serializable.dart';
-import 'package:shell/wayland/model/event/new_surface/new_surface.serializable.dart';
-import 'package:shell/wayland/model/event/wayland_event.serializable.dart';
-import 'package:shell/wayland/model/request/unregister_view_texture/unregister_view_texture.serializable.dart';
+import 'package:shell/platform/model/event/commit_surface/commit_surface.serializable.dart';
+import 'package:shell/platform/model/event/destroy_subsurface/destroy_subsurface.serializable.dart';
+import 'package:shell/platform/model/event/destroy_surface/destroy_surface.serializable.dart';
+import 'package:shell/platform/model/event/new_subsurface/new_subsurface.serializable.dart';
+import 'package:shell/platform/model/event/new_surface/new_surface.serializable.dart';
+import 'package:shell/platform/model/event/wayland_event.serializable.dart';
+import 'package:shell/platform/model/request/unregister_view_texture/unregister_view_texture.serializable.dart';
+import 'package:shell/platform/provider/wayland.manager.dart';
 import 'package:shell/wayland/model/surface_manager_state.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/subsurface_state.dart';
-import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 
 part 'surface.manager.g.dart';
 
-@Riverpod(keepAlive: true)
+@riverpod
 class SurfaceManager extends _$SurfaceManager {
   @override
   SurfaceManagerState build() {
     print('SurfaceManager build');
 
-    ref.listen(waylandManagerProvider, (_, next) {
+    ref.watch(waylandManagerProvider).listen((next) {
       switch (next) {
-        case AsyncData(value: final NewSurfaceEvent event):
+        case final NewSurfaceEvent event:
           _newSurface(event.message);
-        case AsyncData(value: final NewSubsurfaceEvent event):
+        case final NewSubsurfaceEvent event:
           _newSubsurface(event.message);
-        case AsyncData(value: final CommitSurfaceEvent event):
+        case final CommitSurfaceEvent event:
           _commitSurface(event.message);
-        case AsyncData(value: final DestroySurfaceEvent event):
+        case final DestroySurfaceEvent event:
           _destroySurface(event.message);
-        case AsyncData(value: final DestroySubsurfaceEvent event):
+        case final DestroySubsurfaceEvent event:
           _destroySubsurface(event.message);
+        case _:
+          break;
       }
     });
     return SurfaceManagerState(

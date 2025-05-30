@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/shared/widget/cross_reorderable_list.dart';
-import 'package:shell/workspace/provider/current_workspace_id.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
+import 'package:shell/workspace/widget/current_workspace_id.dart';
 import 'package:shell/workspace/widget/tileable/persistent_window/persistent_window.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
 
@@ -13,7 +13,7 @@ class TileableListView extends HookConsumerWidget {
   final List<Tileable> tileableList;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final workspaceId = ref.watch(currentWorkspaceIdProvider);
+    final workspaceId = CurrentWorkspaceId.of(context);
     final workspaceState = ref.watch(workspaceStateProvider(workspaceId));
     final animationController = useAnimationController(
       duration: const Duration(milliseconds: 200),

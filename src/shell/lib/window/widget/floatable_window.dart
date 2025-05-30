@@ -9,9 +9,9 @@ import 'package:shell/meta_window/provider/meta_window_resizing_state.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/widget/meta_surface.dart';
 import 'package:shell/meta_window/widget/meta_surface_resize_handle.dart';
+import 'package:shell/platform/model/event/interactive_resize/interactive_resize.serializable.dart';
+import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/shared/widget/container_with_positionnable_children/container_with_positionnable_children.dart';
-import 'package:shell/wayland/model/event/interactive_resize/interactive_resize.serializable.dart';
-import 'package:shell/wayland/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/window/model/window_base.dart';
 

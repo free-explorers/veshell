@@ -5,7 +5,7 @@ import 'package:shell/manager/wayland/surface/xdg_toplevel/xdg_toplevel.model.da
 part 'window_resize.model.freezed.dart';
 
 @freezed
-class ResizerState with _$ResizerState {
+abstract class ResizerState with _$ResizerState {
   const factory ResizerState({
     required bool resizing,
     required ResizeEdge? resizeEdge,

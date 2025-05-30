@@ -1,32 +1,30 @@
 import 'package:dbus/dbus.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:hooks_riverpod/experimental/persist.dart';
+import 'package:riverpod_annotation/experimental/json_persist.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/pid_to_meta_window_id.dart';
 import 'package:shell/notification/model/dbus_notification_server.dart';
 import 'package:shell/notification/model/notification.serializable.dart';
 import 'package:shell/notification/model/notification_manager_state.serializable.dart';
-import 'package:shell/shared/persistence/persistable_provider.mixin.dart';
+import 'package:shell/shared/provider/persistent_storage_state.dart';
 
 part 'notification_manager.g.dart';
 
 @riverpod
-class NotificationManager extends _$NotificationManager
-    with PersistableProvider<NotificationManagerState> {
+@JsonPersist()
+class NotificationManager extends _$NotificationManager {
   late DbusNotificationServer _server;
 
   @override
-  String getPersistentFolder() => 'Notification';
-
-  @override
-  String getPersistentId() => 'notification_list';
-
-  @override
   NotificationManagerState build() {
-    final persistedState = getPersisted(NotificationManagerState.fromJson);
-    persistChanges();
+    persist(
+      storage: ref.watch(persistentStorageStateProvider).requireValue,
+      options: const StorageOptions(cacheTime: StorageCacheTime.unsafe_forever),
+    );
     initServer();
-    return persistedState ??
+    return stateOrNull ??
         NotificationManagerState(
           notificationMap: <int, Notification>{}.lock,
           lastIndex: 0,

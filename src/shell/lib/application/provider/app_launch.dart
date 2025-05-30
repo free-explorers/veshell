@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/model/launch_config.serializable.dart';
 import 'package:shell/application/provider/logs_for_pid.dart';
-import 'package:shell/wayland/provider/environment_variables.dart';
+import 'package:shell/platform/provider/environment_variables.dart';
 
 part 'app_launch.g.dart';
 

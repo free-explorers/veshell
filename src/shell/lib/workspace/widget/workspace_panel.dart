@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/shared/widget/number_picker.dart';
 import 'package:shell/theme//provider/theme.dart';
+import 'package:shell/workspace/provider/test.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
 import 'package:shell/workspace/widget/tileable_list.dart';
 
@@ -32,6 +33,23 @@ class WorkspacePanel extends HookConsumerWidget implements PreferredSizeWidget {
               value: visibleLength,
               minValue: 0,
               onValueChange: onVisibleLengthChange,
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) {
+                    return Consumer(
+                      builder: (context, ref, child) {
+                        final test = ref.watch(testProviderProvider);
+                        return Text(test);
+                      },
+                    );
+                  },
+                );
+              },
+              icon: const Icon(Icons.brightness_6),
             ),
             const SizedBox(width: 8),
           ],

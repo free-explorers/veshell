@@ -15,7 +15,7 @@ enum SurfaceRole {
 }
 
 @freezed
-class SurfaceTexture with _$SurfaceTexture {
+abstract class SurfaceTexture with _$SurfaceTexture {
   const factory SurfaceTexture({
     required TextureId id,
     required Size size,
@@ -23,7 +23,7 @@ class SurfaceTexture with _$SurfaceTexture {
 }
 
 @freezed
-class WlSurface with _$WlSurface {
+abstract class WlSurface with _$WlSurface {
   const factory WlSurface({
     required SurfaceId surfaceId,
     required SurfaceRole? role,

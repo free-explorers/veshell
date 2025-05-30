@@ -3,10 +3,13 @@
 import 'package:collection/collection.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
+import 'package:hooks_riverpod/experimental/persist.dart';
+import 'package:hooks_riverpod/misc.dart';
+import 'package:riverpod_annotation/experimental/json_persist.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
-import 'package:shell/shared/persistence/persistable_provider.mixin.dart';
-import 'package:shell/window/model/window_id.dart';
+import 'package:shell/shared/provider/persistent_storage_state.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/workspace/model/workspace.serializable.dart';
 import 'package:shell/workspace/provider/window_workspace_map.dart';
@@ -39,43 +42,53 @@ enum MeaningfulApplicationCategory { IDE, WebBrowser, Player }
 
 /// Workspace provider
 @riverpod
-class WorkspaceState extends _$WorkspaceState
-    with PersistableProvider<Workspace> {
-  @override
-  String getPersistentFolder() => 'Workspace';
-
-  @override
-  String getPersistentId() => workspaceId;
-
+@JsonPersist()
+class WorkspaceState extends _$WorkspaceState {
+  KeepAliveLink? _keepAliveLink;
+  String get persistKey => 'workspace_$workspaceId';
   @override
   Workspace build(WorkspaceId workspaceId) {
-    persistChanges();
+    _keepAliveLink = ref.keepAlive();
+    persist(
+      key: persistKey,
+      storage: ref.watch(persistentStorageStateProvider).requireValue,
+      options: const StorageOptions(cacheTime: StorageCacheTime.unsafe_forever),
+    );
 
-    final persistedState = getPersisted(Workspace.fromJson);
-    if (persistedState != null) {
-      return persistedState.copyWith(
-        tileableWindowList: persistedState.tileableWindowList.where(
-          (tileableId) {
-            try {
-              ref.read(persistentWindowStateProvider(tileableId));
-              return true;
-            } catch (e) {
-              print(
-                'Failed to load persistentWindowsState while restoring workspace state',
-              );
-              return false;
-            }
-          },
-        ).toIList(),
-      );
-    } else {
-      return Workspace(
-        workspaceId: workspaceId,
-        tileableWindowList: <PersistentWindowId>[].lock,
-        selectedIndex: 0,
-        visibleLength: 1,
-      );
+    return stateOrNull?.copyWith(
+          tileableWindowList: stateOrNull!.tileableWindowList.where(
+            (tileableId) {
+              try {
+                ref.read(persistentWindowStateProvider(tileableId));
+                return true;
+              } catch (e) {
+                print(
+                  'Failed to load persistentWindowsState while restoring workspace state',
+                );
+                return false;
+              }
+            },
+          ).toIList(),
+        ) ??
+        Workspace(
+          workspaceId: workspaceId,
+          tileableWindowList: <PersistentWindowId>[].lock,
+          selectedIndex: 0,
+          visibleLength: 1,
+        );
+  }
+
+  Future<void> delete() async {
+    final storage = ref.read(persistentStorageStateProvider).requireValue;
+    ref.onDispose(() {
+      storage.delete(persistKey);
+    });
+    for (final windowId in state.tileableWindowList) {
+      ref
+          .read(persistentWindowStateProvider(windowId).notifier)
+          .closeWindow(forceRemove: true);
     }
+    _keepAliveLink?.close();
   }
 
   void reorderWindowList(IList<PersistentWindowId> newWindowList) {
@@ -130,7 +143,6 @@ class WorkspaceState extends _$WorkspaceState
     final removedIsCurrentlyFocused =
         state.selectedIndex < state.tileableWindowList.length &&
             windowId == state.tileableWindowList[state.selectedIndex];
-    final removedIndex = state.tileableWindowList.indexOf(windowId);
     final newWindowList = state.tileableWindowList.remove(windowId);
 
     var selectedIndex = state.selectedIndex;

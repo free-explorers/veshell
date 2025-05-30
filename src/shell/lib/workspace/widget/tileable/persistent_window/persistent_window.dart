@@ -8,16 +8,15 @@ import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/widget/meta_surface.dart';
 import 'package:shell/meta_window/widget/meta_surface_gaming_overlay.dart';
+import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
+import 'package:shell/platform/model/request/activate_window/activate_window.serializable.dart';
+import 'package:shell/platform/provider/wayland.manager.dart';
 import 'package:shell/shared/widget/container_with_positionnable_children/container_with_positionnable_children.dart';
-import 'package:shell/wayland/model/event/meta_window_patches/meta_window_patches.serializable.dart';
-import 'package:shell/wayland/model/request/activate_window/activate_window.serializable.dart';
-import 'package:shell/wayland/provider/wayland.manager.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
-import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
-import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/window/widget/floatable_window.dart';
 import 'package:shell/workspace/widget/tileable/persistent_window/window_placeholder.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
@@ -157,9 +156,10 @@ class PersistentWindowTileable extends Tileable {
                               onPressed: () {
                                 ref
                                     .read(
-                                      windowManagerProvider.notifier,
+                                      persistentWindowStateProvider(windowId)
+                                          .notifier,
                                     )
-                                    .closeWindow(window.windowId);
+                                    .closeWindow();
                               },
                               icon: const Icon(MdiIcons.close),
                             )
@@ -232,9 +232,9 @@ class PersistentWindowTileable extends Tileable {
         onPressed: () {
           ref
               .read(
-                windowManagerProvider.notifier,
+                persistentWindowStateProvider(windowId).notifier,
               )
-              .closeWindow(windowId);
+              .closeWindow();
         },
         leadingIcon: const Icon(MdiIcons.close),
         child: const Text('Close'),
@@ -267,6 +267,14 @@ class WithSurfacesWidget extends HookConsumerWidget {
 
     final activateWindow = useCallback(
       (bool value) {
+        final dialogWindowList = ref
+            .read(
+          dialogSetForWindowProvider(window.windowId),
+        )
+            .map((element) {
+          return ref.read(dialogWindowStateProvider(element));
+        }).toList();
+
         final metaWindowToActivate =
             dialogWindowList.lastOrNull?.metaWindowId ?? window.metaWindowId;
         if (metaWindowToActivate != null) {
@@ -338,6 +346,8 @@ class WithSurfacesWidget extends HookConsumerWidget {
                             metaWindowStateProvider(window.metaWindowId!)
                                 .select((value) => value.geometry),
                           );
+
+                          print('debug1 geometry: $geometry');
 
                           ref
                               .read(

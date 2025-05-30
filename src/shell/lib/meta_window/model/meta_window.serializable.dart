@@ -16,7 +16,7 @@ enum MetaWindowDisplayMode {
 typedef MetaWindowId = String;
 
 @freezed
-class MetaWindow with _$MetaWindow {
+abstract class MetaWindow with _$MetaWindow {
   const factory MetaWindow({
     required MetaWindowId id,
     required int pid,

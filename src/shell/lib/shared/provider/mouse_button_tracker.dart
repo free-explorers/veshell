@@ -3,8 +3,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'mouse_button_tracker.g.dart';
 
 @Riverpod(keepAlive: true)
-MouseButtonTracker mouseButtonTracker(MouseButtonTrackerRef ref) =>
-    MouseButtonTracker();
+MouseButtonTracker mouseButtonTracker(Ref ref) => MouseButtonTracker();
 
 /// When receiving a pointer event in the Listener widget, we can only have a bitmap of all pressed mouse buttons, and
 /// not the button that has been pressed or released. This class tracks changes between such bitmaps and returns the

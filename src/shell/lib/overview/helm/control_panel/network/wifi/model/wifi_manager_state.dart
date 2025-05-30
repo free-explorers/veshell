@@ -3,7 +3,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'wifi_manager_state.freezed.dart';
 
 @freezed
-class WifiManagerState with _$WifiManagerState {
+abstract class WifiManagerState with _$WifiManagerState {
   factory WifiManagerState({
     required bool isScanning,
   }) = _WifiManagerState;

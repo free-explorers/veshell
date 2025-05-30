@@ -5,7 +5,7 @@ import 'package:shell/shared/bluez/provider/bluez_client.dart';
 part 'bluez_device_added.g.dart';
 
 @riverpod
-Stream<BlueZDevice> BluezDeviceAdded(BluezDeviceAddedRef ref) async* {
+Stream<BlueZDevice> BluezDeviceAdded(Ref ref) async* {
   final client = await ref.watch(bluezClientProvider.future);
   yield* client.deviceAdded;
 }

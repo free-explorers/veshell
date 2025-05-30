@@ -11,7 +11,7 @@ part 'meta_popup.serializable.g.dart';
 typedef MetaPopupId = String;
 
 @freezed
-class MetaPopup with _$MetaPopup {
+abstract class MetaPopup with _$MetaPopup {
   const factory MetaPopup({
     required MetaPopupId id,
     required MetaWindowId parent,

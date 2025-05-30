@@ -3,7 +3,7 @@ import 'package:defer_pointer/defer_pointer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shell/meta_window/provider/meta_window_resizing_state.dart';
-import 'package:shell/wayland/model/event/interactive_resize/interactive_resize.serializable.dart';
+import 'package:shell/platform/model/event/interactive_resize/interactive_resize.serializable.dart';
 
 class WithResizeHandles extends StatelessWidget {
   const WithResizeHandles({

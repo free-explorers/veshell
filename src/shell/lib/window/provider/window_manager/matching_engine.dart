@@ -5,7 +5,7 @@ import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
 import 'package:shell/window/model/window_base.dart';
-import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
@@ -218,8 +218,9 @@ class MatchingEngine extends _$MatchingEngine {
 
     final metaWindowMatchInfo = MatchingInfo.fromMetaWindow(metaWindow);
 
-    final candidateWindowSet =
-        ref.read(windowManagerProvider).where((windowId) {
+    final candidateWindowSet = ref
+        .read(windowManagerProvider.select((value) => value.windows))
+        .where((windowId) {
       if (windowId is DialogWindowId) return false;
       if (excludedWindowIds.contains(windowId)) return false;
       final windowState = _getWindowState(windowId);

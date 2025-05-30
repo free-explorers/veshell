@@ -41,8 +41,9 @@ class WindowPlaceholder extends HookConsumerWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final responsiveRowColumn =
-            constraints.maxWidth > constraints.maxHeight ? Row.new : Column.new;
+        final displayDirection = constraints.maxWidth > constraints.maxHeight
+            ? Axis.horizontal
+            : Axis.vertical;
 
         final iconHeight = constraints.biggest.shortestSide *
             6 /
@@ -54,6 +55,13 @@ class WindowPlaceholder extends HookConsumerWidget {
             sqrt(
               constraints.biggest.shortestSide / 1.2,
             );
+
+        final magicSpacing = constraints.biggest.longestSide *
+            6 /
+            sqrt(
+              constraints.biggest.longestSide / 1.2,
+            ) /
+            8;
         return Stack(
           children: [
             Positioned.fill(
@@ -131,69 +139,73 @@ class WindowPlaceholder extends HookConsumerWidget {
                             ),
                           ),
                           Expanded(
-                            flex: responsiveRowColumn == Row.new ? 4 : 5,
-                            child: responsiveRowColumn(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                SizedBox(
-                                  height: iconHeight,
-                                  width: iconWidth,
-                                  child: AppIconById(id: appId),
-                                ),
-                                SizedBox(
-                                  width: constraints.biggest.longestSide *
-                                      6 /
-                                      sqrt(
-                                        constraints.biggest.longestSide / 1.2,
-                                      ) /
-                                      8,
-                                  height: constraints.biggest.longestSide *
-                                      6 /
-                                      sqrt(
-                                        constraints.biggest.longestSide / 1.2,
-                                      ) /
-                                      8,
-                                ),
-                                Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment:
-                                      responsiveRowColumn == Row.new
-                                          ? CrossAxisAlignment.start
-                                          : CrossAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      entry?.entries[
-                                              DesktopEntryKey.name.string] ??
-                                          'Unknown',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .displayMedium,
-                                      textAlign: TextAlign.center,
+                            flex: displayDirection == Axis.horizontal ? 4 : 5,
+                            child: Padding(
+                              padding: displayDirection == Axis.horizontal
+                                  ? EdgeInsets.symmetric(
+                                      horizontal: magicSpacing,
+                                    )
+                                  : EdgeInsets.symmetric(
+                                      vertical: magicSpacing,
                                     ),
-                                    const SizedBox(
-                                      height: 16,
+                              child: Flex(
+                                direction: displayDirection,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                spacing: magicSpacing,
+                                children: [
+                                  SizedBox(
+                                    height: iconHeight,
+                                    width: iconWidth,
+                                    child: AppIconById(id: appId),
+                                  ),
+                                  Flexible(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          displayDirection == Axis.horizontal
+                                              ? CrossAxisAlignment.start
+                                              : CrossAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          entry?.entries[DesktopEntryKey
+                                                  .name.string] ??
+                                              'Unknown',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .displayMedium,
+                                          textAlign: TextAlign.center,
+                                          softWrap: false,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(
+                                          height: 16,
+                                        ),
+                                        ExecCommandEditor(
+                                          maxWidth: displayDirection ==
+                                                  Axis.horizontal
+                                              ? constraints.maxWidth / 3 -
+                                                  iconWidth
+                                              : constraints.maxWidth / 4,
+                                          originalExec: entry?.entries[
+                                                  DesktopEntryKey
+                                                      .exec.string] ??
+                                              entry?.entries[DesktopEntryKey
+                                                  .tryExec.string] ??
+                                              'Unknown',
+                                          customExec: window.customExec,
+                                          onChanged: (customExec) => ref
+                                              .read(
+                                                persistentWindowStateProvider(
+                                                  window.windowId,
+                                                ).notifier,
+                                              )
+                                              .setCustomExec(customExec),
+                                        ),
+                                      ],
                                     ),
-                                    ExecCommandEditor(
-                                      maxWidth: responsiveRowColumn == Row.new
-                                          ? constraints.maxWidth / 3 - iconWidth
-                                          : constraints.maxWidth / 4,
-                                      originalExec: entry?.entries[
-                                              DesktopEntryKey.exec.string] ??
-                                          entry?.entries[
-                                              DesktopEntryKey.tryExec.string] ??
-                                          'Unknown',
-                                      customExec: window.customExec,
-                                      onChanged: (customExec) => ref
-                                          .read(
-                                            persistentWindowStateProvider(
-                                              window.windowId,
-                                            ).notifier,
-                                          )
-                                          .setCustomExec(customExec),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                           Expanded(

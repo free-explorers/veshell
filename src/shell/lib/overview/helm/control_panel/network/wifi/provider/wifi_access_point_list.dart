@@ -17,7 +17,7 @@ class WifiAccessPointList extends _$WifiAccessPointList {
     final wireless = device.wireless!;
 
     final connectionPerSsid =
-        ref.watch(connectionPerSsidProvider(address)).valueOrNull ?? {};
+        ref.watch(connectionPerSsidProvider(address)).value ?? {};
 
     final listenToChanges = wireless.propertiesChanged.listen((event) {
       if (event.contains('AccessPoints')) {

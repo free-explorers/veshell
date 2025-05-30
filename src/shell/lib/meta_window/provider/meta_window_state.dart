@@ -1,13 +1,14 @@
-import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:hooks_riverpod/misc.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_id_per_surface_id.dart';
 import 'package:shell/meta_window/provider/pid_to_meta_window_id.dart';
-import 'package:shell/wayland/model/event/meta_window_created/meta_window_created.serializable.dart';
-import 'package:shell/wayland/model/event/meta_window_patches/meta_window_patches.serializable.dart';
-import 'package:shell/wayland/model/request/meta_window_patches/meta_window_patches.dart';
-import 'package:shell/wayland/provider/wayland.manager.dart';
+import 'package:shell/platform/model/event/meta_window_created/meta_window_created.serializable.dart';
+import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
+import 'package:shell/platform/model/request/close_window/close_window.serializable.dart';
+import 'package:shell/platform/model/request/meta_window_patches/meta_window_patches.dart';
+import 'package:shell/platform/provider/wayland.manager.dart';
 
 part 'meta_window_state.g.dart';
 
@@ -59,6 +60,7 @@ class MetaWindowState extends _$MetaWindowState {
     MetaWindowPatchMessage patch, {
     bool propagate = true,
   }) async {
+    print('debug patches $patch');
     switch (patch) {
       case UpdateAppId():
         {
@@ -108,5 +110,15 @@ class MetaWindowState extends _$MetaWindowState {
           metaWindowIdPerSurfaceIdProvider(state.surfaceId).notifier,
         )
         .clear();
+  }
+
+  void requestToClose() {
+    ref.read(waylandManagerProvider.notifier).request(
+          CloseWindowRequest(
+            message: CloseWindowMessage(
+              metaWindowId: state.id,
+            ),
+          ),
+        );
   }
 }

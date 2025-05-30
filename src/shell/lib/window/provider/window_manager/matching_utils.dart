@@ -47,7 +47,11 @@ int windowMatchingCost(
   );
   cost += matchingCost(windowMatchInfo.title, metaWindowMatchInfo.title, 50, 1);
   cost += matchingCost(
-      windowMatchInfo.startupId, metaWindowMatchInfo.startupId, 1, 1);
+    windowMatchInfo.startupId,
+    metaWindowMatchInfo.startupId,
+    1,
+    1,
+  );
 
   cost += matchingCost(windowMatchInfo.pid, metaWindowMatchInfo.pid, 1, 1);
 

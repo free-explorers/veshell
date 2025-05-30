@@ -9,7 +9,7 @@ import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/available_screen_list.dart';
 import 'package:shell/screen/provider/monitor_for_screen.dart';
 import 'package:shell/screen/provider/screen_label.dart';
-import 'package:shell/screen/provider/screen_list.dart';
+import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/shared/widget/number_picker.dart';
@@ -49,8 +49,9 @@ class ScreenConfigurationMenu extends HookConsumerWidget {
                   if (value > screenConfiguration.screenList.length) {
                     var screenToUse =
                         ref.watch(availableScreenListProvider).firstOrNull;
-                    screenToUse ??=
-                        ref.read(screenListProvider.notifier).createNewScreen();
+                    screenToUse ??= ref
+                        .read(screenManagerProvider.notifier)
+                        .createNewScreen();
                     ref
                         .read(
                           monitorConfigurationStateProvider(monitor).notifier,
@@ -148,7 +149,11 @@ class ScreenPicker extends HookConsumerWidget {
   )? onScreenSelected;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final screenList = ref.watch(screenListProvider);
+    final screenList = ref.watch(
+      screenManagerProvider.select(
+        (value) => value.screenIds,
+      ),
+    );
 
     return ListView.builder(
       itemCount: screenList.length + 1,
@@ -159,7 +164,7 @@ class ScreenPicker extends HookConsumerWidget {
             title: const Text('Create new screen'),
             onTap: () {
               final newScreenId =
-                  ref.read(screenListProvider.notifier).createNewScreen();
+                  ref.read(screenManagerProvider.notifier).createNewScreen();
               onScreenSelected?.call(newScreenId);
             },
           );
@@ -190,17 +195,17 @@ class ScreenListTile extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final screenLabel = ref.watch(screenLabelProvider(screenId));
-    final monitorForScreen = ref.watch(monitorForScreenProvider(screenId));
+    final monitorIdForScreen = ref.watch(monitorForScreenProvider(screenId));
     return ListTile(
       leading: selected
           ? const Icon(MdiIcons.check)
-          : monitorForScreen != null
+          : monitorIdForScreen != null
               ? const Icon(MdiIcons.swapVertical)
               : const Icon(MdiIcons.radioboxBlank),
-      title: Text(screenLabel.valueOrNull ?? ''),
-      subtitle: monitorForScreen != null
+      title: Text(screenLabel.value ?? ''),
+      subtitle: monitorIdForScreen != null
           ? Text(
-              monitorForScreen.name,
+              monitorIdForScreen,
               style: Theme.of(context).textTheme.labelSmall!.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -232,24 +237,24 @@ class ScreenListTile extends HookConsumerWidget {
                 title: Text('Delete'),
               ),
               onTap: () {
-                final monitor = ref.read(monitorForScreenProvider(screenId));
-                if (monitor != null) {
+                final monitorId = ref.read(monitorForScreenProvider(screenId));
+                if (monitorId != null) {
                   var screenToUse =
                       ref.watch(availableScreenListProvider).firstOrNull;
-                  screenToUse ??=
-                      ref.read(screenListProvider.notifier).createNewScreen();
+                  screenToUse ??= ref
+                      .read(screenManagerProvider.notifier)
+                      .createNewScreen();
 
                   ref
                       .read(
-                        monitorConfigurationStateProvider(monitor.name)
-                            .notifier,
+                        monitorConfigurationStateProvider(monitorId).notifier,
                       )
                       .replaceScreenIdByScreenId(
                         screenId,
                         screenToUse,
                       );
                 }
-                ref.read(screenListProvider.notifier).removeScreen(screenId);
+                ref.read(screenManagerProvider.notifier).removeScreen(screenId);
               },
             ),
           ];

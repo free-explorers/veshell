@@ -10,7 +10,12 @@ part 'authentication_agent.g.dart';
 const busName = 'org.freedesktop.PolicyKit1.AuthenticationAgent';
 const objectPath = '/org/freedesktop/PolicyKit1/AuthenticationAgent';
 
-@Riverpod(keepAlive: true)
+Duration? noRetry(int retryCount, Object error) => null;
+
+@Riverpod(
+  keepAlive: true,
+  retry: noRetry,
+)
 class PolkitAuthenticationAgentState extends _$PolkitAuthenticationAgentState {
   late PolkitAuthenticationAgent _agent;
   late DBusRemoteObject _authority;

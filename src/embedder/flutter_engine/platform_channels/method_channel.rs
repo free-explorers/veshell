@@ -1,6 +1,7 @@
 use smithay::reexports::calloop::channel;
 use std::cell::RefCell;
 use std::rc::Rc;
+use tracing::{debug, error, info};
 
 use crate::flutter_engine::platform_channels::binary_messenger::{
     BinaryMessageHandler, BinaryMessenger, BinaryReply,
@@ -10,6 +11,8 @@ use crate::flutter_engine::platform_channels::engine_method_result::EngineMethod
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_codec::MethodCodec;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
+
+use super::method_result_functions::MethodResultFunctions;
 
 type MethodCallHandler<T> = Option<Box<dyn FnMut(MethodCall<T>, Box<dyn MethodResult<T>>)>>;
 
@@ -43,8 +46,18 @@ impl<T: 'static> MethodChannel<T> {
         let mut result = if let Some(result) = result {
             result
         } else {
-            self.messenger.borrow_mut().send(&self.name, &message, None);
-            return;
+            Box::new(MethodResultFunctions {
+                on_success: None,
+                on_error: Some(Box::new(|code, message, details| {
+                    error!(
+                        "MethodChannel failed to invoke method {}: {} ",
+                        code, message
+                    );
+                })),
+                on_not_implemented: Some(Box::new(|| {
+                    error!("MethodChannel method not implemented");
+                })),
+            })
         };
 
         let codec = self.codec.clone();

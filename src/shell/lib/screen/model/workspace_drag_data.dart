@@ -5,7 +5,7 @@ import 'package:shell/workspace/provider/workspace_state.dart';
 part 'workspace_drag_data.freezed.dart';
 
 @freezed
-class WorkspaceDragData with _$WorkspaceDragData {
+abstract class WorkspaceDragData with _$WorkspaceDragData {
   /// Factory
   const factory WorkspaceDragData({
     required WorkspaceId workspaceId,

@@ -5,7 +5,7 @@ part 'desktop_entries.g.dart';
 
 @Riverpod(keepAlive: true)
 Future<Map<String, DesktopEntry>> installedDesktopEntries(
-  InstalledDesktopEntriesRef ref,
+  Ref ref,
 ) async {
   final entries = await parseAllInstalledDesktopFiles();
   return entries;

@@ -4,7 +4,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'memory_stats_snapshot.freezed.dart';
 
 @freezed
-class MemoryStatsSnapshot with _$MemoryStatsSnapshot {
+abstract class MemoryStatsSnapshot with _$MemoryStatsSnapshot {
   factory MemoryStatsSnapshot({
     required int totalMem,
     required int freeMem,

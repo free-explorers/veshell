@@ -5,40 +5,48 @@ import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_popup_state.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/meta_window_window_map.dart';
-import 'package:shell/wayland/model/event/wayland_event.serializable.dart';
-import 'package:shell/wayland/provider/wayland.manager.dart';
+import 'package:shell/platform/model/event/wayland_event.serializable.dart';
+import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
+import 'package:shell/window/provider/dialog_window_state.dart';
+import 'package:shell/window/provider/ephemeral_window_state.dart';
+import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/matching_engine.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
+import 'package:shell/window/provider/window_provider.mixin.dart';
 
 part 'meta_window_manager.g.dart';
 
-@Riverpod(keepAlive: true)
+@riverpod
 class MetaWindowManager extends _$MetaWindowManager {
   final Map<MetaWindowId, ProviderSubscription<bool>> _mappedSubscriptions = {};
   @override
   ISet<MetaWindowId> build() {
-    ref.listen(waylandManagerProvider, (_, next) {
-      if (next case AsyncData(value: final MetaWindowCreatedEvent event)) {
+    ref.onDispose(() => print('ON DISPOSE MetaWindowManager'));
+
+    ref.watch(waylandManagerProvider).listen((next) {
+      print('wayland event $next');
+      if (next case final MetaWindowCreatedEvent event) {
         onNewMetaWindow(event);
       }
-      if (next case AsyncData(value: final MetaWindowPatchEvent event)) {
+      if (next case final MetaWindowPatchEvent event) {
         ref.read(metaWindowStateProvider(event.message.id).notifier).patch(
               event.message,
               propagate: false,
             );
       }
-      if (next case AsyncData(value: final MetaWindowRemovedEvent event)) {
+      if (next case final MetaWindowRemovedEvent event) {
         onMetaWindowRemoved(event.message.id);
       }
-      if (next case AsyncData(value: final MetaPopupCreatedEvent event)) {
+      if (next case final MetaPopupCreatedEvent event) {
         onNewMetaPopup(event);
       }
-      if (next case AsyncData(value: final MetaPopupPatchEvent event)) {
+      if (next case final MetaPopupPatchEvent event) {
         ref.read(metaPopupStateProvider(event.message.id).notifier).applyPatch(
               event.message,
             );
       }
-      if (next case AsyncData(value: final MetaPopupRemovedEvent event)) {
+      if (next case final MetaPopupRemovedEvent event) {
         onMetaPopupRemoved(event.message.id);
       }
     });
@@ -47,7 +55,7 @@ class MetaWindowManager extends _$MetaWindowManager {
   }
 
   Future<void> onNewMetaWindow(MetaWindowCreatedEvent event) async {
-    print('New meta window: ${event.message.id}');
+    print('debug1 New meta window: ${event.message}');
     final metaWindowId = event.message.id;
     await ref.read(metaWindowStateProvider(metaWindowId).notifier).create(
           event.message,
@@ -57,11 +65,9 @@ class MetaWindowManager extends _$MetaWindowManager {
       metaWindowStateProvider(metaWindowId).select(
         (value) => value.mapped,
       ),
-      (previous, next) {
-        if (next) {
+      (previouslyMapped, isMapped) {
+        if (previouslyMapped != isMapped && isMapped == true) {
           onMetaWindowMapped(metaWindowId);
-        } else {
-          onMetaWindowUnmapped(metaWindowId);
         }
       },
     );
@@ -74,14 +80,21 @@ class MetaWindowManager extends _$MetaWindowManager {
   }
 
   void onMetaWindowMapped(MetaWindowId id, {int retryCount = 0}) {
+    print('debug1 MetaWindowMapped: $id');
     final metaWindow = ref.read(metaWindowStateProvider(id));
+
+    if (ref.read(metaWindowWindowMapProvider).get(id) != null) {
+      return;
+    }
 
     if (metaWindow.parent != null) {
       final parentWindowId =
           ref.read(metaWindowWindowMapProvider).get(metaWindow.parent!);
       if (parentWindowId == null) {
         // try again after a short delay because the parent window might not be mapped yet
-        if (retryCount > 10) {
+        print('debug1 Parent $parentWindowId window not found for $id');
+        if (retryCount < 10) {
+          print('debug1 Retrying to find parent window for $id');
           Future.delayed(const Duration(milliseconds: 100), () {
             onMetaWindowMapped(id, retryCount: retryCount + 1);
           });
@@ -99,13 +112,21 @@ class MetaWindowManager extends _$MetaWindowManager {
     print('MetaWindowMapped: $id');
   }
 
-  void onMetaWindowUnmapped(MetaWindowId id) {
-    ref.read(windowManagerProvider.notifier).onMetaWindowUnmapped(id);
-  }
-
-  void onMetaWindowRemoved(String id) {
+  void onMetaWindowRemoved(MetaWindowId id) {
+    print('MetaWindowRemoved: $id');
+    final windowId = ref.read(metaWindowWindowMapProvider).get(id);
+    if (windowId != null) {
+      (switch (windowId) {
+        PersistentWindowId() =>
+          ref.read(persistentWindowStateProvider(windowId).notifier),
+        DialogWindowId() =>
+          ref.read(dialogWindowStateProvider(windowId).notifier),
+        EphemeralWindowId() =>
+          ref.read(ephemeralWindowStateProvider(windowId).notifier),
+      } as WindowProviderMixin)
+          .onMetaWindowRemoved(id);
+    }
     _mappedSubscriptions.remove(id)?.close();
-    onMetaWindowUnmapped(id);
     ref.read(metaWindowStateProvider(id).notifier).destroy();
     state = state.remove(id);
   }

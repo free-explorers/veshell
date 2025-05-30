@@ -6,7 +6,7 @@ import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/widget/meta_surface.dart';
 import 'package:shell/monitor/provider/current_monitor.dart';
 import 'package:shell/monitor/provider/monitor_by_name.dart';
-import 'package:shell/wayland/model/event/meta_window_patches/meta_window_patches.serializable.dart';
+import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:uuid/uuid.dart';
 
 class MetaSurfaceGamingOverlay extends HookConsumerWidget {

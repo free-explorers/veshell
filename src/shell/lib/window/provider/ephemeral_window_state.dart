@@ -3,11 +3,13 @@ import 'dart:io';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
-import 'package:shell/wayland/model/event/meta_window_patches/meta_window_patches.serializable.dart';
+import 'package:shell/overview/provider/overview_state.dart';
+import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/window/model/ephemeral_window.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
-import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/model/window_properties.serializable.dart';
+import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/window/provider/window_provider.mixin.dart';
 
 part 'ephemeral_window_state.g.dart';
@@ -62,5 +64,19 @@ class EphemeralWindowState extends _$EphemeralWindowState
     state = state.copyWith(
       properties: WindowProperties.fromMetaWindow(metaWindow),
     );
+  }
+
+  @override
+  void onMetaWindowRemoved(MetaWindowId metaWindowId) {
+    super.onMetaWindowRemoved(metaWindowId);
+    removeWindow();
+  }
+
+  @override
+  void removeWindow({bool forceRemove = false}) {
+    final screenId = ref.read(ephemeralWindowStateProvider(windowId)).screenId;
+    ref.read(overviewStateProvider(screenId).notifier).removeWindow(windowId);
+    ref.read(windowManagerProvider.notifier).removeWindow(state.windowId);
+    dispose();
   }
 }

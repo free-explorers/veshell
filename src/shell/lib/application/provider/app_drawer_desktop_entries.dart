@@ -6,7 +6,7 @@ part 'app_drawer_desktop_entries.g.dart';
 
 @Riverpod(keepAlive: true)
 Future<Iterable<LocalizedDesktopEntry>> appDrawerDesktopEntries(
-  AppDrawerDesktopEntriesRef ref,
+  Ref ref,
 ) async {
   final localizedDesktopEntries =
       await ref.watch(localizedDesktopEntriesProvider.future);

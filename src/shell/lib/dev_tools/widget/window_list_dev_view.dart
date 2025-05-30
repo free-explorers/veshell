@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/window/model/window_id.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
+import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
@@ -9,7 +10,8 @@ class WindowListDevView extends HookConsumerWidget {
   const WindowListDevView({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final windowList = ref.watch(windowManagerProvider);
+    final windowList =
+        ref.watch(windowManagerProvider.select((value) => value.windows));
     return ListView.separated(
       itemBuilder: (context, index) {
         final windowId = windowList[index];
@@ -18,8 +20,7 @@ class WindowListDevView extends HookConsumerWidget {
             ref.read(persistentWindowStateProvider(windowId)),
           EphemeralWindowId() =>
             ref.read(ephemeralWindowStateProvider(windowId)),
-          // TODO: Handle this case.
-          DialogWindowId() => throw UnimplementedError(),
+          DialogWindowId() => ref.read(dialogWindowStateProvider(windowId)),
         };
 
         return Row(
@@ -37,7 +38,7 @@ class WindowListDevView extends HookConsumerWidget {
                     Text('Title: ${state.properties.title}'),
                     Text('AppId: ${state.properties.appId}'),
                     Text('Pid: ${state.properties.pid}'),
-                    Text('surfaceId: ${state.metaWindowId}'),
+                    Text('metaWindowId: ${state.metaWindowId}'),
                   ],
                 ),
               ),
