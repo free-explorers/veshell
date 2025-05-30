@@ -7,17 +7,19 @@ part 'bluez_device.g.dart';
 @riverpod
 class BluezDevice extends _$BluezDevice {
   @override
-  BlueZDevice build(String address) {
-    final device = ref.read(bluezDevicesProvider.notifier).getDevice(address)!;
-    final subscription = device.propertiesChanged.listen((changes) {
-      print('propertiesChanged $changes');
-      ref.notifyListeners();
-    });
+  BlueZDevice? build(String address) {
+    final device = ref.read(bluezDevicesProvider.notifier).getDevice(address);
+    if (device != null) {
+      final subscription = device.propertiesChanged.listen((changes) {
+        print('propertiesChanged $changes');
+        ref.notifyListeners();
+      });
 
-    ref.onDispose(() {
-      print('dispose BlueZDevice ');
-      subscription.cancel();
-    });
+      ref.onDispose(() {
+        print('dispose BlueZDevice ');
+        subscription.cancel();
+      });
+    }
     return device;
   }
 }

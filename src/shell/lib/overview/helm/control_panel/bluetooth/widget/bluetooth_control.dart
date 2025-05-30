@@ -21,6 +21,7 @@ class BluetoothControl extends HookConsumerWidget {
         ref.watch(bluezDevicesProvider).value ?? <String>{}.lock;
     final devices = deviceAddresses
         .map((address) => ref.watch(bluezDeviceProvider(address)))
+        .nonNulls
         // First connected then paired then unpaired
         .sorted(
       (a, b) {
