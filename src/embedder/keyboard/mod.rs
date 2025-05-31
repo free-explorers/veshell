@@ -25,6 +25,24 @@ pub struct VeshellKeyEvent {
     pub mods_changed: bool,
 }
 
+pub fn swap_left_alt_and_meta<BackendData: Backend + 'static>(
+    data: &mut State<BackendData>,
+    key_code: Keycode,
+) -> Keycode {
+    let mut linux_code = key_code.raw() - 8;
+    if data.meta_window_state.meta_window_in_gaming_mode.is_none() {
+        // Swap Meta ant leftAlt keycode
+        if linux_code == input_linux::sys::KEY_LEFTMETA as u32 {
+            info!("keycode is meta replace by leftalt");
+            linux_code = input_linux::sys::KEY_LEFTALT as u32
+        } else if linux_code == input_linux::sys::KEY_LEFTALT as u32 {
+            info!("keycode is leftalt replace by leftmeta ");
+            linux_code = input_linux::sys::KEY_LEFTMETA as u32
+        }
+    }
+    Keycode::new(linux_code + 8)
+}
+
 pub fn handle_keyboard_event<BackendData: Backend + 'static>(
     data: &mut State<BackendData>,
     mut key_code: Keycode,
@@ -35,18 +53,7 @@ pub fn handle_keyboard_event<BackendData: Backend + 'static>(
     // Every key event must be passed through `glfw_key_codes.input_intercept`
     // so that Smithay knows what keys are pressed.
     let keyboard = data.keyboard.clone();
-    let mut linux_code = key_code.raw() - 8;
-    if data.meta_window_state.meta_window_in_gaming_mode.is_none() {
-        // Swap Meta ant leftAlt keycode
-        if linux_code == input_linux::sys::KEY_LEFTMETA as u32 {
-            linux_code = input_linux::sys::KEY_LEFTALT as u32
-        } else if linux_code == input_linux::sys::KEY_LEFTALT as u32 {
-            linux_code = input_linux::sys::KEY_LEFTMETA as u32
-        }
-    }
-
-    key_code = Keycode::new(linux_code + 8);
-    info!("keycode {:?}", key_code,);
+    key_code = swap_left_alt_and_meta(data, key_code);
 
     // 1. Update the Smithay keyboard state but intercept the event so it's not forwarded to the focused client just yet
     let ((mods, raw_keysym, keysym), mods_changed) =

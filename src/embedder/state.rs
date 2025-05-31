@@ -62,8 +62,8 @@ use crate::flutter_engine::wayland_messages::{
 };
 use crate::flutter_engine::FlutterEngine;
 use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
-use crate::keyboard::handle_keyboard_event;
 use crate::keyboard::key_repeater::KeyRepeater;
+use crate::keyboard::{handle_keyboard_event, swap_left_alt_and_meta};
 use crate::meta_window_state::MetaWindowState;
 use crate::settings::{SettingsManager, VeshellSettings};
 use crate::texture_swap_chain::TextureSwapChain;
@@ -145,7 +145,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 
     pub fn release_all_keys(&mut self) {
         let keyboard = self.keyboard.clone();
-        for key_code in keyboard.pressed_keys() {
+        for mut key_code in keyboard.pressed_keys() {
+            key_code = swap_left_alt_and_meta(self, key_code);
             handle_keyboard_event::<BackendData>(self, key_code, KeyState::Released, 0);
         }
     }
