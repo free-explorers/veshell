@@ -166,6 +166,13 @@ class WorkspaceState extends _$WorkspaceState {
     }
   }
 
+  void selectWindow(PersistentWindowId windowId) {
+    final index = state.tileableWindowList.indexOf(windowId);
+    if (index == -1) return;
+    if (index == state.selectedIndex) return;
+    state = state.copyWith(selectedIndex: index);
+  }
+
   void setSelectedIndex(int index) {
     state = state.copyWith(
       selectedIndex: index,

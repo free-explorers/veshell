@@ -1,7 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/shared/util/logger.dart';
 
 class SurfaceFocus extends HookConsumerWidget {
   const SurfaceFocus({
@@ -69,16 +68,7 @@ class SurfaceFocus extends HookConsumerWidget {
         },
         child: Focus(
           focusNode: focusNode,
-          onFocusChange: (value) {
-            print('Surface focus $value');
-          },
-          child: Listener(
-            onPointerDown: (_) {
-              focusNode?.requestFocus();
-              focusLog.info('SurfaceFocus.requestFocus on PinterDown');
-            },
-            child: child,
-          ),
+          child: child,
         ),
       ),
     );

@@ -73,7 +73,6 @@ class PointerFocusManager extends _$PointerFocusManager {
   }
 
   void _notifyWayland() {
-    print(state?.toJson());
     ref.read(platformManagerProvider.notifier).request(
           PointerFocusRequest(message: PointerFocusMessage(focus: state)),
         );

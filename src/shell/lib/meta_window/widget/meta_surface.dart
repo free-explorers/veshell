@@ -34,31 +34,33 @@ class MetaSurfaceWidget extends HookConsumerWidget {
       -1 * (geometry?.left ?? 0),
       -1 * (geometry?.top ?? 0),
     );
-    return DeferredPointerHandler(
-      child: Center(
-        child: SurfaceFocus(
-          focusNode: focusNode,
-          child: Stack(
-            clipBehavior: Clip.none,
-            alignment: AlignmentDirectional.center,
-            children: [
-              Positioned(
-                left: offset.dx,
-                top: offset.dy,
-                child: MetaSurfaceDecoration(
-                  metaWindowId: metaWindowId,
-                  enabled: decorated,
-                  child: ActivateSurfaceOnPointerDown(
-                    surfaceId: surfaceId,
+    return Center(
+      child: SurfaceFocus(
+        focusNode: focusNode,
+        child: ActivateSurfaceOnPointerDown(
+          surfaceId: surfaceId,
+          // Be sure to not put pointer listener behind the DeferredPointerHandler, as it will
+          // Since Hit detection between DeferPointer and the handler are bypassed
+          child: DeferredPointerHandler(
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: AlignmentDirectional.center,
+              children: [
+                Positioned(
+                  left: offset.dx,
+                  top: offset.dy,
+                  child: MetaSurfaceDecoration(
+                    metaWindowId: metaWindowId,
+                    enabled: decorated,
                     child: SurfaceWidget(
                       surfaceId: surfaceId,
                     ),
                   ),
                 ),
-              ),
-              for (final popupId in popups)
-                MetaPopupWidget(metaPopupId: popupId),
-            ],
+                for (final popupId in popups)
+                  MetaPopupWidget(metaPopupId: popupId),
+              ],
+            ),
           ),
         ),
       ),

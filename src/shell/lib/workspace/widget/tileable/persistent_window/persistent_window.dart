@@ -12,6 +12,8 @@ import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/widget/window.dart';
 import 'package:shell/window/widget/window_placeholder.dart';
+import 'package:shell/workspace/provider/workspace_state.dart';
+import 'package:shell/workspace/widget/current_workspace_id.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
 
 /// Tileable Window that persist when closed
@@ -43,6 +45,7 @@ class PersistentWindowTileable extends Tileable {
         persistentFocusNode
           ..canRequestFocus = isSelected
           ..descendantsAreFocusable = isSelected;
+
         if (isSelected) {
           if (persistentFocusNode.focusedChild != null) {
             persistentFocusNode.focusedChild!.requestFocus();
@@ -56,44 +59,52 @@ class PersistentWindowTileable extends Tileable {
     );
 
     return ClipRect(
-      child: FocusScope(
-        node: persistentFocusNode,
-        autofocus: true,
-        onFocusChange: (value) {
-          if (value) {
-            persistentFocusNode.autofocus(primaryFocusNode);
-          }
+      child: Listener(
+        onPointerDown: (event) {
+          final currentWorkspaceId = CurrentWorkspaceId.of(context);
+          ref
+              .read(workspaceStateProvider(currentWorkspaceId).notifier)
+              .selectWindow(windowId);
         },
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
-          child: window.metaWindowId != null
-              ? WindowWidget(
-                  metaWindowId: window.metaWindowId!,
-                  focusNode: primaryFocusNode,
-                  displayMode: window.displayMode,
-                  dialogMetaWindowList: ref
-                      .watch(
-                    dialogSetForWindowProvider(window.windowId),
+        child: FocusScope(
+          node: persistentFocusNode,
+          autofocus: true,
+          onFocusChange: (value) {
+            if (value) {
+              persistentFocusNode.autofocus(primaryFocusNode);
+            }
+          },
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: window.metaWindowId != null
+                ? WindowWidget(
+                    metaWindowId: window.metaWindowId!,
+                    focusNode: primaryFocusNode,
+                    displayMode: window.displayMode,
+                    dialogMetaWindowList: ref
+                        .watch(
+                      dialogSetForWindowProvider(window.windowId),
+                    )
+                        .map((element) {
+                      return ref
+                          .read(dialogWindowStateProvider(element))
+                          .metaWindowId;
+                    }).toList(),
                   )
-                      .map((element) {
-                    return ref
-                        .read(dialogWindowStateProvider(element))
-                        .metaWindowId;
-                  }).toList(),
-                )
-              : WindowPlaceholder(
-                  isSelected: isSelected,
-                  focusNode: primaryFocusNode,
-                  window: window,
-                  onTap: () {
-                    primaryFocusNode.requestFocus();
-                    ref
-                        .read(
-                          persistentWindowStateProvider(windowId).notifier,
-                        )
-                        .launchSelf();
-                  },
-                ),
+                : WindowPlaceholder(
+                    isSelected: isSelected,
+                    focusNode: primaryFocusNode,
+                    window: window,
+                    onTap: () {
+                      primaryFocusNode.requestFocus();
+                      ref
+                          .read(
+                            persistentWindowStateProvider(windowId).notifier,
+                          )
+                          .launchSelf();
+                    },
+                  ),
+          ),
         ),
       ),
     );
