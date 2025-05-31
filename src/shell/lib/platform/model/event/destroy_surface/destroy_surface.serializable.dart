@@ -1,5 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 
 part 'destroy_surface.serializable.freezed.dart';
@@ -9,7 +9,7 @@ part 'destroy_surface.serializable.g.dart';
 @freezed
 abstract class DestroySurfaceMessage
     with _$DestroySurfaceMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   /// Factory
   factory DestroySurfaceMessage({
     required SurfaceId surfaceId,

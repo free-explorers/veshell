@@ -1,13 +1,13 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/platform/model/request/wayland_request.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/model/request/platform_request.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/pointer/model/pointer_focus.serializable.dart';
 
 part 'pointer_focus.serializable.freezed.dart';
 part 'pointer_focus.serializable.g.dart';
 
 /// [PointerFocusRequest]
-class PointerFocusRequest extends WaylandRequest {
+class PointerFocusRequest extends PlatformRequest {
   /// constructor
   const PointerFocusRequest({
     required PointerFocusMessage super.message,
@@ -19,7 +19,7 @@ class PointerFocusRequest extends WaylandRequest {
 @freezed
 abstract class PointerFocusMessage
     with _$PointerFocusMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   /// Factory
   factory PointerFocusMessage({
     required PointerFocus? focus,

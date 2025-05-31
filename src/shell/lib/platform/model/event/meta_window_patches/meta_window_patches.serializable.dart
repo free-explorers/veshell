@@ -2,7 +2,7 @@ import 'dart:ui';
 
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/util/json_converter/rect.dart';
 
 part 'meta_window_patches.serializable.freezed.dart';
@@ -15,7 +15,7 @@ part 'meta_window_patches.serializable.g.dart';
 )
 sealed class MetaWindowPatchMessage
     with _$MetaWindowPatchMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   const factory MetaWindowPatchMessage.updateAppId({
     required String id,
     String? value,

@@ -8,7 +8,7 @@ import 'package:shell/platform/model/event/meta_window_created/meta_window_creat
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/platform/model/request/close_window/close_window.serializable.dart';
 import 'package:shell/platform/model/request/meta_window_patches/meta_window_patches.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 
 part 'meta_window_state.g.dart';
 
@@ -60,7 +60,6 @@ class MetaWindowState extends _$MetaWindowState {
     MetaWindowPatchMessage patch, {
     bool propagate = true,
   }) async {
-    print('debug patches $patch');
     switch (patch) {
       case UpdateAppId():
         {
@@ -95,7 +94,7 @@ class MetaWindowState extends _$MetaWindowState {
         state = state.copyWith(gameModeActivated: patch.value);
     }
     if (propagate == true) {
-      await ref.read(waylandManagerProvider.notifier).request(
+      await ref.read(platformManagerProvider.notifier).request(
             MetaWindowPatchesRequest(
               message: patch,
             ),
@@ -113,7 +112,7 @@ class MetaWindowState extends _$MetaWindowState {
   }
 
   void requestToClose() {
-    ref.read(waylandManagerProvider.notifier).request(
+    ref.read(platformManagerProvider.notifier).request(
           CloseWindowRequest(
             message: CloseWindowMessage(
               metaWindowId: state.id,

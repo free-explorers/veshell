@@ -1,7 +1,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
-import 'package:shell/platform/model/event/wayland_event.serializable.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/model/event/platform_event.serializable.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 
 part 'meta_window_dragging_state.g.dart';
 
@@ -9,7 +9,7 @@ part 'meta_window_dragging_state.g.dart';
 class MetaWindowDraggingState extends _$MetaWindowDraggingState {
   @override
   bool build(MetaWindowId metaWindowId) {
-    ref.watch(waylandManagerProvider).listen((next) {
+    ref.watch(platformManagerProvider).listen((next) {
       if (next case final InteractiveMoveEvent event) {
         {
           if (event.message.metaWindowId == metaWindowId) {

@@ -1,12 +1,12 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/platform/model/request/wayland_request.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/model/request/platform_request.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 
 part 'get_monitor_layout.serializable.freezed.dart';
 part 'get_monitor_layout.serializable.g.dart';
 
 /// [GetMonitorLayoutRequest]
-class GetMonitorLayoutRequest extends WaylandRequest {
+class GetMonitorLayoutRequest extends PlatformRequest {
   /// constructor
   const GetMonitorLayoutRequest({
     required GetMonitorLayoutMessage super.message,
@@ -18,7 +18,7 @@ class GetMonitorLayoutRequest extends WaylandRequest {
 @freezed
 abstract class GetMonitorLayoutMessage
     with _$GetMonitorLayoutMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   /// Factory
   factory GetMonitorLayoutMessage() = _GetMonitorLayoutMessage;
 

@@ -1,13 +1,13 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/platform/model/request/wayland_request.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/model/request/platform_request.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 
 part 'touch.serializable.freezed.dart';
 part 'touch.serializable.g.dart';
 
 /// [TouchDownRequest]
-class TouchDownRequest extends WaylandRequest {
+class TouchDownRequest extends PlatformRequest {
   /// constructor
   const TouchDownRequest({
     required TouchDownMessage super.message,
@@ -19,7 +19,7 @@ class TouchDownRequest extends WaylandRequest {
 @freezed
 abstract class TouchDownMessage
     with _$TouchDownMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   /// Factory
   factory TouchDownMessage({
     required SurfaceId surfaceId,
@@ -35,7 +35,7 @@ abstract class TouchDownMessage
 }
 
 /// [TouchMotionRequest]
-class TouchMotionRequest extends WaylandRequest {
+class TouchMotionRequest extends PlatformRequest {
   /// constructor
   const TouchMotionRequest({
     required TouchMotionMessage super.message,
@@ -47,7 +47,7 @@ class TouchMotionRequest extends WaylandRequest {
 @freezed
 abstract class TouchMotionMessage
     with _$TouchMotionMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   /// Factory
   factory TouchMotionMessage({
     required int touchId,
@@ -62,7 +62,7 @@ abstract class TouchMotionMessage
 }
 
 /// [TouchUpRequest]
-class TouchUpRequest extends WaylandRequest {
+class TouchUpRequest extends PlatformRequest {
   /// constructor
   const TouchUpRequest({
     required TouchIdMessage super.message,
@@ -71,7 +71,7 @@ class TouchUpRequest extends WaylandRequest {
 }
 
 /// [TouchCancelRequest]
-class TouchCancelRequest extends WaylandRequest {
+class TouchCancelRequest extends PlatformRequest {
   /// constructor
   const TouchCancelRequest({
     required TouchIdMessage super.message,
@@ -81,7 +81,7 @@ class TouchCancelRequest extends WaylandRequest {
 
 /// Model for [TouchIdMessage]
 @freezed
-abstract class TouchIdMessage with _$TouchIdMessage implements WaylandMessage {
+abstract class TouchIdMessage with _$TouchIdMessage implements PlatformMessage {
   /// Factory
   factory TouchIdMessage({
     required int touchId,

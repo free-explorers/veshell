@@ -1,6 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/util/json_converter/resize_edge.dart';
 
 part 'interactive_resize.serializable.freezed.dart';
@@ -22,7 +22,7 @@ enum ResizeEdge {
 @freezed
 abstract class InteractiveResizeMessage
     with _$InteractiveResizeMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   /// Factory
   factory InteractiveResizeMessage({
     required MetaWindowId metaWindowId,

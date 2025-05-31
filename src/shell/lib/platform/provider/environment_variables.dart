@@ -1,7 +1,7 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/platform/model/event/wayland_event.serializable.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/model/event/platform_event.serializable.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 
 part 'environment_variables.g.dart';
 
@@ -9,7 +9,7 @@ part 'environment_variables.g.dart';
 class EnvironmentVariables extends _$EnvironmentVariables {
   @override
   IMap<String, String> build() {
-    ref.watch(waylandManagerProvider).listen((next) {
+    ref.watch(platformManagerProvider).listen((next) {
       if (next case final SetEnvironmentVariablesEvent event) {
         _set(event.message.environmentVariables);
       }

@@ -2,26 +2,26 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/platform/model/event/wayland_event.serializable.dart';
-import 'package:shell/platform/model/request/wayland_request.dart';
+import 'package:shell/platform/model/event/platform_event.serializable.dart';
+import 'package:shell/platform/model/request/platform_request.dart';
 
-part 'wayland.manager.g.dart';
+part 'platform_manager.g.dart';
 
 /// Manager for Wayland interaction
 ///
-/// provide a stream of [WaylandEvent]
-/// and a method to send [WaylandRequest]
+/// provide a stream of [PlatformEvent]
+/// and a method to send [PlatformRequest]
 @riverpod
-class WaylandManager extends _$WaylandManager {
-  /// Build the stream of [WaylandEvent]
+class PlatformManager extends _$PlatformManager {
+  /// Build the stream of [PlatformEvent]
   @override
-  Raw<Stream<WaylandEvent>> build() {
+  Raw<Stream<PlatformEvent>> build() {
     const channel = MethodChannel('platform', JSONMethodCodec());
-    final streamCtroller = StreamController<WaylandEvent>.broadcast();
+    final streamCtroller = StreamController<PlatformEvent>.broadcast();
     channel.setMethodCallHandler((call) async {
       // try catch to be notified of errors since errors occuring
       // in setMethodCallHandler seem to be outside zone
-      final event = WaylandEvent.fromJson({
+      final event = PlatformEvent.fromJson({
         'method': call.method,
         'message': (call.arguments as Map).cast<String, dynamic>(),
       });
@@ -30,28 +30,21 @@ class WaylandManager extends _$WaylandManager {
       );
     });
 
-    ref.onCancel(() {
-      print('paused');
-    });
-    ref.onResume(() {
-      print('resumed');
-    });
-
     return streamCtroller.stream;
   }
 
-  /// Send a [WaylandRequest] to the Wayland compositor
-  Future<void> request(WaylandRequest request) async {
+  /// Send a [PlatformRequest] to the Wayland compositor
+  Future<void> request(PlatformRequest request) async {
     const channel = MethodChannel('platform', JSONMethodCodec());
     await channel.invokeMethod(request.method, request.message?.toJson());
   }
 }
 
 /// base class for a wayland interaction
-/// implemented by [WaylandEvent] and [WaylandRequest]
-abstract class WaylandInteraction {
+/// implemented by [PlatformEvent] and [PlatformRequest]
+abstract class PlatformInteraction {
   /// Factory
-  const WaylandInteraction({
+  const PlatformInteraction({
     required this.method,
     required this.message,
   });
@@ -60,12 +53,12 @@ abstract class WaylandInteraction {
   final String method;
 
   /// interaction Message
-  final WaylandMessage? message;
+  final PlatformMessage? message;
 }
 
 /// base class for serializable wayland message
 /// ignore: one_member_abstracts
-abstract class WaylandMessage {
+abstract class PlatformMessage {
   /// interaction message need to be serializable
   Map<String, dynamic> toJson();
 }

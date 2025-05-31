@@ -1,11 +1,11 @@
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 
 /// Abstract class for a wayland request
 ///
 /// This class is used to create a request to the wayland compositor.
-abstract class WaylandRequest implements WaylandInteraction {
+abstract class PlatformRequest implements PlatformInteraction {
   /// Factory
-  const WaylandRequest({
+  const PlatformRequest({
     required this.method,
     this.message,
   });
@@ -16,5 +16,5 @@ abstract class WaylandRequest implements WaylandInteraction {
 
   /// Request Message
   @override
-  final WaylandMessage? message;
+  final PlatformMessage? message;
 }

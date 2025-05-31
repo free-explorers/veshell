@@ -42,7 +42,6 @@ class SettingPropertyHotkeyEditor extends HookConsumerWidget
       autofocus: true,
       focusNode: focusNode,
       onKeyEvent: (node, event) {
-        print(event);
         if (event.logicalKey == LogicalKeyboardKey.escape &&
             keysPressed.value.isEmpty) {
           ExpandableContainer.of(context).toggle();

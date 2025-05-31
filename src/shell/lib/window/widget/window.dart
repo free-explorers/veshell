@@ -7,7 +7,7 @@ import 'package:shell/meta_window/widget/meta_surface.dart';
 import 'package:shell/meta_window/widget/meta_surface_gaming_overlay.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/platform/model/request/activate_window/activate_window.serializable.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/widget/container_with_positionnable_children/container_with_positionnable_children.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/widget/floatable_window.dart';
@@ -36,7 +36,7 @@ class WindowWidget extends HookConsumerWidget {
         final metaWindow =
             ref.read(metaWindowStateProvider(metaWindowToActivate));
 
-        ref.read(waylandManagerProvider.notifier).request(
+        ref.read(platformManagerProvider.notifier).request(
               ActivateWindowRequest(
                 message: ActivateWindowMessage(
                   surfaceId: metaWindow.surfaceId,

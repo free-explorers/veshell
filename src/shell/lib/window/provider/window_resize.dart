@@ -61,7 +61,7 @@ class WindowResize extends _$WindowResize {
       final int width = max(1, state.wantedSize.width.toInt());
       final int height = max(1, state.wantedSize.height.toInt());
 
-      ref.read(waylandManagerProvider.notifier).request(
+      ref.read(platformManagerProvider.notifier).request(
             ResizeWindowRequest(
               message: ResizeWindowMessage(
                 surfaceId: surfaceId,
@@ -98,7 +98,7 @@ class WindowResize extends _$WindowResize {
     final int width = max(1, state.wantedSize.width.toInt());
     final int height = max(1, state.wantedSize.height.toInt());
 
-    ref.read(waylandManagerProvider.notifier).request(
+    ref.read(platformManagerProvider.notifier).request(
           ResizeWindowRequest(
             message: ResizeWindowMessage(
               surfaceId: surfaceId,

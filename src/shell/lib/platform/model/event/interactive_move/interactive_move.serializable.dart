@@ -1,6 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 
 part 'interactive_move.serializable.freezed.dart';
 part 'interactive_move.serializable.g.dart';
@@ -9,7 +9,7 @@ part 'interactive_move.serializable.g.dart';
 @freezed
 abstract class InteractiveMoveMessage
     with _$InteractiveMoveMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   /// Factory
   factory InteractiveMoveMessage({
     required MetaWindowId metaWindowId,

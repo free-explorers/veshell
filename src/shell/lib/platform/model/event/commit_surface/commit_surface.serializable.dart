@@ -2,7 +2,7 @@ import 'dart:ui';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/util/json_converter/offset.dart';
 import 'package:shell/shared/util/json_converter/rect.dart';
 import 'package:shell/shared/util/json_converter/size.dart';
@@ -15,7 +15,7 @@ part 'commit_surface.serializable.g.dart';
 @freezed
 sealed class CommitSurfaceMessage
     with _$CommitSurfaceMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   /// Factory
   factory CommitSurfaceMessage({
     required SurfaceId surfaceId,

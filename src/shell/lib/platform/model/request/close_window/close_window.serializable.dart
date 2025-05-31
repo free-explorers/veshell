@@ -1,13 +1,13 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
-import 'package:shell/platform/model/request/wayland_request.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/model/request/platform_request.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 
 part 'close_window.serializable.freezed.dart';
 part 'close_window.serializable.g.dart';
 
 /// [CloseWindowRequest]
-class CloseWindowRequest extends WaylandRequest {
+class CloseWindowRequest extends PlatformRequest {
   /// constructor
   const CloseWindowRequest({
     required CloseWindowMessage super.message,
@@ -19,7 +19,7 @@ class CloseWindowRequest extends WaylandRequest {
 @freezed
 abstract class CloseWindowMessage
     with _$CloseWindowMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   /// Factory
   factory CloseWindowMessage({
     required MetaWindowId metaWindowId,

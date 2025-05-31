@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/platform/model/request/pointer_focus/pointer_focus.serializable.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/pointer/model/pointer_focus.serializable.dart';
 
 part 'pointer_focus.manager.g.dart';
@@ -74,7 +74,7 @@ class PointerFocusManager extends _$PointerFocusManager {
 
   void _notifyWayland() {
     print(state?.toJson());
-    ref.read(waylandManagerProvider.notifier).request(
+    ref.read(platformManagerProvider.notifier).request(
           PointerFocusRequest(message: PointerFocusMessage(focus: state)),
         );
   }

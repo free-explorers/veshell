@@ -1,6 +1,6 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 
 part 'set_environment_variables.serializable.freezed.dart';
 part 'set_environment_variables.serializable.g.dart';
@@ -9,7 +9,7 @@ part 'set_environment_variables.serializable.g.dart';
 @freezed
 sealed class SetEnvironmentVariablesMessage
     with _$SetEnvironmentVariablesMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   /// Factory
   factory SetEnvironmentVariablesMessage({
     /// A nullable value means that the variable should be unset.

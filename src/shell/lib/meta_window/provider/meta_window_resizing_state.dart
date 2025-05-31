@@ -1,8 +1,8 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/platform/model/event/interactive_resize/interactive_resize.serializable.dart';
-import 'package:shell/platform/model/event/wayland_event.serializable.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/model/event/platform_event.serializable.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 
 part 'meta_window_resizing_state.g.dart';
 
@@ -10,7 +10,7 @@ part 'meta_window_resizing_state.g.dart';
 class MetaWindowResizingState extends _$MetaWindowResizingState {
   @override
   ResizeEdge? build(MetaWindowId metaWindowId) {
-    ref.watch(waylandManagerProvider).listen((next) {
+    ref.watch(platformManagerProvider).listen((next) {
       if (next case final InteractiveResizeEvent event) {
         {
           if (event.message.metaWindowId == metaWindowId) {

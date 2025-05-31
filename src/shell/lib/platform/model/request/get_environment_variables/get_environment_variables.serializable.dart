@@ -1,12 +1,12 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/platform/model/request/wayland_request.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/model/request/platform_request.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 
 part 'get_environment_variables.serializable.freezed.dart';
 part 'get_environment_variables.serializable.g.dart';
 
 /// [GetEnvironmentVariablesRequest]
-class GetEnvironmentVariablesRequest extends WaylandRequest {
+class GetEnvironmentVariablesRequest extends PlatformRequest {
   /// constructor
   const GetEnvironmentVariablesRequest({
     required GetEnvironmentVariablesMessage super.message,
@@ -18,7 +18,7 @@ class GetEnvironmentVariablesRequest extends WaylandRequest {
 @freezed
 abstract class GetEnvironmentVariablesMessage
     with _$GetEnvironmentVariablesMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   /// Factory
   factory GetEnvironmentVariablesMessage() = _GetEnvironmentVariablesMessage;
 

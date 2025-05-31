@@ -1,13 +1,13 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/platform/model/request/wayland_request.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/model/request/platform_request.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 
 part 'activate_window.serializable.freezed.dart';
 part 'activate_window.serializable.g.dart';
 
 /// [ActivateWindowRequest]
-class ActivateWindowRequest extends WaylandRequest {
+class ActivateWindowRequest extends PlatformRequest {
   /// constructor
   const ActivateWindowRequest({
     required ActivateWindowMessage super.message,
@@ -19,7 +19,7 @@ class ActivateWindowRequest extends WaylandRequest {
 @freezed
 abstract class ActivateWindowMessage
     with _$ActivateWindowMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   /// Factory
   factory ActivateWindowMessage({
     required SurfaceId surfaceId,

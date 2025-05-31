@@ -1,12 +1,12 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/platform/model/request/wayland_request.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/model/request/platform_request.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 
 part 'unregister_view_texture.serializable.freezed.dart';
 part 'unregister_view_texture.serializable.g.dart';
 
 /// [UnregisterViewTextureRequest]
-class UnregisterViewTextureRequest extends WaylandRequest {
+class UnregisterViewTextureRequest extends PlatformRequest {
   ///
   const UnregisterViewTextureRequest({
     required UnregisterViewTextureMessage super.message,
@@ -18,7 +18,7 @@ class UnregisterViewTextureRequest extends WaylandRequest {
 @freezed
 abstract class UnregisterViewTextureMessage
     with _$UnregisterViewTextureMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   /// Factory
   factory UnregisterViewTextureMessage({
     required int textureId,

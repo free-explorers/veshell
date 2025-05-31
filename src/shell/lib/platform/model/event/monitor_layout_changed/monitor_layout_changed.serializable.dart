@@ -1,6 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 
 part 'monitor_layout_changed.serializable.freezed.dart';
 part 'monitor_layout_changed.serializable.g.dart';
@@ -9,7 +9,7 @@ part 'monitor_layout_changed.serializable.g.dart';
 @freezed
 abstract class MonitorLayoutChangedMessage
     with _$MonitorLayoutChangedMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   /// Factory
   factory MonitorLayoutChangedMessage({
     required List<Monitor> monitors,

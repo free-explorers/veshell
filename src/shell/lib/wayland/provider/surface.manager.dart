@@ -8,9 +8,9 @@ import 'package:shell/platform/model/event/destroy_subsurface/destroy_subsurface
 import 'package:shell/platform/model/event/destroy_surface/destroy_surface.serializable.dart';
 import 'package:shell/platform/model/event/new_subsurface/new_subsurface.serializable.dart';
 import 'package:shell/platform/model/event/new_surface/new_surface.serializable.dart';
-import 'package:shell/platform/model/event/wayland_event.serializable.dart';
+import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/model/request/unregister_view_texture/unregister_view_texture.serializable.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/wayland/model/surface_manager_state.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/subsurface_state.dart';
@@ -24,7 +24,7 @@ class SurfaceManager extends _$SurfaceManager {
   SurfaceManagerState build() {
     print('SurfaceManager build');
 
-    ref.watch(waylandManagerProvider).listen((next) {
+    ref.watch(platformManagerProvider).listen((next) {
       switch (next) {
         case final NewSurfaceEvent event:
           _newSurface(event.message);
@@ -48,7 +48,7 @@ class SurfaceManager extends _$SurfaceManager {
 
   /// Send a [UnregisterViewTextureRequest] to the Wayland compositor
   Future<void> unregisterViewTexture(int textureId) {
-    return ref.read(waylandManagerProvider.notifier).request(
+    return ref.read(platformManagerProvider.notifier).request(
           UnregisterViewTextureRequest(
             message: UnregisterViewTextureMessage(textureId: textureId),
           ),

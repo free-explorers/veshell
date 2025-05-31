@@ -88,8 +88,6 @@ class OrgFreedesktopPolicyKit1AuthenticationAgent extends DBusObject {
 
   @override
   Future<DBusMethodResponse> handleMethodCall(DBusMethodCall methodCall) async {
-    print('polkit handleMethodCall $methodCall');
-
     if (methodCall.interface ==
         'org.freedesktop.PolicyKit1.AuthenticationAgent') {
       if (methodCall.name == 'BeginAuthentication') {

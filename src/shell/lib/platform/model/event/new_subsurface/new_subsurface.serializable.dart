@@ -1,5 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 
 part 'new_subsurface.serializable.freezed.dart';
@@ -9,7 +9,7 @@ part 'new_subsurface.serializable.g.dart';
 @freezed
 sealed class NewSubsurfaceMessage
     with _$NewSubsurfaceMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   /// Factory
   factory NewSubsurfaceMessage({
     required SurfaceId surfaceId,

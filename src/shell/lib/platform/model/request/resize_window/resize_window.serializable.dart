@@ -1,13 +1,13 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
-import 'package:shell/platform/model/request/wayland_request.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/model/request/platform_request.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 
 part 'resize_window.serializable.freezed.dart';
 part 'resize_window.serializable.g.dart';
 
 /// [ResizeWindowRequest]
-class ResizeWindowRequest extends WaylandRequest {
+class ResizeWindowRequest extends PlatformRequest {
   /// constructor
   const ResizeWindowRequest({
     required ResizeWindowMessage super.message,
@@ -19,7 +19,7 @@ class ResizeWindowRequest extends WaylandRequest {
 @freezed
 abstract class ResizeWindowMessage
     with _$ResizeWindowMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   /// Factory
   factory ResizeWindowMessage({
     required MetaWindowId metaWindowId,

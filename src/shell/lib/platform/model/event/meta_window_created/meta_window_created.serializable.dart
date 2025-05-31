@@ -1,7 +1,7 @@
 import 'dart:ui';
 
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/util/json_converter/rect.dart';
 
 part 'meta_window_created.serializable.freezed.dart';
@@ -11,7 +11,7 @@ part 'meta_window_created.serializable.g.dart';
 @freezed
 sealed class MetaWindowCreatedMessage
     with _$MetaWindowCreatedMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   /// Factory
   factory MetaWindowCreatedMessage({
     required String id,

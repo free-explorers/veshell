@@ -37,6 +37,8 @@ pub fn mouse_buttons_event<BackendData: Backend + 'static>(
     let payload: MouseButtonsPayload = serde_json::from_value(args).unwrap();
     info!("mouse_buttons_event: for  {:?}", payload.surface_id);
 
+    //
+
     for button in payload.buttons {
         pointer.button(
             data,

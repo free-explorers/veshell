@@ -1,14 +1,14 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/platform/model/request/wayland_request.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/model/request/platform_request.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 
 part 'mouse_buttons_event.serializable.freezed.dart';
 part 'mouse_buttons_event.serializable.g.dart';
 
 /// [MouseButtonsEventRequest]
-class MouseButtonsEventRequest extends WaylandRequest {
+class MouseButtonsEventRequest extends PlatformRequest {
   /// constructor
   const MouseButtonsEventRequest({
     required MouseButtonsEventMessage super.message,
@@ -20,7 +20,7 @@ class MouseButtonsEventRequest extends WaylandRequest {
 @freezed
 abstract class MouseButtonsEventMessage
     with _$MouseButtonsEventMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   /// Factory
   factory MouseButtonsEventMessage({
     required SurfaceId surfaceId,

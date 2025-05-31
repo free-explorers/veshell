@@ -45,7 +45,6 @@ class PersistentStorage implements persist.Storage<String, String> {
 
   @override
   Future<void> delete(String key) async {
-    print('delete $key');
     final file = File(path.join(persistenceDirectory.path, '$key.json'));
     if (file.existsSync()) {
       await file.delete();
@@ -54,7 +53,6 @@ class PersistentStorage implements persist.Storage<String, String> {
 
   @override
   persist.PersistedData<String>? read(String key) {
-    print('Storage read $key');
     final data = initialStoredData[key];
     if (data == null) {
       return null;
@@ -68,7 +66,6 @@ class PersistentStorage implements persist.Storage<String, String> {
     String value,
     persist.StorageOptions options,
   ) async {
-    print('Storage write $key');
     await writeFileAtomically(
       path.join(persistenceDirectory.path, '$key.json'),
       value,

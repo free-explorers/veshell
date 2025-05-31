@@ -7,7 +7,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/platform/model/request/mouse_buttons_event/mouse_buttons_event.serializable.dart';
 import 'package:shell/platform/model/request/touch/touch.serializable.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/pointer/model/pointer_focus.serializable.dart';
 import 'package:shell/pointer/provider/pointer_focus.manager.dart';
 import 'package:shell/shared/provider/mouse_button_tracker.dart';
@@ -133,7 +133,7 @@ class ViewInputListener extends HookConsumerWidget {
       await _sendMouseButtonsToPlatform(ref, event.buttons);
       ref.read(pointerFocusManagerProvider.notifier).startPotentialDrag();
     } else if (event.kind == PointerDeviceKind.touch) {
-      await ref.read(waylandManagerProvider.notifier).request(
+      await ref.read(platformManagerProvider.notifier).request(
             TouchDownRequest(
               message: TouchDownMessage(
                 surfaceId: surfaceId,
@@ -155,7 +155,7 @@ class ViewInputListener extends HookConsumerWidget {
       await _sendMouseButtonsToPlatform(ref, event.buttons);
       _pointerMoved(ref, globalOffset);
     } else if (event.kind == PointerDeviceKind.touch) {
-      await ref.read(waylandManagerProvider.notifier).request(
+      await ref.read(platformManagerProvider.notifier).request(
             TouchMotionRequest(
               message: TouchMotionMessage(
                 touchId: event.pointer,
@@ -170,7 +170,7 @@ class ViewInputListener extends HookConsumerWidget {
       await _sendMouseButtonsToPlatform(ref, event.buttons);
       ref.read(pointerFocusManagerProvider.notifier).stopPotentialDrag();
     } else if (event.kind == PointerDeviceKind.touch) {
-      await ref.read(waylandManagerProvider.notifier).request(
+      await ref.read(platformManagerProvider.notifier).request(
             TouchUpRequest(message: TouchIdMessage(touchId: event.pointer)),
           );
     }
@@ -184,7 +184,7 @@ class ViewInputListener extends HookConsumerWidget {
       await _sendMouseButtonsToPlatform(ref, 0);
       ref.read(pointerFocusManagerProvider.notifier).stopPotentialDrag();
     } else if (lastPointerEvent.kind == PointerDeviceKind.touch) {
-      await ref.read(waylandManagerProvider.notifier).request(
+      await ref.read(platformManagerProvider.notifier).request(
             TouchCancelRequest(
               message: TouchIdMessage(touchId: lastPointerEvent.pointer),
             ),
@@ -205,7 +205,7 @@ class ViewInputListener extends HookConsumerWidget {
     WidgetRef ref,
     List<MouseButtonEvent> events,
   ) {
-    return ref.read(waylandManagerProvider.notifier).request(
+    return ref.read(platformManagerProvider.notifier).request(
           MouseButtonsEventRequest(
             message: MouseButtonsEventMessage(
               surfaceId: surfaceId,

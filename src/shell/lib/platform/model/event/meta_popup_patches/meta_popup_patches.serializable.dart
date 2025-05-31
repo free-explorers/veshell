@@ -1,7 +1,7 @@
 import 'dart:ui';
 
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/util/json_converter/offset.dart';
 
 part 'meta_popup_patches.serializable.freezed.dart';
@@ -14,7 +14,7 @@ part 'meta_popup_patches.serializable.g.dart';
 )
 sealed class MetaPopupPatchMessage
     with _$MetaPopupPatchMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   const factory MetaPopupPatchMessage.updatePosition({
     required String id,
     @OffsetConverter() required Offset value,

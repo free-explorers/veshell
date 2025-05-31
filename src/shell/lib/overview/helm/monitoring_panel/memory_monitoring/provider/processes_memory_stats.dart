@@ -72,7 +72,6 @@ class ProcessesMemoryStats extends _$ProcessesMemoryStats {
     for (final process in snapshot.memoryUsagePerProcess.keys) {
       final usage = snapshot.memoryUsagePerProcess[process] ?? 0;
 
-      //print('$usage ${snapshot.totalMem}');
       final percentage = (usage / totalMemInBytes) * 100;
       memoryUsagePerProcess[process] = percentage;
     }

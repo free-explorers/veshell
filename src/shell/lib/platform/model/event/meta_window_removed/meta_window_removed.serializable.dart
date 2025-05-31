@@ -1,5 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/platform/provider/wayland.manager.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 
 part 'meta_window_removed.serializable.freezed.dart';
 part 'meta_window_removed.serializable.g.dart';
@@ -8,7 +8,7 @@ part 'meta_window_removed.serializable.g.dart';
 @freezed
 sealed class MetaWindowRemovedMessage
     with _$MetaWindowRemovedMessage
-    implements WaylandMessage {
+    implements PlatformMessage {
   /// Factory
   factory MetaWindowRemovedMessage({
     required String id,
