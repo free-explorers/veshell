@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/notification/provider/notification_list.dart';
-import 'package:shell/overview/helm/notification_panel/widget/notification.dart';
+import 'package:shell/notification/provider/notification_manager.dart';
+import 'package:shell/notification/widget/notification.dart';
 
 class NotificationPanel extends HookConsumerWidget {
   const NotificationPanel({
@@ -27,7 +28,18 @@ class NotificationPanel extends HookConsumerWidget {
                     ),
                     itemBuilder: (context, index) {
                       final notification = notificationList[index];
-                      return NotificationWidget(notification: notification);
+                      return Card(
+                        margin: EdgeInsets.zero,
+                        color: Theme.of(context).colorScheme.surfaceContainer,
+                        child: NotificationWidget(
+                          notification: notification,
+                          onClose: () {
+                            ref
+                                .read(notificationManagerProvider.notifier)
+                                .removeNotification(notification.id);
+                          },
+                        ),
+                      );
                     },
                     itemCount: notificationList.length,
                   ),

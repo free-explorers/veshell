@@ -8,6 +8,8 @@ import 'package:shell/meta_window/provider/pid_to_meta_window_id.dart';
 import 'package:shell/notification/model/dbus_notification_server.dart';
 import 'package:shell/notification/model/notification.serializable.dart';
 import 'package:shell/notification/model/notification_manager_state.serializable.dart';
+import 'package:shell/notification/provider/notification_channel.dart';
+import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/shared/provider/persistent_storage_state.dart';
 
 part 'notification_manager.g.dart';
@@ -32,9 +34,9 @@ class NotificationManager extends _$NotificationManager {
   }
 
   Future<void> initServer() async {
-    final client = DBusClient.session();
+    final dbusClient = DBusClient.session();
     final requestNameReply =
-        await client.requestName('org.freedesktop.Notifications');
+        await dbusClient.requestName('org.freedesktop.Notifications');
     if (requestNameReply == DBusRequestNameReply.primaryOwner) {
       print('Successfully registered as org.freedesktop.Notifications');
     } else {
@@ -60,22 +62,35 @@ class NotificationManager extends _$NotificationManager {
                 )
                 .appId;
           }
+          final notification = Notification(
+            id: newId,
+            appId: appId,
+            dbusNotification: newNotification,
+            createdAt: DateTime.now(),
+          );
           state = state.copyWith(
             notificationMap: state.notificationMap.add(
               newId,
-              Notification(
-                id: newId,
-                appId: appId,
-                dbusNotification: newNotification,
-                createdAt: DateTime.now(),
-              ),
+              notification,
             ),
             lastIndex: newId,
           );
+          ref
+              .read(
+                notificationChannelProvider(ref.read(focusedScreenProvider))
+                    .notifier,
+              )
+              .add(notification);
           return newId;
         }
       },
     );
-    await client.registerObject(_server);
+    await dbusClient.registerObject(_server);
+  }
+
+  void removeNotification(int id) {
+    state = state.copyWith(
+      notificationMap: state.notificationMap.remove(id),
+    );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:shell/notification/widget/notification_area.dart';
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/screen/widget/screen_configuration_menu.dart';
@@ -15,6 +16,7 @@ class ScreenPanel extends HookConsumerWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final screenId = CurrentScreenId.of(context);
     return Material(
       color: theme.colorScheme.surface,
       textStyle: TextStyle(color: theme.colorScheme.onSurface),
@@ -22,27 +24,31 @@ class ScreenPanel extends HookConsumerWidget implements PreferredSizeWidget {
         width: panelSize,
         child: Column(
           children: [
-            IconButton.filled(
-              constraints: const BoxConstraints(
-                minWidth: panelSize,
-                minHeight: panelSize,
+            NotificationArea(
+              channel: screenId,
+              offset: const Offset(panelSize, panelSize),
+              child: IconButton.filled(
+                constraints: const BoxConstraints(
+                  minWidth: panelSize,
+                  minHeight: panelSize,
+                ),
+                style: IconButton.styleFrom(
+                  backgroundColor: theme.colorScheme.primaryContainer,
+                  foregroundColor: theme.colorScheme.onPrimaryContainer,
+                  shape: const RoundedRectangleBorder(),
+                  iconSize: 24,
+                ),
+                onPressed: () {
+                  ref
+                      .read(
+                        overviewStateProvider(
+                          CurrentScreenId.of(context),
+                        ).notifier,
+                      )
+                      .toggle();
+                },
+                icon: const Icon(MdiIcons.shipWheel),
               ),
-              style: IconButton.styleFrom(
-                backgroundColor: theme.colorScheme.primaryContainer,
-                foregroundColor: theme.colorScheme.onPrimaryContainer,
-                shape: const RoundedRectangleBorder(),
-                iconSize: 24,
-              ),
-              onPressed: () {
-                ref
-                    .read(
-                      overviewStateProvider(
-                        CurrentScreenId.of(context),
-                      ).notifier,
-                    )
-                    .toggle();
-              },
-              icon: const Icon(MdiIcons.shipWheel),
             ),
             const Expanded(child: WorkspaceListView()),
             const ScreenConfigurationMenu(),
