@@ -30,7 +30,6 @@ mod settings;
 mod state;
 mod texture_swap_chain;
 mod wayland;
-mod xwayland;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up subscriber with both stdout and file layers

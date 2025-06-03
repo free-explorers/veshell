@@ -198,7 +198,6 @@ pub mod xwayland {
 
             self.x11_surface_per_wl_surface.remove(&wl_surface);
 
-            let x11_surface_id = Self::get_x11_surface_id(&surface);
             let surface_id = get_surface_id(&wl_surface);
             if surface.is_override_redirect() {
                 if let Some(meta_popup_id) = self
@@ -256,12 +255,16 @@ pub mod xwayland {
             _above: Option<u32>,
         ) {
             info!("configure_notify: {:?}", geometry);
-            let surface_id = Self::get_x11_surface_id(&x11_surface);
-            if x11_surface.is_override_redirect() && x11_surface.wl_surface().is_some() {
+            let Some(wl_surface) = x11_surface.wl_surface() else {
+                return;
+            };
+            let surface_id = get_surface_id(&wl_surface);
+
+            if x11_surface.is_override_redirect() {
                 if let Some(meta_popup_id) = self
                     .meta_window_state
                     .meta_popup_id_per_surface_id
-                    .get(&get_surface_id(&x11_surface.wl_surface().unwrap()))
+                    .get(&surface_id)
                     .cloned()
                 {
                     self.patch_meta_popup(MetaPopupPatch::UpdatePosition {
@@ -288,7 +291,11 @@ pub mod xwayland {
             property: WmWindowProperty,
         ) {
             info!("property_notify: {:?}", property);
-            let surface_id = Self::get_x11_surface_id(&x11_surface);
+            let Some(wl_surface) = x11_surface.wl_surface() else {
+                return;
+            };
+
+            let surface_id = get_surface_id(&wl_surface);
             if let Some(meta_window) = self.get_meta_window(surface_id) {
                 match property {
                     WmWindowProperty::Title => {
@@ -340,7 +347,10 @@ pub mod xwayland {
             resize_edge: xwm::ResizeEdge,
         ) {
             print!("resize_request");
-            let surface_id = get_surface_id(&x11_surface.wl_surface().unwrap());
+            let Some(wl_surface) = x11_surface.wl_surface() else {
+                return;
+            };
+            let surface_id = get_surface_id(&wl_surface);
             let meta_window = self.get_meta_window(surface_id).unwrap();
             let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
             let resize_edge = MetaResizeEdge::from(resize_edge);
@@ -357,8 +367,11 @@ pub mod xwayland {
         }
 
         fn move_request(&mut self, _xwm: XwmId, x11_surface: X11Surface, _button: u32) {
+            let Some(wl_surface) = x11_surface.wl_surface() else {
+                return;
+            };
             print!("move_request");
-            let surface_id = get_surface_id(&x11_surface.wl_surface().unwrap());
+            let surface_id = get_surface_id(&wl_surface);
             let meta_window = self.get_meta_window(surface_id).unwrap();
             let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
             platform_method_channel.invoke_method(

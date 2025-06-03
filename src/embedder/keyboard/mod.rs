@@ -29,12 +29,13 @@ pub fn swap_left_alt_and_meta<BackendData: Backend + 'static>(
     data: &mut State<BackendData>,
     key_code: Keycode,
 ) -> Keycode {
-    if data
+    let swap_alt_and_win = data
         .settings_manager
         .get_settings()
         .keyboard
-        .swap_alt_and_win
-    {
+        .swap_alt_and_win;
+    info!("swap_alt_and_win: {}", swap_alt_and_win);
+    if swap_alt_and_win {
         let mut linux_code = key_code.raw() - 8;
         if data.meta_window_state.meta_window_in_gaming_mode.is_none() {
             // Swap Meta ant leftAlt keycode

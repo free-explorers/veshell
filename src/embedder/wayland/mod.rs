@@ -1,5 +1,5 @@
 pub mod xdg;
-
+pub mod xwayland;
 pub mod wayland {
     use std::cell::RefCell;
 
