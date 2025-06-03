@@ -54,6 +54,10 @@ use tracing::{debug, error, info, warn};
 use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
 use smithay_drm_extras::edid::EdidInfo;
 
+use crate::flutter_engine::embedder::{
+    FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+    FlutterPointerDeviceKind_kFlutterPointerDeviceKindTouch,
+};
 use crate::flutter_engine::FlutterEngine;
 use crate::keyboard::handle_keyboard_event;
 use crate::settings::{self, MonitorConfiguration};
@@ -522,16 +526,36 @@ pub fn run_drm_backend() {
                     handle_keyboard_event(data, event.key_code(), event.state(), event.time_msec());
                 }
                 InputEvent::PointerMotion { event } => {
-                    data.on_pointer_motion::<LibinputInputBackend>(event)
+                    let kind = if event.device().config_tap_finger_count() > 0 {
+                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindTouch
+                    } else {
+                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse
+                    };
+                    data.on_pointer_motion::<LibinputInputBackend>(event, kind)
                 }
                 InputEvent::PointerMotionAbsolute { event } => {
-                    data.on_pointer_motion_absolute::<LibinputInputBackend>(event)
+                    let kind = if event.device().config_tap_finger_count() > 0 {
+                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindTouch
+                    } else {
+                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse
+                    };
+                    data.on_pointer_motion_absolute::<LibinputInputBackend>(event, kind)
                 }
                 InputEvent::PointerButton { event } => {
-                    data.on_pointer_button::<LibinputInputBackend>(event)
+                    let kind = if event.device().config_tap_finger_count() > 0 {
+                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindTouch
+                    } else {
+                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse
+                    };
+                    data.on_pointer_button::<LibinputInputBackend>(event, kind)
                 }
                 InputEvent::PointerAxis { event } => {
-                    data.on_pointer_axis::<LibinputInputBackend>(event)
+                    let kind = if event.device().config_tap_finger_count() > 0 {
+                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindTouch
+                    } else {
+                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse
+                    };
+                    data.on_pointer_axis::<LibinputInputBackend>(event, kind)
                 }
                 InputEvent::GestureSwipeBegin { event: _ } => {}
                 InputEvent::GestureSwipeUpdate { event: _ } => {}

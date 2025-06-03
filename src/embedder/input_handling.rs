@@ -11,17 +11,21 @@ use tracing::info;
 
 use crate::backend::Backend;
 use crate::flutter_engine::embedder::{
-    FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse, FlutterPointerEvent,
-    FlutterPointerPhase_kDown, FlutterPointerPhase_kHover, FlutterPointerPhase_kMove,
-    FlutterPointerPhase_kUp, FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
+    FlutterPointerDeviceKind, FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+    FlutterPointerEvent, FlutterPointerPhase_kDown, FlutterPointerPhase_kHover,
+    FlutterPointerPhase_kMove, FlutterPointerPhase_kUp,
+    FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
     FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
 };
 use crate::flutter_engine::FlutterEngine;
 use crate::state::State;
 
 impl<BackendData: Backend> State<BackendData> {
-    pub fn on_pointer_motion<B: InputBackend>(&mut self, event: B::PointerMotionEvent)
-    where
+    pub fn on_pointer_motion<B: InputBackend>(
+        &mut self,
+        event: B::PointerMotionEvent,
+        device_kind: FlutterPointerDeviceKind,
+    ) where
         BackendData: Backend + 'static,
     {
         let pointer: smithay::input::pointer::PointerHandle<State<BackendData>> =
@@ -59,12 +63,13 @@ impl<BackendData: Backend> State<BackendData> {
             return;
         }
 
-        self.send_motion_event(pointer_location)
+        self.send_motion_event(pointer_location, device_kind)
     }
 
     pub fn on_pointer_motion_absolute<B: InputBackend>(
         &mut self,
         event: B::PointerMotionAbsoluteEvent,
+        device_kind: FlutterPointerDeviceKind,
     ) where
         BackendData: Backend + 'static,
     {
@@ -102,11 +107,14 @@ impl<BackendData: Backend> State<BackendData> {
         if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
             return;
         }
-        self.send_motion_event(pointer_location)
+        self.send_motion_event(pointer_location, device_kind)
     }
 
-    pub fn on_pointer_button<B: InputBackend>(&mut self, event: B::PointerButtonEvent)
-    where
+    pub fn on_pointer_button<B: InputBackend>(
+        &mut self,
+        event: B::PointerButtonEvent,
+        device_kind: FlutterPointerDeviceKind,
+    ) where
         BackendData: Backend + 'static,
     {
         let phase = if event.state() == ButtonState::Pressed {
@@ -166,7 +174,7 @@ impl<BackendData: Backend> State<BackendData> {
                 signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
                 scroll_delta_x: 0.0,
                 scroll_delta_y: 0.0,
-                device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+                device_kind: device_kind,
                 buttons: self
                     .flutter_engine()
                     .mouse_button_tracker
@@ -180,8 +188,11 @@ impl<BackendData: Backend> State<BackendData> {
             .unwrap();
     }
 
-    pub fn on_pointer_axis<B: InputBackend>(&mut self, event: B::PointerAxisEvent)
-    where
+    pub fn on_pointer_axis<B: InputBackend>(
+        &mut self,
+        event: B::PointerAxisEvent,
+        device_kind: FlutterPointerDeviceKind,
+    ) where
         BackendData: Backend + 'static,
     {
         let horizontal_amount = event.amount(input::Axis::Horizontal).unwrap_or_else(|| {
@@ -241,7 +252,7 @@ impl<BackendData: Backend> State<BackendData> {
                 signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
                 scroll_delta_x: frame.axis.0,
                 scroll_delta_y: frame.axis.1,
-                device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+                device_kind: device_kind,
                 buttons: self
                     .flutter_engine()
                     .mouse_button_tracker
@@ -296,8 +307,11 @@ impl<BackendData: Backend> State<BackendData> {
         }
     }
 
-    fn send_motion_event(&mut self, location: Point<f64, Logical>)
-    where
+    fn send_motion_event(
+        &mut self,
+        location: Point<f64, Logical>,
+        device_kind: FlutterPointerDeviceKind,
+    ) where
         BackendData: Backend + 'static,
     {
         self.flutter_engine()
@@ -319,7 +333,7 @@ impl<BackendData: Backend> State<BackendData> {
                 signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
                 scroll_delta_x: 0.0,
                 scroll_delta_y: 0.0,
-                device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+                device_kind: device_kind,
                 buttons: self
                     .flutter_engine()
                     .mouse_button_tracker

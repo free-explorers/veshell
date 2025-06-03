@@ -48,6 +48,7 @@ use smithay::{
 };
 use tracing::{debug, info};
 
+use crate::flutter_engine::embedder::FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse;
 use crate::flutter_engine::FlutterEngine;
 use crate::keyboard::{self, handle_keyboard_event};
 use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
@@ -360,16 +361,23 @@ pub fn run_x11_client() {
                             event.time_msec(),
                         );
                     }
-                    InputEvent::PointerMotion { event } => {
-                        data.on_pointer_motion::<X11Input>(event)
-                    }
-                    InputEvent::PointerMotionAbsolute { event } => {
-                        data.on_pointer_motion_absolute::<X11Input>(event)
-                    }
-                    InputEvent::PointerButton { event } => {
-                        data.on_pointer_button::<X11Input>(event)
-                    }
-                    InputEvent::PointerAxis { event } => data.on_pointer_axis::<X11Input>(event),
+                    InputEvent::PointerMotion { event } => data.on_pointer_motion::<X11Input>(
+                        event,
+                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+                    ),
+                    InputEvent::PointerMotionAbsolute { event } => data
+                        .on_pointer_motion_absolute::<X11Input>(
+                            event,
+                            FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+                        ),
+                    InputEvent::PointerButton { event } => data.on_pointer_button::<X11Input>(
+                        event,
+                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+                    ),
+                    InputEvent::PointerAxis { event } => data.on_pointer_axis::<X11Input>(
+                        event,
+                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+                    ),
                     InputEvent::GestureSwipeBegin { event: _ } => {}
                     InputEvent::GestureSwipeUpdate { event: _ } => {}
                     InputEvent::GestureSwipeEnd { event: _ } => {}

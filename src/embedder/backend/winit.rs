@@ -22,7 +22,10 @@ use smithay::{
 use tracing::{info, warn};
 
 use crate::{
-    flutter_engine::{EmbedderChannels, FlutterEngine},
+    flutter_engine::{
+        embedder::FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse, EmbedderChannels,
+        FlutterEngine,
+    },
     keyboard::handle_keyboard_event,
     settings,
     state::State,
@@ -221,13 +224,19 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                         );
                     }
                     InputEvent::PointerMotion { event } => {}
-                    InputEvent::PointerMotionAbsolute { event } => {
-                        data.on_pointer_motion_absolute::<WinitInput>(event)
-                    }
-                    InputEvent::PointerButton { event } => {
-                        data.on_pointer_button::<WinitInput>(event)
-                    }
-                    InputEvent::PointerAxis { event } => data.on_pointer_axis::<WinitInput>(event),
+                    InputEvent::PointerMotionAbsolute { event } => data
+                        .on_pointer_motion_absolute::<WinitInput>(
+                            event,
+                            FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+                        ),
+                    InputEvent::PointerButton { event } => data.on_pointer_button::<WinitInput>(
+                        event,
+                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+                    ),
+                    InputEvent::PointerAxis { event } => data.on_pointer_axis::<WinitInput>(
+                        event,
+                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+                    ),
                     InputEvent::GestureSwipeBegin { event: _ } => {}
                     InputEvent::GestureSwipeUpdate { event: _ } => {}
                     InputEvent::GestureSwipeEnd { event: _ } => {}
