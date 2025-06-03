@@ -13,6 +13,9 @@
                 "layout": {
                     "type": "string"
                 },
+                "swapAltAndWin": {
+                    "type": "boolean"
+                },
                 "hotkeys": {
                     "type": "object",
                     "properties": {

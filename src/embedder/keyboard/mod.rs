@@ -29,18 +29,27 @@ pub fn swap_left_alt_and_meta<BackendData: Backend + 'static>(
     data: &mut State<BackendData>,
     key_code: Keycode,
 ) -> Keycode {
-    let mut linux_code = key_code.raw() - 8;
-    if data.meta_window_state.meta_window_in_gaming_mode.is_none() {
-        // Swap Meta ant leftAlt keycode
-        if linux_code == input_linux::sys::KEY_LEFTMETA as u32 {
-            info!("keycode is meta replace by leftalt");
-            linux_code = input_linux::sys::KEY_LEFTALT as u32
-        } else if linux_code == input_linux::sys::KEY_LEFTALT as u32 {
-            info!("keycode is leftalt replace by leftmeta ");
-            linux_code = input_linux::sys::KEY_LEFTMETA as u32
+    if data
+        .settings_manager
+        .get_settings()
+        .keyboard
+        .swap_alt_and_win
+    {
+        let mut linux_code = key_code.raw() - 8;
+        if data.meta_window_state.meta_window_in_gaming_mode.is_none() {
+            // Swap Meta ant leftAlt keycode
+            if linux_code == input_linux::sys::KEY_LEFTMETA as u32 {
+                info!("keycode is meta replace by leftalt");
+                linux_code = input_linux::sys::KEY_LEFTALT as u32
+            } else if linux_code == input_linux::sys::KEY_LEFTALT as u32 {
+                info!("keycode is leftalt replace by leftmeta ");
+                linux_code = input_linux::sys::KEY_LEFTMETA as u32
+            }
         }
+        Keycode::new(linux_code + 8)
+    } else {
+        key_code
     }
-    Keycode::new(linux_code + 8)
 }
 
 pub fn handle_keyboard_event<BackendData: Backend + 'static>(

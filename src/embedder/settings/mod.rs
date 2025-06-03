@@ -16,8 +16,11 @@ type SettingsCallback<BackendData> = fn(&mut State<BackendData>);
 type MonitorSettingsCallback<BackendData> = fn(&mut State<BackendData>, &str);
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+
 pub struct KeyboardSettings {
     pub layout: String,
+    pub swap_alt_and_win: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -29,12 +32,13 @@ pub struct ThemeSettings {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VeshellSettings {
     pub keyboard: KeyboardSettings,
     pub theme: ThemeSettings,
 }
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
-
+#[serde(rename_all = "camelCase")]
 pub struct MonitorResolution {
     /// horizontal coordinate
     pub width: f64,
@@ -153,7 +157,7 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
     pub fn get_settings(&self) -> VeshellSettings {
         let default_settings_path = Path::new(&self.default_settings_folder).join("settings.json");
         let default_settings_file = File::open(default_settings_path).expect("Unable to open file");
-        let mut default_settings_json: Value =
+        let mut settings_json: Value =
             serde_json::from_reader(default_settings_file).expect("Unable to parse JSON");
 
         let configured_settings_path = Path::new(&self.config_folder_path).join("settings.json");
@@ -164,11 +168,10 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
             let configured_settings_json: Value =
                 serde_json::from_reader(configured_settings_file).expect("Unable to parse JSON");
 
-            merge_json(&mut default_settings_json, configured_settings_json);
+            merge_json(&mut settings_json, configured_settings_json);
         }
 
-        serde_json::from_value(default_settings_json)
-            .expect("Unable to convert JSON to VeshellSettings")
+        serde_json::from_value(settings_json).expect("Unable to convert JSON to VeshellSettings")
     }
 
     pub fn get_monitor_configuration(&self, monitor_id: &str) -> Option<MonitorConfiguration> {

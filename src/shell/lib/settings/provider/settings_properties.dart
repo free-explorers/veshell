@@ -53,6 +53,11 @@ class SettingsProperties extends _$SettingsProperties {
             name: 'Layout',
             description: 'Keyboard layout',
           ),
+          'swapAltAndWin': SettingProperty<bool>(
+            name: 'Swap Alt and Win',
+            description:
+                'Improve thumb ergonomics by swapping the Alt and Win keys',
+          ),
           'hotkeys': SettingGroup(
             name: 'Hotkeys',
             description: 'Hotkeys settings',
@@ -124,7 +129,7 @@ class SettingsProperties extends _$SettingsProperties {
     };
   }
 
-  void updateProperty(String path, String? newValue) {
+  void updateProperty(String path, dynamic newValue) {
     final defaultJson = ref.read(defaultSettingsJsonProvider);
     final json = ref.read(configuredSettingsJsonProvider);
     final configDirectory = ref.read(configDirectoryProvider);

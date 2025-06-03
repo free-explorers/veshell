@@ -33,6 +33,10 @@ class ConfiguredSettingsJson extends _$ConfiguredSettingsJson {
       ref.invalidateSelf();
     });
 
+    ref.onDispose(() {
+      _subscription?.cancel();
+    });
+
     try {
       return jsonDecode(
         configuredSettingsFile.readAsStringSync(),

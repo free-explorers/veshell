@@ -10,14 +10,14 @@ abstract class SettingProperty<T>
   const factory SettingProperty({
     required String name,
     required String description,
-    JsonConverter<T, String>? converter,
+    JsonConverter<T, dynamic>? converter,
     String? key,
   }) = _SettingProperty;
   const SettingProperty._();
 
-  T castValue(String val) =>
+  T castValue(dynamic val) =>
       converter != null ? converter!.fromJson(val) : val as T;
 
-  String serializeValue(T val) =>
-      converter != null ? converter!.toJson(val) : val as String;
+  dynamic serializeValue(T val) =>
+      converter != null ? converter!.toJson(val) : val;
 }

@@ -1,6 +1,7 @@
 {
     "keyboard": {
         "layout": "us(altgr-intl)",
+        "swapAltAndWin": false,
         "hotkeys": {
             "system": {
                 "increaseVolume": "volumeUp",

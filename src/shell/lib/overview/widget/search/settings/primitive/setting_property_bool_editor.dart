@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/overview/widget/search/settings/setting_value_editor.dart';
 import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/provider/settings_properties.dart';
 import 'package:shell/settings/provider/util/json_value_by_path.dart';
 
-class SettingPropertyStringEditor extends HookConsumerWidget
-    implements SettingPropertyValueEditor<String> {
-  const SettingPropertyStringEditor({
+class SettingPropertyBoolEditor extends HookConsumerWidget
+    implements SettingPropertyValueEditor<bool> {
+  const SettingPropertyBoolEditor({
     required this.path,
     required this.property,
     required this.onChanged,
@@ -18,16 +17,15 @@ class SettingPropertyStringEditor extends HookConsumerWidget
   final String path;
 
   @override
-  final SettingProperty<String> property;
+  final SettingProperty<bool> property;
 
   @override
-  final void Function(String newValue) onChanged;
+  final void Function(bool newValue) onChanged;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final val = ref.watch(jsonValueByPathProvider(path)) as String;
-    final controller = useTextEditingController(text: val);
-    void updateValue(String newValue) {
+    final val = ref.watch(jsonValueByPathProvider(path)) as bool;
+    void updateValue(bool newValue) {
       ref.read(settingsPropertiesProvider.notifier).updateProperty(
             path,
             property.serializeValue(newValue),
@@ -35,13 +33,11 @@ class SettingPropertyStringEditor extends HookConsumerWidget
       onChanged(newValue);
     }
 
-    return TextField(
-      controller: controller,
-      autofocus: true,
-      decoration: const InputDecoration(
-        filled: true,
-      ),
-      onSubmitted: updateValue,
+    return SwitchListTile(
+      title: Text(property.name),
+      subtitle: Text(property.description),
+      value: val,
+      onChanged: updateValue,
     );
   }
 }
