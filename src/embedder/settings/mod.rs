@@ -143,31 +143,6 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
             })
             .unwrap();
 
-        /*         loop_handle
-        .insert_source(settings_source, move |event, _, data| {
-            match event.kind {
-                notify::EventKind::Create(_) | notify::EventKind::Modify(_) => {
-                    // if path contain monitor directory, reload monitors
-                    for path in event.paths {
-                        // only check json files to ignore temp files
-                        if path.extension().is_some() && path.extension().unwrap() == "json" {
-                            info!("Settings file changed, reloading..., {:?}", event.kind);
-
-                            if path.to_str().unwrap().contains("monitor") {
-                                let monitor_name = path.file_stem().unwrap().to_str().unwrap();
-
-                                on_monitor_settings_changed(data, monitor_name);
-                            } else {
-                                on_settings_changed(data);
-                            }
-                        }
-                    }
-                }
-                _ => {}
-            }
-        })
-        .unwrap(); */
-
         Self {
             _loop_handle: loop_handle.clone(),
             default_settings_folder,
