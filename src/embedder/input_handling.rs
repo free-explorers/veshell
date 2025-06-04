@@ -271,7 +271,7 @@ impl<BackendData: Backend> State<BackendData> {
                 .unwrap();
         } else {
             // For Trackpad Flutter expect a PanZoom event
-            if (frame.stop.0 || frame.stop.1)
+            if (frame.stop.0 && frame.stop.1)
                 && self
                     .flutter_engine()
                     .trackpad_scrolling_manager
