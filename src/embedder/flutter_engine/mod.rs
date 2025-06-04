@@ -17,6 +17,7 @@ use std::path::Path;
 use std::ptr::{null, null_mut};
 use std::rc::Rc;
 use std::time::Duration;
+use trackpad_scrolling_manager::TrackpadScrollingManager;
 
 use smithay::backend::renderer::gles::ffi::RGBA8;
 use smithay::output::Output;
@@ -92,8 +93,8 @@ pub mod platform_channel_callbacks;
 pub mod platform_channels;
 pub mod task_runner;
 mod text_input;
+pub mod trackpad_scrolling_manager;
 pub mod wayland_messages;
-
 /// Wrap the handle for various safety reasons:
 /// - Clone & Copy is willingly not implemented to avoid using the engine after being shut down.
 /// - Send is not implemented because all its methods must be called from the thread the engine was created.
@@ -109,7 +110,7 @@ pub struct FlutterEngine<BackendData: Backend + 'static> {
     pub key_event_channel: BasicMessageChannel<serde_json::Value>,
     pub text_input: TextInput,
     rx_request_external_texture_name_registration_token: calloop::RegistrationToken,
-    pub trackpad_scrolling: bool,
+    pub trackpad_scrolling_manager: TrackpadScrollingManager,
 }
 
 /// I don't want people to clone it because it's UB to call [FlutterEngine::on_vsync] multiple times
@@ -468,7 +469,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     key_event_channel,
                     text_input: TextInput::new(text_input_channel),
                     rx_request_external_texture_name_registration_token,
-                    trackpad_scrolling: false,
+                    trackpad_scrolling_manager: TrackpadScrollingManager::new(),
                 });
 
                 // TODO: Delete this function once Box::assume_init gets stabilized.

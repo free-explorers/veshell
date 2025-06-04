@@ -271,8 +271,16 @@ impl<BackendData: Backend> State<BackendData> {
                 .unwrap();
         } else {
             // For Trackpad Flutter expect a PanZoom event
-            if (frame.stop.0 || frame.stop.1) && self.flutter_engine().trackpad_scrolling {
-                self.flutter_engine_mut().trackpad_scrolling = false;
+            if (frame.stop.0 || frame.stop.1)
+                && self
+                    .flutter_engine()
+                    .trackpad_scrolling_manager
+                    .trackpad_scrolling
+            {
+                self.flutter_engine_mut()
+                    .trackpad_scrolling_manager
+                    .stop_scrolling();
+
                 self.send_pointer_pan_zoom_event(
                     device_id,
                     self.pointer.current_location().x,
@@ -283,26 +291,39 @@ impl<BackendData: Backend> State<BackendData> {
                     0.,
                     0.,
                 );
-            } else if !self.flutter_engine().trackpad_scrolling {
-                self.flutter_engine_mut().trackpad_scrolling = true;
-                self.send_pointer_pan_zoom_event(
-                    device_id,
-                    self.pointer.current_location().x,
-                    self.pointer.current_location().y,
-                    FlutterPointerPhase_kPanZoomStart,
-                    0.,
-                    0.,
-                    0.,
-                    0.,
-                );
             } else {
+                if !self
+                    .flutter_engine()
+                    .trackpad_scrolling_manager
+                    .trackpad_scrolling
+                {
+                    self.flutter_engine_mut()
+                        .trackpad_scrolling_manager
+                        .start_scrolling();
+                    self.send_pointer_pan_zoom_event(
+                        device_id,
+                        self.pointer.current_location().x,
+                        self.pointer.current_location().y,
+                        FlutterPointerPhase_kPanZoomStart,
+                        0.,
+                        0.,
+                        0.,
+                        0.,
+                    );
+                }
+                self.flutter_engine_mut()
+                    .trackpad_scrolling_manager
+                    .update_pan(
+                        event.amount(Axis::Horizontal).unwrap_or_else(|| 0.0),
+                        event.amount(Axis::Vertical).unwrap_or_else(|| 0.0),
+                    );
                 self.send_pointer_pan_zoom_event(
                     device_id,
                     self.pointer.current_location().x,
                     self.pointer.current_location().y,
                     FlutterPointerPhase_kPanZoomUpdate,
-                    event.amount(Axis::Horizontal).unwrap_or_else(|| 0.0),
-                    event.amount(Axis::Vertical).unwrap_or_else(|| 0.0),
+                    self.flutter_engine().trackpad_scrolling_manager.pan_x,
+                    self.flutter_engine().trackpad_scrolling_manager.pan_y,
                     1.,
                     0.,
                 );
