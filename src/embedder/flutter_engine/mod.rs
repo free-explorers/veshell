@@ -109,6 +109,7 @@ pub struct FlutterEngine<BackendData: Backend + 'static> {
     pub key_event_channel: BasicMessageChannel<serde_json::Value>,
     pub text_input: TextInput,
     rx_request_external_texture_name_registration_token: calloop::RegistrationToken,
+    pub trackpad_scrolling: bool,
 }
 
 /// I don't want people to clone it because it's UB to call [FlutterEngine::on_vsync] multiple times
@@ -467,6 +468,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     key_event_channel,
                     text_input: TextInput::new(text_input_channel),
                     rx_request_external_texture_name_registration_token,
+                    trackpad_scrolling: false,
                 });
 
                 // TODO: Delete this function once Box::assume_init gets stabilized.

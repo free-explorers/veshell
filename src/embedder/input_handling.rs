@@ -15,8 +15,8 @@ use crate::backend::Backend;
 use crate::flutter_engine::embedder::{
     FlutterPointerDeviceKind, FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
     FlutterPointerDeviceKind_kFlutterPointerDeviceKindTrackpad, FlutterPointerEvent,
-    FlutterPointerPhase_kDown, FlutterPointerPhase_kHover, FlutterPointerPhase_kMove,
-    FlutterPointerPhase_kPanZoomEnd, FlutterPointerPhase_kPanZoomStart,
+    FlutterPointerPhase, FlutterPointerPhase_kDown, FlutterPointerPhase_kHover,
+    FlutterPointerPhase_kMove, FlutterPointerPhase_kPanZoomEnd, FlutterPointerPhase_kPanZoomStart,
     FlutterPointerPhase_kPanZoomUpdate, FlutterPointerPhase_kUp,
     FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
     FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
@@ -28,7 +28,6 @@ impl<BackendData: Backend> State<BackendData> {
     pub fn on_pointer_motion<B: InputBackend>(
         &mut self,
         event: B::PointerMotionEvent,
-        device_kind: FlutterPointerDeviceKind,
         device_id: i32,
     ) where
         BackendData: Backend + 'static,
@@ -68,13 +67,12 @@ impl<BackendData: Backend> State<BackendData> {
             return;
         }
 
-        self.send_motion_event(pointer_location, device_kind, device_id)
+        self.send_motion_event(pointer_location, device_id)
     }
 
     pub fn on_pointer_motion_absolute<B: InputBackend>(
         &mut self,
         event: B::PointerMotionAbsoluteEvent,
-        device_kind: FlutterPointerDeviceKind,
         device_id: i32,
     ) where
         BackendData: Backend + 'static,
@@ -113,7 +111,7 @@ impl<BackendData: Backend> State<BackendData> {
         if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
             return;
         }
-        self.send_motion_event(pointer_location, device_kind, device_id)
+        self.send_motion_event(pointer_location, device_id)
     }
 
     pub fn on_pointer_button<B: InputBackend>(
@@ -195,19 +193,15 @@ impl<BackendData: Backend> State<BackendData> {
             .unwrap();
     }
 
-    pub fn on_pointer_axis<B: InputBackend>(
-        &mut self,
-        event: B::PointerAxisEvent,
-        device_kind: FlutterPointerDeviceKind,
-        device_id: i32,
-    ) where
+    pub fn on_pointer_axis<B: InputBackend>(&mut self, event: B::PointerAxisEvent, device_id: i32)
+    where
         BackendData: Backend + 'static,
     {
         let horizontal_amount = event.amount(input::Axis::Horizontal).unwrap_or_else(|| {
-            event.amount_v120(input::Axis::Horizontal).unwrap_or(0.0) * 15.0 / 120.
+            event.amount_v120(input::Axis::Horizontal).unwrap_or(0.0) / 120. * 15.
         });
         let vertical_amount = event.amount(input::Axis::Vertical).unwrap_or_else(|| {
-            event.amount_v120(input::Axis::Vertical).unwrap_or(0.0) * 15.0 / 120.
+            event.amount_v120(input::Axis::Vertical).unwrap_or(0.0) / 120. * 15.
         });
         let horizontal_amount_discrete = event.amount_v120(input::Axis::Horizontal);
         let vertical_amount_discrete = event.amount_v120(input::Axis::Vertical);
@@ -237,41 +231,83 @@ impl<BackendData: Backend> State<BackendData> {
                 frame = frame.stop(Axis::Vertical);
             }
         }
+        info!("on_pointer_axis | amount_x = {:?}, amount_y = {:?}, amount_x_discrete = {:?}, amount_y_discrete = {:?}", horizontal_amount, vertical_amount, horizontal_amount_discrete, vertical_amount_discrete);
         let pointer = self.pointer.clone();
         pointer.axis(self, frame);
         self.register_frame();
 
-        self.flutter_engine()
-            .send_pointer_event(FlutterPointerEvent {
-                struct_size: size_of::<FlutterPointerEvent>(),
-                phase: if self
-                    .flutter_engine()
-                    .mouse_button_tracker
-                    .are_any_buttons_pressed()
-                {
-                    FlutterPointerPhase_kMove
-                } else {
-                    FlutterPointerPhase_kDown
-                },
-                timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
-                x: self.pointer.current_location().x,
-                y: self.pointer.current_location().y,
-                device: device_id,
-                signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
-                scroll_delta_x: frame.axis.0,
-                scroll_delta_y: frame.axis.1,
-                device_kind: device_kind,
-                buttons: self
-                    .flutter_engine()
-                    .mouse_button_tracker
-                    .get_flutter_button_bitmask(),
-                pan_x: 0.0,
-                pan_y: 0.0,
-                scale: 1.0,
-                rotation: 0.0,
-                view_id: 0,
-            })
-            .unwrap();
+        // Flutter distinguish Mouse and Trackpad scrolls, so we need to send a separate event for each
+        if event.source() == AxisSource::Wheel || event.source() == AxisSource::WheelTilt {
+            self.flutter_engine()
+                .send_pointer_event(FlutterPointerEvent {
+                    struct_size: size_of::<FlutterPointerEvent>(),
+                    phase: if self
+                        .flutter_engine()
+                        .mouse_button_tracker
+                        .are_any_buttons_pressed()
+                    {
+                        FlutterPointerPhase_kMove
+                    } else {
+                        FlutterPointerPhase_kDown
+                    },
+                    timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
+                    x: self.pointer.current_location().x,
+                    y: self.pointer.current_location().y,
+                    device: device_id,
+                    signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
+                    scroll_delta_x: frame.axis.0,
+                    scroll_delta_y: frame.axis.1,
+                    device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+                    buttons: self
+                        .flutter_engine()
+                        .mouse_button_tracker
+                        .get_flutter_button_bitmask(),
+                    pan_x: 0.0,
+                    pan_y: 0.0,
+                    scale: 1.0,
+                    rotation: 0.0,
+                    view_id: 0,
+                })
+                .unwrap();
+        } else {
+            // For Trackpad Flutter expect a PanZoom event
+            if (frame.stop.0 || frame.stop.1) && self.flutter_engine().trackpad_scrolling {
+                self.flutter_engine_mut().trackpad_scrolling = false;
+                self.send_pointer_pan_zoom_event(
+                    device_id,
+                    self.pointer.current_location().x,
+                    self.pointer.current_location().y,
+                    FlutterPointerPhase_kPanZoomEnd,
+                    0.,
+                    0.,
+                    0.,
+                    0.,
+                );
+            } else if !self.flutter_engine().trackpad_scrolling {
+                self.flutter_engine_mut().trackpad_scrolling = true;
+                self.send_pointer_pan_zoom_event(
+                    device_id,
+                    self.pointer.current_location().x,
+                    self.pointer.current_location().y,
+                    FlutterPointerPhase_kPanZoomStart,
+                    0.,
+                    0.,
+                    0.,
+                    0.,
+                );
+            } else {
+                self.send_pointer_pan_zoom_event(
+                    device_id,
+                    self.pointer.current_location().x,
+                    self.pointer.current_location().y,
+                    FlutterPointerPhase_kPanZoomUpdate,
+                    event.amount(Axis::Horizontal).unwrap_or_else(|| 0.0),
+                    event.amount(Axis::Vertical).unwrap_or_else(|| 0.0),
+                    1.,
+                    0.,
+                );
+            }
+        }
     }
 
     pub fn on_gesture_pinch_begin<B: InputBackend>(
@@ -282,26 +318,16 @@ impl<BackendData: Backend> State<BackendData> {
         let pointer: smithay::input::pointer::PointerHandle<State<BackendData>> =
             self.pointer.clone();
 
-        self.flutter_engine()
-            .send_pointer_event(FlutterPointerEvent {
-                struct_size: size_of::<FlutterPointerEvent>(),
-                phase: FlutterPointerPhase_kPanZoomStart,
-                timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
-                x: pointer.current_location().x,
-                y: pointer.current_location().y,
-                device: device_id,
-                signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
-                scroll_delta_x: 0.0,
-                scroll_delta_y: 0.0,
-                device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindTrackpad,
-                buttons: 0,
-                pan_x: 0.0,
-                pan_y: 0.0,
-                scale: 1.0,
-                rotation: 0.0,
-                view_id: 0,
-            })
-            .unwrap();
+        self.send_pointer_pan_zoom_event(
+            device_id,
+            pointer.current_location().x,
+            pointer.current_location().y,
+            FlutterPointerPhase_kPanZoomStart,
+            0.,
+            0.,
+            0.,
+            0.,
+        );
     }
     pub fn on_gesture_pinch_update<B: InputBackend>(
         &mut self,
@@ -310,27 +336,16 @@ impl<BackendData: Backend> State<BackendData> {
     ) {
         let pointer: smithay::input::pointer::PointerHandle<State<BackendData>> =
             self.pointer.clone();
-
-        self.flutter_engine()
-            .send_pointer_event(FlutterPointerEvent {
-                struct_size: size_of::<FlutterPointerEvent>(),
-                phase: FlutterPointerPhase_kPanZoomUpdate,
-                timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
-                x: pointer.current_location().x,
-                y: pointer.current_location().y,
-                device: device_id,
-                signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
-                scroll_delta_x: 0.0,
-                scroll_delta_y: 0.0,
-                device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindTrackpad,
-                buttons: 0,
-                pan_x: event.delta_x(),
-                pan_y: event.delta_y(),
-                scale: event.scale(),
-                rotation: event.rotation(),
-                view_id: 0,
-            })
-            .unwrap();
+        self.send_pointer_pan_zoom_event(
+            device_id,
+            pointer.current_location().x,
+            pointer.current_location().y,
+            FlutterPointerPhase_kPanZoomUpdate,
+            event.delta_x(),
+            event.delta_y(),
+            event.scale(),
+            event.rotation(),
+        );
     }
     pub fn on_gesture_pinch_end<B: InputBackend>(
         &mut self,
@@ -339,26 +354,16 @@ impl<BackendData: Backend> State<BackendData> {
     ) {
         let pointer: smithay::input::pointer::PointerHandle<State<BackendData>> =
             self.pointer.clone();
-        self.flutter_engine()
-            .send_pointer_event(FlutterPointerEvent {
-                struct_size: size_of::<FlutterPointerEvent>(),
-                phase: FlutterPointerPhase_kPanZoomEnd,
-                timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
-                x: pointer.current_location().x,
-                y: pointer.current_location().y,
-                device: device_id,
-                signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
-                scroll_delta_x: 0.0,
-                scroll_delta_y: 0.0,
-                device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindTrackpad,
-                buttons: 0,
-                pan_x: 0.0,
-                pan_y: 0.0,
-                scale: 0.0,
-                rotation: 0.0,
-                view_id: 0,
-            })
-            .unwrap();
+        self.send_pointer_pan_zoom_event(
+            device_id,
+            pointer.current_location().x,
+            pointer.current_location().y,
+            FlutterPointerPhase_kPanZoomEnd,
+            0.,
+            0.,
+            0.,
+            0.,
+        );
     }
 
     fn register_frame(&mut self) {
@@ -402,12 +407,8 @@ impl<BackendData: Backend> State<BackendData> {
         }
     }
 
-    fn send_motion_event(
-        &mut self,
-        location: Point<f64, Logical>,
-        device_kind: FlutterPointerDeviceKind,
-        device_id: i32,
-    ) where
+    fn send_motion_event(&mut self, location: Point<f64, Logical>, device_id: i32)
+    where
         BackendData: Backend + 'static,
     {
         self.flutter_engine()
@@ -429,7 +430,7 @@ impl<BackendData: Backend> State<BackendData> {
                 signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
                 scroll_delta_x: 0.0,
                 scroll_delta_y: 0.0,
-                device_kind: device_kind,
+                device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
                 buttons: self
                     .flutter_engine()
                     .mouse_button_tracker
@@ -438,6 +439,39 @@ impl<BackendData: Backend> State<BackendData> {
                 pan_y: 0.0,
                 scale: 1.0,
                 rotation: 0.0,
+                view_id: 0,
+            })
+            .unwrap();
+    }
+
+    fn send_pointer_pan_zoom_event(
+        &mut self,
+        device_id: i32,
+        x: f64,
+        y: f64,
+        phase: FlutterPointerPhase,
+        pan_x: f64,
+        pan_y: f64,
+        scale: f64,
+        rotation: f64,
+    ) {
+        self.flutter_engine()
+            .send_pointer_event(FlutterPointerEvent {
+                struct_size: size_of::<FlutterPointerEvent>(),
+                phase,
+                timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
+                x,
+                y,
+                device: device_id,
+                signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
+                scroll_delta_x: 0.0,
+                scroll_delta_y: 0.0,
+                device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindTrackpad,
+                buttons: 0,
+                pan_x,
+                pan_y,
+                scale,
+                rotation,
                 view_id: 0,
             })
             .unwrap();

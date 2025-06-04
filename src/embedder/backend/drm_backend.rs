@@ -528,22 +528,12 @@ pub fn run_drm_backend() {
                     handle_keyboard_event(data, event.key_code(), event.state(), event.time_msec());
                 }
                 InputEvent::PointerMotion { event } => {
-                    let kind = if event.device().config_tap_finger_count() > 0 {
-                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindTouch
-                    } else {
-                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse
-                    };
                     let device_id = event.device().id_product() as i32;
-                    data.on_pointer_motion::<LibinputInputBackend>(event, kind, device_id)
+                    data.on_pointer_motion::<LibinputInputBackend>(event, device_id)
                 }
                 InputEvent::PointerMotionAbsolute { event } => {
-                    let kind = if event.device().config_tap_finger_count() > 0 {
-                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindTouch
-                    } else {
-                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse
-                    };
                     let device_id = event.device().id_product() as i32;
-                    data.on_pointer_motion_absolute::<LibinputInputBackend>(event, kind, device_id)
+                    data.on_pointer_motion_absolute::<LibinputInputBackend>(event, device_id)
                 }
                 InputEvent::PointerButton { event } => {
                     let kind = if event.device().config_tap_finger_count() > 0 {
@@ -561,7 +551,7 @@ pub fn run_drm_backend() {
                         FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse
                     };
                     let device_id = event.device().id_product() as i32;
-                    data.on_pointer_axis::<LibinputInputBackend>(event, kind, device_id)
+                    data.on_pointer_axis::<LibinputInputBackend>(event, device_id)
                 }
                 InputEvent::GestureSwipeBegin { event: _ } => {}
                 InputEvent::GestureSwipeUpdate { event: _ } => {}
