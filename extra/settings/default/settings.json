@@ -19,6 +19,9 @@
             }
         }
     },
+    "mouseAndTouchpad": {
+        "naturalScrolling": true
+    },
     "theme": {
         "color": "0xFF006888",
         "gtkTheme": "Adwaita-dark",

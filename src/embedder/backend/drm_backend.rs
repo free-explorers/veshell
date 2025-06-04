@@ -41,7 +41,7 @@ use smithay::reexports::drm::control::{
     self, connector, crtc, Device as DeviceTrait, ModeFlags, ModeTypeFlags,
 };
 use smithay::reexports::drm::Device as _;
-use smithay::reexports::input::Libinput;
+use smithay::reexports::input::{self, Libinput};
 use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::Display;
@@ -62,7 +62,7 @@ use crate::flutter_engine::embedder::{
 };
 use crate::flutter_engine::FlutterEngine;
 use crate::keyboard::handle_keyboard_event;
-use crate::settings::{self, MonitorConfiguration};
+use crate::settings::{self, MonitorConfiguration, MouseAndTouchpadSettings};
 use crate::state;
 use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
 
@@ -263,6 +263,24 @@ pub fn run_drm_backend() {
         |data: &mut State<DrmBackend>| {
             let settings = data.settings_manager.get_settings();
             data.apply_veshell_settings(&settings);
+            for mut device in data.input_devices.clone() {
+                let is_touchpad = device.config_tap_finger_count() > 0;
+                if is_touchpad {
+                    device
+                        .config_tap_set_enabled(true)
+                        .expect("Failed to enable tap");
+                    let natural_scrolling = data
+                        .settings_manager
+                        .get_settings()
+                        .mouse_and_touchpad
+                        .natural_scrolling;
+                    if natural_scrolling && device.config_scroll_has_natural_scroll() {
+                        device
+                            .config_scroll_set_natural_scroll_enabled(natural_scrolling)
+                            .expect("Failed to set natural scrolling");
+                    }
+                }
+            }
         },
         |data, monitor_name| {
             info!("Monitor settings updated of {}", monitor_name);
@@ -516,14 +534,27 @@ pub fn run_drm_backend() {
             let _dh = data.display_handle.clone();
             match event {
                 InputEvent::DeviceAdded { mut device } => {
+                    data.input_devices.insert(device.clone());
                     let is_touchpad = device.config_tap_finger_count() > 0;
                     if is_touchpad {
                         device
                             .config_tap_set_enabled(true)
                             .expect("Failed to enable tap");
+                        let natural_scrolling = data
+                            .settings_manager
+                            .get_settings()
+                            .mouse_and_touchpad
+                            .natural_scrolling;
+                        if natural_scrolling && device.config_scroll_has_natural_scroll() {
+                            device
+                                .config_scroll_set_natural_scroll_enabled(natural_scrolling)
+                                .expect("Failed to set natural scrolling");
+                        }
                     }
                 }
-                InputEvent::DeviceRemoved { device: _ } => {}
+                InputEvent::DeviceRemoved { device } => {
+                    data.input_devices.remove(&device);
+                }
                 InputEvent::Keyboard { event } => {
                     handle_keyboard_event(data, event.key_code(), event.state(), event.time_msec());
                 }
@@ -1369,6 +1400,8 @@ impl State<DrmBackend> {
             }
         }
     }
+
+    pub fn apply_libinput_settings(config: &MouseAndTouchpadSettings, device: &mut input::Device) {}
 }
 
 #[allow(dead_code)]

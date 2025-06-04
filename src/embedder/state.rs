@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::os::fd::OwnedFd;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
@@ -12,6 +12,7 @@ use smithay::input::pointer::{CursorImageStatus, PointerHandle};
 use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::reexports::calloop::generic::Generic;
 use smithay::reexports::calloop::{channel, Interest, LoopHandle, Mode, PostAction};
+use smithay::reexports::input;
 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::WmCapabilities;
@@ -122,6 +123,7 @@ pub struct State<BackendData: Backend + 'static> {
     pub cursor_image_status: Mutex<CursorImageStatus>,
     pub settings_manager: SettingsManager<BackendData>,
     pub xdg_decoration_state: XdgDecorationState,
+    pub input_devices: HashSet<input::Device>,
 }
 
 impl<BackendData: Backend + 'static> State<BackendData> {
@@ -325,6 +327,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             cursor_image_status: Mutex::new(CursorImageStatus::default_named()),
             settings_manager,
             xdg_decoration_state,
+            input_devices: HashSet::new(),
         }
     }
 

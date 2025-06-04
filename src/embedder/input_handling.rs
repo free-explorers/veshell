@@ -1,12 +1,10 @@
 use std::mem::size_of;
 
 use smithay::backend::input::{
-    self, AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, GesturePinchBeginEvent,
-    GesturePinchEndEvent, GesturePinchUpdateEvent, InputBackend, PointerAxisEvent,
-    PointerButtonEvent, PointerMotionEvent,
+    self, AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, GesturePinchUpdateEvent,
+    InputBackend, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
 };
 use smithay::input::pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent};
-use smithay::reexports::input::event::gesture::GesturePinchEvent;
 use smithay::reexports::wayland_server::protocol::wl_pointer;
 use smithay::utils::{Logical, Point, SERIAL_COUNTER};
 use tracing::info;
@@ -22,6 +20,7 @@ use crate::flutter_engine::embedder::{
     FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
 };
 use crate::flutter_engine::FlutterEngine;
+use crate::settings::MouseAndTouchpadSettings;
 use crate::state::State;
 
 impl<BackendData: Backend> State<BackendData> {

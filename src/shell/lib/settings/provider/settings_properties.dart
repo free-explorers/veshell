@@ -106,6 +106,18 @@ class SettingsProperties extends _$SettingsProperties {
           ),
         },
       ),
+      'mouseAndTouchpad': const SettingGroup(
+        name: 'Mouse and Touchpad',
+        description: null,
+        icon: MdiIcons.mouse,
+        children: {
+          'naturalScrolling': SettingProperty<bool>(
+            name: 'Natural Scrolling',
+            description:
+                'Toggle Natural scrolling (reversed scrolling direction)',
+          ),
+        },
+      ),
       'theme': const SettingGroup(
         name: 'Theme',
         description: null,

@@ -25,6 +25,13 @@ pub struct KeyboardSettings {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+
+pub struct MouseAndTouchpadSettings {
+    pub natural_scrolling: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ThemeSettings {
     color: String,
     pub gtk_theme: String,
@@ -35,6 +42,7 @@ pub struct ThemeSettings {
 #[serde(rename_all = "camelCase")]
 pub struct VeshellSettings {
     pub keyboard: KeyboardSettings,
+    pub mouse_and_touchpad: MouseAndTouchpadSettings,
     pub theme: ThemeSettings,
 }
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]

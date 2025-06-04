@@ -20,8 +20,8 @@ impl TrackpadScrollingManager {
         self.trackpad_scrolling = false;
     }
     pub fn update_pan(&mut self, delta_x: f64, delta_y: f64) {
-        self.pan_x += delta_x;
-        self.pan_y += delta_y;
+        self.pan_x -= delta_x;
+        self.pan_y -= delta_y;
     }
     pub fn reset_pan(&mut self) {
         self.pan_x = 0.0;

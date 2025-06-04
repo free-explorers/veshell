@@ -63,6 +63,15 @@
             },
             "additionalProperties": false
         },
+        "mouseAndTouchpad": {
+            "type": "object",
+            "properties": {
+                "naturalScrolling": {
+                    "type": "boolean"
+                }
+            },
+            "additionalProperties": false
+        },
         "theme": {
             "type": "object",
             "properties": {
