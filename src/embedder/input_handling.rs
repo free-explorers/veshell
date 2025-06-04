@@ -116,7 +116,6 @@ impl<BackendData: Backend> State<BackendData> {
     pub fn on_pointer_button<B: InputBackend>(
         &mut self,
         event: B::PointerButtonEvent,
-        device_kind: FlutterPointerDeviceKind,
         device_id: i32,
     ) where
         BackendData: Backend + 'static,
@@ -150,7 +149,6 @@ impl<BackendData: Backend> State<BackendData> {
                 FlutterPointerPhase_kUp
             }
         };
-        info!("PointerButton {:?}", event.button_code());
         if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
             let state = wl_pointer::ButtonState::from(event.state());
 
@@ -178,7 +176,7 @@ impl<BackendData: Backend> State<BackendData> {
                 signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
                 scroll_delta_x: 0.0,
                 scroll_delta_y: 0.0,
-                device_kind: device_kind,
+                device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
                 buttons: self
                     .flutter_engine()
                     .mouse_button_tracker
@@ -230,7 +228,7 @@ impl<BackendData: Backend> State<BackendData> {
                 frame = frame.stop(Axis::Vertical);
             }
         }
-        info!("on_pointer_axis | amount_x = {:?}, amount_y = {:?}, amount_x_discrete = {:?}, amount_y_discrete = {:?}", horizontal_amount, vertical_amount, horizontal_amount_discrete, vertical_amount_discrete);
+
         let pointer = self.pointer.clone();
         pointer.axis(self, frame);
         self.register_frame();
@@ -254,8 +252,8 @@ impl<BackendData: Backend> State<BackendData> {
                     y: self.pointer.current_location().y,
                     device: device_id,
                     signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
-                    scroll_delta_x: frame.axis.0,
-                    scroll_delta_y: frame.axis.1,
+                    scroll_delta_x: frame.axis.0 * 58.,
+                    scroll_delta_y: frame.axis.1 * 58.,
                     device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
                     buttons: self
                         .flutter_engine()
