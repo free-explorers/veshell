@@ -364,19 +364,23 @@ pub fn run_x11_client() {
                     InputEvent::PointerMotion { event } => data.on_pointer_motion::<X11Input>(
                         event,
                         FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+                        0,
                     ),
                     InputEvent::PointerMotionAbsolute { event } => data
                         .on_pointer_motion_absolute::<X11Input>(
                             event,
                             FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+                            0,
                         ),
                     InputEvent::PointerButton { event } => data.on_pointer_button::<X11Input>(
                         event,
                         FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+                        0,
                     ),
                     InputEvent::PointerAxis { event } => data.on_pointer_axis::<X11Input>(
                         event,
                         FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+                        0,
                     ),
                     InputEvent::GestureSwipeBegin { event: _ } => {}
                     InputEvent::GestureSwipeUpdate { event: _ } => {}

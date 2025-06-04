@@ -1,10 +1,12 @@
 use std::mem::size_of;
 
 use smithay::backend::input::{
-    self, AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend,
-    PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
+    self, AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, GesturePinchBeginEvent,
+    GesturePinchEndEvent, GesturePinchUpdateEvent, InputBackend, PointerAxisEvent,
+    PointerButtonEvent, PointerMotionEvent,
 };
 use smithay::input::pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent};
+use smithay::reexports::input::event::gesture::GesturePinchEvent;
 use smithay::reexports::wayland_server::protocol::wl_pointer;
 use smithay::utils::{Logical, Point, SERIAL_COUNTER};
 use tracing::info;
@@ -12,8 +14,10 @@ use tracing::info;
 use crate::backend::Backend;
 use crate::flutter_engine::embedder::{
     FlutterPointerDeviceKind, FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
-    FlutterPointerEvent, FlutterPointerPhase_kDown, FlutterPointerPhase_kHover,
-    FlutterPointerPhase_kMove, FlutterPointerPhase_kUp,
+    FlutterPointerDeviceKind_kFlutterPointerDeviceKindTrackpad, FlutterPointerEvent,
+    FlutterPointerPhase_kDown, FlutterPointerPhase_kHover, FlutterPointerPhase_kMove,
+    FlutterPointerPhase_kPanZoomEnd, FlutterPointerPhase_kPanZoomStart,
+    FlutterPointerPhase_kPanZoomUpdate, FlutterPointerPhase_kUp,
     FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
     FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
 };
@@ -25,6 +29,7 @@ impl<BackendData: Backend> State<BackendData> {
         &mut self,
         event: B::PointerMotionEvent,
         device_kind: FlutterPointerDeviceKind,
+        device_id: i32,
     ) where
         BackendData: Backend + 'static,
     {
@@ -63,13 +68,14 @@ impl<BackendData: Backend> State<BackendData> {
             return;
         }
 
-        self.send_motion_event(pointer_location, device_kind)
+        self.send_motion_event(pointer_location, device_kind, device_id)
     }
 
     pub fn on_pointer_motion_absolute<B: InputBackend>(
         &mut self,
         event: B::PointerMotionAbsoluteEvent,
         device_kind: FlutterPointerDeviceKind,
+        device_id: i32,
     ) where
         BackendData: Backend + 'static,
     {
@@ -107,13 +113,14 @@ impl<BackendData: Backend> State<BackendData> {
         if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
             return;
         }
-        self.send_motion_event(pointer_location, device_kind)
+        self.send_motion_event(pointer_location, device_kind, device_id)
     }
 
     pub fn on_pointer_button<B: InputBackend>(
         &mut self,
         event: B::PointerButtonEvent,
         device_kind: FlutterPointerDeviceKind,
+        device_id: i32,
     ) where
         BackendData: Backend + 'static,
     {
@@ -170,7 +177,7 @@ impl<BackendData: Backend> State<BackendData> {
                 timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
                 x: self.pointer.current_location().x,
                 y: self.pointer.current_location().y,
-                device: 0,
+                device: device_id,
                 signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
                 scroll_delta_x: 0.0,
                 scroll_delta_y: 0.0,
@@ -192,6 +199,7 @@ impl<BackendData: Backend> State<BackendData> {
         &mut self,
         event: B::PointerAxisEvent,
         device_kind: FlutterPointerDeviceKind,
+        device_id: i32,
     ) where
         BackendData: Backend + 'static,
     {
@@ -248,7 +256,7 @@ impl<BackendData: Backend> State<BackendData> {
                 timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
                 x: self.pointer.current_location().x,
                 y: self.pointer.current_location().y,
-                device: 0,
+                device: device_id,
                 signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
                 scroll_delta_x: frame.axis.0,
                 scroll_delta_y: frame.axis.1,
@@ -260,6 +268,93 @@ impl<BackendData: Backend> State<BackendData> {
                 pan_x: 0.0,
                 pan_y: 0.0,
                 scale: 1.0,
+                rotation: 0.0,
+                view_id: 0,
+            })
+            .unwrap();
+    }
+
+    pub fn on_gesture_pinch_begin<B: InputBackend>(
+        &mut self,
+        event: B::GesturePinchBeginEvent,
+        device_id: i32,
+    ) {
+        let pointer: smithay::input::pointer::PointerHandle<State<BackendData>> =
+            self.pointer.clone();
+
+        self.flutter_engine()
+            .send_pointer_event(FlutterPointerEvent {
+                struct_size: size_of::<FlutterPointerEvent>(),
+                phase: FlutterPointerPhase_kPanZoomStart,
+                timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
+                x: pointer.current_location().x,
+                y: pointer.current_location().y,
+                device: device_id,
+                signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
+                scroll_delta_x: 0.0,
+                scroll_delta_y: 0.0,
+                device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindTrackpad,
+                buttons: 0,
+                pan_x: 0.0,
+                pan_y: 0.0,
+                scale: 1.0,
+                rotation: 0.0,
+                view_id: 0,
+            })
+            .unwrap();
+    }
+    pub fn on_gesture_pinch_update<B: InputBackend>(
+        &mut self,
+        event: B::GesturePinchUpdateEvent,
+        device_id: i32,
+    ) {
+        let pointer: smithay::input::pointer::PointerHandle<State<BackendData>> =
+            self.pointer.clone();
+
+        self.flutter_engine()
+            .send_pointer_event(FlutterPointerEvent {
+                struct_size: size_of::<FlutterPointerEvent>(),
+                phase: FlutterPointerPhase_kPanZoomUpdate,
+                timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
+                x: pointer.current_location().x,
+                y: pointer.current_location().y,
+                device: device_id,
+                signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
+                scroll_delta_x: 0.0,
+                scroll_delta_y: 0.0,
+                device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindTrackpad,
+                buttons: 0,
+                pan_x: event.delta_x(),
+                pan_y: event.delta_y(),
+                scale: event.scale(),
+                rotation: event.rotation(),
+                view_id: 0,
+            })
+            .unwrap();
+    }
+    pub fn on_gesture_pinch_end<B: InputBackend>(
+        &mut self,
+        _event: B::GesturePinchEndEvent,
+        device_id: i32,
+    ) {
+        let pointer: smithay::input::pointer::PointerHandle<State<BackendData>> =
+            self.pointer.clone();
+        self.flutter_engine()
+            .send_pointer_event(FlutterPointerEvent {
+                struct_size: size_of::<FlutterPointerEvent>(),
+                phase: FlutterPointerPhase_kPanZoomEnd,
+                timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
+                x: pointer.current_location().x,
+                y: pointer.current_location().y,
+                device: device_id,
+                signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
+                scroll_delta_x: 0.0,
+                scroll_delta_y: 0.0,
+                device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindTrackpad,
+                buttons: 0,
+                pan_x: 0.0,
+                pan_y: 0.0,
+                scale: 0.0,
                 rotation: 0.0,
                 view_id: 0,
             })
@@ -311,6 +406,7 @@ impl<BackendData: Backend> State<BackendData> {
         &mut self,
         location: Point<f64, Logical>,
         device_kind: FlutterPointerDeviceKind,
+        device_id: i32,
     ) where
         BackendData: Backend + 'static,
     {
@@ -329,7 +425,7 @@ impl<BackendData: Backend> State<BackendData> {
                 timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
                 x: location.x,
                 y: location.y,
-                device: 0,
+                device: device_id,
                 signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
                 scroll_delta_x: 0.0,
                 scroll_delta_y: 0.0,

@@ -228,14 +228,17 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                         .on_pointer_motion_absolute::<WinitInput>(
                             event,
                             FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+                            0,
                         ),
                     InputEvent::PointerButton { event } => data.on_pointer_button::<WinitInput>(
                         event,
                         FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+                        0,
                     ),
                     InputEvent::PointerAxis { event } => data.on_pointer_axis::<WinitInput>(
                         event,
                         FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+                        0,
                     ),
                     InputEvent::GestureSwipeBegin { event: _ } => {}
                     InputEvent::GestureSwipeUpdate { event: _ } => {}

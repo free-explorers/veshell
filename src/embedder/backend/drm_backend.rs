@@ -19,7 +19,7 @@ use smithay::backend::drm::{
     NodeType,
 };
 use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
-use smithay::backend::input::{Event, InputEvent, KeyboardKeyEvent};
+use smithay::backend::input::{Device, Event, InputEvent, KeyboardKeyEvent};
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
 use smithay::backend::renderer::element::texture::TextureRenderElement;
 use smithay::backend::renderer::gles::ffi::Gles2;
@@ -37,7 +37,9 @@ use smithay::output::{Output, PhysicalProperties};
 use smithay::reexports::calloop::channel::Event as CalloopEvent;
 use smithay::reexports::calloop::RegistrationToken;
 use smithay::reexports::calloop::{EventLoop, LoopHandle};
-use smithay::reexports::drm::control::{self, connector, crtc, Device, ModeFlags, ModeTypeFlags};
+use smithay::reexports::drm::control::{
+    self, connector, crtc, Device as DeviceTrait, ModeFlags, ModeTypeFlags,
+};
 use smithay::reexports::drm::Device as _;
 use smithay::reexports::input::Libinput;
 use smithay::reexports::wayland_server::backend::GlobalId;
@@ -531,7 +533,8 @@ pub fn run_drm_backend() {
                     } else {
                         FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse
                     };
-                    data.on_pointer_motion::<LibinputInputBackend>(event, kind)
+                    let device_id = event.device().id_product() as i32;
+                    data.on_pointer_motion::<LibinputInputBackend>(event, kind, device_id)
                 }
                 InputEvent::PointerMotionAbsolute { event } => {
                     let kind = if event.device().config_tap_finger_count() > 0 {
@@ -539,7 +542,8 @@ pub fn run_drm_backend() {
                     } else {
                         FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse
                     };
-                    data.on_pointer_motion_absolute::<LibinputInputBackend>(event, kind)
+                    let device_id = event.device().id_product() as i32;
+                    data.on_pointer_motion_absolute::<LibinputInputBackend>(event, kind, device_id)
                 }
                 InputEvent::PointerButton { event } => {
                     let kind = if event.device().config_tap_finger_count() > 0 {
@@ -547,7 +551,8 @@ pub fn run_drm_backend() {
                     } else {
                         FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse
                     };
-                    data.on_pointer_button::<LibinputInputBackend>(event, kind)
+                    let device_id = event.device().id_product() as i32;
+                    data.on_pointer_button::<LibinputInputBackend>(event, kind, device_id)
                 }
                 InputEvent::PointerAxis { event } => {
                     let kind = if event.device().config_tap_finger_count() > 0 {
@@ -555,14 +560,24 @@ pub fn run_drm_backend() {
                     } else {
                         FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse
                     };
-                    data.on_pointer_axis::<LibinputInputBackend>(event, kind)
+                    let device_id = event.device().id_product() as i32;
+                    data.on_pointer_axis::<LibinputInputBackend>(event, kind, device_id)
                 }
                 InputEvent::GestureSwipeBegin { event: _ } => {}
                 InputEvent::GestureSwipeUpdate { event: _ } => {}
-                InputEvent::GestureSwipeEnd { event: _ } => {}
-                InputEvent::GesturePinchBegin { event: _ } => {}
-                InputEvent::GesturePinchUpdate { event: _ } => {}
-                InputEvent::GesturePinchEnd { event: _ } => {}
+                InputEvent::GestureSwipeEnd { event } => {}
+                InputEvent::GesturePinchBegin { event } => {
+                    let device_id = event.device().id_product() as i32;
+                    data.on_gesture_pinch_begin::<LibinputInputBackend>(event, device_id)
+                }
+                InputEvent::GesturePinchUpdate { event } => {
+                    let device_id = event.device().id_product() as i32;
+                    data.on_gesture_pinch_update::<LibinputInputBackend>(event, device_id)
+                }
+                InputEvent::GesturePinchEnd { event } => {
+                    let device_id = event.device().id_product() as i32;
+                    data.on_gesture_pinch_end::<LibinputInputBackend>(event, device_id)
+                }
                 InputEvent::GestureHoldBegin { event: _ } => {}
                 InputEvent::GestureHoldEnd { event: _ } => {}
                 InputEvent::TouchDown { event: _ } => {}
