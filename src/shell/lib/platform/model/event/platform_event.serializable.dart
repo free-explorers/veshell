@@ -2,6 +2,9 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/platform/model/event/commit_surface/commit_surface.serializable.dart';
 import 'package:shell/platform/model/event/destroy_subsurface/destroy_subsurface.serializable.dart';
 import 'package:shell/platform/model/event/destroy_surface/destroy_surface.serializable.dart';
+import 'package:shell/platform/model/event/gesture_swipe/gesture_swipe_begin.serializable.dart';
+import 'package:shell/platform/model/event/gesture_swipe/gesture_swipe_end.serializable.dart';
+import 'package:shell/platform/model/event/gesture_swipe/gesture_swipe_update.serializable.dart';
 import 'package:shell/platform/model/event/interactive_move/interactive_move.serializable.dart';
 import 'package:shell/platform/model/event/interactive_resize/interactive_resize.serializable.dart';
 import 'package:shell/platform/model/event/meta_popup_created/meta_popup_created.serializable.dart';
@@ -129,6 +132,27 @@ sealed class PlatformEvent with _$PlatformEvent implements PlatformInteraction {
     required String method,
     required SetEnvironmentVariablesMessage message,
   }) = SetEnvironmentVariablesEvent;
+
+  /// Gesture Swipe Begin Event
+  /// This event is sent when the user performs a swipe gesture.
+  const factory PlatformEvent.gestureSwipeBegin({
+    required String method,
+    required GestureSwipeBeginMessage message,
+  }) = GestureSwipeBeginEvent;
+
+  /// Gesture Swipe Update Event
+  /// This event is sent when the user performs a swipe gesture.
+  const factory PlatformEvent.gestureSwipeUpdate({
+    required String method,
+    required GestureSwipeUpdateMessage message,
+  }) = GestureSwipeUpdateEvent;
+
+  /// Gesture Swipe End Event
+  /// This event is sent when the user performs a swipe gesture.
+  const factory PlatformEvent.gestureSwipeEnd({
+    required String method,
+    required GestureSwipeEndMessage message,
+  }) = GestureSwipeEndEvent;
 
   /// Creates a new [PlatformEvent] instance from a map.
   ///

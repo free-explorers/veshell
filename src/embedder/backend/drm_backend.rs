@@ -8,6 +8,7 @@ use std::sync::atomic::Ordering;
 
 use rustix::fs::OFlags;
 use sd_notify::NotifyState;
+use serde_json::json;
 use smithay::backend::allocator::dmabuf::{AnyError, AsDmabuf, Dmabuf, DmabufAllocator};
 use smithay::backend::allocator::gbm::GbmDevice;
 use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags};
@@ -19,7 +20,9 @@ use smithay::backend::drm::{
     NodeType,
 };
 use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
-use smithay::backend::input::{Device, Event, InputEvent, KeyboardKeyEvent};
+use smithay::backend::input::{
+    Device, Event, GestureBeginEvent, GestureEndEvent, InputEvent, KeyboardKeyEvent,
+};
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
 use smithay::backend::renderer::element::texture::TextureRenderElement;
 use smithay::backend::renderer::gles::ffi::Gles2;
@@ -41,6 +44,7 @@ use smithay::reexports::drm::control::{
     self, connector, crtc, Device as DeviceTrait, ModeFlags, ModeTypeFlags,
 };
 use smithay::reexports::drm::Device as _;
+use smithay::reexports::input::event::gesture::GestureEventCoordinates;
 use smithay::reexports::input::{self, Libinput};
 use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
@@ -59,6 +63,9 @@ use smithay_drm_extras::edid::EdidInfo;
 use crate::flutter_engine::embedder::{
     FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
     FlutterPointerDeviceKind_kFlutterPointerDeviceKindTouch,
+};
+use crate::flutter_engine::wayland_messages::{
+    GestureSwipeBeginEventMessage, GestureSwipeEndEventMessage, GestureSwipeUpdateEventMessage,
 };
 use crate::flutter_engine::FlutterEngine;
 use crate::keyboard::handle_keyboard_event;
@@ -567,26 +574,65 @@ pub fn run_drm_backend() {
                     data.on_pointer_motion_absolute::<LibinputInputBackend>(event, device_id)
                 }
                 InputEvent::PointerButton { event } => {
-                    let kind = if event.device().config_tap_finger_count() > 0 {
-                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindTouch
-                    } else {
-                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse
-                    };
                     let device_id = event.device().id_product() as i32;
-                    data.on_pointer_button::<LibinputInputBackend>(event, kind, device_id)
+                    data.on_pointer_button::<LibinputInputBackend>(event, device_id)
                 }
                 InputEvent::PointerAxis { event } => {
-                    let kind = if event.device().config_tap_finger_count() > 0 {
-                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindTouch
-                    } else {
-                        FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse
-                    };
                     let device_id = event.device().id_product() as i32;
                     data.on_pointer_axis::<LibinputInputBackend>(event, device_id)
                 }
-                InputEvent::GestureSwipeBegin { event: _ } => {}
-                InputEvent::GestureSwipeUpdate { event: _ } => {}
-                InputEvent::GestureSwipeEnd { event } => {}
+                InputEvent::GestureSwipeBegin { event } => {
+                    let fingers = event.fingers();
+                    data.flutter_engine_mut()
+                        .platform_method_channel
+                        .invoke_method(
+                            "gesture_swipe_begin",
+                            Some(Box::new(json!(GestureSwipeBeginEventMessage {
+                                time: event.time_msec(),
+                                fingers: fingers,
+                            }))),
+                            None,
+                        );
+                }
+                InputEvent::GestureSwipeUpdate { event } => {
+                    let fingers = event.fingers();
+                    let mut delta_x = event.dx_unaccelerated();
+                    let mut delta_y = event.dy_unaccelerated();
+
+                    let device = event.device();
+                    if device.config_scroll_natural_scroll_enabled() {
+                        delta_x = -delta_x;
+                        delta_y = -delta_y;
+                    }
+
+                    data.flutter_engine_mut()
+                        .platform_method_channel
+                        .invoke_method(
+                            "gesture_swipe_update",
+                            Some(Box::new(json!(GestureSwipeUpdateEventMessage {
+                                time: event.time_msec(),
+                                fingers: fingers,
+                                delta_x,
+                                delta_y
+                            }))),
+                            None,
+                        );
+                }
+                InputEvent::GestureSwipeEnd { event } => {
+                    let fingers = event.fingers();
+                    let cancelled = event.cancelled();
+                    data.flutter_engine_mut()
+                        .platform_method_channel
+                        .invoke_method(
+                            "gesture_swipe_end",
+                            Some(Box::new(json!(GestureSwipeEndEventMessage {
+                                time: event.time_msec(),
+                                fingers: fingers,
+                                cancelled: cancelled,
+                            }))),
+                            None,
+                        );
+                }
                 InputEvent::GesturePinchBegin { event } => {
                     let device_id = event.device().id_product() as i32;
                     data.on_gesture_pinch_begin::<LibinputInputBackend>(event, device_id)

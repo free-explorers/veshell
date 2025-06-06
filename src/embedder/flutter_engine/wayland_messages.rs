@@ -331,3 +331,27 @@ impl Serialize for MyPhysicalProperties {
 pub struct EnvironmentVariables<'k, 'v> {
     pub environment_variables: HashMap<&'k str, Option<&'v str>>,
 }
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GestureSwipeBeginEventMessage {
+    pub time: u32,
+    pub fingers: u32,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GestureSwipeUpdateEventMessage {
+    pub time: u32,
+    pub fingers: u32,
+    pub delta_x: f64,
+    pub delta_y: f64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GestureSwipeEndEventMessage {
+    pub time: u32,
+    pub fingers: u32,
+    pub cancelled: bool,
+}
