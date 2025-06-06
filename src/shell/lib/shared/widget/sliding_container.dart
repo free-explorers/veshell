@@ -9,12 +9,14 @@ class SlidingContainer extends HookConsumerWidget {
     required this.index,
     this.direction = Axis.horizontal,
     this.visible = 1,
+    this.onIndexChanged,
     super.key,
   });
   final Axis direction;
   final List<Widget> children;
   final int index;
   final int visible;
+  final Function(int newIndex)? onIndexChanged;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pageController = usePageController(
@@ -24,46 +26,53 @@ class SlidingContainer extends HookConsumerWidget {
     );
 
     final swipeInProgress = useState(false);
+    final cumulatedSwipeDelta = useState<double>(0);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         return HookBuilder(
           builder: (context) {
+            void scrollToIndex(int indexToScrollTo) {
+              if (!pageController.hasClients) {
+                return;
+              }
+
+              final viewportWidth = constraints.biggest.width;
+              final viewportHeight = constraints.biggest.height;
+              final pageWidth = direction == Axis.horizontal
+                  ? viewportWidth / visible
+                  : viewportWidth;
+              final pageHeight = direction == Axis.horizontal
+                  ? viewportHeight
+                  : viewportHeight / visible;
+              final firstPageInView = direction == Axis.horizontal
+                  ? pageController.offset / pageWidth
+                  : pageController.offset / pageHeight;
+              final visibleRangeStart = firstPageInView;
+              final visibleRangeEnd = firstPageInView + visible - 1;
+              double? offset;
+              // Depending on the direction calculate the minimal offset to animate
+              if (indexToScrollTo < visibleRangeStart) {
+                offset = direction == Axis.horizontal
+                    ? pageWidth * indexToScrollTo
+                    : pageHeight * indexToScrollTo;
+              } else if (indexToScrollTo > visibleRangeEnd) {
+                offset = direction == Axis.horizontal
+                    ? pageWidth * (indexToScrollTo - visible + 1)
+                    : pageHeight * (indexToScrollTo - visible + 1);
+              }
+              if (offset != null) {
+                pageController.animateTo(
+                  offset,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeInOut,
+                );
+              }
+            }
+
             useEffect(
               () {
-                if (pageController.hasClients) {
-                  final viewportWidth = constraints.biggest.width;
-                  final viewportHeight = constraints.biggest.height;
-                  final pageWidth = direction == Axis.horizontal
-                      ? viewportWidth / visible
-                      : viewportWidth;
-                  final pageHeight = direction == Axis.horizontal
-                      ? viewportHeight
-                      : viewportHeight / visible;
-                  final currentPage = direction == Axis.horizontal
-                      ? pageController.offset / pageWidth
-                      : pageController.offset / pageHeight;
-                  final visibleRangeStart = currentPage;
-                  final visibleRangeEnd = currentPage + visible - 1;
-                  double? offset;
-                  // Depending on the direction calculate the minimal offset to animate
-                  if (index < visibleRangeStart) {
-                    offset = direction == Axis.horizontal
-                        ? pageWidth * index
-                        : pageHeight * index;
-                  } else if (index > visibleRangeEnd) {
-                    offset = direction == Axis.horizontal
-                        ? pageWidth * (index - visible + 1)
-                        : pageHeight * (index - visible + 1);
-                  }
-                  if (offset != null) {
-                    pageController.animateTo(
-                      offset,
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeInOut,
-                    );
-                  }
-                }
+                scrollToIndex(index);
                 return null;
               },
               [index, children],
@@ -71,6 +80,10 @@ class SlidingContainer extends HookConsumerWidget {
             return SwipeGestureDetector(
               onSwipeBegin: (event) {},
               onSwipeUpdate: (event) {
+                if (event.message.fingers != 3) {
+                  return;
+                }
+                // Determine the direction of the swipe (horizontal or vertical
                 final eventDirection =
                     event.message.deltaX.abs() > event.message.deltaY.abs()
                         ? Axis.horizontal
@@ -85,26 +98,12 @@ class SlidingContainer extends HookConsumerWidget {
                     ? event.message.deltaX
                     : event.message.deltaY;
 
-                /* // If the page is at the start or end, don't scroll
-								
-                if (pageController.offset == 0 && delta > 0) {
-                  return;
-                }
-                if (pageController.offset ==
-                        pageController.position.maxScrollExtent &&
-                    delta < 0) {
-                  return;
-                } */
+                cumulatedSwipeDelta.value += delta;
                 pageController.jumpTo(pageController.offset - delta);
               },
               onSwipeEnd: (event) {
                 if (swipeInProgress.value) {
                   swipeInProgress.value = false;
-                  pageController.animateTo(
-                    pageController.offset.roundToDouble(),
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeInOut,
-                  );
                 }
               },
               child: PageView.builder(
@@ -115,7 +114,6 @@ class SlidingContainer extends HookConsumerWidget {
                   return children[index];
                 },
                 physics: const NeverScrollableScrollPhysics(),
-                pageSnapping: false,
                 padEnds: false,
               ),
             );
