@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/platform/widget/swipe_gesture_detector.dart';
 
 class SlidingContainer extends HookConsumerWidget {
   const SlidingContainer({
@@ -21,6 +22,8 @@ class SlidingContainer extends HookConsumerWidget {
       viewportFraction: 1.0 / visible,
       keys: [visible],
     );
+
+    final swipeInProgress = useState(false);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -65,16 +68,56 @@ class SlidingContainer extends HookConsumerWidget {
               },
               [index, children],
             );
-            return PageView.builder(
-              controller: pageController,
-              scrollDirection: direction,
-              itemCount: children.length,
-              itemBuilder: (context, index) {
-                return children[index];
+            return SwipeGestureDetector(
+              onSwipeBegin: (event) {},
+              onSwipeUpdate: (event) {
+                final eventDirection =
+                    event.message.deltaX.abs() > event.message.deltaY.abs()
+                        ? Axis.horizontal
+                        : Axis.vertical;
+
+                if (eventDirection != direction) {
+                  return;
+                }
+                swipeInProgress.value = true;
+
+                final delta = direction == Axis.horizontal
+                    ? event.message.deltaX
+                    : event.message.deltaY;
+
+                /* // If the page is at the start or end, don't scroll
+								
+                if (pageController.offset == 0 && delta > 0) {
+                  return;
+                }
+                if (pageController.offset ==
+                        pageController.position.maxScrollExtent &&
+                    delta < 0) {
+                  return;
+                } */
+                pageController.jumpTo(pageController.offset - delta);
               },
-              physics: const NeverScrollableScrollPhysics(),
-              pageSnapping: false,
-              padEnds: false,
+              onSwipeEnd: (event) {
+                if (swipeInProgress.value) {
+                  swipeInProgress.value = false;
+                  pageController.animateTo(
+                    pageController.offset.roundToDouble(),
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeInOut,
+                  );
+                }
+              },
+              child: PageView.builder(
+                controller: pageController,
+                scrollDirection: direction,
+                itemCount: children.length,
+                itemBuilder: (context, index) {
+                  return children[index];
+                },
+                physics: const NeverScrollableScrollPhysics(),
+                pageSnapping: false,
+                padEnds: false,
+              ),
             );
           },
         );
