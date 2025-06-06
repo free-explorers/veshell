@@ -11,7 +11,7 @@ abstract class GestureSwipeEndMessage
     implements PlatformMessage {
   /// Factory
   factory GestureSwipeEndMessage({
-    required DateTime time,
+    required int time,
     required int fingers,
     required bool cancelled,
   }) = _GestureSwipeEndMessage;

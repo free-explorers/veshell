@@ -11,7 +11,7 @@ abstract class GestureSwipeUpdateMessage
     implements PlatformMessage {
   /// Factory
   factory GestureSwipeUpdateMessage({
-    required DateTime time,
+    required int time,
     required int fingers,
     required double deltaX,
     required double deltaY,

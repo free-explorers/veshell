@@ -11,7 +11,7 @@ abstract class GestureSwipeBeginMessage
     implements PlatformMessage {
   /// Factory
   factory GestureSwipeBeginMessage({
-    required DateTime time,
+    required int time,
     required int fingers,
   }) = _GestureSwipeBeginMessage;
 

@@ -16,28 +16,31 @@ class SwipeGestureDetector extends HookConsumerWidget {
 
   final Widget child;
   final bool enabled;
-  final void Function(GestureSwipeBeginEvent)? onSwipeBegin;
-  final void Function(GestureSwipeUpdateEvent)? onSwipeUpdate;
-  final void Function(GestureSwipeEndEvent)? onSwipeEnd;
+  final void Function(GestureSwipeBeginEvent event)? onSwipeBegin;
+  final void Function(GestureSwipeUpdateEvent event)? onSwipeUpdate;
+  final void Function(GestureSwipeEndEvent event)? onSwipeEnd;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final stream = ref.watch(platformManagerProvider);
-    useEffect(() {
-      final subscription = stream.listen((event) {
-        if (!enabled) {
-          return;
-        }
-        if (event is GestureSwipeBeginEvent) {
-          onSwipeBegin?.call(event);
-        } else if (event is GestureSwipeUpdateEvent) {
-          onSwipeUpdate?.call(event);
-        } else if (event is GestureSwipeEndEvent) {
-          onSwipeEnd?.call(event);
-        }
-      });
-      return subscription.cancel;
-    });
+    useEffect(
+      () {
+        final subscription = stream.listen((event) {
+          if (!enabled) {
+            return;
+          }
+          if (event is GestureSwipeBeginEvent) {
+            onSwipeBegin?.call(event);
+          } else if (event is GestureSwipeUpdateEvent) {
+            onSwipeUpdate?.call(event);
+          } else if (event is GestureSwipeEndEvent) {
+            onSwipeEnd?.call(event);
+          }
+        });
+        return subscription.cancel;
+      },
+      [enabled],
+    );
     return child;
   }
 }
