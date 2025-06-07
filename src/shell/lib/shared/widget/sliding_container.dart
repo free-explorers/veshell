@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -26,7 +27,8 @@ class SlidingContainer extends HookConsumerWidget {
     );
 
     final swipeInProgress = useState(false);
-    final cumulatedSwipeDelta = useState<double>(0);
+    final lastSwipeTime = useState<int?>(null);
+    final swipeVelocityTracker = useState<VelocityTracker?>(null);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -78,7 +80,11 @@ class SlidingContainer extends HookConsumerWidget {
               [index, children],
             );
             return SwipeGestureDetector(
-              onSwipeBegin: (event) {},
+              onSwipeBegin: (event) {
+                if (event.message.fingers != 3) {
+                  return;
+                }
+              },
               onSwipeUpdate: (event) {
                 if (event.message.fingers != 3) {
                   return;
@@ -92,18 +98,51 @@ class SlidingContainer extends HookConsumerWidget {
                 if (eventDirection != direction) {
                   return;
                 }
-                swipeInProgress.value = true;
+                if (!swipeInProgress.value) {
+                  swipeInProgress.value = true;
+                  swipeVelocityTracker.value =
+                      VelocityTracker.withKind(PointerDeviceKind.trackpad);
+                }
 
                 final delta = direction == Axis.horizontal
                     ? event.message.deltaX
                     : event.message.deltaY;
 
-                cumulatedSwipeDelta.value += delta;
-                pageController.jumpTo(pageController.offset - delta);
+                final position =
+                    pageController.position as ScrollPositionWithSingleContext;
+                position.pointerScroll(delta);
+                if (lastSwipeTime.value != null) {
+                  swipeVelocityTracker.value?.addPosition(
+                    Duration(
+                      milliseconds: event.message.time - lastSwipeTime.value!,
+                    ),
+                    direction == Axis.horizontal
+                        ? Offset(delta, 0)
+                        : Offset(0, delta),
+                  );
+                }
+                lastSwipeTime.value = event.message.time;
               },
               onSwipeEnd: (event) {
                 if (swipeInProgress.value) {
                   swipeInProgress.value = false;
+                  final velocity = swipeVelocityTracker.value
+                          ?.getVelocityEstimate()
+                          ?.pixelsPerSecond
+                          .dx ??
+                      0.0;
+                  print('velocity: $velocity');
+                  swipeVelocityTracker.value = null;
+                  final simulation =
+                      const PageScrollPhysics().createBallisticSimulation(
+                    pageController.position,
+                    velocity,
+                  );
+                  if (simulation != null) {
+                    final distance = simulation.x(
+                        const Duration(seconds: 10).inMilliseconds.toDouble());
+                    print('distance: $distance');
+                  }
                 }
               },
               child: PageView.builder(
@@ -114,6 +153,7 @@ class SlidingContainer extends HookConsumerWidget {
                   return children[index];
                 },
                 physics: const NeverScrollableScrollPhysics(),
+                pageSnapping: false,
                 padEnds: false,
               ),
             );
