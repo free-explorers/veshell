@@ -126,22 +126,32 @@ class SlidingContainer extends HookConsumerWidget {
               onSwipeEnd: (event) {
                 if (swipeInProgress.value) {
                   swipeInProgress.value = false;
-                  final velocity = swipeVelocityTracker.value
-                          ?.getVelocityEstimate()
-                          ?.pixelsPerSecond
-                          .dx ??
-                      0.0;
-                  print('velocity: $velocity');
+                  final velocity = swipeVelocityTracker.value?.getVelocity();
                   swipeVelocityTracker.value = null;
-                  final simulation =
-                      const PageScrollPhysics().createBallisticSimulation(
+                  const physics = BouncingScrollPhysics(
+                    decelerationRate: ScrollDecelerationRate.fast,
+                    parent: RangeMaintainingScrollPhysics(),
+                  );
+                  final simulation = physics.createBallisticSimulation(
                     pageController.position,
-                    velocity,
+                    direction == Axis.horizontal
+                        ? velocity!.pixelsPerSecond.dx
+                        : velocity!.pixelsPerSecond.dy,
                   );
                   if (simulation != null) {
-                    final distance = simulation.x(
-                        const Duration(seconds: 10).inMilliseconds.toDouble());
-                    print('distance: $distance');
+                    final target = simulation.x(1);
+                    final viewportWidth = constraints.biggest.width;
+                    final viewportHeight = constraints.biggest.height;
+                    final pageWidth = direction == Axis.horizontal
+                        ? viewportWidth / visible
+                        : viewportWidth;
+                    final pageHeight = direction == Axis.horizontal
+                        ? viewportHeight
+                        : viewportHeight / visible;
+                    final pageSize =
+                        direction == Axis.horizontal ? pageWidth : pageHeight;
+                    final targetPage = target / pageSize;
+                    scrollToIndex(targetPage.round());
                   }
                 }
               },
