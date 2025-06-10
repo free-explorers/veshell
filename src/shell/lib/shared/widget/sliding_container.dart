@@ -11,13 +11,15 @@ class SlidingContainer extends HookConsumerWidget {
     this.direction = Axis.horizontal,
     this.visible = 1,
     this.onIndexChanged,
+    this.isSwipeEnabled = true,
     super.key,
   });
   final Axis direction;
   final List<Widget> children;
   final int index;
   final int visible;
-  final Function(int newIndex)? onIndexChanged;
+  final bool isSwipeEnabled;
+  final void Function(int newIndex)? onIndexChanged;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pageController = usePageController(
@@ -80,11 +82,7 @@ class SlidingContainer extends HookConsumerWidget {
               [index, children],
             );
             return SwipeGestureDetector(
-              onSwipeBegin: (event) {
-                if (event.message.fingers != 3) {
-                  return;
-                }
-              },
+              enabled: isSwipeEnabled,
               onSwipeUpdate: (event) {
                 if (event.message.fingers != 3) {
                   return;
@@ -151,7 +149,13 @@ class SlidingContainer extends HookConsumerWidget {
                     final pageSize =
                         direction == Axis.horizontal ? pageWidth : pageHeight;
                     final targetPage = target / pageSize;
-                    scrollToIndex(targetPage.round());
+                    if (targetPage < index) {
+                      onIndexChanged?.call(index - 1);
+                    } else if (targetPage > index) {
+                      onIndexChanged?.call(index + 1);
+                    } else {
+                      scrollToIndex(index);
+                    }
                   }
                 }
               },
