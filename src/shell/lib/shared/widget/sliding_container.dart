@@ -136,26 +136,27 @@ class SlidingContainer extends HookConsumerWidget {
                         ? velocity!.pixelsPerSecond.dx
                         : velocity!.pixelsPerSecond.dy,
                   );
+                  var target = pageController.offset;
                   if (simulation != null) {
-                    final target = simulation.x(1);
-                    final viewportWidth = constraints.biggest.width;
-                    final viewportHeight = constraints.biggest.height;
-                    final pageWidth = direction == Axis.horizontal
-                        ? viewportWidth / visible
-                        : viewportWidth;
-                    final pageHeight = direction == Axis.horizontal
-                        ? viewportHeight
-                        : viewportHeight / visible;
-                    final pageSize =
-                        direction == Axis.horizontal ? pageWidth : pageHeight;
-                    final targetPage = target / pageSize;
-                    if (targetPage < index) {
-                      onIndexChanged?.call(index - 1);
-                    } else if (targetPage > index) {
-                      onIndexChanged?.call(index + 1);
-                    } else {
-                      scrollToIndex(index);
-                    }
+                    target = simulation.x(1);
+                  }
+                  final viewportWidth = constraints.biggest.width;
+                  final viewportHeight = constraints.biggest.height;
+                  final pageWidth = direction == Axis.horizontal
+                      ? viewportWidth / visible
+                      : viewportWidth;
+                  final pageHeight = direction == Axis.horizontal
+                      ? viewportHeight
+                      : viewportHeight / visible;
+                  final pageSize =
+                      direction == Axis.horizontal ? pageWidth : pageHeight;
+                  final targetPage = target / pageSize;
+                  if (targetPage < index) {
+                    onIndexChanged?.call(index - 1);
+                  } else if (targetPage > index) {
+                    onIndexChanged?.call(index + 1);
+                  } else {
+                    scrollToIndex(index);
                   }
                 }
               },
