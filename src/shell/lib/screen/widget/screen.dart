@@ -107,9 +107,11 @@ class ScreenWidget extends HookConsumerWidget {
                         child: SlidingContainer(
                           direction: Axis.vertical,
                           index: screenState.selectedIndex,
-                          onIndexChanged: (newIndex) => ref
-                              .read(screenStateProvider(screenId).notifier)
-                              .selectWorkspace(newIndex),
+                          onIndexChanged: (newIndex) {
+                            ref
+                                .read(screenStateProvider(screenId).notifier)
+                                .selectWorkspace(newIndex);
+                          },
                           isSwipeEnabled:
                               screenId == ref.watch(focusedScreenProvider),
                           children: screenState.workspaceList

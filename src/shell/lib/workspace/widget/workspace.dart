@@ -137,7 +137,8 @@ class WorkspaceWidget extends HookConsumerWidget {
                         .setSelectedIndex(nextIndex);
                   },
                   isSwipeEnabled: CurrentScreenId.of(context) ==
-                      ref.watch(focusedScreenProvider),
+                          ref.watch(focusedScreenProvider) &&
+                      isSelected,
                   children: tileableList,
                 ),
               ),
