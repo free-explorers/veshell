@@ -31,7 +31,7 @@ class SlidingContainer extends HookConsumerWidget {
     final swipeInProgress = useState(false);
     final cumulatedSwipeDelta = useState<double>(0);
     final swipeVelocityTracker = useState<VelocityTracker?>(null);
-
+    final lastVelocity = useState<double?>(null);
     return HookBuilder(
       builder: (context) {
         void scrollToIndex(int indexToScrollTo) {
@@ -68,6 +68,9 @@ class SlidingContainer extends HookConsumerWidget {
         );
         return SwipeGestureDetector(
           enabled: isSwipeEnabled,
+          onSwipeBegin: (event) {
+            lastVelocity.value = null;
+          },
           onSwipeUpdate: (event) {
             if (event.message.fingers != 3) {
               return;
@@ -119,6 +122,7 @@ class SlidingContainer extends HookConsumerWidget {
               final velocity = direction == Axis.horizontal
                   ? velocityEstimate!.pixelsPerSecond.dx
                   : velocityEstimate!.pixelsPerSecond.dy;
+              lastVelocity.value = velocity;
               if (targetPage < index || (velocity < -1000 && index > 0)) {
                 onIndexChanged?.call(index - 1);
               } else if (targetPage > index ||
@@ -129,16 +133,28 @@ class SlidingContainer extends HookConsumerWidget {
               }
             }
           },
-          child: PageView.builder(
-            controller: pageController,
-            scrollDirection: direction,
-            itemCount: children.length,
-            itemBuilder: (context, index) {
-              return children[index];
-            },
-            physics: const NeverScrollableScrollPhysics(),
-            pageSnapping: false,
-            padEnds: false,
+          child: Stack(
+            children: [
+              PageView.builder(
+                controller: pageController,
+                scrollDirection: direction,
+                itemCount: children.length,
+                itemBuilder: (context, index) {
+                  return children[index];
+                },
+                physics: const NeverScrollableScrollPhysics(),
+                pageSnapping: false,
+                padEnds: false,
+              ),
+              if (lastVelocity.value != null)
+                Positioned(
+                  bottom: 16,
+                  right: 16,
+                  child: Text(
+                    'Swipe velocity: ${lastVelocity.value}',
+                  ),
+                ),
+            ],
           ),
         );
       },
