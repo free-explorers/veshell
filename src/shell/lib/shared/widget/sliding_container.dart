@@ -4,6 +4,8 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/platform/widget/swipe_gesture_detector.dart';
 
+const swipeVelocityThreshold = 800;
+
 class SlidingContainer extends HookConsumerWidget {
   const SlidingContainer({
     required this.children,
@@ -31,7 +33,6 @@ class SlidingContainer extends HookConsumerWidget {
     final swipeInProgress = useState(false);
     final cumulatedSwipeDelta = useState<double>(0);
     final swipeVelocityTracker = useState<VelocityTracker?>(null);
-    final lastVelocity = useState<double?>(null);
     return HookBuilder(
       builder: (context) {
         void scrollToIndex(int indexToScrollTo) {
@@ -68,9 +69,6 @@ class SlidingContainer extends HookConsumerWidget {
         );
         return SwipeGestureDetector(
           enabled: isSwipeEnabled,
-          onSwipeBegin: (event) {
-            lastVelocity.value = null;
-          },
           onSwipeUpdate: (event) {
             if (event.message.fingers != 3) {
               return;
@@ -110,8 +108,17 @@ class SlidingContainer extends HookConsumerWidget {
           onSwipeEnd: (event) {
             if (swipeInProgress.value) {
               swipeInProgress.value = false;
-              final velocityEstimate =
-                  swipeVelocityTracker.value?.getVelocityEstimate();
+              final velocity = direction == Axis.horizontal
+                  ? swipeVelocityTracker.value
+                          ?.getVelocity()
+                          .pixelsPerSecond
+                          .dx ??
+                      0
+                  : swipeVelocityTracker.value
+                          ?.getVelocity()
+                          .pixelsPerSecond
+                          .dy ??
+                      0;
               swipeVelocityTracker.value = null;
               final target = pageController.offset;
               final viewportDimension =
@@ -119,42 +126,28 @@ class SlidingContainer extends HookConsumerWidget {
               final pageDimension = viewportDimension / visible;
               final viewportCenter = target + (viewportDimension / 2);
               final targetPage = (viewportCenter / pageDimension).floor();
-              final velocity = direction == Axis.horizontal
-                  ? velocityEstimate!.pixelsPerSecond.dx
-                  : velocityEstimate!.pixelsPerSecond.dy;
-              lastVelocity.value = velocity;
-              if (targetPage < index || (velocity < -1000 && index > 0)) {
+              if (targetPage < index ||
+                  (velocity < -swipeVelocityThreshold && index > 0)) {
                 onIndexChanged?.call(index - 1);
               } else if (targetPage > index ||
-                  (velocity > 1000 && index < children.length - 1)) {
+                  (velocity > swipeVelocityThreshold &&
+                      index < children.length - 1)) {
                 onIndexChanged?.call(index + 1);
               } else {
                 scrollToIndex(index);
               }
             }
           },
-          child: Stack(
-            children: [
-              PageView.builder(
-                controller: pageController,
-                scrollDirection: direction,
-                itemCount: children.length,
-                itemBuilder: (context, index) {
-                  return children[index];
-                },
-                physics: const NeverScrollableScrollPhysics(),
-                pageSnapping: false,
-                padEnds: false,
-              ),
-              if (lastVelocity.value != null)
-                Positioned(
-                  bottom: 16,
-                  right: 16,
-                  child: Text(
-                    'Swipe velocity: ${lastVelocity.value}',
-                  ),
-                ),
-            ],
+          child: PageView.builder(
+            controller: pageController,
+            scrollDirection: direction,
+            itemCount: children.length,
+            itemBuilder: (context, index) {
+              return children[index];
+            },
+            physics: const NeverScrollableScrollPhysics(),
+            pageSnapping: false,
+            padEnds: false,
           ),
         );
       },
