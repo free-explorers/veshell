@@ -158,5 +158,21 @@ fn install(_arch: &str, profile: &str) -> Result<(), Box<dyn std::error::Error>>
         .output()
         .expect("Failed to copy veshell-shutdown.target");
 
+    if !Path::new("/usr/local/share/xdg-desktop-portal/").exists() {
+        println!("Creating /usr/local/share/xdg-desktop-portal/ directory");
+        Command::new("sudo")
+            .arg("mkdir")
+            .arg("-p")
+            .arg("/usr/local/share/xdg-desktop-portal/")
+            .output()
+            .expect("Failed to create xdg-desktop-portal directory");
+    }
+    println!("Copying veshell-portals.conf to /usr/local/share/xdg-desktop-portal/");
+    Command::new("sudo")
+        .arg("cp")
+        .arg(format!("{}/veshell-portals.conf", assets_directory))
+        .arg("/usr/local/share/xdg-desktop-portal/")
+        .output()
+        .expect("Failed to copy veshell-portals.conf");
     Ok(())
 }

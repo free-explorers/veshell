@@ -4,6 +4,7 @@ use std::io::Write;
 use std::os::fd::FromRawFd;
 
 use std::path::Path;
+use std::process::Command;
 use std::sync::atomic::Ordering;
 
 use rustix::fs::OFlags;
@@ -739,6 +740,8 @@ pub fn run_drm_backend() {
         .unwrap();
 
     state::State::<DrmBackend>::start_xwayland(&mut state);
+
+    import_environment();
 
     // Notify systemd we're ready.
     if let Err(err) = sd_notify::notify(true, &[NotifyState::Ready]) {
@@ -1578,4 +1581,44 @@ fn notify_fd() -> Result<(), Box<dyn std::error::Error>> {
     let mut notif = unsafe { File::from_raw_fd(fd) };
     notif.write_all(b"READY=1\n")?;
     Ok(())
+}
+
+fn import_environment() {
+    let variables = [
+        "WAYLAND_DISPLAY",
+        "DISPLAY",
+        "XDG_CURRENT_DESKTOP",
+        "XDG_SESSION_TYPE",
+    ]
+    .join(" ");
+
+    let init_system_import = format!("systemctl --user import-environment {variables};",);
+
+    let rv = Command::new("/bin/sh")
+        .args([
+            "-c",
+            &format!(
+                "{init_system_import}\
+                 hash dbus-update-activation-environment 2>/dev/null && \
+                 dbus-update-activation-environment {variables}"
+            ),
+        ])
+        .spawn();
+    // Wait for the import process to complete, otherwise services will start too fast without
+    // environment variables available.
+    match rv {
+        Ok(mut child) => match child.wait() {
+            Ok(status) => {
+                if !status.success() {
+                    warn!("import environment shell exited with {status}");
+                }
+            }
+            Err(err) => {
+                warn!("error waiting for import environment shell: {err:?}");
+            }
+        },
+        Err(err) => {
+            warn!("error spawning shell to import environment: {err:?}");
+        }
+    }
 }

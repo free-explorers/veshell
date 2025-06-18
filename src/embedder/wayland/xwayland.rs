@@ -80,7 +80,7 @@ pub mod xwayland {
 
                         data.x11_wm = Some(wm);
                         data.xwayland_display = Some(display_number);
-
+                        std::env::set_var("DISPLAY", format!(":{}", display_number));
                         if let Some(flutter_engine) = data.flutter_engine.as_mut() {
                             flutter_engine.set_environment_variable(
                                 "DISPLAY",

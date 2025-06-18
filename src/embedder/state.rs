@@ -240,6 +240,9 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .expect("Failed to init wayland socket source");
 
         info!(name = socket_name, "Listening on wayland socket");
+        // Set WAYLAND_DISPLAY for children.
+
+        std::env::set_var("WAYLAND_DISPLAY", socket_name.clone());
         // Set the current desktop for xdg-desktop-portal.
         std::env::set_var("XDG_CURRENT_DESKTOP", "veshell");
         // Ensure the session type is set to Wayland for xdg-autostart and Qt apps.
