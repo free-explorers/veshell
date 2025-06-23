@@ -166,12 +166,24 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
 
         let executable_path = std::fs::canonicalize("/proc/self/exe")?;
 
-        let mut bundle_root = executable_path.parent().unwrap().display().to_string();
-        // check if the bundle_root/data exists
-        if !Path::new(&bundle_root).join("data").exists() {
-            debug!("bundle_root/data does not exist, falling back to src/shell/build/linux/{arch}/{flutter_engine_build}/bundle");
-            // fallback to source
-            bundle_root = format!("src/shell/build/linux/{arch}/{flutter_engine_build}/bundle")
+        // if the executable is in /usr/local/bin use /usr/local/share/veshell
+        // Default to installed path
+        let mut bundle_root = format!("/usr/share/veshell");
+        let mut lib_path = format!("/usr/lib/veshell");
+
+        if executable_path.starts_with("/usr/local/bin") {
+            bundle_root = format!("/usr/local/share/veshell");
+            lib_path = format!("/usr/local/lib/veshell");
+        }
+
+        let src_bundle_root = format!("src/shell/build/linux/{arch}/{flutter_engine_build}/bundle");
+
+        // check if the src_bundle_root exists
+        if Path::new(&src_bundle_root).exists() {
+            debug!("override bundle_root to src/shell/build/linux/{arch}/{flutter_engine_build}/bundle");
+            // override bundle_root to source
+            bundle_root = src_bundle_root.clone();
+            lib_path = format!("{src_bundle_root}/lib");
         }
 
         let host = "127.0.0.1";
@@ -198,7 +210,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             disable_service_auth_codes.as_ptr(),
         ];
 
-        let elf_path = CString::new(format!("{bundle_root}/lib/libapp.so"))?;
+        let elf_path = CString::new(format!("{lib_path}/libapp.so"))?;
         let mut aot_data: FlutterEngineAOTData = null_mut();
 
         if flutter_engine_build != "debug" {

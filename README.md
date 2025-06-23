@@ -23,12 +23,14 @@ By becoming a Free Explorer you can get involve into the project and support it.
 cargo run
 ```
 
-# Installing Veshell
+# Installing Veshell locally
 ```shell
-cargo build --profile release
+make install
 ```
+
+# Uninstalling Veshell
 ```shell
-cargo install_veshell
+make uninstall
 ```
 
 # The innovative workflow

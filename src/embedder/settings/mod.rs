@@ -90,15 +90,22 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
         on_settings_changed: SettingsCallback<BackendData>,
         on_monitor_settings_changed: MonitorSettingsCallback<BackendData>,
     ) -> Self {
-        if std::env::var("VESHELL_DEFAULT_CONFIG_DIR").is_err() {
-            if let Ok(exe_path) = std::env::current_exe() {
-                if let Some(exe_dir) = exe_path.parent() {
-                    let config_dir = exe_dir.join("settings/default");
-                    std::env::set_var("VESHELL_DEFAULT_CONFIG_DIR", config_dir);
-                }
+        let mut default_settings_folder = format!("usr/share/veshell/settings/default");
+
+        if let Ok(executable_path) = std::env::current_exe() {
+            if executable_path.starts_with("/usr/local/bin") {
+                default_settings_folder = format!("/usr/local/share/veshell/settings/default");
             }
         }
-        let default_settings_folder = std::env::var("VESHELL_DEFAULT_CONFIG_DIR").unwrap();
+
+        if std::env::var("VESHELL_DEFAULT_CONFIG_DIR").is_err() {
+            std::env::set_var(
+                "VESHELL_DEFAULT_CONFIG_DIR",
+                default_settings_folder.clone(),
+            );
+        } else {
+            default_settings_folder = std::env::var("VESHELL_DEFAULT_CONFIG_DIR").unwrap();
+        }
 
         let config_folder_path = std::env::var("VESHELL_CONFIG_DIR")
             .or_else(|_| {
@@ -164,6 +171,7 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
 
     pub fn get_settings(&self) -> VeshellSettings {
         let default_settings_path = Path::new(&self.default_settings_folder).join("settings.json");
+        info!("Loading settings from {}", default_settings_path.display());
         let default_settings_file = File::open(default_settings_path).expect("Unable to open file");
         let mut settings_json: Value =
             serde_json::from_reader(default_settings_file).expect("Unable to parse JSON");

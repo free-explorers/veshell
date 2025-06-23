@@ -16,10 +16,6 @@ flutter_version = "3.29.0"
 name = "veshell"
 path = "src/embedder/main.rs"
 
-[[bin]]
-name = "helper"
-path = "extra/scripts/helper.rs"
-
 [profile.profile]
 inherits = "release"
 

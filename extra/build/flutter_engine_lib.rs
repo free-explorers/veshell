@@ -200,11 +200,12 @@ fn link_libflutter_engine(flutter_engine_build: FlutterEngineBuild) {
     println!("cargo:rustc-link-search={libflutter_engine_dir}");
     println!("cargo:rustc-link-lib={FLUTTER_ENGINE_LINK_NAME}");
 
-    // link when is bundled
-    println!("cargo:rustc-link-arg=-Wl,-rpath={}", "$ORIGIN/lib");
-
-    // link when is running from source
-    println!("cargo:rustc-link-arg=-Wl,-rpath={}", &libflutter_engine_dir);
+    if let Ok(lib_dir) = std::env::var("VESHELL_LIB_DIR") {
+        println!("cargo:rustc-link-arg=-Wl,-rpath={}", lib_dir);
+    } else {
+        // link when is running from source
+        println!("cargo:rustc-link-arg=-Wl,-rpath={}", &libflutter_engine_dir);
+    }
 }
 
 fn link_libgl() {

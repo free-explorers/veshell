@@ -1,6 +1,5 @@
 [alias]
 bundle = "run --workspace --bin bundle"
-install_veshell = "run --bin helper --profile release -- --install"
 
 [env]
 VESHELL_DEFAULT_CONFIG_DIR = "extra/settings/default"
