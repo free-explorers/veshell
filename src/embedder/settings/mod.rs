@@ -90,7 +90,7 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
         on_settings_changed: SettingsCallback<BackendData>,
         on_monitor_settings_changed: MonitorSettingsCallback<BackendData>,
     ) -> Self {
-        let mut default_settings_folder = format!("usr/share/veshell/settings/default");
+        let mut default_settings_folder = format!("/usr/share/veshell/settings/default");
 
         if let Ok(executable_path) = std::env::current_exe() {
             if executable_path.starts_with("/usr/local/bin") {
