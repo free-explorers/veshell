@@ -1,5 +1,5 @@
 [Unit]
-Description=An innovative Not-Desktop environment 
+Description=An innovative Not-Desktop environment
 BindsTo=graphical-session.target
 Before=graphical-session.target
 Wants=graphical-session-pre.target
@@ -11,4 +11,4 @@ Before=xdg-desktop-autostart.target
 [Service]
 Slice=session.slice
 Type=notify
-ExecStart=/usr/local/bin/veshell --session
+ExecStart=@bindir@/veshell --session
