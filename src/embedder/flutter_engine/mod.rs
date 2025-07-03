@@ -41,16 +41,26 @@ use smithay::{
 
 use crate::backend::Backend;
 use crate::flutter_engine::callbacks::{
+    add_view_callback, collect_backing_store_callback, create_backing_store_callback,
     gl_external_texture_frame_callback, platform_message_callback, populate_existing_damage,
-    post_task_callback, runs_task_on_current_thread_callback, vsync_callback,
+    post_task_callback, present_view_callback, runs_task_on_current_thread_callback,
+    vsync_callback, CompositorUserData,
 };
 use crate::flutter_engine::embedder::{
-    FlutterCustomTaskRunners, FlutterEngineAOTData, FlutterEngineAOTDataSource,
+    FlutterAddViewInfo, FlutterBackingStore, FlutterBackingStoreConfig,
+    FlutterBackingStoreType_kFlutterBackingStoreTypeOpenGL, FlutterBackingStore__bindgen_ty_1,
+    FlutterCompositor, FlutterCustomTaskRunners, FlutterEngineAOTData, FlutterEngineAOTDataSource,
     FlutterEngineAOTDataSourceType_kFlutterEngineAOTDataSourceTypeElfPath,
-    FlutterEngineAOTDataSource__bindgen_ty_1, FlutterEngineCreateAOTData, FlutterEngineInitialize,
-    FlutterEngineMarkExternalTextureFrameAvailable, FlutterEngineRegisterExternalTexture,
+    FlutterEngineAOTDataSource__bindgen_ty_1, FlutterEngineAddView, FlutterEngineCreateAOTData,
+    FlutterEngineDisplay, FlutterEngineDisplaysUpdateType_kFlutterEngineDisplaysUpdateTypeCount,
+    FlutterEngineDisplaysUpdateType_kFlutterEngineDisplaysUpdateTypeStartup,
+    FlutterEngineInitialize, FlutterEngineMarkExternalTextureFrameAvailable,
+    FlutterEngineNotifyDisplayUpdate, FlutterEngineRegisterExternalTexture,
     FlutterEngineRunInitialized, FlutterEngineRunTask, FlutterEngineSendKeyEvent,
-    FlutterEngineSendPointerEvent, FlutterPointerEvent, FlutterTaskRunnerDescription,
+    FlutterEngineSendPointerEvent, FlutterOpenGLBackingStore,
+    FlutterOpenGLBackingStore__bindgen_ty_1, FlutterOpenGLFramebuffer,
+    FlutterOpenGLTargetType_kFlutterOpenGLTargetTypeFramebuffer, FlutterPointerEvent,
+    FlutterRendererType_kOpenGL, FlutterTaskRunnerDescription,
 };
 use crate::flutter_engine::platform_channel_callbacks::platform_channel_method_handler;
 use crate::flutter_engine::platform_channels::basic_message_channel::BasicMessageChannel;
@@ -134,6 +144,53 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
 
         let (tx_flutter_handled_key_event, rx_flutter_handled_key_event) =
             channel::channel::<(VeshellKeyEvent, bool)>();
+
+        let (tx_backing_store, rx_backing_store) = channel::channel::<Option<Dmabuf>>();
+        let (tx_request_backing_store, rx_request_backing_store) =
+            channel::channel::<FlutterBackingStoreConfig>();
+
+        server_state
+            .loop_handle
+            .insert_source(rx_request_backing_store, move |config, _, data| {
+                if let Msg(config) = config {
+                    let dmabuf = data.backend_data.get_buffer_for_view(config.view_id);
+                    let engine_data = &mut data.flutter_engine_mut().data;
+                    engine_data.channels.tx_backing_store.send(dmabuf);
+                    /*
+
+                    let fbo = engine_data
+                        .framebuffer_importer
+                        .import_framebuffer(&engine_data.main_egl_context, dmabuf)
+                        .unwrap_or(0);
+
+                    engine_data
+                        .channels
+                        .tx_backing_store
+                        .send(FlutterBackingStore {
+                            struct_size: std::mem::size_of::<FlutterBackingStore>(),
+                            user_data: null_mut(),
+                            type_: FlutterBackingStoreType_kFlutterBackingStoreTypeOpenGL,
+                            did_update: true,
+                            __bindgen_anon_1: FlutterBackingStore__bindgen_ty_1 {
+                                open_gl: FlutterOpenGLBackingStore {
+                                    type_:
+                                        FlutterOpenGLTargetType_kFlutterOpenGLTargetTypeFramebuffer,
+                                    __bindgen_anon_1: FlutterOpenGLBackingStore__bindgen_ty_1 {
+                                        framebuffer: FlutterOpenGLFramebuffer {
+                                            // RGBA8
+                                            target: 0x8058,
+                                            name: fbo,
+                                            user_data: null_mut(),
+                                            destruction_callback: None,
+                                        },
+                                    },
+                                },
+                            },
+                        })
+                        .unwrap(); */
+                }
+            });
+
         let flutter_engine_channels = FlutterEngineChannels {
             tx_present,
             tx_request_fbo,
@@ -143,6 +200,9 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             tx_request_external_texture_name,
             rx_external_texture_name,
             tx_flutter_handled_key_event,
+            tx_backing_store,
+            rx_backing_store,
+            tx_request_backing_store,
         };
 
         let embedder_channels = EmbedderChannels {
@@ -254,6 +314,13 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     thread_priority_setter: None,
                 };
 
+                /*                 let mut compositor_user_data = Box::new(CompositorUserData {
+                    rx_backing_store,
+                    tx_request_backing_store,
+                });
+
+                let compositor_user_data_ptr = Box::into_raw(compositor_user_data); */
+
                 let project_args = FlutterProjectArgs {
                     struct_size: size_of::<FlutterProjectArgs>(),
                     assets_path: assets_path.as_ptr(),
@@ -280,7 +347,19 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     custom_dart_entrypoint: null(),
                     custom_task_runners: &task_runners,
                     shutdown_dart_vm_when_done: true,
-                    compositor: null(),
+                    compositor: &FlutterCompositor {
+                        struct_size: size_of::<FlutterCompositor>(),
+                        user_data: this.deref_mut() as *const _ as *mut _,
+                        create_backing_store_callback: Some(
+                            create_backing_store_callback::<BackendData>,
+                        ),
+                        collect_backing_store_callback: Some(
+                            collect_backing_store_callback::<BackendData>,
+                        ),
+                        present_layers_callback: None,
+                        avoid_backing_store_cache: true,
+                        present_view_callback: Some(present_view_callback::<BackendData>),
+                    },
                     dart_old_gen_heap_size: 0,
                     aot_data,
                     compute_platform_resolved_locale_callback: None,
@@ -295,7 +374,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                 };
 
                 let renderer_config = FlutterRendererConfig {
-                    type_: 0,
+                    type_: FlutterRendererType_kOpenGL,
                     __bindgen_anon_1: FlutterRendererConfig__bindgen_ty_1 {
                         open_gl: FlutterOpenGLRendererConfig {
                             struct_size: size_of::<FlutterOpenGLRendererConfig>(),
@@ -708,6 +787,53 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             None,
         );
     }
+
+    pub fn add_view(&mut self) {
+        let result = unsafe {
+            FlutterEngineAddView(
+                self.handle,
+                &FlutterAddViewInfo {
+                    struct_size: size_of::<FlutterAddViewInfo>(),
+                    view_id: 1,
+                    view_metrics: &FlutterWindowMetricsEvent {
+                        struct_size: size_of::<FlutterWindowMetricsEvent>(),
+                        width: 2000,
+                        height: 2000,
+                        pixel_ratio: 1.,
+                        left: 0,
+                        top: 0,
+                        physical_view_inset_top: 0.,
+                        physical_view_inset_right: 0.,
+                        physical_view_inset_bottom: 0.,
+                        physical_view_inset_left: 0.,
+                        display_id: 0,
+                        view_id: 1,
+                    },
+                    user_data: core::ptr::null_mut(),
+                    add_view_callback: Some(add_view_callback::<BackendData>),
+                },
+            )
+        };
+    }
+
+    pub fn update_display(&mut self, display_id: u64) {
+        let result = unsafe {
+            FlutterEngineNotifyDisplayUpdate(
+                self.handle,
+                FlutterEngineDisplaysUpdateType_kFlutterEngineDisplaysUpdateTypeStartup,
+                &FlutterEngineDisplay {
+                    struct_size: size_of::<FlutterEngineDisplay>(),
+                    display_id: display_id,
+                    single_display: true,
+                    refresh_rate: 60.,
+                    width: 200,
+                    height: 200,
+                    device_pixel_ratio: 1.,
+                },
+                1,
+            )
+        };
+    }
 }
 
 impl<BackendData: Backend + 'static> Drop for FlutterEngine<BackendData> {
@@ -781,6 +907,9 @@ pub struct FlutterEngineChannels {
     tx_request_external_texture_name: channel::Sender<i64>,
     rx_external_texture_name: channel::Channel<(u32, u32)>,
     tx_flutter_handled_key_event: channel::Sender<(VeshellKeyEvent, bool)>,
+    tx_backing_store: channel::Sender<Option<Dmabuf>>,
+    tx_request_backing_store: channel::Sender<FlutterBackingStoreConfig>,
+    rx_backing_store: channel::Channel<Option<Dmabuf>>,
 }
 
 pub struct EmbedderChannels {

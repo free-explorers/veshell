@@ -3,12 +3,16 @@ use std::ptr::null_mut;
 
 use smithay::backend::renderer::gles::ffi;
 use smithay::reexports::calloop::channel;
-use tracing::error;
+use tracing::{debug, error};
 
 use crate::backend::Backend;
 use crate::flutter_engine::embedder::{
-    FlutterDamage, FlutterOpenGLTexture, FlutterPlatformMessage, FlutterPresentInfo, FlutterRect,
-    FlutterTask, FlutterTransformation,
+    FlutterAddViewResult, FlutterBackingStore, FlutterBackingStoreConfig,
+    FlutterBackingStoreType_kFlutterBackingStoreTypeOpenGL, FlutterBackingStore__bindgen_ty_1,
+    FlutterDamage, FlutterOpenGLBackingStore, FlutterOpenGLBackingStore__bindgen_ty_1,
+    FlutterOpenGLFramebuffer, FlutterOpenGLTargetType_kFlutterOpenGLTargetTypeFramebuffer,
+    FlutterOpenGLTexture, FlutterPlatformMessage, FlutterPresentInfo, FlutterPresentViewInfo,
+    FlutterRect, FlutterTask, FlutterTransformation,
 };
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::flutter_engine::{Baton, FlutterEngine};
@@ -163,6 +167,7 @@ pub unsafe extern "C" fn vsync_callback<BackendData>(
 ) where
     BackendData: Backend + 'static,
 {
+    debug!("vsync_callback");
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     let _ = flutter_engine.data.channels.tx_baton.send(Baton(baton));
 }
@@ -173,6 +178,7 @@ pub unsafe extern "C" fn runs_task_on_current_thread_callback<BackendData>(
 where
     BackendData: Backend + 'static,
 {
+    debug!("runs_task_on_current_thread_callback");
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     flutter_engine.current_thread_id == std::thread::current().id()
 }
@@ -184,6 +190,7 @@ pub unsafe extern "C" fn post_task_callback<BackendData>(
 ) where
     BackendData: Backend + 'static,
 {
+    debug!("post_task_callback");
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     let timeout = flutter_engine.task_runner.enqueue_task(task, target_time);
     flutter_engine
@@ -217,8 +224,9 @@ pub unsafe extern "C" fn gl_external_texture_frame_callback<BackendData>(
 where
     BackendData: Backend + 'static,
 {
+    debug!("gl_external_texture_frame_callback");
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
-    let channels = &mut flutter_engine.data.channels;
+    let channels: &mut super::FlutterEngineChannels = &mut flutter_engine.data.channels;
 
     let (texture_name, _) = channels
         .tx_request_external_texture_name
@@ -262,4 +270,98 @@ where
     data.tx_flutter_handled_key_event
         .send((data.key_event, handled))
         .unwrap();
+}
+
+// add view callback
+pub unsafe extern "C" fn add_view_callback<BackendData>(result: *const FlutterAddViewResult)
+where
+    BackendData: Backend + 'static,
+{
+    debug!("add_view_callback: {:?}", result);
+}
+
+pub struct CompositorUserData {
+    pub tx_request_backing_store: channel::Sender<FlutterBackingStoreConfig>,
+    pub rx_backing_store: channel::Channel<FlutterBackingStore>,
+}
+
+pub unsafe extern "C" fn create_backing_store_callback<BackendData>(
+    config: *const FlutterBackingStoreConfig,
+    backing_store_out: *mut FlutterBackingStore,
+    user_data: *mut c_void,
+) -> bool
+where
+    BackendData: Backend + 'static,
+{
+    debug!("create_backing_store_callback: {:?}", (*config).view_id);
+    let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
+
+    let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
+    if flutter_engine
+        .data
+        .channels
+        .tx_request_backing_store
+        .send(*config)
+        .is_err()
+    {
+        return false;
+    }
+
+    if let Ok(Some(dmabuf)) = flutter_engine.data.channels.rx_backing_store.recv() {
+        let name = flutter_engine
+            .data
+            .framebuffer_importer
+            .import_framebuffer(&flutter_engine.data.main_egl_context, dmabuf)
+            .unwrap_or(0);
+        *backing_store_out = FlutterBackingStore {
+            struct_size: std::mem::size_of::<FlutterBackingStore>(),
+            user_data: null_mut(),
+            type_: FlutterBackingStoreType_kFlutterBackingStoreTypeOpenGL,
+            did_update: true,
+            __bindgen_anon_1: FlutterBackingStore__bindgen_ty_1 {
+                open_gl: FlutterOpenGLBackingStore {
+                    type_: FlutterOpenGLTargetType_kFlutterOpenGLTargetTypeFramebuffer,
+                    __bindgen_anon_1: FlutterOpenGLBackingStore__bindgen_ty_1 {
+                        framebuffer: FlutterOpenGLFramebuffer {
+                            // RGBA8
+                            target: 0x8058,
+                            name: name,
+                            user_data: null_mut(),
+                            destruction_callback: None,
+                        },
+                    },
+                },
+            },
+        }
+    } else {
+        return false;
+    }
+    true
+}
+
+pub unsafe extern "C" fn collect_backing_store_callback<BackendData>(
+    renderer: *const FlutterBackingStore,
+    user_data: *mut c_void,
+) -> bool
+where
+    BackendData: Backend + 'static,
+{
+    debug!("collect_backing_store_callback: {:?}", renderer);
+    let user_data = user_data as *mut FlutterEngine<BackendData>;
+    let flutter_engine = &mut *user_data;
+
+    true
+}
+
+pub unsafe extern "C" fn present_view_callback<BackendData>(
+    info: *const FlutterPresentViewInfo,
+) -> bool
+where
+    BackendData: Backend + 'static,
+{
+    debug!("present_view_callback: {:?}", (*info).view_id);
+    let user_data = (*info).user_data;
+    let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
+    flutter_engine.data.gl.Finish();
+    flutter_engine.data.channels.tx_present.send(()).is_ok()
 }

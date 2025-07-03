@@ -54,6 +54,10 @@ impl Backend for Winit {
     ) -> Option<T> {
         Some(f(self.backend.renderer()))
     }
+
+    fn get_buffer_for_view(&mut self, view_id: i64) -> Option<Dmabuf> {
+        None
+    }
 }
 
 impl DmabufHandler for State<Winit> {

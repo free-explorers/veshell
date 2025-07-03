@@ -15,7 +15,7 @@ use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::renderer::{Bind, ImportDma, ImportEgl};
 use smithay::backend::x11::X11Input;
 use smithay::delegate_dmabuf;
-use smithay::output::{Output, PhysicalProperties, Subpixel};
+use smithay::output::{Output, PhysicalProperties, Scale, Subpixel};
 use smithay::reexports::ash::ext;
 use smithay::reexports::calloop::channel::Event as CalloopEvent;
 use smithay::reexports::calloop::channel::Event::Msg;
@@ -128,7 +128,12 @@ pub fn run_x11_client() {
         },
     );
     let _global = output.create_global::<State<X11Data>>(&display_handle);
-    output.change_current_state(Some(mode), None, None, Some((0, 0).into()));
+    output.change_current_state(
+        Some(mode),
+        None,
+        Some(Scale::Fractional(1.0)),
+        Some((0, 0).into()),
+    );
     output.set_preferred(mode);
     let damage_tracker = OutputDamageTracker::from_output(&output);
 
@@ -283,6 +288,8 @@ pub fn run_x11_client() {
         .flutter_engine_mut()
         .send_window_metrics((size.w as u32, size.h as u32).into())
         .unwrap();
+
+    state.flutter_engine_mut().add_view();
 
     // Mandatory formats by the Wayland spec.
     // TODO: Add more formats based on the GLES version.
@@ -623,5 +630,22 @@ impl Backend for X11Data {
         f: impl FnOnce(&mut GlesRenderer) -> T,
     ) -> Option<T> {
         Some(f(&mut self.renderer))
+    }
+
+    fn get_buffer_for_view(&mut self, _view_id: i64) -> Option<Dmabuf> {
+        let slot = match self.swapchain.acquire() {
+            Ok(Some(slot)) => slot,
+            Ok(None) => {
+                error!("Failed to acquire swapchain slot: no available slots");
+                return None;
+            }
+            Err(err) => {
+                error!("Error while acquiring swapchain slot: {}", err);
+                return None;
+            }
+        };
+        let dmabuf = slot.export().unwrap();
+        self.current_slot = Some(slot);
+        Some(dmabuf)
     }
 }

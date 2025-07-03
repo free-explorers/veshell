@@ -36,7 +36,7 @@ use smithay::backend::{egl, SwapBuffersError};
 use smithay::delegate_dmabuf;
 use smithay::desktop::utils::OutputPresentationFeedback;
 use smithay::input::pointer::CursorImageStatus;
-use smithay::output::Mode;
+use smithay::output::{Mode, Scale};
 use smithay::output::{Output, PhysicalProperties};
 use smithay::reexports::calloop::channel::Event as CalloopEvent;
 use smithay::reexports::calloop::RegistrationToken;
@@ -143,6 +143,21 @@ impl Backend for DrmBackend {
         /* let mut renderer = self.g.single_renderer(&self.primary_gpu).ok()?;
         Some(f(renderer.as_gles_renderer_mut())) */
         Some(f(&mut self.get_gpu_data_mut().renderer))
+    }
+
+    fn get_buffer_for_view(&mut self, view_id: i64) -> Option<Dmabuf> {
+        let gpu_data = self.get_gpu_data_mut();
+        let slot = gpu_data
+            .swapchain
+            .as_mut()
+            .unwrap()
+            .acquire()
+            .ok()
+            .flatten()
+            .unwrap();
+        let dmabuf = slot.export().unwrap();
+        gpu_data.current_slot = Some(slot);
+        Some(dmabuf)
     }
 }
 
@@ -921,7 +936,12 @@ impl State<DrmBackend> {
         }
         let wl_mode = Mode::from(drm_mode);
         output.set_preferred(wl_mode);
-        output.change_current_state(Some(wl_mode), None, None, Some(position));
+        output.change_current_state(
+            Some(wl_mode),
+            None,
+            Some(Scale::Fractional(2.0)),
+            Some(position),
+        );
         self.space.map_output(&output, position);
 
         output.user_data().insert_if_missing(|| UdevOutputId {
