@@ -287,7 +287,9 @@ pub fn run_x11_client() {
         .send_window_metrics((size.w as u32, size.h as u32).into())
         .unwrap();
 
-    state.flutter_engine_mut().add_view(0);
+    state
+        .flutter_engine_mut()
+        .add_view(0, size.w as usize, size.h as usize);
 
     // Mandatory formats by the Wayland spec.
     // TODO: Add more formats based on the GLES version.
@@ -324,9 +326,9 @@ pub fn run_x11_client() {
                         .unwrap();
 
                     let monitors = data.space.outputs().cloned().collect::<Vec<_>>();
-                    data.backend_data
-                        .swapchain
-                        .resize(size.w as u32, size.h as u32);
+                    data.flutter_engine_mut()
+                        .resizeView(view_id, size.w as u32, size.h as u32);
+
                     data.flutter_engine_mut().monitor_layout_changed(monitors);
                     data.backend_data.render = true;
                 }
@@ -407,39 +409,6 @@ pub fn run_x11_client() {
         .insert_source(rx_baton, move |baton, _, data| {
             if let CalloopEvent::Msg(baton) = baton {
                 data.batons.push(baton);
-            }
-        })
-        .unwrap();
-
-    event_loop
-        .handle()
-        .insert_source(rx_request_fbo, move |_, _, data| {
-            let slot = match data.backend_data.swapchain.acquire() {
-                Ok(Some(slot)) => slot,
-                Ok(None) => {
-                    error!("Failed to acquire swapchain slot: no available slots");
-                    return;
-                }
-                Err(err) => {
-                    error!("Error while acquiring swapchain slot: {}", err);
-                    return;
-                }
-            };
-            let dmabuf = slot.export().unwrap();
-            data.backend_data.current_slot = Some(slot);
-            data.tx_fbo.as_ref().unwrap().send(Some(dmabuf)).unwrap();
-        })
-        .unwrap();
-
-    event_loop
-        .handle()
-        .insert_source(rx_present, move |_, _, data| {
-            data.is_next_flutter_frame_scheduled = true;
-
-            data.backend_data.last_rendered_slot = data.backend_data.current_slot.take();
-
-            if let Some(ref slot) = data.backend_data.last_rendered_slot {
-                data.backend_data.swapchain.submitted(slot);
             }
         })
         .unwrap();

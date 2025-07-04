@@ -829,7 +829,7 @@ impl State<DrmBackend> {
 
         let view_id = {
             let flutter_engine = self.flutter_engine_mut();
-            flutter_engine.add_view(interface_id, phys_w, phys_h)
+            flutter_engine.add_view(interface_id, phys_w as usize, phys_h as usize)
         };
 
         let device = if let Some(device) = self.backend_data.gpus.get_mut(&node) {

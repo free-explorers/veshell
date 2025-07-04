@@ -40,7 +40,7 @@ struct AddViewData {
 }
 
 impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
-    pub fn add_view(&mut self, display_id: u64, width: u32, height: u32) -> i64 {
+    pub fn add_view(&mut self, display_id: u64, width: usize, height: usize) -> i64 {
         let (tx_done, rx_done) = channel::channel::<(i64, bool)>();
 
         let serial: u32 = self.views_management.serials.next_serial().into();
@@ -96,7 +96,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         view_id
     }
 
-    pub fn resizeView(&self, view_id: i64, width: i32, height: i32) {
+    pub fn resizeView(&self, view_id: i64, width: u32, height: u32) {
         // send new metrics to flutter engine
 
         //resize the swapchain
