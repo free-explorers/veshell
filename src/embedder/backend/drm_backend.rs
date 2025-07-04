@@ -145,19 +145,34 @@ impl Backend for DrmBackend {
         Some(f(&mut self.get_gpu_data_mut().renderer))
     }
 
-    fn get_buffer_for_view(&mut self, view_id: i64) -> Option<Dmabuf> {
-        let gpu_data = self.get_gpu_data_mut();
-        let slot = gpu_data
-            .swapchain
-            .as_mut()
-            .unwrap()
-            .acquire()
-            .ok()
-            .flatten()
-            .unwrap();
-        let dmabuf = slot.export().unwrap();
-        gpu_data.current_slot = Some(slot);
-        Some(dmabuf)
+    fn new_swapchain(
+        &mut self,
+        width: u32,
+        height: u32,
+    ) -> Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>> {
+        let modifiers = self.with_primary_renderer_mut(|renderer| {
+            renderer
+                .egl_context()
+                .dmabuf_texture_formats()
+                .iter()
+                .map(|format| format.modifier)
+                .collect::<Vec<_>>()
+        });
+        let dmabuf_allocator: Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>> = {
+            let gbm_allocator = GbmAllocator::new(
+                self.gpus.get(&self.primary_gpu).unwrap().gbm_device.clone(),
+                GbmBufferFlags::RENDERING,
+            );
+            Box::new(DmabufAllocator(gbm_allocator))
+        };
+
+        Swapchain::new(
+            dmabuf_allocator,
+            width,
+            height,
+            Fourcc::Argb8888,
+            modifiers.unwrap(),
+        )
     }
 }
 
@@ -724,36 +739,6 @@ pub fn run_drm_backend() {
         })
         .unwrap();
 
-    event_loop
-        .handle()
-        .insert_source(rx_request_fbo, move |_, _, data| {
-            let gpu_data = data.backend_data.get_gpu_data_mut();
-            let slot = gpu_data
-                .swapchain
-                .as_mut()
-                .unwrap()
-                .acquire()
-                .ok()
-                .flatten()
-                .unwrap();
-            let dmabuf = slot.export().unwrap();
-            gpu_data.current_slot = Some(slot);
-            data.tx_fbo.as_ref().unwrap().send(Some(dmabuf)).unwrap();
-        })
-        .unwrap();
-
-    event_loop
-        .handle()
-        .insert_source(rx_present, move |_, _, data| {
-            let gpu_data = data.backend_data.get_gpu_data_mut();
-            gpu_data.last_rendered_slot = gpu_data.current_slot.take();
-
-            if let Some(ref slot) = gpu_data.last_rendered_slot {
-                gpu_data.swapchain.as_mut().unwrap().submitted(slot);
-            }
-        })
-        .unwrap();
-
     state::State::<DrmBackend>::start_xwayland(&mut state);
 
     import_environment();
@@ -814,9 +799,6 @@ struct GpuData {
     drm_scanner: DrmScanner,
     render_node: DrmNode,
     registration_token: RegistrationToken,
-    swapchain: Option<Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>>>,
-    current_slot: Option<Slot<Dmabuf>>,
-    last_rendered_slot: Option<Slot<Dmabuf>>,
     renderer: GlesRenderer,
 }
 
@@ -842,6 +824,14 @@ impl State<DrmBackend> {
         connector: connector::Info,
         crtc: crtc::Handle,
     ) {
+        let interface_id = connector.interface_id() as u64;
+        let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
+
+        let view_id = {
+            let flutter_engine = self.flutter_engine_mut();
+            flutter_engine.add_view(interface_id, phys_w, phys_h)
+        };
+
         let device = if let Some(device) = self.backend_data.gpus.get_mut(&node) {
             device
         } else {
@@ -912,8 +902,6 @@ impl State<DrmBackend> {
                 return;
             }
         };
-
-        let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
 
         let output = Output::new(
             output_name.clone(),
@@ -1011,6 +999,7 @@ impl State<DrmBackend> {
             render_node: device.render_node,
             global: Some(global),
             compositor,
+            view_id,
         };
 
         device.surfaces.insert(crtc, surface);
@@ -1022,14 +1011,13 @@ impl State<DrmBackend> {
             .reduce(|first, second| first.merge(second))
             .unwrap();
 
-        if device.swapchain.is_some() {
+        /* if device.swapchain.is_some() {
             device
                 .swapchain
                 .as_mut()
                 .unwrap()
                 .resize(bounding_box.size.w as u32, bounding_box.size.h as u32);
-        }
-
+        } */
         self.flutter_engine()
             .send_window_metrics((bounding_box.size.w as u32, bounding_box.size.h as u32).into())
             .unwrap();
@@ -1081,13 +1069,13 @@ impl State<DrmBackend> {
             .map(|output| self.space.output_geometry(output).unwrap())
             .reduce(|first, second| first.merge(second))
             .unwrap_or(Rectangle::default());
-        if device.swapchain.is_some() {
+        /* if device.swapchain.is_some() {
             device
                 .swapchain
                 .as_mut()
                 .unwrap()
                 .resize(bounding_box.size.w as u32, bounding_box.size.h as u32);
-        }
+        } */
         self.flutter_engine()
             .send_window_metrics((bounding_box.size.w as u32, bounding_box.size.h as u32).into())
             .unwrap();
@@ -1188,9 +1176,6 @@ impl State<DrmBackend> {
                 render_node,
                 surfaces: HashMap::new(),
                 active_leases: Vec::new(),
-                swapchain,
-                current_slot: None,
-                last_rendered_slot: None,
                 renderer,
             },
         );
@@ -1330,40 +1315,42 @@ impl State<DrmBackend> {
     // TODO: I don't think this method should be here.
     // It should probably be in GpuData or SurfaceData.
     pub fn render_surface(&mut self, node: DrmNode, crtc: crtc::Handle) {
-        let gpu_data = self.backend_data.gpus.get_mut(&node);
-        let gpu_data = if let Some(gpu_data) = gpu_data {
-            gpu_data
-        } else {
-            error!("Trying to render without gpu_data {}", node);
-            return;
+        let (surface, renderer) = {
+            let gpu_data = self.backend_data.gpus.get_mut(&node);
+            let gpu_data = if let Some(gpu_data) = gpu_data {
+                gpu_data
+            } else {
+                error!("Trying to render without gpu_data {}", node);
+                return;
+            };
+
+            let surface = match gpu_data.surfaces.get_mut(&crtc) {
+                Some(surface) => surface,
+                None => return,
+            };
+
+            let renderer = &mut gpu_data.renderer;
+            (surface, renderer)
         };
 
-        let surface = match gpu_data.surfaces.get_mut(&crtc) {
-            Some(surface) => surface,
-            None => return,
-        };
+        let slot = {
+            let view = self
+                .flutter_engine
+                .as_mut()
+                .unwrap()
+                .views_management
+                .views
+                .get(&surface.view_id)
+                .unwrap();
 
-        /* let render_node = surface.render_node;
-        let primary_gpu = self.backend_data.primary_gpu;
-        let mut renderer = if primary_gpu == render_node {
-            self.backend_data.gpu_manager.single_renderer(&render_node)
-        } else {
-            let format = surface.compositor.format();
-            self.backend_data
-                .gpu_manager
-                .renderer(&primary_gpu, &render_node, format)
-        }
-        .unwrap(); */
-        let renderer = &mut gpu_data.renderer;
-
-        let last_rendered_slot = gpu_data.last_rendered_slot.as_mut();
-
-        let slot = if let Some(ref slot) = last_rendered_slot {
+            let slot = if let Some(ref slot) = view.last_rendered_slot {
+                slot
+            } else {
+                // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
+                initial_render(surface, renderer).expect("Failed to render initial frame");
+                return;
+            };
             slot
-        } else {
-            // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
-            initial_render(surface, renderer).expect("Failed to render initial frame");
-            return;
         };
 
         let output = self.space.outputs().find(|output| {
@@ -1420,7 +1407,6 @@ impl State<DrmBackend> {
                 Ok(()) => {}
                 Err(err) => {
                     warn!("error queueing frame: {err}");
-                    warn!("drm active: {:?}", gpu_data.drm_device.is_active());
                     return;
                 }
             },
@@ -1483,6 +1469,7 @@ struct SurfaceData {
     render_node: DrmNode,
     global: Option<GlobalId>,
     compositor: GbmDrmCompositor,
+    view_id: i64,
 }
 
 pub type GbmDrmCompositor = DrmCompositor<

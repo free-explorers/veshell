@@ -227,13 +227,13 @@ pub fn run_x11_client() {
         .collect::<Vec<_>>();
     let size = window.size();
 
-    let swapchain = Swapchain::new(
+    /* let swapchain = Swapchain::new(
         dmabuf_allocator,
         size.w as u32,
         size.h as u32,
         Fourcc::Argb8888,
         modifiers,
-    );
+    ); */
 
     let settings_manager = settings::SettingsManager::new(
         event_loop.handle(),
@@ -253,9 +253,7 @@ pub fn run_x11_client() {
             render: false,
             x11_surface,
             renderer: gles_renderer,
-            swapchain,
-            current_slot: None,
-            last_rendered_slot: None,
+            gbm_device,
             damage_tracker,
         },
         Some(dmabuf_state),
@@ -289,7 +287,7 @@ pub fn run_x11_client() {
         .send_window_metrics((size.w as u32, size.h as u32).into())
         .unwrap();
 
-    state.flutter_engine_mut().add_view();
+    state.flutter_engine_mut().add_view(0);
 
     // Mandatory formats by the Wayland spec.
     // TODO: Add more formats based on the GLES version.
@@ -610,9 +608,7 @@ pub struct X11Data {
     render: bool,
     pub x11_surface: X11Surface,
     renderer: GlesRenderer,
-    swapchain: Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>>,
-    current_slot: Option<Slot<Dmabuf>>,
-    last_rendered_slot: Option<Slot<Dmabuf>>,
+    gbm_device: gbm::Device<DeviceFd>,
     damage_tracker: OutputDamageTracker,
 }
 
@@ -632,20 +628,21 @@ impl Backend for X11Data {
         Some(f(&mut self.renderer))
     }
 
-    fn get_buffer_for_view(&mut self, _view_id: i64) -> Option<Dmabuf> {
-        let slot = match self.swapchain.acquire() {
-            Ok(Some(slot)) => slot,
-            Ok(None) => {
-                error!("Failed to acquire swapchain slot: no available slots");
-                return None;
-            }
-            Err(err) => {
-                error!("Error while acquiring swapchain slot: {}", err);
-                return None;
-            }
+    fn new_swapchain(
+        &mut self,
+        width: u32,
+        height: u32,
+    ) -> Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>> {
+        let dmabuf_formats = self.renderer.dmabuf_formats();
+        let dmabuf_allocator: Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>> = {
+            let gbm_allocator =
+                GbmAllocator::new(self.gbm_device.clone(), GbmBufferFlags::RENDERING);
+            Box::new(DmabufAllocator(gbm_allocator))
         };
-        let dmabuf = slot.export().unwrap();
-        self.current_slot = Some(slot);
-        Some(dmabuf)
+        let modifiers = dmabuf_formats
+            .iter()
+            .map(|format| format.modifier)
+            .collect::<Vec<_>>();
+        Swapchain::new(dmabuf_allocator, width, height, Fourcc::Argb8888, modifiers)
     }
 }

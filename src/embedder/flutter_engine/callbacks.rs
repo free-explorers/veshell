@@ -273,12 +273,6 @@ where
 }
 
 // add view callback
-pub unsafe extern "C" fn add_view_callback<BackendData>(result: *const FlutterAddViewResult)
-where
-    BackendData: Backend + 'static,
-{
-    debug!("add_view_callback: {:?}", result);
-}
 
 pub struct CompositorUserData {
     pub tx_request_backing_store: channel::Sender<FlutterBackingStoreConfig>,

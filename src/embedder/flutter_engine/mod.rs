@@ -41,7 +41,7 @@ use smithay::{
 
 use crate::backend::Backend;
 use crate::flutter_engine::callbacks::{
-    add_view_callback, collect_backing_store_callback, create_backing_store_callback,
+    collect_backing_store_callback, create_backing_store_callback,
     gl_external_texture_frame_callback, platform_message_callback, populate_existing_damage,
     post_task_callback, present_view_callback, runs_task_on_current_thread_callback,
     vsync_callback, CompositorUserData,
@@ -73,6 +73,7 @@ use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::flutter_engine::task_runner::TaskRunner;
 use crate::flutter_engine::text_input::{text_input_channel_method_call_handler, TextInput};
+use crate::flutter_engine::view::ViewsManagement;
 use crate::flutter_engine::wayland_messages::{EnvironmentVariables, MonitorsMessage, MyOutput};
 use crate::gles_framebuffer_importer::GlesFramebufferImporter;
 use crate::keyboard::key_mapping::{GTK_KEYVAL_TO_LOGICAL_KEY_MAP, XKB_TO_PHYSICAL_KEY_MAP};
@@ -104,6 +105,7 @@ pub mod platform_channels;
 pub mod task_runner;
 mod text_input;
 pub mod trackpad_scrolling_manager;
+pub mod view;
 pub mod wayland_messages;
 /// Wrap the handle for various safety reasons:
 /// - Clone & Copy is willingly not implemented to avoid using the engine after being shut down.
@@ -121,6 +123,7 @@ pub struct FlutterEngine<BackendData: Backend + 'static> {
     pub text_input: TextInput,
     rx_request_external_texture_name_registration_token: calloop::RegistrationToken,
     pub trackpad_scrolling_manager: TrackpadScrollingManager,
+    pub views_management: ViewsManagement,
 }
 
 /// I don't want people to clone it because it's UB to call [FlutterEngine::on_vsync] multiple times
@@ -561,6 +564,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     text_input: TextInput::new(text_input_channel),
                     rx_request_external_texture_name_registration_token,
                     trackpad_scrolling_manager: TrackpadScrollingManager::new(),
+                    views_management: ViewsManagement::new(),
                 });
 
                 // TODO: Delete this function once Box::assume_init gets stabilized.
@@ -786,34 +790,6 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             }))),
             None,
         );
-    }
-
-    pub fn add_view(&mut self) {
-        let result = unsafe {
-            FlutterEngineAddView(
-                self.handle,
-                &FlutterAddViewInfo {
-                    struct_size: size_of::<FlutterAddViewInfo>(),
-                    view_id: 1,
-                    view_metrics: &FlutterWindowMetricsEvent {
-                        struct_size: size_of::<FlutterWindowMetricsEvent>(),
-                        width: 2000,
-                        height: 2000,
-                        pixel_ratio: 1.,
-                        left: 0,
-                        top: 0,
-                        physical_view_inset_top: 0.,
-                        physical_view_inset_right: 0.,
-                        physical_view_inset_bottom: 0.,
-                        physical_view_inset_left: 0.,
-                        display_id: 0,
-                        view_id: 1,
-                    },
-                    user_data: core::ptr::null_mut(),
-                    add_view_callback: Some(add_view_callback::<BackendData>),
-                },
-            )
-        };
     }
 
     pub fn update_display(&mut self, display_id: u64) {
