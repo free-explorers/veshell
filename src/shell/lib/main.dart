@@ -40,7 +40,7 @@ void main() async {
   runWidget(
     ProviderScope(
       child: View(
-        view: RendererBinding.instance.platformDispatcher.view(id: 0)!,
+        view: RendererBinding.instance.platformDispatcher.view(id: 1)!,
         child: const Veshell(),
       ),
     ),

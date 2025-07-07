@@ -267,14 +267,10 @@ pub fn run_x11_client() {
     let (
         flutter_engine,
         EmbedderChannels {
-            rx_present,
-            rx_request_fbo,
-            tx_fbo,
             tx_output_height,
             rx_baton,
         },
     ) = FlutterEngine::new(&mut state).unwrap();
-    state.tx_fbo = Some(tx_fbo.clone());
 
     state.flutter_engine = Some(flutter_engine);
 
@@ -282,12 +278,7 @@ pub fn run_x11_client() {
     state.space.map_output(&output, (0, 0));
     let output_clone = output.clone();
 
-    state
-        .flutter_engine_mut()
-        .send_window_metrics((size.w as u32, size.h as u32).into())
-        .unwrap();
-
-    state
+    let view_id = state
         .flutter_engine_mut()
         .add_view(0, size.w as usize, size.h as usize);
 
@@ -321,13 +312,11 @@ pub fn run_x11_client() {
                     output_clone.set_preferred(mode);
 
                     let _ = tx_output_height.send(new_size.h);
-                    data.flutter_engine()
-                        .send_window_metrics((size.w as u32, size.h as u32).into())
-                        .unwrap();
 
                     let monitors = data.space.outputs().cloned().collect::<Vec<_>>();
                     data.flutter_engine_mut()
-                        .resizeView(view_id, size.w as u32, size.h as u32);
+                        .resize_view(view_id, size.w as usize, size.h as usize)
+                        .unwrap();
 
                     data.flutter_engine_mut().monitor_layout_changed(monitors);
                     data.backend_data.render = true;
@@ -369,15 +358,17 @@ pub fn run_x11_client() {
                         );
                     }
                     InputEvent::PointerMotion { event } => {
-                        data.on_pointer_motion::<X11Input>(event, 0)
+                        data.on_pointer_motion::<X11Input>(event, 0, view_id)
                     }
                     InputEvent::PointerMotionAbsolute { event } => {
-                        data.on_pointer_motion_absolute::<X11Input>(event, 0)
+                        data.on_pointer_motion_absolute::<X11Input>(event, 0, view_id)
                     }
                     InputEvent::PointerButton { event } => {
-                        data.on_pointer_button::<X11Input>(event, 0)
+                        data.on_pointer_button::<X11Input>(event, 0, view_id)
                     }
-                    InputEvent::PointerAxis { event } => data.on_pointer_axis::<X11Input>(event, 0),
+                    InputEvent::PointerAxis { event } => {
+                        data.on_pointer_axis::<X11Input>(event, 0, view_id)
+                    }
                     InputEvent::GestureSwipeBegin { event: _ } => {}
                     InputEvent::GestureSwipeUpdate { event: _ } => {}
                     InputEvent::GestureSwipeEnd { event: _ } => {}
@@ -417,8 +408,6 @@ pub fn run_x11_client() {
 
     while state.running.load(Ordering::SeqCst) {
         if state.backend_data.render {
-            let last_rendered_slot = state.backend_data.last_rendered_slot.as_mut();
-
             let (mut buffer, age) = state
                 .backend_data
                 .x11_surface
@@ -432,8 +421,26 @@ pub fn run_x11_client() {
                     continue;
                 }
             };
+            let geometry = match state.space.output_geometry(&output.clone()) {
+                Some(geometry) => geometry.to_f64(),
+                None => return,
+            };
+            let slot: &Option<Slot<Dmabuf>> = {
+                let view = state
+                    .flutter_engine
+                    .as_mut()
+                    .unwrap()
+                    .views_management
+                    .views
+                    .get(&view_id);
+                if let Some(view) = view {
+                    &view.last_rendered_slot
+                } else {
+                    &None
+                }
+            };
 
-            let slot = if let Some(ref slot) = last_rendered_slot {
+            let slot = if let Some(ref slot) = slot {
                 slot
             } else {
                 // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
@@ -466,11 +473,6 @@ pub fn run_x11_client() {
                     }
                 }
                 continue;
-            };
-
-            let geometry = match state.space.output_geometry(&output.clone()) {
-                Some(geometry) => geometry.to_f64(),
-                None => return,
             };
 
             let elements = get_render_elements(
@@ -568,9 +570,6 @@ pub fn run_x11_client() {
             display_handle.flush_clients().unwrap();
         }
     }
-
-    // Avoid indefinite hang in the Flutter render thread waiting for new fbo.
-    drop(tx_fbo);
 }
 
 pub struct X11Data {

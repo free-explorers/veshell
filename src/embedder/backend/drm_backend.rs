@@ -377,6 +377,11 @@ pub fn run_drm_backend() {
                                 ),
                             );
                         });
+                    data.flutter_engine.as_mut().unwrap().resize_view(
+                        surface.view_id,
+                        monitor_configuration.mode.size.width as usize,
+                        monitor_configuration.mode.size.height as usize,
+                    );
                 }
             }
             let bounding_box = data
@@ -384,12 +389,6 @@ pub fn run_drm_backend() {
                 .outputs()
                 .map(|output| data.space.output_geometry(output).unwrap())
                 .reduce(|first, second| first.merge(second))
-                .unwrap();
-
-            data.flutter_engine()
-                .send_window_metrics(
-                    (bounding_box.size.w as u32, bounding_box.size.h as u32).into(),
-                )
                 .unwrap();
 
             data.determine_highest_hz_crtc();
@@ -538,14 +537,10 @@ pub fn run_drm_backend() {
     let (
         flutter_engine,
         EmbedderChannels {
-            rx_present,
-            rx_request_fbo,
-            tx_fbo,
             tx_output_height: _,
             rx_baton,
         },
     ) = FlutterEngine::new(&mut state).unwrap();
-    state.tx_fbo = Some(tx_fbo.clone());
     state.flutter_engine = Some(flutter_engine);
 
     let nodes_available: Vec<DrmNode> = state
@@ -598,19 +593,19 @@ pub fn run_drm_backend() {
                 }
                 InputEvent::PointerMotion { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_pointer_motion::<LibinputInputBackend>(event, device_id)
+                    data.on_pointer_motion::<LibinputInputBackend>(event, device_id, 0)
                 }
                 InputEvent::PointerMotionAbsolute { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_pointer_motion_absolute::<LibinputInputBackend>(event, device_id)
+                    data.on_pointer_motion_absolute::<LibinputInputBackend>(event, device_id, 0)
                 }
                 InputEvent::PointerButton { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_pointer_button::<LibinputInputBackend>(event, device_id)
+                    data.on_pointer_button::<LibinputInputBackend>(event, device_id, 0)
                 }
                 InputEvent::PointerAxis { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_pointer_axis::<LibinputInputBackend>(event, device_id)
+                    data.on_pointer_axis::<LibinputInputBackend>(event, device_id, 0)
                 }
                 InputEvent::GestureSwipeBegin { event } => {
                     let fingers = event.fingers();
@@ -666,15 +661,15 @@ pub fn run_drm_backend() {
                 }
                 InputEvent::GesturePinchBegin { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_gesture_pinch_begin::<LibinputInputBackend>(event, device_id)
+                    data.on_gesture_pinch_begin::<LibinputInputBackend>(event, device_id, 0)
                 }
                 InputEvent::GesturePinchUpdate { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_gesture_pinch_update::<LibinputInputBackend>(event, device_id)
+                    data.on_gesture_pinch_update::<LibinputInputBackend>(event, device_id, 0)
                 }
                 InputEvent::GesturePinchEnd { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_gesture_pinch_end::<LibinputInputBackend>(event, device_id)
+                    data.on_gesture_pinch_end::<LibinputInputBackend>(event, device_id, 0)
                 }
                 InputEvent::GestureHoldBegin { event: _ } => {}
                 InputEvent::GestureHoldEnd { event: _ } => {}
@@ -761,9 +756,6 @@ pub fn run_drm_backend() {
             display_handle.flush_clients().unwrap();
         }
     }
-
-    // Avoid indefinite hang in the Flutter render thread waiting for new rbo.
-    drop(tx_fbo);
 }
 
 impl State<DrmBackend> {
@@ -1004,23 +996,12 @@ impl State<DrmBackend> {
 
         device.surfaces.insert(crtc, surface);
 
-        let bounding_box = self
-            .space
-            .outputs()
-            .map(|output| self.space.output_geometry(output).unwrap())
-            .reduce(|first, second| first.merge(second))
+        self.flutter_engine
+            .as_mut()
+            .unwrap()
+            .resize_view(view_id, phys_w as usize, phys_h as usize)
             .unwrap();
 
-        /* if device.swapchain.is_some() {
-            device
-                .swapchain
-                .as_mut()
-                .unwrap()
-                .resize(bounding_box.size.w as u32, bounding_box.size.h as u32);
-        } */
-        self.flutter_engine()
-            .send_window_metrics((bounding_box.size.w as u32, bounding_box.size.h as u32).into())
-            .unwrap();
         self.determine_highest_hz_crtc();
         self.monitor_layout_changed();
         self.schedule_initial_render(node, crtc, self.loop_handle.clone());
@@ -1062,23 +1043,6 @@ impl State<DrmBackend> {
         if let Some(output) = output {
             self.space.unmap_output(&output);
         }
-
-        let bounding_box = self
-            .space
-            .outputs()
-            .map(|output| self.space.output_geometry(output).unwrap())
-            .reduce(|first, second| first.merge(second))
-            .unwrap_or(Rectangle::default());
-        /* if device.swapchain.is_some() {
-            device
-                .swapchain
-                .as_mut()
-                .unwrap()
-                .resize(bounding_box.size.w as u32, bounding_box.size.h as u32);
-        } */
-        self.flutter_engine()
-            .send_window_metrics((bounding_box.size.w as u32, bounding_box.size.h as u32).into())
-            .unwrap();
 
         self.determine_highest_hz_crtc();
         self.monitor_layout_changed();
@@ -1139,30 +1103,6 @@ impl State<DrmBackend> {
             gbm_device.clone(),
             GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT,
         );
-
-        let swapchain: Option<Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>>>> =
-            if render_node == self.backend_data.primary_gpu {
-                let dmabuf_allocator: Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>> = {
-                    let gbm_allocator =
-                        GbmAllocator::new(gbm_device.clone(), GbmBufferFlags::RENDERING);
-                    Box::new(DmabufAllocator(gbm_allocator))
-                };
-                let modifiers = renderer
-                    .egl_context()
-                    .dmabuf_texture_formats()
-                    .iter()
-                    .map(|format| format.modifier)
-                    .collect::<Vec<_>>();
-                Some(Swapchain::new(
-                    dmabuf_allocator,
-                    0,
-                    0,
-                    Fourcc::Argb8888,
-                    modifiers,
-                ))
-            } else {
-                None
-            };
 
         self.backend_data.gpus.insert(
             node,

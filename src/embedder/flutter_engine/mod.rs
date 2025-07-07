@@ -41,10 +41,8 @@ use smithay::{
 
 use crate::backend::Backend;
 use crate::flutter_engine::callbacks::{
-    collect_backing_store_callback, create_backing_store_callback,
     gl_external_texture_frame_callback, platform_message_callback, populate_existing_damage,
-    post_task_callback, present_view_callback, runs_task_on_current_thread_callback,
-    vsync_callback, CompositorUserData,
+    post_task_callback, runs_task_on_current_thread_callback, vsync_callback,
 };
 use crate::flutter_engine::embedder::{
     FlutterAddViewInfo, FlutterBackingStore, FlutterBackingStoreConfig,
@@ -98,6 +96,7 @@ use crate::{
 use smithay::backend::input::KeyState;
 
 mod callbacks;
+pub mod compositor;
 pub mod embedder;
 mod mouse_cursor;
 pub mod platform_channel_callbacks;
@@ -113,7 +112,7 @@ pub mod wayland_messages;
 pub struct FlutterEngine<BackendData: Backend + 'static> {
     loop_handle: LoopHandle<'static, State<BackendData>>,
     pub handle: FlutterEngineHandle,
-    data: FlutterEngineData,
+    renderer_data: RendererData,
     pub task_runner: TaskRunner,
     current_thread_id: std::thread::ThreadId,
     pub(crate) mouse_button_tracker: MouseButtonTracker,
@@ -134,9 +133,6 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
     pub fn new(
         server_state: &mut State<BackendData>,
     ) -> Result<(Box<Self>, EmbedderChannels), Box<dyn std::error::Error>> {
-        let (tx_present, rx_present) = channel::channel::<()>();
-        let (tx_request_fbo, rx_request_fbo) = channel::channel::<()>();
-        let (tx_fbo, rx_fbo) = channel::channel::<Option<Dmabuf>>();
         let (tx_output_height, rx_output_height) = channel::channel::<u16>();
         let (tx_baton, rx_baton) = channel::channel::<Baton>();
         let (tx_reschedule_task_runner_timer, rx_reschedule_task_runner_timer) =
@@ -148,70 +144,15 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         let (tx_flutter_handled_key_event, rx_flutter_handled_key_event) =
             channel::channel::<(VeshellKeyEvent, bool)>();
 
-        let (tx_backing_store, rx_backing_store) = channel::channel::<Option<Dmabuf>>();
-        let (tx_request_backing_store, rx_request_backing_store) =
-            channel::channel::<FlutterBackingStoreConfig>();
-
-        server_state
-            .loop_handle
-            .insert_source(rx_request_backing_store, move |config, _, data| {
-                if let Msg(config) = config {
-                    let dmabuf = data.backend_data.get_buffer_for_view(config.view_id);
-                    let engine_data = &mut data.flutter_engine_mut().data;
-                    engine_data.channels.tx_backing_store.send(dmabuf);
-                    /*
-
-                    let fbo = engine_data
-                        .framebuffer_importer
-                        .import_framebuffer(&engine_data.main_egl_context, dmabuf)
-                        .unwrap_or(0);
-
-                    engine_data
-                        .channels
-                        .tx_backing_store
-                        .send(FlutterBackingStore {
-                            struct_size: std::mem::size_of::<FlutterBackingStore>(),
-                            user_data: null_mut(),
-                            type_: FlutterBackingStoreType_kFlutterBackingStoreTypeOpenGL,
-                            did_update: true,
-                            __bindgen_anon_1: FlutterBackingStore__bindgen_ty_1 {
-                                open_gl: FlutterOpenGLBackingStore {
-                                    type_:
-                                        FlutterOpenGLTargetType_kFlutterOpenGLTargetTypeFramebuffer,
-                                    __bindgen_anon_1: FlutterOpenGLBackingStore__bindgen_ty_1 {
-                                        framebuffer: FlutterOpenGLFramebuffer {
-                                            // RGBA8
-                                            target: 0x8058,
-                                            name: fbo,
-                                            user_data: null_mut(),
-                                            destruction_callback: None,
-                                        },
-                                    },
-                                },
-                            },
-                        })
-                        .unwrap(); */
-                }
-            });
-
         let flutter_engine_channels = FlutterEngineChannels {
-            tx_present,
-            tx_request_fbo,
-            rx_fbo,
             rx_output_height,
             tx_baton,
             tx_request_external_texture_name,
             rx_external_texture_name,
             tx_flutter_handled_key_event,
-            tx_backing_store,
-            rx_backing_store,
-            tx_request_backing_store,
         };
 
         let embedder_channels = EmbedderChannels {
-            rx_present,
-            rx_request_fbo,
-            tx_fbo,
             tx_output_height,
             rx_baton,
         };
@@ -295,7 +236,8 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             .backend_data
             .with_primary_renderer_mut(|renderer| {
                 let root_egl_context = renderer.egl_context();
-
+                let mut renderer_data =
+                    RendererData::new(root_egl_context, flutter_engine_channels)?;
                 // We need a pointer to the memory location before initializing the struct.
                 let mut this = Box::new(MaybeUninit::<Self>::uninit());
 
@@ -316,13 +258,6 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     render_task_runner: null(),
                     thread_priority_setter: None,
                 };
-
-                /*                 let mut compositor_user_data = Box::new(CompositorUserData {
-                    rx_backing_store,
-                    tx_request_backing_store,
-                });
-
-                let compositor_user_data_ptr = Box::into_raw(compositor_user_data); */
 
                 let project_args = FlutterProjectArgs {
                     struct_size: size_of::<FlutterProjectArgs>(),
@@ -350,19 +285,10 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     custom_dart_entrypoint: null(),
                     custom_task_runners: &task_runners,
                     shutdown_dart_vm_when_done: true,
-                    compositor: &FlutterCompositor {
-                        struct_size: size_of::<FlutterCompositor>(),
-                        user_data: this.deref_mut() as *const _ as *mut _,
-                        create_backing_store_callback: Some(
-                            create_backing_store_callback::<BackendData>,
-                        ),
-                        collect_backing_store_callback: Some(
-                            collect_backing_store_callback::<BackendData>,
-                        ),
-                        present_layers_callback: None,
-                        avoid_backing_store_cache: true,
-                        present_view_callback: Some(present_view_callback::<BackendData>),
-                    },
+                    compositor: &FlutterCompositor::new::<BackendData>(
+                        &server_state.loop_handle,
+                        &mut renderer_data,
+                    ),
                     dart_old_gen_heap_size: 0,
                     aot_data,
                     compute_platform_resolved_locale_callback: None,
@@ -383,20 +309,20 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                             struct_size: size_of::<FlutterOpenGLRendererConfig>(),
                             make_current: Some(make_current::<BackendData>),
                             clear_current: Some(clear_current::<BackendData>),
-                            present: None,
-                            fbo_callback: Some(fbo_callback::<BackendData>),
                             make_resource_current: Some(make_resource_current::<BackendData>),
-                            // Flutter must request another framebuffer every frame
-                            // because we're using a triple-buffered swapchain.
-                            fbo_reset_after_present: true,
                             surface_transformation: Some(surface_transformation::<BackendData>),
                             gl_proc_resolver: None,
                             gl_external_texture_frame_callback: Some(
                                 gl_external_texture_frame_callback::<BackendData>,
                             ),
-                            fbo_with_frame_info_callback: None,
-                            present_with_info: Some(present_with_info::<BackendData>),
                             populate_existing_damage: Some(populate_existing_damage::<BackendData>),
+
+                            // those callback are not used since we are using compositor API but we need to provide them since the multi-view api is not finished
+                            present: None,
+                            fbo_callback: Some(fbo_callback::<BackendData>),
+                            present_with_info: Some(present_with_info::<BackendData>),
+                            fbo_reset_after_present: true,
+                            fbo_with_frame_info_callback: None,
                         },
                     },
                 };
@@ -554,7 +480,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                 this.write(Self {
                     loop_handle: server_state.loop_handle.clone(),
                     handle: flutter_engine,
-                    data: FlutterEngineData::new(root_egl_context, flutter_engine_channels)?,
+                    renderer_data,
                     task_runner: TaskRunner::new(tx_reschedule_task_runner_timer),
                     current_thread_id: std::thread::current().id(),
                     mouse_button_tracker: MouseButtonTracker::new(),
@@ -590,33 +516,6 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
 
     pub fn current_time_us() -> u64 {
         unsafe { FlutterEngineGetCurrentTime() / 1000 }
-    }
-
-    pub fn send_window_metrics(
-        &self,
-        size: Size<u32, Physical>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let event = FlutterWindowMetricsEvent {
-            struct_size: size_of::<FlutterWindowMetricsEvent>(),
-            width: size.w as usize,
-            height: size.h as usize,
-            pixel_ratio: 1.0,
-            left: 0,
-            top: 0,
-            physical_view_inset_top: 0.0,
-            physical_view_inset_right: 0.0,
-            physical_view_inset_bottom: 0.0,
-            physical_view_inset_left: 0.0,
-            display_id: 0,
-            view_id: 0,
-        };
-
-        let result =
-            unsafe { FlutterEngineSendWindowMetricsEvent(self.handle, &event as *const _) };
-        if result != 0 {
-            return Err(format!("Could not send window metrics event, error {result}").into());
-        }
-        Ok(())
     }
 
     /// mhz == millihertz
@@ -706,7 +605,11 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         if result != 0 {
             return Err(format!("Could not send key event, error {result}").into());
         }
-        let tx = self.data.channels.tx_flutter_handled_key_event.clone();
+        let tx = self
+            .renderer_data
+            .channels
+            .tx_flutter_handled_key_event
+            .clone();
         // Send fake key event since we don't care about supporting legacy keyboard implementation
         self.key_event_channel.send(
             &json!({
@@ -823,7 +726,7 @@ impl<BackendData: Backend + 'static> Drop for FlutterEngine<BackendData> {
     }
 }
 
-struct FlutterEngineData {
+struct RendererData {
     gl: Gles2,
     main_egl_context: EGLContext,
     resource_egl_context: EGLContext,
@@ -835,9 +738,9 @@ struct FlutterEngineData {
 // Ironically, EGLContext which contains EGLDisplay is Send, but EGLDisplay is not.
 // This impl is not needed, but it's here to make it explicit that it's safe to send this struct
 // to the Flutter render thread.
-unsafe impl Send for FlutterEngineData {}
+unsafe impl Send for RendererData {}
 
-impl FlutterEngineData {
+impl RendererData {
     fn new(
         root_egl_context: &EGLContext,
         channels: FlutterEngineChannels,
@@ -875,23 +778,14 @@ impl FlutterEngineData {
 }
 
 pub struct FlutterEngineChannels {
-    tx_present: channel::Sender<()>,
-    tx_request_fbo: channel::Sender<()>,
-    rx_fbo: channel::Channel<Option<Dmabuf>>,
     rx_output_height: channel::Channel<u16>,
     tx_baton: channel::Sender<Baton>,
     tx_request_external_texture_name: channel::Sender<i64>,
     rx_external_texture_name: channel::Channel<(u32, u32)>,
     tx_flutter_handled_key_event: channel::Sender<(VeshellKeyEvent, bool)>,
-    tx_backing_store: channel::Sender<Option<Dmabuf>>,
-    tx_request_backing_store: channel::Sender<FlutterBackingStoreConfig>,
-    rx_backing_store: channel::Channel<Option<Dmabuf>>,
 }
 
 pub struct EmbedderChannels {
-    pub rx_present: channel::Channel<()>,
-    pub rx_request_fbo: channel::Channel<()>,
-    pub tx_fbo: channel::Sender<Option<Dmabuf>>,
     pub tx_output_height: channel::Sender<u16>,
     pub rx_baton: channel::Channel<Baton>,
 }

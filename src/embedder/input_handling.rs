@@ -19,7 +19,7 @@ use crate::flutter_engine::embedder::{
     FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
     FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
 };
-use crate::flutter_engine::FlutterEngine;
+use crate::flutter_engine::{view, FlutterEngine};
 use crate::settings::MouseAndTouchpadSettings;
 use crate::state::State;
 
@@ -28,6 +28,7 @@ impl<BackendData: Backend> State<BackendData> {
         &mut self,
         event: B::PointerMotionEvent,
         device_id: i32,
+        view_id: i64,
     ) where
         BackendData: Backend + 'static,
     {
@@ -66,13 +67,14 @@ impl<BackendData: Backend> State<BackendData> {
             return;
         }
 
-        self.send_motion_event(pointer_location, device_id)
+        self.send_motion_event(pointer_location, device_id, view_id)
     }
 
     pub fn on_pointer_motion_absolute<B: InputBackend>(
         &mut self,
         event: B::PointerMotionAbsoluteEvent,
         device_id: i32,
+        view_id: i64,
     ) where
         BackendData: Backend + 'static,
     {
@@ -110,13 +112,14 @@ impl<BackendData: Backend> State<BackendData> {
         if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
             return;
         }
-        self.send_motion_event(pointer_location, device_id)
+        self.send_motion_event(pointer_location, device_id, view_id)
     }
 
     pub fn on_pointer_button<B: InputBackend>(
         &mut self,
         event: B::PointerButtonEvent,
         device_id: i32,
+        view_id: i64,
     ) where
         BackendData: Backend + 'static,
     {
@@ -185,13 +188,17 @@ impl<BackendData: Backend> State<BackendData> {
                 pan_y: 0.0,
                 scale: 1.0,
                 rotation: 0.0,
-                view_id: 0,
+                view_id,
             })
             .unwrap();
     }
 
-    pub fn on_pointer_axis<B: InputBackend>(&mut self, event: B::PointerAxisEvent, device_id: i32)
-    where
+    pub fn on_pointer_axis<B: InputBackend>(
+        &mut self,
+        event: B::PointerAxisEvent,
+        device_id: i32,
+        view_id: i64,
+    ) where
         BackendData: Backend + 'static,
     {
         let horizontal_amount = event.amount(input::Axis::Horizontal).unwrap_or_else(|| {
@@ -263,7 +270,7 @@ impl<BackendData: Backend> State<BackendData> {
                     pan_y: 0.0,
                     scale: 1.0,
                     rotation: 0.0,
-                    view_id: 0,
+                    view_id,
                 })
                 .unwrap();
         } else {
@@ -287,6 +294,7 @@ impl<BackendData: Backend> State<BackendData> {
                     0.,
                     0.,
                     0.,
+                    view_id,
                 );
             } else {
                 if !self
@@ -306,6 +314,7 @@ impl<BackendData: Backend> State<BackendData> {
                         0.,
                         0.,
                         0.,
+                        view_id,
                     );
                 }
                 self.flutter_engine_mut()
@@ -323,6 +332,7 @@ impl<BackendData: Backend> State<BackendData> {
                     self.flutter_engine().trackpad_scrolling_manager.pan_y,
                     1.,
                     0.,
+                    view_id,
                 );
             }
         }
@@ -332,6 +342,7 @@ impl<BackendData: Backend> State<BackendData> {
         &mut self,
         event: B::GesturePinchBeginEvent,
         device_id: i32,
+        view_id: i64,
     ) {
         let pointer: smithay::input::pointer::PointerHandle<State<BackendData>> =
             self.pointer.clone();
@@ -345,12 +356,14 @@ impl<BackendData: Backend> State<BackendData> {
             0.,
             0.,
             0.,
+            view_id,
         );
     }
     pub fn on_gesture_pinch_update<B: InputBackend>(
         &mut self,
         event: B::GesturePinchUpdateEvent,
         device_id: i32,
+        view_id: i64,
     ) {
         let pointer: smithay::input::pointer::PointerHandle<State<BackendData>> =
             self.pointer.clone();
@@ -363,12 +376,14 @@ impl<BackendData: Backend> State<BackendData> {
             event.delta_y(),
             event.scale(),
             event.rotation(),
+            view_id,
         );
     }
     pub fn on_gesture_pinch_end<B: InputBackend>(
         &mut self,
         _event: B::GesturePinchEndEvent,
         device_id: i32,
+        view_id: i64,
     ) {
         let pointer: smithay::input::pointer::PointerHandle<State<BackendData>> =
             self.pointer.clone();
@@ -381,6 +396,7 @@ impl<BackendData: Backend> State<BackendData> {
             0.,
             0.,
             0.,
+            view_id,
         );
     }
 
@@ -425,7 +441,7 @@ impl<BackendData: Backend> State<BackendData> {
         }
     }
 
-    fn send_motion_event(&mut self, location: Point<f64, Logical>, device_id: i32)
+    fn send_motion_event(&mut self, location: Point<f64, Logical>, device_id: i32, view_id: i64)
     where
         BackendData: Backend + 'static,
     {
@@ -457,7 +473,7 @@ impl<BackendData: Backend> State<BackendData> {
                 pan_y: 0.0,
                 scale: 1.0,
                 rotation: 0.0,
-                view_id: 0,
+                view_id,
             })
             .unwrap();
     }
@@ -472,6 +488,7 @@ impl<BackendData: Backend> State<BackendData> {
         pan_y: f64,
         scale: f64,
         rotation: f64,
+        view_id: i64,
     ) {
         self.flutter_engine()
             .send_pointer_event(FlutterPointerEvent {
@@ -490,7 +507,7 @@ impl<BackendData: Backend> State<BackendData> {
                 pan_y,
                 scale,
                 rotation,
-                view_id: 0,
+                view_id,
             })
             .unwrap();
     }

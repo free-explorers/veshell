@@ -3,10 +3,11 @@ use std::ffi::c_void;
 
 use crate::flutter_engine::channel::Event::Msg;
 use crate::flutter_engine::embedder::{
-    FlutterAddViewInfo, FlutterAddViewResult, FlutterEngineAddView, FlutterWindowMetricsEvent,
+    FlutterAddViewInfo, FlutterAddViewResult, FlutterEngineAddView,
+    FlutterEngineSendWindowMetricsEvent, FlutterWindowMetricsEvent,
 };
 use crate::{backend::Backend, flutter_engine::FlutterEngine};
-use smithay::backend::allocator::dmabuf::{AnyError, Dmabuf};
+use smithay::backend::allocator::dmabuf::{AnyError, AsDmabuf, Dmabuf};
 use smithay::backend::allocator::{Allocator, Slot, Swapchain};
 use smithay::reexports::calloop::{self, channel};
 use smithay::reexports::winit::event;
@@ -27,11 +28,20 @@ impl ViewsManagement {
     }
 }
 
-struct VeshellView {
+pub struct VeshellView {
     view_id: i64,
     pub swapchain: Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>>,
     pub current_slot: Option<Slot<Dmabuf>>,
     pub last_rendered_slot: Option<Slot<Dmabuf>>,
+}
+
+impl VeshellView {
+    pub fn acquire_dmabuf(&mut self) -> Dmabuf {
+        let slot = self.swapchain.acquire().ok().flatten().unwrap();
+        let dmabuf = slot.export().unwrap();
+        self.current_slot = Some(slot);
+        dmabuf
+    }
 }
 
 struct AddViewData {
@@ -47,6 +57,28 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         let view_id: i64 = serial as i64;
 
         let add_view_data = Box::new(AddViewData { tx_done, view_id });
+        self.loop_handle
+            .insert_source(rx_done, move |event, _, data| {
+                debug!("add_view_callback_done: {:?}", event);
+                if let Msg((event_view_id, added)) = event {
+                    if added {
+                        let view = VeshellView {
+                            view_id: event_view_id,
+                            swapchain: data.backend_data.new_swapchain(width as u32, height as u32),
+                            current_slot: None,
+                            last_rendered_slot: None,
+                        };
+                        data.flutter_engine_mut()
+                            .views_management
+                            .views
+                            .insert(view_id, view);
+
+                        data.flutter_engine_mut()
+                            .resize_view(view_id, width, height);
+                    }
+                }
+            })
+            .unwrap();
         let result = unsafe {
             FlutterEngineAddView(
                 self.handle,
@@ -73,33 +105,40 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             )
         };
 
-        self.loop_handle
-            .insert_source(rx_done, move |event, _, data| {
-                debug!("add_view_callback: {:?}", event);
-                if let Msg((event_view_id, added)) = event {
-                    if added {
-                        let view = VeshellView {
-                            view_id: event_view_id,
-                            swapchain: data.backend_data.new_swapchain(2000, 2000),
-                            current_slot: None,
-                            last_rendered_slot: None,
-                        };
-                        data.flutter_engine_mut()
-                            .views_management
-                            .views
-                            .insert(view_id, view);
-                    }
-                }
-            })
-            .unwrap();
-
         view_id
     }
 
-    pub fn resizeView(&self, view_id: i64, width: u32, height: u32) {
+    pub fn resize_view(
+        &mut self,
+        view_id: i64,
+        width: usize,
+        height: usize,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // send new metrics to flutter engine
+        let event = FlutterWindowMetricsEvent {
+            struct_size: size_of::<FlutterWindowMetricsEvent>(),
+            width,
+            height,
+            pixel_ratio: 1.0,
+            left: 0,
+            top: 0,
+            physical_view_inset_top: 0.0,
+            physical_view_inset_right: 0.0,
+            physical_view_inset_bottom: 0.0,
+            physical_view_inset_left: 0.0,
+            display_id: 0,
+            view_id: view_id,
+        };
 
+        let result =
+            unsafe { FlutterEngineSendWindowMetricsEvent(self.handle, &event as *const _) };
+        if result != 0 {
+            return Err(format!("Could not send window metrics event, error {result}").into());
+        }
         //resize the swapchain
+        let view = self.views_management.views.get_mut(&view_id).unwrap();
+        view.swapchain.resize(width as u32, height as u32);
+        Ok(())
     }
 }
 
@@ -114,4 +153,5 @@ where
         .tx_done
         .send((add_view_data.view_id, result.added))
         .unwrap();
+    debug!("add_view_callback: done");
 }
