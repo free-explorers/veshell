@@ -120,11 +120,13 @@ where
     }
 
     if let Ok(Some(dmabuf)) = compositor_data.rx_on_buffer_sent.recv() {
+        debug!("create_backing_store_callback: received buffer");
         let name = compositor_data
             .renderer_data
             .framebuffer_importer
             .import_framebuffer(&compositor_data.renderer_data.main_egl_context, dmabuf)
             .unwrap_or(0);
+
         *backing_store_out = FlutterBackingStore {
             struct_size: std::mem::size_of::<FlutterBackingStore>(),
             user_data: std::ptr::null_mut(),

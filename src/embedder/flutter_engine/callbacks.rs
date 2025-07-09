@@ -22,6 +22,7 @@ pub unsafe extern "C" fn make_current<BackendData>(user_data: *mut c_void) -> bo
 where
     BackendData: Backend + 'static,
 {
+    debug!("make_current");
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     match flutter_engine.renderer_data.main_egl_context.make_current() {
         Ok(()) => true,

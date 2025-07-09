@@ -142,7 +142,7 @@ impl Backend for DrmBackend {
     ) -> Option<T> {
         /* let mut renderer = self.g.single_renderer(&self.primary_gpu).ok()?;
         Some(f(renderer.as_gles_renderer_mut())) */
-        Some(f(&mut self.get_gpu_data_mut().renderer))
+        Some(f(&mut self.get_primary_gpu_data_mut().renderer))
     }
 
     fn new_swapchain(
@@ -150,34 +150,30 @@ impl Backend for DrmBackend {
         width: u32,
         height: u32,
     ) -> Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>> {
-        let modifiers = self.with_primary_renderer_mut(|renderer| {
-            renderer
-                .egl_context()
-                .dmabuf_texture_formats()
-                .iter()
-                .map(|format| format.modifier)
-                .collect::<Vec<_>>()
-        });
+        let primary_gpu_data = self.get_primary_gpu_data_mut();
+        let renderer = &primary_gpu_data.renderer;
+        let modifiers = renderer
+            .egl_context()
+            .dmabuf_texture_formats()
+            .iter()
+            .map(|format| format.modifier)
+            .collect::<Vec<_>>();
+        debug!("primary gpu: {:?}", self.primary_gpu);
+        debug!("gpus length: {:?}", self.gpus.len());
         let dmabuf_allocator: Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>> = {
             let gbm_allocator = GbmAllocator::new(
-                self.gpus.get(&self.primary_gpu).unwrap().gbm_device.clone(),
+                self.get_primary_gpu_data_mut().gbm_device.clone(),
                 GbmBufferFlags::RENDERING,
             );
             Box::new(DmabufAllocator(gbm_allocator))
         };
 
-        Swapchain::new(
-            dmabuf_allocator,
-            width,
-            height,
-            Fourcc::Argb8888,
-            modifiers.unwrap(),
-        )
+        Swapchain::new(dmabuf_allocator, width, height, Fourcc::Argb8888, modifiers)
     }
 }
 
 impl DrmBackend {
-    fn get_gpu_data_mut(&mut self) -> &mut GpuData {
+    fn get_primary_gpu_data_mut(&mut self) -> &mut GpuData {
         let primary_node = self
             .primary_gpu
             .node_with_type(NodeType::Primary)
@@ -192,6 +188,10 @@ impl DrmBackend {
 struct UdevOutputId {
     device_id: DrmNode,
     crtc: crtc::Handle,
+}
+
+struct OutputViewIdWrapper {
+    view_id: i64,
 }
 
 // we cannot simply pick the first supported format of the intersection of *all* formats, because:
@@ -233,7 +233,7 @@ impl DmabufHandler for State<DrmBackend> {
         } */
         if self
             .backend_data
-            .get_gpu_data_mut()
+            .get_primary_gpu_data_mut()
             .renderer
             .import_dmabuf(&dmabuf, None)
             .is_ok()
@@ -487,7 +487,7 @@ pub fn run_drm_backend() {
         }
     }; */
 
-    let renderer = &mut state.backend_data.get_gpu_data_mut().renderer;
+    let renderer = &mut state.backend_data.get_primary_gpu_data_mut().renderer;
     let egl_context = renderer.egl_context();
 
     let dmabuf_formats = egl_context
@@ -565,6 +565,14 @@ pub fn run_drm_backend() {
         .handle()
         .insert_source(libinput_backend, move |event, _, data| {
             let _dh = data.display_handle.clone();
+            let pointer = data.pointer.clone();
+            let pointer_location = pointer.current_location();
+            let output_under_pointer = data.space.output_under(pointer_location).next().unwrap();
+            let view_id = output_under_pointer
+                .user_data()
+                .get::<OutputViewIdWrapper>()
+                .unwrap()
+                .view_id;
             match event {
                 InputEvent::DeviceAdded { mut device } => {
                     data.input_devices.insert(device.clone());
@@ -593,19 +601,21 @@ pub fn run_drm_backend() {
                 }
                 InputEvent::PointerMotion { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_pointer_motion::<LibinputInputBackend>(event, device_id, 0)
+                    data.on_pointer_motion::<LibinputInputBackend>(event, device_id, view_id)
                 }
                 InputEvent::PointerMotionAbsolute { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_pointer_motion_absolute::<LibinputInputBackend>(event, device_id, 0)
+                    data.on_pointer_motion_absolute::<LibinputInputBackend>(
+                        event, device_id, view_id,
+                    )
                 }
                 InputEvent::PointerButton { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_pointer_button::<LibinputInputBackend>(event, device_id, 0)
+                    data.on_pointer_button::<LibinputInputBackend>(event, device_id, view_id)
                 }
                 InputEvent::PointerAxis { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_pointer_axis::<LibinputInputBackend>(event, device_id, 0)
+                    data.on_pointer_axis::<LibinputInputBackend>(event, device_id, view_id)
                 }
                 InputEvent::GestureSwipeBegin { event } => {
                     let fingers = event.fingers();
@@ -661,15 +671,15 @@ pub fn run_drm_backend() {
                 }
                 InputEvent::GesturePinchBegin { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_gesture_pinch_begin::<LibinputInputBackend>(event, device_id, 0)
+                    data.on_gesture_pinch_begin::<LibinputInputBackend>(event, device_id, view_id)
                 }
                 InputEvent::GesturePinchUpdate { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_gesture_pinch_update::<LibinputInputBackend>(event, device_id, 0)
+                    data.on_gesture_pinch_update::<LibinputInputBackend>(event, device_id, view_id)
                 }
                 InputEvent::GesturePinchEnd { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_gesture_pinch_end::<LibinputInputBackend>(event, device_id, 0)
+                    data.on_gesture_pinch_end::<LibinputInputBackend>(event, device_id, view_id)
                 }
                 InputEvent::GestureHoldBegin { event: _ } => {}
                 InputEvent::GestureHoldEnd { event: _ } => {}
@@ -729,6 +739,7 @@ pub fn run_drm_backend() {
         .handle()
         .insert_source(rx_baton, move |baton, _, data| {
             if let CalloopEvent::Msg(baton) = baton {
+                debug!("Received baton from Flutter engine.");
                 data.batons.push(baton);
             }
         })
@@ -904,6 +915,7 @@ impl State<DrmBackend> {
                 model,
             },
         );
+
         let global = output.create_global::<State<DrmBackend>>(&self.display_handle);
 
         // Put the new output at the right of the last one.
@@ -922,12 +934,18 @@ impl State<DrmBackend> {
             Some(Scale::Fractional(2.0)),
             Some(position),
         );
-        self.space.map_output(&output, position);
+        output
+            .user_data()
+            .insert_if_missing(|| OutputViewIdWrapper {
+                view_id: view_id.clone(),
+            });
 
         output.user_data().insert_if_missing(|| UdevOutputId {
             crtc,
             device_id: node,
         });
+
+        self.space.map_output(&output, position);
 
         let color_formats = if std::env::var("ANVIL_DISABLE_10BIT").is_ok() {
             SUPPORTED_FORMATS_8BIT_ONLY
@@ -995,12 +1013,6 @@ impl State<DrmBackend> {
         };
 
         device.surfaces.insert(crtc, surface);
-
-        self.flutter_engine
-            .as_mut()
-            .unwrap()
-            .resize_view(view_id, phys_w as usize, phys_h as usize)
-            .unwrap();
 
         self.determine_highest_hz_crtc();
         self.monitor_layout_changed();
@@ -1175,6 +1187,7 @@ impl State<DrmBackend> {
     }
 
     fn on_vblank(&mut self, node: DrmNode, crtc: crtc::Handle, _meta: DrmEventMetadata) {
+        debug!("on_vblank");
         // Since the Flutter context is shared among all outputs we need to render all of them at the frequence of the highest Hz output.
         let gpu_data = self.backend_data.gpus.get_mut(&node).unwrap();
 
@@ -1232,6 +1245,7 @@ impl State<DrmBackend> {
 
     // If crtc is `Some()`, render it, else render all crtcs
     fn render(&mut self, node: DrmNode, crtc: Option<crtc::Handle>) {
+        debug!("rendering on node {:?}", node);
         //let primary_gpu = self.backend_data.primary_gpu;
 
         let device_backend = match self.backend_data.gpus.get_mut(&node) {
@@ -1280,12 +1294,18 @@ impl State<DrmBackend> {
                 .unwrap()
                 .views_management
                 .views
-                .get(&surface.view_id)
-                .unwrap();
+                .get(&surface.view_id);
 
-            let slot = if let Some(ref slot) = view.last_rendered_slot {
+            let last_renderer_slot = if let Some(view) = view {
+                &view.last_rendered_slot
+            } else {
+                &None
+            };
+
+            let slot = if let Some(ref slot) = last_renderer_slot {
                 slot
             } else {
+                debug!("Flutter hasn't rendered anything yet.");
                 // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
                 initial_render(surface, renderer).expect("Failed to render initial frame");
                 return;
@@ -1310,7 +1330,7 @@ impl State<DrmBackend> {
             Some(geometry) => geometry.to_f64(),
             None => return,
         };
-
+        debug!("Rendering frame");
         let elements = get_render_elements(
             renderer,
             output,
