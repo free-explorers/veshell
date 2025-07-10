@@ -7,6 +7,8 @@ use mouse_cursor::mouse_cursor_channel_method_call_handler;
 use platform_channels::encodable_value::EncodableValue;
 use platform_channels::standard_method_codec::StandardMethodCodec;
 use serde_json::json;
+use smithay::backend::egl::display::EGLDisplayHandle;
+use smithay::backend::egl::EGLDisplay;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::{c_int, c_void, CString};
@@ -16,6 +18,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::ptr::{null, null_mut};
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Duration;
 use trackpad_scrolling_manager::TrackpadScrollingManager;
 
@@ -235,9 +238,6 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         server_state
             .backend_data
             .with_primary_renderer_mut(|renderer| {
-                let root_egl_context = renderer.egl_context();
-                let mut renderer_data =
-                    RendererData::new(root_egl_context, flutter_engine_channels)?;
                 // We need a pointer to the memory location before initializing the struct.
                 let mut this = Box::new(MaybeUninit::<Self>::uninit());
 
@@ -287,7 +287,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     shutdown_dart_vm_when_done: true,
                     compositor: &FlutterCompositor::new::<BackendData>(
                         &server_state.loop_handle,
-                        &mut renderer_data,
+                        unsafe { GlesFramebufferImporter::new(renderer.egl_context())? },
                     ),
                     dart_old_gen_heap_size: 0,
                     aot_data,
@@ -480,7 +480,10 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                 this.write(Self {
                     loop_handle: server_state.loop_handle.clone(),
                     handle: flutter_engine,
-                    renderer_data,
+                    renderer_data: RendererData::new(
+                        renderer.egl_context(),
+                        flutter_engine_channels,
+                    )?,
                     task_runner: TaskRunner::new(tx_reschedule_task_runner_timer),
                     current_thread_id: std::thread::current().id(),
                     mouse_button_tracker: MouseButtonTracker::new(),
@@ -727,27 +730,28 @@ impl<BackendData: Backend + 'static> Drop for FlutterEngine<BackendData> {
 }
 
 struct RendererData {
-    gl: Gles2,
     main_egl_context: EGLContext,
     resource_egl_context: EGLContext,
     output_height: Option<u16>,
     channels: FlutterEngineChannels,
-    framebuffer_importer: GlesFramebufferImporter,
 }
 
 // Ironically, EGLContext which contains EGLDisplay is Send, but EGLDisplay is not.
 // This impl is not needed, but it's here to make it explicit that it's safe to send this struct
 // to the Flutter render thread.
 unsafe impl Send for RendererData {}
+unsafe impl Sync for RendererData {} // Add this if you need to share references across threads
 
 impl RendererData {
     fn new(
         root_egl_context: &EGLContext,
         channels: FlutterEngineChannels,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        debug!("new RendererData thread: {:?}", std::thread::current().id());
+
         unsafe { root_egl_context.make_current()? };
 
-        let egl_display = root_egl_context.display();
+        let egl_display = root_egl_context.display().clone();
         let gl_attributes = GlAttributes {
             version: (2, 0),
             profile: Some(GlProfile::Core),
@@ -757,7 +761,6 @@ impl RendererData {
         let pixel_format_requirements = PixelFormatRequirements::_8_bit();
 
         Ok(Self {
-            gl: Gles2::load_with(|s| unsafe { egl::get_proc_address(s) } as *const _),
             main_egl_context: EGLContext::new_shared_with_config(
                 &egl_display,
                 &root_egl_context,
@@ -772,7 +775,6 @@ impl RendererData {
             )?,
             output_height: None,
             channels,
-            framebuffer_importer: unsafe { GlesFramebufferImporter::new(egl_display.clone())? },
         })
     }
 }

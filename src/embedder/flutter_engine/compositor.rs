@@ -1,5 +1,7 @@
 use std::ffi::c_void;
 
+use smithay::backend::egl;
+use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesError;
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::{
@@ -26,17 +28,17 @@ use crate::{
 };
 type ImportBufferCallback = fn(dmabuf: Dmabuf) -> Result<u32, GlesError>;
 
-pub struct CompositorUserData<'a> {
+pub struct CompositorUserData {
     pub tx_request_buffer: channel::Sender<FlutterBackingStoreConfig>,
     pub rx_on_buffer_sent: channel::Channel<Option<Dmabuf>>,
     pub tx_present_view: channel::Sender<i64>,
-    pub renderer_data: &'a mut RendererData,
+    framebuffer_importer: GlesFramebufferImporter,
 }
 
 impl FlutterCompositor {
     pub fn new<BackendData>(
         loop_handle: &LoopHandle<'static, State<BackendData>>,
-        renderer_data: &mut RendererData,
+        framebuffer_importer: GlesFramebufferImporter,
     ) -> Self
     where
         BackendData: Backend + 'static,
@@ -58,8 +60,7 @@ impl FlutterCompositor {
 
                     let dmabuf = view.acquire_dmabuf();
 
-                    let engine_data = &mut flutter_engine.renderer_data;
-                    tx_send_buffer.send(Some(dmabuf));
+                    tx_send_buffer.send(Some(dmabuf)).unwrap();
                 }
             })
             .unwrap();
@@ -87,7 +88,7 @@ impl FlutterCompositor {
             tx_request_buffer,
             rx_on_buffer_sent,
             tx_present_view,
-            renderer_data,
+            framebuffer_importer,
         })) as *mut c_void;
 
         FlutterCompositor {
@@ -121,10 +122,10 @@ where
 
     if let Ok(Some(dmabuf)) = compositor_data.rx_on_buffer_sent.recv() {
         debug!("create_backing_store_callback: received buffer");
+
         let name = compositor_data
-            .renderer_data
             .framebuffer_importer
-            .import_framebuffer(&compositor_data.renderer_data.main_egl_context, dmabuf)
+            .import_framebuffer(dmabuf)
             .unwrap_or(0);
 
         *backing_store_out = FlutterBackingStore {
@@ -175,7 +176,7 @@ where
     debug!("present_view_callback: {:?}", (*info).view_id);
     let user_data = (*info).user_data;
     let compositor_data = &mut *(user_data as *mut CompositorUserData);
-    compositor_data.renderer_data.gl.Finish();
+    compositor_data.framebuffer_importer.gl.Finish();
     compositor_data
         .tx_present_view
         .send((*info).view_id)
