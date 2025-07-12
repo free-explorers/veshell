@@ -32,13 +32,13 @@ pub struct CompositorUserData {
     pub tx_request_buffer: channel::Sender<FlutterBackingStoreConfig>,
     pub rx_on_buffer_sent: channel::Channel<Option<Dmabuf>>,
     pub tx_present_view: channel::Sender<i64>,
-    framebuffer_importer: GlesFramebufferImporter,
+    flutter_engine_ptr: *mut c_void,
 }
 
 impl FlutterCompositor {
     pub fn new<BackendData>(
         loop_handle: &LoopHandle<'static, State<BackendData>>,
-        framebuffer_importer: GlesFramebufferImporter,
+        flutter_engine_ptr: *mut c_void,
     ) -> Self
     where
         BackendData: Backend + 'static,
@@ -88,7 +88,7 @@ impl FlutterCompositor {
             tx_request_buffer,
             rx_on_buffer_sent,
             tx_present_view,
-            framebuffer_importer,
+            flutter_engine_ptr,
         })) as *mut c_void;
 
         FlutterCompositor {
@@ -116,6 +116,8 @@ where
     debug!("create_backing_store_callback: {:?}", (*config).view_id);
 
     let compositor_data = &mut *(user_data as *mut CompositorUserData);
+    let flutter_engine =
+        &mut *(compositor_data.flutter_engine_ptr as *mut FlutterEngine<BackendData>);
     if compositor_data.tx_request_buffer.send(*config).is_err() {
         return false;
     }
@@ -123,9 +125,10 @@ where
     if let Ok(Some(dmabuf)) = compositor_data.rx_on_buffer_sent.recv() {
         debug!("create_backing_store_callback: received buffer");
 
-        let name = compositor_data
+        let name = flutter_engine
+            .renderer_data
             .framebuffer_importer
-            .import_framebuffer(dmabuf)
+            .import_framebuffer(&flutter_engine.renderer_data.main_egl_context, dmabuf)
             .unwrap_or(0);
 
         *backing_store_out = FlutterBackingStore {
@@ -176,7 +179,9 @@ where
     debug!("present_view_callback: {:?}", (*info).view_id);
     let user_data = (*info).user_data;
     let compositor_data = &mut *(user_data as *mut CompositorUserData);
-    compositor_data.framebuffer_importer.gl.Finish();
+    let flutter_engine =
+        &mut *(compositor_data.flutter_engine_ptr as *mut FlutterEngine<BackendData>);
+    flutter_engine.renderer_data.gl.Finish();
     compositor_data
         .tx_present_view
         .send((*info).view_id)

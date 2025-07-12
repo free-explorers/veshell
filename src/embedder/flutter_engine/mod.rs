@@ -287,7 +287,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     shutdown_dart_vm_when_done: true,
                     compositor: &FlutterCompositor::new::<BackendData>(
                         &server_state.loop_handle,
-                        unsafe { GlesFramebufferImporter::new(renderer.egl_context())? },
+                        this.deref_mut() as *const _ as *mut _,
                     ),
                     dart_old_gen_heap_size: 0,
                     aot_data,
@@ -730,28 +730,27 @@ impl<BackendData: Backend + 'static> Drop for FlutterEngine<BackendData> {
 }
 
 struct RendererData {
+    gl: Gles2,
     main_egl_context: EGLContext,
     resource_egl_context: EGLContext,
     output_height: Option<u16>,
     channels: FlutterEngineChannels,
+    framebuffer_importer: GlesFramebufferImporter,
 }
 
 // Ironically, EGLContext which contains EGLDisplay is Send, but EGLDisplay is not.
 // This impl is not needed, but it's here to make it explicit that it's safe to send this struct
 // to the Flutter render thread.
 unsafe impl Send for RendererData {}
-unsafe impl Sync for RendererData {} // Add this if you need to share references across threads
 
 impl RendererData {
     fn new(
         root_egl_context: &EGLContext,
         channels: FlutterEngineChannels,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        debug!("new RendererData thread: {:?}", std::thread::current().id());
-
         unsafe { root_egl_context.make_current()? };
 
-        let egl_display = root_egl_context.display().clone();
+        let egl_display = root_egl_context.display();
         let gl_attributes = GlAttributes {
             version: (2, 0),
             profile: Some(GlProfile::Core),
@@ -761,6 +760,7 @@ impl RendererData {
         let pixel_format_requirements = PixelFormatRequirements::_8_bit();
 
         Ok(Self {
+            gl: Gles2::load_with(|s| unsafe { egl::get_proc_address(s) } as *const _),
             main_egl_context: EGLContext::new_shared_with_config(
                 &egl_display,
                 &root_egl_context,
@@ -775,6 +775,7 @@ impl RendererData {
             )?,
             output_height: None,
             channels,
+            framebuffer_importer: unsafe { GlesFramebufferImporter::new(egl_display.clone())? },
         })
     }
 }

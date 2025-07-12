@@ -3,6 +3,7 @@ use std::sync::atomic::Ordering;
 use log::{error, warn};
 use smithay::backend::allocator::dmabuf::{AnyError, AsDmabuf, Dmabuf};
 use smithay::backend::allocator::{Allocator, Fourcc, Slot, Swapchain};
+use smithay::backend::drm::output;
 use smithay::backend::input::{Event, InputEvent, KeyState, KeyboardKeyEvent};
 use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::element::surface::{
@@ -49,6 +50,7 @@ use smithay::{
 use tracing::{debug, info};
 
 use crate::flutter_engine::embedder::FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse;
+use crate::flutter_engine::view::OutputViewIdWrapper;
 use crate::flutter_engine::FlutterEngine;
 use crate::keyboard::{self, handle_keyboard_event};
 use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
@@ -278,10 +280,13 @@ pub fn run_x11_client() {
     state.space.map_output(&output, (0, 0));
     let output_clone = output.clone();
 
-    let view_id = state
-        .flutter_engine_mut()
-        .add_view(0, size.w as usize, size.h as usize);
+    let view_id = state.flutter_engine_mut().add_view(0, &output);
 
+    output_clone
+        .user_data()
+        .insert_if_missing(|| OutputViewIdWrapper {
+            view_id: view_id.clone(),
+        });
     // Mandatory formats by the Wayland spec.
     // TODO: Add more formats based on the GLES version.
     state
@@ -315,7 +320,7 @@ pub fn run_x11_client() {
 
                     let monitors = data.space.outputs().cloned().collect::<Vec<_>>();
                     data.flutter_engine_mut()
-                        .resize_view(view_id, size.w as usize, size.h as usize)
+                        .resize_view(view_id, &output_clone)
                         .unwrap();
 
                     data.flutter_engine_mut().monitor_layout_changed(monitors);

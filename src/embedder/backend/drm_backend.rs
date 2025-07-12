@@ -65,6 +65,7 @@ use crate::flutter_engine::embedder::{
     FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
     FlutterPointerDeviceKind_kFlutterPointerDeviceKindTouch,
 };
+use crate::flutter_engine::view::OutputViewIdWrapper;
 use crate::flutter_engine::wayland_messages::{
     GestureSwipeBeginEventMessage, GestureSwipeEndEventMessage, GestureSwipeUpdateEventMessage,
 };
@@ -188,10 +189,6 @@ impl DrmBackend {
 struct UdevOutputId {
     device_id: DrmNode,
     crtc: crtc::Handle,
-}
-
-struct OutputViewIdWrapper {
-    view_id: i64,
 }
 
 // we cannot simply pick the first supported format of the intersection of *all* formats, because:
@@ -376,12 +373,11 @@ pub fn run_drm_backend() {
                                         .into(),
                                 ),
                             );
+                            data.flutter_engine
+                                .as_mut()
+                                .unwrap()
+                                .resize_view(surface.view_id, output);
                         });
-                    data.flutter_engine.as_mut().unwrap().resize_view(
-                        surface.view_id,
-                        monitor_configuration.mode.size.width as usize,
-                        monitor_configuration.mode.size.height as usize,
-                    );
                 }
             }
             let bounding_box = data
@@ -830,11 +826,6 @@ impl State<DrmBackend> {
         let interface_id = connector.interface_id() as u64;
         let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
 
-        let view_id = {
-            let flutter_engine = self.flutter_engine_mut();
-            flutter_engine.add_view(interface_id, phys_w as usize, phys_h as usize)
-        };
-
         let device = if let Some(device) = self.backend_data.gpus.get_mut(&node) {
             device
         } else {
@@ -931,9 +922,15 @@ impl State<DrmBackend> {
         output.change_current_state(
             Some(wl_mode),
             None,
-            Some(Scale::Fractional(2.0)),
+            Some(Scale::Fractional(1.0)),
             Some(position),
         );
+
+        let view_id = {
+            let flutter_engine = self.flutter_engine.as_mut().unwrap();
+            flutter_engine.add_view(interface_id, &output)
+        };
+
         output
             .user_data()
             .insert_if_missing(|| OutputViewIdWrapper {

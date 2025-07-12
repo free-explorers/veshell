@@ -12,7 +12,6 @@
 
 use core::ffi::{c_char, CStr};
 
-use smithay::backend::egl::context::{GlAttributes, GlProfile, PixelFormatRequirements};
 use smithay::backend::egl::EGLDisplay;
 use smithay::backend::{
     allocator::dmabuf::{Dmabuf, WeakDmabuf},
@@ -23,11 +22,11 @@ use smithay::backend::{
     },
     renderer::gles::{ffi, GlesError},
 };
-use tracing::{debug, info, trace};
+use tracing::{info, trace};
 
 pub struct GlesFramebufferImporter {
-    pub(crate) gl: ffi::Gles2,
-    egl_context: EGLContext,
+    gl: ffi::Gles2,
+    egl_display: EGLDisplay,
 
     // caches
     buffers: Vec<GlesFramebuffer>,
@@ -42,25 +41,8 @@ struct GlesFramebuffer {
 }
 
 impl GlesFramebufferImporter {
-    pub unsafe fn new(root_egl_context: &EGLContext) -> Result<Self, GlesError> {
-        unsafe { root_egl_context.make_current()? };
-
+    pub unsafe fn new(egl_display: EGLDisplay) -> Result<Self, GlesError> {
         let gl = ffi::Gles2::load_with(|s| egl::get_proc_address(s) as *const _);
-        let egl_display = root_egl_context.display().clone();
-        let gl_attributes = GlAttributes {
-            version: (2, 0),
-            profile: Some(GlProfile::Core),
-            debug: false,
-            vsync: false,
-        };
-        let pixel_format_requirements = PixelFormatRequirements::_8_bit();
-        let main_egl_context = EGLContext::new_shared_with_config(
-            &egl_display,
-            &root_egl_context,
-            gl_attributes,
-            pixel_format_requirements,
-        )
-        .map_err(|e| GlesError::CreateShaderObject)?;
 
         info!("Initializing OpenGL ES buffer importer");
         info!(
@@ -78,18 +60,17 @@ impl GlesFramebufferImporter {
 
         Ok(Self {
             gl,
-            egl_context: main_egl_context,
+            egl_display,
             buffers: vec![],
         })
     }
 
-    pub fn import_framebuffer(&mut self, dmabuf: Dmabuf) -> Result<u32, GlesError> {
-        debug!(
-            "import_framebuffer thread: {:?}",
-            std::thread::current().id()
-        );
-        self.make_current()?;
-        debug!("after make_current");
+    pub fn import_framebuffer(
+        &mut self,
+        egl_context: &EGLContext,
+        dmabuf: Dmabuf,
+    ) -> Result<u32, GlesError> {
+        self.make_current(egl_context)?;
 
         let fbo = self
             .buffers
@@ -104,8 +85,7 @@ impl GlesFramebufferImporter {
             .map(|buf| Ok::<_, GlesError>(buf.fbo))
             .unwrap_or_else(|| {
                 trace!("Creating EGLImage for Dmabuf: {:?}", dmabuf);
-                let image = self
-                    .egl_context
+                let image = egl_context
                     .display()
                     .create_image_from_dmabuf(&dmabuf)
                     .map_err(GlesError::BindBufferEGLError)?;
@@ -148,12 +128,12 @@ impl GlesFramebufferImporter {
                 }
             })?;
 
-        self.make_current()?;
+        self.make_current(egl_context)?;
         Ok(fbo)
     }
 
-    pub fn make_current(&mut self) -> Result<(), MakeCurrentError> {
-        unsafe { self.egl_context.make_current()? };
+    pub fn make_current(&mut self, egl_context: &EGLContext) -> Result<(), MakeCurrentError> {
+        unsafe { egl_context.make_current()? };
         // delayed destruction until the next frame rendering.
         self.cleanup();
         Ok(())
@@ -177,10 +157,7 @@ impl GlesFramebufferImporter {
         unsafe {
             self.gl.DeleteFramebuffers(1, &gles_buffer.fbo as *const _);
             self.gl.DeleteRenderbuffers(1, &gles_buffer.rbo as *const _);
-            ffi_egl::DestroyImageKHR(
-                **self.egl_context.display().get_display_handle(),
-                gles_buffer.image,
-            );
+            ffi_egl::DestroyImageKHR(**self.egl_display.get_display_handle(), gles_buffer.image);
         }
     }
 }

@@ -9,11 +9,14 @@ use crate::flutter_engine::embedder::{
 use crate::{backend::Backend, flutter_engine::FlutterEngine};
 use smithay::backend::allocator::dmabuf::{AnyError, AsDmabuf, Dmabuf};
 use smithay::backend::allocator::{Allocator, Slot, Swapchain};
+use smithay::output::Output;
 use smithay::reexports::calloop::{self, channel};
 use smithay::reexports::winit::event;
 use smithay::utils::SerialCounter;
 use tracing::debug;
-
+pub struct OutputViewIdWrapper {
+    pub view_id: i64,
+}
 pub struct ViewsManagement {
     serials: SerialCounter,
     pub views: HashMap<i64, VeshellView>,
@@ -50,13 +53,15 @@ struct AddViewData {
 }
 
 impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
-    pub fn add_view(&mut self, display_id: u64, width: usize, height: usize) -> i64 {
+    pub fn add_view(&mut self, display_id: u64, output: &Output) -> i64 {
         let (tx_done, rx_done) = channel::channel::<(i64, bool)>();
 
         let serial: u32 = self.views_management.serials.next_serial().into();
         let view_id: i64 = serial as i64;
 
         let add_view_data = Box::new(AddViewData { tx_done, view_id });
+
+        let mode = output.current_mode().unwrap();
         self.loop_handle
             .insert_source(rx_done, move |event, _, data| {
                 debug!("add_view_callback_done: {:?}", event);
@@ -64,7 +69,9 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     if added {
                         let view = VeshellView {
                             view_id: event_view_id,
-                            swapchain: data.backend_data.new_swapchain(width as u32, height as u32),
+                            swapchain: data
+                                .backend_data
+                                .new_swapchain(mode.size.w as u32, mode.size.h as u32),
                             current_slot: None,
                             last_rendered_slot: None,
                         };
@@ -72,9 +79,19 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                             .views_management
                             .views
                             .insert(view_id, view);
+                        let output = data
+                            .space
+                            .outputs()
+                            .find(|o| {
+                                o.user_data().get::<OutputViewIdWrapper>().unwrap().view_id
+                                    == view_id
+                            })
+                            .unwrap();
 
-                        data.flutter_engine_mut()
-                            .resize_view(view_id, width, height);
+                        data.flutter_engine
+                            .as_mut()
+                            .unwrap()
+                            .resize_view(view_id, output);
                     }
                 }
             })
@@ -87,9 +104,9 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     view_id,
                     view_metrics: &FlutterWindowMetricsEvent {
                         struct_size: size_of::<FlutterWindowMetricsEvent>(),
-                        width,
-                        height,
-                        pixel_ratio: 1.,
+                        width: mode.size.w as usize,
+                        height: mode.size.h as usize,
+                        pixel_ratio: output.current_scale().fractional_scale(),
                         left: 0,
                         top: 0,
                         physical_view_inset_top: 0.,
@@ -111,15 +128,15 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
     pub fn resize_view(
         &mut self,
         view_id: i64,
-        width: usize,
-        height: usize,
+        output: &Output,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let size = output.current_mode().unwrap().size;
         // send new metrics to flutter engine
         let event = FlutterWindowMetricsEvent {
             struct_size: size_of::<FlutterWindowMetricsEvent>(),
-            width,
-            height,
-            pixel_ratio: 1.0,
+            width: size.w as usize,
+            height: size.h as usize,
+            pixel_ratio: output.current_scale().fractional_scale(),
             left: 0,
             top: 0,
             physical_view_inset_top: 0.0,
@@ -137,7 +154,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         }
         //resize the swapchain
         let view = self.views_management.views.get_mut(&view_id).unwrap();
-        view.swapchain.resize(width as u32, height as u32);
+        view.swapchain.resize(size.w as u32, size.h as u32);
         Ok(())
     }
 }
