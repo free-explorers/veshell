@@ -24,6 +24,7 @@ abstract class Monitor with _$Monitor {
     required Mode? currentMode,
     required Mode? preferredMode,
     required List<Mode> modes,
+    required int viewId,
   }) = _Monitor;
   Monitor._();
 

@@ -11,6 +11,7 @@ part 'monitor_configuration.serializable.g.dart';
 abstract class MonitorConfiguration with _$MonitorConfiguration {
   const factory MonitorConfiguration({
     required Mode mode,
+    required double fractionnalScaling,
     @OffsetConverter() required Offset location,
   }) = _MonitorConfiguration;
   factory MonitorConfiguration.fromJson(Map<String, dynamic> json) =>

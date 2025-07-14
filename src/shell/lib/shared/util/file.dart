@@ -1,6 +1,10 @@
 import 'dart:io';
 
-Future<void> writeFileAtomically(String path, String content) async {
+Future<void> writeFileAtomically(
+  String path,
+  String content, {
+  bool retry = true,
+}) async {
   // Create a temp file path
   final tempFile = File('$path.tmp');
 
@@ -13,8 +17,11 @@ Future<void> writeFileAtomically(String path, String content) async {
     await tempFile.writeAsString(content);
     await tempFile.rename(path);
   } on FileSystemException catch (_) {
+    if (!retry) {
+      rethrow;
+    }
     // If we couldn't create the lock file, wait and retry
     await Future.delayed(const Duration(milliseconds: 100));
-    return writeFileAtomically(path, content);
+    return writeFileAtomically(path, content, retry: false);
   }
 }

@@ -1,5 +1,6 @@
 import 'package:collection/collection.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_client.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_devices.dart';
 import 'package:upower/upower.dart';
 
@@ -11,7 +12,9 @@ bool anyUpowerDevice(Ref ref) {
           .watch(upowerDevicesProvider)
           .value
           ?.whereNot(
-            (element) => element.type == UPowerDeviceType.linePower,
+            (device) =>
+                UpowerClient.getDeviceType(device) ==
+                UPowerDeviceType.linePower,
           )
           .isNotEmpty ??
       false;

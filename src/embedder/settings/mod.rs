@@ -135,12 +135,16 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
         let settings_path = config_folder.join("settings.json");
 
         let monitor_path = config_folder.join("monitor");
+
         if monitor_path.exists() {
             watch_monitors_changes(
                 config_folder_path.clone(),
                 loop_handle.clone(),
                 on_monitor_settings_changed,
             );
+        } else {
+            std::fs::create_dir_all(monitor_path.clone())
+                .expect("Unable to create user settings folder");
         }
 
         loop_handle

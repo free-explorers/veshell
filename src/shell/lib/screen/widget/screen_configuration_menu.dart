@@ -3,8 +3,8 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/monitor/model/monitor_configuration.serializable.dart';
-import 'package:shell/monitor/provider/current_monitor.dart';
 import 'package:shell/monitor/provider/monitor_configuration_state.dart';
+import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/available_screen_list.dart';
 import 'package:shell/screen/provider/monitor_for_screen.dart';
@@ -20,11 +20,11 @@ class ScreenConfigurationMenu extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final menuController = useMemoized(MenuController.new);
-    final monitor = ref.watch(currentMonitorProvider);
+    final monitorName = CurrentMonitorName.of(context);
     final screenId = CurrentScreenId.of(context);
 
     final screenConfiguration =
-        ref.watch(monitorConfigurationStateProvider(monitor));
+        ref.watch(monitorConfigurationStateProvider(monitorName));
     return MenuAnchor(
       controller: menuController,
       style: const MenuStyle(
@@ -54,13 +54,15 @@ class ScreenConfigurationMenu extends HookConsumerWidget {
                         .createNewScreen();
                     ref
                         .read(
-                          monitorConfigurationStateProvider(monitor).notifier,
+                          monitorConfigurationStateProvider(monitorName)
+                              .notifier,
                         )
                         .addNewScreenConfiguration(screenToUse);
                   } else {
                     ref
                         .read(
-                          monitorConfigurationStateProvider(monitor).notifier,
+                          monitorConfigurationStateProvider(monitorName)
+                              .notifier,
                         )
                         .removeLastScreenConfiguration();
                   }
@@ -70,7 +72,7 @@ class ScreenConfigurationMenu extends HookConsumerWidget {
                 onPressed: () {
                   ref
                       .read(
-                        monitorConfigurationStateProvider(monitor).notifier,
+                        monitorConfigurationStateProvider(monitorName).notifier,
                       )
                       .setDisplayMode(
                         switch (screenConfiguration.displayMode) {
@@ -103,14 +105,16 @@ class ScreenConfigurationMenu extends HookConsumerWidget {
                   ref.read(monitorForScreenProvider(newScreenId));
               if (currentMonitorForScreen != null) {
                 ref
-                    .read(monitorConfigurationStateProvider(monitor).notifier)
+                    .read(
+                        monitorConfigurationStateProvider(monitorName).notifier)
                     .swapScreenIds(
                       screenId,
                       newScreenId,
                     );
               } else {
                 ref
-                    .read(monitorConfigurationStateProvider(monitor).notifier)
+                    .read(
+                        monitorConfigurationStateProvider(monitorName).notifier)
                     .replaceScreenIdByScreenId(
                       screenId,
                       newScreenId,
