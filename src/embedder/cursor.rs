@@ -2,6 +2,8 @@ use std::env;
 use std::{collections::HashMap, io::Read, sync::Mutex};
 
 use smithay::backend::renderer::RendererSuper;
+use smithay::output::Scale;
+use smithay::utils;
 use smithay::{
     backend::{
         allocator::Fourcc,
@@ -17,9 +19,7 @@ use smithay::{
     input::pointer::{CursorIcon, CursorImageAttributes, CursorImageStatus},
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     render_elements,
-    utils::{
-        Buffer as BufferCoords, IsAlive, Logical, Monotonic, Point, Scale, Size, Time, Transform,
-    },
+    utils::{Buffer as BufferCoords, IsAlive, Logical, Monotonic, Point, Size, Time, Transform},
     wayland::compositor::with_states,
 };
 use tracing::warn;
@@ -179,7 +179,7 @@ pub fn draw_cursor<R>(
     renderer: &mut R,
     cursor_image_status: &Mutex<CursorImageStatus>,
     cursor_state: &Mutex<CursorStateInner>,
-    scale: Scale<f64>,
+    scale: Scale,
     time: Time<Monotonic>,
     location: Point<f64, Logical>,
     is_surface_under_pointer: bool,
@@ -209,14 +209,19 @@ where
 
     if let CursorImageStatus::Surface(ref wl_surface) = cursor_status {
         if is_surface_under_pointer {
-            return draw_surface_cursor(renderer, wl_surface, location.to_i32_round(), scale);
+            return draw_surface_cursor(
+                renderer,
+                wl_surface,
+                location.to_i32_round(),
+                scale.fractional_scale().into(),
+            );
         }
     }
     if let Some(current_cursor) = named_cursor {
-        let integer_scale = scale.x.max(scale.y).ceil() as u32;
+        let integer_scale = scale.integer_scale();
         let frame = state
             .get_named_cursor(current_cursor)
-            .get_image(integer_scale, time.as_millis());
+            .get_image(integer_scale as u32, time.as_millis());
 
         let pointer_images = &mut state.image_cache;
         let maybe_image =
@@ -241,12 +246,12 @@ where
 
         let hotspot = Point::<i32, BufferCoords>::from((frame.xhot as i32, frame.yhot as i32));
         state.current_image = Some(frame);
-
+        let float_scale: utils::Scale<f64> = scale.fractional_scale().into();
         return vec![(
             CursorRenderElement::Static(
                 MemoryRenderBufferRenderElement::from_buffer(
                     renderer,
-                    location.to_physical(scale),
+                    location.to_physical_precise_round(float_scale),
                     &pointer_image,
                     None,
                     None,
@@ -266,7 +271,7 @@ pub fn draw_surface_cursor<R>(
     renderer: &mut R,
     surface: &WlSurface,
     location: impl Into<Point<i32, Logical>>,
-    scale: Scale<f64>,
+    scale: utils::Scale<f64>,
 ) -> Vec<(CursorRenderElement<R>, Point<i32, BufferCoords>)>
 where
     R: Renderer + ImportAll,
