@@ -351,6 +351,7 @@ pub fn run_drm_backend() {
                         warn!("error changing mode: {err:?}");
                         continue;
                     }
+                    let scale = monitor_configuration.fractionnal_scale;
                     data.space
                         .outputs()
                         .find(|output| output.name() == monitor_name)
@@ -364,7 +365,7 @@ pub fn run_drm_backend() {
                                     refresh: monitor_configuration.mode.refresh_rate,
                                 }),
                                 None,
-                                None,
+                                Some(Scale::Fractional(scale)),
                                 Some(
                                     (
                                         monitor_configuration.location.x as i32,
@@ -918,11 +919,14 @@ impl State<DrmBackend> {
             output.add_mode(Mode::from(*iterated_mode));
         }
         let wl_mode = Mode::from(drm_mode);
+        let scale = monitor_configuration
+            .map(|m| m.fractionnal_scale)
+            .unwrap_or(1.0);
         output.set_preferred(wl_mode);
         output.change_current_state(
             Some(wl_mode),
             None,
-            Some(Scale::Fractional(1.0)),
+            Some(Scale::Fractional(scale)),
             Some(position),
         );
 
