@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/monitor/provider/monitor_by_name.dart';
+import 'package:shell/settings/model/types/monitor_setting.serializable.dart';
 import 'package:shell/settings/provider/util/config_directory.dart';
 
 part 'monitor_setting_json.g.dart';
@@ -28,7 +30,7 @@ class MonitorSettingJson extends _$MonitorSettingJson {
           }
         }
       });
-      return {};
+      return getInitialConfiguration();
     }
     _subscription = file.watch().listen((event) {
       ref.invalidateSelf();
@@ -43,7 +45,16 @@ class MonitorSettingJson extends _$MonitorSettingJson {
         file.readAsStringSync(),
       ) as Map<String, dynamic>;
     } on Exception catch (_) {
-      return {};
+      return getInitialConfiguration();
     }
+  }
+
+  Map<String, dynamic> getInitialConfiguration() {
+    final monitor = ref.read(monitorByNameProvider(monitorId))!;
+    return MonitorSetting(
+      mode: monitor.currentMode!,
+      fractionnalScale: monitor.scale,
+      location: monitor.location,
+    ).toJson();
   }
 }

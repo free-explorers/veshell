@@ -19,6 +19,7 @@ use crate::flutter_engine::embedder::{
     FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
     FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
 };
+use crate::flutter_engine::view::OutputViewIdWrapper;
 use crate::flutter_engine::{view, FlutterEngine};
 use crate::settings::MouseAndTouchpadSettings;
 use crate::state::State;
@@ -168,13 +169,20 @@ impl<BackendData: Backend> State<BackendData> {
             pointer.frame(self);
             return;
         }
+        let scale = self
+            .space
+            .outputs()
+            .find(|o| o.user_data().get::<OutputViewIdWrapper>().unwrap().view_id == view_id)
+            .unwrap()
+            .current_scale()
+            .fractional_scale();
         self.flutter_engine()
             .send_pointer_event(FlutterPointerEvent {
                 struct_size: size_of::<FlutterPointerEvent>(),
                 phase,
                 timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
-                x: self.pointer.current_location().x,
-                y: self.pointer.current_location().y,
+                x: self.pointer.current_location().x * scale,
+                y: self.pointer.current_location().y * scale,
                 device: device_id,
                 signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
                 scroll_delta_x: 0.0,
@@ -293,7 +301,6 @@ impl<BackendData: Backend> State<BackendData> {
                     0.,
                     0.,
                     0.,
-                    0.,
                     view_id,
                 );
             } else {
@@ -310,7 +317,6 @@ impl<BackendData: Backend> State<BackendData> {
                         self.pointer.current_location().x,
                         self.pointer.current_location().y,
                         FlutterPointerPhase_kPanZoomStart,
-                        0.,
                         0.,
                         0.,
                         0.,
@@ -331,7 +337,6 @@ impl<BackendData: Backend> State<BackendData> {
                     self.flutter_engine().trackpad_scrolling_manager.pan_x,
                     self.flutter_engine().trackpad_scrolling_manager.pan_y,
                     1.,
-                    0.,
                     view_id,
                 );
             }
@@ -355,7 +360,6 @@ impl<BackendData: Backend> State<BackendData> {
             0.,
             0.,
             0.,
-            0.,
             view_id,
         );
     }
@@ -374,7 +378,6 @@ impl<BackendData: Backend> State<BackendData> {
             FlutterPointerPhase_kPanZoomUpdate,
             event.delta_x(),
             event.delta_y(),
-            event.scale(),
             event.rotation(),
             view_id,
         );
@@ -392,7 +395,6 @@ impl<BackendData: Backend> State<BackendData> {
             pointer.current_location().x,
             pointer.current_location().y,
             FlutterPointerPhase_kPanZoomEnd,
-            0.,
             0.,
             0.,
             0.,
@@ -445,6 +447,13 @@ impl<BackendData: Backend> State<BackendData> {
     where
         BackendData: Backend + 'static,
     {
+        let scale = self
+            .space
+            .outputs()
+            .find(|o| o.user_data().get::<OutputViewIdWrapper>().unwrap().view_id == view_id)
+            .unwrap()
+            .current_scale()
+            .fractional_scale();
         self.flutter_engine()
             .send_pointer_event(FlutterPointerEvent {
                 struct_size: size_of::<FlutterPointerEvent>(),
@@ -458,8 +467,8 @@ impl<BackendData: Backend> State<BackendData> {
                     FlutterPointerPhase_kHover
                 },
                 timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
-                x: location.x,
-                y: location.y,
+                x: location.x * scale,
+                y: location.y * scale,
                 device: device_id,
                 signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
                 scroll_delta_x: 0.0,
@@ -486,10 +495,16 @@ impl<BackendData: Backend> State<BackendData> {
         phase: FlutterPointerPhase,
         pan_x: f64,
         pan_y: f64,
-        scale: f64,
         rotation: f64,
         view_id: i64,
     ) {
+        let scale = self
+            .space
+            .outputs()
+            .find(|o| o.user_data().get::<OutputViewIdWrapper>().unwrap().view_id == view_id)
+            .unwrap()
+            .current_scale()
+            .fractional_scale();
         self.flutter_engine()
             .send_pointer_event(FlutterPointerEvent {
                 struct_size: size_of::<FlutterPointerEvent>(),

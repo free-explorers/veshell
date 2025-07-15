@@ -7,7 +7,7 @@ import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/settings/model/setting_group.dart';
 import 'package:shell/settings/model/setting_property.dart';
-import 'package:shell/settings/provider/state/monitor_setting.dart';
+import 'package:shell/settings/provider/state/monitor_setting_state.dart';
 import 'package:shell/settings/provider/util/config_directory.dart';
 import 'package:shell/settings/provider/util/configured_settings_json.dart';
 import 'package:shell/settings/provider/util/default_settings_json.dart';
@@ -76,8 +76,8 @@ class SettingsProperties extends _$SettingsProperties {
                     ),
                   ),
                 ),
-                'fractionnalScaling': const SettingProperty<double>(
-                  name: 'Fractionnal Scaling',
+                'fractionnalScale': const SettingProperty<double>(
+                  name: 'Fractionnal Scale',
                   description: 'Monitor fractionnal scaling',
                 ),
               },
@@ -185,7 +185,7 @@ class SettingsProperties extends _$SettingsProperties {
     final parts = path.split('.');
     if (parts.first == 'monitors') {
       return ref
-          .read(monitorSettingProvider(parts[1]).notifier)
+          .read(monitorSettingStateProvider(parts[1]).notifier)
           .updateByPath(parts.sublist(2).join('.'), newValue);
     }
 

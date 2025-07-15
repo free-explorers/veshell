@@ -4,7 +4,7 @@ import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/provider/monitor_by_name.dart';
 import 'package:shell/overview/widget/search/settings/setting_value_editor.dart';
 import 'package:shell/settings/model/setting_property.dart';
-import 'package:shell/settings/provider/state/monitor_setting.dart';
+import 'package:shell/settings/provider/state/monitor_setting_state.dart';
 import 'package:shell/shared/widget/expandable_container.dart';
 
 class MonitorResolutionEditor extends HookConsumerWidget
@@ -37,7 +37,7 @@ class MonitorResolutionEditor extends HookConsumerWidget
           onTap: () {
             final mode = modeMapPerSize[size]!.first;
             ref
-                .read(monitorSettingProvider(monitorName).notifier)
+                .read(monitorSettingStateProvider(monitorName).notifier)
                 .setMode(mode);
 
             ExpandableContainer.of(context).toggle();

@@ -4,20 +4,22 @@ import 'dart:ui';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
-import 'package:shell/settings/model/types/monitor_configuration.serializable.dart';
+import 'package:shell/settings/model/types/monitor_setting.serializable.dart';
 import 'package:shell/settings/provider/util/config_directory.dart';
 import 'package:shell/settings/provider/util/monitor_setting_json.dart';
 import 'package:shell/shared/util/file.dart';
 
-part 'monitor_setting.g.dart';
+part 'monitor_setting_state.g.dart';
 
 @riverpod
-class MonitorSetting extends _$MonitorSetting {
+class MonitorSettingState extends _$MonitorSettingState {
   @override
-  MonitorConfiguration build(String monitorId) {
-    return MonitorConfiguration.fromJson(
-      ref.watch(monitorSettingJsonProvider(monitorId)),
+  MonitorSetting build(String monitorId) {
+    final json = ref.watch(monitorSettingJsonProvider(monitorId));
+    final conf = MonitorSetting.fromJson(
+      json,
     );
+    return conf;
   }
 
   void setMode(Mode mode) {

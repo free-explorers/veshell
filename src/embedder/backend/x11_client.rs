@@ -115,13 +115,49 @@ pub fn run_x11_client() {
         .build(&x11_handle)
         .expect("Failed to create first window");
 
+    let settings_manager = settings::SettingsManager::new(
+        event_loop.handle(),
+        |data: &mut State<X11Data>| {
+            let settings = data.settings_manager.get_settings();
+            data.apply_veshell_settings(&settings);
+        },
+        |data, monitor_name| {
+            info!("Monitor settings updated of {}", monitor_name);
+            let config = data
+                .settings_manager
+                .get_monitor_configuration(monitor_name)
+                .unwrap();
+            data.space.outputs().for_each(|output| {
+                output.change_current_state(
+                    None,
+                    None,
+                    Some(Scale::Fractional(config.fractionnal_scale)),
+                    None,
+                );
+                let view_id = output
+                    .user_data()
+                    .get::<OutputViewIdWrapper>()
+                    .unwrap()
+                    .view_id;
+                data.flutter_engine
+                    .as_mut()
+                    .unwrap()
+                    .resize_view(view_id, output);
+            });
+        },
+    );
+
+    let output_name = "x11".to_string();
+
+    let monitor_setting = settings_manager.get_monitor_configuration(&output_name);
+
     let mode = Mode {
         size: (window.size().w as i32, window.size().h as i32).into(),
         refresh: 144_000,
     };
 
     let output = Output::new(
-        "x11".to_string(),
+        output_name,
         PhysicalProperties {
             size: (1000, 1000).into(),
             subpixel: Subpixel::Unknown,
@@ -130,10 +166,11 @@ pub fn run_x11_client() {
         },
     );
     let _global = output.create_global::<State<X11Data>>(&display_handle);
+    let scale = monitor_setting.map(|x| x.fractionnal_scale).unwrap_or(1.0);
     output.change_current_state(
         Some(mode),
         None,
-        Some(Scale::Fractional(1.0)),
+        Some(Scale::Fractional(scale)),
         Some((0, 0).into()),
     );
     output.set_preferred(mode);
@@ -236,17 +273,6 @@ pub fn run_x11_client() {
         Fourcc::Argb8888,
         modifiers,
     ); */
-
-    let settings_manager = settings::SettingsManager::new(
-        event_loop.handle(),
-        |data: &mut State<X11Data>| {
-            let settings = data.settings_manager.get_settings();
-            data.apply_veshell_settings(&settings);
-        },
-        |_data, monitor_name| {
-            info!("Monitor settings updated of {}", monitor_name);
-        },
-    );
 
     let mut state = State::new(
         display,
