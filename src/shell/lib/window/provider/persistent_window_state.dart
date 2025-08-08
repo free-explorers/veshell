@@ -32,7 +32,7 @@ class PersistentWindowState extends _$PersistentWindowState
   PersistentWindow build(PersistentWindowId windowId) {
     persist(
       key: _persistKey,
-      storage: ref.watch(persistentStorageStateProvider).requireValue,
+      ref.watch(persistentStorageStateProvider).requireValue,
       options: const StorageOptions(cacheTime: StorageCacheTime.unsafe_forever),
     );
 
@@ -61,7 +61,9 @@ class PersistentWindowState extends _$PersistentWindowState
   Future<Process?> launchSelf() async {
     Process? process;
     if (state.customExec != null) {
-      process = await ref.read(appLaunchProvider.notifier).launchApplication(
+      process = await ref
+          .read(appLaunchProvider.notifier)
+          .launchApplication(
             LaunchConfig(command: state.customExec!),
           );
     } else {
@@ -100,7 +102,9 @@ class PersistentWindowState extends _$PersistentWindowState
       DisplayMode.game => MetaWindowDisplayMode.fullscreen,
     };
 
-    ref.read(metaWindowStateProvider(state.metaWindowId!).notifier).patch(
+    ref
+        .read(metaWindowStateProvider(state.metaWindowId!).notifier)
+        .patch(
           MetaWindowPatchMessage.updateDisplayMode(
             id: state.metaWindowId!,
             value: metaDisplayMode,
@@ -134,8 +138,9 @@ class PersistentWindowState extends _$PersistentWindowState
       return;
     }
     super.closeWindow();
-    for (final dialogWindowId
-        in ref.read(dialogSetForWindowProvider(windowId))) {
+    for (final dialogWindowId in ref.read(
+      dialogSetForWindowProvider(windowId),
+    )) {
       ref
           .read(dialogWindowStateProvider(dialogWindowId).notifier)
           .closeWindow();

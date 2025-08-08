@@ -22,8 +22,8 @@ class ScreenManager extends _$ScreenManager {
   @override
   ScreenManagerState build() {
     persist(
+      ref.watch(persistentStorageStateProvider).requireValue,
       key: persistKey,
-      storage: ref.watch(persistentStorageStateProvider).requireValue,
       options: const StorageOptions(cacheTime: StorageCacheTime.unsafe_forever),
     );
     return stateOrNull ?? ScreenManagerState(screenIds: <ScreenId>{}.lock);
@@ -43,8 +43,9 @@ class ScreenManager extends _$ScreenManager {
   void removeIfEmpty(ScreenId screenId) {
     final screen = ref.read(screenStateProvider(screenId));
     if (screen.workspaceList.length == 1) {
-      final workspace =
-          ref.read(workspaceStateProvider(screen.workspaceList.first));
+      final workspace = ref.read(
+        workspaceStateProvider(screen.workspaceList.first),
+      );
       if (workspace.tileableWindowList.isEmpty) {
         ref.read(screenManagerProvider.notifier).removeScreen(screenId);
       }

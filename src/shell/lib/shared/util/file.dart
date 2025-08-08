@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 Future<void> writeFileAtomically(
@@ -6,22 +7,17 @@ Future<void> writeFileAtomically(
   bool retry = true,
 }) async {
   // Create a temp file path
-  final tempFile = File('$path.tmp');
+  final timestampSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  final tempFile = File('${path}_$timestampSeconds.tmp');
 
-  // Try to create the temp file - this acts as our mutex
-  try {
-    // Create temp file - will throw if it already exists
-    await tempFile.create(exclusive: true);
-
-    // Now we have the lock, perform the write operation
-    await tempFile.writeAsString(content);
-    await tempFile.rename(path);
-  } on FileSystemException catch (_) {
-    if (!retry) {
-      rethrow;
-    }
-    // If we couldn't create the lock file, wait and retry
-    await Future.delayed(const Duration(milliseconds: 100));
-    return writeFileAtomically(path, content, retry: false);
+  if (!tempFile.existsSync()) {
+    await tempFile.create(recursive: true);
+    unawaited(
+      Future<void>.delayed(const Duration(seconds: 1)).then((_) async {
+        await tempFile.rename(path);
+      }),
+    );
   }
+
+  await tempFile.writeAsString(content);
 }

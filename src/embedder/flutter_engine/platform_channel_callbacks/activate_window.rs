@@ -97,7 +97,14 @@ pub fn activate_window<BackendData: Backend + 'static>(
             x11_surface.set_activated(payload.activate).unwrap();
 
             if payload.activate && !x11_surface.is_override_redirect() {
-                let _ = data.x11_wm.as_mut().unwrap().raise_window(&x11_surface);
+                let _ = data
+                    .xwayland_state
+                    .as_mut()
+                    .unwrap()
+                    .xwm
+                    .as_mut()
+                    .unwrap()
+                    .raise_window(&x11_surface);
 
                 keyboard.set_focus(
                     data,

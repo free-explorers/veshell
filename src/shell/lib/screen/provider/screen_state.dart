@@ -28,7 +28,7 @@ class ScreenState extends _$ScreenState {
 
     persist(
       key: persistKey,
-      storage: storage,
+      storage,
       options: const StorageOptions(cacheTime: StorageCacheTime.unsafe_forever),
     );
 
@@ -41,13 +41,13 @@ class ScreenState extends _$ScreenState {
         selectedIndex: 0,
       );
     }
-/*     state = stateOrNull ??
+    /*     state = stateOrNull ??
         Screen(
           screenId: screenId,
           workspaceList: IList([const Uuid().v4()]),
           selectedIndex: 0,
         ); */
-// When the last workspace got a new window open in it
+    // When the last workspace got a new window open in it
     // we create a new blank workspace
     listenSelf((prev, next) {
       if (next.workspaceList == prev?.workspaceList) return;
@@ -82,11 +82,14 @@ class ScreenState extends _$ScreenState {
     if (_workspaceListenerMap.containsKey(workspaceId)) {
       return;
     }
-    final workspaceListener =
-        ref.listen(workspaceStateProvider(workspaceId), (_, workspace) {
+    final workspaceListener = ref.listen(workspaceStateProvider(workspaceId), (
+      _,
+      workspace,
+    ) {
       print('Workspace $workspaceId changed');
       final isLast = state.workspaceList.last == workspaceId;
-      final isBeforeLast = state.workspaceList.length > 1 &&
+      final isBeforeLast =
+          state.workspaceList.length > 1 &&
           state.workspaceList[state.workspaceList.length - 2] == workspaceId;
 
       // If the last workspace got a new window open in it
@@ -143,8 +146,9 @@ class ScreenState extends _$ScreenState {
   }
 
   void updateWorkspaceList(IList<WorkspaceId> workspaceList) {
-    final newSelectedIndex =
-        workspaceList.indexOf(state.workspaceList[state.selectedIndex]);
+    final newSelectedIndex = workspaceList.indexOf(
+      state.workspaceList[state.selectedIndex],
+    );
     state = state.copyWith(
       workspaceList: workspaceList,
       selectedIndex: newSelectedIndex,
@@ -164,8 +168,9 @@ class ScreenState extends _$ScreenState {
     var newIndex = index;
     final previousIndex = state.selectedIndex;
     final previousWorkspaceId = state.workspaceList[previousIndex];
-    final previousWorkspaceState =
-        ref.read(workspaceStateProvider(previousWorkspaceId));
+    final previousWorkspaceState = ref.read(
+      workspaceStateProvider(previousWorkspaceId),
+    );
     if (previousWorkspaceId != state.workspaceList.last &&
         previousWorkspaceState.tileableWindowList.isEmpty &&
         state.workspaceList.length > 1) {
@@ -183,8 +188,9 @@ class ScreenState extends _$ScreenState {
     final workspaceList = state.workspaceList;
     final workspaceId = workspaceList[oldIndex];
     state = state.copyWith(
-      workspaceList:
-          workspaceList.removeAt(oldIndex).insert(newIndex, workspaceId),
+      workspaceList: workspaceList
+          .removeAt(oldIndex)
+          .insert(newIndex, workspaceId),
     );
   }
 

@@ -1,6 +1,9 @@
+pub mod fractionnal_scale;
 pub mod xdg;
 pub mod xwayland;
+
 pub mod wayland {
+
     use std::cell::RefCell;
 
     use serde_json::json;

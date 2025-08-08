@@ -18,7 +18,7 @@ class MonitorConfigurationState extends _$MonitorConfigurationState {
   @override
   MonitorConfiguration build(MonitorId monitorId) {
     persist(
-      storage: ref.watch(persistentStorageStateProvider).requireValue,
+      ref.watch(persistentStorageStateProvider).requireValue,
       options: const StorageOptions(cacheTime: StorageCacheTime.unsafe_forever),
     );
     return stateOrNull ??
@@ -69,7 +69,8 @@ class MonitorConfigurationState extends _$MonitorConfigurationState {
           .removeLast()
           .map(
             (screenConfiguration) => screenConfiguration.copyWith(
-              flex: screenConfiguration.flex +
+              flex:
+                  screenConfiguration.flex +
                   configuration.flex ~/ (state.screenList.length - 1),
             ),
           )
@@ -111,8 +112,8 @@ class MonitorConfigurationState extends _$MonitorConfigurationState {
             (screenConfiguration) => screenConfiguration.screenId == screenIdA
                 ? screenConfiguration.copyWith(screenId: screenIdB)
                 : screenConfiguration.screenId == screenIdB
-                    ? screenConfiguration.copyWith(screenId: screenIdA)
-                    : screenConfiguration,
+                ? screenConfiguration.copyWith(screenId: screenIdA)
+                : screenConfiguration,
           )
           .toIList(),
     );
@@ -127,8 +128,8 @@ class MonitorConfigurationState extends _$MonitorConfigurationState {
           .map(
             (aScreenConfiguration) =>
                 aScreenConfiguration == screenConfiguration
-                    ? aScreenConfiguration.copyWith(flex: flex)
-                    : aScreenConfiguration,
+                ? aScreenConfiguration.copyWith(flex: flex)
+                : aScreenConfiguration,
           )
           .toIList(),
     );

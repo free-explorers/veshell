@@ -142,8 +142,10 @@ pub fn run_x11_client() {
                 data.flutter_engine
                     .as_mut()
                     .unwrap()
-                    .resize_view(view_id, output);
+                    .resize_view(view_id, output)
+                    .expect("Failed to resize view");
             });
+            data.on_outputs_changed();
         },
     );
 
@@ -313,6 +315,9 @@ pub fn run_x11_client() {
         .insert_if_missing(|| OutputViewIdWrapper {
             view_id: view_id.clone(),
         });
+
+    state.on_outputs_changed();
+
     // Mandatory formats by the Wayland spec.
     // TODO: Add more formats based on the GLES version.
     state
@@ -344,12 +349,11 @@ pub fn run_x11_client() {
 
                     let _ = tx_output_height.send(new_size.h);
 
-                    let monitors = data.space.outputs().cloned().collect::<Vec<_>>();
                     data.flutter_engine_mut()
                         .resize_view(view_id, &output_clone)
                         .unwrap();
 
-                    data.flutter_engine_mut().monitor_layout_changed(monitors);
+                    data.on_outputs_changed();
                     data.backend_data.render = true;
                 }
 

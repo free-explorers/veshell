@@ -389,7 +389,7 @@ pub fn run_drm_backend() {
                 .unwrap();
 
             data.determine_highest_hz_crtc();
-            data.monitor_layout_changed();
+            data.on_outputs_changed();
         },
     );
     let mut state = State::new(
@@ -564,7 +564,12 @@ pub fn run_drm_backend() {
             let _dh = data.display_handle.clone();
             let pointer = data.pointer.clone();
             let pointer_location = pointer.current_location();
-            let output_under_pointer = data.space.output_under(pointer_location).next().unwrap();
+            let output_under_pointer = data
+                .space
+                .output_under(pointer_location)
+                .next()
+                .or_else(|| data.space.outputs().next())
+                .unwrap();
             let view_id = output_under_pointer
                 .user_data()
                 .get::<OutputViewIdWrapper>()
@@ -767,10 +772,6 @@ pub fn run_drm_backend() {
 }
 
 impl State<DrmBackend> {
-    pub fn monitor_layout_changed(&mut self) {
-        let monitors = self.space.outputs().cloned().collect::<Vec<_>>();
-        self.flutter_engine_mut().monitor_layout_changed(monitors);
-    }
     fn determine_highest_hz_crtc(&mut self) {
         self.backend_data.highest_hz_crtc = self
             .space
@@ -1016,7 +1017,7 @@ impl State<DrmBackend> {
         device.surfaces.insert(crtc, surface);
 
         self.determine_highest_hz_crtc();
-        self.monitor_layout_changed();
+        self.on_outputs_changed();
         self.schedule_initial_render(node, crtc, self.loop_handle.clone());
     }
 
@@ -1058,7 +1059,7 @@ impl State<DrmBackend> {
         }
 
         self.determine_highest_hz_crtc();
-        self.monitor_layout_changed();
+        self.on_outputs_changed();
     }
 
     fn device_added(&mut self, node: DrmNode, path: &Path) -> Result<(), DeviceAddError> {

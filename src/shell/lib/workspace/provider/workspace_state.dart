@@ -4,6 +4,7 @@ import 'package:collection/collection.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/experimental/persist.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:hooks_riverpod/misc.dart';
 import 'package:riverpod_annotation/experimental/json_persist.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -51,7 +52,7 @@ class WorkspaceState extends _$WorkspaceState {
     _keepAliveLink = ref.keepAlive();
     persist(
       key: persistKey,
-      storage: ref.watch(persistentStorageStateProvider).requireValue,
+      ref.watch(persistentStorageStateProvider).requireValue,
       options: const StorageOptions(cacheTime: StorageCacheTime.unsafe_forever),
     );
 
@@ -96,12 +97,14 @@ class WorkspaceState extends _$WorkspaceState {
     // then check if the elements are in different order
     if (!state.tileableWindowList.equalItems(newWindowList) &&
         state.tileableWindowList.length == newWindowList.length &&
-        state.tileableWindowList
-            .every((element) => newWindowList.contains(element))) {
+        state.tileableWindowList.every(
+          (element) => newWindowList.contains(element),
+        )) {
       state = state.copyWith(
         tileableWindowList: newWindowList,
-        selectedIndex: newWindowList
-            .indexOf(state.tileableWindowList[state.selectedIndex]),
+        selectedIndex: newWindowList.indexOf(
+          state.tileableWindowList[state.selectedIndex],
+        ),
       );
     }
   }
@@ -142,14 +145,15 @@ class WorkspaceState extends _$WorkspaceState {
   Future<void> removeWindow(PersistentWindowId windowId) async {
     final removedIsCurrentlyFocused =
         state.selectedIndex < state.tileableWindowList.length &&
-            windowId == state.tileableWindowList[state.selectedIndex];
+        windowId == state.tileableWindowList[state.selectedIndex];
     final newWindowList = state.tileableWindowList.remove(windowId);
 
     var selectedIndex = state.selectedIndex;
     if (!removedIsCurrentlyFocused) {
       if (selectedIndex < state.tileableWindowList.length) {
-        selectedIndex = newWindowList
-            .indexOf(state.tileableWindowList[state.selectedIndex]);
+        selectedIndex = newWindowList.indexOf(
+          state.tileableWindowList[state.selectedIndex],
+        );
       } else {
         selectedIndex--;
       }
@@ -191,8 +195,9 @@ class WorkspaceState extends _$WorkspaceState {
     final appIdList = tileableWindowList
         .map(
           (windowId) => ref.read(
-            persistentWindowStateProvider(windowId)
-                .select((value) => value.properties.appId),
+            persistentWindowStateProvider(
+              windowId,
+            ).select((value) => value.properties.appId),
           ),
         )
         .whereNotNull()
@@ -203,13 +208,15 @@ class WorkspaceState extends _$WorkspaceState {
     for (final app in appIdList) {
       final workspaceCategoryCandidateList = <WorkspaceCategory>[];
       var multiplier = 1;
-      final entry =
-          await ref.read(localizedDesktopEntryForIdProvider(app).future);
+      final entry = await ref.read(
+        localizedDesktopEntryForIdProvider(app).future,
+      );
       if (entry != null) {
         final categoriesString =
             entry.entries[DesktopEntryKey.categories.string];
-        final appCategoryList =
-            categoriesString != null ? categoriesString.split(';') : <String>[];
+        final appCategoryList = categoriesString != null
+            ? categoriesString.split(';')
+            : <String>[];
         for (final appCategory in appCategoryList) {
           final workspaceCategory = WorkspaceCategory.values.firstWhereOrNull(
             (workspaceCategory) => workspaceCategory.name == appCategory,
@@ -217,10 +224,10 @@ class WorkspaceState extends _$WorkspaceState {
           if (workspaceCategory != null) {
             workspaceCategoryCandidateList.add(workspaceCategory);
           }
-          final meaningfulCategory =
-              MeaningfulApplicationCategory.values.firstWhereOrNull(
-            (meaningfulCategory) => meaningfulCategory.name == appCategory,
-          );
+          final meaningfulCategory = MeaningfulApplicationCategory.values
+              .firstWhereOrNull(
+                (meaningfulCategory) => meaningfulCategory.name == appCategory,
+              );
           if (meaningfulCategory != null) {
             multiplier += 1;
           }

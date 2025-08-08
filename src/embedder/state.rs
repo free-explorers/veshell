@@ -27,6 +27,9 @@ use smithay::wayland::compositor::{
     with_states, CompositorState, SubsurfaceCachedState, SurfaceAttributes,
 };
 use smithay::wayland::dmabuf::DmabufState;
+use smithay::wayland::fractional_scale::{
+    with_fractional_scale, FractionalScaleHandler, FractionalScaleManagerState,
+};
 use smithay::wayland::output::OutputHandler;
 use smithay::wayland::relative_pointer::RelativePointerManagerState;
 use smithay::wayland::seat::WaylandFocus;
@@ -50,9 +53,9 @@ use smithay::wayland::socket::ListeningSocketSource;
 use smithay::wayland::xwayland_shell::{self, XWAYLAND_SHELL_ROLE};
 use smithay::xwayland::{X11Surface, X11Wm};
 use smithay::{
-    delegate_compositor, delegate_data_control, delegate_data_device, delegate_output,
-    delegate_primary_selection, delegate_relative_pointer, delegate_seat, delegate_shm,
-    delegate_xdg_decoration, delegate_xdg_shell, delegate_xwayland_shell,
+    delegate_compositor, delegate_data_control, delegate_data_device, delegate_fractional_scale,
+    delegate_output, delegate_primary_selection, delegate_relative_pointer, delegate_seat,
+    delegate_shm, delegate_xdg_decoration, delegate_xdg_shell, delegate_xwayland_shell,
 };
 use tracing::{info, warn};
 
@@ -69,6 +72,7 @@ use crate::meta_window_state::MetaWindowState;
 use crate::settings::{SettingsManager, VeshellSettings};
 use crate::texture_swap_chain::TextureSwapChain;
 use crate::wayland::wayland::{get_direct_subsurfaces, get_surface_id};
+use crate::wayland::xwayland::xwayland::XWaylandState;
 use crate::{flutter_engine, Backend, ClientState};
 
 pub struct State<BackendData: Backend + 'static> {
@@ -111,17 +115,17 @@ pub struct State<BackendData: Backend + 'static> {
     pub x11_surfaces: HashMap<u64, X11Surface>,
     pub x11_surface_per_wl_surface: HashMap<WlSurface, X11Surface>,
     pub x11_surface_per_x11_window: HashMap<X11Window, X11Surface>,
-    pub x11_wm: Option<X11Wm>,
     pub xdg_popups: HashMap<u64, PopupSurface>,
     pub xdg_shell_state: XdgShellState,
     pub xdg_toplevels: HashMap<u64, ToplevelSurface>,
     pub meta_window_state: MetaWindowState,
-    pub xwayland_display: Option<u32>,
     pub xwayland_shell_state: xwayland_shell::XWaylandShellState,
+    pub xwayland_state: Option<XWaylandState>,
     pub cursor_state: CursorState,
     pub cursor_image_status: Mutex<CursorImageStatus>,
     pub settings_manager: SettingsManager<BackendData>,
     pub xdg_decoration_state: XdgDecorationState,
+    pub fractional_scale_manager_state: FractionalScaleManagerState,
     pub input_devices: HashSet<input::Device>,
 }
 
@@ -276,7 +280,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 
         let xwayland_shell_state = xwayland_shell::XWaylandShellState::new::<Self>(&display_handle);
         let xdg_decoration_state = XdgDecorationState::new::<Self>(&display_handle);
-
+        let fractional_scale_manager_state =
+            FractionalScaleManagerState::new::<Self>(&display_handle);
         Self {
             running: Arc::new(AtomicBool::new(true)),
             display_handle,
@@ -302,9 +307,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             repeat_delay,
             repeat_rate,
             key_repeater,
-            x11_wm: None,
             wayland_socket_name: Some(socket_name),
-            xwayland_display: None,
             next_surface_id: 1,
             next_x11_surface_id: 1,
             next_texture_id: 1,
@@ -322,12 +325,14 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             surface_id_per_texture_id: HashMap::new(),
             texture_swapchains: HashMap::new(),
             xwayland_shell_state,
+            xwayland_state: None,
             space: Space::default(),
             pointer_focus: None,
             cursor_state: CursorState::default(),
             cursor_image_status: Mutex::new(CursorImageStatus::default_named()),
             settings_manager,
             xdg_decoration_state,
+            fractional_scale_manager_state,
             input_devices: HashSet::new(),
         }
     }
@@ -432,6 +437,28 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             parent: get_surface_id(&get_parent(surface).unwrap()),
         }
     }
+
+    pub fn on_outputs_changed(&mut self) {
+        let outputs = self.space.outputs().cloned().collect::<Vec<_>>();
+        self.flutter_engine_mut()
+            .monitor_layout_changed(outputs.clone());
+
+        let highest_scale = outputs
+            .iter()
+            .map(|output| output.current_scale().fractional_scale())
+            .fold(f64::NAN, |acc, x| match acc.partial_cmp(&x) {
+                Some(std::cmp::Ordering::Less) | None => x,
+                _ => acc,
+            });
+
+        let highest_scale = if highest_scale.is_nan() {
+            1.0
+        } else {
+            highest_scale
+        };
+
+        self.update_xwayland_scale(highest_scale);
+    }
 }
 
 impl<BackendData: Backend> BufferHandler for State<BackendData> {
@@ -475,7 +502,7 @@ impl<BackendData: Backend> SelectionHandler for State<BackendData> {
         source: Option<SelectionSource>,
         _seat: Seat<Self>,
     ) {
-        if let Some(xwm) = self.x11_wm.as_mut() {
+        if let Some(xwm) = self.xwayland_state.as_mut().unwrap().xwm.as_mut() {
             if let Err(err) = xwm.new_selection(ty, source.map(|source| source.mime_types())) {
                 warn!(?err, ?ty, "Failed to set Xwayland selection");
             }
@@ -490,7 +517,7 @@ impl<BackendData: Backend> SelectionHandler for State<BackendData> {
         _seat: Seat<Self>,
         _user_data: &(),
     ) {
-        if let Some(xwm) = self.x11_wm.as_mut() {
+        if let Some(xwm) = self.xwayland_state.as_mut().unwrap().xwm.as_mut() {
             if let Err(err) = xwm.send_selection(ty, mime_type, fd, self.loop_handle.clone()) {
                 warn!(?err, "Failed to send primary (X11 -> Wayland)");
             }

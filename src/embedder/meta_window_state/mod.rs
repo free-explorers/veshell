@@ -121,6 +121,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             window_class: None,
             startup_id: None,
             geometry,
+            current_output: None,
             need_decoration: !is_decorated,
             game_mode_activated: false,
         });
@@ -167,6 +168,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             display_mode: None,
             window_class: None,
             startup_id: None,
+            current_output: None,
             geometry: Some(x11_surface.geometry().into()),
             need_decoration: !x11_surface.is_decorated(),
             game_mode_activated: false,

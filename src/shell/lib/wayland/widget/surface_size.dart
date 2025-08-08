@@ -21,8 +21,8 @@ class SurfaceSize extends ConsumerWidget {
       ),
     );
     return SizedBox(
-      width: surfaceSize.width,
-      height: surfaceSize.height,
+      width: surfaceSize.width * 1.5,
+      height: surfaceSize.height * 1.5,
       child: child,
     );
   }

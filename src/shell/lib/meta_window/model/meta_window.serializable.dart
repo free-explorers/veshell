@@ -30,6 +30,7 @@ abstract class MetaWindow with _$MetaWindow {
     String? title,
     String? windowClass,
     String? startupId,
+    String? currentOutput,
     @RectConverter() Rect? geometry,
   }) = _MetaWindow;
 

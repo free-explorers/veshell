@@ -18,7 +18,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 0.2.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.8.0 <4.0.0'
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -30,9 +30,9 @@ dependencies:
   async: ^2.11.0
   flutter:
     sdk: flutter
-  hooks_riverpod: ^3.0.0-dev.15
+  hooks_riverpod: ^3.0.0-dev.17
   flutter_hooks: ^0.21.2
-  riverpod_annotation: ^3.0.0-dev.15
+  riverpod_annotation: ^3.0.0-dev.17
   intl: ^0.20.1
   freezed: ^3.0.6
   freezed_annotation: ^3.0.0
@@ -76,13 +76,13 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  build_runner: ^2.4.13
-  flutter_lints: ^5.0.0
-  riverpod_generator: ^3.0.0-dev.15
-  very_good_analysis: ^7.0.0
-  custom_lint: ^0.7.0
-  riverpod_lint: ^3.0.0-dev.15
-  json_serializable: ^6.7.1
+  build_runner: ^2.6.0
+  flutter_lints: ^6.0.0
+  riverpod_generator: ^3.0.0-dev.17
+  very_good_analysis: ^9.0.0
+  custom_lint: ^0.8.0
+  riverpod_lint: ^3.0.0-dev.17
+  json_serializable: ^6.10.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

@@ -1,3 +1,4 @@
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:pulseaudio/pulseaudio.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_server_info.dart';
@@ -10,8 +11,9 @@ class DefaultPulseSink extends _$DefaultPulseSink {
   @override
   PulseAudioSink? build() {
     final defaultSinkName = ref.watch(
-      pulseServerInfoProvider
-          .select((value) => value.requireValue.defaultSinkName),
+      pulseServerInfoProvider.select(
+        (value) => value.requireValue.defaultSinkName,
+      ),
     );
     return ref.watch(pulseSinkByNameProvider(defaultSinkName));
   }

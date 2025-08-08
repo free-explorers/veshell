@@ -20,7 +20,7 @@ class PersistentStorageState extends _$PersistentStorageState {
   }
 }
 
-class PersistentStorage implements persist.Storage<String, String> {
+final class PersistentStorage extends persist.Storage<String, String> {
   PersistentStorage._(this.initialStoredData);
   final Map<String, String> initialStoredData;
 
@@ -70,5 +70,10 @@ class PersistentStorage implements persist.Storage<String, String> {
       path.join(persistenceDirectory.path, '$key.json'),
       value,
     );
+  }
+
+  @override
+  void deleteOutOfDate() {
+    // TODO: implement deleteOutOfDate
   }
 }

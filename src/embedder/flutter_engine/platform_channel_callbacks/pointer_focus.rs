@@ -36,7 +36,14 @@ pub fn pointer_focus<BackendData: Backend + 'static>(
         data.surface_id_under_cursor = Some(pointer_focus.surface_id);
         if let Some(surface) = data.surfaces.get(&pointer_focus.surface_id) {
             if let Some(x11_surface) = data.x11_surface_per_wl_surface.get(surface).cloned() {
-                let _ = data.x11_wm.as_mut().unwrap().raise_window(&x11_surface);
+                let _ = data
+                    .xwayland_state
+                    .as_mut()
+                    .unwrap()
+                    .xwm
+                    .as_mut()
+                    .unwrap()
+                    .raise_window(&x11_surface);
             }
             data.pointer_focus = Some((
                 PointerFocusTarget::from(surface),

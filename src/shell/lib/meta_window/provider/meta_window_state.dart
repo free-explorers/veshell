@@ -92,6 +92,8 @@ class MetaWindowState extends _$MetaWindowState {
         state = state.copyWith(needDecoration: patch.value);
       case UpdateGameModeActivated():
         state = state.copyWith(gameModeActivated: patch.value);
+      case UpdateCurrentOutput():
+        state = state.copyWith(currentOutput: patch.value);
     }
     if (propagate == true) {
       await ref.read(platformManagerProvider.notifier).request(
