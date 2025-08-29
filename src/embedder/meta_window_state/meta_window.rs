@@ -12,6 +12,7 @@ use smithay::{
         shell::xdg::XDG_TOPLEVEL_ROLE,
         xwayland_shell::XWAYLAND_SHELL_ROLE,
     },
+    xwayland::XWaylandClientData,
 };
 use tracing::warn;
 
@@ -81,6 +82,10 @@ pub enum MetaWindowPatch {
         id: String,
         value: Option<String>,
     },
+    UpdateScaleRatio {
+        id: String,
+        value: f64,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -99,6 +104,7 @@ pub struct MetaWindow {
     pub geometry: Option<MyRectangle<i32, Logical>>,
     pub need_decoration: bool,
     pub current_output: Option<String>,
+    pub scale_ratio: f64,
     pub game_mode_activated: bool,
 }
 
@@ -331,27 +337,19 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         return;
                     }
                     meta_window.current_output = value.clone();
-                    if let Some(surface) = self.surfaces.get(&meta_window.surface_id) {
-                        if let Some(x11_surface) = self.x11_surface_per_wl_surface.get(surface) {
-                            // Don't scale the wayland surface of an X11 surface
-                            with_states(surface, |data| {
-                                with_fractional_scale(data, |fractional| {
-                                    fractional.set_preferred_scale(0.1);
-                                });
-                            });
-                        } else {
-                            if let Some(output) = self.space.outputs().find(|output| {
-                                output.name() == value.clone().unwrap_or("".to_string())
-                            }) {
-                                with_states(surface, |data| {
-                                    with_fractional_scale(data, |fractional| {
-                                        fractional.set_preferred_scale(
-                                            output.current_scale().fractional_scale(),
-                                        );
-                                    });
-                                });
-                            }
-                        }
+                    let scale = self
+                        .space
+                        .outputs()
+                        .find(|output| output.name() == value.clone().unwrap_or("".to_string()))
+                        .map(|output| output.current_scale().fractional_scale());
+                    if let Some(scale) = scale {
+                        self.patch_meta_window(
+                            MetaWindowPatch::UpdateScaleRatio {
+                                id: id,
+                                value: scale,
+                            },
+                            true,
+                        );
                     }
                 }
             }
@@ -383,6 +381,36 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     } else {
                         if self.meta_window_state.meta_window_in_gaming_mode == Some(id) {
                             self.meta_window_state.meta_window_in_gaming_mode = None;
+                        }
+                    }
+                }
+            }
+            MetaWindowPatch::UpdateScaleRatio { id, value } => {
+                let xwayland_scale_ratio = self
+                    .xwayland_state
+                    .as_ref()
+                    .unwrap()
+                    .client
+                    .get_data::<XWaylandClientData>()
+                    .unwrap()
+                    .compositor_state
+                    .client_scale();
+                if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
+                    if meta_window.scale_ratio == value.clone() {
+                        return;
+                    }
+                    meta_window.scale_ratio = value.clone();
+
+                    if let Some(surface) = self.surfaces.get(&meta_window.surface_id) {
+                        if let Some(x11_surface) = self.x11_surface_per_wl_surface.get(surface) {
+                            // for xwayland force scale ratio to be the same as the client scale
+                            meta_window.scale_ratio = xwayland_scale_ratio;
+                        } else {
+                            with_states(surface, |data| {
+                                with_fractional_scale(data, |fractional| {
+                                    fractional.set_preferred_scale(meta_window.scale_ratio);
+                                });
+                            });
                         }
                     }
                 }

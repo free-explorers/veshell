@@ -17,6 +17,7 @@ pub mod xdg {
         utils::{Logical, Rectangle, Serial},
         wayland::{
             compositor::{self, add_post_commit_hook, with_states},
+            fractional_scale::with_fractional_scale,
             shell::xdg::{
                 decoration::XdgDecorationHandler, Configure, PopupSurface, PositionerState,
                 SurfaceCachedState, ToplevelSurface, XdgPopupSurfaceData, XdgShellHandler,
@@ -110,7 +111,17 @@ pub mod xdg {
             });
 
             self.xdg_popups.insert(surface_id, surface.clone());
-            let mut position = surface.with_pending_state(|state| state.geometry.loc);
+            let mut position: smithay::utils::Point<i32, Logical> =
+                surface.with_pending_state(|state| state.geometry.loc);
+
+            let geometry = with_states(surface.wl_surface(), |surface_data| {
+                surface_data
+                    .cached_state
+                    .get::<SurfaceCachedState>()
+                    .current()
+                    .geometry
+                    .map(|geometry| geometry.into())
+            });
             // TODO: Revise this unwrap.
             // Wayland states that popups without parents can exist but I don't know in what case.
             let parent_surface_id = get_surface_id(&parent.unwrap());
@@ -161,15 +172,52 @@ pub mod xdg {
 
             let position = get_popup_toplevel_coords(&PopupKind::Xdg(surface.clone())); */
 
+            let scale_ratio = {
+                self.meta_window_state
+                    .meta_windows
+                    .get_mut(&parent_meta_window_id)
+                    .unwrap()
+                    .scale_ratio
+            };
+
             let meta_popup = self.create_meta_popup(MetaPopup {
                 id: Uuid::new_v4().hyphenated().to_string(),
                 parent: parent_meta_window_id,
                 position: position.into(),
                 surface_id,
+                scale_ratio: scale_ratio,
+                geometry: geometry,
             });
             self.meta_window_state
                 .meta_popup_id_per_surface_id
                 .insert(surface_id, meta_popup.id.clone());
+
+            compositor::add_post_commit_hook(
+                surface.wl_surface(),
+                |state: &mut Self, _, surface| {
+                    let geometry = with_states(surface, |surface_data| {
+                        surface_data
+                            .cached_state
+                            .get::<SurfaceCachedState>()
+                            .current()
+                            .geometry
+                            .map(|geometry| geometry.into())
+                    });
+                    if let Some(meta_popup_id) = state
+                        .meta_window_state
+                        .meta_popup_id_per_surface_id
+                        .get(&get_surface_id(surface))
+                    {
+                        state.patch_meta_popup(
+                            MetaPopupPatch::UpdateGeometry {
+                                id: meta_popup_id.clone(),
+                                value: geometry,
+                            },
+                            true,
+                        );
+                    }
+                },
+            );
         }
 
         fn move_request(&mut self, surface: ToplevelSurface, _seat: WlSeat, _serial: Serial) {
@@ -250,10 +298,13 @@ pub mod xdg {
                 .cloned()
             {
                 surface.with_pending_state(|state| {
-                    self.patch_meta_popup(MetaPopupPatch::UpdatePosition {
-                        id: meta_popup_id,
-                        value: state.geometry.loc.into(),
-                    });
+                    self.patch_meta_popup(
+                        MetaPopupPatch::UpdatePosition {
+                            id: meta_popup_id,
+                            value: state.geometry.loc.into(),
+                        },
+                        true,
+                    );
                 });
             }
             surface.send_repositioned(token);

@@ -25,8 +25,8 @@ class MetaSurfaceWidget extends HookConsumerWidget {
   final bool decorated;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final geometry = ref.watch(
-      metaWindowStateProvider(metaWindowId).select((value) => value.geometry),
+    final metaWindow = ref.watch(
+      metaWindowStateProvider(metaWindowId),
     );
 
     final surfaceId = ref.watch(
@@ -34,8 +34,8 @@ class MetaSurfaceWidget extends HookConsumerWidget {
     );
     final popups = ref.watch(metaPopupForIdProvider(metaWindowId));
     final offset = Offset(
-      -1 * (geometry?.left ?? 0),
-      -1 * (geometry?.top ?? 0),
+      -1 * (metaWindow.geometry?.left ?? 0),
+      -1 * (metaWindow.geometry?.top ?? 0),
     );
 
     final currentMonitor = CurrentMonitorName.of(context);
@@ -44,7 +44,9 @@ class MetaSurfaceWidget extends HookConsumerWidget {
         if (ref.read(metaWindowStateProvider(metaWindowId)).currentOutput !=
             currentMonitor) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            ref.read(metaWindowStateProvider(metaWindowId).notifier).patch(
+            ref
+                .read(metaWindowStateProvider(metaWindowId).notifier)
+                .patch(
                   MetaWindowPatchMessage.updateCurrentOutput(
                     id: metaWindowId,
                     value: currentMonitor,
@@ -76,6 +78,7 @@ class MetaSurfaceWidget extends HookConsumerWidget {
                     enabled: decorated,
                     child: SurfaceWidget(
                       surfaceId: surfaceId,
+                      scaleRatio: metaWindow.scaleRatio,
                     ),
                   ),
                 ),

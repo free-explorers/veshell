@@ -10,42 +10,49 @@ import 'package:shell/wayland/widget/surface_size.dart';
 class SurfaceWidget extends ConsumerWidget {
   const SurfaceWidget({
     required this.surfaceId,
+    required this.scaleRatio,
     super.key,
   });
 
   final SurfaceId surfaceId;
-
+  final double scaleRatio;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return SurfaceSize(
-      surfaceId: surfaceId,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          _Subsurfaces(
-            surfaceId: surfaceId,
-            layer: _SubsurfaceLayer.below,
-          ),
-          ViewInputListener(
-            surfaceId: surfaceId,
-            child: Consumer(
-              builder: (BuildContext context, WidgetRef ref, Widget? child) {
-                final textureId = ref.watch(
-                  wlSurfaceStateProvider(surfaceId).select(
-                    (v) => v.texture!.id,
-                  ),
-                );
-                return Texture(
-                  textureId: textureId,
-                );
-              },
+    return ColoredBox(
+      color: Colors.red.withAlpha(100),
+      child: SurfaceSize(
+        surfaceId: surfaceId,
+        scaleRatio: scaleRatio,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            _Subsurfaces(
+              surfaceId: surfaceId,
+              scaleRatio: scaleRatio,
+              layer: _SubsurfaceLayer.below,
             ),
-          ),
-          _Subsurfaces(
-            surfaceId: surfaceId,
-            layer: _SubsurfaceLayer.above,
-          ),
-        ],
+            ViewInputListener(
+              surfaceId: surfaceId,
+              child: Consumer(
+                builder: (BuildContext context, WidgetRef ref, Widget? child) {
+                  final textureId = ref.watch(
+                    wlSurfaceStateProvider(surfaceId).select(
+                      (v) => v.texture!.id,
+                    ),
+                  );
+                  return Texture(
+                    textureId: textureId,
+                  );
+                },
+              ),
+            ),
+            _Subsurfaces(
+              surfaceId: surfaceId,
+              scaleRatio: scaleRatio,
+              layer: _SubsurfaceLayer.above,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -54,11 +61,13 @@ class SurfaceWidget extends ConsumerWidget {
 class _Subsurfaces extends ConsumerWidget {
   const _Subsurfaces({
     required this.surfaceId,
+    required this.scaleRatio,
     required this.layer,
   });
 
   final SurfaceId surfaceId;
   final _SubsurfaceLayer layer;
+  final double scaleRatio;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -72,7 +81,12 @@ class _Subsurfaces extends ConsumerWidget {
           (id) =>
               ref.watch(subsurfaceStateProvider(id).select((ss) => ss.mapped)),
         )
-        .map((id) => SubsurfaceWidget(surfaceId: id))
+        .map(
+          (id) => SubsurfaceWidget(
+            surfaceId: id,
+            scaleRatio: scaleRatio,
+          ),
+        )
         .toList();
 
     return subsurfaces.isEmpty

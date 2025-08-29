@@ -450,10 +450,13 @@ pub mod xwayland {
                     .get(&surface_id)
                     .cloned()
                 {
-                    self.patch_meta_popup(MetaPopupPatch::UpdatePosition {
-                        id: meta_popup_id,
-                        value: geometry.loc.into(),
-                    });
+                    self.patch_meta_popup(
+                        MetaPopupPatch::UpdatePosition {
+                            id: meta_popup_id,
+                            value: geometry.loc.into(),
+                        },
+                        true,
+                    );
                 }
             }
             if let Some(meta_window) = self.get_meta_window(surface_id) {
@@ -684,6 +687,15 @@ pub mod xwayland {
             info!("mapped_id: {:?}", mapped_id);
             let hints = surface.hints();
             info!("hints: {:?}", hints);
+            let xwayland_scale_ratio = self
+                .xwayland_state
+                .as_ref()
+                .unwrap()
+                .client
+                .get_data::<XWaylandClientData>()
+                .unwrap()
+                .compositor_state
+                .client_scale();
             if surface.is_override_redirect() {
                 if let Some(parent_meta_window_id) = parent_surface
                     .and_then(|parent_surface| {
@@ -714,6 +726,8 @@ pub mod xwayland {
                         position: surface.geometry().loc.into(),
                         parent: parent_meta_window_id.clone(),
                         surface_id: get_surface_id(wl_surface.borrow()),
+                        scale_ratio: xwayland_scale_ratio,
+                        geometry: Some(surface.geometry().into()),
                     });
                     self.meta_window_state
                         .meta_popup_id_per_surface_id
@@ -746,6 +760,7 @@ pub mod xwayland {
                                 })
                             })
                     }),
+                    xwayland_scale_ratio,
                 );
                 self.meta_window_state
                     .meta_window_id_per_surface_id

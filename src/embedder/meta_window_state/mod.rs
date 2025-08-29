@@ -123,6 +123,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             geometry,
             current_output: None,
             need_decoration: !is_decorated,
+            scale_ratio: 1.0,
             game_mode_activated: false,
         });
         info!("new meta window from toplevel: {:?}", meta_window);
@@ -134,6 +135,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         x11_surface: X11Surface,
         surface_id: u64,
         parent_surface_id: Option<u64>,
+        scale_ratio: f64,
     ) -> MetaWindow {
         let meta_window_parent = parent_surface_id.and_then(|parent_id| {
             self.meta_window_state
@@ -171,6 +173,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             current_output: None,
             geometry: Some(x11_surface.geometry().into()),
             need_decoration: !x11_surface.is_decorated(),
+            scale_ratio: scale_ratio,
             game_mode_activated: false,
         });
         info!("new meta window from x11: {:?}", meta_window);

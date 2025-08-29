@@ -16,10 +16,11 @@ class MetaPopupWidget extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final metaPopup = ref.watch(metaPopupStateProvider(metaPopupId));
     return Positioned(
-      left: metaPopup.position.dx,
-      top: metaPopup.position.dy,
+      left: metaPopup.position.dx - (metaPopup.geometry?.left ?? 0),
+      top: metaPopup.position.dy - (metaPopup.geometry?.top ?? 0),
       child: SurfaceWidget(
         surfaceId: metaPopup.surfaceId,
+        scaleRatio: metaPopup.scaleRatio,
       ),
     );
   }

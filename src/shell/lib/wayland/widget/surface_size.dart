@@ -6,11 +6,14 @@ import 'package:shell/wayland/provider/wl_surface_state.dart';
 class SurfaceSize extends ConsumerWidget {
   const SurfaceSize({
     required this.surfaceId,
+    required this.scaleRatio,
     required this.child,
     super.key,
   });
 
   final SurfaceId surfaceId;
+  final double scaleRatio;
+
   final Widget child;
 
   @override
@@ -21,8 +24,8 @@ class SurfaceSize extends ConsumerWidget {
       ),
     );
     return SizedBox(
-      width: surfaceSize.width * 1.5,
-      height: surfaceSize.height * 1.5,
+      width: surfaceSize.width / scaleRatio,
+      height: surfaceSize.height / scaleRatio,
       child: child,
     );
   }

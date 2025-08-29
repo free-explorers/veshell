@@ -257,6 +257,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     platform_task_runner: &task_runner_description,
                     render_task_runner: null(),
                     thread_priority_setter: None,
+                    ui_task_runner: null(),
                 };
 
                 let project_args = FlutterProjectArgs {
@@ -300,6 +301,8 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     update_semantics_callback: None,
                     update_semantics_callback2: None,
                     channel_update_callback: None,
+                    view_focus_change_request_callback: None,
+                    engine_id: 0,
                 };
 
                 let renderer_config = FlutterRendererConfig {

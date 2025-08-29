@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/util/json_converter/offset.dart';
+import 'package:shell/shared/util/json_converter/rect.dart';
 
 part 'meta_popup_patches.serializable.freezed.dart';
 part 'meta_popup_patches.serializable.g.dart';
@@ -19,6 +20,16 @@ sealed class MetaPopupPatchMessage
     required String id,
     @OffsetConverter() required Offset value,
   }) = UpdatePosition;
+
+  const factory MetaPopupPatchMessage.updateScaleRatio({
+    required String id,
+    required double value,
+  }) = UpdateScaleRatio;
+
+  const factory MetaPopupPatchMessage.updateGeometry({
+    required String id,
+    @RectConverter() required Rect value,
+  }) = UpdateGeometry;
 
   factory MetaPopupPatchMessage.fromJson(Map<String, dynamic> json) =>
       _$MetaPopupPatchMessageFromJson(json);

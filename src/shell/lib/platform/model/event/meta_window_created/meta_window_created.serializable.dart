@@ -20,6 +20,7 @@ sealed class MetaWindowCreatedMessage
     required int surfaceId,
     required bool needDecoration,
     required bool gameModeActivated,
+    required double scaleRatio,
     String? appId,
     String? parent,
     String? displayMode,

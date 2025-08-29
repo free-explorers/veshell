@@ -7,10 +7,11 @@ import 'package:shell/wayland/widget/surface.dart';
 class SubsurfaceWidget extends StatelessWidget {
   const SubsurfaceWidget({
     required this.surfaceId,
+    required this.scaleRatio,
     super.key,
   });
   final SurfaceId surfaceId;
-
+  final double scaleRatio;
   @override
   Widget build(BuildContext context) {
     return _Positioner(
@@ -19,6 +20,7 @@ class SubsurfaceWidget extends StatelessWidget {
         builder: (BuildContext context, WidgetRef ref, Widget? child) {
           return SurfaceWidget(
             surfaceId: surfaceId,
+            scaleRatio: scaleRatio,
           );
         },
       ),
@@ -36,8 +38,9 @@ class _Positioner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final position =
-        ref.watch(subsurfaceStateProvider(surfaceId).select((v) => v.position));
+    final position = ref.watch(
+      subsurfaceStateProvider(surfaceId).select((v) => v.position),
+    );
 
     return Positioned(
       left: position.dx,

@@ -43,8 +43,10 @@ pub fn link_flutter_engine_shared_library(
 
 fn get_flutter_engine_revision() -> String {
     let mut git_cmd = Command::new("git");
-    git_cmd.current_dir(FLUTTER_REPO_DIR);
-    git_cmd.args(&["rev-parse", "HEAD"]);
+    let mut engine_path = String::from(FLUTTER_REPO_DIR);
+    engine_path.push_str("/engine");
+    git_cmd.current_dir(engine_path);
+    git_cmd.args(&["log", "-1", "--format=%H", "--", "."]);
 
     let output = git_cmd.output();
 
