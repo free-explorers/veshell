@@ -1,24 +1,11 @@
-import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
-import 'package:shell/monitor/model/monitor.serializable.dart';
-import 'package:shell/overview/widget/search/settings/keyboard/setting_property_hotkey_editor.dart';
-import 'package:shell/overview/widget/search/settings/monitor/monitor_refresh_rate_editor.dart';
-import 'package:shell/overview/widget/search/settings/monitor/monitor_refresh_rate_value.dart';
-import 'package:shell/overview/widget/search/settings/monitor/monitor_resolution_editor.dart';
-import 'package:shell/overview/widget/search/settings/monitor/monitor_resolution_value.dart';
-import 'package:shell/overview/widget/search/settings/primitive/setting_property_bool_editor.dart';
-import 'package:shell/overview/widget/search/settings/primitive/setting_property_color_editor.dart';
-import 'package:shell/overview/widget/search/settings/primitive/setting_property_string_editor.dart';
 import 'package:shell/settings/model/setting_definition.dart';
 import 'package:shell/settings/model/setting_group.dart';
 import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/provider/settings_properties.dart';
-import 'package:shell/settings/provider/util/json_value_by_path.dart';
-import 'package:shell/shared/widget/expandable_container.dart';
-import 'package:shell/shared/widget/hotkey_viewer.dart';
 
 /// List of applications for the given searchText
 class SettingsSearchResult extends HookConsumerWidget {
@@ -157,55 +144,11 @@ class SettingPropertySliver<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SliverToBoxAdapter(
-      child: property is SettingProperty<bool>
-          ? SettingPropertyBoolEditor(
-              path: path,
-              property: property as SettingProperty<bool>,
-              onChanged: (value) {},
-            )
-          : ExpandableContainer(
-              builder: (BuildContext context, {required bool isExpanded}) {
-                final tile = ListTile(
-                  onTap: isExpanded
-                      ? null
-                      : () {
-                          ExpandableContainer.of(context).toggle();
-                        },
-                  title: Text(property.name),
-                  subtitle: Text(property.description),
-                  trailing:
-                      SettingPropertyValue(path: path, property: property),
-                );
-
-                return Card(
-                  color: isExpanded ? null : Colors.transparent,
-                  margin: EdgeInsets.zero,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(0),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      tile,
-                      if (isExpanded)
-                        Flexible(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: SettingPropertyEditor(
-                              path: path,
-                              property: property,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
-            ),
+      child: property.build(context, path),
     );
   }
 }
-
+/* 
 class SettingPropertyValue<T> extends HookConsumerWidget {
   const SettingPropertyValue({
     required this.path,
@@ -220,6 +163,7 @@ class SettingPropertyValue<T> extends HookConsumerWidget {
 
     return switch (property) {
       SettingProperty<String>() => Text('$val'),
+      SettingProperty<double>() => Text('$val'),
       SettingProperty<bool>() => Text('$val'),
       SettingProperty<Color>() => ColorIndicator(
           color: (property as SettingProperty<Color>).castValue(val),
@@ -277,7 +221,7 @@ class SettingPropertyEditor<T> extends HookConsumerWidget {
       SettingProperty<T>() => throw UnimplementedError(),
     };
   }
-}
+} */
 
 bool searchSetting(
   String searchText,

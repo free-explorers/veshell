@@ -5,6 +5,7 @@ use meta_window::{DisplayMode, MetaWindow, MetaWindowPatch};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use smithay::{
+    output::Output,
     reexports::{
         wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode as DecorationMode,
         wayland_server::{DisplayHandle, Resource},
@@ -50,6 +51,17 @@ impl MetaWindowState {
             meta_popup_id_per_surface_id: HashMap::new(),
             meta_window_in_gaming_mode: None,
         }
+    }
+
+    pub fn get_meta_windows_for_output(&mut self, output: Output) -> Vec<MetaWindow> {
+        let mut meta_windows = Vec::new();
+        let some_name = Some(output.name());
+        for (_, meta_window) in self.meta_windows.iter_mut() {
+            if meta_window.current_output == some_name {
+                meta_windows.push(meta_window.clone());
+            }
+        }
+        meta_windows
     }
 }
 
@@ -121,7 +133,9 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             window_class: None,
             startup_id: None,
             geometry,
+            current_output: None,
             need_decoration: !is_decorated,
+            scale_ratio: 1.0,
             game_mode_activated: false,
         });
         info!("new meta window from toplevel: {:?}", meta_window);
@@ -133,6 +147,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         x11_surface: X11Surface,
         surface_id: u64,
         parent_surface_id: Option<u64>,
+        scale_ratio: f64,
     ) -> MetaWindow {
         let meta_window_parent = parent_surface_id.and_then(|parent_id| {
             self.meta_window_state
@@ -167,8 +182,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             display_mode: None,
             window_class: None,
             startup_id: None,
+            current_output: None,
             geometry: Some(x11_surface.geometry().into()),
             need_decoration: !x11_surface.is_decorated(),
+            scale_ratio: scale_ratio,
             game_mode_activated: false,
         });
         info!("new meta window from x11: {:?}", meta_window);

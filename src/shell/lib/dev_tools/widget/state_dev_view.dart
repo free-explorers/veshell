@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/display/provider/display.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/widget/meta_surface.dart';
@@ -20,31 +19,10 @@ class StateDevView extends HookConsumerWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          DisplayStateViewer(),
           MonitorStateViewer(),
           Divider(),
         ],
       ),
-    );
-  }
-}
-
-class DisplayStateViewer extends HookConsumerWidget {
-  const DisplayStateViewer({super.key});
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final display = ref.watch(currentDisplayProvider);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Text('Display'),
-        DataContainer(
-          children: [
-            DataRow(property: 'size', value: display.size.toString()),
-          ],
-        ),
-      ],
     );
   }
 }

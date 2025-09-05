@@ -11,6 +11,23 @@ class OffsetConverter extends JsonConverter<Offset, Map<dynamic, dynamic>> {
       Offset((json['x']! as num).toDouble(), (json['y']! as num).toDouble());
 
   @override
-  Map<dynamic, dynamic> toJson(Offset object) =>
-      {'x': object.dx, 'y': object.dy};
+  Map<dynamic, dynamic> toJson(Offset object) => {
+    'x': object.dx,
+    'y': object.dy,
+  };
+}
+
+class OffsetIntConverter extends JsonConverter<Offset, Map<dynamic, dynamic>> {
+  /// Serialize [Offset] to [Map].
+  const OffsetIntConverter();
+
+  @override
+  Offset fromJson(Map<dynamic, dynamic> json) =>
+      Offset((json['x']! as num).toDouble(), (json['y']! as num).toDouble());
+
+  @override
+  Map<dynamic, dynamic> toJson(Offset object) => {
+    'x': object.dx.toInt(),
+    'y': object.dy.toInt(),
+  };
 }

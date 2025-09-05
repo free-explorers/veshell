@@ -24,12 +24,14 @@ abstract class MetaWindow with _$MetaWindow {
     required SurfaceId surfaceId,
     required bool needDecoration,
     required bool gameModeActivated,
+    required double scaleRatio,
     String? appId,
     String? parent,
     MetaWindowDisplayMode? displayMode,
     String? title,
     String? windowClass,
     String? startupId,
+    String? currentOutput,
     @RectConverter() Rect? geometry,
   }) = _MetaWindow;
 

@@ -27,7 +27,9 @@ class MetaWindowManager extends _$MetaWindowManager {
         onNewMetaWindow(event);
       }
       if (next case final MetaWindowPatchEvent event) {
-        ref.read(metaWindowStateProvider(event.message.id).notifier).patch(
+        ref
+            .read(metaWindowStateProvider(event.message.id).notifier)
+            .patch(
               event.message,
               propagate: false,
             );
@@ -39,8 +41,11 @@ class MetaWindowManager extends _$MetaWindowManager {
         onNewMetaPopup(event);
       }
       if (next case final MetaPopupPatchEvent event) {
-        ref.read(metaPopupStateProvider(event.message.id).notifier).applyPatch(
+        ref
+            .read(metaPopupStateProvider(event.message.id).notifier)
+            .patch(
               event.message,
+              propagate: false,
             );
       }
       if (next case final MetaPopupRemovedEvent event) {
@@ -53,7 +58,9 @@ class MetaWindowManager extends _$MetaWindowManager {
 
   Future<void> onNewMetaWindow(MetaWindowCreatedEvent event) async {
     final metaWindowId = event.message.id;
-    await ref.read(metaWindowStateProvider(metaWindowId).notifier).create(
+    await ref
+        .read(metaWindowStateProvider(metaWindowId).notifier)
+        .create(
           event.message,
         );
 
@@ -83,8 +90,9 @@ class MetaWindowManager extends _$MetaWindowManager {
     }
 
     if (metaWindow.parent != null) {
-      final parentWindowId =
-          ref.read(metaWindowWindowMapProvider).get(metaWindow.parent!);
+      final parentWindowId = ref
+          .read(metaWindowWindowMapProvider)
+          .get(metaWindow.parent!);
       if (parentWindowId == null) {
         // try again after a short delay because the parent window might not be mapped yet
         if (retryCount < 10) {
@@ -107,13 +115,17 @@ class MetaWindowManager extends _$MetaWindowManager {
     final windowId = ref.read(metaWindowWindowMapProvider).get(id);
     if (windowId != null) {
       (switch (windowId) {
-        PersistentWindowId() =>
-          ref.read(persistentWindowStateProvider(windowId).notifier),
-        DialogWindowId() =>
-          ref.read(dialogWindowStateProvider(windowId).notifier),
-        EphemeralWindowId() =>
-          ref.read(ephemeralWindowStateProvider(windowId).notifier),
-      } as WindowProviderMixin)
+                PersistentWindowId() => ref.read(
+                  persistentWindowStateProvider(windowId).notifier,
+                ),
+                DialogWindowId() => ref.read(
+                  dialogWindowStateProvider(windowId).notifier,
+                ),
+                EphemeralWindowId() => ref.read(
+                  ephemeralWindowStateProvider(windowId).notifier,
+                ),
+              }
+              as WindowProviderMixin)
           .onMetaWindowRemoved(id);
     }
     _mappedSubscriptions.remove(id)?.close();

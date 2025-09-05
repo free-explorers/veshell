@@ -12,4 +12,12 @@ class UpowerClient extends _$UpowerClient {
     ref.onDispose(client.close);
     return client;
   }
+
+  static UPowerDeviceType getDeviceType(UPowerDevice device) {
+    try {
+      return device.type;
+    } catch (e) {
+      return UPowerDeviceType.unknown;
+    }
+  }
 }

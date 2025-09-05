@@ -37,7 +37,7 @@ class WindowManager extends _$WindowManager {
   @override
   WindowManagerState build() {
     persist(
-      storage: ref.watch(persistentStorageStateProvider).requireValue,
+      ref.watch(persistentStorageStateProvider).requireValue,
       options: const StorageOptions(cacheTime: StorageCacheTime.unsafe_forever),
     );
 

@@ -1,66 +1,102 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/main.dart';
 import 'package:shell/monitor/model/monitor_configuration.serializable.dart';
 import 'package:shell/monitor/model/screen_configuration.serializable.dart';
-import 'package:shell/monitor/provider/current_monitor.dart';
 import 'package:shell/monitor/provider/monitor_by_name.dart';
+import 'package:shell/monitor/provider/monitor_by_view_id.dart';
 import 'package:shell/monitor/provider/monitor_configuration_state.dart';
+import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/screen/widget/screen.dart';
+import 'package:shell/theme/provider/theme.dart';
 
 /// Widget that represent the Monitor in the widget tree
 class MonitorWidget extends HookConsumerWidget {
   /// Const constructor
-  const MonitorWidget({super.key});
+  const MonitorWidget({required this.viewId, super.key});
+  final int viewId;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final monitorName = ref.watch(currentMonitorProvider);
-    final monitorConfiguration = ref.watch(
-      monitorConfigurationStateProvider(monitorName),
-    );
+    final (lightTheme, darkTheme) = ref.watch(veshellThemeProvider);
+    final initializationStatus = InitializationStatus.of(context);
+    return MaterialApp(
+      theme: lightTheme,
+      darkTheme: darkTheme,
+      themeMode: ThemeMode.dark,
+      home: Material(
+        child: initializationStatus.when(
+          data: (initialized) => HookConsumer(
+            builder: (context, ref, child) {
+              final monitorName = ref.watch(monitorByViewIdProvider(viewId));
+              if (monitorName == null) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-    useEffect(
-      () {
-        if (monitorConfiguration.screenList.isEmpty) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            final newScreenId =
-                ref.read(screenManagerProvider.notifier).createNewScreen();
-            ref
-                .read(
-                  monitorConfigurationStateProvider(monitorName).notifier,
-                )
-                .addNewScreenConfiguration(newScreenId);
-          });
-        }
-        return null;
-      },
-      [monitorConfiguration.screenList],
-    );
+              final monitorConfiguration = ref.watch(
+                monitorConfigurationStateProvider(monitorName),
+              );
 
-    return Flex(
-      direction: switch (monitorConfiguration.displayMode) {
-        ScreenDisplayMode.splitVertical => Axis.vertical,
-        ScreenDisplayMode.splitHorizontal => Axis.horizontal,
-      },
-      children: [
-        for (final screenConfiguration in monitorConfiguration.screenList) ...[
-          Flexible(
-            flex: screenConfiguration.flex,
-            child: ScreenWidget(
-              screenId: screenConfiguration.screenId,
-            ),
+              useEffect(
+                () {
+                  if (monitorConfiguration.screenList.isEmpty) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      final newScreenId = ref
+                          .read(screenManagerProvider.notifier)
+                          .createNewScreen();
+                      ref
+                          .read(
+                            monitorConfigurationStateProvider(monitorName)
+                                .notifier,
+                          )
+                          .addNewScreenConfiguration(newScreenId);
+                    });
+                  }
+                  return null;
+                },
+                [monitorConfiguration.screenList],
+              );
+              return CurrentMonitorName(
+                name: monitorName,
+                child: Flex(
+                  direction: switch (monitorConfiguration.displayMode) {
+                    ScreenDisplayMode.splitVertical => Axis.vertical,
+                    ScreenDisplayMode.splitHorizontal => Axis.horizontal,
+                  },
+                  children: [
+                    for (final screenConfiguration
+                        in monitorConfiguration.screenList) ...[
+                      Flexible(
+                        flex: screenConfiguration.flex,
+                        child: ScreenWidget(
+                          screenId: screenConfiguration.screenId,
+                        ),
+                      ),
+                      if (screenConfiguration !=
+                          monitorConfiguration.screenList.last)
+                        ScreenDivider(
+                          screenA: screenConfiguration,
+                          screenB: monitorConfiguration.screenList[
+                              monitorConfiguration.screenList
+                                      .indexOf(screenConfiguration) +
+                                  1],
+                          displayMode: monitorConfiguration.displayMode,
+                        ),
+                    ],
+                  ],
+                ),
+              );
+            },
           ),
-          if (screenConfiguration != monitorConfiguration.screenList.last)
-            ScreenDivider(
-              screenA: screenConfiguration,
-              screenB: monitorConfiguration.screenList[
-                  monitorConfiguration.screenList.indexOf(screenConfiguration) +
-                      1],
-              displayMode: monitorConfiguration.displayMode,
-            ),
-        ],
-      ],
+          loading: () => const Center(
+            child: CircularProgressIndicator(),
+          ),
+          error: (error, stackTrace) => Center(
+            child: Text(error.toString()),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -78,7 +114,7 @@ class ScreenDivider extends HookConsumerWidget {
   final ScreenDisplayMode displayMode;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final monitorName = ref.watch(currentMonitorProvider);
+    final monitorName = CurrentMonitorName.of(context);
     final monitor = ref.watch(monitorByNameProvider(monitorName))!;
     final monitorConfiguration =
         ref.watch(monitorConfigurationStateProvider(monitorName));

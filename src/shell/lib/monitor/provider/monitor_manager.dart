@@ -18,7 +18,7 @@ class MonitorManager extends _$MonitorManager {
   MonitorManagerState build() {
     persist(
       key: persistKey,
-      storage: ref.watch(persistentStorageStateProvider).requireValue,
+      ref.watch(persistentStorageStateProvider).requireValue,
       options: const StorageOptions(cacheTime: StorageCacheTime.unsafe_forever),
     );
 

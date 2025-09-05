@@ -36,7 +36,7 @@ use smithay::backend::{egl, SwapBuffersError};
 use smithay::delegate_dmabuf;
 use smithay::desktop::utils::OutputPresentationFeedback;
 use smithay::input::pointer::CursorImageStatus;
-use smithay::output::Mode;
+use smithay::output::{Mode, Scale};
 use smithay::output::{Output, PhysicalProperties};
 use smithay::reexports::calloop::channel::Event as CalloopEvent;
 use smithay::reexports::calloop::RegistrationToken;
@@ -65,6 +65,7 @@ use crate::flutter_engine::embedder::{
     FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
     FlutterPointerDeviceKind_kFlutterPointerDeviceKindTouch,
 };
+use crate::flutter_engine::view::OutputViewIdWrapper;
 use crate::flutter_engine::wayland_messages::{
     GestureSwipeBeginEventMessage, GestureSwipeEndEventMessage, GestureSwipeUpdateEventMessage,
 };
@@ -142,12 +143,38 @@ impl Backend for DrmBackend {
     ) -> Option<T> {
         /* let mut renderer = self.g.single_renderer(&self.primary_gpu).ok()?;
         Some(f(renderer.as_gles_renderer_mut())) */
-        Some(f(&mut self.get_gpu_data_mut().renderer))
+        Some(f(&mut self.get_primary_gpu_data_mut().renderer))
+    }
+
+    fn new_swapchain(
+        &mut self,
+        width: u32,
+        height: u32,
+    ) -> Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>> {
+        let primary_gpu_data = self.get_primary_gpu_data_mut();
+        let renderer = &primary_gpu_data.renderer;
+        let modifiers = renderer
+            .egl_context()
+            .dmabuf_texture_formats()
+            .iter()
+            .map(|format| format.modifier)
+            .collect::<Vec<_>>();
+        debug!("primary gpu: {:?}", self.primary_gpu);
+        debug!("gpus length: {:?}", self.gpus.len());
+        let dmabuf_allocator: Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>> = {
+            let gbm_allocator = GbmAllocator::new(
+                self.get_primary_gpu_data_mut().gbm_device.clone(),
+                GbmBufferFlags::RENDERING,
+            );
+            Box::new(DmabufAllocator(gbm_allocator))
+        };
+
+        Swapchain::new(dmabuf_allocator, width, height, Fourcc::Argb8888, modifiers)
     }
 }
 
 impl DrmBackend {
-    fn get_gpu_data_mut(&mut self) -> &mut GpuData {
+    fn get_primary_gpu_data_mut(&mut self) -> &mut GpuData {
         let primary_node = self
             .primary_gpu
             .node_with_type(NodeType::Primary)
@@ -203,7 +230,7 @@ impl DmabufHandler for State<DrmBackend> {
         } */
         if self
             .backend_data
-            .get_gpu_data_mut()
+            .get_primary_gpu_data_mut()
             .renderer
             .import_dmabuf(&dmabuf, None)
             .is_ok()
@@ -292,78 +319,22 @@ pub fn run_drm_backend() {
         },
         |data, monitor_name| {
             info!("Monitor settings updated of {}", monitor_name);
-            for (&_node, gpu_data) in &mut data.backend_data.gpus {
-                for (&_handle, surface) in &mut gpu_data.surfaces {
-                    let monitor_name = surface.name.clone();
-                    if monitor_name.is_empty() {
-                        continue;
-                    }
-                    let Some(connector) = gpu_data
-                        .drm_scanner
-                        .connectors()
-                        .get(&surface.connector_handle)
-                    else {
-                        error!("missing enabled connector in drm_scanner");
-                        continue;
-                    };
-                    let monitor_configuration = match data
-                        .settings_manager
-                        .get_monitor_configuration(&monitor_name)
-                    {
-                        Some(monitor_configuration) => monitor_configuration,
-                        None => {
-                            warn!("Monitor configuration not found for {}", monitor_name);
-                            return;
-                        }
-                    };
+            let config: settings::MonitorConfiguration = data
+                .settings_manager
+                .get_monitor_configuration(monitor_name)
+                .unwrap();
 
-                    let (drm_mode, _fallback) =
-                        pick_mode(&connector, Some(monitor_configuration.clone())).unwrap();
+            data.apply_monitor_configuration_to_drm_surface(monitor_name, &config);
 
-                    if let Err(err) = surface.compositor.use_mode(drm_mode) {
-                        warn!("error changing mode: {err:?}");
-                        continue;
-                    }
-                    data.space
-                        .outputs()
-                        .find(|output| output.name() == monitor_name)
-                        .map(|output: &Output| {
-                            output.change_current_state(
-                                Some(Mode {
-                                    size: Size::from((
-                                        monitor_configuration.mode.size.width as i32,
-                                        monitor_configuration.mode.size.height as i32,
-                                    )),
-                                    refresh: monitor_configuration.mode.refresh_rate,
-                                }),
-                                None,
-                                None,
-                                Some(
-                                    (
-                                        monitor_configuration.location.x as i32,
-                                        monitor_configuration.location.y as i32,
-                                    )
-                                        .into(),
-                                ),
-                            );
-                        });
+            if let Some(output) = data.get_output_by_name(monitor_name) {
+                let any_changes =
+                    data.apply_monitor_configuration_to_output(&output.clone(), config);
+
+                if any_changes {
+                    data.determine_highest_hz_crtc();
+                    data.on_outputs_changed();
                 }
             }
-            let bounding_box = data
-                .space
-                .outputs()
-                .map(|output| data.space.output_geometry(output).unwrap())
-                .reduce(|first, second| first.merge(second))
-                .unwrap();
-
-            data.flutter_engine()
-                .send_window_metrics(
-                    (bounding_box.size.w as u32, bounding_box.size.h as u32).into(),
-                )
-                .unwrap();
-
-            data.determine_highest_hz_crtc();
-            data.monitor_layout_changed();
         },
     );
     let mut state = State::new(
@@ -458,7 +429,7 @@ pub fn run_drm_backend() {
         }
     }; */
 
-    let renderer = &mut state.backend_data.get_gpu_data_mut().renderer;
+    let renderer = &mut state.backend_data.get_primary_gpu_data_mut().renderer;
     let egl_context = renderer.egl_context();
 
     let dmabuf_formats = egl_context
@@ -508,14 +479,10 @@ pub fn run_drm_backend() {
     let (
         flutter_engine,
         EmbedderChannels {
-            rx_present,
-            rx_request_fbo,
-            tx_fbo,
             tx_output_height: _,
             rx_baton,
         },
     ) = FlutterEngine::new(&mut state).unwrap();
-    state.tx_fbo = Some(tx_fbo.clone());
     state.flutter_engine = Some(flutter_engine);
 
     let nodes_available: Vec<DrmNode> = state
@@ -540,6 +507,19 @@ pub fn run_drm_backend() {
         .handle()
         .insert_source(libinput_backend, move |event, _, data| {
             let _dh = data.display_handle.clone();
+            let pointer = data.pointer.clone();
+            let pointer_location = pointer.current_location();
+            let output_under_pointer = data
+                .space
+                .output_under(pointer_location)
+                .next()
+                .or_else(|| data.space.outputs().next())
+                .unwrap();
+            let view_id = output_under_pointer
+                .user_data()
+                .get::<OutputViewIdWrapper>()
+                .unwrap()
+                .view_id;
             match event {
                 InputEvent::DeviceAdded { mut device } => {
                     data.input_devices.insert(device.clone());
@@ -568,19 +548,21 @@ pub fn run_drm_backend() {
                 }
                 InputEvent::PointerMotion { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_pointer_motion::<LibinputInputBackend>(event, device_id)
+                    data.on_pointer_motion::<LibinputInputBackend>(event, device_id, view_id)
                 }
                 InputEvent::PointerMotionAbsolute { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_pointer_motion_absolute::<LibinputInputBackend>(event, device_id)
+                    data.on_pointer_motion_absolute::<LibinputInputBackend>(
+                        event, device_id, view_id,
+                    )
                 }
                 InputEvent::PointerButton { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_pointer_button::<LibinputInputBackend>(event, device_id)
+                    data.on_pointer_button::<LibinputInputBackend>(event, device_id, view_id)
                 }
                 InputEvent::PointerAxis { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_pointer_axis::<LibinputInputBackend>(event, device_id)
+                    data.on_pointer_axis::<LibinputInputBackend>(event, device_id, view_id)
                 }
                 InputEvent::GestureSwipeBegin { event } => {
                     let fingers = event.fingers();
@@ -636,15 +618,15 @@ pub fn run_drm_backend() {
                 }
                 InputEvent::GesturePinchBegin { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_gesture_pinch_begin::<LibinputInputBackend>(event, device_id)
+                    data.on_gesture_pinch_begin::<LibinputInputBackend>(event, device_id, view_id)
                 }
                 InputEvent::GesturePinchUpdate { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_gesture_pinch_update::<LibinputInputBackend>(event, device_id)
+                    data.on_gesture_pinch_update::<LibinputInputBackend>(event, device_id, view_id)
                 }
                 InputEvent::GesturePinchEnd { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_gesture_pinch_end::<LibinputInputBackend>(event, device_id)
+                    data.on_gesture_pinch_end::<LibinputInputBackend>(event, device_id, view_id)
                 }
                 InputEvent::GestureHoldBegin { event: _ } => {}
                 InputEvent::GestureHoldEnd { event: _ } => {}
@@ -704,37 +686,8 @@ pub fn run_drm_backend() {
         .handle()
         .insert_source(rx_baton, move |baton, _, data| {
             if let CalloopEvent::Msg(baton) = baton {
+                debug!("Received baton from Flutter engine.");
                 data.batons.push(baton);
-            }
-        })
-        .unwrap();
-
-    event_loop
-        .handle()
-        .insert_source(rx_request_fbo, move |_, _, data| {
-            let gpu_data = data.backend_data.get_gpu_data_mut();
-            let slot = gpu_data
-                .swapchain
-                .as_mut()
-                .unwrap()
-                .acquire()
-                .ok()
-                .flatten()
-                .unwrap();
-            let dmabuf = slot.export().unwrap();
-            gpu_data.current_slot = Some(slot);
-            data.tx_fbo.as_ref().unwrap().send(Some(dmabuf)).unwrap();
-        })
-        .unwrap();
-
-    event_loop
-        .handle()
-        .insert_source(rx_present, move |_, _, data| {
-            let gpu_data = data.backend_data.get_gpu_data_mut();
-            gpu_data.last_rendered_slot = gpu_data.current_slot.take();
-
-            if let Some(ref slot) = gpu_data.last_rendered_slot {
-                gpu_data.swapchain.as_mut().unwrap().submitted(slot);
             }
         })
         .unwrap();
@@ -761,16 +714,9 @@ pub fn run_drm_backend() {
             display_handle.flush_clients().unwrap();
         }
     }
-
-    // Avoid indefinite hang in the Flutter render thread waiting for new rbo.
-    drop(tx_fbo);
 }
 
 impl State<DrmBackend> {
-    pub fn monitor_layout_changed(&mut self) {
-        let monitors = self.space.outputs().cloned().collect::<Vec<_>>();
-        self.flutter_engine_mut().monitor_layout_changed(monitors);
-    }
     fn determine_highest_hz_crtc(&mut self) {
         self.backend_data.highest_hz_crtc = self
             .space
@@ -799,9 +745,6 @@ struct GpuData {
     drm_scanner: DrmScanner,
     render_node: DrmNode,
     registration_token: RegistrationToken,
-    swapchain: Option<Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>>>,
-    current_slot: Option<Slot<Dmabuf>>,
-    last_rendered_slot: Option<Slot<Dmabuf>>,
     renderer: GlesRenderer,
 }
 
@@ -827,6 +770,9 @@ impl State<DrmBackend> {
         connector: connector::Info,
         crtc: crtc::Handle,
     ) {
+        let interface_id = connector.interface_id() as u64;
+        let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
+
         let device = if let Some(device) = self.backend_data.gpus.get_mut(&node) {
             device
         } else {
@@ -884,21 +830,20 @@ impl State<DrmBackend> {
         );
 
         // Determine DRM mode from the monitor configuration or fallback to the preferred mode
-        let (drm_mode, _fallback) = pick_mode(&connector, monitor_configuration).unwrap();
+        let (mode_to_use, preferred_mode) = pick_mode(&connector, monitor_configuration);
 
         // Create the DrmSurface
-        let surface = match device
-            .drm_device
-            .create_surface(crtc, drm_mode, &[connector.handle()])
-        {
-            Ok(surface) => surface,
-            Err(err) => {
-                warn!("Failed to create drm surface: {}", err);
-                return;
-            }
-        };
-
-        let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
+        let surface =
+            match device
+                .drm_device
+                .create_surface(crtc, mode_to_use, &[connector.handle()])
+            {
+                Ok(surface) => surface,
+                Err(err) => {
+                    warn!("Failed to create drm surface: {}", err);
+                    return;
+                }
+            };
 
         let output = Output::new(
             output_name.clone(),
@@ -909,25 +854,52 @@ impl State<DrmBackend> {
                 model,
             },
         );
-        let global = output.create_global::<State<DrmBackend>>(&self.display_handle);
 
-        // Put the new output at the right of the last one.
-        let x = self.space.outputs().fold(0, |acc, o| {
-            acc + self.space.output_geometry(o).unwrap().size.w
-        });
-        let position = (x, 0).into();
+        let global = output.create_global::<State<DrmBackend>>(&self.display_handle);
         for iterated_mode in connector.modes() {
             output.add_mode(Mode::from(*iterated_mode));
         }
-        let wl_mode = Mode::from(drm_mode);
-        output.set_preferred(wl_mode);
-        output.change_current_state(Some(wl_mode), None, None, Some(position));
-        self.space.map_output(&output, position);
+        if let Some(preferred_mode) = preferred_mode {
+            let wl_mode = Mode::from(preferred_mode);
+            output.set_preferred(wl_mode);
+        }
+
+        let position = monitor_configuration
+            .map(|monitor_configuration| monitor_configuration.location.into())
+            .unwrap_or_else(|| {
+                // Put the new output at the right of the last one.
+                let x = self.space.outputs().fold(0, |acc, o| {
+                    acc + self.space.output_geometry(o).unwrap().size.w
+                });
+                (x, 0).into()
+            });
+        let scale = monitor_configuration
+            .map(|m| m.fractionnal_scale)
+            .unwrap_or(1.0);
+        output.change_current_state(
+            Some(Mode::from(mode_to_use)),
+            None,
+            Some(Scale::Fractional(scale)),
+            Some(position),
+        );
+
+        let view_id = {
+            let flutter_engine = self.flutter_engine.as_mut().unwrap();
+            flutter_engine.add_view(interface_id, &output)
+        };
+
+        output
+            .user_data()
+            .insert_if_missing(|| OutputViewIdWrapper {
+                view_id: view_id.clone(),
+            });
 
         output.user_data().insert_if_missing(|| UdevOutputId {
             crtc,
             device_id: node,
         });
+
+        self.space.map_output(&output, position);
 
         let color_formats = if std::env::var("ANVIL_DISABLE_10BIT").is_ok() {
             SUPPORTED_FORMATS_8BIT_ONLY
@@ -991,30 +963,13 @@ impl State<DrmBackend> {
             render_node: device.render_node,
             global: Some(global),
             compositor,
+            view_id,
         };
 
         device.surfaces.insert(crtc, surface);
 
-        let bounding_box = self
-            .space
-            .outputs()
-            .map(|output| self.space.output_geometry(output).unwrap())
-            .reduce(|first, second| first.merge(second))
-            .unwrap();
-
-        if device.swapchain.is_some() {
-            device
-                .swapchain
-                .as_mut()
-                .unwrap()
-                .resize(bounding_box.size.w as u32, bounding_box.size.h as u32);
-        }
-
-        self.flutter_engine()
-            .send_window_metrics((bounding_box.size.w as u32, bounding_box.size.h as u32).into())
-            .unwrap();
         self.determine_highest_hz_crtc();
-        self.monitor_layout_changed();
+        self.on_outputs_changed();
         self.schedule_initial_render(node, crtc, self.loop_handle.clone());
     }
 
@@ -1055,25 +1010,8 @@ impl State<DrmBackend> {
             self.space.unmap_output(&output);
         }
 
-        let bounding_box = self
-            .space
-            .outputs()
-            .map(|output| self.space.output_geometry(output).unwrap())
-            .reduce(|first, second| first.merge(second))
-            .unwrap_or(Rectangle::default());
-        if device.swapchain.is_some() {
-            device
-                .swapchain
-                .as_mut()
-                .unwrap()
-                .resize(bounding_box.size.w as u32, bounding_box.size.h as u32);
-        }
-        self.flutter_engine()
-            .send_window_metrics((bounding_box.size.w as u32, bounding_box.size.h as u32).into())
-            .unwrap();
-
         self.determine_highest_hz_crtc();
-        self.monitor_layout_changed();
+        self.on_outputs_changed();
     }
 
     fn device_added(&mut self, node: DrmNode, path: &Path) -> Result<(), DeviceAddError> {
@@ -1132,30 +1070,6 @@ impl State<DrmBackend> {
             GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT,
         );
 
-        let swapchain: Option<Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>>>> =
-            if render_node == self.backend_data.primary_gpu {
-                let dmabuf_allocator: Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>> = {
-                    let gbm_allocator =
-                        GbmAllocator::new(gbm_device.clone(), GbmBufferFlags::RENDERING);
-                    Box::new(DmabufAllocator(gbm_allocator))
-                };
-                let modifiers = renderer
-                    .egl_context()
-                    .dmabuf_texture_formats()
-                    .iter()
-                    .map(|format| format.modifier)
-                    .collect::<Vec<_>>();
-                Some(Swapchain::new(
-                    dmabuf_allocator,
-                    0,
-                    0,
-                    Fourcc::Argb8888,
-                    modifiers,
-                ))
-            } else {
-                None
-            };
-
         self.backend_data.gpus.insert(
             node,
             GpuData {
@@ -1168,9 +1082,6 @@ impl State<DrmBackend> {
                 render_node,
                 surfaces: HashMap::new(),
                 active_leases: Vec::new(),
-                swapchain,
-                current_slot: None,
-                last_rendered_slot: None,
                 renderer,
             },
         );
@@ -1230,6 +1141,7 @@ impl State<DrmBackend> {
     }
 
     fn on_vblank(&mut self, node: DrmNode, crtc: crtc::Handle, _meta: DrmEventMetadata) {
+        debug!("on_vblank");
         // Since the Flutter context is shared among all outputs we need to render all of them at the frequence of the highest Hz output.
         let gpu_data = self.backend_data.gpus.get_mut(&node).unwrap();
 
@@ -1287,6 +1199,7 @@ impl State<DrmBackend> {
 
     // If crtc is `Some()`, render it, else render all crtcs
     fn render(&mut self, node: DrmNode, crtc: Option<crtc::Handle>) {
+        debug!("rendering on node {:?}", node);
         //let primary_gpu = self.backend_data.primary_gpu;
 
         let device_backend = match self.backend_data.gpus.get_mut(&node) {
@@ -1310,40 +1223,48 @@ impl State<DrmBackend> {
     // TODO: I don't think this method should be here.
     // It should probably be in GpuData or SurfaceData.
     pub fn render_surface(&mut self, node: DrmNode, crtc: crtc::Handle) {
-        let gpu_data = self.backend_data.gpus.get_mut(&node);
-        let gpu_data = if let Some(gpu_data) = gpu_data {
-            gpu_data
-        } else {
-            error!("Trying to render without gpu_data {}", node);
-            return;
+        let (surface, renderer) = {
+            let gpu_data = self.backend_data.gpus.get_mut(&node);
+            let gpu_data = if let Some(gpu_data) = gpu_data {
+                gpu_data
+            } else {
+                error!("Trying to render without gpu_data {}", node);
+                return;
+            };
+
+            let surface = match gpu_data.surfaces.get_mut(&crtc) {
+                Some(surface) => surface,
+                None => return,
+            };
+
+            let renderer = &mut gpu_data.renderer;
+            (surface, renderer)
         };
 
-        let surface = match gpu_data.surfaces.get_mut(&crtc) {
-            Some(surface) => surface,
-            None => return,
-        };
+        let slot = {
+            let view = self
+                .flutter_engine
+                .as_mut()
+                .unwrap()
+                .views_management
+                .views
+                .get(&surface.view_id);
 
-        /* let render_node = surface.render_node;
-        let primary_gpu = self.backend_data.primary_gpu;
-        let mut renderer = if primary_gpu == render_node {
-            self.backend_data.gpu_manager.single_renderer(&render_node)
-        } else {
-            let format = surface.compositor.format();
-            self.backend_data
-                .gpu_manager
-                .renderer(&primary_gpu, &render_node, format)
-        }
-        .unwrap(); */
-        let renderer = &mut gpu_data.renderer;
+            let last_renderer_slot = if let Some(view) = view {
+                &view.last_rendered_slot
+            } else {
+                &None
+            };
 
-        let last_rendered_slot = gpu_data.last_rendered_slot.as_mut();
-
-        let slot = if let Some(ref slot) = last_rendered_slot {
+            let slot = if let Some(ref slot) = last_renderer_slot {
+                slot
+            } else {
+                debug!("Flutter hasn't rendered anything yet.");
+                // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
+                initial_render(surface, renderer).expect("Failed to render initial frame");
+                return;
+            };
             slot
-        } else {
-            // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
-            initial_render(surface, renderer).expect("Failed to render initial frame");
-            return;
         };
 
         let output = self.space.outputs().find(|output| {
@@ -1359,16 +1280,19 @@ impl State<DrmBackend> {
             None => return,
         };
 
-        let geometry = match self.space.output_geometry(output) {
-            Some(geometry) => geometry.to_f64(),
+        let size = match self.space.output_geometry(output) {
+            Some(geometry) => geometry.to_f64().size,
             None => return,
         };
-
+        debug!("Rendering frame {:?}", size);
         let elements = get_render_elements(
             renderer,
             output,
             slot,
-            geometry,
+            Rectangle {
+                loc: (0.0, 0.0).into(),
+                size: size,
+            },
             self.clock.now(),
             &self.cursor_image_status,
             &self.cursor_state,
@@ -1400,7 +1324,6 @@ impl State<DrmBackend> {
                 Ok(()) => {}
                 Err(err) => {
                     warn!("error queueing frame: {err}");
-                    warn!("drm active: {:?}", gpu_data.drm_device.is_active());
                     return;
                 }
             },
@@ -1451,6 +1374,30 @@ impl State<DrmBackend> {
     }
 
     pub fn apply_libinput_settings(config: &MouseAndTouchpadSettings, device: &mut input::Device) {}
+
+    fn apply_monitor_configuration_to_drm_surface(
+        &mut self,
+        name: &str,
+        config: &MonitorConfiguration,
+    ) {
+        for (&_node, gpu_data) in &mut self.backend_data.gpus {
+            for (&_handle, surface) in &mut gpu_data.surfaces {
+                if surface.name == name {
+                    if let Some(connector) = gpu_data
+                        .drm_scanner
+                        .connectors()
+                        .get(&surface.connector_handle)
+                    {
+                        let (mode_to_use, _) = pick_mode(&connector, Some(config.clone()));
+                        if let Err(err) = surface.compositor.use_mode(mode_to_use) {
+                            warn!("error changing mode: {err:?}");
+                        }
+                    }
+                    return;
+                }
+            }
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -1463,6 +1410,7 @@ struct SurfaceData {
     render_node: DrmNode,
     global: Option<GlobalId>,
     compositor: GbmDrmCompositor,
+    view_id: i64,
 }
 
 pub type GbmDrmCompositor = DrmCompositor<
@@ -1475,15 +1423,27 @@ pub type GbmDrmCompositor = DrmCompositor<
 fn pick_mode(
     connector: &connector::Info,
     target: Option<MonitorConfiguration>,
-) -> Option<(control::Mode, bool)> {
-    let mut mode = None;
-    let mut fallback = false;
+) -> (control::Mode, Option<control::Mode>) {
+    let mut mode_to_use: Option<control::Mode> = None;
+    let mut preferred_mode: Option<control::Mode> = None;
 
-    if let Some(target) = target {
-        let refresh = target.mode.refresh_rate;
+    for mode in connector.modes() {
+        // Interlaced modes don't appear to work.
+        if mode.flags().contains(ModeFlags::INTERLACE) {
+            continue;
+        }
 
-        for m in connector.modes() {
-            if m.size()
+        if mode.mode_type().contains(ModeTypeFlags::PREFERRED) {
+            if let Some(curr) = preferred_mode {
+                if curr.vrefresh() < mode.vrefresh() {
+                    preferred_mode = Some(mode.clone());
+                }
+            } else {
+                preferred_mode = Some(mode.clone());
+            }
+        }
+        if let Some(target) = target {
+            if mode.size()
                 != (
                     target.mode.size.width as u16,
                     target.mode.size.height as u16,
@@ -1491,57 +1451,21 @@ fn pick_mode(
             {
                 continue;
             }
+            let refresh: i32 = target.mode.refresh_rate;
 
-            // Interlaced modes don't appear to work.
-            if m.flags().contains(ModeFlags::INTERLACE) {
-                continue;
-            }
             // If refresh is set, only pick modes with matching refresh.
-            let wl_mode = Mode::from(*m);
+            let wl_mode = Mode::from(*mode);
             if wl_mode.refresh == refresh {
-                mode = Some(m);
-            }
-
-            /*             if let Some(refresh) = refresh {
-
-            } else if let Some(curr) = mode {
-                // If refresh isn't set, pick the mode with the highest refresh.
-                if curr.vrefresh() < m.vrefresh() {
-                    mode = Some(m);
-                }
-            } else {
-                mode = Some(m);
-            } */
-        }
-
-        if mode.is_none() {
-            fallback = true;
-        }
-    }
-
-    if mode.is_none() {
-        // Pick a preferred mode.
-        for m in connector.modes() {
-            if !m.mode_type().contains(ModeTypeFlags::PREFERRED) {
-                continue;
-            }
-
-            if let Some(curr) = mode {
-                if curr.vrefresh() < m.vrefresh() {
-                    mode = Some(m);
-                }
-            } else {
-                mode = Some(m);
+                mode_to_use = Some(mode.clone());
             }
         }
     }
 
-    if mode.is_none() {
-        // Last attempt.
-        mode = connector.modes().first();
+    if mode_to_use.is_none() {
+        mode_to_use = preferred_mode.or_else(|| connector.modes().first().cloned());
     }
 
-    mode.map(|m| (*m, fallback))
+    (mode_to_use.unwrap(), preferred_mode)
 }
 
 fn initial_render<R>(surface: &mut SurfaceData, renderer: &mut R) -> Result<(), SwapBuffersError>

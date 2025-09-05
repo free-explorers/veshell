@@ -22,7 +22,7 @@ class NotificationManager extends _$NotificationManager {
   @override
   NotificationManagerState build() {
     persist(
-      storage: ref.watch(persistentStorageStateProvider).requireValue,
+      ref.watch(persistentStorageStateProvider).requireValue,
       options: const StorageOptions(cacheTime: StorageCacheTime.unsafe_forever),
     );
     initServer();
@@ -35,8 +35,9 @@ class NotificationManager extends _$NotificationManager {
 
   Future<void> initServer() async {
     final dbusClient = DBusClient.session();
-    final requestNameReply =
-        await dbusClient.requestName('org.freedesktop.Notifications');
+    final requestNameReply = await dbusClient.requestName(
+      'org.freedesktop.Notifications',
+    );
     if (requestNameReply == DBusRequestNameReply.primaryOwner) {
       print('Successfully registered as org.freedesktop.Notifications');
     } else {
@@ -54,8 +55,9 @@ class NotificationManager extends _$NotificationManager {
               newNotification.pid != null &&
               ref.read(pidToMetaWindowIdProvider(newNotification.pid!)) !=
                   null) {
-            final metaWindowId =
-                ref.read(pidToMetaWindowIdProvider(newNotification.pid!));
+            final metaWindowId = ref.read(
+              pidToMetaWindowIdProvider(newNotification.pid!),
+            );
             appId = ref
                 .read(
                   metaWindowStateProvider(metaWindowId!),
@@ -77,8 +79,9 @@ class NotificationManager extends _$NotificationManager {
           );
           ref
               .read(
-                notificationChannelProvider(ref.read(focusedScreenProvider))
-                    .notifier,
+                notificationChannelProvider(
+                  ref.read(focusedScreenProvider),
+                ).notifier,
               )
               .add(notification);
           return newId;

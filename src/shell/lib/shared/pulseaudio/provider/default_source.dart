@@ -1,3 +1,4 @@
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:pulseaudio/pulseaudio.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_server_info.dart';

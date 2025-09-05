@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/display/widget/display.dart';
 import 'package:shell/meta_window/provider/meta_window_manager.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
+import 'package:shell/monitor/widget/monitor.dart';
 import 'package:shell/notification/provider/notification_manager.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_client.dart';
 import 'package:shell/platform/model/request/get_environment_variables/get_environment_variables.serializable.dart';
@@ -20,7 +21,6 @@ import 'package:shell/shared/pulseaudio/provider/pulse_sink_list.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_source_list.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shortcut_manager/widget/shortcut_manager.dart';
-import 'package:shell/theme/provider/theme.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/window/provider/window_manager/matching_engine.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
@@ -36,11 +36,61 @@ void main() async {
       'FocusManager.instance.primaryFocus ${FocusManager.instance.primaryFocus}',
     );
   });
-  runApp(
+  runWidget(
     const ProviderScope(
-      child: Veshell(),
+      child: _EagerInitialization(child: Veshell()),
     ),
   );
+}
+
+final globalVeshellKey = GlobalKey();
+
+class Veshell extends HookConsumerWidget {
+  const Veshell({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final views = RendererBinding.instance.platformDispatcher.views
+        .where(
+          (view) =>
+              view != RendererBinding.instance.platformDispatcher.implicitView,
+        )
+        .toList();
+
+    useEffect(
+      () {
+        ref.read(platformManagerProvider.notifier)
+          ..request(
+            GetEnvironmentVariablesRequest(
+              message: GetEnvironmentVariablesMessage(),
+            ),
+          )
+          ..request(
+            GetMonitorLayoutRequest(
+              message: GetMonitorLayoutMessage(),
+            ),
+          )
+          ..request(const ShellReadyRequest());
+        return null;
+      },
+      [],
+    );
+
+    return VeshellShortcutManager(
+      child: ViewCollection(
+        views: views
+            .map(
+              (view) => View(
+                view: view,
+                child: MonitorWidget(
+                  viewId: view.viewId,
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
 }
 
 class _EagerInitialization extends ConsumerWidget {
@@ -67,19 +117,19 @@ class _EagerInitialization extends ConsumerWidget {
     if (results.any(
       (element) => element.isLoading,
     )) {
-      return const Center(child: CircularProgressIndicator());
+      return InitializationStatus(
+        asyncValue: const AsyncLoading(),
+        child: child,
+      );
     } else if (results.any(
       (element) => element.hasError,
     )) {
-      return Column(
-        children: results
-            .where(
-              (element) => element.hasError,
-            )
-            .map(
-              (e) => Text(e.asError.toString()),
-            )
-            .toList(),
+      return InitializationStatus(
+        asyncValue: AsyncError(
+          Error(),
+          StackTrace.current,
+        ),
+        child: child,
       );
     }
 
@@ -94,58 +144,32 @@ class _EagerInitialization extends ConsumerWidget {
       ..watch(matchingEngineProvider)
       ..watch(notificationManagerProvider);
 
-    return child;
+    return InitializationStatus(
+      asyncValue: const AsyncData(true),
+      child: child,
+    );
   }
 }
 
-final globalVeshellKey = GlobalKey();
+class InitializationStatus extends InheritedWidget {
+  const InitializationStatus({
+    required this.asyncValue,
+    required super.child,
+    super.key,
+  });
 
-class Veshell extends ConsumerWidget {
-  const Veshell({super.key});
+  final AsyncValue<bool> asyncValue;
+
+  static AsyncValue<bool> of(BuildContext context) {
+    final provider =
+        context.dependOnInheritedWidgetOfExactType<InitializationStatus>();
+    if (provider == null) {
+      throw FlutterError('InitializationStatus not found in the widget tree');
+    }
+    return provider.asyncValue;
+  }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final (lightTheme, darkTheme) = ref.watch(veshellThemeProvider);
-    return MaterialApp(
-      key: globalVeshellKey,
-      theme: lightTheme,
-      darkTheme: darkTheme,
-      themeMode: ThemeMode.dark,
-      home: _EagerInitialization(
-        child: VeshellShortcutManager(
-          child: Material(
-            color: Colors.black,
-            child: HookConsumer(
-              builder: (
-                BuildContext context,
-                WidgetRef ref,
-                Widget? child,
-              ) {
-                useEffect(
-                  () {
-                    ref.read(platformManagerProvider.notifier)
-                      ..request(
-                        GetEnvironmentVariablesRequest(
-                          message: GetEnvironmentVariablesMessage(),
-                        ),
-                      )
-                      ..request(
-                        GetMonitorLayoutRequest(
-                          message: GetMonitorLayoutMessage(),
-                        ),
-                      )
-                      ..request(const ShellReadyRequest());
-                    return null;
-                  },
-                  [],
-                );
-
-                return const DisplayWidget();
-              },
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  bool updateShouldNotify(InitializationStatus oldWidget) =>
+      asyncValue != oldWidget.asyncValue;
 }

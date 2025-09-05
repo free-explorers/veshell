@@ -5,7 +5,9 @@ use calloop_notify::NotifySource;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use smithay::output::Mode;
 use smithay::reexports::calloop::LoopHandle;
+use smithay::utils::{Logical, Physical, Point, Size};
 use std::fs::File;
 use std::path::Path;
 use tracing::info;
@@ -49,9 +51,23 @@ pub struct VeshellSettings {
 #[serde(rename_all = "camelCase")]
 pub struct MonitorResolution {
     /// horizontal coordinate
-    pub width: f64,
+    pub width: i32,
     /// vertical coordinate
-    pub height: f64,
+    pub height: i32,
+}
+impl From<MonitorResolution> for Size<i32, Physical> {
+    fn from(resolution: MonitorResolution) -> Self {
+        (resolution.width, resolution.height).into()
+    }
+}
+
+impl From<Size<i32, Physical>> for MonitorResolution {
+    fn from(size: Size<i32, Physical>) -> Self {
+        MonitorResolution {
+            width: size.w,
+            height: size.h,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
@@ -64,19 +80,52 @@ pub struct MonitorMode {
     /// `1000` is one fps (frame per second), `2000` is 2 fps, etc...
     pub refresh_rate: i32,
 }
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
-
-pub struct MonitorLocation {
-    /// horizontal coordinate
-    pub x: f64,
-    /// vertical coordinate
-    pub y: f64,
+impl From<Mode> for MonitorMode {
+    fn from(mode: Mode) -> Self {
+        MonitorMode {
+            size: MonitorResolution::from(mode.size),
+            refresh_rate: mode.refresh,
+        }
+    }
+}
+impl From<MonitorMode> for Mode {
+    fn from(monitor_mode: MonitorMode) -> Self {
+        Mode {
+            size: monitor_mode.size.into(), // Assuming you can convert between these types
+            refresh: monitor_mode.refresh_rate,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+pub struct MonitorLocation {
+    /// horizontal coordinate
+    pub x: i32,
+    /// vertical coordinate
+    pub y: i32,
+}
+impl From<MonitorLocation> for Point<i32, Logical> {
+    fn from(location: MonitorLocation) -> Self {
+        (location.x, location.y).into()
+    }
+}
+
+impl From<Point<i32, Logical>> for MonitorLocation {
+    fn from(point: Point<i32, Logical>) -> Self {
+        MonitorLocation {
+            x: point.x,
+            y: point.y,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+
 pub struct MonitorConfiguration {
     pub mode: MonitorMode,
     pub location: MonitorLocation,
+    pub fractionnal_scale: f64,
 }
 
 pub struct SettingsManager<BackendData: Backend + 'static> {
@@ -135,12 +184,16 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
         let settings_path = config_folder.join("settings.json");
 
         let monitor_path = config_folder.join("monitor");
+
         if monitor_path.exists() {
             watch_monitors_changes(
                 config_folder_path.clone(),
                 loop_handle.clone(),
                 on_monitor_settings_changed,
             );
+        } else {
+            std::fs::create_dir_all(monitor_path.clone())
+                .expect("Unable to create user settings folder");
         }
 
         loop_handle

@@ -1,5 +1,6 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
@@ -22,14 +23,16 @@ Future<String> screenLabel(Ref ref, ScreenId screenId) async {
         workspaceState.forcedCategory?.name ?? workspaceState.category?.name;
     if (workspaceName == null && workspaceState.tileableWindowList.isNotEmpty) {
       final appId = ref.watch(
-        persistentWindowStateProvider(workspaceState.tileableWindowList.first)
-            .select(
+        persistentWindowStateProvider(
+          workspaceState.tileableWindowList.first,
+        ).select(
           (value) => value.properties.appId,
         ),
       );
 
-      final desktopEntry =
-          await ref.watch(localizedDesktopEntryForIdProvider(appId).future);
+      final desktopEntry = await ref.watch(
+        localizedDesktopEntryForIdProvider(appId).future,
+      );
       if (desktopEntry != null) {
         workspaceName = desktopEntry.entries[DesktopEntryKey.name.string];
       }

@@ -1,6 +1,9 @@
+pub mod fractionnal_scale;
 pub mod xdg;
 pub mod xwayland;
+
 pub mod wayland {
+
     use std::cell::RefCell;
 
     use serde_json::json;
@@ -13,14 +16,16 @@ pub mod wayland {
             },
             Renderer, Texture,
         },
+        desktop::{find_popup_root_surface, PopupKind},
         input::pointer::{CursorImageStatus, CursorImageSurfaceData},
         reexports::wayland_server::{protocol::wl_surface::WlSurface, Client},
         utils::{Buffer as BufferCoords, Size},
         wayland::{
             compositor::{
-                with_states, with_surface_tree_upward, CompositorClientState, CompositorHandler,
-                CompositorState, SurfaceAttributes, TraversalAction,
+                get_parent, with_states, with_surface_tree_upward, CompositorClientState,
+                CompositorHandler, CompositorState, SurfaceAttributes, TraversalAction,
             },
+            fractional_scale::with_fractional_scale,
             shell::xdg::{
                 self, ToplevelSurface, XdgPopupSurfaceData, XdgToplevelSurfaceData,
                 XDG_TOPLEVEL_ROLE,
@@ -32,7 +37,9 @@ pub mod wayland {
     use tracing::info;
 
     use crate::{
-        meta_window_state::meta_window::MetaWindowPatch, state::State, Backend, ClientState,
+        meta_window_state::{meta_popup, meta_window::MetaWindowPatch},
+        state::State,
+        Backend, ClientState,
     };
 
     pub struct WlSurfaceVeshellState {
@@ -129,14 +136,23 @@ pub mod wayland {
 
         fn new_subsurface(&mut self, surface: &WlSurface, parent: &WlSurface) {
             let surface_id = get_surface_id(surface);
-            let parent = get_surface_id(parent);
+            let parent_id = get_surface_id(parent);
+            if let Some(meta_window) = self.get_meta_window(parent_id) {
+                with_states(surface, |data| {
+                    with_fractional_scale(data, |fractional| {
+                        fractional.set_preferred_scale(meta_window.scale_ratio);
+                    });
+                });
+            }
+
             self.subsurfaces.insert(surface_id, surface.clone());
+
             let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
             platform_method_channel.invoke_method(
                 "new_subsurface",
                 Some(Box::new(json!({
                     "surfaceId": surface_id,
-                    "parent": parent,
+                    "parent": parent_id,
                 }))),
                 None,
             );
@@ -165,6 +181,11 @@ pub mod wayland {
                         }
                     }
                 });
+            }
+
+            let mut root_surface = surface.clone();
+            while let Some(parent) = get_parent(&root_surface) {
+                root_surface = parent;
             }
 
             let (subsurfaces_below, subsurfaces_above) = get_direct_subsurfaces(surface);
@@ -329,6 +350,12 @@ pub mod wayland {
                     });
                     if !initial_configure_sent {
                         if let Some(popup) = self.xdg_popups.get(&surface_id) {
+                            let meta_popup = self.get_meta_popup(surface_id).unwrap();
+                            with_states(surface, |data| {
+                                with_fractional_scale(data, |fractional| {
+                                    fractional.set_preferred_scale(meta_popup.scale_ratio);
+                                });
+                            });
                             popup.send_configure().expect("Failed to send configure");
                         }
                     }

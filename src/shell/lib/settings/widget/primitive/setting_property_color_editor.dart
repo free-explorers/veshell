@@ -12,7 +12,6 @@ class SettingPropertyColorEditor extends HookConsumerWidget
   const SettingPropertyColorEditor({
     required this.path,
     required this.property,
-    required this.onChanged,
     super.key,
   });
 
@@ -20,8 +19,7 @@ class SettingPropertyColorEditor extends HookConsumerWidget
   final String path;
   @override
   final SettingProperty<Color> property;
-  @override
-  final void Function(Color newValue) onChanged;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final val = ref.watch(jsonValueByPathProvider(path));
@@ -33,7 +31,6 @@ class SettingPropertyColorEditor extends HookConsumerWidget
             path,
             property.serializeValue(newValue),
           );
-      onChanged(newValue);
     }
 
     return Row(

@@ -3,12 +3,16 @@ use std::ptr::null_mut;
 
 use smithay::backend::renderer::gles::ffi;
 use smithay::reexports::calloop::channel;
-use tracing::error;
+use tracing::{debug, error};
 
 use crate::backend::Backend;
 use crate::flutter_engine::embedder::{
-    FlutterDamage, FlutterOpenGLTexture, FlutterPlatformMessage, FlutterPresentInfo, FlutterRect,
-    FlutterTask, FlutterTransformation,
+    FlutterAddViewResult, FlutterBackingStore, FlutterBackingStoreConfig,
+    FlutterBackingStoreType_kFlutterBackingStoreTypeOpenGL, FlutterBackingStore__bindgen_ty_1,
+    FlutterDamage, FlutterOpenGLBackingStore, FlutterOpenGLBackingStore__bindgen_ty_1,
+    FlutterOpenGLFramebuffer, FlutterOpenGLTargetType_kFlutterOpenGLTargetTypeFramebuffer,
+    FlutterOpenGLTexture, FlutterPlatformMessage, FlutterPresentInfo, FlutterPresentViewInfo,
+    FlutterRect, FlutterTask, FlutterTransformation,
 };
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
 use crate::flutter_engine::{Baton, FlutterEngine};
@@ -19,7 +23,7 @@ where
     BackendData: Backend + 'static,
 {
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
-    match flutter_engine.data.main_egl_context.make_current() {
+    match flutter_engine.renderer_data.main_egl_context.make_current() {
         Ok(()) => true,
         Err(err) => {
             error!("{}", err);
@@ -33,7 +37,11 @@ where
     BackendData: Backend + 'static,
 {
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
-    match flutter_engine.data.resource_egl_context.make_current() {
+    match flutter_engine
+        .renderer_data
+        .resource_egl_context
+        .make_current()
+    {
         Ok(()) => true,
         Err(err) => {
             error!("{}", err);
@@ -47,7 +55,7 @@ where
     BackendData: Backend + 'static,
 {
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
-    match flutter_engine.data.main_egl_context.unbind() {
+    match flutter_engine.renderer_data.main_egl_context.unbind() {
         Ok(()) => true,
         Err(err) => {
             error!("{}", err);
@@ -60,25 +68,9 @@ pub unsafe extern "C" fn fbo_callback<BackendData>(user_data: *mut c_void) -> u3
 where
     BackendData: Backend + 'static,
 {
-    let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
-    if flutter_engine
-        .data
-        .channels
-        .tx_request_fbo
-        .send(())
-        .is_err()
-    {
-        return 0;
-    }
-    if let Ok(Some(dmabuf)) = flutter_engine.data.channels.rx_fbo.recv() {
-        flutter_engine
-            .data
-            .framebuffer_importer
-            .import_framebuffer(&flutter_engine.data.main_egl_context, dmabuf)
-            .unwrap_or(0)
-    } else {
-        0
-    }
+    debug!("fbo_callback");
+
+    0
 }
 
 pub unsafe extern "C" fn present_with_info<BackendData>(
@@ -88,9 +80,7 @@ pub unsafe extern "C" fn present_with_info<BackendData>(
 where
     BackendData: Backend + 'static,
 {
-    let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
-    flutter_engine.data.gl.Finish();
-    flutter_engine.data.channels.tx_present.send(()).is_ok()
+    true
 }
 
 pub unsafe extern "C" fn populate_existing_damage<BackendData>(
@@ -127,11 +117,16 @@ where
 {
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
 
-    while let Ok(output_height) = flutter_engine.data.channels.rx_output_height.try_recv() {
-        flutter_engine.data.output_height = Some(output_height);
+    while let Ok(output_height) = flutter_engine
+        .renderer_data
+        .channels
+        .rx_output_height
+        .try_recv()
+    {
+        flutter_engine.renderer_data.output_height = Some(output_height);
     }
 
-    match flutter_engine.data.output_height {
+    match flutter_engine.renderer_data.output_height {
         Some(output_height) => FlutterTransformation {
             scaleX: 1.0,
             skewX: 0.0,
@@ -164,7 +159,11 @@ pub unsafe extern "C" fn vsync_callback<BackendData>(
     BackendData: Backend + 'static,
 {
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
-    let _ = flutter_engine.data.channels.tx_baton.send(Baton(baton));
+    let _ = flutter_engine
+        .renderer_data
+        .channels
+        .tx_baton
+        .send(Baton(baton));
 }
 
 pub unsafe extern "C" fn runs_task_on_current_thread_callback<BackendData>(
@@ -218,7 +217,7 @@ where
     BackendData: Backend + 'static,
 {
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
-    let channels = &mut flutter_engine.data.channels;
+    let channels: &mut super::FlutterEngineChannels = &mut flutter_engine.renderer_data.channels;
 
     let (texture_name, _) = channels
         .tx_request_external_texture_name
@@ -263,3 +262,5 @@ where
         .send((data.key_event, handled))
         .unwrap();
 }
+
+// add view callback

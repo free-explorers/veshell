@@ -3,6 +3,7 @@ use std::sync::atomic::Ordering;
 use log::{error, warn};
 use smithay::backend::allocator::dmabuf::{AnyError, AsDmabuf, Dmabuf};
 use smithay::backend::allocator::{Allocator, Fourcc, Slot, Swapchain};
+use smithay::backend::drm::output;
 use smithay::backend::input::{Event, InputEvent, KeyState, KeyboardKeyEvent};
 use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::element::surface::{
@@ -15,7 +16,7 @@ use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::renderer::{Bind, ImportDma, ImportEgl};
 use smithay::backend::x11::X11Input;
 use smithay::delegate_dmabuf;
-use smithay::output::{Output, PhysicalProperties, Subpixel};
+use smithay::output::{Output, PhysicalProperties, Scale, Subpixel};
 use smithay::reexports::ash::ext;
 use smithay::reexports::calloop::channel::Event as CalloopEvent;
 use smithay::reexports::calloop::channel::Event::Msg;
@@ -49,6 +50,7 @@ use smithay::{
 use tracing::{debug, info};
 
 use crate::flutter_engine::embedder::FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse;
+use crate::flutter_engine::view::OutputViewIdWrapper;
 use crate::flutter_engine::FlutterEngine;
 use crate::keyboard::{self, handle_keyboard_event};
 use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
@@ -113,13 +115,38 @@ pub fn run_x11_client() {
         .build(&x11_handle)
         .expect("Failed to create first window");
 
+    let settings_manager = settings::SettingsManager::new(
+        event_loop.handle(),
+        |data: &mut State<X11Data>| {
+            let settings = data.settings_manager.get_settings();
+            data.apply_veshell_settings(&settings);
+        },
+        |data, monitor_name| {
+            info!("Monitor settings updated of {}", monitor_name);
+            let config: settings::MonitorConfiguration = data
+                .settings_manager
+                .get_monitor_configuration(monitor_name)
+                .unwrap();
+            if let Some(output) = data.get_output_by_name(monitor_name) {
+                let any_changes =
+                    data.apply_monitor_configuration_to_output(&output.clone(), config);
+
+                if any_changes {
+                    data.on_outputs_changed();
+                }
+            }
+        },
+    );
+
+    let output_name = "x11".to_string();
+
     let mode = Mode {
         size: (window.size().w as i32, window.size().h as i32).into(),
         refresh: 144_000,
     };
 
     let output = Output::new(
-        "x11".to_string(),
+        output_name,
         PhysicalProperties {
             size: (1000, 1000).into(),
             subpixel: Subpixel::Unknown,
@@ -128,7 +155,12 @@ pub fn run_x11_client() {
         },
     );
     let _global = output.create_global::<State<X11Data>>(&display_handle);
-    output.change_current_state(Some(mode), None, None, Some((0, 0).into()));
+    output.change_current_state(
+        Some(mode),
+        None,
+        Some(Scale::Fractional(1.)),
+        Some((0, 0).into()),
+    );
     output.set_preferred(mode);
     let damage_tracker = OutputDamageTracker::from_output(&output);
 
@@ -222,24 +254,13 @@ pub fn run_x11_client() {
         .collect::<Vec<_>>();
     let size = window.size();
 
-    let swapchain = Swapchain::new(
+    /* let swapchain = Swapchain::new(
         dmabuf_allocator,
         size.w as u32,
         size.h as u32,
         Fourcc::Argb8888,
         modifiers,
-    );
-
-    let settings_manager = settings::SettingsManager::new(
-        event_loop.handle(),
-        |data: &mut State<X11Data>| {
-            let settings = data.settings_manager.get_settings();
-            data.apply_veshell_settings(&settings);
-        },
-        |_data, monitor_name| {
-            info!("Monitor settings updated of {}", monitor_name);
-        },
-    );
+    ); */
 
     let mut state = State::new(
         display,
@@ -248,14 +269,19 @@ pub fn run_x11_client() {
             render: false,
             x11_surface,
             renderer: gles_renderer,
-            swapchain,
-            current_slot: None,
-            last_rendered_slot: None,
+            gbm_device,
             damage_tracker,
         },
         Some(dmabuf_state),
         settings_manager,
     );
+
+    if let Some(monitor_setting) = state
+        .settings_manager
+        .get_monitor_configuration(&output.name())
+    {
+        state.apply_monitor_configuration_to_output(&output, monitor_setting);
+    }
 
     state.gl = Some(Gles2::load_with(
         |s| unsafe { egl::get_proc_address(s) } as *const _
@@ -264,14 +290,10 @@ pub fn run_x11_client() {
     let (
         flutter_engine,
         EmbedderChannels {
-            rx_present,
-            rx_request_fbo,
-            tx_fbo,
             tx_output_height,
             rx_baton,
         },
     ) = FlutterEngine::new(&mut state).unwrap();
-    state.tx_fbo = Some(tx_fbo.clone());
 
     state.flutter_engine = Some(flutter_engine);
 
@@ -279,10 +301,15 @@ pub fn run_x11_client() {
     state.space.map_output(&output, (0, 0));
     let output_clone = output.clone();
 
-    state
-        .flutter_engine_mut()
-        .send_window_metrics((size.w as u32, size.h as u32).into())
-        .unwrap();
+    let view_id = state.flutter_engine_mut().add_view(0, &output);
+
+    output_clone
+        .user_data()
+        .insert_if_missing(|| OutputViewIdWrapper {
+            view_id: view_id.clone(),
+        });
+
+    state.on_outputs_changed();
 
     // Mandatory formats by the Wayland spec.
     // TODO: Add more formats based on the GLES version.
@@ -311,18 +338,14 @@ pub fn run_x11_client() {
                         None,
                         Some((0, 0).into()),
                     );
-                    output_clone.set_preferred(mode);
 
                     let _ = tx_output_height.send(new_size.h);
-                    data.flutter_engine()
-                        .send_window_metrics((size.w as u32, size.h as u32).into())
+
+                    data.flutter_engine_mut()
+                        .resize_view(view_id, &output_clone)
                         .unwrap();
 
-                    let monitors = data.space.outputs().cloned().collect::<Vec<_>>();
-                    data.backend_data
-                        .swapchain
-                        .resize(size.w as u32, size.h as u32);
-                    data.flutter_engine_mut().monitor_layout_changed(monitors);
+                    data.on_outputs_changed();
                     data.backend_data.render = true;
                 }
 
@@ -362,15 +385,17 @@ pub fn run_x11_client() {
                         );
                     }
                     InputEvent::PointerMotion { event } => {
-                        data.on_pointer_motion::<X11Input>(event, 0)
+                        data.on_pointer_motion::<X11Input>(event, 0, view_id)
                     }
                     InputEvent::PointerMotionAbsolute { event } => {
-                        data.on_pointer_motion_absolute::<X11Input>(event, 0)
+                        data.on_pointer_motion_absolute::<X11Input>(event, 0, view_id)
                     }
                     InputEvent::PointerButton { event } => {
-                        data.on_pointer_button::<X11Input>(event, 0)
+                        data.on_pointer_button::<X11Input>(event, 0, view_id)
                     }
-                    InputEvent::PointerAxis { event } => data.on_pointer_axis::<X11Input>(event, 0),
+                    InputEvent::PointerAxis { event } => {
+                        data.on_pointer_axis::<X11Input>(event, 0, view_id)
+                    }
                     InputEvent::GestureSwipeBegin { event: _ } => {}
                     InputEvent::GestureSwipeUpdate { event: _ } => {}
                     InputEvent::GestureSwipeEnd { event: _ } => {}
@@ -406,45 +431,10 @@ pub fn run_x11_client() {
         })
         .unwrap();
 
-    event_loop
-        .handle()
-        .insert_source(rx_request_fbo, move |_, _, data| {
-            let slot = match data.backend_data.swapchain.acquire() {
-                Ok(Some(slot)) => slot,
-                Ok(None) => {
-                    error!("Failed to acquire swapchain slot: no available slots");
-                    return;
-                }
-                Err(err) => {
-                    error!("Error while acquiring swapchain slot: {}", err);
-                    return;
-                }
-            };
-            let dmabuf = slot.export().unwrap();
-            data.backend_data.current_slot = Some(slot);
-            data.tx_fbo.as_ref().unwrap().send(Some(dmabuf)).unwrap();
-        })
-        .unwrap();
-
-    event_loop
-        .handle()
-        .insert_source(rx_present, move |_, _, data| {
-            data.is_next_flutter_frame_scheduled = true;
-
-            data.backend_data.last_rendered_slot = data.backend_data.current_slot.take();
-
-            if let Some(ref slot) = data.backend_data.last_rendered_slot {
-                data.backend_data.swapchain.submitted(slot);
-            }
-        })
-        .unwrap();
-
     state::State::<X11Data>::start_xwayland(&mut state);
 
     while state.running.load(Ordering::SeqCst) {
         if state.backend_data.render {
-            let last_rendered_slot = state.backend_data.last_rendered_slot.as_mut();
-
             let (mut buffer, age) = state
                 .backend_data
                 .x11_surface
@@ -458,8 +448,26 @@ pub fn run_x11_client() {
                     continue;
                 }
             };
+            let geometry = match state.space.output_geometry(&output.clone()) {
+                Some(geometry) => geometry.to_f64(),
+                None => return,
+            };
+            let slot: &Option<Slot<Dmabuf>> = {
+                let view = state
+                    .flutter_engine
+                    .as_mut()
+                    .unwrap()
+                    .views_management
+                    .views
+                    .get(&view_id);
+                if let Some(view) = view {
+                    &view.last_rendered_slot
+                } else {
+                    &None
+                }
+            };
 
-            let slot = if let Some(ref slot) = last_rendered_slot {
+            let slot = if let Some(ref slot) = slot {
                 slot
             } else {
                 // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
@@ -492,11 +500,6 @@ pub fn run_x11_client() {
                     }
                 }
                 continue;
-            };
-
-            let geometry = match state.space.output_geometry(&output.clone()) {
-                Some(geometry) => geometry.to_f64(),
-                None => return,
             };
 
             let elements = get_render_elements(
@@ -594,18 +597,13 @@ pub fn run_x11_client() {
             display_handle.flush_clients().unwrap();
         }
     }
-
-    // Avoid indefinite hang in the Flutter render thread waiting for new fbo.
-    drop(tx_fbo);
 }
 
 pub struct X11Data {
     render: bool,
     pub x11_surface: X11Surface,
     renderer: GlesRenderer,
-    swapchain: Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>>,
-    current_slot: Option<Slot<Dmabuf>>,
-    last_rendered_slot: Option<Slot<Dmabuf>>,
+    gbm_device: gbm::Device<DeviceFd>,
     damage_tracker: OutputDamageTracker,
 }
 
@@ -623,5 +621,23 @@ impl Backend for X11Data {
         f: impl FnOnce(&mut GlesRenderer) -> T,
     ) -> Option<T> {
         Some(f(&mut self.renderer))
+    }
+
+    fn new_swapchain(
+        &mut self,
+        width: u32,
+        height: u32,
+    ) -> Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>> {
+        let dmabuf_formats = self.renderer.dmabuf_formats();
+        let dmabuf_allocator: Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>> = {
+            let gbm_allocator =
+                GbmAllocator::new(self.gbm_device.clone(), GbmBufferFlags::RENDERING);
+            Box::new(DmabufAllocator(gbm_allocator))
+        };
+        let modifiers = dmabuf_formats
+            .iter()
+            .map(|format| format.modifier)
+            .collect::<Vec<_>>();
+        Swapchain::new(dmabuf_allocator, width, height, Fourcc::Argb8888, modifiers)
     }
 }

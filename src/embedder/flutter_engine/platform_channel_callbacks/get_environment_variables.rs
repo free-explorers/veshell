@@ -15,7 +15,10 @@ pub fn get_environment_variables<BackendData: Backend + 'static>(
 ) {
     let wayland_socket_name = data.wayland_socket_name.as_deref();
 
-    let xwayland_display = data.xwayland_display.map(|display| format!(":{}", display));
+    let xwayland_display = data
+        .xwayland_state
+        .as_mut()
+        .map(|state| format!(":{}", state.display));
     let xwayland_display = xwayland_display.as_deref();
 
     data.flutter_engine

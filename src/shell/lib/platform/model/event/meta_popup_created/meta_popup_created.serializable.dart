@@ -20,7 +20,9 @@ sealed class MetaPopupCreatedMessage
     required MetaPopupId id,
     required MetaWindowId parent,
     required SurfaceId surfaceId,
+    required double scaleRatio,
     @OffsetConverter() required Offset position,
+    String? currentOutput,
   }) = _MetaPopupCreatedMessage;
 
   factory MetaPopupCreatedMessage.fromJson(Map<String, dynamic> json) =>

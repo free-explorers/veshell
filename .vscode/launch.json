@@ -40,7 +40,7 @@
             "name": "embedder",
             "env": {
                 "RUST_LOG": "debug",
-                //"WAYLAND_DEBUG": "server",
+                "WAYLAND_DEBUG": "server",
                 "VESHELL_VSCODE_DEBUG": "true",
                 "VESHELL_DEFAULT_CONFIG_DIR": "${workspaceFolder}/extra/settings/default",
                 "VESHELL_CONFIG_DIR": "${workspaceFolder}/.veshell"

@@ -5,10 +5,14 @@ use smithay::{
         decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode as DecorationMode,
         shell::server::xdg_toplevel,
     },
-    utils::{Logical, Rectangle},
+    utils::{Logical, Rectangle, Transform},
     wayland::{
-        compositor::with_states, shell::xdg::XDG_TOPLEVEL_ROLE, xwayland_shell::XWAYLAND_SHELL_ROLE,
+        compositor::{send_surface_state, with_states},
+        fractional_scale::with_fractional_scale,
+        shell::xdg::XDG_TOPLEVEL_ROLE,
+        xwayland_shell::XWAYLAND_SHELL_ROLE,
     },
+    xwayland::XWaylandClientData,
 };
 use tracing::warn;
 
@@ -74,6 +78,14 @@ pub enum MetaWindowPatch {
         id: String,
         value: bool,
     },
+    UpdateCurrentOutput {
+        id: String,
+        value: Option<String>,
+    },
+    UpdateScaleRatio {
+        id: String,
+        value: f64,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -91,6 +103,8 @@ pub struct MetaWindow {
     pub startup_id: Option<String>,
     pub geometry: Option<MyRectangle<i32, Logical>>,
     pub need_decoration: bool,
+    pub current_output: Option<String>,
+    pub scale_ratio: f64,
     pub game_mode_activated: bool,
 }
 
@@ -317,6 +331,28 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     meta_window.need_decoration = value.clone();
                 }
             }
+            MetaWindowPatch::UpdateCurrentOutput { id, value } => {
+                if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
+                    if meta_window.current_output == value.clone() {
+                        return;
+                    }
+                    meta_window.current_output = value.clone();
+                    let scale = self
+                        .space
+                        .outputs()
+                        .find(|output| output.name() == value.clone().unwrap_or("".to_string()))
+                        .map(|output| output.current_scale().fractional_scale());
+                    if let Some(scale) = scale {
+                        self.patch_meta_window(
+                            MetaWindowPatch::UpdateScaleRatio {
+                                id: id,
+                                value: scale,
+                            },
+                            true,
+                        );
+                    }
+                }
+            }
             MetaWindowPatch::UpdateGameModeActivated { id, value } => {
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
                     if meta_window.game_mode_activated == value.clone() {
@@ -330,7 +366,14 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                             if let Some(x11_surface) =
                                 self.x11_surface_per_wl_surface.get(surface).cloned()
                             {
-                                let _ = self.x11_wm.as_mut().unwrap().raise_window(&x11_surface);
+                                let _ = self
+                                    .xwayland_state
+                                    .as_mut()
+                                    .unwrap()
+                                    .xwm
+                                    .as_mut()
+                                    .unwrap()
+                                    .raise_window(&x11_surface);
                             }
                             self.pointer_focus =
                                 Some((PointerFocusTarget::from(surface), (0.0, 0.0).into()));
@@ -338,6 +381,36 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     } else {
                         if self.meta_window_state.meta_window_in_gaming_mode == Some(id) {
                             self.meta_window_state.meta_window_in_gaming_mode = None;
+                        }
+                    }
+                }
+            }
+            MetaWindowPatch::UpdateScaleRatio { id, value } => {
+                let xwayland_scale_ratio = self
+                    .xwayland_state
+                    .as_ref()
+                    .unwrap()
+                    .client
+                    .get_data::<XWaylandClientData>()
+                    .unwrap()
+                    .compositor_state
+                    .client_scale();
+                if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
+                    if meta_window.scale_ratio == value.clone() {
+                        return;
+                    }
+                    meta_window.scale_ratio = value.clone();
+
+                    if let Some(surface) = self.surfaces.get(&meta_window.surface_id) {
+                        if let Some(x11_surface) = self.x11_surface_per_wl_surface.get(surface) {
+                            // for xwayland force scale ratio to be the same as the client scale
+                            meta_window.scale_ratio = xwayland_scale_ratio;
+                        } else {
+                            with_states(surface, |data| {
+                                with_fractional_scale(data, |fractional| {
+                                    fractional.set_preferred_scale(meta_window.scale_ratio);
+                                });
+                            });
                         }
                     }
                 }

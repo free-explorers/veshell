@@ -71,6 +71,16 @@ sealed class MetaWindowPatchMessage
     required bool value,
   }) = UpdateGameModeActivated;
 
+  const factory MetaWindowPatchMessage.updateCurrentOutput({
+    required String id,
+    String? value,
+  }) = UpdateCurrentOutput;
+
+  const factory MetaWindowPatchMessage.updateScaleRatio({
+    required String id,
+    required double value,
+  }) = UpdateScaleRatio;
+
   factory MetaWindowPatchMessage.fromJson(Map<String, dynamic> json) =>
       _$MetaWindowPatchMessageFromJson(json);
 }

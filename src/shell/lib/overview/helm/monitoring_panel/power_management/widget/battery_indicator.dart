@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/overview/helm/monitoring_panel/disk_monitoring/widget/disk_usage_monitoring.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_battery_device.dart';
+import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_client.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_devices.dart';
 import 'package:upower/upower.dart';
 
@@ -15,7 +16,9 @@ class PowerIndicator extends HookConsumerWidget {
               (device) => ![
                 UPowerDeviceType.battery,
                 UPowerDeviceType.linePower,
-              ].contains(device.type),
+              ].contains(
+                UpowerClient.getDeviceType(device),
+              ),
             ) ??
         [];
     final batteryDevice = ref.watch(upowerBatteryDeviceProvider).value;
@@ -168,7 +171,7 @@ class DeviceIndicator extends StatelessWidget {
   }
 
   Icon get icon {
-    switch (device.type) {
+    switch (UpowerClient.getDeviceType(device)) {
       case UPowerDeviceType.unknown:
       case UPowerDeviceType.linePower:
       case UPowerDeviceType.battery:

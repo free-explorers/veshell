@@ -45,6 +45,7 @@ class MetaWindowState extends _$MetaWindowState {
       geometry: message.geometry,
       needDecoration: message.needDecoration,
       gameModeActivated: message.gameModeActivated,
+      scaleRatio: message.scaleRatio,
     );
 
     ref
@@ -92,9 +93,15 @@ class MetaWindowState extends _$MetaWindowState {
         state = state.copyWith(needDecoration: patch.value);
       case UpdateGameModeActivated():
         state = state.copyWith(gameModeActivated: patch.value);
+      case UpdateCurrentOutput():
+        state = state.copyWith(currentOutput: patch.value);
+      case UpdateScaleRatio():
+        state = state.copyWith(scaleRatio: patch.value);
     }
     if (propagate == true) {
-      await ref.read(platformManagerProvider.notifier).request(
+      await ref
+          .read(platformManagerProvider.notifier)
+          .request(
             MetaWindowPatchesRequest(
               message: patch,
             ),
@@ -112,7 +119,9 @@ class MetaWindowState extends _$MetaWindowState {
   }
 
   void requestToClose() {
-    ref.read(platformManagerProvider.notifier).request(
+    ref
+        .read(platformManagerProvider.notifier)
+        .request(
           CloseWindowRequest(
             message: CloseWindowMessage(
               metaWindowId: state.id,

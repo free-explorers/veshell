@@ -11,12 +11,23 @@ pub mod xwayland {
     use crate::state::State;
     use crate::wayland::wayland::get_surface_id;
     use serde_json::json;
-
+    use smithay::backend::allocator::Fourcc;
+    use smithay::backend::renderer::element::memory::{
+        MemoryRenderBuffer, MemoryRenderBufferRenderElement,
+    };
+    use smithay::backend::renderer::element::Kind;
+    use smithay::backend::renderer::pixman::{PixmanError, PixmanRenderer};
+    use smithay::backend::renderer::utils::draw_render_elements;
+    use smithay::backend::renderer::{Bind, Frame, Offscreen, Renderer};
     use smithay::input::pointer::CursorIcon;
+    use smithay::reexports::gbm::Format;
     use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 
+    use smithay::reexports::wayland_server::Client;
     use smithay::reexports::x11rb::rust_connection::{DefaultStream, RustConnection};
-    use smithay::utils::{Logical, Point, Rectangle, Size, SERIAL_COUNTER};
+    use smithay::utils::{
+        Buffer as BufferCoords, Logical, Point, Rectangle, Size, Transform, SERIAL_COUNTER,
+    };
     use smithay::wayland::seat::WaylandFocus;
     use smithay::wayland::selection::data_device::{
         clear_data_device_selection, current_data_device_selection_userdata,
@@ -29,13 +40,121 @@ pub mod xwayland {
     use smithay::wayland::selection::SelectionTarget;
     use smithay::wayland::xwayland_shell::{XWaylandShellHandler, XWaylandShellState};
     use smithay::xwayland::xwm::{Reorder, WmWindowProperty, XwmId};
-    use smithay::xwayland::{xwm, X11Surface, X11Wm, XWayland, XWaylandEvent, XwmHandler};
+    use smithay::xwayland::{
+        xwm, X11Surface, X11Wm, XWayland, XWaylandClientData, XWaylandEvent, XwmHandler,
+    };
     use std::borrow::Borrow;
     use std::cell::RefCell;
     use std::os::fd::OwnedFd;
     use uuid::Uuid;
+    use xcursor::parser::Image;
 
-    use tracing::{error, info, trace};
+    use tracing::{error, info, trace, warn};
+
+    pub struct XWaylandState {
+        pub client: Client,
+        pub xwm: Option<X11Wm>,
+        pub display: u32,
+    }
+
+    impl XWaylandState {
+        pub fn reload_cursor(&mut self, scale: f64) {
+            if let Some(wm) = self.xwm.as_mut() {
+                let (theme, size) = load_cursor_theme();
+                let cursor = Cursor::load(&theme, CursorIcon::Default, size);
+                let image = cursor.get_image(scale.ceil() as u32, 0);
+
+                let (pixels_rgba, size, hotspot) = match scale_cursor(scale, size, &image) {
+                    Ok(x) => x,
+                    Err(err) => {
+                        warn!("Failed to scale Xwayland cursor image: {}", err);
+                        (
+                            image.pixels_rgba,
+                            Size::from((image.width as u16, image.height as u16)),
+                            Point::from((image.xhot as u16, image.yhot as u16)),
+                        )
+                    }
+                };
+
+                if let Err(err) = wm.set_cursor(&pixels_rgba, size, hotspot) {
+                    warn!(
+                        id = ?wm.id(),
+                        ?err,
+                        "Failed to set default cursor for Xwayland WM",
+                    );
+                }
+            }
+        }
+    }
+
+    fn scale_cursor(
+        scale: f64,
+        cursor_size: u32,
+        image: &Image,
+    ) -> Result<(Vec<u8>, Size<u16, Logical>, Point<u16, Logical>), PixmanError> {
+        let mut renderer = PixmanRenderer::new()?;
+        let image_scale = (image.size / cursor_size).max(1);
+        let pixel_size = (cursor_size as f64 * scale).round() as i32;
+        let buffer_size = Size::<i32, BufferCoords>::from((pixel_size, pixel_size));
+        let output_size = buffer_size.to_logical(1, Transform::Normal).to_physical(1);
+
+        let image_buffer = MemoryRenderBuffer::from_slice(
+            &image.pixels_rgba,
+            Fourcc::Abgr8888,
+            (image.width as i32, image.height as i32),
+            image_scale as i32,
+            Transform::Normal,
+            None,
+        );
+        let element = MemoryRenderBufferRenderElement::from_buffer(
+            &mut renderer,
+            (0., 0.),
+            &image_buffer,
+            None,
+            None,
+            None,
+            Kind::Unspecified,
+        )?;
+
+        let mut buffer = renderer.create_buffer(Fourcc::Abgr8888, buffer_size)?;
+        let mut fb = renderer.bind(&mut buffer)?;
+        let mut frame = renderer.render(&mut fb, output_size, Transform::Normal)?;
+        draw_render_elements(
+            &mut frame,
+            scale,
+            &[element],
+            &[Rectangle::new((0, 0).into(), output_size)],
+        )?;
+        let sync = frame.finish()?;
+        while let Err(_) = sync.wait() {}
+
+        let len = (buffer_size.w * buffer_size.h * 4) as usize;
+        let mut data = Vec::with_capacity(len);
+        assert_eq!(buffer.stride(), (buffer_size.w * 4) as usize);
+        data.extend_from_slice(unsafe {
+            std::slice::from_raw_parts(buffer.data() as *mut u8, len)
+        });
+
+        let hotspot = Point::<i32, BufferCoords>::from((image.xhot as i32, image.yhot as i32))
+            .to_f64()
+            .to_logical(
+                image_scale as f64,
+                Transform::Normal,
+                &Size::from((image.width as f64, image.height as f64)),
+            )
+            .to_buffer(
+                scale,
+                Transform::Normal,
+                &output_size.to_logical(1).to_f64(),
+            )
+            .to_i32_round::<i32>();
+        Ok((
+            data,
+            Size::from((buffer_size.w as u16, buffer_size.h as u16)),
+            Point::from((hotspot.x as u16, hotspot.y as u16)),
+        ))
+    }
+
     pub struct MyX11SurfaceState {
         pub x11_surface_id: u64,
     }
@@ -64,22 +183,18 @@ pub mod xwayland {
                         x11_socket,
                         display_number,
                     } => {
+                        data.xwayland_state = Some(XWaylandState {
+                            client: client.clone(),
+                            xwm: None,
+                            display: display_number,
+                        });
                         let mut wm =
                             X11Wm::start_wm(data.loop_handle.clone(), x11_socket, client.clone())
                                 .expect("Failed to attach X11 Window Manager");
+                        let xwayland_state = data.xwayland_state.as_mut().unwrap();
+                        xwayland_state.xwm = Some(wm);
+                        xwayland_state.reload_cursor(1.);
 
-                        let (theme, size) = load_cursor_theme();
-                        let cursor = Cursor::load(&theme, CursorIcon::Default, size);
-                        let image = cursor.get_image(1, 0);
-                        wm.set_cursor(
-                            &image.pixels_rgba,
-                            Size::from((image.width as u16, image.height as u16)),
-                            Point::from((image.xhot as u16, image.yhot as u16)),
-                        )
-                        .expect("Failed to set xwayland default cursor");
-
-                        data.x11_wm = Some(wm);
-                        data.xwayland_display = Some(display_number);
                         std::env::set_var("DISPLAY", format!(":{}", display_number));
                         if let Some(flutter_engine) = data.flutter_engine.as_mut() {
                             flutter_engine.set_environment_variable(
@@ -89,9 +204,7 @@ pub mod xwayland {
                         }
                     }
                     XWaylandEvent::Error => {
-                        data.x11_wm = None;
-                        data.xwayland_display = None;
-
+                        data.xwayland_state = None;
                         if let Some(flutter_engine) = data.flutter_engine.as_mut() {
                             flutter_engine.set_environment_variable("DISPLAY", None);
                         }
@@ -155,11 +268,81 @@ pub mod xwayland {
                 parent
             );
         }
+
+        pub fn update_xwayland_scale(&mut self, new_scale: f64) {
+            if let Some(xwayland) = self.xwayland_state.as_mut() {
+                let geometries = self
+                    .x11_surfaces
+                    .iter()
+                    .filter_map(|s| Some((s.1.clone(), s.1.geometry())))
+                    .collect::<Vec<_>>();
+
+                let cursor_size = std::env::var("XCURSOR_SIZE")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(24);
+
+                // update xorg dpi
+                if let Some(xwm) = xwayland.xwm.as_mut() {
+                    let dpi = new_scale * 96. * 1024.;
+                    if let Err(err) = xwm.set_xsettings(
+                        [
+                            ("Xft/DPI".into(), (dpi.round() as i32).into()),
+                            (
+                                "Xcursor/size".into(),
+                                ((new_scale * cursor_size as f64).round() as i32).into(),
+                            ),
+                            (
+                                "Gdk/UnscaledDPI".into(),
+                                ((dpi / new_scale).round() as i32).into(),
+                            ),
+                            (
+                                "Gdk/WindowScalingFactor".into(),
+                                (new_scale.round() as i32).into(),
+                            ),
+                            (
+                                "Gtk/CursorThemeSize".into(),
+                                ((new_scale * cursor_size as f64).round() as i32).into(),
+                            ),
+                        ]
+                        .into_iter(),
+                    ) {
+                        warn!(wm_id = ?xwm.id(), ?err, "Failed to update XSETTINGS.");
+                    }
+                }
+
+                // update cursor
+                xwayland.reload_cursor(new_scale);
+
+                // update client scale
+                xwayland
+                    .client
+                    .get_data::<XWaylandClientData>()
+                    .unwrap()
+                    .compositor_state
+                    .set_client_scale(new_scale);
+
+                /* // update wl/xdg_outputs
+                for output in self.space.outputs() {
+                    output.change_current_state(None, None, None, None);
+                } */
+
+                // update geometries
+                for (surface, geometry) in geometries.iter() {
+                    if let Err(err) = surface.configure(*geometry) {
+                        warn!(?err, surface = ?surface.window_id(), "Failed to update geometry after scale change");
+                    }
+                }
+            }
+        }
     }
 
     impl<BackendData: Backend> XwmHandler for State<BackendData> {
         fn xwm_state(&mut self, _xwm: XwmId) -> &mut X11Wm {
-            self.x11_wm.as_mut().unwrap()
+            self.xwayland_state
+                .as_mut()
+                .and_then(|state| state.xwm.as_mut())
+                .unwrap()
         }
 
         fn new_window(&mut self, _xwm: XwmId, surface: X11Surface) {
@@ -267,10 +450,13 @@ pub mod xwayland {
                     .get(&surface_id)
                     .cloned()
                 {
-                    self.patch_meta_popup(MetaPopupPatch::UpdatePosition {
-                        id: meta_popup_id,
-                        value: geometry.loc.into(),
-                    });
+                    self.patch_meta_popup(
+                        MetaPopupPatch::UpdatePosition {
+                            id: meta_popup_id,
+                            value: geometry.loc.into(),
+                        },
+                        true,
+                    );
                 }
             }
             if let Some(meta_window) = self.get_meta_window(surface_id) {
@@ -501,6 +687,15 @@ pub mod xwayland {
             info!("mapped_id: {:?}", mapped_id);
             let hints = surface.hints();
             info!("hints: {:?}", hints);
+            let xwayland_scale_ratio = self
+                .xwayland_state
+                .as_ref()
+                .unwrap()
+                .client
+                .get_data::<XWaylandClientData>()
+                .unwrap()
+                .compositor_state
+                .client_scale();
             if surface.is_override_redirect() {
                 if let Some(parent_meta_window_id) = parent_surface
                     .and_then(|parent_surface| {
@@ -531,6 +726,8 @@ pub mod xwayland {
                         position: surface.geometry().loc.into(),
                         parent: parent_meta_window_id.clone(),
                         surface_id: get_surface_id(wl_surface.borrow()),
+                        scale_ratio: xwayland_scale_ratio,
+                        geometry: Some(surface.geometry().into()),
                     });
                     self.meta_window_state
                         .meta_popup_id_per_surface_id
@@ -563,6 +760,7 @@ pub mod xwayland {
                                 })
                             })
                     }),
+                    xwayland_scale_ratio,
                 );
                 self.meta_window_state
                     .meta_window_id_per_surface_id

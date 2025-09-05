@@ -7,9 +7,15 @@ import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/settings/model/setting_group.dart';
 import 'package:shell/settings/model/setting_property.dart';
+import 'package:shell/settings/provider/state/monitor_setting_state.dart';
 import 'package:shell/settings/provider/util/config_directory.dart';
 import 'package:shell/settings/provider/util/configured_settings_json.dart';
 import 'package:shell/settings/provider/util/default_settings_json.dart';
+import 'package:shell/settings/widget/expandable_search_result.dart';
+import 'package:shell/settings/widget/monitor/monitor_refresh_rate_editor.dart';
+import 'package:shell/settings/widget/monitor/monitor_refresh_rate_value.dart';
+import 'package:shell/settings/widget/monitor/monitor_resolution_editor.dart';
+import 'package:shell/settings/widget/monitor/monitor_resolution_value.dart';
 import 'package:shell/shared/util/file.dart';
 import 'package:shell/shared/util/json_converter/color.dart';
 import 'package:shell/shared/util/json_converter/logical_key_set.dart';
@@ -32,13 +38,47 @@ class SettingsProperties extends _$SettingsProperties {
               name: e.name,
               description: e.description,
               children: {
-                'resolution': const SettingProperty<MonitorResolution>(
+                'resolution': SettingProperty<MonitorResolution>(
                   name: 'Resolution',
                   description: 'Monitor resolution',
+                  buildSearchResult: (context, path, property) =>
+                      ExpandableSearchResult(
+                    path: path,
+                    property: property,
+                    buildValue: (context, value, {required isExpanded}) =>
+                        MonitorResolutionValue(path: path),
+                    buildEditor: (
+                      BuildContext context, {
+                      required isExpanded,
+                    }) =>
+                        MonitorResolutionEditor(
+                      path: path,
+                      property: property,
+                    ),
+                  ),
                 ),
-                'refreshRate': const SettingProperty<MonitorRefreshRate>(
+                'refreshRate': SettingProperty<MonitorRefreshRate>(
                   name: 'Refresh Rate',
                   description: 'Monitor refresh rate',
+                  buildSearchResult: (context, path, property) =>
+                      ExpandableSearchResult(
+                    path: path,
+                    property: property,
+                    buildValue: (context, value, {required isExpanded}) =>
+                        MonitorRefreshRateValue(path: path),
+                    buildEditor: (
+                      BuildContext context, {
+                      required isExpanded,
+                    }) =>
+                        MonitorRefreshRateEditor(
+                      path: path,
+                      property: property,
+                    ),
+                  ),
+                ),
+                'fractionnalScale': const SettingProperty<double>(
+                  name: 'Fractionnal Scale',
+                  description: 'Monitor fractionnal scaling',
                 ),
               },
             ),
@@ -142,11 +182,17 @@ class SettingsProperties extends _$SettingsProperties {
   }
 
   void updateProperty(String path, dynamic newValue) {
+    final parts = path.split('.');
+    if (parts.first == 'monitors') {
+      return ref
+          .read(monitorSettingStateProvider(parts[1]).notifier)
+          .updateByPath(parts.sublist(2).join('.'), newValue);
+    }
+
     final defaultJson = ref.read(defaultSettingsJsonProvider);
     final json = ref.read(configuredSettingsJsonProvider);
     final configDirectory = ref.read(configDirectoryProvider);
 
-    final parts = path.split('.');
     var currentMap = json;
     var defaultCurrentMap = defaultJson;
 

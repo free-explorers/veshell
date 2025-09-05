@@ -1,6 +1,9 @@
 use std::sync::Mutex;
 
 use crate::{
+    backend::render::fractionnal_texture::{
+        FractionnalTextureBuffer, FractionnalTextureRenderElement,
+    },
     cursor::{draw_cursor, CursorRenderElement, CursorStateInner},
     meta_window_state::meta_window::MetaWindow,
 };
@@ -28,12 +31,13 @@ use smithay::{
 };
 
 pub static CLEAR_COLOR: [f32; 4] = [0.8, 0.8, 0.9, 1.0];
-
+mod fractionnal_memory;
+mod fractionnal_texture;
 smithay::backend::renderer::element::render_elements! {
     pub VeshellRenderElements<R> where
         R: ImportAll + ImportMem;
     Cursor=RelocateRenderElement<CursorRenderElement<R>>,
-    Flutter=TextureRenderElement<R::TextureId>,
+    Flutter=FractionnalTextureRenderElement<R::TextureId>,
     Surface=WaylandSurfaceRenderElement<R>
 }
 
@@ -65,7 +69,7 @@ where
             renderer,
             cursor_image_status,
             cursor_state,
-            scale.fractional_scale().into(),
+            scale,
             now,
             cursor_location - output_geometry.loc,
             is_surface_under_pointer,
@@ -97,17 +101,17 @@ where
     };
     if flutter_texture_result.is_ok() {
         let flutter_texture = flutter_texture_result.unwrap();
-        let flutter_texture_buffer = TextureBuffer::from_texture(
+        let flutter_texture_buffer = FractionnalTextureBuffer::from_texture(
             renderer,
             flutter_texture,
-            scale.integer_scale(),
+            scale.fractional_scale(),
             transform,
-            None,
+            Vec::new(),
         );
-        let flutter_texture_element = TextureRenderElement::from_texture_buffer(
+        let flutter_texture_element = FractionnalTextureRenderElement::from_texture_buffer(
+            flutter_texture_buffer,
             Point::from((0.0, 0.0)),
-            &flutter_texture_buffer,
-            None,
+            1.,
             Some(output_geometry),
             None,
             Kind::Unspecified,
