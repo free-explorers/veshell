@@ -20,7 +20,7 @@ abstract class Monitor with _$Monitor {
     required String description,
     required PhysicalProperties physicalProperties,
     required double scale,
-    @OffsetConverter() required Offset location,
+    @OffsetIntConverter() required Offset location,
     required Mode? currentMode,
     required Mode? preferredMode,
     required List<Mode> modes,
@@ -35,7 +35,7 @@ abstract class Monitor with _$Monitor {
 @freezed
 abstract class Mode with _$Mode {
   const factory Mode({
-    @SizeConverter() required MonitorResolution size,
+    @SizeIntConverter() required MonitorResolution size,
     required MonitorRefreshRate refreshRate,
   }) = _Mode;
 
@@ -45,7 +45,7 @@ abstract class Mode with _$Mode {
 @freezed
 abstract class PhysicalProperties with _$PhysicalProperties {
   const factory PhysicalProperties({
-    @SizeConverter() required Size size,
+    @SizeIntConverter() required Size size,
     required String make,
     required String model,
   }) = _PhysicalProperties;

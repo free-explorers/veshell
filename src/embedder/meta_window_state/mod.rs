@@ -5,6 +5,7 @@ use meta_window::{DisplayMode, MetaWindow, MetaWindowPatch};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use smithay::{
+    output::Output,
     reexports::{
         wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode as DecorationMode,
         wayland_server::{DisplayHandle, Resource},
@@ -50,6 +51,17 @@ impl MetaWindowState {
             meta_popup_id_per_surface_id: HashMap::new(),
             meta_window_in_gaming_mode: None,
         }
+    }
+
+    pub fn get_meta_windows_for_output(&mut self, output: Output) -> Vec<MetaWindow> {
+        let mut meta_windows = Vec::new();
+        let some_name = Some(output.name());
+        for (_, meta_window) in self.meta_windows.iter_mut() {
+            if meta_window.current_output == some_name {
+                meta_windows.push(meta_window.clone());
+            }
+        }
+        meta_windows
     }
 }
 

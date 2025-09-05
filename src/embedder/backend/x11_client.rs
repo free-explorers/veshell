@@ -123,35 +123,22 @@ pub fn run_x11_client() {
         },
         |data, monitor_name| {
             info!("Monitor settings updated of {}", monitor_name);
-            let config = data
+            let config: settings::MonitorConfiguration = data
                 .settings_manager
                 .get_monitor_configuration(monitor_name)
                 .unwrap();
-            data.space.outputs().for_each(|output| {
-                output.change_current_state(
-                    None,
-                    None,
-                    Some(Scale::Fractional(config.fractionnal_scale)),
-                    None,
-                );
-                let view_id = output
-                    .user_data()
-                    .get::<OutputViewIdWrapper>()
-                    .unwrap()
-                    .view_id;
-                data.flutter_engine
-                    .as_mut()
-                    .unwrap()
-                    .resize_view(view_id, output)
-                    .expect("Failed to resize view");
-            });
-            data.on_outputs_changed();
+            if let Some(output) = data.get_output_by_name(monitor_name) {
+                let any_changes =
+                    data.apply_monitor_configuration_to_output(&output.clone(), config);
+
+                if any_changes {
+                    data.on_outputs_changed();
+                }
+            }
         },
     );
 
     let output_name = "x11".to_string();
-
-    let monitor_setting = settings_manager.get_monitor_configuration(&output_name);
 
     let mode = Mode {
         size: (window.size().w as i32, window.size().h as i32).into(),
@@ -168,11 +155,10 @@ pub fn run_x11_client() {
         },
     );
     let _global = output.create_global::<State<X11Data>>(&display_handle);
-    let scale = monitor_setting.map(|x| x.fractionnal_scale).unwrap_or(1.0);
     output.change_current_state(
         Some(mode),
         None,
-        Some(Scale::Fractional(scale)),
+        Some(Scale::Fractional(1.)),
         Some((0, 0).into()),
     );
     output.set_preferred(mode);
@@ -290,6 +276,13 @@ pub fn run_x11_client() {
         settings_manager,
     );
 
+    if let Some(monitor_setting) = state
+        .settings_manager
+        .get_monitor_configuration(&output.name())
+    {
+        state.apply_monitor_configuration_to_output(&output, monitor_setting);
+    }
+
     state.gl = Some(Gles2::load_with(
         |s| unsafe { egl::get_proc_address(s) } as *const _
     ));
@@ -345,7 +338,6 @@ pub fn run_x11_client() {
                         None,
                         Some((0, 0).into()),
                     );
-                    output_clone.set_preferred(mode);
 
                     let _ = tx_output_height.send(new_size.h);
 

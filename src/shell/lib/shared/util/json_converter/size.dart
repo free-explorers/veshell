@@ -8,11 +8,30 @@ class SizeConverter extends JsonConverter<Size, Map<dynamic, dynamic>> {
 
   @override
   Size fromJson(Map<dynamic, dynamic> json) => Size(
-        (json['width']! as num).toDouble(),
-        (json['height']! as num).toDouble(),
-      );
+    (json['width']! as num).toDouble(),
+    (json['height']! as num).toDouble(),
+  );
 
   @override
-  Map<dynamic, dynamic> toJson(Size object) =>
-      {'width': object.width, 'height': object.height};
+  Map<dynamic, dynamic> toJson(Size object) => {
+    'width': object.width,
+    'height': object.height,
+  };
+}
+
+class SizeIntConverter extends JsonConverter<Size, Map<dynamic, dynamic>> {
+  /// Serialize [Size] to [List].
+  const SizeIntConverter();
+
+  @override
+  Size fromJson(Map<dynamic, dynamic> json) => Size(
+    (json['width']! as num).toDouble(),
+    (json['height']! as num).toDouble(),
+  );
+
+  @override
+  Map<dynamic, dynamic> toJson(Size object) => {
+    'width': object.width.toInt(),
+    'height': object.height.toInt(),
+  };
 }

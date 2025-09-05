@@ -113,8 +113,6 @@ pub unsafe extern "C" fn create_backing_store_callback<BackendData>(
 where
     BackendData: Backend + 'static,
 {
-    debug!("create_backing_store_callback: {:?}", (*config).view_id);
-
     let compositor_data = &mut *(user_data as *mut CompositorUserData);
     let flutter_engine =
         &mut *(compositor_data.flutter_engine_ptr as *mut FlutterEngine<BackendData>);
@@ -123,8 +121,6 @@ where
     }
 
     if let Ok(Some(dmabuf)) = compositor_data.rx_on_buffer_sent.recv() {
-        debug!("create_backing_store_callback: received buffer");
-
         let name = flutter_engine
             .renderer_data
             .framebuffer_importer
@@ -164,7 +160,7 @@ pub unsafe extern "C" fn collect_backing_store_callback<BackendData>(
 where
     BackendData: Backend + 'static,
 {
-    debug!("collect_backing_store_callback: {:?}", renderer);
+    // TODO: ensure we don't have a memory leak there
     let compositor_data = &mut *(user_data as *mut CompositorUserData);
 
     true
@@ -176,7 +172,6 @@ pub unsafe extern "C" fn present_view_callback<BackendData>(
 where
     BackendData: Backend + 'static,
 {
-    debug!("present_view_callback: {:?}", (*info).view_id);
     let user_data = (*info).user_data;
     let compositor_data = &mut *(user_data as *mut CompositorUserData);
     let flutter_engine =

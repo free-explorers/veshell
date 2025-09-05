@@ -23,7 +23,6 @@ where
     BackendData: Backend + 'static,
 {
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
-    debug!("make_current thread: {:?}", std::thread::current().id());
     match flutter_engine.renderer_data.main_egl_context.make_current() {
         Ok(()) => true,
         Err(err) => {
@@ -37,10 +36,6 @@ pub unsafe extern "C" fn make_resource_current<BackendData>(user_data: *mut c_vo
 where
     BackendData: Backend + 'static,
 {
-    debug!(
-        "make_resource_current thread: {:?}",
-        std::thread::current().id()
-    );
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     match flutter_engine
         .renderer_data
@@ -59,8 +54,6 @@ pub unsafe extern "C" fn clear_current<BackendData>(user_data: *mut c_void) -> b
 where
     BackendData: Backend + 'static,
 {
-    debug!("clear_current");
-
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     match flutter_engine.renderer_data.main_egl_context.unbind() {
         Ok(()) => true,
@@ -87,7 +80,6 @@ pub unsafe extern "C" fn present_with_info<BackendData>(
 where
     BackendData: Backend + 'static,
 {
-    debug!("present_with_info");
     true
 }
 
@@ -98,7 +90,6 @@ pub unsafe extern "C" fn populate_existing_damage<BackendData>(
 ) where
     BackendData: Backend + 'static,
 {
-    debug!("populate_existing_damage");
     let existing_damage = &mut *existing_damage;
     existing_damage.struct_size = std::mem::size_of::<FlutterDamage>();
     existing_damage.num_rects = 1;
@@ -124,7 +115,6 @@ pub unsafe extern "C" fn surface_transformation<BackendData>(
 where
     BackendData: Backend + 'static,
 {
-    debug!("surface_transformation");
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
 
     while let Ok(output_height) = flutter_engine
@@ -168,7 +158,6 @@ pub unsafe extern "C" fn vsync_callback<BackendData>(
 ) where
     BackendData: Backend + 'static,
 {
-    debug!("vsync_callback");
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     let _ = flutter_engine
         .renderer_data
@@ -183,7 +172,6 @@ pub unsafe extern "C" fn runs_task_on_current_thread_callback<BackendData>(
 where
     BackendData: Backend + 'static,
 {
-    debug!("runs_task_on_current_thread_callback");
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     flutter_engine.current_thread_id == std::thread::current().id()
 }
@@ -195,7 +183,6 @@ pub unsafe extern "C" fn post_task_callback<BackendData>(
 ) where
     BackendData: Backend + 'static,
 {
-    debug!("post_task_callback");
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     let timeout = flutter_engine.task_runner.enqueue_task(task, target_time);
     flutter_engine
@@ -211,7 +198,6 @@ pub unsafe extern "C" fn platform_message_callback<BackendData>(
 ) where
     BackendData: Backend + 'static,
 {
-    debug!("platform_message_callback");
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     let message = &*message;
     flutter_engine
@@ -230,7 +216,6 @@ pub unsafe extern "C" fn gl_external_texture_frame_callback<BackendData>(
 where
     BackendData: Backend + 'static,
 {
-    debug!("gl_external_texture_frame_callback");
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     let channels: &mut super::FlutterEngineChannels = &mut flutter_engine.renderer_data.channels;
 

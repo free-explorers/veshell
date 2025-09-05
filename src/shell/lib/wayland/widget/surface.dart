@@ -18,41 +18,38 @@ class SurfaceWidget extends ConsumerWidget {
   final double scaleRatio;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return ColoredBox(
-      color: Colors.red.withAlpha(100),
-      child: SurfaceSize(
-        surfaceId: surfaceId,
-        scaleRatio: scaleRatio,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            _Subsurfaces(
-              surfaceId: surfaceId,
-              scaleRatio: scaleRatio,
-              layer: _SubsurfaceLayer.below,
+    return SurfaceSize(
+      surfaceId: surfaceId,
+      scaleRatio: scaleRatio,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          _Subsurfaces(
+            surfaceId: surfaceId,
+            scaleRatio: scaleRatio,
+            layer: _SubsurfaceLayer.below,
+          ),
+          ViewInputListener(
+            surfaceId: surfaceId,
+            child: Consumer(
+              builder: (BuildContext context, WidgetRef ref, Widget? child) {
+                final textureId = ref.watch(
+                  wlSurfaceStateProvider(surfaceId).select(
+                    (v) => v.texture!.id,
+                  ),
+                );
+                return Texture(
+                  textureId: textureId,
+                );
+              },
             ),
-            ViewInputListener(
-              surfaceId: surfaceId,
-              child: Consumer(
-                builder: (BuildContext context, WidgetRef ref, Widget? child) {
-                  final textureId = ref.watch(
-                    wlSurfaceStateProvider(surfaceId).select(
-                      (v) => v.texture!.id,
-                    ),
-                  );
-                  return Texture(
-                    textureId: textureId,
-                  );
-                },
-              ),
-            ),
-            _Subsurfaces(
-              surfaceId: surfaceId,
-              scaleRatio: scaleRatio,
-              layer: _SubsurfaceLayer.above,
-            ),
-          ],
-        ),
+          ),
+          _Subsurfaces(
+            surfaceId: surfaceId,
+            scaleRatio: scaleRatio,
+            layer: _SubsurfaceLayer.above,
+          ),
+        ],
       ),
     );
   }

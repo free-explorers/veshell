@@ -12,7 +12,7 @@ abstract class MonitorSetting with _$MonitorSetting {
   const factory MonitorSetting({
     required Mode mode,
     required double fractionnalScale,
-    @OffsetConverter() required Offset location,
+    @OffsetIntConverter() required Offset location,
   }) = _MonitorSetting;
   factory MonitorSetting.fromJson(Map<String, dynamic> json) =>
       _$MonitorSettingFromJson(json);

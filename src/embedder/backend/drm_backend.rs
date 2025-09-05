@@ -319,77 +319,22 @@ pub fn run_drm_backend() {
         },
         |data, monitor_name| {
             info!("Monitor settings updated of {}", monitor_name);
-            for (&_node, gpu_data) in &mut data.backend_data.gpus {
-                for (&_handle, surface) in &mut gpu_data.surfaces {
-                    let monitor_name = surface.name.clone();
-                    if monitor_name.is_empty() {
-                        continue;
-                    }
-                    let Some(connector) = gpu_data
-                        .drm_scanner
-                        .connectors()
-                        .get(&surface.connector_handle)
-                    else {
-                        error!("missing enabled connector in drm_scanner");
-                        continue;
-                    };
-                    let monitor_configuration = match data
-                        .settings_manager
-                        .get_monitor_configuration(&monitor_name)
-                    {
-                        Some(monitor_configuration) => monitor_configuration,
-                        None => {
-                            warn!("Monitor configuration not found for {}", monitor_name);
-                            return;
-                        }
-                    };
-
-                    let (drm_mode, _fallback) =
-                        pick_mode(&connector, Some(monitor_configuration.clone())).unwrap();
-
-                    if let Err(err) = surface.compositor.use_mode(drm_mode) {
-                        warn!("error changing mode: {err:?}");
-                        continue;
-                    }
-                    let scale = monitor_configuration.fractionnal_scale;
-                    data.space
-                        .outputs()
-                        .find(|output| output.name() == monitor_name)
-                        .map(|output: &Output| {
-                            output.change_current_state(
-                                Some(Mode {
-                                    size: Size::from((
-                                        monitor_configuration.mode.size.width as i32,
-                                        monitor_configuration.mode.size.height as i32,
-                                    )),
-                                    refresh: monitor_configuration.mode.refresh_rate,
-                                }),
-                                None,
-                                Some(Scale::Fractional(scale)),
-                                Some(
-                                    (
-                                        monitor_configuration.location.x as i32,
-                                        monitor_configuration.location.y as i32,
-                                    )
-                                        .into(),
-                                ),
-                            );
-                            data.flutter_engine
-                                .as_mut()
-                                .unwrap()
-                                .resize_view(surface.view_id, output);
-                        });
-                }
-            }
-            let bounding_box = data
-                .space
-                .outputs()
-                .map(|output| data.space.output_geometry(output).unwrap())
-                .reduce(|first, second| first.merge(second))
+            let config: settings::MonitorConfiguration = data
+                .settings_manager
+                .get_monitor_configuration(monitor_name)
                 .unwrap();
 
-            data.determine_highest_hz_crtc();
-            data.on_outputs_changed();
+            data.apply_monitor_configuration_to_drm_surface(monitor_name, &config);
+
+            if let Some(output) = data.get_output_by_name(monitor_name) {
+                let any_changes =
+                    data.apply_monitor_configuration_to_output(&output.clone(), config);
+
+                if any_changes {
+                    data.determine_highest_hz_crtc();
+                    data.on_outputs_changed();
+                }
+            }
         },
     );
     let mut state = State::new(
@@ -885,19 +830,20 @@ impl State<DrmBackend> {
         );
 
         // Determine DRM mode from the monitor configuration or fallback to the preferred mode
-        let (drm_mode, _fallback) = pick_mode(&connector, monitor_configuration).unwrap();
+        let (mode_to_use, preferred_mode) = pick_mode(&connector, monitor_configuration);
 
         // Create the DrmSurface
-        let surface = match device
-            .drm_device
-            .create_surface(crtc, drm_mode, &[connector.handle()])
-        {
-            Ok(surface) => surface,
-            Err(err) => {
-                warn!("Failed to create drm surface: {}", err);
-                return;
-            }
-        };
+        let surface =
+            match device
+                .drm_device
+                .create_surface(crtc, mode_to_use, &[connector.handle()])
+            {
+                Ok(surface) => surface,
+                Err(err) => {
+                    warn!("Failed to create drm surface: {}", err);
+                    return;
+                }
+            };
 
         let output = Output::new(
             output_name.clone(),
@@ -910,22 +856,28 @@ impl State<DrmBackend> {
         );
 
         let global = output.create_global::<State<DrmBackend>>(&self.display_handle);
-
-        // Put the new output at the right of the last one.
-        let x = self.space.outputs().fold(0, |acc, o| {
-            acc + self.space.output_geometry(o).unwrap().size.w
-        });
-        let position = (x, 0).into();
         for iterated_mode in connector.modes() {
             output.add_mode(Mode::from(*iterated_mode));
         }
-        let wl_mode = Mode::from(drm_mode);
+        if let Some(preferred_mode) = preferred_mode {
+            let wl_mode = Mode::from(preferred_mode);
+            output.set_preferred(wl_mode);
+        }
+
+        let position = monitor_configuration
+            .map(|monitor_configuration| monitor_configuration.location.into())
+            .unwrap_or_else(|| {
+                // Put the new output at the right of the last one.
+                let x = self.space.outputs().fold(0, |acc, o| {
+                    acc + self.space.output_geometry(o).unwrap().size.w
+                });
+                (x, 0).into()
+            });
         let scale = monitor_configuration
             .map(|m| m.fractionnal_scale)
             .unwrap_or(1.0);
-        output.set_preferred(wl_mode);
         output.change_current_state(
-            Some(wl_mode),
+            Some(Mode::from(mode_to_use)),
             None,
             Some(Scale::Fractional(scale)),
             Some(position),
@@ -1422,6 +1374,30 @@ impl State<DrmBackend> {
     }
 
     pub fn apply_libinput_settings(config: &MouseAndTouchpadSettings, device: &mut input::Device) {}
+
+    fn apply_monitor_configuration_to_drm_surface(
+        &mut self,
+        name: &str,
+        config: &MonitorConfiguration,
+    ) {
+        for (&_node, gpu_data) in &mut self.backend_data.gpus {
+            for (&_handle, surface) in &mut gpu_data.surfaces {
+                if surface.name == name {
+                    if let Some(connector) = gpu_data
+                        .drm_scanner
+                        .connectors()
+                        .get(&surface.connector_handle)
+                    {
+                        let (mode_to_use, _) = pick_mode(&connector, Some(config.clone()));
+                        if let Err(err) = surface.compositor.use_mode(mode_to_use) {
+                            warn!("error changing mode: {err:?}");
+                        }
+                    }
+                    return;
+                }
+            }
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -1447,15 +1423,27 @@ pub type GbmDrmCompositor = DrmCompositor<
 fn pick_mode(
     connector: &connector::Info,
     target: Option<MonitorConfiguration>,
-) -> Option<(control::Mode, bool)> {
-    let mut mode = None;
-    let mut fallback = false;
+) -> (control::Mode, Option<control::Mode>) {
+    let mut mode_to_use: Option<control::Mode> = None;
+    let mut preferred_mode: Option<control::Mode> = None;
 
-    if let Some(target) = target {
-        let refresh = target.mode.refresh_rate;
+    for mode in connector.modes() {
+        // Interlaced modes don't appear to work.
+        if mode.flags().contains(ModeFlags::INTERLACE) {
+            continue;
+        }
 
-        for m in connector.modes() {
-            if m.size()
+        if mode.mode_type().contains(ModeTypeFlags::PREFERRED) {
+            if let Some(curr) = preferred_mode {
+                if curr.vrefresh() < mode.vrefresh() {
+                    preferred_mode = Some(mode.clone());
+                }
+            } else {
+                preferred_mode = Some(mode.clone());
+            }
+        }
+        if let Some(target) = target {
+            if mode.size()
                 != (
                     target.mode.size.width as u16,
                     target.mode.size.height as u16,
@@ -1463,57 +1451,21 @@ fn pick_mode(
             {
                 continue;
             }
+            let refresh: i32 = target.mode.refresh_rate;
 
-            // Interlaced modes don't appear to work.
-            if m.flags().contains(ModeFlags::INTERLACE) {
-                continue;
-            }
             // If refresh is set, only pick modes with matching refresh.
-            let wl_mode = Mode::from(*m);
+            let wl_mode = Mode::from(*mode);
             if wl_mode.refresh == refresh {
-                mode = Some(m);
-            }
-
-            /*             if let Some(refresh) = refresh {
-
-            } else if let Some(curr) = mode {
-                // If refresh isn't set, pick the mode with the highest refresh.
-                if curr.vrefresh() < m.vrefresh() {
-                    mode = Some(m);
-                }
-            } else {
-                mode = Some(m);
-            } */
-        }
-
-        if mode.is_none() {
-            fallback = true;
-        }
-    }
-
-    if mode.is_none() {
-        // Pick a preferred mode.
-        for m in connector.modes() {
-            if !m.mode_type().contains(ModeTypeFlags::PREFERRED) {
-                continue;
-            }
-
-            if let Some(curr) = mode {
-                if curr.vrefresh() < m.vrefresh() {
-                    mode = Some(m);
-                }
-            } else {
-                mode = Some(m);
+                mode_to_use = Some(mode.clone());
             }
         }
     }
 
-    if mode.is_none() {
-        // Last attempt.
-        mode = connector.modes().first();
+    if mode_to_use.is_none() {
+        mode_to_use = preferred_mode.or_else(|| connector.modes().first().cloned());
     }
 
-    mode.map(|m| (*m, fallback))
+    (mode_to_use.unwrap(), preferred_mode)
 }
 
 fn initial_render<R>(surface: &mut SurfaceData, renderer: &mut R) -> Result<(), SwapBuffersError>

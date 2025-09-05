@@ -10,6 +10,7 @@ use smithay::desktop::{Space, Window};
 use smithay::input::keyboard::{KeyboardHandle, XkbConfig};
 use smithay::input::pointer::{CursorImageStatus, PointerHandle};
 use smithay::input::{Seat, SeatHandler, SeatState};
+use smithay::output::{Output, Scale};
 use smithay::reexports::calloop::generic::Generic;
 use smithay::reexports::calloop::{channel, Interest, LoopHandle, Mode, PostAction};
 use smithay::reexports::input;
@@ -60,6 +61,7 @@ use smithay::{
 use tracing::{info, warn};
 
 use crate::cursor::CursorState;
+use crate::flutter_engine::view::OutputViewIdWrapper;
 use crate::flutter_engine::wayland_messages::{
     PopupMessage, SubsurfaceMessage, SurfaceMessage, SurfaceRole, ToplevelMessage,
     XdgSurfaceMessage, XdgSurfaceRole,
@@ -68,8 +70,9 @@ use crate::flutter_engine::FlutterEngine;
 use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
 use crate::keyboard::key_repeater::KeyRepeater;
 use crate::keyboard::{handle_keyboard_event, swap_left_alt_and_meta};
+use crate::meta_window_state::meta_window::MetaWindowPatch;
 use crate::meta_window_state::MetaWindowState;
-use crate::settings::{SettingsManager, VeshellSettings};
+use crate::settings::{MonitorConfiguration, SettingsManager, VeshellSettings};
 use crate::texture_swap_chain::TextureSwapChain;
 use crate::wayland::wayland::{get_direct_subsurfaces, get_surface_id};
 use crate::wayland::xwayland::xwayland::XWaylandState;
@@ -435,6 +438,74 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         SubsurfaceMessage {
             position: location.into(),
             parent: get_surface_id(&get_parent(surface).unwrap()),
+        }
+    }
+
+    pub fn get_output_by_name(&self, name: &str) -> Option<&Output> {
+        self.space.outputs().find(|output| output.name() == name)
+    }
+
+    pub fn apply_monitor_configuration_to_output(
+        &mut self,
+        output: &Output,
+        configuration: MonitorConfiguration,
+    ) -> bool {
+        let new_mode = if output.current_mode().unwrap() != configuration.mode.into() {
+            Some(configuration.mode.into())
+        } else {
+            None
+        };
+
+        let new_scale =
+            if output.current_scale().fractional_scale() != configuration.fractionnal_scale {
+                Some(Scale::Fractional(configuration.fractionnal_scale))
+            } else {
+                None
+            };
+
+        let new_location = if output.current_location() != configuration.location.into() {
+            Some(configuration.location.into())
+        } else {
+            None
+        };
+
+        // if any new apply changes and return true
+        if new_mode.is_some() || new_scale.is_some() || new_location.is_some() {
+            output.change_current_state(new_mode, None, new_scale, new_location);
+            if new_mode.is_some() {
+                output.set_preferred(new_mode.unwrap());
+            }
+            // if scale changed update the scale for all MetaWindow displayed on it
+            if new_scale.is_some() {
+                for meta_window in self
+                    .meta_window_state
+                    .get_meta_windows_for_output(output.clone())
+                {
+                    self.patch_meta_window(
+                        MetaWindowPatch::UpdateScaleRatio {
+                            id: meta_window.clone().id,
+                            value: new_scale.unwrap().fractional_scale(),
+                        },
+                        true,
+                    );
+                }
+            }
+            // if mode changed update the view size
+            if let Some(view_id) = output
+                .user_data()
+                .get::<OutputViewIdWrapper>()
+                .map(|wrapper| wrapper.view_id)
+            {
+                self.flutter_engine
+                    .as_mut()
+                    .unwrap()
+                    .resize_view(view_id, output)
+                    .expect("Failed to resize view");
+            }
+
+            true
+        } else {
+            false
         }
     }
 
