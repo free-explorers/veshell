@@ -159,8 +159,6 @@ impl Backend for DrmBackend {
             .iter()
             .map(|format| format.modifier)
             .collect::<Vec<_>>();
-        debug!("primary gpu: {:?}", self.primary_gpu);
-        debug!("gpus length: {:?}", self.gpus.len());
         let dmabuf_allocator: Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>> = {
             let gbm_allocator = GbmAllocator::new(
                 self.get_primary_gpu_data_mut().gbm_device.clone(),
@@ -662,7 +660,6 @@ pub fn run_drm_backend() {
                 } */
             }
             UdevEvent::Changed { device_id } => {
-                debug!("UdevEvent::Changed {{ device_id: {device_id} }}");
                 if let Ok(node) = DrmNode::from_dev_id(device_id) {
                     data.device_changed(node)
                 }
@@ -686,7 +683,6 @@ pub fn run_drm_backend() {
         .handle()
         .insert_source(rx_baton, move |baton, _, data| {
             if let CalloopEvent::Msg(baton) = baton {
-                debug!("Received baton from Flutter engine.");
                 data.batons.push(baton);
             }
         })
@@ -1141,7 +1137,6 @@ impl State<DrmBackend> {
     }
 
     fn on_vblank(&mut self, node: DrmNode, crtc: crtc::Handle, _meta: DrmEventMetadata) {
-        debug!("on_vblank");
         // Since the Flutter context is shared among all outputs we need to render all of them at the frequence of the highest Hz output.
         let gpu_data = self.backend_data.gpus.get_mut(&node).unwrap();
 
@@ -1199,7 +1194,6 @@ impl State<DrmBackend> {
 
     // If crtc is `Some()`, render it, else render all crtcs
     fn render(&mut self, node: DrmNode, crtc: Option<crtc::Handle>) {
-        debug!("rendering on node {:?}", node);
         //let primary_gpu = self.backend_data.primary_gpu;
 
         let device_backend = match self.backend_data.gpus.get_mut(&node) {
@@ -1284,7 +1278,6 @@ impl State<DrmBackend> {
             Some(geometry) => geometry.to_f64().size,
             None => return,
         };
-        debug!("Rendering frame {:?}", size);
         let elements = get_render_elements(
             renderer,
             output,
@@ -1339,7 +1332,6 @@ impl State<DrmBackend> {
         crtc: crtc::Handle,
         evt_handle: LoopHandle<'static, State<DrmBackend>>,
     ) {
-        debug!("schedule_initial_render: {}", node);
         let device = if let Some(device) = self.backend_data.gpus.get_mut(&node) {
             device
         } else {
