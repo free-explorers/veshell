@@ -67,6 +67,7 @@ package: $(SERVICE_OUTPUT)
 	cp -r $(SETTINGS_DIR)/* $(DESTDIR)$(SHAREDIR)/settings/
 
 install:
+	export VESHELL_LIB_DIR=$(DESTDIR)$(LIBDIR) && \
 	$(MAKE) build PROFILE=$(PROFILE)
 	sudo $(MAKE) package PROFILE=$(PROFILE)
 
