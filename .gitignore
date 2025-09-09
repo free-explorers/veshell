@@ -4,6 +4,7 @@ veshell.log
 .flutter_sdk
 target
 .vscode/vmService.json
+.devenv*
 
 // debug config folder
 .veshell
