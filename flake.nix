@@ -18,21 +18,21 @@
       flutterVersion = cargoToml.package.metadata.flutter_version;
 
       # Get Flutter SDK from GitHub
-      flutter = pkgs.flutter.overrideAttrs (oldAttrs: {
-        src = pkgs.fetchFromGitHub {
-          owner = "flutter";
-          repo = "flutter";
-          rev = flutterVersion;
-          sha256 = flutterHash;
-        };
-        version = flutterVersion;
-      });
+      flutterNixpkgs = pkgs.flutter332; # TODO build flutter from flutterVersion
+      flutter = assert lib.assertMsg
+        (flutterNixpkgs.version == flutterVersion)
+        "Flutter version mismatch between cargo (${flutterVersion}) and nixpkgs (${flutterNixpkgs.version})";
+        flutterNixpkgs;
+      flutterSrc = pkgs.fetchFromGitHub {
+        owner = "flutter";
+        repo = "flutter";
+        rev = flutterVersion;
+        sha256 = flutterHash;
+      };
 
       # Parse Flutter engine revision from Flutter
-      engineRevisionFile = "${flutter}/bin/internal/engine.version";
-      engineRevision = if builtins.pathExists engineRevisionFile
-        then lib.strings.removeSuffix "\n" (builtins.readFile engineRevisionFile)
-        else "stable";
+      engineRevisionFile = "${flutterSrc}/bin/internal/engine.version";
+      engineRevision = lib.strings.removeSuffix "\n" (builtins.readFile engineRevisionFile);
 
       # Get Flutter Engine from GitHub
       flutterEngine = pkgs.stdenv.mkDerivation rec {
