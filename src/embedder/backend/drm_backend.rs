@@ -1137,6 +1137,7 @@ impl State<DrmBackend> {
     }
 
     fn on_vblank(&mut self, node: DrmNode, crtc: crtc::Handle, _meta: DrmEventMetadata) {
+        debug!("on_vblank");
         // Since the Flutter context is shared among all outputs we need to render all of them at the frequence of the highest Hz output.
         let gpu_data = self.backend_data.gpus.get_mut(&node).unwrap();
 
@@ -1467,6 +1468,7 @@ where
         + smithay::backend::renderer::Bind<smithay::backend::allocator::dmabuf::Dmabuf>,
     <R as RendererSuper>::TextureId: Clone + 'static,
 {
+    debug!("initial_render");
     let render = surface
         .compositor
         .render_frame::<_, TextureRenderElement<_>>(
