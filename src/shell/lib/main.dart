@@ -37,13 +37,17 @@ void main() async {
     );
   });
   runWidget(
-    const ProviderScope(
-      child: _EagerInitialization(child: Veshell()),
+    ProviderScope(
+      child: _EagerInitialization(
+        child: Veshell(
+          key: globalVeshellKey,
+        ),
+      ),
     ),
   );
 }
 
-final globalVeshellKey = GlobalKey();
+final GlobalKey<State<StatefulWidget>> globalVeshellKey = GlobalKey();
 
 class Veshell extends HookConsumerWidget {
   const Veshell({super.key});
@@ -161,8 +165,8 @@ class InitializationStatus extends InheritedWidget {
   final AsyncValue<bool> asyncValue;
 
   static AsyncValue<bool> of(BuildContext context) {
-    final provider =
-        context.dependOnInheritedWidgetOfExactType<InitializationStatus>();
+    final provider = context
+        .dependOnInheritedWidgetOfExactType<InitializationStatus>();
     if (provider == null) {
       throw FlutterError('InitializationStatus not found in the widget tree');
     }

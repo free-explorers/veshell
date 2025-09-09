@@ -130,31 +130,32 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         view_id: i64,
         output: &Output,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let size = output.current_mode().unwrap().size;
-        // send new metrics to flutter engine
-        let event = FlutterWindowMetricsEvent {
-            struct_size: size_of::<FlutterWindowMetricsEvent>(),
-            width: size.w as usize,
-            height: size.h as usize,
-            pixel_ratio: output.current_scale().fractional_scale(),
-            left: 0,
-            top: 0,
-            physical_view_inset_top: 0.0,
-            physical_view_inset_right: 0.0,
-            physical_view_inset_bottom: 0.0,
-            physical_view_inset_left: 0.0,
-            display_id: 0,
-            view_id: view_id,
-        };
+        if let Some(view) = self.views_management.views.get_mut(&view_id) {
+            let size = output.current_mode().unwrap().size;
+            // send new metrics to flutter engine
+            let event = FlutterWindowMetricsEvent {
+                struct_size: size_of::<FlutterWindowMetricsEvent>(),
+                width: size.w as usize,
+                height: size.h as usize,
+                pixel_ratio: output.current_scale().fractional_scale(),
+                left: 0,
+                top: 0,
+                physical_view_inset_top: 0.0,
+                physical_view_inset_right: 0.0,
+                physical_view_inset_bottom: 0.0,
+                physical_view_inset_left: 0.0,
+                display_id: 0,
+                view_id: view_id,
+            };
 
-        let result =
-            unsafe { FlutterEngineSendWindowMetricsEvent(self.handle, &event as *const _) };
-        if result != 0 {
-            return Err(format!("Could not send window metrics event, error {result}").into());
+            let result =
+                unsafe { FlutterEngineSendWindowMetricsEvent(self.handle, &event as *const _) };
+            if result != 0 {
+                return Err(format!("Could not send window metrics event, error {result}").into());
+            }
+            //resize the swapchain
+            view.swapchain.resize(size.w as u32, size.h as u32);
         }
-        //resize the swapchain
-        let view = self.views_management.views.get_mut(&view_id).unwrap();
-        view.swapchain.resize(size.w as u32, size.h as u32);
         Ok(())
     }
 }
