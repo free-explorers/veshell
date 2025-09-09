@@ -5,6 +5,7 @@ veshell.log
 target
 .vscode/vmService.json
 .devenv*
+.direnv
 
 // debug config folder
 .veshell
