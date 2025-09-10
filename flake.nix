@@ -6,7 +6,8 @@
   outputs = {nixpkgs, ...}:
     let
       flutterHash = "sha256-s5T16+cMmL2ustJQjwFbfS8G+/TJW/WCEF1IO4WgbXQ=";
-      flutterEngineHash = "sha256-XNZGEFE7ryNhA9Fc33n0v/uq7+IjdDDAMpqEVECRxws=";
+      flutterEngineDebugHash = "sha256-XNZGEFE7ryNhA9Fc33n0v/uq7+IjdDDAMpqEVECRxws=";
+      flutterEngineReleaseHash = "sha256-2BneNQqZQRHCQt5AUHjo2G5qrwwsyRHmvZm9V+Qc/Eo=";
     in
     let
       system = "x86_64-linux";
@@ -39,19 +40,32 @@
         pname = "flutter-engine";
         version = engineRevision;
 
-        src = pkgs.fetchurl {
-          name = "flutter-engine-${version}.tar.gz";
-          url = "https://github.com/meta-flutter/flutter-engine/releases/download/linux-engine-sdk-debug-x86_64-${version}/linux-engine-sdk-debug-x86_64-${version}.tar.gz";
-          sha256 = flutterEngineHash;
-        };
+        src = pkgs.linkFarm "flutter-engine-src-${version}" (
+          lib.listToAttrs (map (cfg: with cfg; {
+            name = "${variant}.tar.gz";
+            value = pkgs.fetchurl {
+              name = "flutter-engine-${variant}-${version}.tar.gz";
+              url = "https://github.com/meta-flutter/flutter-engine/releases/download/linux-engine-sdk-${variant}-x86_64-${version}/linux-engine-sdk-${variant}-x86_64-${version}.tar.gz";
+              sha256 = hash;
+            };
+          }) [
+            {variant = "debug"; hash = flutterEngineDebugHash;}
+            {variant = "release"; hash = flutterEngineReleaseHash;}
+          ])
+        );
 
         nativeBuildInputs = [ pkgs.gnutar pkgs.gzip ];
 
         unpackPhase = ''
           runHook preUnpack
-          mkdir -p $out
-          tar -xzf $src
-          mv flutter/engine/src/out/linux_debug_x64/engine-sdk/* $out/
+          mkdir -p $out/debug $out/release
+
+          tar -xzf $src/debug.tar.gz
+          mv flutter/engine/src/out/linux_debug_x64/engine-sdk/* $out/debug/
+          rm -rf flutter
+          tar -xzf $src/release.tar.gz
+          mv flutter/engine/src/out/linux_release_x64/engine-sdk/* $out/release/
+
           runHook postUnpack
         '';
 
@@ -112,9 +126,11 @@
 
           # Symlink Flutter Engine
           echo "Linking Flutter Engine..."
-          mkdir -p extra/third_party/flutter_engine/debug
-          ln -sf "${flutterEngine}/lib/libflutter_engine.so" extra/third_party/flutter_engine/debug/libflutter_engine.so
-          ln -sf "${flutterEngine}/include/flutter_embedder.h" extra/third_party/flutter_engine/flutter_embedder.h
+          enginePath="extra/third_party/flutter_engine"
+          mkdir -p "$enginePath/debug" "$enginePath/release"
+          ln -sf "${flutterEngine}/debug/lib/libflutter_engine.so" "$enginePath/debug/libflutter_engine.so"
+          ln -sf "${flutterEngine}/release/lib/libflutter_engine.so" "$enginePath/release/libflutter_engine.so"
+          ln -sf "${flutterEngine}/debug/include/flutter_embedder.h" "$enginePath/flutter_embedder.h"
 
           echo "=== Version Information ==="
           echo "Flutter version: $(${flutter}/bin/flutter --version --machine | jq -r '.flutterVersion')"
