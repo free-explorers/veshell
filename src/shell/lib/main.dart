@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/meta_window/provider/meta_window_manager.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
@@ -49,36 +48,54 @@ void main() async {
 
 final GlobalKey<State<StatefulWidget>> globalVeshellKey = GlobalKey();
 
-class Veshell extends HookConsumerWidget {
+class Veshell extends ConsumerStatefulWidget {
   const Veshell({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<Veshell> createState() => _VeshellState();
+}
+
+class _VeshellState extends ConsumerState<Veshell> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
+    ref.read(platformManagerProvider.notifier)
+      ..request(
+        GetEnvironmentVariablesRequest(
+          message: GetEnvironmentVariablesMessage(),
+        ),
+      )
+      ..request(
+        GetMonitorLayoutRequest(
+          message: GetMonitorLayoutMessage(),
+        ),
+      )
+      ..request(const ShellReadyRequest());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    print('didChangeMetrics');
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final views = RendererBinding.instance.platformDispatcher.views
         .where(
           (view) =>
               view != RendererBinding.instance.platformDispatcher.implicitView,
         )
         .toList();
-
-    useEffect(
-      () {
-        ref.read(platformManagerProvider.notifier)
-          ..request(
-            GetEnvironmentVariablesRequest(
-              message: GetEnvironmentVariablesMessage(),
-            ),
-          )
-          ..request(
-            GetMonitorLayoutRequest(
-              message: GetMonitorLayoutMessage(),
-            ),
-          )
-          ..request(const ShellReadyRequest());
-        return null;
-      },
-      [],
-    );
+    print('views: $views');
 
     return VeshellShortcutManager(
       child: ViewCollection(
