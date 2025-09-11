@@ -7,7 +7,7 @@ use smithay::backend::input::{
 use smithay::input::pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent};
 use smithay::reexports::wayland_server::protocol::wl_pointer;
 use smithay::utils::{Logical, Point, SERIAL_COUNTER};
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::backend::Backend;
 use crate::flutter_engine::embedder::{
@@ -35,7 +35,6 @@ impl<BackendData: Backend> State<BackendData> {
     {
         let pointer: smithay::input::pointer::PointerHandle<State<BackendData>> =
             self.pointer.clone();
-
         let mut pointer_location = self.pointer.current_location();
 
         pointer.relative_motion(
@@ -67,8 +66,8 @@ impl<BackendData: Backend> State<BackendData> {
         if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
             return;
         }
-
-        self.send_motion_event(pointer_location, device_id, view_id)
+        let relative_location: Point<f64, Logical> = self.relative_pointer_location();
+        self.send_motion_event(relative_location, device_id, view_id)
     }
 
     pub fn on_pointer_motion_absolute<B: InputBackend>(
@@ -113,7 +112,8 @@ impl<BackendData: Backend> State<BackendData> {
         if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
             return;
         }
-        self.send_motion_event(pointer_location, device_id, view_id)
+        let relative_location: Point<f64, Logical> = self.relative_pointer_location();
+        self.send_motion_event(relative_location, device_id, view_id)
     }
 
     pub fn on_pointer_button<B: InputBackend>(
@@ -176,13 +176,15 @@ impl<BackendData: Backend> State<BackendData> {
             .unwrap()
             .current_scale()
             .fractional_scale();
+
+        let pointer_location = self.relative_pointer_location();
         self.flutter_engine()
             .send_pointer_event(FlutterPointerEvent {
                 struct_size: size_of::<FlutterPointerEvent>(),
                 phase,
                 timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
-                x: self.pointer.current_location().x * scale,
-                y: self.pointer.current_location().y * scale,
+                x: pointer_location.x * scale,
+                y: pointer_location.y * scale,
                 device: device_id,
                 signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
                 scroll_delta_x: 0.0,
@@ -247,6 +249,7 @@ impl<BackendData: Backend> State<BackendData> {
         let pointer = self.pointer.clone();
         pointer.axis(self, frame);
         self.register_frame();
+        let pointer_location = self.relative_pointer_location();
 
         // Flutter distinguish Mouse and Trackpad scrolls, so we need to send a separate event for each
         if event.source() == AxisSource::Wheel || event.source() == AxisSource::WheelTilt {
@@ -263,8 +266,8 @@ impl<BackendData: Backend> State<BackendData> {
                         FlutterPointerPhase_kDown
                     },
                     timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
-                    x: self.pointer.current_location().x,
-                    y: self.pointer.current_location().y,
+                    x: pointer_location.x,
+                    y: pointer_location.y,
                     device: device_id,
                     signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
                     scroll_delta_x: frame.axis.0 * 58.,
@@ -295,8 +298,8 @@ impl<BackendData: Backend> State<BackendData> {
 
                 self.send_pointer_pan_zoom_event(
                     device_id,
-                    self.pointer.current_location().x,
-                    self.pointer.current_location().y,
+                    pointer_location.x,
+                    pointer_location.y,
                     FlutterPointerPhase_kPanZoomEnd,
                     0.,
                     0.,
@@ -314,8 +317,8 @@ impl<BackendData: Backend> State<BackendData> {
                         .start_scrolling();
                     self.send_pointer_pan_zoom_event(
                         device_id,
-                        self.pointer.current_location().x,
-                        self.pointer.current_location().y,
+                        pointer_location.x,
+                        pointer_location.y,
                         FlutterPointerPhase_kPanZoomStart,
                         0.,
                         0.,
@@ -331,8 +334,8 @@ impl<BackendData: Backend> State<BackendData> {
                     );
                 self.send_pointer_pan_zoom_event(
                     device_id,
-                    self.pointer.current_location().x,
-                    self.pointer.current_location().y,
+                    pointer_location.x,
+                    pointer_location.y,
                     FlutterPointerPhase_kPanZoomUpdate,
                     self.flutter_engine().trackpad_scrolling_manager.pan_x,
                     self.flutter_engine().trackpad_scrolling_manager.pan_y,
@@ -443,6 +446,23 @@ impl<BackendData: Backend> State<BackendData> {
         }
     }
 
+    fn relative_pointer_location(&mut self) -> Point<f64, Logical> {
+        let location = self.pointer.current_location();
+        let output_under_pointer_location = self
+            .space
+            .output_under(location)
+            .next()
+            .or_else(|| self.space.outputs().next())
+            .unwrap()
+            .current_location()
+            .to_f64();
+        (
+            location.x - output_under_pointer_location.x,
+            location.y - output_under_pointer_location.y,
+        )
+            .into()
+    }
+
     fn send_motion_event(&mut self, location: Point<f64, Logical>, device_id: i32, view_id: i64)
     where
         BackendData: Backend + 'static,
@@ -454,6 +474,7 @@ impl<BackendData: Backend> State<BackendData> {
             .unwrap()
             .current_scale()
             .fractional_scale();
+
         self.flutter_engine()
             .send_pointer_event(FlutterPointerEvent {
                 struct_size: size_of::<FlutterPointerEvent>(),

@@ -1275,18 +1275,11 @@ impl State<DrmBackend> {
             None => return,
         };
 
-        let size = match self.space.output_geometry(output) {
-            Some(geometry) => geometry.to_f64().size,
-            None => return,
-        };
         let elements = get_render_elements(
             renderer,
             output,
             slot,
-            Rectangle {
-                loc: (0.0, 0.0).into(),
-                size: size,
-            },
+            self.space.output_geometry(output).unwrap().to_f64(),
             self.clock.now(),
             &self.cursor_image_status,
             &self.cursor_state,
