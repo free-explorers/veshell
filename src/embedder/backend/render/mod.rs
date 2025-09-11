@@ -112,7 +112,10 @@ where
             flutter_texture_buffer,
             Point::from((0.0, 0.0)),
             1.,
-            Some(output_geometry),
+            Some(Rectangle {
+                loc: (0., 0.).into(),
+                size: output_geometry.size,
+            }),
             None,
             Kind::Unspecified,
         );
