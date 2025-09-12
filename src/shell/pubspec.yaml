@@ -30,12 +30,12 @@ dependencies:
   async: ^2.11.0
   flutter:
     sdk: flutter
-  hooks_riverpod: ^3.0.0-dev.17
-  flutter_hooks: ^0.21.2
-  riverpod_annotation: ^3.0.0-dev.17
+  hooks_riverpod: ^3.0.0
+  flutter_hooks: ^0.21.3+1
+  riverpod_annotation: ^3.0.0
   intl: ^0.20.1
-  freezed: ^3.0.6
-  freezed_annotation: ^3.0.0
+  freezed: ^3.2.3
+  freezed_annotation: ^3.1.0
   tuple: ^2.0.2
   freedesktop_desktop_entry:
     git:
@@ -78,10 +78,10 @@ dev_dependencies:
   # rules and activating additional ones.
   build_runner: ^2.6.0
   flutter_lints: ^6.0.0
-  riverpod_generator: ^3.0.0-dev.17
+  riverpod_generator: ^3.0.0
   very_good_analysis: ^9.0.0
   custom_lint: ^0.8.0
-  riverpod_lint: ^3.0.0-dev.17
+  riverpod_lint: ^3.0.0
   json_serializable: ^6.10.0
 
 # For information on the generic Dart part of this file, see the
