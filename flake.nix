@@ -79,7 +79,7 @@
     in
     {
       devShells.${system}.default = pkgs.mkShell {
-        buildInputs = with pkgs; [
+        buildInputs = (with pkgs; [
           clang
           cmake
           ninja
@@ -104,7 +104,20 @@
           libgbm
           xwayland
           pulseaudio
-        ];
+          util-linux
+          libselinux
+          libsepol
+          libthai
+          libdatrie
+          xorg.libXdmcp
+          xorg.libXtst
+          libdeflate
+          lerc
+          xz
+          zstd
+          libwebp
+          libepoxy
+        ]) ++ [flutter];
 
         shellHook = ''
           export RUST_BACKTRACE=1
