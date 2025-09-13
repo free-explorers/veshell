@@ -4,7 +4,6 @@ use crate::{flutter_sdk::FLUTTER_REPO_DIR, FlutterEngineBuild};
 use lazy_static::lazy_static;
 
 lazy_static! {
-    static ref dart_bin_path: String = format!("{FLUTTER_REPO_DIR}/bin/dart");
     static ref flutter_bin_path: String = format!("{FLUTTER_REPO_DIR}/bin/flutter");
 }
 
@@ -18,7 +17,6 @@ pub fn build_shell(
     println!("cargo:rerun-if-changed=src/shell/lib");
 
     let absolute_flutter_bin = Path::new(&*flutter_bin_path).canonicalize()?;
-    let absolute_dart_bin = Path::new(&*dart_bin_path).canonicalize()?;
     let absolute_shell_directory = Path::new(&SHELL_DIRECTORY).canonicalize()?;
     // get pub dependencies
     let output = std::process::Command::new(absolute_flutter_bin.clone())
@@ -33,7 +31,8 @@ pub fn build_shell(
 
     // run build_runner
     println!("Running build_runner...");
-    let output = std::process::Command::new(absolute_dart_bin)
+    let output = std::process::Command::new(absolute_flutter_bin.clone())
+        .arg("pub")
         .arg("run")
         .arg("build_runner")
         .arg("build")
