@@ -28,7 +28,7 @@ use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface}
 use smithay::backend::renderer::element::texture::TextureRenderElement;
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
-use smithay::backend::renderer::{ImportAll, ImportDma, ImportEgl, Renderer, RendererSuper};
+use smithay::backend::renderer::{Bind, ImportAll, ImportDma, ImportEgl, Renderer, RendererSuper};
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{libseat, Event as SessionEvent, Session};
 use smithay::backend::udev::{all_gpus, primary_gpu, UdevBackend, UdevEvent};
@@ -45,6 +45,7 @@ use smithay::reexports::drm::control::{
     self, connector, crtc, Device as DeviceTrait, ModeFlags, ModeTypeFlags,
 };
 use smithay::reexports::drm::Device as _;
+use smithay::reexports::gbm::Modifier;
 use smithay::reexports::input::event::gesture::GestureEventCoordinates;
 use smithay::reexports::input::{self, Libinput};
 use smithay::reexports::wayland_server::backend::GlobalId;
@@ -61,6 +62,7 @@ use tracing::{debug, error, info, warn};
 use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
 use smithay_drm_extras::edid::EdidInfo;
 
+use crate::backend::filtered_modifiers;
 use crate::flutter_engine::embedder::{
     FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
     FlutterPointerDeviceKind_kFlutterPointerDeviceKindTouch,
@@ -150,15 +152,11 @@ impl Backend for DrmBackend {
         &mut self,
         width: u32,
         height: u32,
+        fourcc: Fourcc,
     ) -> Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>> {
         let primary_gpu_data = self.get_primary_gpu_data_mut();
         let renderer = &primary_gpu_data.renderer;
-        let modifiers = renderer
-            .egl_context()
-            .dmabuf_texture_formats()
-            .iter()
-            .map(|format| format.modifier)
-            .collect::<Vec<_>>();
+        let modifiers = filtered_modifiers(renderer, fourcc);
         let dmabuf_allocator: Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>> = {
             let gbm_allocator = GbmAllocator::new(
                 self.get_primary_gpu_data_mut().gbm_device.clone(),
@@ -167,7 +165,7 @@ impl Backend for DrmBackend {
             Box::new(DmabufAllocator(gbm_allocator))
         };
 
-        Swapchain::new(dmabuf_allocator, width, height, Fourcc::Argb8888, modifiers)
+        Swapchain::new(dmabuf_allocator, width, height, fourcc, modifiers)
     }
 }
 
@@ -430,20 +428,20 @@ pub fn run_drm_backend() {
     let renderer = &mut state.backend_data.get_primary_gpu_data_mut().renderer;
     let egl_context = renderer.egl_context();
 
-    let dmabuf_formats = egl_context
+    /*     let dmabuf_formats = egl_context
         .dmabuf_texture_formats()
         .iter()
         .copied()
         .collect::<Vec<_>>();
     let dmabuf_default_feedback = DmabufFeedbackBuilder::new(primary_gpu.dev_id(), dmabuf_formats)
         .build()
-        .unwrap();
+        .unwrap(); */
 
     let mut dmabuf_state = DmabufState::new();
-    let _dmabuf_global = dmabuf_state.create_global_with_default_feedback::<State<DrmBackend>>(
+    /* let _dmabuf_global = dmabuf_state.create_global_with_default_feedback::<State<DrmBackend>>(
         &display_handle,
         &dmabuf_default_feedback,
-    );
+    ); */
 
     state.dmabuf_state = Some(dmabuf_state);
 
@@ -1137,6 +1135,7 @@ impl State<DrmBackend> {
     }
 
     fn on_vblank(&mut self, node: DrmNode, crtc: crtc::Handle, _meta: DrmEventMetadata) {
+        debug!("on_vblank");
         // Since the Flutter context is shared among all outputs we need to render all of them at the frequence of the highest Hz output.
         let gpu_data = self.backend_data.gpus.get_mut(&node).unwrap();
 
@@ -1460,6 +1459,7 @@ where
         + smithay::backend::renderer::Bind<smithay::backend::allocator::dmabuf::Dmabuf>,
     <R as RendererSuper>::TextureId: Clone + 'static,
 {
+    debug!("initial_render");
     let render = surface
         .compositor
         .render_frame::<_, TextureRenderElement<_>>(

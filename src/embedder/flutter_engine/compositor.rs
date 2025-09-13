@@ -67,6 +67,8 @@ impl FlutterCompositor {
 
         loop_handle
             .insert_source(rx_on_present_view, move |view_id, _, data| {
+                debug!("rx_on_present_view");
+
                 if let Msg(view_id) = view_id {
                     let flutter_engine = data.flutter_engine_mut();
                     let view = flutter_engine
@@ -113,6 +115,7 @@ pub unsafe extern "C" fn create_backing_store_callback<BackendData>(
 where
     BackendData: Backend + 'static,
 {
+    debug!("create_backing_store_callback");
     let compositor_data = &mut *(user_data as *mut CompositorUserData);
     let flutter_engine =
         &mut *(compositor_data.flutter_engine_ptr as *mut FlutterEngine<BackendData>);
@@ -172,6 +175,7 @@ pub unsafe extern "C" fn present_view_callback<BackendData>(
 where
     BackendData: Backend + 'static,
 {
+    debug!("present_view_callback");
     let user_data = (*info).user_data;
     let compositor_data = &mut *(user_data as *mut CompositorUserData);
     let flutter_engine =
