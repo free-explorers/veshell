@@ -49,6 +49,7 @@ use smithay::{
 };
 use tracing::{debug, info};
 
+use crate::backend::filtered_modifiers;
 use crate::flutter_engine::embedder::FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse;
 use crate::flutter_engine::view::OutputViewIdWrapper;
 use crate::flutter_engine::FlutterEngine;
@@ -199,16 +200,22 @@ pub fn run_x11_client() {
         None
     };
 
+    let mut gles_renderer =
+        unsafe { GlesRenderer::new(egl_context) }.expect("Failed to initialize GLES");
+
+    if gles_renderer.bind_wl_display(&display_handle).is_ok() {
+        info!("EGL hardware-acceleration enabled");
+    }
+
+    let modifiers = filtered_modifiers(&gles_renderer, Fourcc::Argb8888);
+
     let x11_surface = match vulkan_allocator {
         // Create the surface for the window.
         Some(vulkan_allocator) => x11_handle
             .create_surface(
                 &window,
                 DmabufAllocator(vulkan_allocator),
-                egl_context
-                    .dmabuf_render_formats()
-                    .iter()
-                    .map(|format| format.modifier),
+                modifiers.into_iter(),
             )
             .expect("Failed to create X11 surface"),
         None => x11_handle
@@ -218,20 +225,10 @@ pub fn run_x11_client() {
                     gbm_device.clone(),
                     GbmBufferFlags::RENDERING,
                 )),
-                egl_context
-                    .dmabuf_render_formats()
-                    .iter()
-                    .map(|format| format.modifier),
+                modifiers.into_iter(),
             )
             .expect("Failed to create X11 surface"),
     };
-
-    let mut gles_renderer =
-        unsafe { GlesRenderer::new(egl_context) }.expect("Failed to initialize GLES");
-
-    if gles_renderer.bind_wl_display(&display_handle).is_ok() {
-        info!("EGL hardware-acceleration enabled");
-    }
 
     let dmabuf_formats = gles_renderer.dmabuf_formats();
     let dmabuf_default_feedback = DmabufFeedbackBuilder::new(node.dev_id(), dmabuf_formats.clone())
@@ -243,24 +240,7 @@ pub fn run_x11_client() {
         &dmabuf_default_feedback,
     );
 
-    let dmabuf_allocator: Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>> = {
-        let gbm_allocator = GbmAllocator::new(gbm_device.clone(), GbmBufferFlags::RENDERING);
-        Box::new(DmabufAllocator(gbm_allocator))
-    };
-
-    let modifiers = dmabuf_formats
-        .iter()
-        .map(|format| format.modifier)
-        .collect::<Vec<_>>();
     let size = window.size();
-
-    /* let swapchain = Swapchain::new(
-        dmabuf_allocator,
-        size.w as u32,
-        size.h as u32,
-        Fourcc::Argb8888,
-        modifiers,
-    ); */
 
     let mut state = State::new(
         display,
@@ -627,17 +607,15 @@ impl Backend for X11Data {
         &mut self,
         width: u32,
         height: u32,
+        fourcc: Fourcc,
     ) -> Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>> {
-        let dmabuf_formats = self.renderer.dmabuf_formats();
         let dmabuf_allocator: Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>> = {
             let gbm_allocator =
                 GbmAllocator::new(self.gbm_device.clone(), GbmBufferFlags::RENDERING);
             Box::new(DmabufAllocator(gbm_allocator))
         };
-        let modifiers = dmabuf_formats
-            .iter()
-            .map(|format| format.modifier)
-            .collect::<Vec<_>>();
-        Swapchain::new(dmabuf_allocator, width, height, Fourcc::Argb8888, modifiers)
+        let modifiers = filtered_modifiers(&self.renderer, fourcc);
+
+        Swapchain::new(dmabuf_allocator, width, height, fourcc, modifiers)
     }
 }

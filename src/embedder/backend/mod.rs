@@ -1,10 +1,13 @@
-use smithay::backend::{
-    allocator::{
-        dmabuf::{AnyError, Dmabuf},
-        Allocator, Swapchain,
+use smithay::{
+    backend::{
+        allocator::{
+            dmabuf::{AnyError, Dmabuf},
+            Allocator, Fourcc, Swapchain,
+        },
+        renderer::{gles::GlesRenderer, Bind},
+        session::libseat::LibSeatSession,
     },
-    renderer::gles::GlesRenderer,
-    session::libseat::LibSeatSession,
+    reexports::gbm::{Format, Modifier},
 };
 
 pub mod drm_backend;
@@ -25,5 +28,15 @@ pub trait Backend {
         &mut self,
         width: u32,
         height: u32,
+        fourcc: Fourcc,
     ) -> Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>>;
+}
+
+fn filtered_modifiers(renderer: &GlesRenderer, fourcc: Fourcc) -> Vec<Modifier> {
+    Bind::<Dmabuf>::supported_formats(renderer)
+        .unwrap()
+        .iter()
+        .filter(|format| format.code == fourcc)
+        .map(|format| format.modifier)
+        .collect()
 }

@@ -1,6 +1,3 @@
-use std::collections::{HashMap, HashSet};
-use std::ffi::c_void;
-
 use crate::flutter_engine::channel::Event::Msg;
 use crate::flutter_engine::embedder::{
     FlutterAddViewInfo, FlutterAddViewResult, FlutterEngineAddView,
@@ -8,11 +5,14 @@ use crate::flutter_engine::embedder::{
 };
 use crate::{backend::Backend, flutter_engine::FlutterEngine};
 use smithay::backend::allocator::dmabuf::{AnyError, AsDmabuf, Dmabuf};
+use smithay::backend::allocator::Fourcc;
 use smithay::backend::allocator::{Allocator, Slot, Swapchain};
 use smithay::output::Output;
 use smithay::reexports::calloop::{self, channel};
 use smithay::reexports::winit::event;
 use smithay::utils::SerialCounter;
+use std::collections::{HashMap, HashSet};
+use std::ffi::c_void;
 use tracing::debug;
 pub struct OutputViewIdWrapper {
     pub view_id: i64,
@@ -69,9 +69,11 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     if added {
                         let view = VeshellView {
                             view_id: event_view_id,
-                            swapchain: data
-                                .backend_data
-                                .new_swapchain(mode.size.w as u32, mode.size.h as u32),
+                            swapchain: data.backend_data.new_swapchain(
+                                mode.size.w as u32,
+                                mode.size.h as u32,
+                                Fourcc::Argb8888,
+                            ),
                             current_slot: None,
                             last_rendered_slot: None,
                         };
