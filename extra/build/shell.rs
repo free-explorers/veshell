@@ -30,7 +30,7 @@ pub fn build_shell(
     }
 
     // run build_runner
-    println!("Running build_runner...");
+    /*     println!("Running build_runner...");
     let output = std::process::Command::new(absolute_flutter_bin.clone())
         .arg("pub")
         .arg("run")
@@ -41,7 +41,7 @@ pub fn build_shell(
         .status()?;
     if !output.success() {
         panic!("Failed to run build_runner");
-    }
+    } */
 
     // build shell
     println!("Building shell...");
