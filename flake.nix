@@ -29,6 +29,7 @@
         repo = "flutter";
         rev = flutterVersion;
         sha256 = flutterHash;
+        fetchSubmodules = true;
       };
 
       # Parse Flutter engine revision from Flutter
