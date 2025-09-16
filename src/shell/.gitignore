@@ -47,5 +47,5 @@ app.*.map.json
 /deps/
 
 # Generated files
-**/**.freezed.dart
-**/**.g.dart
+#**/**.freezed.dart
+#**/**.g.dart
