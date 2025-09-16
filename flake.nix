@@ -127,7 +127,7 @@
           export FLUTTER_PATH=${flutter}
           export FLUTTER_ENGINE_PATH=${flutterEngine}
           export LIBCLANG_PATH=${pkgs.libclang.lib}/lib
-          export LD_LIBRARY_PATH=${pkgs.wayland}/lib:${pkgs.pulseaudio}/lib:${pkgs.fontconfig.lib}/lib:${pkgs.libepoxy.lib}/lib
+          export LD_LIBRARY_PATH=${pkgs.wayland}/lib:${pkgs.pulseaudio}/lib:${pkgs.fontconfig.lib}/lib
 
           echo "=== Flutter Installation ==="
 
