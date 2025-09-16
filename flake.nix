@@ -118,6 +118,7 @@
           zstd
           libwebp
           libepoxy
+          fontconfig
         ]) ++ [flutter];
 
         shellHook = ''
