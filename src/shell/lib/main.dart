@@ -136,13 +136,6 @@ class _EagerInitialization extends ConsumerWidget {
 
     // Handle error states and loading states
     if (results.any(
-      (element) => element.isLoading,
-    )) {
-      return InitializationStatus(
-        asyncValue: const AsyncLoading(),
-        child: child,
-      );
-    } else if (results.any(
       (element) => element.hasError,
     )) {
       return InitializationStatus(
@@ -150,6 +143,18 @@ class _EagerInitialization extends ConsumerWidget {
           Error(),
           StackTrace.current,
         ),
+        child: child,
+      );
+    } else if (results.any(
+      (element) {
+        if (element.isLoading) {
+          print('$element is still loading');
+        }
+        return element.isLoading;
+      },
+    )) {
+      return InitializationStatus(
+        asyncValue: const AsyncLoading(),
         child: child,
       );
     }
