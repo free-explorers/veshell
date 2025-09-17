@@ -91,6 +91,7 @@
           xz
           zstd
           libwebp
+          pixman
         ]) ++ [flutter];
 
         shellHook = ''
