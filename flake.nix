@@ -84,6 +84,8 @@
           openssl
           jq
           myflutter
+          fontconfig
+          libepoxy
         ];
 
         RUSTC_VERSION = overrides.toolchain.channel;
