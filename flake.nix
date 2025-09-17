@@ -19,7 +19,6 @@
       flutter = pkgs.flutter.overrideAttrs (old: {
         version = "3.32.0";
         flutterHash = "sha256-Wk84RfnPvPVVnnbwGcnHIcRnu3Kizo2AkRQbVSEw+1M=";
-        "version": "3.32.0",
         "engineVersion": "18818009497c581ede5d8a3b8b833b81d00cebb7",
         "engineHashes": {
           "aarch64-linux": {
