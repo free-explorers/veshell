@@ -8,7 +8,9 @@
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
       overrides = (builtins.fromTOML (builtins.readFile (self + "/rust-toolchain.toml")));
-
+      fonts.packages = with pkgs; [
+        roboto
+      ];
       flutterEngineDebugHash = "sha256-XNZGEFE7ryNhA9Fc33n0v/uq7+IjdDDAMpqEVECRxws=";
       flutterEngineReleaseHash = "sha256-2BneNQqZQRHCQt5AUHjo2G5qrwwsyRHmvZm9V+Qc/Eo=";
 
