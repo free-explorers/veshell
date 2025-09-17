@@ -60,7 +60,7 @@
       };
     in
     {
-      devShells.${system}.default = pkgs.mkShell {
+      devShells.${system}.default = pkgs.mkShell rec{
         nativeBuildInputs = [ pkgs.pkg-config ];
         buildInputs = with pkgs; [
           clang
