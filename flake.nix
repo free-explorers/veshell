@@ -81,7 +81,7 @@
           export RUST_BACKTRACE=1
           export FLUTTER_PATH=${flutter}
           export FLUTTER_ENGINE_PATH=${flutterEngine}
-
+          export SKIP_FLUTTER_ENGINE_DOWNLOAD=1
           echo "=== Flutter Installation ==="
 
           # Symlink Flutter SDK
