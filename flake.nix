@@ -19,21 +19,9 @@
       flutter = pkgs.flutter.overrideAttrs (old: {
         version = "3.32.0";
         flutterHash = "sha256-Wk84RfnPvPVVnnbwGcnHIcRnu3Kizo2AkRQbVSEw+1M=";
-
         engineVersion = "18818009497c581ede5d8a3b8b833b81d00cebb7";
-        engineHashes = {
-          aarch64-linux = "sha256-zGlgnVbNPZ9OX5VFxaajc8xqPKftzZMkyem2NLk8EH8=";
-          x86_64-linux = "sha256-TWwsPtAnkQzsvNLUd5Q3G80ALeh7nM/XV4M6rfBvUGY=";
-          # Add other platforms if needed
-        };
-
         dartVersion = "3.8.0";
-        dartHash = {
-          x86_64-linux = "sha256-/b6dNwqeMymHKI4cz2ggfVtcHWtdsrlVyEZ1Z2G0RKw=";
-          aarch64-linux = "sha256-tXIeGM7n1lx9GOwOMEFapiW0sHBlhupx5NCAtFd73Pk=";
-          x86_64-darwin = "sha256-wD9Z3J29N4ecWKmCetj5GnbTQ8LiJ1tZFEbPuG6ny5w=";
-          aarch64-darwin = "sha256-IIFn6OTpTH8LzwZzF7V8yUrhHkjavMUWX7n62YEMABk=";
-        };
+
       });
     in
     let
