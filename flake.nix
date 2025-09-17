@@ -5,10 +5,12 @@
 
   outputs = {nixpkgs, ...}:
     let
+      system = "x86_64-linux";
+      pkgs = import nixpkgs { inherit system; };
+
       flutterHash = "sha256-s5T16+cMmL2ustJQjwFbfS8G+/TJW/WCEF1IO4WgbXQ=";
       flutterEngineDebugHash = "sha256-XNZGEFE7ryNhA9Fc33n0v/uq7+IjdDDAMpqEVECRxws=";
       flutterEngineReleaseHash = "sha256-2BneNQqZQRHCQt5AUHjo2G5qrwwsyRHmvZm9V+Qc/Eo=";
-      pkgs = import nixpkgs { inherit system; };
       # Parse Flutter version from Cargo metadata
       cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
       flutterVersion = cargoToml.package.metadata.flutter_version;
@@ -19,7 +21,6 @@
       };
     in
     let
-      system = "x86_64-linux";
       lib = pkgs.lib;  
 
       flutterSrc = pkgs.fetchFromGitHub {
