@@ -12,6 +12,9 @@
       flutterEngineDebugHash = "sha256-XNZGEFE7ryNhA9Fc33n0v/uq7+IjdDDAMpqEVECRxws=";
       flutterEngineReleaseHash = "sha256-2BneNQqZQRHCQt5AUHjo2G5qrwwsyRHmvZm9V+Qc/Eo=";
 
+      # Get Flutter SDK
+      myflutter = pkgs.flutter332;
+
       libPath = with pkgs; lib.makeLibraryPath [
         # load external libraries that you need in your rust project here
       ];
@@ -19,7 +22,7 @@
     let
       lib = pkgs.lib;  
 
-      engineRevision = pkgs.flutter332.passthru.engineVersion;
+      engineRevision = myflutter.passthru.engineVersion;
 
       # Get Flutter Engine from GitHub
       flutterEngine = pkgs.stdenv.mkDerivation rec {
@@ -77,7 +80,7 @@
           util-linux
           pixman
           jq
-          flutter332
+          myflutter
         ];
         RUSTC_VERSION = overrides.toolchain.channel;
 
@@ -87,7 +90,7 @@
           export PATH=$PATH:''${CARGO_HOME:-~/.cargo}/bin
           export PATH=$PATH:''${RUSTUP_HOME:-~/.rustup}/toolchains/$RUSTC_VERSION-x86_64-unknown-linux-gnu/bin/
           export RUST_BACKTRACE=1
-          export FLUTTER_PATH=${flutter}
+          export FLUTTER_PATH=${myflutter}
           export FLUTTER_ENGINE_PATH=${flutterEngine}
           export SKIP_FLUTTER_ENGINE_DOWNLOAD=1
           echo "=== Flutter Installation ==="
@@ -109,10 +112,10 @@
           ln -sf "${flutterEngine}/debug/include/flutter_embedder.h" "$enginePath/flutter_embedder.h"
 
           echo "=== Version Information ==="
-          echo "Flutter version: $(${flutter}/bin/flutter --version --machine | jq -r '.flutterVersion')"
-          echo "Dart version: $(${flutter}/bin/flutter --version --machine | jq -r '.dartSdkVersion')"
-          echo "Engine revision: $(${flutter}/bin/flutter --version --machine | jq -r '.engineRevision')"
-          echo "Channel: $(${flutter}/bin/flutter --version --machine | jq -r '.channel')"
+          echo "Flutter version: $(${myflutter}/bin/flutter --version --machine | jq -r '.flutterVersion')"
+          echo "Dart version: $(${myflutter}/bin/flutter --version --machine | jq -r '.dartSdkVersion')"
+          echo "Engine revision: $(${myflutter}/bin/flutter --version --machine | jq -r '.engineRevision')"
+          echo "Channel: $(${myflutter}/bin/flutter --version --machine | jq -r '.channel')"
           '';
 
         # Add precompiled library to rustc search path
