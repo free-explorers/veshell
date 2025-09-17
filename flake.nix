@@ -10,6 +10,10 @@
 
       flutterEngineDebugHash = "sha256-XNZGEFE7ryNhA9Fc33n0v/uq7+IjdDDAMpqEVECRxws=";
       flutterEngineReleaseHash = "sha256-2BneNQqZQRHCQt5AUHjo2G5qrwwsyRHmvZm9V+Qc/Eo=";
+      
+      # Parse Flutter version from Cargo metadata
+      cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
+      flutterVersion = cargoToml.package.metadata.flutter_version;
 
       # Get Flutter SDK
       flutter = pkgs.flutter332;
@@ -22,13 +26,14 @@
       # Get Flutter Engine from GitHub
       flutterEngine = pkgs.stdenv.mkDerivation rec {
         pname = "flutter-engine";
+        version = engineRevision;
 
-        src = pkgs.linkFarm "flutter-engine-src-${engineRevision}" (
+        src = pkgs.linkFarm "flutter-engine-src-${version}" (
           lib.listToAttrs (map (cfg: with cfg; {
             name = "${variant}.tar.gz";
             value = pkgs.fetchurl {
-              name = "flutter-engine-${variant}-${engineRevision}.tar.gz";
-              url = "https://github.com/meta-flutter/flutter-engine/releases/download/linux-engine-sdk-${variant}-x86_64-${engineRevision}/linux-engine-sdk-${variant}-x86_64-${engineRevision}.tar.gz";
+              name = "flutter-engine-${variant}-${version}.tar.gz";
+              url = "https://github.com/meta-flutter/flutter-engine/releases/download/linux-engine-sdk-${variant}-x86_64-${version}/linux-engine-sdk-${variant}-x86_64-${version}.tar.gz";
               sha256 = hash;
             };
           }) [
@@ -51,6 +56,13 @@
 
           runHook postUnpack
         '';
+
+        meta = with lib; {
+          description = "Flutter engine libraries for Linux";
+          homepage = "https://flutter.dev";
+          license = licenses.bsd3;
+          platforms = platforms.linux;
+        };
       };
     in
     {
