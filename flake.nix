@@ -101,7 +101,7 @@
             rm -rf .flutter_sdk
           fi
           echo "Linking Flutter SDK..."
-          ln -sfn ${flutter} .flutter_sdk
+          ln -sfn ${myflutter} .flutter_sdk
 
           # Symlink Flutter Engine
           echo "Linking Flutter Engine..."
