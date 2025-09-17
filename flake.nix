@@ -16,20 +16,17 @@
       flutterVersion = cargoToml.package.metadata.flutter_version;
 
       # Get Flutter SDK
-      flutter = pkgs.flutter.overrideAttrs (old: {
+      flutter = pkgs.flutter.v3_32_0.overrideAttrs (old: {
         version = "3.32.0";
         flutterHash = "sha256-Wk84RfnPvPVVnnbwGcnHIcRnu3Kizo2AkRQbVSEw+1M=";
+
         engineVersion = "18818009497c581ede5d8a3b8b833b81d00cebb7";
         engineHashes = {
-          aarch64-linux = {
-            aarch64-linux = "sha256-zGlgnVbNPZ9OX5VFxaajc8xqPKftzZMkyem2NLk8EH8=";
-            x86_64-linux = "sha256-zGlgnVbNPZ9OX5VFxaajc8xqPKftzZMkyem2NLk8EH8=";
-          };
-          x86_64-linux = {
-            aarch64-linux = "sha256-TWwsPtAnkQzsvNLUd5Q3G80ALeh7nM/XV4M6rfBvUGY=";
-            x86_64-linux = "sha256-TWwsPtAnkQzsvNLUd5Q3G80ALeh7nM/XV4M6rfBvUGY=";
-          };
+          aarch64-linux = "sha256-zGlgnVbNPZ9OX5VFxaajc8xqPKftzZMkyem2NLk8EH8=";
+          x86_64-linux = "sha256-TWwsPtAnkQzsvNLUd5Q3G80ALeh7nM/XV4M6rfBvUGY=";
+          # Add other platforms if needed
         };
+
         dartVersion = "3.8.0";
         dartHash = {
           x86_64-linux = "sha256-/b6dNwqeMymHKI4cz2ggfVtcHWtdsrlVyEZ1Z2G0RKw=";
