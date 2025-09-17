@@ -22,14 +22,13 @@
       # Get Flutter Engine from GitHub
       flutterEngine = pkgs.stdenv.mkDerivation rec {
         pname = "flutter-engine";
-        version = engineRevision;
 
-        src = pkgs.linkFarm "flutter-engine-src-${version}" (
+        src = pkgs.linkFarm "flutter-engine-src-${engineRevision}" (
           lib.listToAttrs (map (cfg: with cfg; {
             name = "${variant}.tar.gz";
             value = pkgs.fetchurl {
-              name = "flutter-engine-${variant}-${version}.tar.gz";
-              url = "https://github.com/meta-flutter/flutter-engine/releases/download/linux-engine-sdk-${variant}-x86_64-${version}/linux-engine-sdk-${variant}-x86_64-${version}.tar.gz";
+              name = "flutter-engine-${variant}-${engineRevision}.tar.gz";
+              url = "https://github.com/meta-flutter/flutter-engine/releases/download/linux-engine-sdk-${variant}-x86_64-${engineRevision}/linux-engine-sdk-${variant}-x86_64-${engineRevision}.tar.gz";
               sha256 = hash;
             };
           }) [
