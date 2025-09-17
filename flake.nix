@@ -17,7 +17,7 @@
 
       # Get Flutter SDK
       flutter = pkgs.flutter.overrideAttrs (old: {
-        version = flutterVersion;
+        version = "3.32.0";
       });
     in
     let
