@@ -8,9 +8,8 @@
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
 
-      # Parse Flutter version from Cargo metadata
-      cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
-      flutterVersion = cargoToml.package.metadata.flutter_version;
+      flutterEngineDebugHash = "sha256-XNZGEFE7ryNhA9Fc33n0v/uq7+IjdDDAMpqEVECRxws=";
+      flutterEngineReleaseHash = "sha256-2BneNQqZQRHCQt5AUHjo2G5qrwwsyRHmvZm9V+Qc/Eo=";
 
       # Get Flutter SDK
       flutter = pkgs.flutter332;
@@ -23,6 +22,7 @@
       # Get Flutter Engine from GitHub
       flutterEngine = pkgs.stdenv.mkDerivation rec {
         pname = "flutter-engine";
+
         src = pkgs.linkFarm "flutter-engine-src-${engineRevision}" (
           lib.listToAttrs (map (cfg: with cfg; {
             name = "${variant}.tar.gz";
@@ -51,13 +51,6 @@
 
           runHook postUnpack
         '';
-
-        meta = with lib; {
-          description = "Flutter engine libraries for Linux";
-          homepage = "https://flutter.dev";
-          license = licenses.bsd3;
-          platforms = platforms.linux;
-        };
       };
     in
     {
