@@ -21,17 +21,7 @@
     let
       lib = pkgs.lib;  
 
-      flutterSrc = pkgs.fetchFromGitHub {
-        owner = "flutter";
-        repo = "flutter";
-        rev = flutterVersion;
-        sha256 = flutterHash;
-        fetchSubmodules = true;
-      };
-
-      # Parse Flutter engine revision from Flutter
-      engineRevisionFile = "${flutterSrc}/bin/internal/engine.version";
-      engineRevision = lib.strings.removeSuffix "\n" (builtins.readFile engineRevisionFile);
+      engineRevision = flutter.passthru.engineVersion;
 
       # Get Flutter Engine from GitHub
       flutterEngine = pkgs.stdenv.mkDerivation rec {
