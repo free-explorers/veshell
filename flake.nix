@@ -8,11 +8,6 @@
       flutterHash = "sha256-s5T16+cMmL2ustJQjwFbfS8G+/TJW/WCEF1IO4WgbXQ=";
       flutterEngineDebugHash = "sha256-XNZGEFE7ryNhA9Fc33n0v/uq7+IjdDDAMpqEVECRxws=";
       flutterEngineReleaseHash = "sha256-2BneNQqZQRHCQt5AUHjo2G5qrwwsyRHmvZm9V+Qc/Eo=";
-    in
-    let
-      system = "x86_64-linux";
-      pkgs = import nixpkgs { inherit system; };
-      lib = pkgs.lib;
 
       # Parse Flutter version from Cargo metadata
       cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
@@ -22,6 +17,11 @@
       flutter = pkgs.flutter.override {
         version = flutterVersion;
       };
+    in
+    let
+      system = "x86_64-linux";
+      pkgs = import nixpkgs { inherit system; };
+      lib = pkgs.lib;  
 
       flutterSrc = pkgs.fetchFromGitHub {
         owner = "flutter";
