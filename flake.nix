@@ -16,7 +16,7 @@
       flutterVersion = cargoToml.package.metadata.flutter_version;
 
       # Get Flutter SDK
-      flutter = pkgs.flutter.v3_32_0.overrideAttrs (old: {
+      flutter = pkgs.flutter.overrideAttrs (old: {
         version = "3.32.0";
         flutterHash = "sha256-Wk84RfnPvPVVnnbwGcnHIcRnu3Kizo2AkRQbVSEw+1M=";
 
