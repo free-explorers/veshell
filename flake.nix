@@ -10,10 +10,6 @@
 
       flutterEngineDebugHash = "sha256-XNZGEFE7ryNhA9Fc33n0v/uq7+IjdDDAMpqEVECRxws=";
       flutterEngineReleaseHash = "sha256-2BneNQqZQRHCQt5AUHjo2G5qrwwsyRHmvZm9V+Qc/Eo=";
-      
-      # Parse Flutter version from Cargo metadata
-      cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
-      flutterVersion = cargoToml.package.metadata.flutter_version;
 
       # Get Flutter SDK
       flutter = pkgs.flutter332;
