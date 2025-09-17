@@ -7,6 +7,7 @@
     let
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
+      overrides = (builtins.fromTOML (builtins.readFile (self + "/rust-toolchain.toml")));
 
       flutterEngineDebugHash = "sha256-XNZGEFE7ryNhA9Fc33n0v/uq7+IjdDDAMpqEVECRxws=";
       flutterEngineReleaseHash = "sha256-2BneNQqZQRHCQt5AUHjo2G5qrwwsyRHmvZm9V+Qc/Eo=";
@@ -60,6 +61,7 @@
     in
     {
       devShells.${system}.default = pkgs.mkShell {
+        nativeBuildInputs = [ pkgs.pkg-config ];
         buildInputs = (with pkgs; [
           clang
           llvmPackages.bintools
@@ -69,7 +71,6 @@
           libinput
           libxkbcommon
           cmake
-          pkg-config
           seatd
           systemd
           wayland
@@ -80,6 +81,7 @@
           pixman
           jq
         ]) ++ [flutter];
+        RUSTC_VERSION = overrides.toolchain.channel;
 
         # https://github.com/rust-lang/rust-bindgen#environment-variables
         LIBCLANG_PATH = pkgs.lib.makeLibraryPath [ pkgs.llvmPackages_latest.libclang.lib ];
@@ -114,11 +116,13 @@
           echo "Engine revision: $(${flutter}/bin/flutter --version --machine | jq -r '.engineRevision')"
           echo "Channel: $(${flutter}/bin/flutter --version --machine | jq -r '.channel')"
           '';
+
         # Add precompiled library to rustc search path
         RUSTFLAGS = (builtins.map (a: ''-L ${a}/lib'') [
           # add libraries here (e.g. pkgs.libvmi)
         ]);
-        LD_LIBRARY_PATH = libPath;
+        
+        LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (buildInputs ++ nativeBuildInputs);
         # Add glibc, clang, glib, and other headers to bindgen search path
         BINDGEN_EXTRA_CLANG_ARGS =
         # Includes normal include path
