@@ -17,8 +17,8 @@
 
       # Get Flutter SDK
       flutter = pkgs.flutter.overrideAttrs (old: {
-        version = flutterVersion;
-        flutterHash = flutterHash;
+        version = "3.32.0";
+        flutterHash = "sha256-Wk84RfnPvPVVnnbwGcnHIcRnu3Kizo2AkRQbVSEw+1M=";
       });
     in
     let
