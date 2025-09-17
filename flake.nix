@@ -16,13 +16,7 @@
       flutterVersion = cargoToml.package.metadata.flutter_version;
 
       # Get Flutter SDK
-      flutter = pkgs.flutter.overrideAttrs (old: {
-        version = "3.32.0";
-        flutterHash = "sha256-Wk84RfnPvPVVnnbwGcnHIcRnu3Kizo2AkRQbVSEw+1M=";
-        engineVersion = "18818009497c581ede5d8a3b8b833b81d00cebb7";
-        dartVersion = "3.8.0";
-
-      });
+      flutter = pkgs.flutter332;
     in
     let
       lib = pkgs.lib;  
