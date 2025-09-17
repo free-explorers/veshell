@@ -15,10 +15,10 @@
       cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
       flutterVersion = cargoToml.package.metadata.flutter_version;
 
-      # Get Flutter SDK from GitHub
-      flutter = pkgs.flutter.override {
+      # Get Flutter SDK
+      flutter = pkgs.flutter.overrideAttrs (old: {
         version = flutterVersion;
-      };
+      });
     in
     let
       lib = pkgs.lib;  
