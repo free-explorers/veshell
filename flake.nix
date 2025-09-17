@@ -19,11 +19,10 @@
       flutterVersion = cargoToml.package.metadata.flutter_version;
 
       # Get Flutter SDK from GitHub
-      flutterNixpkgs = pkgs.flutter332; # TODO build flutter from flutterVersion
-      flutter = assert lib.assertMsg
-        (flutterNixpkgs.version == flutterVersion)
-        "Flutter version mismatch between cargo (${flutterVersion}) and nixpkgs (${flutterNixpkgs.version})";
-        flutterNixpkgs;
+      flutter = pkgs.flutter.override {
+        version = flutterVersion;
+      };
+
       flutterSrc = pkgs.fetchFromGitHub {
         owner = "flutter";
         repo = "flutter";
