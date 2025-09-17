@@ -79,6 +79,7 @@
           git
           util-linux
           pixman
+          openssl
           jq
           myflutter
         ];
