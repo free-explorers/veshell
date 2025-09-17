@@ -12,9 +12,6 @@
       flutterEngineDebugHash = "sha256-XNZGEFE7ryNhA9Fc33n0v/uq7+IjdDDAMpqEVECRxws=";
       flutterEngineReleaseHash = "sha256-2BneNQqZQRHCQt5AUHjo2G5qrwwsyRHmvZm9V+Qc/Eo=";
 
-      # Get Flutter SDK
-      flutter = pkgs.flutter332;
-
       libPath = with pkgs; lib.makeLibraryPath [
         # load external libraries that you need in your rust project here
       ];
@@ -62,7 +59,7 @@
     {
       devShells.${system}.default = pkgs.mkShell {
         nativeBuildInputs = [ pkgs.pkg-config ];
-        buildInputs = (with pkgs; [
+        buildInputs = with pkgs; [
           clang
           llvmPackages.bintools
           rustup
@@ -80,7 +77,8 @@
           util-linux
           pixman
           jq
-        ]) ++ [flutter];
+          flutter332
+        ];
         RUSTC_VERSION = overrides.toolchain.channel;
 
         # https://github.com/rust-lang/rust-bindgen#environment-variables
