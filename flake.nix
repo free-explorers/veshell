@@ -59,14 +59,12 @@
         buildInputs = (with pkgs; [
           clang
           cmake
-          ninja
           pkg-config
           rustc
           cargo
           rustfmt
           clippy
           rust-analyzer
-          gtk3
           sysprof
           libsysprof-capture
           pcre2
@@ -93,8 +91,6 @@
           xz
           zstd
           libwebp
-          libepoxy
-          fontconfig
         ]) ++ [flutter];
 
         shellHook = ''
