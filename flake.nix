@@ -57,40 +57,22 @@
     {
       devShells.${system}.default = pkgs.mkShell {
         buildInputs = (with pkgs; [
+          rustc
+          cargo
+          libGL
+          libgbm
+          libinput
+          libxkbcommon
           clang
           cmake
           pkg-config
-          rustc
-          cargo
-          rustfmt
-          clippy
-          rust-analyzer
-          sysprof
-          libsysprof-capture
-          pcre2
-          openssl
-          systemd
           seatd
-          unzip
-          jq
-          git
-          libxkbcommon
-          libinput
-          libgbm
+          systemd
+          wayland
           xwayland
-          pulseaudio
+          pulseaudio         
+          git
           util-linux
-          libselinux
-          libsepol
-          libthai
-          libdatrie
-          xorg.libXdmcp
-          xorg.libXtst
-          libdeflate
-          lerc
-          xz
-          zstd
-          libwebp
           pixman
         ]) ++ [flutter];
 
