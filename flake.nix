@@ -74,6 +74,7 @@
           git
           util-linux
           pixman
+          jq
         ]) ++ [flutter];
 
         shellHook = ''
