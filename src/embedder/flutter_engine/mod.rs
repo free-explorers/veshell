@@ -209,12 +209,14 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         let observatory_host = CString::new(format!("--vm-service-host={}", host))?;
         let observatory_port = CString::new(format!("--vm-service-port={}", port))?;
         let disable_service_auth_codes = CString::new("--disable-service-auth-codes")?;
+        let verbose_flag = CString::new("--verbose-logging")?;
 
         let command_line_argv = [
             executable_path.as_ptr(),
             observatory_host.as_ptr(),
             observatory_port.as_ptr(),
             disable_service_auth_codes.as_ptr(),
+            verbose_flag.as_ptr(),
         ];
 
         let elf_path = CString::new(format!("{lib_path}/libapp.so"))?;

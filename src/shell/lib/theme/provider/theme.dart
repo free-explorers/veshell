@@ -25,7 +25,7 @@ class VeshellTheme extends _$VeshellTheme {
           useMaterial3: true,
         ),
         color,
-      )
+      ),
     );
   }
 
@@ -48,6 +48,7 @@ class VeshellTheme extends _$VeshellTheme {
       highlightColor: lighterSurface.withAlpha(30),
       focusColor: lighterSurface.withAlpha(60),
       hoverColor: lighterSurface.withAlpha(20),
+      textTheme: defaultTheme.textTheme.apply(fontFamily: 'Imperial'),
     );
 
     return _applyCardTheme(theme);
