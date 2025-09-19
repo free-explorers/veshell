@@ -5,11 +5,9 @@ import 'package:shell/main.dart';
 import 'package:shell/monitor/model/monitor_configuration.serializable.dart';
 import 'package:shell/monitor/model/screen_configuration.serializable.dart';
 import 'package:shell/monitor/provider/monitor_by_name.dart';
-import 'package:shell/monitor/provider/monitor_by_view_id.dart';
 import 'package:shell/monitor/provider/monitor_configuration_state.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
-import 'package:shell/screen/provider/screen_manager.dart';
-import 'package:shell/screen/widget/screen.dart';
+import 'package:shell/test_theme.dart';
 import 'package:shell/theme/provider/theme.dart';
 
 /// Widget that represent the Monitor in the widget tree
@@ -25,7 +23,7 @@ class MonitorWidget extends HookConsumerWidget {
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: ThemeMode.dark,
-      home: Material(
+      /* home: Material(
         child: initializationStatus.when(
           data: (initialized) => HookConsumer(
             builder: (context, ref, child) {
@@ -96,7 +94,8 @@ class MonitorWidget extends HookConsumerWidget {
             child: Text(error.toString()),
           ),
         ),
-      ),
+      ), */
+      home: const TextThemeComparison(),
     );
   }
 }
@@ -116,8 +115,9 @@ class ScreenDivider extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final monitorName = CurrentMonitorName.of(context);
     final monitor = ref.watch(monitorByNameProvider(monitorName))!;
-    final monitorConfiguration =
-        ref.watch(monitorConfigurationStateProvider(monitorName));
+    final monitorConfiguration = ref.watch(
+      monitorConfigurationStateProvider(monitorName),
+    );
     final cumulatedDelta = useState<double>(0);
     final resizeInProgress = useState(false);
     return GestureDetector(
@@ -172,15 +172,15 @@ class ScreenDivider extends HookConsumerWidget {
         },
         child: switch (displayMode) {
           ScreenDisplayMode.splitVertical => const Divider(
-              thickness: 4,
-              height: 4,
-              color: Colors.black,
-            ),
+            thickness: 4,
+            height: 4,
+            color: Colors.black,
+          ),
           ScreenDisplayMode.splitHorizontal => const VerticalDivider(
-              thickness: 4,
-              width: 4,
-              color: Colors.black,
-            ),
+            thickness: 4,
+            width: 4,
+            color: Colors.black,
+          ),
         },
       ),
     );

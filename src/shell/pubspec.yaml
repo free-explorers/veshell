@@ -123,8 +123,13 @@ flutter:
   #         weight: 700
   #
   fonts: 
-    - family: Imperial
+    - family: RobotoFlex
       fonts:
-        - asset: fonts/ImperialScript-Regular.ttf
+        - asset: fonts/RobotoFlex.ttf
+    - family: Roboto
+      fonts:
+        - asset: fonts/Roboto-Regular.ttf
+        - asset: fonts/Roboto-Medium.ttf
+          weight: 500
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/custom-fonts/#from-packages

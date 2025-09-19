@@ -210,6 +210,9 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         let observatory_port = CString::new(format!("--vm-service-port={}", port))?;
         let disable_service_auth_codes = CString::new("--disable-service-auth-codes")?;
         let verbose_flag = CString::new("--verbose-logging")?;
+        let trace_startup_flag = CString::new("--trace-startup")?;
+        let profile_startup_flag = CString::new("--profile-startup")?;
+        debug!("assets {:?}", assets_path);
 
         let command_line_argv = [
             executable_path.as_ptr(),
@@ -217,6 +220,8 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             observatory_port.as_ptr(),
             disable_service_auth_codes.as_ptr(),
             verbose_flag.as_ptr(),
+            trace_startup_flag.as_ptr(),
+            profile_startup_flag.as_ptr(),
         ];
 
         let elf_path = CString::new(format!("{lib_path}/libapp.so"))?;

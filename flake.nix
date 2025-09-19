@@ -86,6 +86,7 @@
           myflutter
           fontconfig
           libepoxy
+          roboto
         ];
 
         RUSTC_VERSION = overrides.toolchain.channel;
