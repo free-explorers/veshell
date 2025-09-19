@@ -126,10 +126,10 @@ flutter:
     - family: RobotoFlex
       fonts:
         - asset: fonts/RobotoFlex.ttf
-    - family: Roboto
-      fonts:
-        - asset: fonts/Roboto-Regular.ttf
-        - asset: fonts/Roboto-Medium.ttf
-          weight: 500
+#    - family: Roboto
+#      fonts:
+#        - asset: fonts/Roboto-Regular.ttf
+#        - asset: fonts/Roboto-Medium.ttf
+#          weight: 500
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/custom-fonts/#from-packages
