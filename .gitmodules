@@ -1,4 +1,4 @@
-[submodule ".flutter"]
-	path = .flutter
+[submodule ".flutter_sdk"]
+	path = .flutter_sdk
 	url = https://github.com/flutter/flutter.git
 	

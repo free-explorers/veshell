@@ -1,7 +1,6 @@
 /build/
 extra/third_party/flutter_engine
 veshell.log
-.flutter_sdk
 target
 .vscode/vmService.json
 
