@@ -34,8 +34,7 @@ SERVICE_OUTPUT := build/veshell.service
 
 .PHONY: all build package install uninstall clean
 
-# Assign the output of the git log command to a variable
-ENGINE_COMMIT := $(shell cd $(FLUTTER_SDK)/engine && git log -1 --format=%H -- .)
+
 
 all: build
 
@@ -45,8 +44,11 @@ init:
 	git submodule update --recursive
 	if [ ! -f .flutter_sdk/.gclient ]; then cp $(FLUTTER_SDK)/engine/scripts/standard.gclient $(FLUTTER_SDK)/.gclient; fi
 
+# Assign the output of the git log command to a variable
+engine: ENGINE_COMMIT := $(shell cd $(FLUTTER_SDK)/engine && git log -1 --format=%H -- .)
 engine:
 	@echo "Building Flutter engine"
+	
 	cd $(FLUTTER_SDK)/engine/src && \
 	./flutter/tools/gn \
 		--runtime-mode=$(PROFILE) \
