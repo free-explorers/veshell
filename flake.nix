@@ -21,8 +21,6 @@
     let
       lib = pkgs.lib;  
 
-      engineRevision = myflutter.passthru.engineVersion;
-
       # Get Flutter Engine from GitHub
       flutterEngine = pkgs.stdenv.mkDerivation rec {
          pname = "flutter-engine";
