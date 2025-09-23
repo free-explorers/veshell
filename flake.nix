@@ -42,13 +42,6 @@
             pkgs.bash
             pkgs.cmake
             pkgs.ninja
-          ] ++ with pkgs; [
-            clang
-            llvmPackages.libcxx
-            pkgconfig
-            ninja
-            cmake
-            python3
           ];
 
           buildInputs = [
