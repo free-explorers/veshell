@@ -52,7 +52,6 @@
             pkgs.fontconfig
             pkgs.libxrandr
             pkgs.xorg.xprop
-            pkgs.chrome-gn
           ];
 
           buildPhase = ''
