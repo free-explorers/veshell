@@ -30,8 +30,6 @@
             owner = "flutter";
             repo = "engine";
             rev = "master";
-            # Optionally specify commit hash instead of "master" for reproducibility
-            sha256 = "0000000000000000000000000000000000000000000000000000"; # replace with actual sha256
           };
 
           nativeBuildInputs = [
