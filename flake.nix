@@ -51,12 +51,6 @@
             pkgs.cairo
             pkgs.fontconfig
             pkgs.libxrandr
-            pkgs.libxinerama
-            pkgs.libxcursor
-            pkgs.libxi
-            pkgs.libxcomposite
-            pkgs.libxdamage
-            pkgs.libxfixes
             pkgs.xorg.xprop
             pkgs.chrome-gn
           ];
