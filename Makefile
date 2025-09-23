@@ -41,6 +41,7 @@ all: build
 
 init:
 	@echo "Initializing Veshell repository"
+	git submodule init
 	git submodule update --recursive
 	if [ ! -f .flutter_sdk/.gclient ]; then cp $(FLUTTER_SDK)/engine/scripts/standard.gclient $(FLUTTER_SDK)/.gclient; fi
 
