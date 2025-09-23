@@ -14,12 +14,79 @@
       flutterEngineDebugHash = "sha256-XNZGEFE7ryNhA9Fc33n0v/uq7+IjdDDAMpqEVECRxws=";
       flutterEngineReleaseHash = "sha256-2BneNQqZQRHCQt5AUHjo2G5qrwwsyRHmvZm9V+Qc/Eo=";
 
-      # Get Flutter SDK
-      myflutter = pkgs.flutter332;
-
       libPath = with pkgs; lib.makeLibraryPath [
         # load external libraries that you need in your rust project here
       ];
+    in
+    let
+      lib = pkgs.lib;  
+
+      engineRevision = myflutter.passthru.engineVersion;
+
+      # Get Flutter Engine from GitHub
+      flutterEngine = pkgs.stdenv.mkDerivation rec {
+         pname = "flutter-engine";
+          version = "master";
+
+          src = pkgs.fetchFromGitHub {
+            owner = "flutter";
+            repo = "engine";
+            rev = "master";
+            # Optionally specify commit hash instead of "master" for reproducibility
+            sha256 = "0000000000000000000000000000000000000000000000000000"; # replace with actual sha256
+          };
+
+          nativeBuildInputs = [
+            pkgs.git
+            pkgs.python3
+            pkgs.bash
+            pkgs.cmake
+            pkgs.ninja
+          ] ++ with pkgs; [
+            clang
+            llvmPackages.libcxx
+            pkgconfig
+            ninja
+            cmake
+            python3
+          ];
+
+          buildInputs = [
+            pkgs.pkg-config
+            pkgs.libdrm
+            pkgs.libpng
+            pkgs.freetype
+            pkgs.glib
+            pkgs.cairo
+            pkgs.fontconfig
+            pkgs.libxrandr
+            pkgs.libxinerama
+            pkgs.libxcursor
+            pkgs.libxi
+            pkgs.libxcomposite
+            pkgs.libxdamage
+            pkgs.libxfixes
+            pkgs.xorg.xprop
+            pkgs.chrome-gn
+          ];
+
+          buildPhase = ''
+            ./flutter/tools/gn --unoptimized --no-lto --no-goma
+            ninja -C out/host_debug_unopt
+          '';
+
+          installPhase = ''
+            mkdir -p $out/bin
+            cp -r out/host_debug_unopt/* $out/bin/
+          '';
+
+          meta = with pkgs.lib; {
+            description = "Standalone build of the Flutter engine";
+            license = licenses.bsd3;
+            platforms = platforms.linux;
+            maintainers = with maintainers; [ ];
+          };
+        };
     in
     {
       devShells.${system}.default = pkgs.mkShell rec{
@@ -57,6 +124,14 @@
           export PATH=$PATH:''${RUSTUP_HOME:-~/.rustup}/toolchains/$RUSTC_VERSION-x86_64-unknown-linux-gnu/bin/
           export VPYTHON_VIRTUALENV_ROOT=./vpython
           export RUST_BACKTRACE=1
+
+           # Symlink Flutter Engine
+          echo "Linking Flutter Engine..."
+          enginePath="build/engine/"
+          mkdir -p "$enginePath/debug" "$enginePath/release"
+          ln -sf "${flutterEngine}/debug/lib/libflutter_engine.so" "$enginePath/debug/libflutter_engine.so"
+          ln -sf "${flutterEngine}/release/lib/libflutter_engine.so" "$enginePath/release/libflutter_engine.so"
+          ln -sf "${flutterEngine}/debug/include/flutter_embedder.h" "$enginePath/flutter_embedder.h"
           '';
 
         # Add precompiled library to rustc search path
