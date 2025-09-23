@@ -101,7 +101,6 @@
           pixman
           openssl
           jq
-          myflutter
           fontconfig
           libepoxy
         ];
