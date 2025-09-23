@@ -55,6 +55,10 @@
         shellHook = ''
           export PATH=$PATH:''${CARGO_HOME:-~/.cargo}/bin
           export PATH=$PATH:''${RUSTUP_HOME:-~/.rustup}/toolchains/$RUSTC_VERSION-x86_64-unknown-linux-gnu/bin/
+          export VPYTHON_VIRTUALENV_ROOT=./vpython
+          CLANG_ROOT=$(find -iname clang++)
+          CLANG_ROOT=$(dirname $CLANG_ROOT)
+          export CLANG_ROOT=$(dirname $CLANG_ROOT)
           export RUST_BACKTRACE=1
           '';
 
