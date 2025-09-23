@@ -1,3 +1,7 @@
+FLUTTER_SDK := $(CURDIR)/.flutter_sdk
+DEPOT_TOOLS := $(CURDIR)/.depot_tools
+export PATH := $(PATH):$(FLUTTER_SDK)/bin:$(DEPOT_TOOLS)
+
 # Installation paths
 PREFIX ?= /usr/local
 BINDIR := $(PREFIX)/bin
@@ -30,8 +34,34 @@ SERVICE_OUTPUT := build/veshell.service
 
 .PHONY: all build package install uninstall clean
 
+# Assign the output of the git log command to a variable
+ENGINE_COMMIT := $(shell cd $(FLUTTER_SDK)/engine && git log -1 --format=%H -- .)
+
 all: build
 
+init:
+	@echo "Initializing Veshell repository"
+	git submodule update --recursive
+	if [ ! -f .flutter_sdk/.gclient ]; then cp $(FLUTTER_SDK)/engine/scripts/standard.gclient $(FLUTTER_SDK)/.gclient; fi
+
+engine:
+	@echo "Building Flutter engine"
+	cd $(FLUTTER_SDK)/engine/src && \
+	./flutter/tools/gn \
+		--runtime-mode=$(PROFILE) \
+		--embedder-for-target \
+		--no-build-embedder-examples \
+		--no-goma \
+		--no-rbe \
+		--no-stripped \
+		--no-enable-unittests \
+		--no-dart-version-git-info \
+		--linux-cpu $(ARCH_DIR) \
+		--target-os linux && \
+	ninja -C out/linux_$(PROFILE)_$(ARCH_DIR)
+	mkdir -p $(CURDIR)/build/engine/$(ENGINE_COMMIT)/$(PROFILE)/$(ARCH_DIR)
+	cp $(FLUTTER_SDK)/engine/src/out/linux_$(PROFILE)_$(ARCH_DIR)/libflutter_engine.so  $(CURDIR)/build/engine/$(ENGINE_COMMIT)/$(PROFILE)/$(ARCH_DIR)
+	
 build:
 	cargo build --profile=$(PROFILE)
 

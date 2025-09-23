@@ -2,10 +2,12 @@ use std::env;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
+use build_flutter_engine_artifacts::build_flutter_engine_artifacts;
 use flutter_engine_lib::link_flutter_engine_shared_library;
 use flutter_sdk::install_flutter_sdk;
 use shell::build_shell;
 
+mod build_flutter_engine_artifacts;
 mod flutter_engine_lib;
 mod flutter_sdk;
 mod shell;
@@ -24,12 +26,6 @@ fn main() {
         }
         Err(_) => FlutterEngineBuild::Debug,
     };
-
-    // Install flutter and download Engine shared libs
-    match install_flutter_sdk() {
-        Ok(_) => println!("Flutter SDK installed successfully"),
-        Err(e) => panic!("Failed to install Flutter SDK: {}", e),
-    }
 
     match build_shell(flutter_engine_build) {
         Ok(_) => println!("Shell built successfully"),
