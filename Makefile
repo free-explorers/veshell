@@ -43,12 +43,12 @@ init:
 	git submodule init
 	git submodule update --recursive
 	if [ ! -f .flutter_sdk/.gclient ]; then cp $(FLUTTER_SDK)/engine/scripts/standard.gclient $(FLUTTER_SDK)/.gclient; fi
+	cd $(FLUTTER_SDK) && gclient sync
 
 # Assign the output of the git log command to a variable
 engine: ENGINE_COMMIT := $(shell cd $(FLUTTER_SDK)/engine && git log -1 --format=%H -- .)
 engine:
 	@echo "Building Flutter engine"
-	
 	cd $(FLUTTER_SDK)/engine/src && \
 	./flutter/tools/gn \
 		--runtime-mode=$(PROFILE) \
