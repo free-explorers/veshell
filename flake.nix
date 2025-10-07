@@ -12,20 +12,24 @@
         roboto
       ];
 
+      flutterVersion = "edada7c56edf4a183c1735310e123c7f923584f1";
+
       flutterSources = import ./extra/build/nix/flutter-sources.nix {
-        inherit (nixpkgs) fetchurl fetchgit lib stdenv cacert;
+        inherit (pkgs) lib stdenv cacert;
+        flutterHash = flutterVersion;
       };
       flutterEngine = import ./extra/build/nix/flutter-engine.nix {
-        inherit (nixpkgs) fetchurl fetchgit lib stdenv cacert pkg-config clang cmake ninja dart;
-        flutterSources = flutterSources.${system};
+        inherit (pkgs) lib stdenv cacert pkg-config clang cmake ninja dart;
+        flutterSources = flutterSources;
+        engineVersion = flutterVersion;
       };
       flutterBin = import ./extra/build/nix/flutter-bin.nix {
-        inherit (nixpkgs) lib stdenv;
-        flutterEngine = flutterEngine.${system};
-        flutterSources = flutterSources.${system};
+        inherit (pkgs) lib stdenv;
+        flutterEngine = flutterEngine;
+        flutterSources = flutterSources;
       };
 
-      myflutter = flutterBin.${system};
+      myflutter = flutterBin;
 
     in
     {
@@ -70,10 +74,6 @@
           # Ensure the Flutter tool uses the local engine
           export FLUTTER_ALREADY_LOCKED=1
           export FLUTTER_ROOT="${myflutter}"
-
-          echo "=== Flutter ==="
-          echo engine ${myflutter.engine}
-          echo outName ${myflutter.engine.outName}
 
           echo "=== Flutter Installation ==="
 

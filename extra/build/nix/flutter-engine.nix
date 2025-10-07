@@ -1,8 +1,5 @@
-{ fetchurl, fetchgit, lib, stdenv, cacert, pkg-config, clang, cmake, ninja, dart, flutterSources }:
+{ lib, stdenv, cacert, pkg-config, clang, cmake, ninja, dart, flutterSources, engineVersion }:
 
-let
-  engineVersion = "your-engine-version"; # Replace with your desired engine version
-in
 stdenv.mkDerivation {
   pname = "flutter-engine";
   version = engineVersion;

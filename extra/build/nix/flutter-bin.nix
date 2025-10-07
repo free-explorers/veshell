@@ -4,14 +4,12 @@ stdenv.mkDerivation {
   pname = "flutter-bin";
   version = "1.0.0";
 
-  src = flutterSources;
-
   nativeBuildInputs = [ flutterEngine ];
 
   buildPhase = ''
     mkdir -p $out/bin
     cp -r ${flutterEngine}/bin/* $out/bin/
-    cp -r ${src}/bin/* $out/bin/
+    cp -r ${flutterSources}/bin/* $out/bin/
   '';
 
   meta = with lib; {
