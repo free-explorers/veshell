@@ -9,3 +9,4 @@ target
 
 // debug config folder
 .veshell
+.continue
