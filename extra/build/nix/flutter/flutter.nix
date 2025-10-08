@@ -99,7 +99,6 @@ let
       GIT_AUTHOR_EMAIL= GIT_COMMITTER_EMAIL= \
       GIT_AUTHOR_DATE='1/1/1970 00:00:00 +0000' GIT_COMMITTER_DATE='1/1/1970 00:00:00 +0000' \
         git commit --allow-empty -m "Initial commit"
-      (. '${../../../build-support/fetchgit/deterministic-git}'; make_deterministic_repo .)
 
       mkdir -p bin/cache
 

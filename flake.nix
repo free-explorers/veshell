@@ -29,7 +29,7 @@
         flutterSources = flutterSources;
       }; */
 
-      myflutter = pkgs.callPackage ./extra/build/nix/flutter/default.nix { };
+      myflutter = (pkgs.callPackage ./extra/build/nix/flutter/default.nix { useNixpkgsEngine = true; }).stable;
 
     in
     {

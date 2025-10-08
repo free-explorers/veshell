@@ -87,26 +87,13 @@ runCommand "flutter-engine-source-${version}-${buildPlatform.system}-${targetPla
         or (throw "Hash not set for ${targetPlatform.system} on ${buildPlatform.system}");
   }
   (
-    ''
-      source ${../../../../build-support/fetchgit/deterministic-git}
-      export -f clean_git
-      export -f make_deterministic_repo
 
-    ''
-    + (
-      if lib.versionAtLeast flutterVersion "3.29" then
         ''
           mkdir -p source
           cp $gclient source/.gclient
           cd source
         ''
-      else
-        ''
-          mkdir -p $out
-          cp $gclient $out/.gclient
-          cd $out
-        ''
-    )
+
     + ''
 
       export PATH=$PATH:$depot_tools
