@@ -16,7 +16,7 @@ stdenv.mkDerivation {
     export FLUTTER_ROOT=${flutterSources}
 
     mkdir -p $out/bin
-    cd ${src}/src/flutter
+    cd ${flutterSources}/src/flutter
     ./flutter/tools/gn --unoptimized --full-dart-sdk
     ninja -C out/host_debug_unoptimized
     cp -r out/host_debug_unoptimized $out/bin/

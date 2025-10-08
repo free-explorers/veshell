@@ -1,9 +1,9 @@
-{ lib, stdenv, cacert, flutterHash }:
+{ lib, stdenv, cacert, callPackage, flutterHash, python312 }:
 
 let
 
-  depot_tools = import ./depot_tools.nix { inherit lib stdenv cacert; };
-
+  depot_tools = callPackage ./depot_tools.nix { inherit lib stdenv cacert; };
+  python3 = python312;
   sources = builtins.fetchGit {
     url = "https://github.com/flutter/flutter.git";
     rev = flutterHash;
@@ -38,7 +38,15 @@ stdenv.mkDerivation {
 
   src = sources;
 
-  nativeBuildInputs = [ cacert depot_tools ];
+  nativeBuildInputs = [ 
+    cacert 
+    depot_tools 
+    (python3.withPackages (
+        ps: with ps; [
+          httplib2
+          six
+        ]
+      )) ];
 
   NIX_SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
 
@@ -49,7 +57,9 @@ stdenv.mkDerivation {
   '';
 
   buildPhase = ''
-    gclient sync
+    export PATH=$PATH:${depot_tools}
+    ls ${depot_tools}
+    python3 ${depot_tools}/gclient.py sync --no-history --shallow --nohooks
   '';
 
   meta = with lib; {

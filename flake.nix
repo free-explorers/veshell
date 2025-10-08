@@ -11,11 +11,11 @@
       fonts.packages = with pkgs; [
         roboto
       ];
-
+/* 
       flutterVersion = "edada7c56edf4a183c1735310e123c7f923584f1";
 
       flutterSources = import ./extra/build/nix/flutter-sources.nix {
-        inherit (pkgs) lib stdenv cacert;
+        inherit (pkgs) lib stdenv cacert callPackage python312;
         flutterHash = flutterVersion;
       };
       flutterEngine = import ./extra/build/nix/flutter-engine.nix {
@@ -27,9 +27,9 @@
         inherit (pkgs) lib stdenv;
         flutterEngine = flutterEngine;
         flutterSources = flutterSources;
-      };
+      }; */
 
-      myflutter = flutterBin;
+      myflutter = pkgs.callPackage ./extra/build/nix/flutter/default.nix { };
 
     in
     {
