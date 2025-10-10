@@ -168,6 +168,7 @@ stdenv.mkDerivation (finalAttrs: {
   ++ lib.optionals (lib.versionAtLeast flutterVersion "3.35") [
     "-Wno-macro-redefined"
     "-Wno-error=macro-redefined"
+    "-Wno-error=character-conversion"
   ];
 
   nativeCheckInputs = lib.optionals stdenv.hostPlatform.isLinux [
@@ -280,7 +281,7 @@ stdenv.mkDerivation (finalAttrs: {
   ++ lib.optional (runtimeMode == "debug") "--no-stripped"
   ++ lib.optional finalAttrs.finalPackage.doCheck "--enable-unittests"
   ++ lib.optional (!finalAttrs.finalPackage.doCheck) "--no-enable-unittests"
-  ++ "--copt=-Wno-error=character-conversion";
+
 
   # NOTE: Once https://github.com/flutter/flutter/issues/127606 is fixed, use "--no-prebuilt-dart-sdk"
   configurePhase = ''
