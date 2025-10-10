@@ -279,7 +279,8 @@ stdenv.mkDerivation (finalAttrs: {
   ++ lib.optional (!isOptimized) "--unoptimized"
   ++ lib.optional (runtimeMode == "debug") "--no-stripped"
   ++ lib.optional finalAttrs.finalPackage.doCheck "--enable-unittests"
-  ++ lib.optional (!finalAttrs.finalPackage.doCheck) "--no-enable-unittests";
+  ++ lib.optional (!finalAttrs.finalPackage.doCheck) "--no-enable-unittests"
+  ++ "--copt=-Wno-error=character-conversion";
 
   # NOTE: Once https://github.com/flutter/flutter/issues/127606 is fixed, use "--no-prebuilt-dart-sdk"
   configurePhase = ''
@@ -313,7 +314,8 @@ stdenv.mkDerivation (finalAttrs: {
         --replace-fail "zipfile.ZipFile(args.output, 'w', zipfile.ZIP_DEFLATED)" "zipfile.ZipFile(args.output, 'w', zipfile.ZIP_DEFLATED, strict_timestamps=False)"
     ''}
 
-    ninja -C $out/out/$outName -j$NIX_BUILD_CORES
+    ninja -C $out/out/$outName -j$NIX_BUILD_CORES \
+      CXXFLAGS="-Wno-error=character-conversion"
 
     runHook postBuild
   '';
