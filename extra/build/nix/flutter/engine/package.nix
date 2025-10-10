@@ -163,13 +163,12 @@ stdenv.mkDerivation (finalAttrs: {
 
   NIX_CFLAGS_COMPILE = [
     "-I${finalAttrs.toolchain}/include"
-  ]
-  ++ lib.optional (!isOptimized) "-U_FORTIFY_SOURCE"
-  ++ lib.optionals (lib.versionAtLeast flutterVersion "3.35") [
     "-Wno-macro-redefined"
     "-Wno-error=macro-redefined"
     "-Wno-error=character-conversion"
-  ];
+  ]
+  ++ lib.optional (!isOptimized) "-U_FORTIFY_SOURCE";
+
 
   nativeCheckInputs = lib.optionals stdenv.hostPlatform.isLinux [
     xorg.xorgserver

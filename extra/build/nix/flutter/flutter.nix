@@ -10,7 +10,6 @@
       "https://github.com/flutter/engine.git@${engineVersion}",
   enginePatches ? [ ],
   engineRuntimeModes ? [
-    "release"
     "debug"
   ],
   engineSwiftShaderHash,
