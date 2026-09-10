@@ -115,6 +115,11 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                         physical_view_inset_left: 0.,
                         display_id: display_id,
                         view_id,
+                        has_constraints: false,
+                        min_width_constraint: 0,
+                        min_height_constraint: 0,
+                        max_width_constraint: 0,
+                        max_height_constraint: 0,
                     },
                     user_data: Box::into_raw(add_view_data) as *mut c_void,
                     add_view_callback: Some(add_view_callback::<BackendData>),
@@ -146,6 +151,11 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                 physical_view_inset_left: 0.0,
                 display_id: 0,
                 view_id: view_id,
+                has_constraints: false,
+                min_width_constraint: 0,
+                min_height_constraint: 0,
+                max_width_constraint: 0,
+                max_height_constraint: 0,
             };
 
             let result =

@@ -169,6 +169,7 @@ pub mod xwayland {
                 &data.display_handle,
                 None,
                 std::iter::empty::<(String, String)>(),
+                std::iter::empty::<String>(),
                 true,
                 Stdio::null(),
                 Stdio::null(),
@@ -189,7 +190,12 @@ pub mod xwayland {
                             display: display_number,
                         });
                         let mut wm =
-                            X11Wm::start_wm(data.loop_handle.clone(), x11_socket, client.clone())
+                            X11Wm::start_wm(
+                                data.loop_handle.clone(),
+                                &data.display_handle,
+                                x11_socket,
+                                client.clone(),
+                            )
                                 .expect("Failed to attach X11 Window Manager");
                         let xwayland_state = data.xwayland_state.as_mut().unwrap();
                         xwayland_state.xwm = Some(wm);

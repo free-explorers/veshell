@@ -35,9 +35,9 @@ use smithay::wayland::output::OutputHandler;
 use smithay::wayland::relative_pointer::RelativePointerManagerState;
 use smithay::wayland::seat::WaylandFocus;
 use smithay::wayland::selection::data_device::{
-    set_data_device_focus, ClientDndGrabHandler, DataDeviceHandler, DataDeviceState,
-    ServerDndGrabHandler,
+    set_data_device_focus, DataDeviceHandler, DataDeviceState, WaylandDndGrabHandler,
 };
+use smithay::input::dnd::DndGrabHandler;
 use smithay::wayland::selection::primary_selection::{
     set_primary_focus, PrimarySelectionHandler, PrimarySelectionState,
 };
@@ -53,11 +53,7 @@ use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::wayland::socket::ListeningSocketSource;
 use smithay::wayland::xwayland_shell::{self, XWAYLAND_SHELL_ROLE};
 use smithay::xwayland::{X11Surface, X11Wm};
-use smithay::{
-    delegate_compositor, delegate_data_control, delegate_data_device, delegate_fractional_scale,
-    delegate_output, delegate_primary_selection, delegate_relative_pointer, delegate_seat,
-    delegate_shm, delegate_xdg_decoration, delegate_xdg_shell, delegate_xwayland_shell,
-};
+use smithay::delegate_dispatch2;
 use tracing::{info, warn};
 
 use crate::cursor::CursorState;
@@ -160,6 +156,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
     }
 }
 
+impl<BackendData: Backend + 'static> DndGrabHandler for State<BackendData> {}
+
 impl<BackendData: Backend + 'static> State<BackendData> {
     pub fn flutter_engine(&self) -> &FlutterEngine<BackendData> {
         self.flutter_engine.as_ref().unwrap()
@@ -169,16 +167,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
     }
 }
 
-// Macros used to delegate protocol handling to types in the app state.
-delegate_compositor!(@<BackendData: Backend + 'static> State<BackendData>);
-delegate_xdg_shell!(@<BackendData: Backend + 'static> State<BackendData>);
-delegate_xdg_decoration!(@<BackendData: Backend + 'static> State<BackendData>);
-delegate_shm!(@<BackendData: Backend + 'static> State<BackendData>);
-delegate_output!(@<BackendData: Backend + 'static> State<BackendData>);
-delegate_seat!(@<BackendData: Backend + 'static> State<BackendData>);
-delegate_data_device!(@<BackendData: Backend + 'static> State<BackendData>);
-delegate_xwayland_shell!(@<BackendData: Backend + 'static> State<BackendData>);
-delegate_relative_pointer!(@<BackendData: Backend + 'static> State<BackendData>);
+// Smithay 0.7 centralizes protocol delegation through Dispatch2.
+delegate_dispatch2!(@<BackendData: Backend + 'static> State<BackendData>);
 
 impl<BackendData: Backend + 'static> State<BackendData> {
     pub fn new(
@@ -589,35 +579,30 @@ impl<BackendData: Backend> SelectionHandler for State<BackendData> {
         _user_data: &(),
     ) {
         if let Some(xwm) = self.xwayland_state.as_mut().unwrap().xwm.as_mut() {
-            if let Err(err) = xwm.send_selection(ty, mime_type, fd, self.loop_handle.clone()) {
+            if let Err(err) = xwm.send_selection(ty, mime_type, fd) {
                 warn!(?err, "Failed to send primary (X11 -> Wayland)");
             }
         }
     }
 }
 
-impl<BackendData: Backend> ClientDndGrabHandler for State<BackendData> {}
-
-impl<BackendData: Backend> ServerDndGrabHandler for State<BackendData> {}
+impl<BackendData: Backend> WaylandDndGrabHandler for State<BackendData> {}
 
 impl<BackendData: Backend> DataDeviceHandler for State<BackendData> {
-    fn data_device_state(&self) -> &DataDeviceState {
-        &self.data_device_state
+    fn data_device_state(&mut self) -> &mut DataDeviceState {
+        &mut self.data_device_state
     }
 }
 
 impl<BackendData: Backend> OutputHandler for State<BackendData> {}
 
 impl<BackendData: Backend> PrimarySelectionHandler for State<BackendData> {
-    fn primary_selection_state(&self) -> &PrimarySelectionState {
-        &self.primary_selection_state
+    fn primary_selection_state(&mut self) -> &mut PrimarySelectionState {
+        &mut self.primary_selection_state
     }
 }
-delegate_primary_selection!(@<BackendData: Backend + 'static> State<BackendData>);
-
 impl<BackendData: Backend> DataControlHandler for State<BackendData> {
-    fn data_control_state(&self) -> &DataControlState {
-        &self.data_control_state
+    fn data_control_state(&mut self) -> &mut DataControlState {
+        &mut self.data_control_state
     }
 }
-delegate_data_control!(@<BackendData: Backend + 'static> State<BackendData>);

@@ -1,5 +1,4 @@
 use smithay::{
-    delegate_fractional_scale,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     wayland::{
         compositor::with_states,
@@ -28,4 +27,3 @@ impl<BackendData: Backend + 'static> FractionalScaleHandler for State<BackendDat
         }
     }
 }
-delegate_fractional_scale!(@<BackendData: Backend + 'static> State<BackendData>);

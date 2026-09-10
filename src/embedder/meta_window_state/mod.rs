@@ -79,7 +79,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     surface_state.title.clone(),
                     surface_state.app_id.clone(),
                     surface_state.parent.clone(),
-                    surface_state.modal.clone(),
+                    matches!(
+                        surface_state.dialog_hint,
+                        smithay::wayland::shell::xdg::dialog::ToplevelDialogHint::Modal
+                    ),
                 )
             });
 
@@ -115,11 +118,14 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         };
         let surface_id = get_surface_id(surface.wl_surface());
 
-        let is_decorated = surface
-            .current_state()
-            .decoration_mode
-            .map(|mode| mode == DecorationMode::ClientSide)
-            .unwrap_or(true);
+        let is_decorated = surface.with_cached_state(|state| {
+            state
+                .last_acked
+                .as_ref()
+                .and_then(|configure| configure.state.decoration_mode)
+                .map(|mode| mode == DecorationMode::ClientSide)
+                .unwrap_or(true)
+        });
 
         let meta_window = self.create_meta_window(MetaWindow {
             id: Uuid::new_v4().hyphenated().to_string(),

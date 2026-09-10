@@ -10,7 +10,7 @@ build = "extra/build/mod.rs"
 default-run = "veshell"
 
 [package.metadata]
-flutter_version = "3.32.8"
+flutter_version = "3.47.2"
 
 [[bin]]
 name = "veshell"
@@ -20,23 +20,32 @@ path = "src/embedder/main.rs"
 inherits = "release"
 
 [dependencies.smithay]
-# git = "https://github.com/Smithay/smithay.git"
-git = "https://github.com/PapyElGringo/smithay.git"
-branch = "veshell_changes"
-
-# path = "../smithay-fork"
+git = "https://github.com/Smithay/smithay.git"
+rev = "4cf0b62028039661477d482ec4758b687d8f4392"
+default-features = false
 
 features = [
-    "default",
-    "wayland_frontend",
+    "backend_drm",
     "backend_egl",
+    "backend_gbm",
+    "backend_libinput",
+    "backend_session_libseat",
+    "backend_udev",
+    "backend_vulkan",
+    "backend_x11",
+    "backend_winit",
+    "desktop",
+    "renderer_gl",
+    "renderer_multi",
+    "renderer_pixman",
     "use_system_lib",
+    "wayland_frontend",
     "xwayland",
 ]
 
 [dependencies]
 
-smithay-drm-extras = { path = "extra/third_party/smithay-drm-extras" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay.git", rev = "4cf0b62028039661477d482ec4758b687d8f4392" }
 rustix = "0.38.30"
 input-linux = "0.7.1"
 tracing-subscriber = { version = "0.3.17", features = [

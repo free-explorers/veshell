@@ -2,21 +2,14 @@ use crate::flutter_sdk::FLUTTER_REPO_DIR;
 use crate::FlutterEngineBuild;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::{env, io};
 
 use flate2::read::GzDecoder;
-use lazy_static::lazy_static;
 
 const FLUTTER_ENGINE_LIBS_DIR: &str = "extra/third_party/flutter_engine";
 const FLUTTER_ENGINE_LIB_NAME: &str = "libflutter_engine.so";
 const FLUTTER_ENGINE_HEADER_NAME: &str = "flutter_embedder.h";
 const FLUTTER_ENGINE_LINK_NAME: &str = "flutter_engine";
-lazy_static! {
-    static ref LIBS_REVISION_FILE: String =
-        format!("{FLUTTER_ENGINE_LIBS_DIR}/.flutter_engine_revision");
-}
-
 pub fn link_flutter_engine_shared_library(
     flutter_engine_build: FlutterEngineBuild,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -27,8 +20,10 @@ pub fn link_flutter_engine_shared_library(
     let flutter_engine_revision = get_flutter_engine_revision();
 
     // Check if we need to download the flutter engine library
-    let should_download =
-        should_download_flutter_engine_library(&flutter_engine_revision, flutter_engine_build);
+    let should_download = should_download_flutter_engine_library(
+        &flutter_engine_revision,
+        flutter_engine_build,
+    );
 
     if should_download {
         download_flutter_engine_library(&flutter_engine_revision, flutter_engine_build).unwrap();
@@ -42,27 +37,12 @@ pub fn link_flutter_engine_shared_library(
 }
 
 fn get_flutter_engine_revision() -> String {
-    let mut git_cmd = Command::new("git");
-    let mut engine_path = String::from(FLUTTER_REPO_DIR);
-    engine_path.push_str("/engine");
-    git_cmd.current_dir(engine_path);
-    git_cmd.args(&["log", "-1", "--format=%H", "--", "."]);
-
-    let output = git_cmd.output();
-
-    match output {
-        Ok(output) => {
-            if output.status.success() {
-                let commit_hash = String::from_utf8(output.stdout).expect("Not UTF-8");
-                return commit_hash.trim().to_string();
-            } else {
-                println!("Error: Failed to get git commit hash");
-                return String::new();
-            }
-        }
+    let engine_version_path = format!("{FLUTTER_REPO_DIR}/bin/internal/engine.version");
+    match std::fs::read_to_string(engine_version_path) {
+        Ok(engine_revision) => engine_revision.trim().to_string(),
         Err(e) => {
-            println!("Error: {:?}, failed to execute git command", e);
-            return String::new();
+            println!("Error: {e}, failed to read Flutter engine version");
+            String::new()
         }
     }
 }
@@ -75,7 +55,10 @@ fn should_download_flutter_engine_library(
         return false;
     }
     // Is the revision different? If so, Flutter was probably upgraded.
-    match std::fs::read_to_string(&*LIBS_REVISION_FILE) {
+    let libs_revision_file = format!(
+        "{FLUTTER_ENGINE_LIBS_DIR}/.flutter_engine_revision.{flutter_engine_build}"
+    );
+    match std::fs::read_to_string(libs_revision_file) {
         Ok(libs_revision) => {
             if libs_revision != flutter_engine_revision {
                 return true;
@@ -165,7 +148,10 @@ fn download_flutter_engine_library(
     }
 
     // Remember the revision.
-    let mut revision_file = std::fs::File::create(&*LIBS_REVISION_FILE)
+    let revision_file_path = format!(
+        "{FLUTTER_ENGINE_LIBS_DIR}/.flutter_engine_revision.{flutter_engine_build}"
+    );
+    let mut revision_file = std::fs::File::create(revision_file_path)
         .expect("Failed to create .flutter_engine_revision");
     write!(revision_file, "{}", flutter_engine_revision)
         .expect("Failed to write .flutter_engine_revision");

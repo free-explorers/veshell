@@ -11,7 +11,6 @@ use smithay::{
         },
         winit::{self, WinitEvent, WinitGraphicsBackend, WinitInput},
     },
-    delegate_dmabuf,
     output::{Mode, Output, PhysicalProperties, Subpixel},
     reexports::{calloop::EventLoop, wayland_server::Display},
     utils::{Rectangle, Transform},
@@ -84,7 +83,6 @@ impl DmabufHandler for State<Winit> {
         }
     }
 }
-delegate_dmabuf!(State<Winit>);
 
 pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
     let mut event_loop = EventLoop::try_new().unwrap();

@@ -199,6 +199,9 @@ impl<BackendData: Backend> State<BackendData> {
                 scale: 1.0,
                 rotation: 0.0,
                 view_id,
+                pressure: 0.0,
+                pressure_min: 0.0,
+                pressure_max: 0.0,
             })
             .unwrap();
     }
@@ -282,6 +285,9 @@ impl<BackendData: Backend> State<BackendData> {
                     scale: 1.0,
                     rotation: 0.0,
                     view_id,
+                    pressure: 0.0,
+                    pressure_min: 0.0,
+                    pressure_max: 0.0,
                 })
                 .unwrap();
         } else {
@@ -504,6 +510,9 @@ impl<BackendData: Backend> State<BackendData> {
                 scale: 1.0,
                 rotation: 0.0,
                 view_id,
+                pressure: 0.0,
+                pressure_min: 0.0,
+                pressure_max: 0.0,
             })
             .unwrap();
     }
@@ -544,6 +553,9 @@ impl<BackendData: Backend> State<BackendData> {
                 scale,
                 rotation,
                 view_id,
+                pressure: 0.0,
+                pressure_min: 0.0,
+                pressure_max: 0.0,
             })
             .unwrap();
     }

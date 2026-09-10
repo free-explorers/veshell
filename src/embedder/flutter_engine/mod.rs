@@ -297,6 +297,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     dart_entrypoint_argv: null(),
                     log_message_callback: Some(log_callback),
                     log_tag: null(),
+                    enable_wide_gamut: false,
                     on_pre_engine_restart_callback: None,
                     update_semantics_callback: None,
                     update_semantics_callback2: None,

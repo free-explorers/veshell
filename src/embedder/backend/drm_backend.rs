@@ -7,7 +7,7 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::Ordering;
 
-use rustix::fs::OFlags;
+use smithay::reexports::rustix::fs::OFlags;
 use sd_notify::NotifyState;
 use serde_json::json;
 use smithay::backend::allocator::dmabuf::{AnyError, AsDmabuf, Dmabuf, DmabufAllocator};
@@ -33,7 +33,6 @@ use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{libseat, Event as SessionEvent, Session};
 use smithay::backend::udev::{all_gpus, primary_gpu, UdevBackend, UdevEvent};
 use smithay::backend::{egl, SwapBuffersError};
-use smithay::delegate_dmabuf;
 use smithay::desktop::utils::OutputPresentationFeedback;
 use smithay::input::pointer::CursorImageStatus;
 use smithay::output::{Mode, Scale};
@@ -59,7 +58,7 @@ use smithay::wayland::drm_lease::DrmLease;
 use tracing::{debug, error, info, warn};
 
 use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
-use smithay_drm_extras::edid::EdidInfo;
+use smithay_drm_extras::display_info;
 
 use crate::flutter_engine::embedder::{
     FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
@@ -240,7 +239,6 @@ impl DmabufHandler for State<DrmBackend> {
         }
     }
 }
-delegate_dmabuf!(State<DrmBackend>);
 
 pub fn run_drm_backend() {
     let mut event_loop = EventLoop::try_new().unwrap();
@@ -799,9 +797,15 @@ impl State<DrmBackend> {
             })
             .unwrap_or(false);
 
-        let (make, model) = EdidInfo::for_connector(&device.drm_device, connector.handle())
-            .map(|info| (info.manufacturer, info.model))
-            .unwrap_or_else(|| ("Unknown".into(), "Unknown".into()));
+        let display_info = display_info::for_connector(&device.drm_device, connector.handle());
+        let make = display_info
+            .as_ref()
+            .and_then(|info| info.make())
+            .unwrap_or_else(|| "Unknown".into());
+        let model = display_info
+            .as_ref()
+            .and_then(|info| info.model())
+            .unwrap_or_else(|| "Unknown".into());
 
         if non_desktop {
             info!(
@@ -848,6 +852,7 @@ impl State<DrmBackend> {
                 subpixel: connector.subpixel().into(),
                 make,
                 model,
+                serial_number: String::new(),
             },
         );
 
@@ -937,7 +942,7 @@ impl State<DrmBackend> {
             surface,
             Some(planes),
             device.gbm_allocator.clone(),
-            GbmFramebufferExporter::new(device.gbm_device.clone()),
+            GbmFramebufferExporter::new(device.gbm_device.clone(), device.render_node.into()),
             color_formats.iter().copied(),
             render_formats,
             device.drm_device.cursor_size(),
@@ -1092,7 +1097,7 @@ impl State<DrmBackend> {
             return;
         };
 
-        for event in device.drm_scanner.scan_connectors(&device.drm_device) {
+        for event in device.drm_scanner.scan_connectors(&device.drm_device).unwrap_or_default() {
             match event {
                 DrmScanEvent::Connected {
                     connector,

@@ -34,5 +34,7 @@ analyzer:
   exclude:
     - "**/*.g.dart"
     - "**/*.freezed.dart"
+    - build/**
+    - linux/**
   plugins:
     - custom_lint

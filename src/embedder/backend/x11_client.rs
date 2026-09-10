@@ -15,7 +15,6 @@ use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::renderer::{Bind, ImportDma, ImportEgl};
 use smithay::backend::x11::X11Input;
-use smithay::delegate_dmabuf;
 use smithay::output::{Output, PhysicalProperties, Scale, Subpixel};
 use smithay::reexports::ash::ext;
 use smithay::reexports::calloop::channel::Event as CalloopEvent;
@@ -82,7 +81,6 @@ impl DmabufHandler for State<X11Data> {
         }
     }
 }
-delegate_dmabuf!(State<X11Data>);
 
 pub fn run_x11_client() {
     let mut event_loop = EventLoop::try_new().unwrap();
@@ -152,6 +150,7 @@ pub fn run_x11_client() {
             subpixel: Subpixel::Unknown,
             make: "Veshell".into(),
             model: "x11".into(),
+            serial_number: String::new(),
         },
     );
     let _global = output.create_global::<State<X11Data>>(&display_handle);
