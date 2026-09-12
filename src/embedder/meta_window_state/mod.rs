@@ -144,6 +144,15 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             scale_ratio: 1.0,
             game_mode_activated: false,
         });
+        info!(
+            target: "veshell::geometry",
+            surface_id,
+            meta_window_id = %meta_window.id,
+            geometry = ?meta_window.geometry,
+            scale_ratio = meta_window.scale_ratio,
+            mapped = meta_window.mapped,
+            "Created toplevel window geometry"
+        );
         info!("new meta window from toplevel: {:?}", meta_window);
         meta_window
     }

@@ -186,6 +186,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             handle_keyboard_event::<BackendData>(self, key_code, KeyState::Released, 0);
         }
     }
+
+    pub fn frame_timestamp_millis(&self) -> u32 {
+        self.clock.now().as_millis() as u32
+    }
 }
 
 impl<BackendData: Backend + 'static> DndGrabHandler for State<BackendData> {}
@@ -428,7 +432,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 
         let (subsurfaces_below, subsurfaces_above) = get_direct_subsurfaces(surface);
 
-        SurfaceMessage {
+        let message = SurfaceMessage {
             surface_id,
             role,
             texture_id,
@@ -438,7 +442,18 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             input_region: input_region.into(),
             subsurfaces_below,
             subsurfaces_above,
-        }
+        };
+        tracing::debug!(
+            target: "veshell::geometry",
+            surface_id,
+            texture_id = message.texture_id,
+            buffer_size = ?message.buffer_size,
+            buffer_scale = message.scale,
+            buffer_delta = ?message.buffer_delta,
+            input_region = ?message.input_region,
+            "Constructed surface geometry snapshot"
+        );
+        message
     }
 
     fn construct_surface_role_message(&self, surface: &WlSurface) -> Option<SurfaceRole> {
@@ -561,6 +576,18 @@ impl<BackendData: Backend + 'static> State<BackendData> {
     pub fn on_outputs_changed(&mut self) {
         let outputs = self.space.outputs().cloned().collect::<Vec<_>>();
         let revision = self.output_layout_revision;
+        for output in &outputs {
+            tracing::info!(
+                target: "veshell::geometry",
+                output = %output.name(),
+                output_id = ?output.user_data().get::<OutputViewIdWrapper>().map(|id| id.view_id),
+                location = ?output.current_location(),
+                size = ?output.current_mode().map(|mode| mode.size),
+                scale = output.current_scale().fractional_scale(),
+                revision,
+                "Publishing output geometry to Flutter"
+            );
+        }
         self.flutter_engine_mut()
             .monitor_layout_changed(outputs.clone(), revision);
 

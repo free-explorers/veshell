@@ -106,6 +106,17 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         let add_view_data = Box::new(AddViewData { tx_done, view_id });
 
         let mode = output.current_mode().unwrap();
+        tracing::info!(
+            target: "veshell::geometry",
+            view_id,
+            display_id,
+            output = %output.name(),
+            width = mode.size.w,
+            height = mode.size.h,
+            pixel_ratio = output.current_scale().fractional_scale(),
+            location = ?output.current_location(),
+            "Adding Flutter output view"
+        );
         self.loop_handle
             .insert_source(rx_done, move |event, _, data| {
                 debug!("add_view_callback_done: {:?}", event);
@@ -183,6 +194,16 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
     ) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(view) = self.views_management.views.get_mut(&view_id) {
             let size = output.current_mode().unwrap().size;
+            tracing::info!(
+                target: "veshell::geometry",
+                view_id,
+                output = %output.name(),
+                width = size.w,
+                height = size.h,
+                pixel_ratio = output.current_scale().fractional_scale(),
+                location = ?output.current_location(),
+                "Resizing Flutter output view"
+            );
             // send new metrics to flutter engine
             let event = FlutterWindowMetricsEvent {
                 struct_size: size_of::<FlutterWindowMetricsEvent>(),

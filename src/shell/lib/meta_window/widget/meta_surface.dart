@@ -12,6 +12,7 @@ import 'package:shell/platform/model/event/meta_window_patches/meta_window_patch
 import 'package:shell/wayland/widget/surface.dart';
 import 'package:shell/wayland/widget/surface/pointer_listener.dart';
 import 'package:shell/wayland/widget/surface/surface_focus.dart';
+import 'package:shell/shared/util/logger.dart';
 
 class MetaSurfaceWidget extends HookConsumerWidget {
   const MetaSurfaceWidget({
@@ -39,6 +40,11 @@ class MetaSurfaceWidget extends HookConsumerWidget {
     );
 
     final currentMonitor = CurrentMonitorName.of(context);
+    geometryLog.info(
+      'window layout id=$metaWindowId surface=$surfaceId '
+      'geometry=${metaWindow.geometry} offset=$offset '
+      'scale=${metaWindow.scaleRatio} monitor=$currentMonitor',
+    );
     useEffect(
       () {
         if (ref.read(metaWindowStateProvider(metaWindowId)).currentOutput !=

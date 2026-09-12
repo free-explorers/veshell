@@ -253,6 +253,12 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 }
             }
             MetaWindowPatch::UpdateGeometry { id, value } => {
+                tracing::info!(
+                    target: "veshell::geometry",
+                    meta_window_id = %id,
+                    geometry = ?value,
+                    "Applying native window geometry patch"
+                );
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
                     let are_equal = match (&meta_window.geometry, &value) {
                         (Some(current_rect), Some(new_rect)) => {
@@ -396,6 +402,14 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     .compositor_state
                     .client_scale();
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
+                    tracing::info!(
+                        target: "veshell::geometry",
+                        meta_window_id = %id,
+                        requested_scale_ratio = value,
+                        previous_scale_ratio = meta_window.scale_ratio,
+                        xwayland_scale_ratio,
+                        "Applying native window scale patch"
+                    );
                     if meta_window.scale_ratio == value.clone() {
                         return;
                     }

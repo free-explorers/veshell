@@ -70,6 +70,12 @@ pub mod xdg {
                             .geometry
                             .map(|geometry| geometry.into())
                     });
+                    info!(
+                        target: "veshell::geometry",
+                        surface_id = get_surface_id(surface),
+                        geometry = ?geometry,
+                        "XDG toplevel geometry after commit"
+                    );
                     if let Some(meta_window_id) = state
                         .meta_window_state
                         .meta_window_id_per_surface_id
@@ -88,6 +94,10 @@ pub mod xdg {
         }
 
         fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {
+            surface.with_pending_state(|state| {
+                state.geometry = positioner.get_geometry();
+                state.positioner = positioner;
+            });
             self.constrain_popup_to_parent(&PopupKind::Xdg(surface.clone()));
 
             let (surface_id, parent) = with_states(surface.wl_surface(), |surface_data| {
@@ -111,8 +121,8 @@ pub mod xdg {
             });
 
             self.xdg_popups.insert(surface_id, surface.clone());
-            let mut position: smithay::utils::Point<i32, Logical> =
-                surface.with_pending_state(|state| state.geometry.loc);
+            let position = surface.with_pending_state(|state| state.geometry.loc)
+                + get_popup_toplevel_coords(&PopupKind::Xdg(surface.clone()));
 
             let geometry = with_states(surface.wl_surface(), |surface_data| {
                 surface_data
@@ -126,51 +136,27 @@ pub mod xdg {
             // Wayland states that popups without parents can exist but I don't know in what case.
             let parent_surface_id = get_surface_id(&parent.unwrap());
 
-            // Parent id can be either meta window or meta popup.
+            // Parent id can be either the root meta window or a meta popup.
             let parent_meta_window_id = self
                 .meta_window_state
                 .meta_window_id_per_surface_id
                 .get(&parent_surface_id)
                 .cloned()
-                .unwrap_or_else(|| {
-                    let parent_meta_popup = self.get_meta_popup(parent_surface_id).unwrap();
-                    position = (
-                        position.x + parent_meta_popup.position.0.x,
-                        position.y + parent_meta_popup.position.0.y,
-                    )
-                        .into();
-                    // if parent is a meta popup find the root meta window
-                    let mut meta_parent_id = parent_meta_popup.parent;
-                    while !self
-                        .meta_window_state
-                        .meta_windows
-                        .contains_key(&meta_parent_id)
-                    {
-                        let parent_meta_popup = self
-                            .meta_window_state
-                            .meta_popups
-                            .get(&meta_parent_id)
-                            .unwrap();
-                        position = (
-                            position.x + parent_meta_popup.position.0.x,
-                            position.y + parent_meta_popup.position.0.y,
-                        )
-                            .into();
-                        meta_parent_id = parent_meta_popup.parent.clone();
-                    }
-                    meta_parent_id.clone()
-                });
+                .or_else(|| {
+                    self.get_meta_popup(parent_surface_id)
+                        .map(|popup| popup.parent)
+                })
+                .expect("Popup parent has no root meta window");
 
-            /* let root_parent = find_popup_root_surface(&PopupKind::Xdg(surface.clone())).unwrap();
-            let parent_surface_id = get_surface_id(&root_parent);
-            let parent_meta_window_id = self
-                .meta_window_state
-                .meta_window_id_per_surface_id
-                .get(&parent_surface_id)
-                .cloned()
-                .unwrap();
-
-            let position = get_popup_toplevel_coords(&PopupKind::Xdg(surface.clone())); */
+            info!(
+                target: "veshell::geometry",
+                surface_id,
+                parent_surface_id,
+                parent_meta_window_id = %parent_meta_window_id,
+                position = ?position,
+                geometry = ?geometry,
+                "Creating popup with root-relative position"
+            );
 
             let scale_ratio = {
                 self.meta_window_state
@@ -203,6 +189,12 @@ pub mod xdg {
                             .geometry
                             .map(|geometry| geometry.into())
                     });
+                    info!(
+                        target: "veshell::geometry",
+                        surface_id = get_surface_id(surface),
+                        geometry = ?geometry,
+                        "XDG popup geometry after commit"
+                    );
                     if let Some(meta_popup_id) = state
                         .meta_window_state
                         .meta_popup_id_per_surface_id
@@ -298,10 +290,12 @@ pub mod xdg {
                 .cloned()
             {
                 surface.with_pending_state(|state| {
+                    let position = state.geometry.loc
+                        + get_popup_toplevel_coords(&PopupKind::Xdg(surface.clone()));
                     self.patch_meta_popup(
                         MetaPopupPatch::UpdatePosition {
                             id: meta_popup_id,
-                            value: state.geometry.loc.into(),
+                            value: position.into(),
                         },
                         true,
                     );
@@ -496,17 +490,36 @@ pub mod xdg {
             let Ok(root) = find_popup_root_surface(popup) else {
                 return;
             };
-            if let PopupKind::Xdg(popup) = popup {
-                let toplevel = self.xdg_toplevels.get(&get_surface_id(&root)).unwrap();
-                let target: Rectangle<i32, Logical> = toplevel.with_pending_state(|state| {
-                    let size = state.size.or(Some((0, 0).into())).unwrap();
-                    Rectangle::new((0, 0).into(), (size.w, size.h).into())
-                });
+            let PopupKind::Xdg(popup) = popup else {
+                return;
+            };
+            let root_surface_id = get_surface_id(&root);
+            let Some(toplevel) = self.xdg_toplevels.get(&root_surface_id) else {
+                return;
+            };
+            let parent_offset = get_popup_toplevel_coords(&PopupKind::Xdg(popup.clone()));
+            let size = self
+                .get_meta_window(root_surface_id)
+                .and_then(|window| window.geometry.map(|geometry| geometry.0.size))
+                .or_else(|| toplevel.with_pending_state(|state| state.size))
+                .unwrap_or((0, 0).into());
+            let target = Rectangle::new(
+                (-parent_offset.x, -parent_offset.y).into(),
+                (size.w, size.h).into(),
+            );
 
-                popup.with_pending_state(|state| {
-                    state.geometry = state.positioner.get_unconstrained_geometry(target)
-                });
-            }
+            info!(
+                target: "veshell::geometry",
+                root_surface_id,
+                parent_offset = ?parent_offset,
+                target = ?target,
+                popup_size = ?popup.with_pending_state(|state| state.geometry.size),
+                "Constraining popup to toplevel geometry"
+            );
+
+            popup.with_pending_state(|state| {
+                state.geometry = state.positioner.get_unconstrained_geometry(target)
+            });
         }
     }
 }

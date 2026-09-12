@@ -1141,21 +1141,15 @@ impl State<DrmBackend> {
         for baton in drained {
             self.flutter_engine().on_vsync(baton, mhz as u32).unwrap();
         }
-        let start_time = std::time::Instant::now();
+        let frame_timestamp = self.frame_timestamp_millis();
         for surface in self.xdg_shell_state.toplevel_surfaces() {
-            send_frames_surface_tree(
-                surface.wl_surface(),
-                start_time.elapsed().as_millis() as u32,
-            );
+            send_frames_surface_tree(surface.wl_surface(), frame_timestamp);
         }
         for surface in self.xdg_popups.values() {
-            send_frames_surface_tree(
-                surface.wl_surface(),
-                start_time.elapsed().as_millis() as u32,
-            );
+            send_frames_surface_tree(surface.wl_surface(), frame_timestamp);
         }
         for surface in self.x11_surface_per_wl_surface.keys() {
-            send_frames_surface_tree(surface, start_time.elapsed().as_millis() as u32);
+            send_frames_surface_tree(surface, frame_timestamp);
         }
         let cursor_status = {
             let cursor_image_status = self.cursor_image_status.lock().unwrap();
@@ -1169,7 +1163,7 @@ impl State<DrmBackend> {
         };
 
         if let CursorImageStatus::Surface(wl_surface) = cursor_status {
-            send_frames_surface_tree(&wl_surface, start_time.elapsed().as_millis() as u32)
+            send_frames_surface_tree(&wl_surface, frame_timestamp)
         }
     }
 
