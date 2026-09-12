@@ -30,6 +30,9 @@
                                 },
                                 "muteVolume": {
                                     "type": "string"
+                                },
+                                "takeScreenshot": {
+                                    "type": "string"
                                 }
                             }
                         },

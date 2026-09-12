@@ -18,6 +18,7 @@ use crate::mouse_button_tracker::MouseButtonTracker;
 use crate::state::State;
 
 mod backend;
+mod capture;
 mod cursor;
 mod flutter_engine;
 mod focus;

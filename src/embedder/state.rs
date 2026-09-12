@@ -1,12 +1,16 @@
 use std::collections::{HashMap, HashSet};
+use std::io::{ErrorKind, Write};
 use std::os::fd::OwnedFd;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
+use std::thread;
 
 use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::backend::input::KeyState;
 use smithay::backend::renderer::gles::ffi::Gles2;
+use smithay::delegate_dispatch2;
 use smithay::desktop::{Space, Window};
+use smithay::input::dnd::DndGrabHandler;
 use smithay::input::keyboard::{KeyboardHandle, XkbConfig};
 use smithay::input::pointer::{CursorImageStatus, PointerHandle};
 use smithay::input::{Seat, SeatHandler, SeatState};
@@ -37,7 +41,6 @@ use smithay::wayland::seat::WaylandFocus;
 use smithay::wayland::selection::data_device::{
     set_data_device_focus, DataDeviceHandler, DataDeviceState, WaylandDndGrabHandler,
 };
-use smithay::input::dnd::DndGrabHandler;
 use smithay::wayland::selection::primary_selection::{
     set_primary_focus, PrimarySelectionHandler, PrimarySelectionState,
 };
@@ -53,7 +56,6 @@ use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::wayland::socket::ListeningSocketSource;
 use smithay::wayland::xwayland_shell::{self, XWAYLAND_SHELL_ROLE};
 use smithay::xwayland::{X11Surface, X11Wm};
-use smithay::delegate_dispatch2;
 use tracing::{info, warn};
 
 use crate::cursor::CursorState;
@@ -73,6 +75,32 @@ use crate::texture_swap_chain::TextureSwapChain;
 use crate::wayland::wayland::{get_direct_subsurfaces, get_surface_id};
 use crate::wayland::xwayland::xwayland::XWaylandState;
 use crate::{flutter_engine, Backend, ClientState};
+
+pub const NATIVE_SCREENSHOT_MIME: &str = "application/x-veshell-screenshot";
+pub const PNG_MIME: &str = "image/png";
+pub type SelectionUserData = Option<Arc<Vec<u8>>>;
+
+pub(crate) fn send_native_selection(fd: OwnedFd, data: Arc<Vec<u8>>) {
+    // Selection requests provide a pipe/socket owned by the receiver. Writing it on a
+    // worker keeps a slow receiver from stalling the compositor event loop.
+    thread::spawn(move || {
+        let mut file = std::fs::File::from(fd);
+        let mut written = 0;
+        while written < data.len() {
+            match file.write(&data[written..]) {
+                Ok(0) => break,
+                Ok(count) => written += count,
+                Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                    thread::sleep(std::time::Duration::from_millis(1));
+                }
+                Err(error) => {
+                    warn!(?error, "Failed to write native screenshot selection");
+                    break;
+                }
+            }
+        }
+    });
+}
 
 pub struct State<BackendData: Backend + 'static> {
     pub backend_data: Box<BackendData>,
@@ -126,6 +154,10 @@ pub struct State<BackendData: Backend + 'static> {
     pub xdg_decoration_state: XdgDecorationState,
     pub fractional_scale_manager_state: FractionalScaleManagerState,
     pub input_devices: HashSet<input::Device>,
+    pub output_layout_revision: u64,
+    pub next_screenshot_id: u64,
+    pub pending_screenshot: Option<crate::capture::PendingScreenshot>,
+    pub pointer_view_id: Option<i64>,
 }
 
 impl<BackendData: Backend + 'static> State<BackendData> {
@@ -327,6 +359,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             xdg_decoration_state,
             fractional_scale_manager_state,
             input_devices: HashSet::new(),
+            output_layout_revision: 0,
+            next_screenshot_id: 1,
+            pending_screenshot: None,
+            pointer_view_id: None,
         }
     }
 
@@ -435,6 +471,25 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         self.space.outputs().find(|output| output.name() == name)
     }
 
+    pub fn map_output(&mut self, output: &Output, location: Point<i32, Logical>) {
+        self.space.map_output(output, location);
+        self.output_layout_changed();
+    }
+
+    pub fn unmap_output(&mut self, output: &Output) {
+        self.space.unmap_output(output);
+        self.output_layout_changed();
+    }
+
+    pub fn output_layout_changed(&mut self) {
+        self.space.refresh();
+        self.output_layout_revision = self.output_layout_revision.wrapping_add(1);
+        crate::capture::cancel_pending_screenshot(
+            self,
+            "Output layout changed during screenshot selection",
+        );
+    }
+
     pub fn apply_monitor_configuration_to_output(
         &mut self,
         output: &Output,
@@ -462,6 +517,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         // if any new apply changes and return true
         if new_mode.is_some() || new_scale.is_some() || new_location.is_some() {
             output.change_current_state(new_mode, None, new_scale, new_location);
+            if new_location.is_some() {
+                self.space.map_output(output, output.current_location());
+            }
+            self.output_layout_changed();
             if new_mode.is_some() {
                 output.set_preferred(new_mode.unwrap());
             }
@@ -501,8 +560,9 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 
     pub fn on_outputs_changed(&mut self) {
         let outputs = self.space.outputs().cloned().collect::<Vec<_>>();
+        let revision = self.output_layout_revision;
         self.flutter_engine_mut()
-            .monitor_layout_changed(outputs.clone());
+            .monitor_layout_changed(outputs.clone(), revision);
 
         let highest_scale = outputs
             .iter()
@@ -555,7 +615,7 @@ impl<BackendData: Backend> SeatHandler for State<BackendData> {
 }
 
 impl<BackendData: Backend> SelectionHandler for State<BackendData> {
-    type SelectionUserData = ();
+    type SelectionUserData = SelectionUserData;
 
     fn new_selection(
         &mut self,
@@ -563,7 +623,11 @@ impl<BackendData: Backend> SelectionHandler for State<BackendData> {
         source: Option<SelectionSource>,
         _seat: Seat<Self>,
     ) {
-        if let Some(xwm) = self.xwayland_state.as_mut().unwrap().xwm.as_mut() {
+        if let Some(xwm) = self
+            .xwayland_state
+            .as_mut()
+            .and_then(|state| state.xwm.as_mut())
+        {
             if let Err(err) = xwm.new_selection(ty, source.map(|source| source.mime_types())) {
                 warn!(?err, ?ty, "Failed to set Xwayland selection");
             }
@@ -576,9 +640,19 @@ impl<BackendData: Backend> SelectionHandler for State<BackendData> {
         mime_type: String,
         fd: OwnedFd,
         _seat: Seat<Self>,
-        _user_data: &(),
+        user_data: &SelectionUserData,
     ) {
-        if let Some(xwm) = self.xwayland_state.as_mut().unwrap().xwm.as_mut() {
+        if let Some(data) = user_data {
+            if mime_type == PNG_MIME || mime_type == NATIVE_SCREENSHOT_MIME {
+                send_native_selection(fd, data.clone());
+                return;
+            }
+        }
+        if let Some(xwm) = self
+            .xwayland_state
+            .as_mut()
+            .and_then(|state| state.xwm.as_mut())
+        {
             if let Err(err) = xwm.send_selection(ty, mime_type, fd) {
                 warn!(?err, "Failed to send primary (X11 -> Wayland)");
             }

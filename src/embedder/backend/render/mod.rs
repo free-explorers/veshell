@@ -60,6 +60,41 @@ where
     <R as RendererSuper>::Error:,
     VeshellRenderElements<R>: RenderElement<R>,
 {
+    let dmabuf = slot.export().unwrap();
+    get_render_elements_from_dmabuf(
+        renderer,
+        output,
+        &dmabuf,
+        output_geometry,
+        now,
+        cursor_image_status,
+        cursor_state,
+        cursor_location,
+        is_surface_under_pointer,
+        flip_flutter_texture,
+        surfaces_in_gaming_mode,
+    )
+}
+
+pub fn get_render_elements_from_dmabuf<R>(
+    renderer: &mut R,
+    output: &Output,
+    dmabuf: &Dmabuf,
+    output_geometry: Rectangle<f64, smithay::utils::Logical>,
+    now: Time<Monotonic>,
+    cursor_image_status: &Mutex<CursorImageStatus>,
+    cursor_state: &Mutex<CursorStateInner>,
+    cursor_location: Point<f64, Logical>,
+    is_surface_under_pointer: bool,
+    flip_flutter_texture: bool,
+    surfaces_in_gaming_mode: Vec<&WlSurface>,
+) -> Vec<VeshellRenderElements<R>>
+where
+    R: Renderer + ImportAll + ImportMem + ImportDma,
+    <R as RendererSuper>::TextureId: Send + Clone + 'static,
+    <R as RendererSuper>::Error:,
+    VeshellRenderElements<R>: RenderElement<R>,
+{
     let scale = output.current_scale();
     let mut elements: Vec<VeshellRenderElements<R>> = Vec::new();
 
@@ -93,7 +128,7 @@ where
         elements.extend(get_surface_elements(renderer, surface));
     }
 
-    let flutter_texture_result = renderer.import_dmabuf(&slot.export().unwrap(), None);
+    let flutter_texture_result = renderer.import_dmabuf(dmabuf, None);
     let transform = if flip_flutter_texture {
         Transform::Flipped180
     } else {

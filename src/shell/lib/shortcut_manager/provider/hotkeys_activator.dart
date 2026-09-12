@@ -16,7 +16,8 @@ enum HotkeysAction {
   focusWorkspaceBelow('screen.focusWorkspaceBelow'),
   focusLeftTileable('workspace.focusLeftTileable'),
   focusRightTileable('workspace.focusRightTileable'),
-  closeTileable('workspace.closeTileable');
+  closeTileable('workspace.closeTileable'),
+  takeScreenshot('system.takeScreenshot');
 
   const HotkeysAction(this.actionId);
   final String actionId;
@@ -31,6 +32,7 @@ Intent getActionIntent(HotkeysAction action) => switch (action) {
       HotkeysAction.focusLeftTileable => const FocusLeftTileableIntent(),
       HotkeysAction.focusRightTileable => const FocusRightTileableIntent(),
       HotkeysAction.closeTileable => const CloseTileableIntent(),
+      HotkeysAction.takeScreenshot => const TakeScreenshot(),
     };
 
 @riverpod

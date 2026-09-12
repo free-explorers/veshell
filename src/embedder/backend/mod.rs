@@ -13,6 +13,7 @@ pub mod render;
 pub mod x11_client;
 pub trait Backend {
     const HAS_RELATIVE_MOTION: bool = false;
+    const FLIP_FLUTTER_TEXTURE: bool = false;
 
     fn seat_name(&self) -> String;
 

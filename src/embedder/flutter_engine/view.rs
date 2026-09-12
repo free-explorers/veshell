@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::ffi::c_void;
 
 use crate::flutter_engine::channel::Event::Msg;
@@ -17,6 +17,17 @@ use tracing::debug;
 pub struct OutputViewIdWrapper {
     pub view_id: i64,
 }
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct BackingStoreId {
+    pub view_id: i64,
+    pub generation: u64,
+}
+
+pub struct AcquiredBackingStore {
+    pub id: BackingStoreId,
+    pub dmabuf: Dmabuf,
+}
 pub struct ViewsManagement {
     serials: SerialCounter,
     pub views: HashMap<i64, VeshellView>,
@@ -34,16 +45,49 @@ impl ViewsManagement {
 pub struct VeshellView {
     view_id: i64,
     pub swapchain: Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>>,
-    pub current_slot: Option<Slot<Dmabuf>>,
+    next_backing_store_generation: u64,
+    in_flight_slots: HashMap<u64, Slot<Dmabuf>>,
     pub last_rendered_slot: Option<Slot<Dmabuf>>,
+    pub last_rendered_generation: Option<u64>,
 }
 
 impl VeshellView {
-    pub fn acquire_dmabuf(&mut self) -> Dmabuf {
-        let slot = self.swapchain.acquire().ok().flatten().unwrap();
-        let dmabuf = slot.export().unwrap();
-        self.current_slot = Some(slot);
-        dmabuf
+    pub fn acquire_backing_store(&mut self) -> Option<AcquiredBackingStore> {
+        let slot = self.swapchain.acquire().ok().flatten()?;
+        let dmabuf = slot.export().ok()?;
+        let generation = self.next_backing_store_generation;
+        self.next_backing_store_generation = self.next_backing_store_generation.wrapping_add(1);
+        self.in_flight_slots.insert(generation, slot);
+
+        Some(AcquiredBackingStore {
+            id: BackingStoreId {
+                view_id: self.view_id,
+                generation,
+            },
+            dmabuf,
+        })
+    }
+
+    pub fn present_backing_store(&mut self, id: BackingStoreId) -> bool {
+        if id.view_id != self.view_id {
+            return false;
+        }
+        let Some(slot) = self.in_flight_slots.remove(&id.generation) else {
+            return false;
+        };
+
+        self.last_rendered_slot = Some(slot);
+        self.last_rendered_generation = Some(id.generation);
+        if let Some(slot) = &self.last_rendered_slot {
+            self.swapchain.submitted(slot);
+        }
+        true
+    }
+
+    pub fn discard_backing_store(&mut self, id: BackingStoreId) {
+        if id.view_id == self.view_id {
+            self.in_flight_slots.remove(&id.generation);
+        }
     }
 }
 
@@ -72,8 +116,10 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                             swapchain: data
                                 .backend_data
                                 .new_swapchain(mode.size.w as u32, mode.size.h as u32),
-                            current_slot: None,
+                            next_backing_store_generation: 1,
+                            in_flight_slots: HashMap::new(),
                             last_rendered_slot: None,
+                            last_rendered_generation: None,
                         };
                         data.flutter_engine_mut()
                             .views_management

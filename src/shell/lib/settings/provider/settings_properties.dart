@@ -43,38 +43,34 @@ class SettingsProperties extends _$SettingsProperties {
                   description: 'Monitor resolution',
                   buildSearchResult: (context, path, property) =>
                       ExpandableSearchResult(
-                    path: path,
-                    property: property,
-                    buildValue: (context, value, {required isExpanded}) =>
-                        MonitorResolutionValue(path: path),
-                    buildEditor: (
-                      BuildContext context, {
-                      required isExpanded,
-                    }) =>
-                        MonitorResolutionEditor(
-                      path: path,
-                      property: property,
-                    ),
-                  ),
+                        path: path,
+                        property: property,
+                        buildValue: (context, value, {required isExpanded}) =>
+                            MonitorResolutionValue(path: path),
+                        buildEditor:
+                            (BuildContext context, {required isExpanded}) =>
+                                MonitorResolutionEditor(
+                                  path: path,
+                                  property: property,
+                                ),
+                      ),
                 ),
                 'refreshRate': SettingProperty<MonitorRefreshRate>(
                   name: 'Refresh Rate',
                   description: 'Monitor refresh rate',
                   buildSearchResult: (context, path, property) =>
                       ExpandableSearchResult(
-                    path: path,
-                    property: property,
-                    buildValue: (context, value, {required isExpanded}) =>
-                        MonitorRefreshRateValue(path: path),
-                    buildEditor: (
-                      BuildContext context, {
-                      required isExpanded,
-                    }) =>
-                        MonitorRefreshRateEditor(
-                      path: path,
-                      property: property,
-                    ),
-                  ),
+                        path: path,
+                        property: property,
+                        buildValue: (context, value, {required isExpanded}) =>
+                            MonitorRefreshRateValue(path: path),
+                        buildEditor:
+                            (BuildContext context, {required isExpanded}) =>
+                                MonitorRefreshRateEditor(
+                                  path: path,
+                                  property: property,
+                                ),
+                      ),
                 ),
                 'fractionnalScale': const SettingProperty<double>(
                   name: 'Fractionnal Scale',
@@ -115,6 +111,11 @@ class SettingsProperties extends _$SettingsProperties {
               'system.muteVolume': SettingProperty<LogicalKeySet>(
                 name: 'Mute Volume',
                 description: 'Toggle Mute volume',
+                converter: LogicalKeySetConverter(),
+              ),
+              'system.takeScreenshot': SettingProperty<LogicalKeySet>(
+                name: 'Take Screenshot',
+                description: 'Select an area of the desktop to capture',
                 converter: LogicalKeySetConverter(),
               ),
               'screen.focusWorkspaceAbove': SettingProperty<LogicalKeySet>(

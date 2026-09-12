@@ -12,6 +12,8 @@ pub fn get_monitor_layout<BackendData: Backend + 'static>(
     data: &mut State<BackendData>,
 ) {
     let monitors = data.space.outputs().cloned().collect::<Vec<_>>();
-    data.flutter_engine_mut().monitor_layout_changed(monitors);
+    let revision = data.output_layout_revision;
+    data.flutter_engine_mut()
+        .monitor_layout_changed(monitors, revision);
     result.success(None);
 }

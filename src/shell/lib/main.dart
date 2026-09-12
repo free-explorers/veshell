@@ -97,19 +97,19 @@ class _VeshellState extends ConsumerState<Veshell> with WidgetsBindingObserver {
         .toList();
     print('views: $views');
 
-    return VeshellShortcutManager(
-      child: ViewCollection(
-        views: views
-            .map(
-              (view) => View(
-                view: view,
+    return ViewCollection(
+      views: views
+          .map(
+            (view) => View(
+              view: view,
+              child: VeshellShortcutManager(
                 child: MonitorWidget(
                   viewId: view.viewId,
                 ),
               ),
-            )
-            .toList(),
-      ),
+            ),
+          )
+          .toList(),
     );
   }
 }

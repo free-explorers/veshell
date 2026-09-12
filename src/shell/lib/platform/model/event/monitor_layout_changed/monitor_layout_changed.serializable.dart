@@ -12,6 +12,7 @@ abstract class MonitorLayoutChangedMessage
     implements PlatformMessage {
   /// Factory
   factory MonitorLayoutChangedMessage({
+    required int revision,
     required List<Monitor> monitors,
   }) = _MonitorLayoutChangedMessage;
 

@@ -297,7 +297,7 @@ pub fn run_x11_client() {
     state.flutter_engine = Some(flutter_engine);
 
     tx_output_height.send(size.h).unwrap();
-    state.space.map_output(&output, (0, 0));
+    state.map_output(&output, output.current_location());
     let output_clone = output.clone();
 
     let view_id = state.flutter_engine_mut().add_view(0, &output);
@@ -335,8 +335,9 @@ pub fn run_x11_client() {
                         }),
                         None,
                         None,
-                        Some((0, 0).into()),
+                        None,
                     );
+                    data.output_layout_changed();
 
                     let _ = tx_output_height.send(new_size.h);
 

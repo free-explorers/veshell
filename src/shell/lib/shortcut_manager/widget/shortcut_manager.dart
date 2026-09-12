@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/capture/provider/capture_selection.dart';
 import 'package:shell/shared/pulseaudio/provider/default_sink.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_audio.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_sink_by_name.dart';
@@ -72,6 +73,12 @@ class VeshellShortcutManager extends HookConsumerWidget {
                     !sink.mute,
                   );
               return;
+            },
+          ),
+          TakeScreenshot: CallbackAction<TakeScreenshot>(
+            onInvoke: (TakeScreenshot intent) {
+              ref.read(captureSelectionProvider.notifier).begin();
+              return null;
             },
           ),
         },

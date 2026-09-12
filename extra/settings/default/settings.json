@@ -6,7 +6,8 @@
             "system": {
                 "increaseVolume": "volumeUp",
                 "decreaseVolume": "volumeDown",
-                "muteVolume": "ctrl+alt+m"
+                "muteVolume": "ctrl+alt+m",
+                "takeScreenshot": "printScreen"
             },
             "screen": {
                 "focusWorkspaceAbove": "super+w",

@@ -66,7 +66,17 @@ impl<BackendData: Backend> State<BackendData> {
         if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
             return;
         }
-        let relative_location: Point<f64, Logical> = self.relative_pointer_location();
+        let current_view_id = self.view_id_under_pointer().unwrap_or(view_id);
+        let view_id = if self
+            .flutter_engine()
+            .mouse_button_tracker
+            .are_any_buttons_pressed()
+        {
+            self.pointer_view_id.unwrap_or(current_view_id)
+        } else {
+            current_view_id
+        };
+        let relative_location = self.relative_pointer_location_for_view(view_id);
         self.send_motion_event(relative_location, device_id, view_id)
     }
 
@@ -112,7 +122,17 @@ impl<BackendData: Backend> State<BackendData> {
         if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
             return;
         }
-        let relative_location: Point<f64, Logical> = self.relative_pointer_location();
+        let current_view_id = self.view_id_under_pointer().unwrap_or(view_id);
+        let view_id = if self
+            .flutter_engine()
+            .mouse_button_tracker
+            .are_any_buttons_pressed()
+        {
+            self.pointer_view_id.unwrap_or(current_view_id)
+        } else {
+            current_view_id
+        };
+        let relative_location = self.relative_pointer_location_for_view(view_id);
         self.send_motion_event(relative_location, device_id, view_id)
     }
 
@@ -124,18 +144,20 @@ impl<BackendData: Backend> State<BackendData> {
     ) where
         BackendData: Backend + 'static,
     {
+        let had_buttons_pressed = self
+            .flutter_engine()
+            .mouse_button_tracker
+            .are_any_buttons_pressed();
+        let event_view_id = self.pointer_view_id.unwrap_or(view_id);
         let phase = if event.state() == ButtonState::Pressed {
-            let are_any_buttons_pressed = self
-                .flutter_engine()
-                .mouse_button_tracker
-                .are_any_buttons_pressed();
             let _ = self
                 .flutter_engine_mut()
                 .mouse_button_tracker
                 .press(event.button_code() as u16);
-            if are_any_buttons_pressed {
+            if had_buttons_pressed {
                 FlutterPointerPhase_kMove
             } else {
+                self.pointer_view_id = Some(view_id);
                 FlutterPointerPhase_kDown
             }
         } else {
@@ -172,12 +194,12 @@ impl<BackendData: Backend> State<BackendData> {
         let scale = self
             .space
             .outputs()
-            .find(|o| o.user_data().get::<OutputViewIdWrapper>().unwrap().view_id == view_id)
+            .find(|o| o.user_data().get::<OutputViewIdWrapper>().unwrap().view_id == event_view_id)
             .unwrap()
             .current_scale()
             .fractional_scale();
 
-        let pointer_location = self.relative_pointer_location();
+        let pointer_location = self.relative_pointer_location_for_view(event_view_id);
         self.flutter_engine()
             .send_pointer_event(FlutterPointerEvent {
                 struct_size: size_of::<FlutterPointerEvent>(),
@@ -198,12 +220,20 @@ impl<BackendData: Backend> State<BackendData> {
                 pan_y: 0.0,
                 scale: 1.0,
                 rotation: 0.0,
-                view_id,
+                view_id: event_view_id,
                 pressure: 0.0,
                 pressure_min: 0.0,
                 pressure_max: 0.0,
             })
             .unwrap();
+        if event.state() == ButtonState::Released
+            && !self
+                .flutter_engine()
+                .mouse_button_tracker
+                .are_any_buttons_pressed()
+        {
+            self.pointer_view_id = None;
+        }
     }
 
     pub fn on_pointer_axis<B: InputBackend>(
@@ -453,33 +483,69 @@ impl<BackendData: Backend> State<BackendData> {
     }
 
     fn relative_pointer_location(&mut self) -> Point<f64, Logical> {
+        let view_id = self.view_id_under_pointer().unwrap_or_default();
+        self.relative_pointer_location_for_view(view_id)
+    }
+
+    fn relative_pointer_location_for_view(&self, view_id: i64) -> Point<f64, Logical> {
         let location = self.pointer.current_location();
-        let output_under_pointer_location = self
+        let output_under_pointer_geometry = self
             .space
-            .output_under(location)
-            .next()
-            .or_else(|| self.space.outputs().next())
+            .outputs()
+            .find(|output| {
+                output
+                    .user_data()
+                    .get::<OutputViewIdWrapper>()
+                    .is_some_and(|wrapper| wrapper.view_id == view_id)
+            })
+            .and_then(|output| self.space.output_geometry(output))
+            .or_else(|| {
+                self.space
+                    .output_under(location)
+                    .next()
+                    .or_else(|| self.space.outputs().next())
+                    .and_then(|output| self.space.output_geometry(output))
+            })
             .unwrap()
-            .current_location()
             .to_f64();
         (
-            location.x - output_under_pointer_location.x,
-            location.y - output_under_pointer_location.y,
+            location.x - output_under_pointer_geometry.loc.x,
+            location.y - output_under_pointer_geometry.loc.y,
         )
             .into()
+    }
+
+    pub(crate) fn view_id_under_pointer(&self) -> Option<i64> {
+        self.space
+            .output_under(self.pointer.current_location())
+            .next()
+            .or_else(|| self.space.outputs().next())
+            .and_then(|output| output.user_data().get::<OutputViewIdWrapper>())
+            .map(|wrapper| wrapper.view_id)
     }
 
     fn send_motion_event(&mut self, location: Point<f64, Logical>, device_id: i32, view_id: i64)
     where
         BackendData: Backend + 'static,
     {
-        let scale = self
+        let Some(output) = self
             .space
             .outputs()
             .find(|o| o.user_data().get::<OutputViewIdWrapper>().unwrap().view_id == view_id)
-            .unwrap()
-            .current_scale()
-            .fractional_scale();
+            .or_else(|| {
+                self.space
+                    .output_under(self.pointer.current_location())
+                    .next()
+            })
+        else {
+            return;
+        };
+        let view_id = output
+            .user_data()
+            .get::<OutputViewIdWrapper>()
+            .map(|wrapper| wrapper.view_id)
+            .unwrap_or(view_id);
+        let scale = output.current_scale().fractional_scale();
 
         self.flutter_engine()
             .send_pointer_event(FlutterPointerEvent {

@@ -1,0 +1,788 @@
+# Capture, Recording, And Sharing
+
+Status: proposed implementation reference, reviewed against the current code.
+Date: 2026-09-11.
+Baseline: Veshell `9563921`, Smithay revision `4cf0b62028039661477d482ec4758b687d8f4392`.
+
+This document supersedes the earlier conversational plans. It specifies a single
+architecture, separates required features from later work, and defines checkpoints
+for an implementation agent. The status below records which parts are implemented.
+
+## Current Implementation Status
+
+Implemented native area screenshot slice:
+
+- `PrintScreen` starts a Flutter area selector on the output under the pointer.
+  The selector can cover multiple Veshell Screens rendered by that output.
+- Rust validates the rectangle, restricts it to one physical output, renders that
+  output scene, and crops a single PNG at that output's scale.
+- Flutter first dismisses the selector and waits for an overlay-free rasterized
+  frame. Rust then records every participating Flutter view generation and delays
+  the capture until each view has presented a newer backing store. Layout changes
+  during this handshake reject the screenshot rather than using stale geometry.
+- Output rendering includes the current cursor, game-mode surfaces assigned to
+  that output, and the Flutter texture. Readback is converted to top-left,
+  output-oriented pixels before encoding.
+- The readback is encoded as PNG in the XDG Pictures directory, falling back to
+  `~/Pictures` when that directory is unavailable. The same PNG is offered as
+  `image/png` on the Wayland and XWayland clipboards.
+
+This is not recording, portal capture, MetaWindow capture, or Screen capture. It
+performs synchronous readback and PNG encoding on the compositor path, so it is a
+correctness vertical slice only. M1 remains open pending runtime validation,
+nonblocking delivery, clipboard support, and capture-owned snapshot buffers.
+
+Implemented M1 foundations:
+
+- Physical output location updates remap `Space`, refresh its output bookkeeping,
+  and advance an in-process output-layout revision.
+- Flutter backing stores have a per-view generation. The exact generation presented
+  in a Flutter layer is retained until presentation or collection, rather than
+  promoting whichever buffer was acquired most recently.
+
+These foundations compile and pass the existing test suite; DRM and nested-X11
+runtime validation remains required.
+
+## 1. Goals And Scope
+
+User requirements:
+
+- Take screenshots of any rectangular area of the visible desktop.
+- Record any rectangular area of the visible desktop.
+- Share exactly these kinds of sources: Output, existing Veshell virtual Screen,
+  and MetaWindow.
+- Work with Google Chrome and OBS through their standard Linux portal/PipeWire
+  capture paths, including sandboxed installations where supported.
+- Keep the implementation small and tailored to Veshell, without introducing
+  superseded capture protocols or desktop compatibility layers.
+
+Defaults chosen by this specification, not additional user requirements:
+
+- Local area selection can cross output boundaries, including mixed scales and
+  negative output coordinates. An area means a rectangle, not a freehand mask.
+- A shared Screen follows its existing Screen ID and selected workspace. It does
+  not pin a workspace, follow keyboard focus, or create a virtual monitor.
+- Initially, Screen sharing is available for Screens assigned to connected
+  outputs. Detached Screen layout/rendering is deferred explicitly, not emulated
+  by sharing another source. See section 13.
+- Screenshots are PNG. Initial recordings are silent SDR WebM/VP8 at up to 30 FPS.
+- Local capture can snap selection to output, Screen, or window bounds, but the
+  resulting area still means visible desktop pixels. It does not gain the
+  isolation semantics of sharing a source.
+- Sharing has one chosen source per session; several independent sessions may
+  coexist within resource limits. Audio, remote input, pause/resume, remembered
+  consent, HDR, and live target switching are later features.
+
+## 2. Architecture Decision
+
+Implement the Veshell portal backend and a PipeWire producer in the existing Rust
+process. Reuse the existing Flutter shell for consent, selection, and controls.
+Continue using the system `xdg-desktop-portal` frontend.
+
+```text
+Chrome / OBS
+    | org.freedesktop.portal.ScreenCast
+    v
+system xdg-desktop-portal frontend
+    | org.freedesktop.impl.portal.ScreenCast
+    v
+Veshell Rust portal backend <----> Flutter consent/source picker
+    |
+    v
+authorized capture session -> source rendering -> PipeWire producer
+                                                    |
+                       frontend-restricted remote -> application
+
+Flutter area selector -> same source-rendering helpers -> PNG worker
+                                                      -> recording worker
+```
+
+The frame buffers do not pass through JSON or D-Bus. D-Bus and Flutter platform
+channels carry control messages only.
+
+Decisions:
+
+- Do not implement `org.gnome.Mutter.ScreenCast` or GNOME Shell screenshot APIs.
+  Niri uses those to reuse GNOME's backend and picker. Veshell needs its own picker
+  and Screen semantics, so that extra compatibility layer is unnecessary.
+- Do not add `wlr-screencopy`, export-DMABUF protocols, or X11 root-window capture.
+  Native Wayland Chrome/OBS compatibility does not require them.
+- Do not implement `ext-image-capture-source-v1` / `ext-image-copy-capture-v1` in
+  this feature. They are modern staging protocols and Smithay's pinned revision
+  has handlers, but an internal capture service needs no extra Wayland IPC hop.
+  Add them later only for a concrete external capture-client requirement, with
+  an explicit authorization design.
+- Do not create a separate portal executable/process, generic capture plugin
+  framework, public Rust library, or custom Wayland Screen-source extension now.
+- Implement a few concrete rendering/delivery functions and session structs.
+  A universal `CaptureFrameSink` trait hierarchy is not required.
+- PipeWire means connecting as a producer client to the user's existing daemon,
+  not implementing a daemon or replacing the user's audio/session manager.
+
+### Corrections To Earlier Plans
+
+- Portal compatibility is the application boundary; it does not dictate the
+  compositor's private capture protocol.
+- An existing Veshell Screen is not portal `VIRTUAL`, which requests extending the
+  desktop with a new virtual monitor.
+- A desktop rectangle is not necessarily contained in one source. Modeling every
+  local area as `{ source, rectangle }` would omit cross-output capture.
+- A monitor crop is not safe isolated Screen or MetaWindow sharing.
+- COSMIC advertises SHM and DMA-BUF capabilities at runtime; its code does not
+  establish a historical "SHM first" implementation sequence.
+- COSMIC's `RenderElement::capture_framebuffer` hook is not itself a screencast
+  interface. Do not copy that hook as a supposed universal capture solution.
+- Direct PipeWire integration need not introduce another rendering thread: Niri
+  integrates its PipeWire loop FD into calloop.
+
+## 3. Current Code And Constraints
+
+Paths below are relative to the repository root. Read their current contents
+before implementation; line numbers and APIs may change.
+
+| Area | Files | Consequence |
+| --- | --- | --- |
+| Output composition | `src/embedder/backend/render/mod.rs` | Cursor, game-mode surfaces, and Flutter texture are separate render elements. |
+| Display backends | `src/embedder/backend/{drm_backend,x11_client}.rs` | Capture must work on DRM and nested X11; Winit is not currently enabled. |
+| State and renderer | `src/embedder/state.rs`, `src/embedder/backend/mod.rs` | Reuse calloop and existing GLES access; do not import COSMIC's multi-GPU architecture wholesale. |
+| Flutter buffers | `src/embedder/flutter_engine/{view,compositor}.rs` | One swapchain per output-backed view; no Screen-specific backing store. |
+| External textures | `src/embedder/texture_swap_chain.rs`, `src/embedder/flutter_engine/{mod,callbacks}.rs` | Audit texture retention/release before adding a second Flutter consumer. |
+| Screen state/layout | `src/shell/lib/screen/model/screen.serializable.dart`, `src/shell/lib/screen/widget/screen.dart` | Screen has an ID, workspace list, selected workspace, and label; not an output or framebuffer. |
+| Monitor layout | `src/shell/lib/monitor/widget/monitor.dart` | Split-screen bounds are measured Flutter layout, not just configuration percentages. |
+| Window identities | `src/embedder/meta_window_state/{mod,meta_window,meta_popup}.rs` | Use MetaWindow identity; persistent tiles may not have a live window. |
+| Window presentation | `src/shell/lib/meta_window/widget/meta_surface.dart`, `src/shell/lib/window/widget/window.dart` | Widgets currently change activation, geometry, and output association. Duplicating them is not render-only. |
+| Platform control | `src/embedder/flutter_engine/platform_channel_callbacks/` | Follow existing Flutter-to-Rust channel patterns. |
+| Portal/session setup | `extra/assets/veshell-portals.conf`, `extra/assets/veshell.service.in`, `extra/assets/veshell-session` | Explicit backend selection, bus ownership, and startup/activation work are required. |
+
+Mandatory rendering audit findings to address where capture depends on them:
+
+- The normal output render paths select all game-mode windows, not just the
+  correct output. The local screenshot path filters by `MetaWindow.current_output`,
+  but normal rendering still needs the same correction before claiming multi-output
+  capture parity. Never append a global list to isolated capture.
+- `get_surface_elements()` includes subsurfaces, not independent popup roots.
+  Rust tracks MetaPopups separately; map iteration is not a stacking order.
+- Flutter's present callback keeps the existing `gl.Finish()` barrier and promotes
+  the exact backing-store generation referenced by the presented layer. Keep that
+  barrier until a separately verified synchronization replacement exists.
+- A `last_rendered_slot`/DMABUF reference alone must not be assumed to prevent
+  reuse for the entire duration of asynchronous encoding or streaming.
+- A shared Screen's content is currently flattened into a monitor Flutter frame.
+  Lazy Workspace/PageView building is not proof that an inactive subtree has been
+  painted. Adding a capture view requires explicit routing and frame scheduling.
+
+Do not use unrelated code cleanup or framework upgrades to hide these issues.
+
+## 4. Source And Session Model
+
+Use the existing ID types where possible. The following is conceptual Rust, not
+drop-in code or a mandate to introduce all of these names:
+
+```rust
+enum ShareTarget {
+    Output(OutputIdentity),
+    Screen(ScreenId),
+    MetaWindow(MetaWindowId),
+}
+
+enum CaptureTarget {
+    DesktopArea(Rectangle<f64, Logical>),
+    Source(ShareTarget),
+}
+
+enum CursorMode { Hidden, Embedded }
+```
+
+Sharing entry points accept `ShareTarget`, not `CaptureTarget`. A portal caller
+cannot inject an arbitrary region or an unapproved ID. Local actions can use both
+internally, but the required area-selection workflow uses `DesktopArea`.
+
+Each session records target identity/lifetime, operation, permission state,
+requested pixel size/FPS/cursor mode, layout/source revision, monotonic timestamps,
+pending work, and delivery-specific resources. IDs are not permissions.
+
+Use lifetime validation as well as display names. A disconnected output replaced
+by another output with the same connector name is not automatic authorization to
+share the replacement. Screen IDs are existing persistent string IDs; MetaWindow
+IDs must resolve to the same live window, not a new window with the same title.
+
+Define an idempotent close path used by every cancellation/failure source.
+Never substitute the active window, first monitor, or current workspace on error.
+
+## 5. Rendering Contract
+
+### 5.1 Visible Desktop Areas
+
+Selection coordinates are logical coordinates within the physical output where
+selection starts. Clamp them to that output; do not treat Flutter physical pixels
+or MetaWindow geometry as global logical positions.
+
+Algorithm:
+
+1. Validate finite coordinates, positive dimensions, and checked allocation sizes.
+2. Require the rectangle to remain within the starting physical output. Reject a
+   selection crossing a physical output boundary.
+3. Use that output's scale at selection time. Set pixel size to
+   `ceil(width * scale), ceil(height * scale)`.
+4. Render the output scene and crop the selected rectangle. Apply output
+   transforms and the backend's Flutter texture orientation.
+5. Use completed output scene inputs, including game-mode content. Composite the
+   cursor once in capture coordinates, clipped to the area, if requested.
+6. Deliver a completed, capture-owned frame.
+
+For a screenshot, capture the latest completed overlay-free desktop frame after
+selection finishes. Flutter dismisses the selector, waits for an overlay-free
+rasterized frame, then Rust waits for a newer presented backing-store generation
+for the participating output. Cancel if output layout changes during selection
+or this handshake. Do not use arbitrary sleeps or `endOfFrame` alone as proof of
+presentation. A future preview may use a snapshot, but it must not become a stale
+final image source.
+
+For recording, dismiss the selector and wait for completed overlay-free frames
+from participating views before starting. An arbitrary sleep or Flutter
+`endOfFrame` alone is not proof of GPU presentation. Correlate a layout/overlay
+revision with a completed embedder frame; verify this handshake in milestone 1.
+Carry that revision with the actual completed backing-store identity, not in a
+separate "latest revision" variable. Wait asynchronously: calloop must remain
+able to service Flutter's buffer requests while awaiting a completed frame.
+
+Stop area recording on output topology, position, scale, transform, or mode
+changes affecting its layout. Retain the finalized recording and explain why it
+stopped. This avoids silently recording a newly rearranged desktop.
+
+### 5.2 Output Sharing
+
+The source is the complete selected output, including ordinary shell UI and
+windows currently visible on it. It intentionally follows changes on that output.
+Render the scene into a capture target; do not read only Flutter's texture or a
+DRM primary scanout plane. Hardware cursor/overlay planes must not disappear.
+
+Default pixel size is the output's oriented physical size. Handle mode/scale
+changes by format renegotiation on the existing stream, or close with a clear
+error if renegotiation fails. Never announce success with old-size buffers.
+
+### 5.3 MetaWindow Sharing
+
+Render independently of desktop occlusion and position:
+
+- Include the selected window's client surface, subsurfaces, and explicitly owned
+  popup roots. Exclude unrelated windows, shell panels, and Veshell decorations.
+- Normalize coordinates to the selected client geometry. Clip popups to that
+  viewport for the initial release, avoiding popup-driven stream resizing.
+- Child toplevel dialogs are separate MetaWindows and are not automatically
+  included. Same application ID/PID is insufficient ownership evidence.
+- Preserve stable popup stacking. Verify nested xdg popup offsets and XWayland
+  override-redirect ownership; omit a popup if ownership cannot be established.
+- Use an opaque black background for the initial SDR stream. Preserve client
+  alpha only while compositing, then flatten the result.
+- Continue while occluded; close on window destruction/unmapping. Do not resize,
+  focus, activate, or move the real client merely to satisfy the capture target.
+- Scale or resize the output stream as needed without changing client geometry.
+
+### 5.4 Veshell Screen Sharing
+
+Share the selected Screen's own presentation, including its selected workspace,
+tiles, Screen/Workspace panels, and Screen-local overview state. Exclude other
+Screens, monitor-global navigation/overlays, debug UI, capture pickers, and sharing
+controls. Source-local changes are visible; switching that Screen's workspace is
+visible. This is not a share of all its workspaces at once.
+
+Implement a render-only Flutter capture view for that Screen. It is not a new
+Wayland Output, monitor configuration entry, or persisted Screen.
+
+Required work:
+
+1. Generalize Flutter view metadata to distinguish display views and capture
+   views. Capture metrics contain Screen ID, measured logical dimensions, scale,
+   and revision. Do not make existing monitor lookup code unwrap a capture view.
+2. Add a capture root in Flutter's view routing. Reuse presentation code from the
+   existing Screen tree rather than reimplementing its layout in Rust.
+3. Separate presentation from side effects. Only the normal display tree may
+   configure client size, set current output, activate windows, manage focus, or
+   enter gaming overlays. Capture views have no input/focus and cannot mutate
+   desktop configuration, including through hooks or dispose callbacks.
+   Identify widget-local presentation state as well: floating-window positions,
+   overview visibility/animation, scroll offsets, and source-local routes must
+   be shared read-only or supplied as a presentation snapshot. Rebuilding a
+   widget from persistent Screen data alone does not reproduce the current scene.
+4. Use the source's measured display layout and client geometry. Opening a share
+   must not reflow or resize live applications. Scale the captured result rather
+   than assigning competing geometry authorities.
+5. Ensure textures are available in both views, retain them through GPU use, and
+   implement capture-view removal and outstanding callback cleanup.
+6. Schedule capture-view frames while subscribed. Respect the existing Flutter
+   task/vsync machinery and coalesce requests; do not simulate input or force
+   whole-desktop continuous redraw just to keep a stream alive.
+7. Render only game-mode content belonging to this Screen; do not reuse the
+   monitor-global gaming Navigator route in the capture tree.
+
+Screen-local menus/overlays are included only when ownership is explicit and they
+can be clipped to this Screen. Monitor-root Navigator routes are excluded unless
+refactored into the source-local presentation model. Do not mirror every global
+route into every capture view.
+
+Use a source registry message from Flutter for Screen ID/label, connected output,
+measured rectangle/scale, and layout revision. Publish removals/invalidation too.
+Rust binds authorization to this registry and validates every asynchronous reply.
+
+A crop of the monitor buffer is not an acceptable final implementation: global
+overlays and neighbouring content can already be baked into that texture. Do not
+advertise Screen sharing until the isolated view passes the privacy tests.
+
+If the Screen moves between connected outputs, follow its identity only after a
+validated new layout/capture frame; clear stale content during transition. Close
+if detached or destroyed. Detached rendering needs a later layout-authority
+decision; it must not be improvised by a coding agent.
+
+### 5.5 Cursor And Color
+
+Baseline supports hidden and embedded cursors. Reuse the existing cursor renderer
+for shape, animation, hotspots, and scaling. On isolated sources include a cursor
+only when it actually belongs to that source and has a valid coordinate mapping.
+Do not overlay the global pointer over an unrelated shared window.
+
+Use an explicitly negotiated 8-bit SDR format initially. Check FourCC/SPA channel
+order, stride, origin, alpha, and color conversion; similarly named RGBA/BGRA
+formats are not necessarily memory-equivalent. Test red/blue bars and alpha edges.
+PNG is sRGB RGBA; streaming/recording is opaque SDR. HDR/10-bit inputs must be
+handled under a verified SDR conversion policy or rejected, not mislabeled as SDR.
+
+## 6. Buffer Ownership And Scheduling
+
+Use capture-owned storage, separate from Flutter/output swapchains. A baseline
+readback path is acceptable; zero-copy is an optimization, not a privacy shortcut.
+
+Required ownership progression:
+
+```text
+available -> rendering -> GPU complete -> delivered -> consumer released -> available
+```
+
+- Keep source resources alive until the GPU finishes reading them. Keep capture
+  resources alive until both GPU work and consumer use are finished.
+- Never lend Flutter's mutable backing store directly to an encoder or PipeWire
+  consumer. A duplicated FD does not establish exclusive buffer ownership.
+- Do not render from PipeWire real-time callbacks or access GLES from worker
+  threads. Keep compositor/PipeWire state on calloop; use messages for work.
+- Reuse a small bounded buffer pool (initially three per active continuous capture)
+  and at most one outstanding render request per session. Enforce a total memory
+  budget with checked arithmetic and explicit allocation errors.
+- Slow consumers drop frames, not desktop responsiveness. Never accumulate an
+  unbounded queue of pixel data or block calloop on an encoder.
+- Use monotonic frame timestamps and sequence numbers. Dropped frames retain real
+  elapsed time; do not speed up recorded video by renumbering timestamps.
+- Cap initial continuous capture at 30 FPS. Do not busy-loop on an unchanged
+  desktop. Send an initial full frame; schedule on damage and consumer demand.
+  Recording also needs timed repeat frames or equivalent duration handling so a
+  static scene and the final interval remain correctly represented.
+- Damage is per capture/session, not simply the display's buffer age. Start with
+  full-frame copies if needed; optimize only after ownership/timing tests pass.
+- On resize, retire old-generation buffers safely. Never write beyond negotiated
+  sizes or reuse a buffer from an old generation.
+
+Readback can cause a bounded GPU wait in the first implementation. Measure it and
+report it honestly. PNG encoding, file I/O, and video encoding must be off calloop.
+Do not remove current GL completion barriers in the name of nonblocking capture
+without implementing and testing replacement fences/resource retention.
+
+## 7. PipeWire Producer
+
+Use the Rust `pipewire` bindings compatible with supported system libraries.
+Initialize lazily. Register the PipeWire loop FD with calloop and dispatch without
+blocking, following Niri's pattern rather than copying its entire module.
+
+Baseline:
+
+- Publish one video producer stream for each consented sharing session.
+- Negotiate one tested SDR packed format using shared-memory/memfd buffers first.
+  Implement the actual SPA buffer contract; do not assume `wl_shm` buffers and
+  PipeWire buffers are interchangeable.
+- No client sees a producer before approval. A published node contains only that
+  source, never a chooser preview or another session's frame.
+- Report Start success once the producer has a valid published node identity.
+  Do not wait for a consuming application to stream: it needs Start's result to
+  connect, so waiting would deadlock startup.
+- Negotiate FPS/size and obey dequeue/queue lifetime rules. Avoid holding a buffer
+  when no render is scheduled. Cleanly handle consumer pause and disconnection.
+- On PipeWire failure, close affected sessions and remove event sources/resources.
+  A later user request may reconnect; never silently restore old authorization.
+
+Add DMA-BUF as a subsequent optimization of this same producer. Negotiate the
+intersection of renderer/allocator/consumer formats and modifiers. Bind/render
+only supported buffers, preserve plane offsets/strides, and wait on GPU completion
+before submission. Retain the memory path for actual interoperability needs, not
+as a second independent capture implementation.
+
+Do not assume Niri renders into buffers allocated by PipeWire: its producer also
+allocates/exports backing DMA-BUFs. Choose and document buffer-allocation ownership
+explicitly when implementing Veshell's negotiation.
+
+## 8. Portal Contract
+
+### 8.1 Identity And Interface Boundary
+
+Veshell owns `org.freedesktop.impl.portal.desktop.veshell` on the session bus and
+exports backend interfaces at `/org/freedesktop/portal/desktop`.
+
+It does NOT own `org.freedesktop.portal.Desktop`, replace the frontend, or export
+the application-facing methods as its backend API.
+
+Initial ScreenCast backend version: 4. Advertise `AvailableSourceTypes = 3`
+(MONITOR | WINDOW) only once both corresponding implementations work, and
+`AvailableCursorModes = 3` (Hidden | Embedded). Always return `persist_mode = 0`
+in successful Start results, ignore restore data and prompt again. Do not claim
+persistence support by omission. Version 4 is a bounded initial contract, not an
+excuse to introduce obsolete compositor APIs. Upgrade to version 6 with serial
+metadata once that contract has been tested; retain its required node-ID tuple.
+
+Use the official backend XML/docs to implement exact signatures:
+
+| Backend method | Input | Output |
+| --- | --- | --- |
+| `CreateSession` | `handle:o, session_handle:o, app_id:s, options:a{sv}` | `response:u, results:a{sv}` |
+| `SelectSources` | `handle:o, session_handle:o, app_id:s, options:a{sv}` | `response:u, results:a{sv}` |
+| `Start` | `handle:o, session_handle:o, app_id:s, parent_window:s, options:a{sv}` | `response:u, results:a{sv}` |
+
+`CreateSession` returns an empty results dictionary on success. `SelectSources`
+stores/validates constraints, not user consent. `Start` opens the trusted picker
+and returns `streams: a(ua{sv})` after approval and node publication.
+
+There is NO backend `OpenPipeWireRemote` method. The frontend creates the
+restricted PipeWire connection and passes its FD to the application. Veshell must
+not hand an ordinary unrestricted PipeWire connection to Chrome/OBS.
+
+Backend methods return their response pair after asynchronous work. They do not
+emit frontend `org.freedesktop.portal.Request.Response` signals. Export backend
+`Request.Close()` at supplied request paths and backend `Session.Close()`, its
+`version` property, and `Closed()` signal at supplied session paths. Backend
+`Session.Closed()` has no arguments. Verify these against upstream XML.
+
+Response codes: 0 success, 1 user cancellation, 2 other failure. Return appropriate
+D-Bus errors for unauthorized/malformed calls rather than panicking.
+
+### 8.2 Picker And Type Mapping
+
+| Veshell source | Portal category/type | Picker behavior |
+| --- | --- | --- |
+| Output | MONITOR = 1 | Output name and icon. |
+| Existing Screen | MONITOR = 1 | Separately labeled "Veshell Screens" group. |
+| MetaWindow | WINDOW = 2 | Application/title and icon. |
+
+The baseline picker is text/icon-only. Do not implement live or cached pixel
+previews of unselected targets: when an Output is already shared, Flutter could
+bake an otherwise hidden window's preview into that stream. Add pixel previews
+only after capture-transparent trusted UI composition is proven. Output sharing
+can show ordinary text controls just like other visible shell UI; it must not
+gain hidden targets' pixels through the chooser. Test concurrent requests.
+
+Screen-to-MONITOR is a deliberate interoperability policy: the portal has no
+workspace/Screen source type. It is not an explicitly standardized mapping or a
+verified COSMIC convention. Test it in Chrome and OBS before treating it as proven.
+Do not add a private source-type bit or pretend `VIRTUAL = 4` means this feature.
+
+Filter the picker by requested `types`. A WINDOW-only request cannot choose an
+Output or Screen. Default missing types to MONITOR and cursor to Hidden. A
+VIRTUAL-only request has no supported sources and must fail normally. Validate
+supported bit intersections/options according to the portal contract.
+
+Choose one source even if `multiple=true` (the contract allows at least one).
+Support independent sessions, not multiple streams per session initially.
+Do not use a global reply channel whose result can be consumed by another request.
+
+Return `source_type` and meaningful logical size metadata. Output position is
+global logical position. Omit meaningless position for an isolated Screen; do not
+invent physical monitor coordinates. Node IDs are not persistent source IDs.
+
+The picker names the requesting application, not a supposedly authenticated web
+origin. Chrome's own UI is responsible for website/tab permissions. Browser tab
+capture is outside this compositor feature.
+
+### 8.3 Authorization And Lifecycle
+
+```text
+Created -> Configured -> Choosing -> Starting -> Active -> Closed
+                                               |
+                                Active can be paused by the consumer
+```
+
+Every nonclosed state can close. Track PipeWire transport state separately from
+portal authorization so a paused consumer does not trigger a second consent flow.
+
+- Authenticate backend calls against the current unique bus owner of
+  `org.freedesktop.portal.Desktop`; the caller-supplied app ID is not credentials.
+  Authenticate Request/Session methods as well as the main interface.
+- Bind each session to that frontend instance and its app identity. A frontend
+  name-owner loss/replacement closes all its sessions and pending requests.
+- D-Bus handlers use async per-request replies through calloop. Never lock or
+  borrow mutable renderer state across a user interaction or `.await`.
+- Bind picker replies to unguessable request tokens/revisions and validate source
+  type, source lifetime, and authorization in Rust again after selection.
+- Closing a request during the picker or PipeWire startup invalidates late
+  replies. No cancelled session may publish a node or restart later.
+- A persistent trusted shell indicator names the shared target and provides Stop.
+  It must appear before delivery begins and remain accessible across workspaces.
+- Revoke on user Stop, session closure, target disappearance, frontend loss,
+  PipeWire failure, shell loss, session lock, or compositor session deactivation.
+  Clear cached previews and capture buffers on revocation as appropriate.
+- Revocation destroys/stops the producer, not just its D-Bus objects. Previously
+  delivered pixels cannot be recalled, but no newly rendered frame may be sent.
+- No raw public capture endpoint may bypass consent. Native Flutter actions are
+  trusted shell actions, not D-Bus calls authorized by app ID or PID alone.
+
+The frontend's restricted remote protects portal clients according to PipeWire's
+access policy. Do not claim this prevents every unrestricted same-user host
+process from accessing PipeWire. Verify the deployed daemon/session-manager policy.
+
+### 8.4 Screenshot Backend
+
+Add `org.freedesktop.impl.portal.Screenshot` version 2 when native screenshot
+capture is ready. Implement both `Screenshot` and `PickColor` as specified by the
+backend contract, including request cancellation and trusted user interaction.
+PickColor is a one-pixel sample from the same frozen desktop snapshot.
+
+Return screenshot `uri` as a valid file URI. Use a private file in a private
+Veshell capture directory, keep it available after the reply, and clean portal
+temporary files at session end. The frontend handles sandbox/document export.
+Do not let supplied titles/path strings select arbitrary write locations.
+
+`interactive=false` is not permission to capture silently. Initially prompt for
+all external screenshot/color requests. Never interpret `permission_store_checked`
+as a positive grant by itself. Defer Screenshot v3 and its separate target enum.
+
+## 9. Local Screenshot And Recording Delivery
+
+PNG encoding and disk I/O run on a worker using completed CPU bytes. For native
+screenshots offer Save and Copy Image; implement image/png clipboard ownership in
+the compositor/selection path, not text containing a file path. Keep clipboard
+bytes valid for asynchronous reads and test Wayland and XWayland consumers.
+
+For recording, use a GStreamer worker with Rust bindings and an `appsrc` pipeline
+fed by the same capture frames. Baseline pipeline: raw SDR frames -> color
+conversion -> VP8 encoder -> WebM muxer -> file. Do not add a second PipeWire
+consumer or an external screencopy subprocess solely for native recording.
+
+- Use explicit caps, monotonic-derived PTS/duration, bounded appsrc/worker queues,
+  and nonblocking handoff from calloop. Drop stale frames under load.
+- Detect required plugins at runtime; an absent encoder disables recording with
+  an actionable error without breaking screenshots or sharing.
+- Support one local recording at a time initially. Show elapsed time and Stop in
+  trusted shell UI. No recording starts before explicit user action.
+- Write to a temporary partial file beside the destination. On Stop send EOS,
+  finish muxing asynchronously, and rename only after success. Do not overwrite
+  existing files silently. Preserve/report recoverable partial files on failure.
+- Handle disk-full, encoder errors, cancellation and shutdown without hanging the
+  compositor. A static scene must have the correct final duration.
+- Use XDG Pictures/Videos directories for native saves, with a user-visible path
+  choice and collision-safe filenames. Do not hardcode English home subfolders.
+
+GStreamer is the selected baseline, not one of several interchangeable frameworks
+the coding agent should implement. Codec/audio/hardware-encoding choices can be
+revisited separately if the product needs them.
+
+## 10. Modules And Installation
+
+Suggested placement, introducing files only as their milestone needs them:
+
+| Path | Responsibility |
+| --- | --- |
+| `src/embedder/capture/mod.rs` | Targets, validated sessions, scheduling, close path. |
+| `src/embedder/capture/render.rs` | Desktop composition/crop and isolated source rendering. |
+| `src/embedder/capture/pipewire.rs` | Producer negotiation, buffers, calloop integration. |
+| `src/embedder/capture/recording.rs` | GStreamer worker and file lifecycle. |
+| `src/embedder/portal/mod.rs` | zbus backend, authentication, Request/Session objects. |
+| `src/shell/lib/capture/` | Picker/selector, registry, render-only Screen root, controls. |
+
+Follow the existing Riverpod/Freezed/platform-channel conventions. Add new
+dependencies (`png`, `pipewire`, `zbus`, GStreamer bindings) only when needed and
+record system packages/minimum versions in `docs/dependencies.md`. Do not copy
+generated FFI from references or upgrade Smithay/Flutter without a demonstrated
+missing API. Keep dependency features/build policy consistent with the project.
+
+Install a `veshell.portal` descriptor in the portal descriptor directory, declaring
+only implemented interfaces and `DBusName=org.freedesktop.impl.portal.desktop.veshell`.
+Explicitly select Veshell for ScreenCast and Screenshot in
+`extra/assets/veshell-portals.conf`; preserve unrelated GNOME/GTK selections.
+Update Makefile, RPM and DEB assets together, including uninstall paths.
+
+In-process backend activation is a release gate, not an assumption:
+
+- In the real session, acquire the backend name after its handlers/control path
+  are ready and before session readiness causes portal activation.
+- D-Bus activation must resolve to the already managed session process. Never
+  configure `Exec=veshell` to start a second compositor on a capture request.
+- Verify a supported activation descriptor/service mapping for the existing
+  session unit. If it cannot satisfy the bus/session-manager contract, stop for
+  design review of a minimal activation helper; do not silently introduce a
+  second capture backend or change the compositor's service type blindly.
+- Outside a Veshell session fail clearly rather than launching a graphical
+  session. Do not replace GNOME's/another Veshell instance's bus name.
+- Nested X11 tests use an isolated D-Bus/PipeWire test environment for portal
+  integration. Do not redirect the host desktop's portal as a test shortcut.
+
+The initial production portal activation target is the systemd-managed Veshell
+session. The repository also has dinit/direct-launch paths: native screenshots
+and recording must remain usable there, but portal support must be labeled
+unverified until each launch mode passes name ownership, activation, and shutdown
+tests. Do not silently claim the systemd mapping supports all launch modes.
+
+## 11. Milestones For The Implementation Agent
+
+Implement one milestone per reviewable change. Update this document if a verified
+API limitation changes a decision. Do not claim the entire feature from an output
+screenshot prototype, and do not enable unsupported picker entries.
+
+### M0: Confirm Contracts And Test Harness
+
+Inspect the files in section 3 and the official backend XML. Record the chosen
+dependency versions. Establish unit tests for target validation/geometry and an
+isolated session-bus harness for portal calls. Investigate activation integration
+and prove a capture-only Flutter view can render external window textures without
+changing focus/geometry. Include an already-open overview and moved floating
+window, not just a static texture, to expose presentation-state differences.
+These spikes gate M2's portal delivery and M5's Screen delivery respectively, not
+M1's native screenshots or M3's native recording. If a spike fails, record the
+failure and request a decision for that branch; do not fall back to monitor crops.
+
+### M1: Native Area Screenshots
+
+Implement capture-owned buffers, single-output scene rendering, bounded area
+selection, cursor inclusion, PNG delivery, and clipboard.
+Audit game-mode output routing and completed-frame/overlay revision correlation.
+Tests: multiple Veshell Screens on one output, output-edge clamping, dialogs and
+popups, game mode, clipboard delivery, and image orientation/channel order.
+
+Exit: arbitrary-area screenshots work on DRM and nested X11 without PipeWire.
+
+### M2: PipeWire And Output Sharing
+
+Implement in-process backend plumbing, authenticated Request/Session lifecycle,
+Flutter consent, indicator/Stop, one memory-buffer producer, and packaging.
+Initially advertise MONITOR only. Test Chrome and OBS Output sharing, cancellation
+at every state, late approval, owner loss, restricted remote, and buffer pressure.
+
+Exit: real apps share an output through the system frontend, with no GNOME/wlr
+capture dependency. Missing PipeWire does not break M1.
+
+### M3: Local Recording
+
+Implement area recording with the GStreamer worker and fixed geometry policy.
+Reuse M1's area renderer, not a second capture implementation. Test a long static
+scene, movement, frame drops, Stop/EOS, disk-full, output changes and worker errors.
+
+Exit: a completed recording plays for the correct duration and the compositor
+remains responsive under encoder backpressure.
+
+### M4: MetaWindow Sharing And Screenshot Portal
+
+Implement isolated client/popup rendering and window lifecycle tests. Advertise
+WINDOW only now. Add Screenshot/PickColor backend methods, cancellation and file
+accessibility tests. Confirm no unrelated window leaks when sharing an obscured
+window or opening an application dialog/menu.
+
+### M5: Existing Screen Sharing
+
+Finish the Screen registry, render-only view, view removal, frame scheduling and
+texture-lifetime work. Add the Screen picker group only after isolation tests pass.
+Verify workspace changes, Screen reordering/moves, game mode and multiple Screens
+per monitor. Opening/closing capture must not change window geometry or focus.
+Test Screen-to-MONITOR mapping with Chrome and OBS; document actual versions.
+
+Exit: all three requested sharing targets work. Detached Screen support remains
+explicitly unavailable, not replaced with another target.
+
+### M6: Performance And Release Validation
+
+Measure baseline frame/readback cost, memory, compositor latency and dropped
+frames. Add negotiated DMA-BUF delivery and per-session damage reuse if needed for
+the release target. Verify GPU completion and modifier fallback. Test ScreenCast
+v6 serial metadata before advertising that version. Complete the matrix below.
+Do not declare a CPU-readback prototype a proven high-performance 4K recorder.
+
+## 12. Acceptance Tests
+
+Automate pure state/geometry/protocol tests; keep hardware/application tests as a
+repeatable checklist with recorded versions and results. A failed/unrun test is
+not a pass. No benchmarks or runtime compatibility have been established yet.
+
+| Test | Required result |
+| --- | --- |
+| Chrome screen sharing and OBS PipeWire source | Consent appears, target is correct, frames update, Stop ends delivery. |
+| Flatpak OBS / sandboxed client | Portal remote and screenshot URI work without broad host capture permission. |
+| Requested source-type filtering | WINDOW-only never offers Outputs/Screens; VIRTUAL creation is not advertised. |
+| Two simultaneous applications | Correct per-request results and independent streams; stopping one cannot redirect/stop the other. |
+| Open/cancel another picker during Output sharing | No unselected-source pixel previews leak into the first application's stream. |
+| Direct backend call by another bus client | Rejected even if it supplies a trusted-looking app ID/session path. |
+| Cancel picker / cancel during stream startup | No late node/recording and no resurrected session. |
+| PipeWire / frontend restart | Sessions end safely; new consent is required to restart. |
+| Lock / session deactivation / shell loss | Delivery ceases; no lockscreen or other session's new pixels are captured. |
+| Output removal and same-name reconnection | Previous authorization is not reused for the replacement. |
+| Multiple Veshell Screens on one output | The selected rectangle includes all visible Screens and shell UI on that output. |
+| Cross-output selection | Selection is clamped to the starting physical output. |
+| Mixed DPI, negative origins, desktop gaps | Outside the initial single-output scope. |
+| Overlay removal for recording | No selection rectangle/picker in the first recorded frame. |
+| Cursor at boundaries, animated or client cursor | Correct hotspot/shape, single compositing, no cursor on an unrelated isolated source. |
+| Occluded MetaWindow / nested popups / XWayland menu | Only selected client and verified owned/clipped popup content. |
+| Parent app opens a separate dialog | Dialog is not automatically included as a same-app window. |
+| Screen with neighbouring sensitive content | Other Screen and monitor-global overlays never appear, even during transitions. |
+| Capture view side effects | Focus, activation, client sizes, output association and persisted layout remain unchanged. |
+| Capture an already-open overview or moved floating window | Capture reflects source-local presentation state, not a newly initialized layout. |
+| Screen workspace switch and move | Follows Screen identity/selection, never whatever occupies its former rectangle. |
+| Detached/destroyed Screen | Source becomes unavailable or session closes with a clear reason. |
+| Game-mode window on nonprimary output | Display/output capture agree; isolated capture includes only owned content. |
+| Slow/no consumer, resize, repeated start/stop | Bounded memory/FDs/views, no premature buffer reuse, no compositor deadlock. |
+| Missing encoder/PipeWire | Clear feature-specific error; unrelated capture and desktop functionality remain usable. |
+| Static recording and dropped frames | Correct elapsed duration; EOS produces playable WebM. |
+| Disk-full and destination collision | No silent overwrite, no frozen compositor, partial-file status reported. |
+| Wayland/XWayland clipboard paste | Receives actual PNG bytes after the screenshot UI closes. |
+
+Run `cargo check` / `cargo test` and targeted formatting for changed Rust code.
+Use the project's selected Flutter SDK for analysis, generation and tests in
+`src/shell`; do not silently switch to an arbitrary system Flutter. If Flutter
+tests are introduced, add the missing appropriate test dependency. Preserve and
+report pre-existing failures rather than performing unrelated mass fixes.
+
+## 13. Explicit Deferrals And Review Gates
+
+Do not implement these by guessing:
+
+- Detached Screen sharing: needs a chosen canonical size/scale, frame clock, and
+  a single authority for configuring windows that are not displayed elsewhere.
+- Output-independent Screen capture-view feasibility/texture lifetime and
+  in-process D-Bus activation: prove in M0; stop for review if they fail.
+- Portal Screen-to-MONITOR semantics: the selected policy requires application
+  interoperability testing; it is not an upstream-defined Screen type.
+- Sharing a workspace pinned independently of its Screen, new virtual outputs,
+  region sharing, multiple sources per session, remembered consent, metadata
+  cursor, remote input, audio, HDR, hardware encoding and arbitrary public capture
+  clients are outside this initial feature.
+- Session lock/deactivation must have a reliable Rust capture-revocation hook
+  before release. If the current shell has no trustworthy lock state, integrate
+  that state rather than claiming capture is lock-safe based on widget visibility.
+
+Security, cancellation, buffer ownership and source isolation are not deferrable
+polish. Do not ship an advertised source until those properties hold.
+
+## 14. References
+
+Reference repositories are design evidence, not code to copy wholesale:
+
+- Niri `dd75865f`: `src/screencasting/pw_utils.rs` (PipeWire/calloop, negotiation,
+  GPU completion), `src/screencasting/mod.rs` (source lifecycle),
+  `src/dbus/mutter_screen_cast.rs` (a compatibility layer Veshell will not need).
+- COSMIC Comp `a5578599`: `src/wayland/handlers/image_copy_capture/` (source/session
+  separation, constraints, rendering), `src/wayland/protocols/image_capture_source.rs`
+  (Output/Workspace/Toplevel), `src/utils/screenshot.rs` (native readback).
+- The separate COSMIC portal backend was not inspected; do not infer its
+  PipeWire implementation or workspace-to-portal mapping from cosmic-comp alone.
+- [ScreenCast backend](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.impl.portal.ScreenCast.html)
+- [ScreenCast frontend](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.ScreenCast.html)
+- [Screenshot backend](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.impl.portal.Screenshot.html)
+- [Backend Request](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.impl.portal.Request.html)
+- [Backend Session](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.impl.portal.Session.html)
+- [PipeWire access boundary](https://flatpak.github.io/xdg-desktop-portal/docs/pipewire.html)
+- [Backend installation](https://flatpak.github.io/xdg-desktop-portal/docs/writing-a-new-backend.html)
+- [Portal selection](https://flatpak.github.io/xdg-desktop-portal/docs/portals.conf.html)
+- [Image capture sources](https://wayland.app/protocols/ext-image-capture-source-v1)
+
+Online documentation evolves. Confirm wire signatures and supported versions
+against upstream XML and the deployed frontend before advertising capabilities.

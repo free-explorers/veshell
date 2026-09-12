@@ -44,8 +44,9 @@ use smithay::{
 
 use crate::backend::Backend;
 use crate::flutter_engine::callbacks::{
-    gl_external_texture_frame_callback, platform_message_callback, populate_existing_damage,
-    post_task_callback, runs_task_on_current_thread_callback, vsync_callback,
+    gl_external_texture_frame_callback, key_event_callback, platform_message_callback,
+    populate_existing_damage, post_task_callback, runs_task_on_current_thread_callback,
+    vsync_callback, FlutterKeyEventData,
 };
 use crate::flutter_engine::embedder::{
     FlutterAddViewInfo, FlutterBackingStore, FlutterBackingStoreConfig,
@@ -68,7 +69,6 @@ use crate::flutter_engine::platform_channels::basic_message_channel::BasicMessag
 use crate::flutter_engine::platform_channels::binary_messenger_impl::BinaryMessengerImpl;
 use crate::flutter_engine::platform_channels::json_message_codec::JsonMessageCodec;
 use crate::flutter_engine::platform_channels::json_method_codec::JsonMethodCodec;
-use crate::flutter_engine::platform_channels::message_codec::MessageCodec;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
@@ -121,7 +121,6 @@ pub struct FlutterEngine<BackendData: Backend + 'static> {
     pub(crate) mouse_button_tracker: MouseButtonTracker,
     pub binary_messenger: Rc<RefCell<BinaryMessengerImpl>>,
     pub platform_method_channel: MethodChannel<serde_json::Value>,
-    pub key_event_channel: BasicMessageChannel<serde_json::Value>,
     pub text_input: TextInput,
     rx_request_external_texture_name_registration_token: calloop::RegistrationToken,
     pub trackpad_scrolling_manager: TrackpadScrollingManager,
@@ -368,13 +367,6 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     .insert_source(rx_platform_message, platform_channel_method_handler)
                     .unwrap();
 
-                let codec = Rc::new(JsonMessageCodec::new());
-                let key_event_channel = BasicMessageChannel::<serde_json::Value>::new(
-                    binary_messenger.clone(),
-                    "flutter/keyevent".to_string(),
-                    codec,
-                );
-
                 let mut text_input_channel = MethodChannel::<serde_json::Value>::new(
                     binary_messenger.clone(),
                     "flutter/textinput".to_string(),
@@ -493,7 +485,6 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     mouse_button_tracker: MouseButtonTracker::new(),
                     binary_messenger: binary_messenger.clone(),
                     platform_method_channel,
-                    key_event_channel,
                     text_input: TextInput::new(text_input_channel),
                     rx_request_external_texture_name_registration_token,
                     trackpad_scrolling_manager: TrackpadScrollingManager::new(),
@@ -569,25 +560,61 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             }
         };
 
-        let logical_key =
-            match GTK_KEYVAL_TO_LOGICAL_KEY_MAP.get(&(event.raw_keysym.unwrap().raw() as u64)) {
-                Some(&key) => key,
-                None => event.raw_keysym.unwrap().raw() as u64,
-            };
-
-        let character = if event.state == KeyState::Released || event.keysym.key_char().is_none() {
-            std::ptr::null()
-        } else {
-            let c_str = CString::new(event.keysym.key_char().unwrap().to_string())
-                .expect("CString::new failed");
-            c_str.as_ptr()
+        let raw_keysym = event
+            .raw_keysym
+            .ok_or_else(|| format!("Missing raw keysym for key code {}", event.key_code.raw()))?;
+        let logical_key = match GTK_KEYVAL_TO_LOGICAL_KEY_MAP.get(&(raw_keysym.raw() as u64)) {
+            Some(&key) => key,
+            None => raw_keysym.raw() as u64,
         };
 
-        /* let key_event_data = Box::new(FlutterKeyEventData {
+        let character = (event.state != KeyState::Released)
+            .then(|| event.keysym.key_char())
+            .flatten()
+            .map(|character| CString::new(character.to_string()))
+            .transpose()?;
+        let unicode_scalar_values = if event.state == KeyState::Released {
+            0
+        } else {
+            event
+                .keysym
+                .key_char()
+                .map(|character| character as u32)
+                .unwrap_or_default()
+        };
+        let modifiers = (event.mods.shift as u32)
+            | ((event.mods.caps_lock as u32) << 1)
+            | ((event.mods.ctrl as u32) << 2)
+            | ((event.mods.alt as u32) << 3)
+            | ((event.mods.num_lock as u32) << 4)
+            | ((event.mods.logo as u32) << 26);
+        let key_event_data = Box::new(FlutterKeyEventData {
             key_event: event,
-            tx_flutter_handled_key_event: self.data.channels.tx_flutter_handled_key_event.clone(),
+            tx_flutter_handled_key_event: self
+                .renderer_data
+                .channels
+                .tx_flutter_handled_key_event
+                .clone(),
+            key_event_channel: BasicMessageChannel::new(
+                self.binary_messenger.clone(),
+                "flutter/keyevent".to_string(),
+                Rc::new(JsonMessageCodec::new()),
+            ),
+            raw_key_event: json!({
+                "keymap": "linux",
+                "toolkit": "gtk",
+                "keyCode": raw_keysym.raw(),
+                "scanCode": event.key_code.raw(),
+                "modifiers": modifiers,
+                "unicodeScalarValues": unicode_scalar_values,
+                "specifiedLogicalKey": logical_key,
+                "type": match event.state {
+                    KeyState::Pressed => "keydown",
+                    KeyState::Released => "keyup",
+                },
+            }),
         });
-        let user_data = Box::into_raw(key_event_data) as *mut c_void; */
+        let user_data = Box::into_raw(key_event_data) as *mut c_void;
 
         let flutter_key_event = FlutterKeyEvent {
             struct_size: std::mem::size_of::<FlutterKeyEvent>(),
@@ -595,7 +622,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             type_: event_type,
             physical: physical_key,
             logical: logical_key,
-            character: character,
+            character: character.as_ref().map_or(null(), |value| value.as_ptr()),
             synthesized: false,
             device_type: 1,
         };
@@ -604,49 +631,15 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             FlutterEngineSendKeyEvent(
                 self.handle,
                 &flutter_key_event as *const _,
-                None,                  //Some(key_event_callback::<BackendData>),
-                core::ptr::null_mut(), //user_data,
+                Some(key_event_callback),
+                user_data,
             )
         };
 
         if result != 0 {
+            unsafe { drop(Box::from_raw(user_data as *mut FlutterKeyEventData)) };
             return Err(format!("Could not send key event, error {result}").into());
         }
-        let tx = self
-            .renderer_data
-            .channels
-            .tx_flutter_handled_key_event
-            .clone();
-        // Send fake key event since we don't care about supporting legacy keyboard implementation
-        self.key_event_channel.send(
-            &json!({
-                "keymap": "linux",
-                "toolkit": "gtk",
-                "keyCode": 0,
-                "specifiedLogicalKey": 0,
-                "scanCode":0,
-                "modifiers": 0,
-                "unicodeScalarValues": 0,
-                "type": match event.state {
-                    KeyState::Pressed => "keydown",
-                    KeyState::Released => "keyup",
-                },
-            }),
-            Some(Box::new(move |response: Option<&[u8]>| {
-                // This is the callback that will be called when Flutter replies.
-                // Flutter always replies with a single `handled` boolean.
-                // If its value is true, some widget listening to keyboard shortcuts probably handled this event.
-                let response = match response {
-                    Some(response) => response,
-                    None => return,
-                };
-
-                let message = JsonMessageCodec::new().decode_message(response).unwrap();
-                let handled = message["handled"].as_bool().unwrap();
-                debug!("handled {handled}");
-                tx.send((event, handled)).unwrap();
-            })),
-        );
         Ok(())
     }
 
@@ -675,10 +668,11 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         Ok(())
     }
 
-    pub fn monitor_layout_changed(&mut self, outputs: Vec<Output>) {
+    pub fn monitor_layout_changed(&mut self, outputs: Vec<Output>, revision: u64) {
         self.platform_method_channel.invoke_method(
             "monitor_layout_changed",
             Some(Box::new(json!(MonitorsMessage {
+                revision,
                 monitors: outputs.into_iter().map(|output| MyOutput(output)).collect()
             }))),
             None,

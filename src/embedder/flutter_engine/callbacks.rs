@@ -1,6 +1,7 @@
 use std::ffi::c_void;
 use std::ptr::null_mut;
 
+use serde_json::Value;
 use smithay::backend::renderer::gles::ffi;
 use smithay::reexports::calloop::channel;
 use tracing::{debug, error};
@@ -14,7 +15,10 @@ use crate::flutter_engine::embedder::{
     FlutterOpenGLTexture, FlutterPlatformMessage, FlutterPresentInfo, FlutterPresentViewInfo,
     FlutterRect, FlutterTask, FlutterTransformation,
 };
+use crate::flutter_engine::platform_channels::basic_message_channel::BasicMessageChannel;
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
+use crate::flutter_engine::platform_channels::json_message_codec::JsonMessageCodec;
+use crate::flutter_engine::platform_channels::message_codec::MessageCodec;
 use crate::flutter_engine::{Baton, FlutterEngine};
 use crate::keyboard::VeshellKeyEvent;
 
@@ -244,23 +248,37 @@ where
     texture_name != 0
 }
 
-#[allow(dead_code)]
 pub struct FlutterKeyEventData {
     pub key_event: VeshellKeyEvent,
     pub tx_flutter_handled_key_event: channel::Sender<(VeshellKeyEvent, bool)>,
+    pub key_event_channel: BasicMessageChannel<Value>,
+    pub raw_key_event: Value,
 }
-#[allow(dead_code)]
 
-/// It's currently not used because handled is always false it's seems that we will need it when the deprecation of the legacy keyboard handled will be removed we currently listen to the [key_event_channel.send] callback
-pub unsafe extern "C" fn key_event_callback<BackendData>(handled: bool, user_data: *mut c_void)
-where
-    BackendData: Backend + 'static,
-{
-    let data = &mut *(user_data as *mut FlutterKeyEventData);
+pub unsafe extern "C" fn key_event_callback(handled: bool, user_data: *mut c_void) {
+    // Flutter queues KeyData before responding. Send the legacy companion only
+    // after this callback so the framework dispatches the queued KeyData.
+    let data = Box::from_raw(user_data as *mut FlutterKeyEventData);
+    debug!(?handled, "Flutter key data queued");
 
-    data.tx_flutter_handled_key_event
-        .send((data.key_event, handled))
-        .unwrap();
+    let event = data.key_event;
+    let tx = data.tx_flutter_handled_key_event.clone();
+    data.key_event_channel.send(
+        &data.raw_key_event,
+        Some(Box::new(move |response: Option<&[u8]>| {
+            let handled = response
+                .and_then(|response| JsonMessageCodec::new().decode_message(response))
+                .and_then(|message| message["handled"].as_bool())
+                .unwrap_or(false);
+            debug!(
+                key_code = event.key_code.raw(),
+                keysym = ?event.keysym,
+                ?handled,
+                "Flutter key event result",
+            );
+            tx.send((event, handled)).ok();
+        })),
+    );
 }
 
 // add view callback

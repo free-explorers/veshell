@@ -71,6 +71,8 @@ notify = "8.0.0"
 sd-notify = "0.4.3"
 uuid = { version = "1.16.0", features = ["v4"] }
 bitflags = "2.2.1"
+png = "0.17.16"
+xdg-user = "0.2.1"
 
 
 [build-dependencies]

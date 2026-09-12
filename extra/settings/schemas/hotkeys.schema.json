@@ -16,6 +16,9 @@
         "system.muteVolume": {
             "type": "string"
         },
+        "system.takeScreenshot": {
+            "type": "string"
+        },
         "screen.focusWorkspaceAbove": {
             "type": "string"
         },
@@ -36,6 +39,7 @@
         "system.increaseVolume",
         "system.decreaseVolume",
         "system.muteVolume",
+        "system.takeScreenshot",
         "screen.focusWorkspaceAbove",
         "screen.focusWorkspaceBelow",
         "workspace.focusLeftTileable",
