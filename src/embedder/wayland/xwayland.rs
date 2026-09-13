@@ -516,6 +516,13 @@ pub mod xwayland {
                     WmWindowProperty::Class => {
                         let class = x11_surface.class();
                         info!("class changed: {}", class);
+                        self.patch_meta_window(
+                            MetaWindowPatch::UpdateWindowClass {
+                                id: meta_window.id,
+                                value: (!class.is_empty()).then_some(class),
+                            },
+                            true,
+                        );
                     }
                     WmWindowProperty::TransientFor => {
                         let transient_for = x11_surface.is_transient_for();
@@ -727,13 +734,14 @@ pub mod xwayland {
                         })
                     })
                 {
+                    let geometry = surface.geometry();
                     let meta_popup = self.create_meta_popup(MetaPopup {
                         id: Uuid::new_v4().hyphenated().to_string(),
-                        position: surface.geometry().loc.into(),
+                        position: surface.last_configure().loc.into(),
                         parent: parent_meta_window_id.clone(),
                         surface_id: get_surface_id(wl_surface.borrow()),
                         scale_ratio: xwayland_scale_ratio,
-                        geometry: Some(surface.geometry().into()),
+                        geometry: Some(geometry.into()),
                     });
                     self.meta_window_state
                         .meta_popup_id_per_surface_id

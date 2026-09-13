@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:collection/collection.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:hooks_riverpod/misc.dart';
 import 'package:shell/application/model/launch_config.serializable.dart';
@@ -128,10 +127,14 @@ mixin WindowProviderMixin<T extends Window> {
               excludedWindowIds: excludedWindowIds,
             );
       }
-      final sortedEntries = bestMatchForMetaWindowMap.entries.sorted(
-        (entry1, entry2) =>
-            (entry2.value.$2 ?? 0).compareTo(entry1.value.$2 ?? 0),
-      );
+      // Resolve the strongest matches first so a weak match cannot consume a
+      // candidate needed by a surface with better identity information.
+      final sortedEntries = bestMatchForMetaWindowMap.entries.toList()
+        ..sort(
+          (entry1, entry2) => (entry1.value.$2 ?? INF_COST).compareTo(
+            entry2.value.$2 ?? INF_COST,
+          ),
+        );
 
       for (final entry in sortedEntries) {
         final metaWindowId = entry.key;
@@ -187,8 +190,17 @@ mixin WindowProviderMixin<T extends Window> {
     _closeMetaWindowSubscription(surfaceId);
 
     _metaWindowSubscriptions[surfaceId] =
-        ref.listen(metaWindowStateProvider(surfaceId), (_, next) {
-      _onMetaWindowsChanges();
+        ref.listen(metaWindowStateProvider(surfaceId), (previous, next) {
+      if (previous == null ||
+          previous.appId != next.appId ||
+          previous.title != next.title ||
+          previous.windowClass != next.windowClass ||
+          previous.startupId != next.startupId ||
+          previous.pid != next.pid ||
+          previous.mapped != next.mapped ||
+          previous.parent != next.parent) {
+        _onMetaWindowsChanges();
+      }
       if (surfaceId == _displayedMetaWindowId) {
         onMetaWindowDisplayedPropertiesChanged(next);
       }
