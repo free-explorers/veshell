@@ -186,7 +186,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             },
             mapped: true,
             display_mode: None,
-            window_class: None,
+            window_class: (!x11_surface.class().is_empty()).then(|| x11_surface.class()),
             startup_id: None,
             current_output: None,
             geometry: Some(x11_surface.geometry().into()),

@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/meta_window/provider/meta_window_dragging_state.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
+import 'package:shell/meta_window/provider/meta_window_window_map.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
+import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 
 class MetaSurfaceDecoration extends HookConsumerWidget {
@@ -19,14 +24,15 @@ class MetaSurfaceDecoration extends HookConsumerWidget {
     final metaWindow = ref.watch(metaWindowStateProvider(metaWindowId));
 
     final surfaceSize = ref.watch(
-      wlSurfaceStateProvider(metaWindow.surfaceId).select(
-        (v) => v.texture!.size,
-      ),
+      wlSurfaceStateProvider(
+        metaWindow.surfaceId,
+      ).select((v) => v.texture!.size),
     );
 
     var height = metaWindow.geometry?.height ?? surfaceSize.height;
     if (metaWindow.geometry?.height != null) {
-      height = metaWindow.geometry!.height +
+      height =
+          metaWindow.geometry!.height +
           (metaWindow.needDecoration == true ? 40 : 0);
     }
     if (!enabled) {
@@ -37,11 +43,7 @@ class MetaSurfaceDecoration extends HookConsumerWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(10),
         boxShadow: const [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 10,
-            spreadRadius: 5,
-          ),
+          BoxShadow(color: Colors.black26, blurRadius: 10, spreadRadius: 5),
         ],
       ),
       width: metaWindow.geometry?.width ?? surfaceSize.width,
@@ -63,6 +65,12 @@ class WindowTitleBar extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final metaWindow = ref.watch(metaWindowStateProvider(metaWindowId));
+    final ownerWindowId = ref.watch(
+      metaWindowWindowMapProvider.select((value) => value[metaWindowId]),
+    );
+    final ownerDialogWindowId = ownerWindowId is DialogWindowId
+        ? ownerWindowId
+        : null;
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onPanStart: (details) {
@@ -77,14 +85,32 @@ class WindowTitleBar extends HookConsumerWidget {
           height: 40,
           child: Row(
             children: [
-              const SizedBox(
-                width: 16,
-              ),
+              const SizedBox(width: 16),
               Text(
                 metaWindow.title ?? '',
                 style: const TextStyle(color: Colors.white),
               ),
               const Spacer(),
+              if (ownerDialogWindowId != null)
+                IconButton(
+                  tooltip: 'Extract to new tile',
+                  onPressed: () {
+                    unawaited(
+                      ref
+                          .read(
+                            dialogWindowStateProvider(
+                              ownerDialogWindowId,
+                            ).notifier,
+                          )
+                          .extractToTile(),
+                    );
+                  },
+                  icon: Icon(
+                    Icons.open_in_new,
+                    color: Theme.of(context).colorScheme.onSurface,
+                    size: 16,
+                  ),
+                ),
               InkWell(
                 onTap: () {
                   ref

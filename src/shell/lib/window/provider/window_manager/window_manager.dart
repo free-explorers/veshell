@@ -55,9 +55,7 @@ class WindowManager extends _$WindowManager {
     LocalizedDesktopEntry entry,
   ) {
     final windowId = PersistentWindowId(_uuidGenerator.v4());
-    _log.info(
-      'Creating new PersistentWindow $windowId',
-    );
+    _log.info('Creating new PersistentWindow $windowId');
     final persistentWindow = PersistentWindow(
       windowId: windowId,
       properties: WindowProperties(
@@ -80,9 +78,7 @@ class WindowManager extends _$WindowManager {
     ScreenId screenId,
   ) {
     final windowId = EphemeralWindowId(_uuidGenerator.v4());
-    _log.info(
-      'Creating new EphemeralWindow $windowId',
-    );
+    _log.info('Creating new EphemeralWindow $windowId');
     final ephemeralWindow = EphemeralWindow(
       windowId: windowId,
       screenId: screenId,
@@ -113,13 +109,14 @@ class WindowManager extends _$WindowManager {
     final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
 
     final desktopEntryForSurface = await ref.read(
-      localizedDesktopEntryForIdProvider(metaWindow.appId!).future,
+      localizedDesktopEntryForIdProvider(metaWindow.appId ?? '').future,
     );
 
     final persistentWindow = PersistentWindow(
       windowId: windowId,
       properties: WindowProperties.fromMetaWindow(metaWindow).copyWith(
-        appId: desktopEntryForSurface?.desktopEntry.id ?? metaWindow.appId!,
+        appId:
+            desktopEntryForSurface?.desktopEntry.id ?? (metaWindow.appId ?? ''),
       ),
       metaWindowId: metaWindowId,
     );
@@ -178,9 +175,7 @@ class WindowManager extends _$WindowManager {
     final windowId = DialogWindowId(_uuidGenerator.v4());
     final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
 
-    _log.info(
-      'Creating new DialogWindow $windowId for MetaWindow $metaWindow',
-    );
+    _log.info('Creating new DialogWindow $windowId for MetaWindow $metaWindow');
 
     final dialogWindow = DialogWindow(
       windowId: windowId,
@@ -200,9 +195,7 @@ class WindowManager extends _$WindowManager {
   }
 
   void removeWindow(WindowId windowId) {
-    _log.info(
-      'Removing window: $windowId',
-    );
+    _log.info('Removing window: $windowId');
     state = state.copyWith(windows: state.windows.remove(windowId));
   }
 }

@@ -20,7 +20,7 @@ abstract class WindowProperties with _$WindowProperties {
 
   factory WindowProperties.fromMetaWindow(MetaWindow metaWindow) =>
       WindowProperties(
-        appId: metaWindow.appId!,
+        appId: metaWindow.appId ?? '',
         title: metaWindow.title,
         windowClass: metaWindow.windowClass,
         startupId: metaWindow.startupId,
