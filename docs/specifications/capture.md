@@ -22,10 +22,11 @@ involvement):
   tracking, and the DRM/X11 render paths draw a scrim, a selection outline, and
   a native crosshair (`get_capture_overlay_elements`) instead of the real
   cursor. The drag is clamped to the output under the pointer at hotkey time.
-- On primary-button release, Rust renders the frozen Flutter backing store and
-  the game-mode surfaces of that single output,   crops the selection, and encodes
-  a single PNG at that output's scale. The real cursor is not part of the
-  captured image.
+- The frozen frame is rendered into capture-owned storage at hotkey time: the
+  snapshot contains the Flutter backing store and the game-mode surfaces of that
+  single output. On primary-button release, the selection is cropped from the
+  snapshot and encoded as a single PNG at that output's scale. The real cursor
+  is not part of the captured image.
 - The readback is encoded as PNG in the XDG Pictures directory, falling back to
   `~/Pictures` when that directory is unavailable. The same PNG is offered as
   `image/png` on the Wayland and XWayland clipboards.
@@ -35,12 +36,37 @@ involvement):
   area selector were removed.
 
 This is not recording, portal capture, MetaWindow capture, or Screen capture. It
-performs synchronous readback and PNG encoding on the compositor path, so it is a
-correctness vertical slice only. M1 remains open pending runtime validation,
-nonblocking delivery, and capture-owned snapshot buffers.
+synchronously reads back the hotkey-time screenshot and hands capture-owned
+pixel data to a background PNG encoding worker, so it is a correctness vertical
+slice only. The GPU work stays on the calloop thread; encoding and file I/O run
+off the loop and complete on a calloop channel that also publishes the clipboards.
+
+Implemented capture-owned snapshot buffers (2026-09-15, M1 item): the desktop
+snapshot is rendered into capture-owned CPU storage once at hotkey time, before
+the session starts, from an output-scoped render (frozen Flutter backing store
+plus that output's game-mode surfaces, no cursor). Selection completion composes
+and crops the selection from the snapshot pixels only; nothing reads a Flutter
+swapchain slot or dmabuf after session start, so a recycled or resized
+`last_rendered_slot` buffer can no longer corrupt a capture. Snapshot failures
+abort the session at hotkey time instead of failing at selection release.
+
+Runtime validation performed on DRM (2026-09-15): a seat session recorded seven
+consecutive area captures. The compositor log shows `Entering screenshot capture
+mode` followed by `Screenshot saved` for every attempt, with no cancellation and
+no snapshot/delivery failures; the produced PNG files exist in the user's
+Pictures directory with matching timestamps. Validation was readback-focused:
+game-mode multi-monitor behavior is intentionally excluded from this evidence
+because the normal render path still selects game-mode windows globally. M1
+then remains open pending nested-X11 runtime validation and the game-mode output
+routing audit, which is deferred to a dedicated review session.
 
 Implemented M1 foundations:
 
+- Nonblocking screenshot delivery (2026-09-15): PNG encoding and file I/O run on
+  a worker thread; the worker writes to a `.part` file beside the destination
+  and renames after success. The Wayland and XWayland clipboards are advertised
+  only on the event loop once PNG bytes exist, served lazily from capture-owned
+  `Arc` bytes.
 - Physical output location updates remap `Space`, refresh its output bookkeeping,
   and advance an in-process output-layout revision.
 - Flutter backing stores have a per-view generation. The exact generation presented

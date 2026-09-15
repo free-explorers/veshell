@@ -156,6 +156,7 @@ pub struct State<BackendData: Backend + 'static> {
     pub input_devices: HashSet<input::Device>,
     pub output_layout_revision: u64,
     pub capture_session: Option<crate::capture::CaptureSession>,
+    pub screenshot_delivery_sender: channel::Sender<crate::capture::ScreenshotDeliveryEvent>,
     pub pointer_view_id: Option<i64>,
 }
 
@@ -310,6 +311,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let xdg_decoration_state = XdgDecorationState::new::<Self>(&display_handle);
         let fractional_scale_manager_state =
             FractionalScaleManagerState::new::<Self>(&display_handle);
+        let screenshot_delivery_sender =
+            crate::capture::insert_screenshot_delivery_source(&loop_handle);
         Self {
             running: Arc::new(AtomicBool::new(true)),
             display_handle,
@@ -364,6 +367,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             input_devices: HashSet::new(),
             output_layout_revision: 0,
             capture_session: None,
+            screenshot_delivery_sender,
             pointer_view_id: None,
         }
     }

@@ -1,7 +1,8 @@
 use std::fs::{self, File};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::thread;
 
 use smithay::backend::allocator::dmabuf::{AsDmabuf, Dmabuf};
 use smithay::backend::allocator::{Fourcc, Slot};
@@ -9,6 +10,7 @@ use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::gles::{GlesRenderbuffer, GlesRenderer};
 use smithay::backend::renderer::{Bind, ExportMem, Offscreen};
 use smithay::output::Output;
+use smithay::reexports::calloop::{channel, LoopHandle};
 use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
 use smithay::wayland::selection::data_device::set_data_device_selection;
 use smithay::wayland::selection::SelectionTarget;
@@ -21,16 +23,26 @@ use crate::{Backend, State};
 
 const BTN_LEFT: u32 = 0x110;
 
+/// A capture-owned copy of the frozen desktop, taken when the session begins.
+pub struct CaptureSnapshot {
+    pub size: Size<i32, Physical>,
+    pub scale: f64,
+    pub pixels: Vec<u8>,
+}
+
 /// A live screenshot-selection session.
 ///
 /// Entered when the user presses the compositor's own screenshot hotkey
-/// (print screen). The moment it starts, the desktop visual is frozen: the
-/// new Flutter frames that arrive while the session runs are discarded (see
-/// the compositor backing-store gate) and pointer/keyboard events no longer
-/// reach Flutter or Wayland clients, so nothing on screen can repaint.
+/// (print screen). The moment it starts, its [CaptureSnapshot] is rendered
+/// into capture-owned CPU storage: Flutter and Wayland clients receive no
+/// input while the session runs, and Flutter framing stores presented during
+/// the session are dropped instead of replacing the frame the user saw at
+/// hotkey time (`VeshellView::hold_backing_store`), but the desktop visual
+/// the user composes against stays owned by the capture, never by a
+/// swapchain buffer that could be recycled.
 ///
 /// The cursor is not part of the captured image: while the session runs a
-/// native crosshair is drawn instead (see the render side) and the readback
+/// native crosshair is drawn instead (see the render side) and the snapshot
 /// renders the frozen frame without any cursor.
 ///
 /// The selection is drawn natively over the output the pointer was on when
@@ -38,6 +50,7 @@ const BTN_LEFT: u32 = 0x110;
 pub struct CaptureSession {
     pub output: Output,
     pub output_geometry: Rectangle<f64, Logical>,
+    pub snapshot: Option<CaptureSnapshot>,
     pub start: Option<Point<f64, Logical>>,
     pub current: Point<f64, Logical>,
 }
@@ -101,10 +114,20 @@ pub fn begin_capture_session<BackendData: Backend + 'static>(
         warn!("Unable to start a screenshot session without any output");
         return;
     };
+
+    let snapshot = match take_output_snapshot(state, &output) {
+        Ok(snapshot) => snapshot,
+        Err(message) => {
+            warn!("Unable to start a screenshot session: {message}");
+            return;
+        }
+    };
+
     info!(pointer_location = ?pointer_location, "Entering screenshot capture mode");
     state.capture_session = Some(CaptureSession {
         output,
         output_geometry: geometry,
+        snapshot: Some(snapshot),
         start: None,
         current: pointer_location,
     });
@@ -188,7 +211,7 @@ pub fn capture_pointer_release<BackendData: Backend + 'static>(
 }
 
 fn finish_capture<BackendData: Backend + 'static>(state: &mut State<BackendData>) {
-    let Some(session) = state.capture_session.as_mut() else {
+    let Some(mut session) = state.capture_session.take() else {
         return;
     };
     let area = session.selection();
@@ -196,30 +219,120 @@ fn finish_capture<BackendData: Backend + 'static>(state: &mut State<BackendData>
 
     // Teleport the pointer to the drag end as part of leaving the session,
     // before anything else can observe the frozen-position residue.
-    state.capture_session = None;
     state.pointer.set_location(last_position);
 
     match area {
-        Some(area) => finish_capture_inner(state, area),
+        Some(area) => finish_capture_inner(state, &mut session, area),
         None => info!("Screenshot capture cancelled: empty selection"),
     }
 }
 
 fn finish_capture_inner<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
+    session: &mut CaptureSession,
     area: Rectangle<f64, Logical>,
 ) {
-    match save_desktop_area_screenshot(state, area) {
-        Ok(path) => info!("Screenshot saved: {}", path.display()),
+    let Some(snapshot) = session.snapshot.take() else {
+        warn!("Screenshot capture session has no snapshot");
+        return;
+    };
+    let captured_outputs = [CapturedOutput {
+        geometry: session.output_geometry,
+        size: snapshot.size,
+        pixels: snapshot.pixels,
+    }];
+    match compose_desktop_area(area, snapshot.scale, &captured_outputs) {
+        Ok((size, pixels)) => {
+            if let Err(message) = deliver_screenshot(state, size, pixels) {
+                warn!("Screenshot failed: {message}");
+            }
+        }
         Err(message) => warn!("Screenshot failed: {message}"),
     }
 }
 
-struct OutputCaptureInput {
-    output: Output,
-    geometry: Rectangle<f64, Logical>,
-    flutter_dmabuf: Dmabuf,
-    game_surface_list: Vec<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
+/// Hands the captured pixels to the background encode/write worker.
+///
+/// Encoding and file I/O run on a worker so they cannot stall the compositor
+/// loop; the clipboard is published on the loop when the bytes exist.
+fn deliver_screenshot<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    size: Size<i32, Physical>,
+    pixels: Vec<u8>,
+) -> Result<(), String> {
+    let directory = screenshot_directory()?;
+    let path = directory.join(format!(
+        "Veshell Screenshot {}",
+        chrono::Local::now().format("%Y-%m-%d %H-%M-%S%.3f.png")
+    ));
+    let sender = state.screenshot_delivery_sender.clone();
+    thread::spawn(move || {
+        let outcome = match encode_and_write_png(size, pixels, &path) {
+            Ok(png) => ScreenshotDeliveryEvent::Completed {
+                path,
+                png: Arc::new(png),
+            },
+            Err(message) => ScreenshotDeliveryEvent::Failed { message },
+        };
+        if sender.send(outcome).is_err() {
+            // The receiving loop is gone; nothing to deliver to.
+        }
+    });
+    Ok(())
+}
+
+/// Result of the background PNG encode/write worker, delivered back to the
+/// event loop through a calloop channel.
+pub enum ScreenshotDeliveryEvent {
+    Completed { path: PathBuf, png: Arc<Vec<u8>> },
+    Failed { message: String },
+}
+
+/// Registers the channel that carries worker results back onto the loop.
+/// Returns the worker-side sender; the receiver closes only when the state is
+/// dropped.
+pub fn insert_screenshot_delivery_source<BackendData: Backend + 'static>(
+    loop_handle: &LoopHandle<'static, State<BackendData>>,
+) -> channel::Sender<ScreenshotDeliveryEvent> {
+    let (sender, receiver) = channel::channel::<ScreenshotDeliveryEvent>();
+    loop_handle
+        .insert_source(receiver, |event, _, state| {
+            if let channel::Event::Msg(outcome) = event {
+                complete_screenshot_delivery(state, outcome);
+            }
+        })
+        .expect("Failed to init screenshot delivery channel");
+    sender
+}
+
+/// Publishes a finished screenshot to the Wayland and XWayland clipboards.
+///
+/// The selection is advertised only now, on the event loop, so no client can
+/// request pixels before they exist; reads are served lazily through
+/// `State::send_selection` from the `Arc` bytes handed to the selection.
+fn complete_screenshot_delivery<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    outcome: ScreenshotDeliveryEvent,
+) {
+    match outcome {
+        ScreenshotDeliveryEvent::Completed { path, png } => {
+            let mime_types = vec![PNG_MIME.to_string(), NATIVE_SCREENSHOT_MIME.to_string()];
+            if let Some(xwm) = state
+                .xwayland_state
+                .as_mut()
+                .and_then(|state| state.xwm.as_mut())
+            {
+                if let Err(error) =
+                    xwm.new_selection(SelectionTarget::Clipboard, Some(mime_types.clone()))
+                {
+                    warn!(?error, "Failed to publish native screenshot to XWayland");
+                }
+            }
+            set_data_device_selection(&state.display_handle, &state.seat, mime_types, Some(png));
+            info!("Screenshot saved: {}", path.display());
+        }
+        ScreenshotDeliveryEvent::Failed { message } => warn!("Screenshot failed: {message}"),
+    }
 }
 
 struct CapturedOutput {
@@ -228,115 +341,63 @@ struct CapturedOutput {
     pixels: Vec<u8>,
 }
 
-pub fn save_desktop_area_screenshot<BackendData: Backend + 'static>(
+/// Renders the frozen desktop into capture-owned CPU storage.
+///
+/// The Flutter dmabuf it reads is only borrowed for the duration of this
+/// synchronous render-then-readback, which completes in one dispatch on the
+/// event loop thread (the existing present `gl.Finish` barrier applies).
+/// Everything else the capture later sees is owned `Vec<u8>` data, never a
+/// swapchain buffer that could be recycled under it.
+fn take_output_snapshot<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
-    area: Rectangle<f64, Logical>,
-) -> Result<PathBuf, String> {
-    let (inputs, capture_scale) = output_capture_inputs(state, area)?;
+    output: &Output,
+) -> Result<CaptureSnapshot, String> {
+    let view_id = output
+        .user_data()
+        .get::<OutputViewIdWrapper>()
+        .ok_or_else(|| format!("Output {} has no Flutter view", output.name()))?
+        .view_id;
+    let flutter_dmabuf = latest_flutter_dmabuf(state, view_id)?;
+    let geometry = state
+        .space
+        .output_geometry(output)
+        .ok_or_else(|| format!("Output {} has no geometry", output.name()))?
+        .to_f64();
+    let output_name = output.name();
+    let game_surface_list: Vec<
+        smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+    > = state
+        .meta_window_state
+        .meta_windows
+        .values()
+        .filter_map(|meta_window| {
+            (meta_window.game_mode_activated
+                && meta_window.current_output.as_deref() == Some(output_name.as_str()))
+            .then(|| state.surfaces.get(&meta_window.surface_id).cloned())
+            .flatten()
+        })
+        .collect();
 
-    let captured_outputs = state
+    let (size, pixels) = state
         .backend_data
         .with_primary_renderer_mut(|renderer| {
-            inputs
-                .iter()
-                .map(|input| {
-                    let bytes = render_output_to_memory(
-                        renderer,
-                        &input.output,
-                        &input.flutter_dmabuf,
-                        input.geometry,
-                        BackendData::FLIP_FLUTTER_TEXTURE,
-                        input.game_surface_list.iter().collect(),
-                    )?;
-                    let (size, pixels) = orient_readback(&input.output, bytes)?;
-                    Ok(CapturedOutput {
-                        geometry: input.geometry,
-                        size,
-                        pixels,
-                    })
-                })
-                .collect::<Result<Vec<_>, String>>()
+            let bytes = render_output_to_memory(
+                renderer,
+                output,
+                &flutter_dmabuf,
+                geometry,
+                BackendData::FLIP_FLUTTER_TEXTURE,
+                game_surface_list.iter().collect(),
+            )?;
+            orient_readback(output, bytes)
         })
         .ok_or_else(|| "No renderer is available to capture the output".to_string())??;
 
-    let (size, pixels) = compose_desktop_area(area, capture_scale, &captured_outputs)?;
-    let (path, png) = write_png(size, pixels)?;
-    if let Some(xwm) = state
-        .xwayland_state
-        .as_mut()
-        .and_then(|state| state.xwm.as_mut())
-    {
-        if let Err(error) = xwm.new_selection(
-            SelectionTarget::Clipboard,
-            Some(vec![
-                PNG_MIME.to_string(),
-                NATIVE_SCREENSHOT_MIME.to_string(),
-            ]),
-        ) {
-            warn!(?error, "Failed to publish native screenshot to XWayland");
-        }
-    }
-    set_data_device_selection(
-        &state.display_handle,
-        &state.seat,
-        vec![PNG_MIME.to_string(), NATIVE_SCREENSHOT_MIME.to_string()],
-        Some(Arc::new(png)),
-    );
-    Ok(path)
-}
-
-fn output_capture_inputs<BackendData: Backend + 'static>(
-    state: &State<BackendData>,
-    area: Rectangle<f64, Logical>,
-) -> Result<(Vec<OutputCaptureInput>, f64), String> {
-    let mut inputs = Vec::new();
-    let mut capture_scale: f64 = 0.0;
-
-    for output in state.space.outputs().cloned() {
-        let geometry = state
-            .space
-            .output_geometry(&output)
-            .ok_or_else(|| format!("Output {} has no geometry", output.name()))?
-            .to_f64();
-        if area.intersection(geometry).is_none() {
-            continue;
-        }
-
-        let view_id = output
-            .user_data()
-            .get::<OutputViewIdWrapper>()
-            .ok_or_else(|| format!("Output {} has no Flutter view", output.name()))?
-            .view_id;
-        let flutter_dmabuf = latest_flutter_dmabuf(state, view_id)?;
-        let output_name = output.name();
-        let game_surface_list = state
-            .meta_window_state
-            .meta_windows
-            .values()
-            .filter_map(|meta_window| {
-                (meta_window.game_mode_activated
-                    && meta_window.current_output.as_deref() == Some(output_name.as_str()))
-                .then(|| state.surfaces.get(&meta_window.surface_id).cloned())
-                .flatten()
-            })
-            .collect();
-
-        capture_scale = capture_scale.max(output.current_scale().fractional_scale());
-        inputs.push(OutputCaptureInput {
-            output,
-            geometry,
-            flutter_dmabuf,
-            game_surface_list,
-        });
-    }
-
-    if inputs.is_empty() {
-        return Err("Capture rectangle does not intersect any output".to_string());
-    }
-    if inputs.len() != 1 {
-        return Err("Capture selection must stay within one physical output".to_string());
-    }
-    Ok((inputs, capture_scale))
+    Ok(CaptureSnapshot {
+        size,
+        scale: output.current_scale().fractional_scale(),
+        pixels,
+    })
 }
 
 fn compose_desktop_area(
@@ -597,17 +658,26 @@ fn orient_pixels(
     Ok((target_size, pixels))
 }
 
-fn write_png(size: Size<i32, Physical>, pixels: Vec<u8>) -> Result<(PathBuf, Vec<u8>), String> {
-    let path = screenshot_directory()?.join(format!(
-        "Veshell Screenshot {}.png",
-        chrono::Local::now().format("%Y-%m-%d %H-%M-%S%.3f")
-    ));
+fn encode_and_write_png(
+    size: Size<i32, Physical>,
+    pixels: Vec<u8>,
+    path: &Path,
+) -> Result<Vec<u8>, String> {
     let png = encode_png(size, pixels)
         .map_err(|error| format!("Unable to encode screenshot {}: {error}", path.display()))?;
-    File::create(&path)
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("Invalid screenshot path {}", path.display()))?;
+    let part_path = path.with_file_name(format!("{file_name}.part"));
+    let result = File::create(&part_path)
         .and_then(|mut file| file.write_all(&png))
-        .map_err(|error| format!("Unable to write screenshot {}: {error}", path.display()))?;
-    Ok((path, png))
+        .and_then(|()| fs::rename(&part_path, path))
+        .map_err(|error| format!("Unable to write screenshot {}: {error}", path.display()));
+    if result.is_err() {
+        let _ = fs::remove_file(&part_path);
+    }
+    result.map(|()| png)
 }
 
 fn encode_png(size: Size<i32, Physical>, pixels: Vec<u8>) -> Result<Vec<u8>, png::EncodingError> {
@@ -682,6 +752,33 @@ mod tests {
     }
 
     #[test]
+    fn encode_and_write_png_renames_part_file_atomically() {
+        let directory =
+            std::env::temp_dir().join(format!("veshell-capture-test-{}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("shot.png");
+
+        let png = encode_and_write_png((1, 1).into(), vec![1, 2, 3, 255], &path).unwrap();
+
+        assert_eq!(fs::read(&path).unwrap(), png);
+        assert!(!directory.join("shot.png.part").exists());
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn encode_and_write_png_leaves_no_part_file_when_directory_is_missing() {
+        let directory =
+            std::env::temp_dir().join(format!("veshell-capture-missing-{}", std::process::id()));
+        let path = directory.join("shot.png");
+
+        assert!(encode_and_write_png((1, 1).into(), vec![1, 2, 3, 255], &path).is_err());
+
+        assert!(!path.exists());
+        assert!(!directory.join("shot.png.part").exists());
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
     fn desktop_area_composes_intersecting_outputs() {
         let area = Rectangle::new((0., 0.).into(), (4., 1.).into());
         let outputs = [
@@ -727,6 +824,7 @@ mod tests {
             output_geometry: Rectangle::new((0., 0.).into(), (100., 100.).into()),
             start: Some((80., 90.).into()),
             current: (10., 20.).into(),
+            snapshot: None,
         };
 
         let rect = session.selection().unwrap();
@@ -742,6 +840,7 @@ mod tests {
             output_geometry: Rectangle::new((0., 0.).into(), (100., 100.).into()),
             start: Some((10., 10.).into()),
             current: (10., 10.).into(),
+            snapshot: None,
         };
 
         assert!(session.selection().is_none());
