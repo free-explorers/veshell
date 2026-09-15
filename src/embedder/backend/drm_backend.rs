@@ -128,6 +128,7 @@ pub struct DrmBackend {
 impl Backend for DrmBackend {
     const HAS_RELATIVE_MOTION: bool = true;
     const FLIP_FLUTTER_TEXTURE: bool = true;
+    const RUNS_PORTAL_BACKEND: bool = true;
 
     fn seat_name(&self) -> String {
         self.session.seat()

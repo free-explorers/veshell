@@ -14,6 +14,10 @@ pub mod x11_client;
 pub trait Backend {
     const HAS_RELATIVE_MOTION: bool = false;
     const FLIP_FLUTTER_TEXTURE: bool = false;
+    /// Only the real seat session (DRM) owns the portal backend name; a
+    /// nested or non-session run must not answer portal requests on a
+    /// foreign bus.
+    const RUNS_PORTAL_BACKEND: bool = false;
 
     fn seat_name(&self) -> String;
 

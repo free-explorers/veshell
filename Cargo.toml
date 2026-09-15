@@ -73,6 +73,8 @@ uuid = { version = "1.16.0", features = ["v4"] }
 bitflags = "2.2.1"
 png = "0.17.16"
 xdg-user = "0.2.1"
+zbus = "5"
+async-channel = "2"
 
 
 [build-dependencies]
@@ -93,6 +95,7 @@ assets = [
     { source = "extra/assets/veshell-session", dest = "/usr/bin/", mode = "755" },
     { source = "extra/assets/veshell.desktop", dest = "/usr/share/wayland-sessions/", mode = "644" },
     { source = "extra/assets/veshell-portals.conf", dest = "/usr/share/xdg-desktop-portal/", mode = "644" },
+    { source = "extra/assets/veshell.portal", dest = "/usr/share/xdg-desktop-portal/", mode = "644" },
     { source = "extra/assets/veshell.service", dest = "/usr/lib/systemd/user/", mode = "644" },
     { source = "extra/assets/veshell-shutdown.target", dest = "/usr/lib/systemd/user/", mode = "644" },
 ]
@@ -116,6 +119,11 @@ assets = [
     ],
     [
         "extra/assets/veshell-portals.conf",
+        "/usr/share/xdg-desktop-portal/",
+        "644",
+    ],
+    [
+        "extra/assets/veshell.portal",
         "/usr/share/xdg-desktop-portal/",
         "644",
     ],

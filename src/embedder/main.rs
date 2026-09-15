@@ -27,6 +27,7 @@ mod input_handling;
 mod keyboard;
 mod meta_window_state;
 mod mouse_button_tracker;
+mod portal;
 mod settings;
 mod state;
 mod texture_swap_chain;

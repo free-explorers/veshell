@@ -69,6 +69,40 @@ Implemented M1 foundations:
   `Arc` bytes.
 - Physical output location updates remap `Space`, refresh its output bookkeeping,
   and advance an in-process output-layout revision.
+- M2.1 portal backend state machine (2026-09-15): the ScreenCast backend owns
+  its name on the real session bus only in the seat session (`RUNS_PORTAL_
+  BACKEND`); nested and non-session runs stay silent. Every bridged call is
+  authenticated against the live unique owner of
+  `org.freedesktop.portal.Desktop` (queried from the bus driver at startup;
+  an absent frontend rejects everything). The session lifecycle runs
+  Created -> Configured -> Choosing -> Starting -> Active -> Closed on a plain
+  ledger with an idempotent close: Session.Close / Request.Close invalidate
+  late replies, a frontend owner loss closes every session and pending
+  request, and no cancelled session may resurrect. Start cancels safely
+  (response code 1) until the consent milestone exists - there is no consent
+  to betray yet. Session/Request objects are served on a dedicated object
+  bridge thread (compositor code stays off async and signals `Closed()`
+  before unexporting).
+- Packaging (2026-09-15): `extra/assets/veshell.portal` declares
+  `DBusName=org.freedesktop.impl.portal.desktop.veshell` plus the ScreenCast
+  interface only; `veshell-portals.conf` selects Veshell for ScreenCast while
+  preserving unrelated GTK/GNOME selections; the Makefile, RPM and DEB
+  metadata install and uninstall the descriptor together with the selection
+  file.
+- M2.0 portal groundwork (2026-09-15): `zbus` 5 dependency recorded in
+  `docs/dependencies.md`; `src/embedder/portal/mod.rs` implements the
+  ScreenCast backend v4 contract skeleton (`CreateSession`/`SelectSources`/`Start`
+  signatures, Request/Session objects, response codes 0/1/2, MONITOR-only
+  `AvailableSourceTypes`), constraint parsing with defaults and strict
+  unknown-bit rejection, and frontend-owner authorization. Every backend call
+  is bridged onto a calloop channel; replies are completed from the loop
+  thread. An isolated session-bus harness (`portal/harness.rs`) runs a private
+  `dbus-daemon` plus a fake frontend   the call round trip, and the VIRTUAL-only rejection end to end.
+- M2.1 harness coverage (2026-09-15): the harness additionally drives the REAL
+  ledger through `apply_portal_call` while the fake frontend exercises
+  CreateSession (Session object `version` property = 2), SelectSources
+  constraint storage, and its VIRTUAL-only rejection. A second bus connection
+  without the frontend name gets response code 2 and creates nothing.
 - Flutter backing stores have a per-view generation. The exact generation presented
   in a Flutter layer is retained until presentation or collection, rather than
   promoting whichever buffer was acquired most recently.

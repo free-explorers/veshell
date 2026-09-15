@@ -157,6 +157,7 @@ pub struct State<BackendData: Backend + 'static> {
     pub output_layout_revision: u64,
     pub capture_session: Option<crate::capture::CaptureSession>,
     pub screenshot_delivery_sender: channel::Sender<crate::capture::ScreenshotDeliveryEvent>,
+    pub portal_runtime: Option<crate::portal::PortalRuntime>,
     pub pointer_view_id: Option<i64>,
 }
 
@@ -313,6 +314,35 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             FractionalScaleManagerState::new::<Self>(&display_handle);
         let screenshot_delivery_sender =
             crate::capture::insert_screenshot_delivery_source(&loop_handle);
+
+        // The portal backend is owned exclusively by the seat session: a
+        // nested or foreign-bus run must never answer portal requests.
+        let portal_runtime = if <BackendData as Backend>::RUNS_PORTAL_BACKEND {
+            match crate::portal::spawn_portal_runtime() {
+                Some(Ok((runtime, calls))) => {
+                    loop_handle
+                        .insert_source(calls, |event, _, state: &mut Self| {
+                            if let channel::Event::Msg(call) = event {
+                                crate::portal::service::handle_portal_call(state, call);
+                            }
+                        })
+                        .expect("Failed to init portal call bridge");
+                    info!("Portal backend listening on the session bus");
+                    Some(runtime)
+                }
+                Some(Err(error)) => {
+                    warn!(?error, "Portal backend did not start");
+                    None
+                }
+                None => {
+                    warn!("No session bus is available for the portal backend");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         Self {
             running: Arc::new(AtomicBool::new(true)),
             display_handle,
@@ -368,6 +398,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             output_layout_revision: 0,
             capture_session: None,
             screenshot_delivery_sender,
+            portal_runtime,
             pointer_view_id: None,
         }
     }

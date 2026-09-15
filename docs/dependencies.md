@@ -64,11 +64,27 @@
       <td>openssl-devel</td>
       <td>openssl</td>
     </tr>
-     <tr>
+    <tr>
       <td>libstdc</td>
       <td></td>
       <td></td>
       <td>libstdc++-12-dev</td>
     </tr>
-  </tbody>
+    <tr>
+      <td>zbus 5 (cargo dependency, pure Rust)</td>
+      <td colspan=3></td>
+    </tr>
+    <tr>
+      <td>libpipewire-0.3 >= 1.0 (used from M2.3 / producer)</td>
+      <td>pipewire</td>
+      <td>pipewire-devel</td>
+      <td>libpipewire-0.3-dev</td>
+    </tr>
+    <tr>
+      <td>dbus-daemon session bus (tests + portal frontend)</td>
+      <td>dbus</td>
+      <td>dbus</td>
+      <td>dbus</td>
+    </tr>
+   </tbody>
 </table>
