@@ -109,13 +109,11 @@ pub fn apply_portal_call(
             ..
         } => {
             let response = if !valid_session_path(session_handle.as_str()) {
-                println!("DEBUG create rejected: invalid session handle");
                 failed("invalid session handle")
             } else if ledger.sessions.contains_key(&session_handle) {
                 failed("session already exists")
             } else {
                 tracing::info!(session_path = %session_handle, "Portal session created");
-                println!("DEBUG create ok");
                 actions.push(PortalAction::ExportSession(session_handle.clone()));
                 ledger.sessions.insert(
                     session_handle,
