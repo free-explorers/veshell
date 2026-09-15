@@ -155,8 +155,7 @@ pub struct State<BackendData: Backend + 'static> {
     pub fractional_scale_manager_state: FractionalScaleManagerState,
     pub input_devices: HashSet<input::Device>,
     pub output_layout_revision: u64,
-    pub next_screenshot_id: u64,
-    pub pending_screenshot: Option<crate::capture::PendingScreenshot>,
+    pub capture_session: Option<crate::capture::CaptureSession>,
     pub pointer_view_id: Option<i64>,
 }
 
@@ -364,8 +363,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             fractional_scale_manager_state,
             input_devices: HashSet::new(),
             output_layout_revision: 0,
-            next_screenshot_id: 1,
-            pending_screenshot: None,
+            capture_session: None,
             pointer_view_id: None,
         }
     }
@@ -499,10 +497,9 @@ impl<BackendData: Backend + 'static> State<BackendData> {
     pub fn output_layout_changed(&mut self) {
         self.space.refresh();
         self.output_layout_revision = self.output_layout_revision.wrapping_add(1);
-        crate::capture::cancel_pending_screenshot(
-            self,
-            "Output layout changed during screenshot selection",
-        );
+        // The frozen image no longer describes the layout: abort the
+        // capture session instead of producing a broken screenshot.
+        crate::capture::cancel_capture_session(self);
     }
 
     pub fn apply_monitor_configuration_to_output(

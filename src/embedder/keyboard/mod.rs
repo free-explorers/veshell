@@ -141,6 +141,24 @@ fn handle_embedder_hotkeys<BackendData: Backend + 'static>(
     data: &mut State<BackendData>,
     event: VeshellKeyEvent,
 ) -> bool {
+    // While a screenshot session runs, the desktop must stay frozen: every
+    // key is swallowed, and Escape leaves capture mode instead of being
+    // forwarded anywhere.
+    if data.capture_session.is_some() {
+        if event.keysym == Keysym::Escape && event.state == KeyState::Pressed {
+            crate::capture::cancel_capture_session(data);
+        }
+        return true;
+    }
+
+    // Capture the exact rendering state at the moment the hotkey is
+    // pressed: Rust owns the whole flow, the key never reaches Flutter.
+    if event.keysym == Keysym::Print && event.state == KeyState::Pressed {
+        let pointer_location = data.pointer.current_location();
+        crate::capture::begin_capture_session(data, pointer_location);
+        return true;
+    }
+
     // Switching to another VT
     if (Keysym::XF86_Switch_VT_1.raw()..=Keysym::XF86_Switch_VT_12.raw())
         .contains(&event.keysym.raw())

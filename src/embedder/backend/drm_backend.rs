@@ -1249,6 +1249,13 @@ impl State<DrmBackend> {
             None => return,
         };
 
+        // The selection overlay only appears on the output the screenshot
+        // session attached to; on the others the pointer never goes.
+        let capture_overlay = self
+            .capture_session
+            .as_ref()
+            .filter(|session| session.output.name() == output.name());
+
         let elements = get_render_elements(
             renderer,
             output,
@@ -1271,6 +1278,7 @@ impl State<DrmBackend> {
                     }
                 })
                 .collect::<Vec<_>>(),
+            capture_overlay,
         );
 
         let rendered = surface.compositor.render_frame(

@@ -79,7 +79,6 @@ Map<String, LogicalKeyboardKey> stringToKeyMap = {
   'arrowRight': LogicalKeyboardKey.arrowRight,
   'arrowDown': LogicalKeyboardKey.arrowDown,
   // GTK reports the physical Print Screen key as the logical `print` key.
-  'printScreen': LogicalKeyboardKey.print,
   'insert': LogicalKeyboardKey.insert,
   'contextMenu': LogicalKeyboardKey.contextMenu,
   'pause': LogicalKeyboardKey.pause,
@@ -112,5 +111,6 @@ Map<String, LogicalKeyboardKey> stringToKeyMap = {
   'volumeUp': LogicalKeyboardKey.audioVolumeUp,
 };
 
-Map<LogicalKeyboardKey, String> keyToStringMap =
-    stringToKeyMap.map((key, value) => MapEntry(value, key));
+Map<LogicalKeyboardKey, String> keyToStringMap = stringToKeyMap.map(
+  (key, value) => MapEntry(value, key),
+);

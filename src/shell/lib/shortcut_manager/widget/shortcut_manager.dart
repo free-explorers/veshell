@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/capture/provider/capture_selection.dart';
 import 'package:shell/shared/pulseaudio/provider/default_sink.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_audio.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_sink_by_name.dart';
@@ -32,9 +31,7 @@ class VeshellShortcutManager extends HookConsumerWidget {
             onInvoke: (IncreaseVolume intent) {
               final defaultSink = ref.read(defaultPulseSinkProvider);
               if (defaultSink == null) return;
-              final sink = ref.read(
-                pulseSinkByNameProvider(defaultSink.name),
-              );
+              final sink = ref.read(pulseSinkByNameProvider(defaultSink.name));
               if (sink == null) return;
 
               ref
@@ -48,14 +45,12 @@ class VeshellShortcutManager extends HookConsumerWidget {
             onInvoke: (DecreaseVolume intent) {
               final defaultSink = ref.read(defaultPulseSinkProvider);
               if (defaultSink == null) return;
-              final sink = ref.read(
-                pulseSinkByNameProvider(defaultSink.name),
-              );
+              final sink = ref.read(pulseSinkByNameProvider(defaultSink.name));
               if (sink == null) return;
-              ref.read(pulseClientProvider).requireValue.setSinkVolume(
-                    defaultSink.name,
-                    max(sink.volume - 0.05, 0),
-                  );
+              ref
+                  .read(pulseClientProvider)
+                  .requireValue
+                  .setSinkVolume(defaultSink.name, max(sink.volume - 0.05, 0));
 
               return null;
             },
@@ -64,21 +59,13 @@ class VeshellShortcutManager extends HookConsumerWidget {
             onInvoke: (ToggleMute intent) {
               final defaultSink = ref.read(defaultPulseSinkProvider);
               if (defaultSink == null) return;
-              final sink = ref.read(
-                pulseSinkByNameProvider(defaultSink.name),
-              );
+              final sink = ref.read(pulseSinkByNameProvider(defaultSink.name));
               if (sink == null) return;
-              ref.read(pulseClientProvider).requireValue.setSinkMute(
-                    defaultSink.name,
-                    !sink.mute,
-                  );
+              ref
+                  .read(pulseClientProvider)
+                  .requireValue
+                  .setSinkMute(defaultSink.name, !sink.mute);
               return;
-            },
-          ),
-          TakeScreenshot: CallbackAction<TakeScreenshot>(
-            onInvoke: (TakeScreenshot intent) {
-              ref.read(captureSelectionProvider.notifier).begin();
-              return null;
             },
           ),
         },
@@ -110,12 +97,9 @@ class _ShortcutManager extends ShortcutManager {
           intent: overviewIntent,
         );
         if (action != null) {
-          final (bool enabled, Object? invokeResult) =
-              Actions.of(primaryContext).invokeActionIfEnabled(
-            action,
-            overviewIntent,
+          final (bool enabled, Object? invokeResult) = Actions.of(
             primaryContext,
-          );
+          ).invokeActionIfEnabled(action, overviewIntent, primaryContext);
           if (enabled) {
             return action.toKeyEventResult(overviewIntent, invokeResult);
           }

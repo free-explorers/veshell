@@ -2,232 +2,237 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 
-use serde::Deserialize;
 use smithay::backend::allocator::dmabuf::{AsDmabuf, Dmabuf};
 use smithay::backend::allocator::{Fourcc, Slot};
 use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::gles::{GlesRenderbuffer, GlesRenderer};
 use smithay::backend::renderer::{Bind, ExportMem, Offscreen};
 use smithay::output::Output;
-use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
-use smithay::utils::{Physical, Rectangle, Size, Transform};
+use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
 use smithay::wayland::selection::data_device::set_data_device_selection;
 use smithay::wayland::selection::SelectionTarget;
-use tracing::warn;
+use tracing::{info, warn};
 
-use crate::backend::render::get_render_elements_from_dmabuf;
-use crate::flutter_engine::platform_channels::method_result::MethodResult;
+use crate::backend::render::get_frame_elements_from_dmabuf;
 use crate::flutter_engine::view::OutputViewIdWrapper;
 use crate::state::{NATIVE_SCREENSHOT_MIME, PNG_MIME};
 use crate::{Backend, State};
 
-#[derive(Clone, Copy, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct DesktopArea {
-    pub x: f64,
-    pub y: f64,
-    pub width: f64,
-    pub height: f64,
+const BTN_LEFT: u32 = 0x110;
+
+/// A live screenshot-selection session.
+///
+/// Entered when the user presses the compositor's own screenshot hotkey
+/// (print screen). The moment it starts, the desktop visual is frozen: the
+/// new Flutter frames that arrive while the session runs are discarded (see
+/// the compositor backing-store gate) and pointer/keyboard events no longer
+/// reach Flutter or Wayland clients, so nothing on screen can repaint.
+///
+/// The cursor is not part of the captured image: while the session runs a
+/// native crosshair is drawn instead (see the render side) and the readback
+/// renders the frozen frame without any cursor.
+///
+/// The selection is drawn natively over the output the pointer was on when
+/// the hotkey fired; the drag is confined to [output_geometry].
+pub struct CaptureSession {
+    pub output: Output,
+    pub output_geometry: Rectangle<f64, Logical>,
+    pub start: Option<Point<f64, Logical>>,
+    pub current: Point<f64, Logical>,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ScreenshotRequest {
-    pub rect: DesktopArea,
-    #[serde(default)]
-    pub revision: Option<u64>,
+impl CaptureSession {
+    /// The logical selection rectangle, or None if no drag has started yet
+    /// or the drag area is empty (a click without drag).
+    pub fn selection(&self) -> Option<Rectangle<f64, Logical>> {
+        let start = self.start?;
+        let x_min = start.x.min(self.current.x);
+        let y_min = start.y.min(self.current.y);
+        let width = start.x.max(self.current.x) - x_min;
+        let height = start.y.max(self.current.y) - y_min;
+        let rect = Rectangle::new((x_min, y_min).into(), (width, height).into());
+        (rect.size.w > 0.0 && rect.size.h > 0.0).then_some(rect)
+    }
+
+    /// Clamps a point within this session's output geometry.
+    pub fn clamp_in_output(&self, point: Point<f64, Logical>) -> Point<f64, Logical> {
+        let mut x = point.x;
+        let mut y = point.y;
+        x = x.clamp(
+            self.output_geometry.loc.x,
+            self.output_geometry.loc.x + self.output_geometry.size.w,
+        );
+        y = y.clamp(
+            self.output_geometry.loc.y,
+            self.output_geometry.loc.y + self.output_geometry.size.h,
+        );
+        (x, y).into()
+    }
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct PreparedScreenshotRequest {
-    pub id: u64,
+/// Starts a screenshot session, freezing the desktop at the current state.
+///
+/// Returns true when a session started (the caller must swallow the event).
+pub fn begin_capture_session<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    pointer_location: Point<f64, Logical>,
+) {
+    let Some((output, geometry)) = state
+        .space
+        .outputs()
+        .find_map(|output| {
+            state
+                .space
+                .output_geometry(output)
+                .map(|geometry| (output, geometry.to_f64()))
+                .filter(|(_, geometry)| geometry.contains(pointer_location))
+        })
+        .or_else(|| {
+            state.space.outputs().next().and_then(|output| {
+                state
+                    .space
+                    .output_geometry(output)
+                    .map(|geometry| (output, geometry.to_f64()))
+            })
+        })
+        .map(|(output, geometry)| (output.clone(), geometry))
+    else {
+        warn!("Unable to start a screenshot session without any output");
+        return;
+    };
+    info!(pointer_location = ?pointer_location, "Entering screenshot capture mode");
+    state.capture_session = Some(CaptureSession {
+        output,
+        output_geometry: geometry,
+        start: None,
+        current: pointer_location,
+    });
 }
 
-pub struct PreparedScreenshot {
-    id: u64,
-    area: DesktopArea,
-    layout_revision: u64,
-    view_generations: Vec<(i64, Option<u64>)>,
+/// Ends the session by teleporting the compositor pointer back to the last
+/// tracked selection position.
+///
+/// Pointer motion was short-circuited during the session, so the Smithay
+/// pointer is still at the hotkey-press location; without this the cursor
+/// would visibly jump back there after the frozen desktop clears.
+/// `set_location` deliberately sends no events and touches no focus.
+fn end_capture_session<BackendData: Backend + 'static>(state: &mut State<BackendData>) {
+    let Some(session) = state.capture_session.take() else {
+        return;
+    };
+    state.pointer.set_location(session.current);
 }
 
-pub struct PendingScreenshot {
-    prepared: PreparedScreenshot,
-    result: Option<Box<dyn MethodResult<serde_json::Value>>>,
+/// Cancels the running session without taking a screenshot.
+pub fn cancel_capture_session<BackendData: Backend + 'static>(state: &mut State<BackendData>) {
+    if state.capture_session.is_some() {
+        end_capture_session(state);
+        info!("Screenshot capture cancelled");
+    }
+}
+
+pub fn capture_pointer_press<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    button_code: u32,
+) {
+    let Some(session) = state.capture_session.as_mut() else {
+        return;
+    };
+    // Primary button starts (or restarts) a drag; other buttons cancel.
+    if button_code == BTN_LEFT {
+        session.start = Some(session.current);
+    } else {
+        end_capture_session(state);
+        info!("Screenshot capture cancelled by button");
+    }
+}
+
+/// Accumulates a relative motion event (its `delta()` is a logical point)
+/// into the session's tracked position.
+pub fn capture_pointer_motion_delta<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    delta: Point<f64, Logical>,
+) {
+    let Some(session) = state.capture_session.as_mut() else {
+        return;
+    };
+    session.current =
+        session.clamp_in_output((session.current.x + delta.x, session.current.y + delta.y).into());
+}
+
+/// Replaces the session's tracked position with an absolute motion event.
+pub fn capture_pointer_motion_to<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    next: Point<f64, Logical>,
+) {
+    let Some(session) = state.capture_session.as_mut() else {
+        return;
+    };
+    session.current = session.clamp_in_output(next);
+}
+
+pub fn capture_pointer_release<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    button_code: u32,
+) {
+    if state.capture_session.is_none() {
+        return;
+    }
+    // Left button completes the capture, every other button cancels.
+    if button_code != BTN_LEFT {
+        cancel_capture_session(state);
+        return;
+    }
+    finish_capture(state);
+}
+
+fn finish_capture<BackendData: Backend + 'static>(state: &mut State<BackendData>) {
+    let Some(session) = state.capture_session.as_mut() else {
+        return;
+    };
+    let area = session.selection();
+    let last_position = session.current;
+
+    // Teleport the pointer to the drag end as part of leaving the session,
+    // before anything else can observe the frozen-position residue.
+    state.capture_session = None;
+    state.pointer.set_location(last_position);
+
+    match area {
+        Some(area) => finish_capture_inner(state, area),
+        None => info!("Screenshot capture cancelled: empty selection"),
+    }
+}
+
+fn finish_capture_inner<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    area: Rectangle<f64, Logical>,
+) {
+    match save_desktop_area_screenshot(state, area) {
+        Ok(path) => info!("Screenshot saved: {}", path.display()),
+        Err(message) => warn!("Screenshot failed: {message}"),
+    }
 }
 
 struct OutputCaptureInput {
     output: Output,
-    geometry: Rectangle<f64, smithay::utils::Logical>,
+    geometry: Rectangle<f64, Logical>,
     flutter_dmabuf: Dmabuf,
     game_surface_list: Vec<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
 }
 
 struct CapturedOutput {
-    geometry: Rectangle<f64, smithay::utils::Logical>,
+    geometry: Rectangle<f64, Logical>,
     size: Size<i32, Physical>,
     pixels: Vec<u8>,
 }
 
-pub fn prepare_desktop_area_screenshot<BackendData: Backend + 'static>(
-    state: &mut State<BackendData>,
-    area: DesktopArea,
-    revision: Option<u64>,
-) -> Result<u64, String> {
-    if state.pending_screenshot.is_some() {
-        return Err("A screenshot is already in progress".to_string());
-    }
-
-    let area = area.rectangle()?;
-    if revision.is_some_and(|revision| revision != state.output_layout_revision) {
-        return Err("Output layout changed during screenshot selection".to_string());
-    }
-    let view_generations = capture_view_generations(state, area)?;
-    let id = state.next_screenshot_id;
-    state.next_screenshot_id = state.next_screenshot_id.wrapping_add(1);
-    state.pending_screenshot = Some(PendingScreenshot {
-        prepared: PreparedScreenshot {
-            id,
-            area: DesktopArea {
-                x: area.loc.x,
-                y: area.loc.y,
-                width: area.size.w,
-                height: area.size.h,
-            },
-            layout_revision: state.output_layout_revision,
-            view_generations,
-        },
-        result: None,
-    });
-    let loop_handle = state.loop_handle.clone();
-    if let Err(error) = loop_handle.insert_source(
-        Timer::from_duration(Duration::from_secs(5)),
-        move |_, _, state| {
-            cancel_pending_screenshot_if_id(
-                state,
-                id,
-                "Screenshot capture timed out waiting for a presented frame",
-            );
-            TimeoutAction::Drop
-        },
-    ) {
-        state.pending_screenshot = None;
-        return Err(format!("Unable to schedule screenshot timeout: {error}"));
-    }
-    Ok(id)
-}
-
-pub fn queue_prepared_screenshot<BackendData: Backend + 'static>(
-    state: &mut State<BackendData>,
-    id: u64,
-    result: Box<dyn MethodResult<serde_json::Value>>,
-) {
-    let Some(mut pending) = state.pending_screenshot.take() else {
-        return_result_error(
-            result,
-            "No prepared screenshot matches this request".to_string(),
-        );
-        return;
-    };
-    if pending.prepared.id != id {
-        state.pending_screenshot = Some(pending);
-        return_result_error(
-            result,
-            "No prepared screenshot matches this request".to_string(),
-        );
-        return;
-    }
-    if pending.prepared.layout_revision != state.output_layout_revision {
-        return_result_error(
-            result,
-            "Output layout changed during screenshot selection".to_string(),
-        );
-        return;
-    }
-    if pending.result.is_some() {
-        state.pending_screenshot = Some(pending);
-        return_result_error(result, "Screenshot capture is already queued".to_string());
-        return;
-    }
-
-    pending.result = Some(result);
-    state.pending_screenshot = Some(pending);
-    complete_pending_screenshot(state);
-}
-
-pub fn cancel_pending_screenshot<BackendData: Backend + 'static>(
-    state: &mut State<BackendData>,
-    message: &str,
-) {
-    let Some(pending) = state.pending_screenshot.take() else {
-        return;
-    };
-    if let Some(result) = pending.result {
-        return_result_error(result, message.to_string());
-    }
-}
-
-fn cancel_pending_screenshot_if_id<BackendData: Backend + 'static>(
-    state: &mut State<BackendData>,
-    id: u64,
-    message: &str,
-) {
-    if state
-        .pending_screenshot
-        .as_ref()
-        .is_some_and(|pending| pending.prepared.id == id)
-    {
-        cancel_pending_screenshot(state, message);
-    }
-}
-
-pub fn complete_pending_screenshot<BackendData: Backend + 'static>(state: &mut State<BackendData>) {
-    let Some(pending) = state.pending_screenshot.as_ref() else {
-        return;
-    };
-    if pending.prepared.layout_revision != state.output_layout_revision {
-        let pending = state.pending_screenshot.take().unwrap();
-        if let Some(result) = pending.result {
-            return_result_error(
-                result,
-                "Output layout changed during screenshot selection".to_string(),
-            );
-        }
-        return;
-    }
-    if pending.result.is_none() {
-        return;
-    }
-    if !has_new_presented_frames(state, &pending.prepared.view_generations) {
-        return;
-    }
-
-    let pending = state.pending_screenshot.take().unwrap();
-    let result = pending.result.unwrap();
-    match save_desktop_area_screenshot(state, pending.prepared.area) {
-        Ok(path) => {
-            let mut result = result;
-            result.success(Some(serde_json::json!({ "path": path })));
-        }
-        Err(message) => return_result_error(result, message),
-    }
-}
-
-fn return_result_error(mut result: Box<dyn MethodResult<serde_json::Value>>, message: String) {
-    result.error("screenshot_failed".to_string(), message, None);
-}
-
 pub fn save_desktop_area_screenshot<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
-    area: DesktopArea,
+    area: Rectangle<f64, Logical>,
 ) -> Result<PathBuf, String> {
-    let area = area.rectangle()?;
     let (inputs, capture_scale) = output_capture_inputs(state, area)?;
-    let pointer_location = state.pointer.current_location();
-    let now = state.clock.now();
-    let is_surface_under_pointer = state.surface_id_under_cursor.is_some();
 
     let captured_outputs = state
         .backend_data
@@ -240,11 +245,6 @@ pub fn save_desktop_area_screenshot<BackendData: Backend + 'static>(
                         &input.output,
                         &input.flutter_dmabuf,
                         input.geometry,
-                        now,
-                        &state.cursor_image_status,
-                        &state.cursor_state,
-                        pointer_location,
-                        is_surface_under_pointer,
                         BackendData::FLIP_FLUTTER_TEXTURE,
                         input.game_surface_list.iter().collect(),
                     )?;
@@ -285,30 +285,9 @@ pub fn save_desktop_area_screenshot<BackendData: Backend + 'static>(
     Ok(path)
 }
 
-impl DesktopArea {
-    fn rectangle(self) -> Result<Rectangle<f64, smithay::utils::Logical>, String> {
-        if !self.x.is_finite()
-            || !self.y.is_finite()
-            || !self.width.is_finite()
-            || !self.height.is_finite()
-            || self.width <= 0.
-            || self.height <= 0.
-        {
-            return Err(
-                "Capture rectangle must have finite coordinates and positive dimensions"
-                    .to_string(),
-            );
-        }
-        Ok(Rectangle::new(
-            (self.x, self.y).into(),
-            (self.width, self.height).into(),
-        ))
-    }
-}
-
 fn output_capture_inputs<BackendData: Backend + 'static>(
     state: &State<BackendData>,
-    area: Rectangle<f64, smithay::utils::Logical>,
+    area: Rectangle<f64, Logical>,
 ) -> Result<(Vec<OutputCaptureInput>, f64), String> {
     let mut inputs = Vec::new();
     let mut capture_scale: f64 = 0.0;
@@ -360,66 +339,8 @@ fn output_capture_inputs<BackendData: Backend + 'static>(
     Ok((inputs, capture_scale))
 }
 
-fn capture_view_generations<BackendData: Backend + 'static>(
-    state: &State<BackendData>,
-    area: Rectangle<f64, smithay::utils::Logical>,
-) -> Result<Vec<(i64, Option<u64>)>, String> {
-    let mut views = Vec::new();
-    for output in state.space.outputs() {
-        let geometry = state
-            .space
-            .output_geometry(output)
-            .ok_or_else(|| format!("Output {} has no geometry", output.name()))?
-            .to_f64();
-        if area.intersection(geometry).is_none() {
-            continue;
-        }
-        let view_id = output
-            .user_data()
-            .get::<OutputViewIdWrapper>()
-            .ok_or_else(|| format!("Output {} has no Flutter view", output.name()))?
-            .view_id;
-        let generation = state
-            .flutter_engine()
-            .views_management
-            .views
-            .get(&view_id)
-            .and_then(|view| view.last_rendered_generation);
-        views.push((view_id, generation));
-    }
-    if views.is_empty() {
-        return Err("Capture rectangle does not intersect any output".to_string());
-    }
-    Ok(views)
-}
-
-fn has_new_presented_frames<BackendData: Backend + 'static>(
-    state: &State<BackendData>,
-    expected_generations: &[(i64, Option<u64>)],
-) -> bool {
-    all_views_have_new_generations(expected_generations, |view_id| {
-        state
-            .flutter_engine()
-            .views_management
-            .views
-            .get(&view_id)
-            .map(|view| view.last_rendered_generation)
-    })
-}
-
-fn all_views_have_new_generations(
-    expected_generations: &[(i64, Option<u64>)],
-    mut current_generation: impl FnMut(i64) -> Option<Option<u64>>,
-) -> bool {
-    expected_generations
-        .iter()
-        .all(|(view_id, expected_generation)| {
-            current_generation(*view_id).is_some_and(|current| current != *expected_generation)
-        })
-}
-
 fn compose_desktop_area(
-    area: Rectangle<f64, smithay::utils::Logical>,
+    area: Rectangle<f64, Logical>,
     scale: f64,
     outputs: &[CapturedOutput],
 ) -> Result<(Size<i32, Physical>, Vec<u8>), String> {
@@ -461,10 +382,7 @@ fn compose_desktop_area(
     Ok((size, pixels))
 }
 
-fn pixel_size(
-    size: Size<f64, smithay::utils::Logical>,
-    scale: f64,
-) -> Result<Size<i32, Physical>, String> {
+fn pixel_size(size: Size<f64, Logical>, scale: f64) -> Result<Size<i32, Physical>, String> {
     if !scale.is_finite() || scale <= 0. {
         return Err("Capture scale must be finite and positive".to_string());
     }
@@ -495,8 +413,8 @@ fn pixel_len(size: Size<i32, Physical>) -> Result<usize, String> {
 }
 
 fn scaled_bounds(
-    rectangle: Rectangle<f64, smithay::utils::Logical>,
-    origin: smithay::utils::Point<f64, smithay::utils::Logical>,
+    rectangle: Rectangle<f64, Logical>,
+    origin: Point<f64, Logical>,
     scale_x: f64,
     scale_y: f64,
 ) -> Result<Rectangle<i32, Physical>, String> {
@@ -591,38 +509,28 @@ fn render_output_to_memory(
     renderer: &mut GlesRenderer,
     output: &Output,
     flutter_dmabuf: &Dmabuf,
-    output_geometry: Rectangle<f64, smithay::utils::Logical>,
-    now: smithay::utils::Time<smithay::utils::Monotonic>,
-    cursor_image_status: &std::sync::Mutex<smithay::input::pointer::CursorImageStatus>,
-    cursor_state: &std::sync::Mutex<crate::cursor::CursorStateInner>,
-    pointer_location: smithay::utils::Point<f64, smithay::utils::Logical>,
-    is_surface_under_pointer: bool,
+    output_geometry: Rectangle<f64, Logical>,
     flip_flutter_texture: bool,
     game_surface_list: Vec<&smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
 ) -> Result<Vec<u8>, String> {
     let mode = output
         .current_mode()
         .ok_or_else(|| format!("Output {} has no mode", output.name()))?;
-    let size = mode
-        .size
-        .to_logical(1)
-        .to_buffer(1, smithay::utils::Transform::Normal);
+    let size = mode.size.to_logical(1).to_buffer(1, Transform::Normal);
     let mut target_buffer =
         Offscreen::<GlesRenderbuffer>::create_buffer(renderer, Fourcc::Abgr8888, size)
             .map_err(|error| format!("Unable to create capture buffer: {error}"))?;
     let mut target = renderer
         .bind(&mut target_buffer)
         .map_err(|error| format!("Unable to bind capture buffer: {error}"))?;
-    let elements = get_render_elements_from_dmabuf(
+    // The cursor is deliberately not rendered: a screenshot should not
+    // contain the pointer. Game-mode surfaces stay, they are part of the
+    // desktop the user sees.
+    let elements = get_frame_elements_from_dmabuf(
         renderer,
         output,
         flutter_dmabuf,
         output_geometry,
-        now,
-        cursor_image_status,
-        cursor_state,
-        pointer_location,
-        is_surface_under_pointer,
         flip_flutter_texture,
         game_surface_list,
     );
@@ -750,13 +658,6 @@ mod tests {
     }
 
     #[test]
-    fn screenshot_png_is_encoded_for_clipboard_and_file() {
-        let encoded = encode_png((1, 1).into(), vec![1, 2, 3, 255]).unwrap();
-
-        assert_eq!(&encoded[..8], b"\x89PNG\r\n\x1a\n");
-    }
-
-    #[test]
     fn readback_is_oriented_for_rotated_outputs() {
         let top_left = [1, 2, 3, 4];
         let top_right = [5, 6, 7, 8];
@@ -771,6 +672,13 @@ mod tests {
             pixels,
             [bottom_left, top_left, bottom_right, top_right].concat()
         );
+    }
+
+    #[test]
+    fn screenshot_png_is_encoded_for_clipboard_and_file() {
+        let encoded = encode_png((1, 1).into(), vec![1, 2, 3, 255]).unwrap();
+
+        assert_eq!(&encoded[..8], b"\x89PNG\r\n\x1a\n");
     }
 
     #[test]
@@ -813,25 +721,42 @@ mod tests {
     }
 
     #[test]
-    fn screenshot_waits_for_every_participating_view() {
-        let expected = [(1, Some(3)), (2, Some(5))];
+    fn selection_rectangle_normalizes_drag_orientation() {
+        let session = CaptureSession {
+            output: test_output(),
+            output_geometry: Rectangle::new((0., 0.).into(), (100., 100.).into()),
+            start: Some((80., 90.).into()),
+            current: (10., 20.).into(),
+        };
 
-        assert!(!all_views_have_new_generations(
-            &expected,
-            |view_id| match view_id {
-                1 => Some(Some(4)),
-                2 => Some(Some(5)),
-                _ => None,
-            }
-        ));
-        assert!(all_views_have_new_generations(
-            &expected,
-            |view_id| match view_id {
-                1 => Some(Some(4)),
-                2 => Some(Some(6)),
-                _ => None,
-            }
-        ));
-        assert!(!all_views_have_new_generations(&expected, |_| None));
+        let rect = session.selection().unwrap();
+
+        assert_eq!(rect.loc, (10., 20.).into());
+        assert_eq!(rect.size, (70., 70.).into());
+    }
+
+    #[test]
+    fn click_without_drag_selects_nothing() {
+        let session = CaptureSession {
+            output: test_output(),
+            output_geometry: Rectangle::new((0., 0.).into(), (100., 100.).into()),
+            start: Some((10., 10.).into()),
+            current: (10., 10.).into(),
+        };
+
+        assert!(session.selection().is_none());
+    }
+
+    fn test_output() -> Output {
+        Output::new(
+            "test".into(),
+            smithay::output::PhysicalProperties {
+                size: (100, 100).into(),
+                subpixel: smithay::output::Subpixel::Unknown,
+                make: String::new(),
+                model: String::new(),
+                serial_number: String::new(),
+            },
+        )
     }
 }

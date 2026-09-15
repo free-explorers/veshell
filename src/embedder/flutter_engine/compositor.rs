@@ -75,26 +75,34 @@ impl FlutterCompositor {
         loop_handle
             .insert_source(rx_on_backing_store_event, move |event, _, data| {
                 if let Msg(event) = event {
-                    let presented = {
-                        let flutter_engine = data.flutter_engine_mut();
-                        match event {
-                            BackingStoreEvent::Presented(id) => flutter_engine
-                                .views_management
-                                .views
-                                .get_mut(&id.view_id)
-                                .is_some_and(|view| view.present_backing_store(id)),
-                            BackingStoreEvent::Collected(id) => {
+                    // Snapshot the freeze flag first: the mutable engine
+                    // borrow must not overlap it.
+                    let freeze = data.capture_session.is_some();
+                    let flutter_engine = data.flutter_engine_mut();
+                    match event {
+                        BackingStoreEvent::Presented(id) => {
+                            // While a screenshot session freezes the
+                            // desktop, late Flutter frames must not
+                            // replace the frame captured at hotkey time.
+                            if freeze {
                                 if let Some(view) =
                                     flutter_engine.views_management.views.get_mut(&id.view_id)
                                 {
-                                    view.discard_backing_store(id);
+                                    view.hold_backing_store(id);
                                 }
-                                false
+                            } else if let Some(view) =
+                                flutter_engine.views_management.views.get_mut(&id.view_id)
+                            {
+                                view.present_backing_store(id);
                             }
                         }
-                    };
-                    if presented {
-                        crate::capture::complete_pending_screenshot(data);
+                        BackingStoreEvent::Collected(id) => {
+                            if let Some(view) =
+                                flutter_engine.views_management.views.get_mut(&id.view_id)
+                            {
+                                view.discard_backing_store(id);
+                            }
+                        }
                     }
                 }
             })

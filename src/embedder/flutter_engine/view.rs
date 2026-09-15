@@ -89,6 +89,15 @@ impl VeshellView {
             self.in_flight_slots.remove(&id.generation);
         }
     }
+
+    /// Drops a just-presented backing store without showing it: while a
+    /// screenshot session freezes the desktop, nothing may replace the
+    /// frame the user is looking at.
+    pub fn hold_backing_store(&mut self, id: BackingStoreId) {
+        if id.view_id == self.view_id {
+            self.in_flight_slots.remove(&id.generation);
+        }
+    }
 }
 
 struct AddViewData {

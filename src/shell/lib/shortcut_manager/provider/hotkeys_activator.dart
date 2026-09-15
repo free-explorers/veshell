@@ -16,24 +16,22 @@ enum HotkeysAction {
   focusWorkspaceBelow('screen.focusWorkspaceBelow'),
   focusLeftTileable('workspace.focusLeftTileable'),
   focusRightTileable('workspace.focusRightTileable'),
-  closeTileable('workspace.closeTileable'),
-  takeScreenshot('system.takeScreenshot');
+  closeTileable('workspace.closeTileable');
 
   const HotkeysAction(this.actionId);
   final String actionId;
 }
 
 Intent getActionIntent(HotkeysAction action) => switch (action) {
-      HotkeysAction.increaseVolume => const IncreaseVolume(),
-      HotkeysAction.decreaseVolume => const DecreaseVolume(),
-      HotkeysAction.toggleMute => const ToggleMute(),
-      HotkeysAction.focusWorkspaceAbove => const FocusWorkspaceAboveIntent(),
-      HotkeysAction.focusWorkspaceBelow => const FocusWorkspaceBelowIntent(),
-      HotkeysAction.focusLeftTileable => const FocusLeftTileableIntent(),
-      HotkeysAction.focusRightTileable => const FocusRightTileableIntent(),
-      HotkeysAction.closeTileable => const CloseTileableIntent(),
-      HotkeysAction.takeScreenshot => const TakeScreenshot(),
-    };
+  HotkeysAction.increaseVolume => const IncreaseVolume(),
+  HotkeysAction.decreaseVolume => const DecreaseVolume(),
+  HotkeysAction.toggleMute => const ToggleMute(),
+  HotkeysAction.focusWorkspaceAbove => const FocusWorkspaceAboveIntent(),
+  HotkeysAction.focusWorkspaceBelow => const FocusWorkspaceBelowIntent(),
+  HotkeysAction.focusLeftTileable => const FocusLeftTileableIntent(),
+  HotkeysAction.focusRightTileable => const FocusRightTileableIntent(),
+  HotkeysAction.closeTileable => const CloseTileableIntent(),
+};
 
 @riverpod
 class HotkeysActivator extends _$HotkeysActivator {
@@ -54,10 +52,11 @@ class HotkeysActivator extends _$HotkeysActivator {
 
     // add the dev tools shortcuts
     map[const SingleActivator(
-      LogicalKeyboardKey.f12,
-      control: true,
-      shift: true,
-    )] = const ToggleDevToolsIntent();
+          LogicalKeyboardKey.f12,
+          control: true,
+          shift: true,
+        )] =
+        const ToggleDevToolsIntent();
     return map;
   }
 }

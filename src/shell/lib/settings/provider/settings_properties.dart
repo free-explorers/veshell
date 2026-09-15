@@ -113,11 +113,6 @@ class SettingsProperties extends _$SettingsProperties {
                 description: 'Toggle Mute volume',
                 converter: LogicalKeySetConverter(),
               ),
-              'system.takeScreenshot': SettingProperty<LogicalKeySet>(
-                name: 'Take Screenshot',
-                description: 'Select an area of the desktop to capture',
-                converter: LogicalKeySetConverter(),
-              ),
               'screen.focusWorkspaceAbove': SettingProperty<LogicalKeySet>(
                 name: 'Focus Workspace Above',
                 description: 'Focus workspace above',

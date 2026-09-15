@@ -67,32 +67,6 @@ class PlatformManager extends _$PlatformManager {
         if (entry.value is String) entry.key as String: entry.value as String,
     };
   }
-
-  Future<int> prepareScreenshot(Rect rect, int revision) async {
-    const channel = MethodChannel('platform', JSONMethodCodec());
-    final response = await channel.invokeMapMethod<String, dynamic>(
-      'prepare_screenshot',
-      {
-        'rect': {
-          'x': rect.left,
-          'y': rect.top,
-          'width': rect.width,
-          'height': rect.height,
-        },
-        'revision': revision,
-      },
-    );
-    final id = response?['id'];
-    if (id is! num) {
-      throw const FormatException('Missing prepared screenshot ID');
-    }
-    return id.toInt();
-  }
-
-  Future<void> takePreparedScreenshot(int id) async {
-    const channel = MethodChannel('platform', JSONMethodCodec());
-    await channel.invokeMethod<void>('take_screenshot', {'id': id});
-  }
 }
 
 /// base class for a wayland interaction

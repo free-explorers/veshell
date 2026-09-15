@@ -18,7 +18,6 @@ mod on_shell_ready;
 mod pointer_exit;
 mod pointer_focus;
 mod resize_window;
-mod take_screenshot;
 
 use self::activate_window::activate_window;
 use self::close_window::close_window;
@@ -31,7 +30,6 @@ use self::on_shell_ready::on_shell_ready;
 use self::pointer_exit::pointer_exit;
 use self::pointer_focus::pointer_focus;
 use self::resize_window::resize_window;
-use self::take_screenshot::{prepare_screenshot, take_screenshot};
 
 pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
     event: Event<(
@@ -54,8 +52,6 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             "meta_window_patches" => meta_window_patches(method_call, result, data),
             "meta_popup_patches" => meta_popup_patches(method_call, result, data),
             "shell_ready" => on_shell_ready(method_call, result, data),
-            "prepare_screenshot" => prepare_screenshot(method_call, result, data),
-            "take_screenshot" => take_screenshot(method_call, result, data),
             _ => result.error(
                 "method_not_found".to_string(),
                 format!("Method {} not found", method_call.method()),

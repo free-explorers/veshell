@@ -17,9 +17,3 @@ class ToggleMute extends Intent {
   ///
   const ToggleMute();
 }
-
-/// An intent to take a screenshot of the output under the pointer.
-class TakeScreenshot extends Intent {
-  ///
-  const TakeScreenshot();
-}

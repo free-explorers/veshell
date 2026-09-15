@@ -10,27 +10,34 @@ for an implementation agent. The status below records which parts are implemente
 
 ## Current Implementation Status
 
-Implemented native area screenshot slice:
+Implemented native area screenshot slice (2026-09-15, fully native, no Flutter
+involvement):
 
-- `PrintScreen` starts a Flutter area selector on the output under the pointer.
-  The selector can cover multiple Veshell Screens rendered by that output.
-- Rust validates the rectangle, restricts it to one physical output, renders that
-  output scene, and crops a single PNG at that output's scale.
-- Flutter first dismisses the selector and waits for an overlay-free rasterized
-  frame. Rust then records every participating Flutter view generation and delays
-  the capture until each view has presented a newer backing store. Layout changes
-  during this handshake reject the screenshot rather than using stale geometry.
-- Output rendering includes the current cursor, game-mode surfaces assigned to
-  that output, and the Flutter texture. Readback is converted to top-left,
-  output-oriented pixels before encoding.
+- The `Print` keysym handled in `handle_embedder_hotkeys` (Rust) starts a
+  screenshot session and freezes the desktop at hotkey-press time: Flutter and
+  Wayland clients receive no input while the session runs, and Flutter framing
+  stores presented during the session are dropped instead of replacing the
+  frame the user saw at hotkey time (`VeshellView::hold_backing_store`).
+- The selection is native: a Smithay pointer grab feeds `input_handling` drag
+  tracking, and the DRM/X11 render paths draw a scrim, a selection outline, and
+  a native crosshair (`get_capture_overlay_elements`) instead of the real
+  cursor. The drag is clamped to the output under the pointer at hotkey time.
+- On primary-button release, Rust renders the frozen Flutter backing store and
+  the game-mode surfaces of that single output,   crops the selection, and encodes
+  a single PNG at that output's scale. The real cursor is not part of the
+  captured image.
 - The readback is encoded as PNG in the XDG Pictures directory, falling back to
   `~/Pictures` when that directory is unavailable. The same PNG is offered as
   `image/png` on the Wayland and XWayland clipboards.
+- Escape or any non-primary button cancels the session. Output layout changes
+  cancel it too. There is no Flutter channel or UI left in the local screenshot
+  path: `prepare_screenshot`/`take_screenshot` platform channels and the shell
+  area selector were removed.
 
 This is not recording, portal capture, MetaWindow capture, or Screen capture. It
 performs synchronous readback and PNG encoding on the compositor path, so it is a
 correctness vertical slice only. M1 remains open pending runtime validation,
-nonblocking delivery, clipboard support, and capture-owned snapshot buffers.
+nonblocking delivery, and capture-owned snapshot buffers.
 
 Implemented M1 foundations:
 
@@ -230,13 +237,12 @@ Algorithm:
    cursor once in capture coordinates, clipped to the area, if requested.
 6. Deliver a completed, capture-owned frame.
 
-For a screenshot, capture the latest completed overlay-free desktop frame after
-selection finishes. Flutter dismisses the selector, waits for an overlay-free
-rasterized frame, then Rust waits for a newer presented backing-store generation
-for the participating output. Cancel if output layout changes during selection
-or this handshake. Do not use arbitrary sleeps or `endOfFrame` alone as proof of
-presentation. A future preview may use a snapshot, but it must not become a stale
-final image source.
+For a screenshot, capture the latest completed frame at hotkey time: the
+selection session freezes the desktop before the user starts dragging, so the
+capture happens on release against the frozen backing store. Because the session
+withholds input and late Flutter presentations, no overlay-free handshake or
+revision correlation is needed. Cancel if output layout changes during the
+session.
 
 For recording, dismiss the selector and wait for completed overlay-free frames
 from participating views before starting. An arbitrary sleep or Flutter
@@ -645,9 +651,16 @@ failure and request a decision for that branch; do not fall back to monitor crop
 
 ### M1: Native Area Screenshots
 
-Implement capture-owned buffers, single-output scene rendering, bounded area
-selection, cursor inclusion, PNG delivery, and clipboard.
-Audit game-mode output routing and completed-frame/overlay revision correlation.
+Screenshot state: hotkey interception, session freeze, native drag selection
+(with scrim, outline, crosshair), single-output scene rendering without the
+cursor, PNG delivered to Pictures and to both clipboards. Remaining work: runtime
+validation on DRM and nested X11, nonblocking delivery, capture-owned snapshot
+buffers for later preview/recording work, and a Flutter feedback surface (toast)
+when one is wanted.
+
+Audit game-mode output routing (the normal render path still selects all
+game-mode windows, not just the pieces assigned to the output that would claim
+multi-output parity).
 Tests: multiple Veshell Screens on one output, output-edge clamping, dialogs and
 popups, game mode, clipboard delivery, and image orientation/channel order.
 

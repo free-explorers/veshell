@@ -37,6 +37,18 @@ impl<BackendData: Backend> State<BackendData> {
             self.pointer.clone();
         let mut pointer_location = self.pointer.current_location();
 
+        // While a screenshot session is active the desktop is frozen: the
+        // pointer only drives the native selection, nothing is sent to
+        // Flutter or Wayland clients. The Smithay pointer keeps its frozen
+        // position; the session accumulates the deltas itself.
+        if self.capture_session.is_some() {
+            crate::capture::capture_pointer_motion_delta(self, event.delta());
+            return;
+        }
+
+        // clamp to screen limits
+        pointer_location = self.clamp_coords(pointer_location);
+
         pointer.relative_motion(
             self,
             self.pointer_focus.clone(),
@@ -108,6 +120,11 @@ impl<BackendData: Backend> State<BackendData> {
         // clamp to screen limits
         pointer_location = self.clamp_coords(pointer_location);
 
+        if self.capture_session.is_some() {
+            crate::capture::capture_pointer_motion_to(self, pointer_location);
+            return;
+        }
+
         let pointer = self.pointer.clone();
         pointer.motion(
             self,
@@ -144,6 +161,19 @@ impl<BackendData: Backend> State<BackendData> {
     ) where
         BackendData: Backend + 'static,
     {
+        // While a screenshot session is active the drag is native: the
+        // button never reaches the frozen desktop below. Positions come
+        // from the session's own tracking (the Smithay pointer is frozen).
+        if self.capture_session.is_some() {
+            let button_code = event.button_code();
+            if event.state() == ButtonState::Pressed {
+                crate::capture::capture_pointer_press(self, button_code);
+            } else {
+                crate::capture::capture_pointer_release(self, button_code);
+            }
+            return;
+        }
+
         let had_buttons_pressed = self
             .flutter_engine()
             .mouse_button_tracker
@@ -244,6 +274,11 @@ impl<BackendData: Backend> State<BackendData> {
     ) where
         BackendData: Backend + 'static,
     {
+        // Scroll events are irrelevant while the desktop is frozen for a
+        // screenshot selection.
+        if self.capture_session.is_some() {
+            return;
+        }
         let horizontal_amount = event.amount(input::Axis::Horizontal).unwrap_or_else(|| {
             event.amount_v120(input::Axis::Horizontal).unwrap_or(0.0) / 120. * 15.
         });

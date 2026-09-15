@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:shell/capture/widget/area_selector.dart';
 import 'package:shell/main.dart';
 import 'package:shell/monitor/model/monitor_configuration.serializable.dart';
 import 'package:shell/monitor/model/screen_configuration.serializable.dart';
@@ -23,19 +22,16 @@ class MonitorWidget extends HookConsumerWidget {
     final (lightTheme, darkTheme) = ref.watch(veshellThemeProvider);
     final initializationStatus = InitializationStatus.of(context);
     final monitorName = ref.watch(monitorByViewIdProvider(viewId));
-    final monitor = monitorName == null
-        ? null
-        : ref.watch(monitorByNameProvider(monitorName));
+    if (monitorName != null) {
+      ref.watch(monitorByNameProvider(monitorName));
+    }
     return MaterialApp(
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: ThemeMode.dark,
       builder: (context, child) => Stack(
         fit: StackFit.expand,
-        children: [
-          child ?? const SizedBox.shrink(),
-          if (monitor != null) AreaSelector(monitor: monitor),
-        ],
+        children: [child ?? const SizedBox.shrink()],
       ),
       home: Material(
         child: initializationStatus.when(

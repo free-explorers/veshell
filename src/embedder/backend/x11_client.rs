@@ -525,6 +525,10 @@ pub fn run_x11_client() {
                         }
                     })
                     .collect::<Vec<_>>(),
+                state
+                    .capture_session
+                    .as_ref()
+                    .filter(|session| session.output.name() == output.name()),
             );
 
             let mut elements2: Vec<VeshellRenderElements<GlesRenderer>> = Vec::new();
