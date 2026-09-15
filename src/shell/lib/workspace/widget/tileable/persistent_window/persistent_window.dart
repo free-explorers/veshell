@@ -40,23 +40,20 @@ class PersistentWindowTileable extends Tileable {
       debugLabel: 'PrimaryFocusNode ${window.properties.title}',
     );
 
-    useEffect(
-      () {
-        persistentFocusNode
-          ..canRequestFocus = isSelected
-          ..descendantsAreFocusable = isSelected;
+    useEffect(() {
+      persistentFocusNode
+        ..canRequestFocus = isSelected
+        ..descendantsAreFocusable = isSelected;
 
-        if (isSelected) {
-          if (persistentFocusNode.focusedChild != null) {
-            persistentFocusNode.focusedChild!.requestFocus();
-          } else {
-            persistentFocusNode.requestFocus();
-          }
+      if (isSelected) {
+        if (persistentFocusNode.focusedChild != null) {
+          persistentFocusNode.focusedChild!.requestFocus();
+        } else {
+          persistentFocusNode.requestFocus();
         }
-        return null;
-      },
-      [isSelected],
-    );
+      }
+      return null;
+    }, [isSelected]);
 
     return ClipRect(
       child: Listener(
@@ -82,14 +79,13 @@ class PersistentWindowTileable extends Tileable {
                     focusNode: primaryFocusNode,
                     displayMode: window.displayMode,
                     dialogMetaWindowList: ref
-                        .watch(
-                      dialogSetForWindowProvider(window.windowId),
-                    )
+                        .watch(dialogSetForWindowProvider(window.windowId))
                         .map((element) {
-                      return ref
-                          .read(dialogWindowStateProvider(element))
-                          .metaWindowId;
-                    }).toList(),
+                          return ref
+                              .read(dialogWindowStateProvider(element))
+                              .metaWindowId;
+                        })
+                        .toList(),
                   )
                 : WindowPlaceholder(
                     isSelected: isSelected,
@@ -111,10 +107,7 @@ class PersistentWindowTileable extends Tileable {
   }
 
   @override
-  Widget buildPanelWidget(
-    BuildContext context,
-    WidgetRef ref,
-  ) {
+  Widget buildPanelWidget(BuildContext context, WidgetRef ref) {
     final window = ref.watch(persistentWindowStateProvider(windowId));
     final isRunning = window.metaWindowId != null;
     final title = window.properties.title;
@@ -125,9 +118,7 @@ class PersistentWindowTileable extends Tileable {
         return GestureDetector(
           onTertiaryTapUp: (_) {
             ref
-                .read(
-                  persistentWindowStateProvider(windowId).notifier,
-                )
+                .read(persistentWindowStateProvider(windowId).notifier)
                 .closeWindow();
           },
           child: MouseRegion(
@@ -157,18 +148,14 @@ class PersistentWindowTileable extends Tileable {
                                 child: AppIconById(id: window.properties.appId),
                               ),
                       ),
-                      const SizedBox(
-                        width: 16,
-                      ),
+                      const SizedBox(width: 16),
                       Flexible(
                         child: Text(
                           title ?? 'Unknown',
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(
-                        width: 8,
-                      ),
+                      const SizedBox(width: 8),
                       SizedBox(
                         width: 32,
                         child: isSelected || isHoverState.value
@@ -178,8 +165,9 @@ class PersistentWindowTileable extends Tileable {
                                 onPressed: () {
                                   ref
                                       .read(
-                                        persistentWindowStateProvider(windowId)
-                                            .notifier,
+                                        persistentWindowStateProvider(
+                                          windowId,
+                                        ).notifier,
                                       )
                                       .closeWindow();
                                 },
@@ -214,24 +202,25 @@ class PersistentWindowTileable extends Tileable {
       Consumer(
         builder: (context, subref, child) {
           final displayMode = subref.watch(
-            persistentWindowStateProvider(windowId).select(
-              (value) => value.displayMode,
-            ),
+            persistentWindowStateProvider(
+              windowId,
+            ).select((value) => value.displayMode),
           );
           return SubmenuButton(
             menuChildren: [
               ...DisplayMode.values.map(
                 (e) => MenuItemButton(
                   leadingIcon: switch (e) {
-                    DisplayMode.maximized =>
-                      const Icon(MdiIcons.windowMaximize),
+                    DisplayMode.maximized => const Icon(
+                      MdiIcons.windowMaximize,
+                    ),
                     DisplayMode.fullscreen => const Icon(MdiIcons.fullscreen),
                     DisplayMode.game => const Icon(MdiIcons.controller),
                     DisplayMode.floating => SvgPicture.asset(
-                        'assets/float-symbolic.svg',
-                        width: 24,
-                        height: 24,
-                      ),
+                      'assets/float-symbolic.svg',
+                      width: 24,
+                      height: 24,
+                    ),
                   },
                   onPressed: () {
                     ref
@@ -254,9 +243,7 @@ class PersistentWindowTileable extends Tileable {
       MenuItemButton(
         onPressed: () {
           ref
-              .read(
-                persistentWindowStateProvider(windowId).notifier,
-              )
+              .read(persistentWindowStateProvider(windowId).notifier)
               .closeWindow();
         },
         leadingIcon: const Icon(MdiIcons.close),

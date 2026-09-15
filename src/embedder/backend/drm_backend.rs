@@ -426,24 +426,6 @@ pub fn run_drm_backend() {
     }; */
 
     let renderer = &mut state.backend_data.get_primary_gpu_data_mut().renderer;
-    let egl_context = renderer.egl_context();
-
-    let dmabuf_formats = egl_context
-        .dmabuf_texture_formats()
-        .iter()
-        .copied()
-        .collect::<Vec<_>>();
-    let dmabuf_default_feedback = DmabufFeedbackBuilder::new(primary_gpu.dev_id(), dmabuf_formats)
-        .build()
-        .unwrap();
-
-    let mut dmabuf_state = DmabufState::new();
-    let _dmabuf_global = dmabuf_state.create_global_with_default_feedback::<State<DrmBackend>>(
-        &display_handle,
-        &dmabuf_default_feedback,
-    );
-
-    state.dmabuf_state = Some(dmabuf_state);
 
     info!(
         ?primary_gpu,

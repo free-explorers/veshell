@@ -38,6 +38,27 @@ class PlatformManager extends _$PlatformManager {
     const channel = MethodChannel('platform', JSONMethodCodec());
     await channel.invokeMethod(request.method, request.message?.toJson());
   }
+
+  /// Fetch the environment the compositor exposes to launched applications.
+  ///
+  /// Tracked launches go through the systemd user manager, which does not
+  /// inherit the compositor's environment, so the values must be fetched on
+  /// demand and forwarded explicitly.
+  Future<Map<String, String>> fetchLaunchEnvironment() async {
+    const channel = MethodChannel('platform', JSONMethodCodec());
+    final response = await channel.invokeMapMethod<dynamic, dynamic>(
+      'get_environment_variables',
+      const <String, dynamic>{},
+    );
+    final variables = response?['environmentVariables'];
+    if (variables is! Map) {
+      return const {};
+    }
+    return {
+      for (final entry in variables.entries)
+        if (entry.value is String) entry.key as String: entry.value as String,
+    };
+  }
 }
 
 /// base class for a wayland interaction

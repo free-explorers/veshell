@@ -32,6 +32,41 @@ const WINDOW_RECENTLY_CREATED_TIME_MS = 2000;
 /// windowInfo are the matching details for the meta window, for example its window title.
 ///
 /// A higher returned cost means the match is less desirable.
+///
+/// The cost model deliberately weights identity promises that indicate *the
+/// same application instance* over cosmetic metadata. Rule of thumb, when a
+/// property is set on the candidate side:
+///
+/// | Signal            | Match | Mismatch | Not set on candidate |
+/// |-------------------|-------|----------|----------------------|
+/// | windowClass       | 0     | INF_COST (hard identity, e.g. X11 class) | 1 |
+/// | title             | 0     | 50       | 1                     |
+/// | startupId         | 0     | 1        | 1                     |
+/// | pid               | 0     | 1        | 1                     |
+/// | waiting           | 100 → 90 over the first second since the app was launched | 200 (not waiting) |
+///
+/// Reading the table:
+///
+/// - `INF_COST` on class means: when the *candidate window* advertises a
+///   class, the native window must carry it; class mismatch is a
+///   veto, everything else is a tie-break.
+/// - A placeholder launched *seconds ago* (the "waiting" state set by
+///   `waitForSurface`) gets roughly `-100`: it is the strongest soft signal
+///   that the user is expecting this exact window. This is what makes a
+///   single-instance application's delegated window (new placeholder →
+///   existing process creates the window) go to the freshly launched
+///   placeholder instead of the already-running one.
+/// - `pid` matches are almost useless as evidence (the placeholder records
+///   its launcher's pid; multi-process applications report a different one),
+///   hence the negligible 1.
+///
+/// Worked example — two placeholders for the same desktop entry, none
+/// waiting, native window title "Document — Code":
+///
+/// - placeholder with desktop-entry name "Code - OSS" → 1 + 50 + 1 + 1 + 200
+///   = 253 (class/title/startup/pid skips+mismatch, not waiting)
+/// - placeholder renamed "Document — Code" via custom title → 203
+/// → the custom-title placeholder wins, without any provenance involved.
 int windowMatchingCost(
   MatchingInfo metaWindowMatchInfo,
   MatchingInfo windowMatchInfo,
@@ -57,15 +92,12 @@ int windowMatchingCost(
 
   cost += windowMatchInfo.waitingForAppSince != null
       ? 100 -
-          (DateTime.now()
-                      .difference(windowMatchInfo.waitingForAppSince!)
-                      .inMilliseconds
-                      .clamp(
-                        0,
-                        1000,
-                      ) /
-                  100)
-              .round() // Clamp the difference to be between 0 and 1000 milliseconds
+            (DateTime.now()
+                        .difference(windowMatchInfo.waitingForAppSince!)
+                        .inMilliseconds
+                        .clamp(0, 1000) /
+                    100)
+                .round() // Clamp the difference to be between 0 and 1000 milliseconds
       : 200;
 
   return cost;

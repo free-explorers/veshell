@@ -7,12 +7,7 @@ import 'package:shell/window/model/window_properties.serializable.dart';
 part 'persistent_window.serializable.freezed.dart';
 part 'persistent_window.serializable.g.dart';
 
-enum DisplayMode {
-  maximized,
-  fullscreen,
-  game,
-  floating,
-}
+enum DisplayMode { maximized, fullscreen, game, floating }
 
 @freezed
 abstract class PersistentWindow extends Window with _$PersistentWindow {

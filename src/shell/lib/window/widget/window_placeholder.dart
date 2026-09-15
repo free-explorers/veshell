@@ -29,11 +29,7 @@ class WindowPlaceholder extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appId = window.properties.appId;
-    final entry = ref
-        .watch(
-          localizedDesktopEntryForIdProvider(appId),
-        )
-        .value;
+    final entry = ref.watch(localizedDesktopEntryForIdProvider(appId)).value;
 
     useListenable(focusNode ?? Listenable.merge([]));
     final isFocused = focusNode?.hasFocus ?? false;
@@ -45,22 +41,19 @@ class WindowPlaceholder extends HookConsumerWidget {
             ? Axis.horizontal
             : Axis.vertical;
 
-        final iconHeight = constraints.biggest.shortestSide *
+        final iconHeight =
+            constraints.biggest.shortestSide *
             6 /
-            sqrt(
-              constraints.biggest.shortestSide / 1.2,
-            );
-        final iconWidth = constraints.biggest.shortestSide *
+            sqrt(constraints.biggest.shortestSide / 1.2);
+        final iconWidth =
+            constraints.biggest.shortestSide *
             6 /
-            sqrt(
-              constraints.biggest.shortestSide / 1.2,
-            );
+            sqrt(constraints.biggest.shortestSide / 1.2);
 
-        final magicSpacing = constraints.biggest.longestSide *
+        final magicSpacing =
+            constraints.biggest.longestSide *
             6 /
-            sqrt(
-              constraints.biggest.longestSide / 1.2,
-            ) /
+            sqrt(constraints.biggest.longestSide / 1.2) /
             8;
         return Stack(
           children: [
@@ -70,16 +63,10 @@ class WindowPlaceholder extends HookConsumerWidget {
               top: -constraints.biggest.height * 0.3,
               bottom: -constraints.biggest.height * 0.3,
               child: ImageFiltered(
-                imageFilter: ImageFilter.blur(
-                  sigmaX: 300,
-                  sigmaY: 300,
-                ),
+                imageFilter: ImageFilter.blur(sigmaX: 300, sigmaY: 300),
                 child: FittedBox(
                   fit: BoxFit.fill,
-                  child: AppIconById(
-                    id: appId,
-                    constrainedSize: 4,
-                  ),
+                  child: AppIconById(id: appId, constrainedSize: 4),
                 ),
               ),
             ),
@@ -109,12 +96,12 @@ class WindowPlaceholder extends HookConsumerWidget {
                   child: InkWell(
                     canRequestFocus: false,
                     onTap: entry != null ? onTap : null,
-                    splashColor:
-                        Theme.of(context).colorScheme.primary.withAlpha(32),
-                    focusColor: Theme.of(context)
-                        .colorScheme
-                        .surfaceContainerLow
-                        .withAlpha(125),
+                    splashColor: Theme.of(
+                      context,
+                    ).colorScheme.primary.withAlpha(32),
+                    focusColor: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerLow.withAlpha(125),
                     child: Focus(
                       focusNode: focusNode,
                       autofocus: true,
@@ -163,34 +150,36 @@ class WindowPlaceholder extends HookConsumerWidget {
                                       mainAxisSize: MainAxisSize.min,
                                       crossAxisAlignment:
                                           displayDirection == Axis.horizontal
-                                              ? CrossAxisAlignment.start
-                                              : CrossAxisAlignment.center,
+                                          ? CrossAxisAlignment.start
+                                          : CrossAxisAlignment.center,
                                       children: [
                                         Text(
                                           entry?.entries[DesktopEntryKey
-                                                  .name.string] ??
+                                                  .name
+                                                  .string] ??
                                               'Unknown',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .displayMedium,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.displayMedium,
                                           textAlign: TextAlign.center,
                                           softWrap: false,
                                           overflow: TextOverflow.ellipsis,
                                         ),
-                                        const SizedBox(
-                                          height: 16,
-                                        ),
+                                        const SizedBox(height: 16),
                                         ExecCommandEditor(
-                                          maxWidth: displayDirection ==
+                                          maxWidth:
+                                              displayDirection ==
                                                   Axis.horizontal
                                               ? constraints.maxWidth / 3 -
-                                                  iconWidth
+                                                    iconWidth
                                               : constraints.maxWidth / 4,
-                                          originalExec: entry?.entries[
-                                                  DesktopEntryKey
-                                                      .exec.string] ??
+                                          originalExec:
                                               entry?.entries[DesktopEntryKey
-                                                  .tryExec.string] ??
+                                                  .exec
+                                                  .string] ??
+                                              entry?.entries[DesktopEntryKey
+                                                  .tryExec
+                                                  .string] ??
                                               'Unknown',
                                           customExec: window.customExec,
                                           onChanged: (customExec) => ref
@@ -211,9 +200,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                           Expanded(
                             child: Text(
                               'Click to start the application',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall!
+                              style: Theme.of(context).textTheme.headlineSmall!
                                   .copyWith(
                                     color: isFocused
                                         ? Theme.of(context).colorScheme.primary
@@ -257,13 +244,10 @@ class ExecCommandEditor extends HookWidget {
       text: customExec ?? originalExec,
     );
 
-    useEffect(
-      () {
-        textController.text = customExec ?? originalExec;
-        return null;
-      },
-      [customExec, originalExec],
-    );
+    useEffect(() {
+      textController.text = customExec ?? originalExec;
+      return null;
+    }, [customExec, originalExec]);
 
     final focusNode = useFocusNode(skipTraversal: true);
     final submittedCb = useCallback(() {
@@ -279,37 +263,29 @@ class ExecCommandEditor extends HookWidget {
         Material(
           clipBehavior: Clip.antiAlias,
           color: Colors.white.withAlpha(12),
-          borderRadius: const BorderRadius.all(
-            Radius.circular(48),
-          ),
+          borderRadius: const BorderRadius.all(Radius.circular(48)),
           child: InkWell(
             onTap: () {
               if (isEditable.value) return;
               isEditable.value = true;
-              WidgetsBinding.instance.addPostFrameCallback(
-                (_) {
-                  focusNode.requestFocus();
-                  textController.selection = TextSelection.fromPosition(
-                    TextPosition(offset: textController.text.length),
-                  );
-                },
-              );
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                focusNode.requestFocus();
+                textController.selection = TextSelection.fromPosition(
+                  TextPosition(offset: textController.text.length),
+                );
+              });
             },
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: maxWidth,
-                  ),
+                  constraints: BoxConstraints(maxWidth: maxWidth),
                   child: IntrinsicWidth(
                     child: TextField(
                       onSubmitted: (value) => submittedCb(),
                       enabled: isEditable.value,
                       decoration: InputDecoration(
-                        prefixIcon: const Icon(
-                          MdiIcons.chevronRight,
-                        ),
+                        prefixIcon: const Icon(MdiIcons.chevronRight),
                         border: const OutlineInputBorder(
                           borderSide: BorderSide.none,
                         ),
@@ -319,10 +295,7 @@ class ExecCommandEditor extends HookWidget {
                         ),
                         suffixIcon: isEditable.value
                             ? null
-                            : const Icon(
-                                MdiIcons.pencil,
-                                size: 20,
-                              ),
+                            : const Icon(MdiIcons.pencil, size: 20),
                       ),
                       controller: textController,
                       focusNode: focusNode,
@@ -330,16 +303,12 @@ class ExecCommandEditor extends HookWidget {
                   ),
                 ),
                 if (isEditable.value) ...[
-                  const SizedBox(
-                    width: 4,
-                  ),
+                  const SizedBox(width: 4),
                   IconButton(
                     onPressed: submittedCb,
                     icon: const Icon(MdiIcons.check),
                   ),
-                  const SizedBox(
-                    width: 4,
-                  ),
+                  const SizedBox(width: 4),
                 ],
               ],
             ),
@@ -383,10 +352,10 @@ class DisplayModeRow extends StatelessWidget {
               DisplayMode.fullscreen => const Icon(MdiIcons.fullscreen),
               DisplayMode.game => const Icon(MdiIcons.controller),
               DisplayMode.floating => SvgPicture.asset(
-                  'assets/float-symbolic.svg',
-                  width: 24,
-                  height: 24,
-                ),
+                'assets/float-symbolic.svg',
+                width: 24,
+                height: 24,
+              ),
             };
             return [
               Material(
@@ -400,22 +369,16 @@ class DisplayModeRow extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: icon,
-                      ),
+                      Padding(padding: const EdgeInsets.all(8), child: icon),
                       if (selected)
                         Padding(
                           padding: const EdgeInsets.only(right: 16),
-                          child: Text(
-                            switch (mode) {
-                              DisplayMode.maximized => 'Maximized',
-                              DisplayMode.game => 'Game',
-                              DisplayMode.fullscreen => 'Fullscreen',
-                              DisplayMode.floating => 'Floating',
-                            },
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
+                          child: Text(switch (mode) {
+                            DisplayMode.maximized => 'Maximized',
+                            DisplayMode.game => 'Game',
+                            DisplayMode.fullscreen => 'Fullscreen',
+                            DisplayMode.floating => 'Floating',
+                          }, style: Theme.of(context).textTheme.bodyMedium),
                         ),
                     ],
                   ),
@@ -423,7 +386,8 @@ class DisplayModeRow extends StatelessWidget {
               ),
               if (mode !=
                   DisplayMode
-                      .values.last) // To avoid adding SizedBox at the end
+                      .values
+                      .last) // To avoid adding SizedBox at the end
                 const SizedBox(width: 8), // Adjust the width as needed
             ];
           })
