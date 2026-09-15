@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/main.dart';
+import 'package:shell/capture/widget/screen_cast_consent.dart';
+import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/monitor/model/monitor_configuration.serializable.dart';
 import 'package:shell/monitor/model/screen_configuration.serializable.dart';
 import 'package:shell/monitor/provider/monitor_by_name.dart';
@@ -97,6 +99,15 @@ class MonitorWidget extends HookConsumerWidget {
                         ],
                       ],
                     ),
+                    // The consent picker surfaces on the first connected
+                    // monitor: a portal flow is a single system dialog.
+                    if (monitorName != null &&
+                        ref
+                                .watch(connectedMonitorListProvider)
+                                .firstOrNull
+                                ?.name ==
+                            monitorName)
+                      const ScreenCastConsentHost(),
                   ],
                 ),
               );

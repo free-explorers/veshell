@@ -136,7 +136,12 @@ fn drain_portal_calls(
                     let mut actions = Vec::new();
                     {
                         let mut ledger = ledger.lock().unwrap();
-                        super::service::apply_portal_call(&mut ledger, call, &mut actions);
+                        super::service::apply_portal_call(
+                            &mut ledger,
+                            call,
+                            &mut actions,
+                            &mut Vec::new(),
+                        );
                     }
                     for action in actions {
                         if let Err(error) = zbus::block_on(perform_bridge_action(
