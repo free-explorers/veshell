@@ -124,8 +124,11 @@ pub struct Producer {
 
 struct StreamEntry {
     // The listener must drop before the stream to avoid a use-after-free:
-    // hold it first, exactly as Niri does.
-    _listener: StreamListener<()>,
+    // store it as an Option and take it on teardown. It starts as None
+    // because the entry exists for a moment before `attach_listeners`
+    // builds it: a zero placeholder is not valid here (StreamListener
+    // holds a non-null inner pointer; zeroing it aborts the process).
+    listener: Option<StreamListener<()>>,
     stream: StreamRc,
     inner: Rc<RefCell<StreamInner>>,
 }
@@ -344,7 +347,7 @@ impl Producer {
         self.streams.insert(
             session_handle.clone(),
             StreamEntry {
-                _listener: unsafe { std::mem::zeroed() },
+                listener: None,
                 stream: stream.clone(),
                 inner: inner.clone(),
             },
@@ -521,7 +524,7 @@ impl Producer {
             .streams
             .get_mut(session_handle)
             .expect("stream entry was just inserted");
-        entry._listener = listener;
+        entry.listener = Some(listener);
 
         let mut b = Vec::new();
         let pod = make_video_params(&mut b, descriptor.size);
@@ -582,8 +585,8 @@ impl Producer {
     /// Stops and removes the stream of a session: no other source may
     /// survive the session closing.
     pub fn stop_stream(&mut self, session_handle: &OwnedObjectPath) {
-        if let Some(entry) = self.streams.remove(session_handle) {
-            drop(entry._listener);
+        if let Some(mut entry) = self.streams.remove(session_handle) {
+            drop(entry.listener.take());
             let _ = entry.stream.disconnect();
         }
     }

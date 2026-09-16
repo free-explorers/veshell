@@ -98,7 +98,14 @@ Implemented M1 foundations:
   with a real consumer through the system frontend remains the open exit
   condition for M2; it is a user-assisted DRM run (Chrome/OBS attach,
   stop paths, consumer disconnect/reconnect observations recorded in this
-  document).
+  document). First real-machine run (2026-09-16): picker and
+  authorization reached the approval click, which aborted the
+  compositor — `start_stream` had zero-initialized a
+  `StreamListener<()>` placeholder, invalid for its non-null inner
+  pointer. The placeholder is gone (an `Option` listener stores exactly
+  once and `take`s on teardown, registration still completing before
+  `connect`); no other zeroed-initialization remains in the capture
+  stack.
 - M2.3 PipeWire producer (2026-09-16): `pipewire-rs` 0.10 with
   `libpipewire-0.3` 1.6 delivers one BGRx stream per consented session
   (`src/embedder/capture/pipewire.rs`). The PipeWire main loop FD is a
