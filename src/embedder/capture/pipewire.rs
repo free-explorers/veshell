@@ -16,7 +16,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::Cursor;
-use std::os::fd::{AsFd, BorrowedFd, RawFd};
+use std::os::fd::{AsFd, BorrowedFd};
 use std::ptr::NonNull;
 
 use pipewire as pipewire_crate;
@@ -139,66 +139,17 @@ struct StreamInner {
     /// Negotiated buffer size; None until the SPA fixated the format.
     ready_size: Option<Size<i32, Physical>>,
     node_id: Option<u32>,
-    buffers: HashMap<RawFd, MemoryBuffer>,
+    /// Frames are written directly into the pw-negotiated MemFd buffers.
+    /// With `MAP_BUFFERS`, `add_buffer` hands over an already-mapped
+    /// `spa_data.data`; the compositor records it keyed by the buffer's
+    /// mapped pointer so `queue_frame` can copy without touching fd
+    /// bookkeeping.
+    buffers: HashMap<*mut u8, usize>,
 }
 
-/// A producer-owned memfd-backed buffer: mapped once for the compositor
-/// to copy frames into, exported to PipeWire as a MemPtr fd.
-struct MemoryBuffer {
-    fd: RawFd,
-    data: *mut u8,
-    size: usize,
-}
-
-unsafe impl Send for MemoryBuffer {}
-
-impl MemoryBuffer {
-    fn allocate(size: usize) -> std::io::Result<Self> {
-        let fd = unsafe {
-            libc::memfd_create(
-                c"veshell-screencast".as_ptr(),
-                libc::MFD_CLOEXEC | libc::MFD_ALLOW_SEALING,
-            )
-        };
-        if fd < 0 {
-            return Err(std::io::Error::last_os_error());
-        }
-        unsafe {
-            if libc::ftruncate(fd, size as libc::off_t) != 0 {
-                let error = std::io::Error::last_os_error();
-                libc::close(fd);
-                return Err(error);
-            }
-            let data = libc::mmap(
-                std::ptr::null_mut(),
-                size,
-                libc::PROT_READ | libc::PROT_WRITE,
-                libc::MAP_SHARED,
-                fd,
-                0,
-            );
-            if data == libc::MAP_FAILED {
-                let error = std::io::Error::last_os_error();
-                libc::close(fd);
-                return Err(error);
-            }
-            Ok(Self {
-                fd,
-                data: data as *mut u8,
-                size,
-            })
-        }
-    }
-}
-
-impl Drop for MemoryBuffer {
-    fn drop(&mut self) {
-        unsafe {
-            libc::munmap(self.data as *mut libc::c_void, self.size);
-            libc::close(self.fd);
-        }
-    }
-}
+// Raw mapped pointers keyed across callback invocations; the memory is
+// valid only while the buffer registration is in the map.
+unsafe impl Send for StreamInner {}
 
 fn make_pod(buffer: &mut Vec<u8>, object: pod::Object) -> &Pod {
     PodSerializer::serialize(Cursor::new(&mut *buffer), &pod::Value::Object(object))
@@ -455,11 +406,12 @@ impl Producer {
 
                 let mut b1 = Vec::new();
                 let mut b2 = Vec::new();
-                // Buffers params carry the MemPtr geometry explicitly:
-                // without size/stride the adapter cannot allocate (a
-                // live failure logged as `alloc buffers: Invalid
-                // argument`), and the buffer count is a range exactly
-                // like the reference producer (2..16, default 8).
+                // Buffers params declare the standard sysmem portal
+                // shape: pw-allocated MemFd shared memory (the merged
+                // datatype must intersect the consumer's demand — the
+                // live negotiation trace showed MemPtr-only intersected
+                // with a MemFd-only consumer as empty, i.e. `error alloc
+                // buffers`), geometry explicit, count as a 2..16 range.
                 let stride = expected.w as usize * BYTES_PER_PIXEL;
                 let total = stride * expected.h as usize;
                 let buffers_object = pod::object!(
@@ -487,8 +439,11 @@ impl Producer {
                         pod::Value::Choice(ChoiceValue::Int(Choice(
                             ChoiceFlags::empty(),
                             ChoiceEnum::Flags {
-                                default: 1 << DataType::MemPtr.as_raw(),
-                                flags: vec![1 << DataType::MemPtr.as_raw()],
+                                default: 1 << DataType::MemFd.as_raw(),
+                                flags: vec![
+                                    1 << DataType::MemFd.as_raw(),
+                                    1 << DataType::MemPtr.as_raw(),
+                                ],
                             }
                         ))),
                     ),
@@ -515,16 +470,11 @@ impl Producer {
                 }
             })
             .add_buffer(move |_, (), buffer| {
-                // The producer owns the memory: one memfd per buffer,
-                // already mapped for the compositor to copy frames into.
-                let size = lock_buffers.borrow().descriptor.size;
-                let stride = size.w as usize * BYTES_PER_PIXEL;
-                let total = stride * size.h as usize;
-                let Ok(memory) = MemoryBuffer::allocate(total) else {
-                    tracing::warn!("error allocating memfd producer buffer");
-                    return;
-                };
-                let fd = memory.fd;
+                // pw owns the buffer memory and, with MAP_BUFFERS,
+                // hands add_buffer a fully mapped MemFd: record the
+                // mapped pointer (with its fillable size) so queue_frame
+                // can copy without touching fd bookkeeping. The spa_data
+                // is left exactly as pw allocated it.
                 unsafe {
                     let spa_buffer = (*buffer).buffer;
                     if (*spa_buffer).n_datas < 1 {
@@ -532,27 +482,22 @@ impl Producer {
                         return;
                     }
                     let raw_datas = (*spa_buffer).datas;
-                    let mut data = *raw_datas;
-                    data.type_ = DataType::MemPtr.as_raw();
-                    // The mapped pointer must accompany the MemPtr type:
-                    // consumers dereference `data.data` directly, and an
-                    // fd-only MemPtr reads as an Invalid-argument buffer.
-                    data.data = memory.data as *mut libc::c_void;
-                    data.fd = fd as i64;
-                    data.maxsize = total as u32;
-                    data.flags = DataFlags::READWRITE.bits();
-                    *raw_datas = data;
-                    let chunk = data.chunk;
-                    (*chunk).offset = 0;
-                    (*chunk).stride = stride as i32;
-                    (*chunk).size = total as u32;
+                    let data = *raw_datas;
+                    if data.data.is_null() {
+                        tracing::warn!("spa buffer has no mapped memory");
+                        return;
+                    }
+                    let mapped = data.data as *mut u8;
+                    lock_buffers
+                        .borrow_mut()
+                        .buffers
+                        .insert(mapped, data.maxsize as usize);
                 }
-                lock_buffers.borrow_mut().buffers.insert(fd, memory);
             })
             .remove_buffer(move |_, (), buffer| unsafe {
                 let spa_buffer = (*buffer).buffer;
-                let fd = (*(*spa_buffer).datas).fd;
-                lock_remove.borrow_mut().buffers.remove(&(fd as RawFd));
+                let mapped = (*(*spa_buffer).datas).data as *mut u8;
+                lock_remove.borrow_mut().buffers.remove(&mapped);
             })
             .register()
             .map_err(|error| format!("attach stream listener: {error}"))
@@ -570,7 +515,12 @@ impl Producer {
         if let Err(error) = stream.connect(
             Direction::Output,
             None,
-            StreamFlags::DRIVER | StreamFlags::ALLOC_BUFFERS,
+            // MAP_BUFFERS: pw allocates the MemFd buffer memory itself
+            // (the consumer's demand in the merged negotiation) and maps
+            // it into this process; ALLOC_BUFFERS here would instead
+            // require the client-side NO_MEM allocation that failed
+            // live. The driver role stays: the shell drives the graph.
+            StreamFlags::DRIVER | StreamFlags::MAP_BUFFERS,
             &mut pods,
         ) {
             let _ = self.to_loop.send(ProducerEvent::Fatal {
@@ -603,16 +553,17 @@ impl Producer {
             let spa_buffer = (*pw_buffer_ptr.as_ptr()).buffer;
             let raw_datas = (*spa_buffer).datas;
             let data = *raw_datas;
-            let fd = data.fd;
-            let Some(memory) = inner.buffers.get(&(fd as RawFd)) else {
+            let mapped = data.data as *mut u8;
+            let Some(&capacity) = inner.buffers.get(&mapped) else {
                 drop(pw_buffer_ptr);
                 pw_stream_return_buffer(entry.stream.as_raw_ptr(), pw_buffer_ptr.as_ptr());
                 return;
             };
-            // Pixels land at chunk offset 0; the memory's stride matches
-            // the frame stride exactly, so the copy is stride-exact.
-            let copied = pixels.len().min(memory.size);
-            std::ptr::copy_nonoverlapping(pixels.as_ptr(), memory.data, copied);
+            // Pixels land at chunk offset 0; the pw-negotiated memory's
+            // stride matches the frame stride exactly (the Buffers pod
+            // declared the geometry), so the copy is stride-exact.
+            let copied = pixels.len().min(capacity);
+            std::ptr::copy_nonoverlapping(pixels.as_ptr(), mapped, copied);
             let chunk = (*raw_datas).chunk;
             (*chunk).offset = 0;
             (*chunk).stride = (inner.descriptor.size.w as usize * BYTES_PER_PIXEL) as i32;

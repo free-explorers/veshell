@@ -141,12 +141,23 @@ Implemented M1 foundations:
   (`data.data`) that a `MemPtr` spa_data entry must have. The producer
   now declares size/stride in the Buffers pod (buffer count as a 2..16
   range, reference style) and installs each producer-owned memfd with
-  its mapped pointer filled in.
+  its mapped pointer filled in. Transport-type correction (2026-09-16,
+  PIPEWIRE_DEBUG=4 negotiation trace): Chrome's stream demands MemFd
+  only (`dataType Flags: Int 4`), so a MemPtr-only offer intersected
+  with an empty set — every link reported
+  `error alloc buffers: Invalid argument` from `pw_buffers_negotiate`.
+  The producer now offers `Flags { MemFd, MemPtr }` (memfd default, the
+  fix_datatype convention) and drops `ALLOC_BUFFERS` in favour of
+  `MAP_BUFFERS`: the pw daemon allocates MemFd buffers with the declared
+  geometry and maps them into this process, so `add_buffer` only records
+  the pw-provided mapped pointer and `queue_frame` copies into it. The
+  compositor-self memfd machinery is removed.
 - M2.3 PipeWire producer (2026-09-16): `pipewire-rs` 0.10 with
   `libpipewire-0.3` 1.6 delivers one BGRx stream per consented session
   (`src/embedder/capture/pipewire.rs`). The PipeWire main loop FD is a
   level-triggered calloop source (Niri's integration pattern, no
-  blocking dispatch). Producer-owned memfd shared memory backs the
+  blocking dispatch). Shared memory backed by pw-negotiated MemFd
+  buffers (with MAP_BUFFERS client mapping) backs the
   buffers; the producer publishes a `Video/Source` node only after
   approval, Start completes once the node identity exists (spec 7: never
   waiting for the consumer), and the Start result carries
