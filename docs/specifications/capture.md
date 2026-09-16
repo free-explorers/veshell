@@ -172,6 +172,19 @@ Implemented M1 foundations:
   path everywhere (user Stop, Session.Close, frontend loss, core
   failure). Frame delivery timing moved to the M2.4 damage coupling
   below; the initial full-frame timer copy only stood until validation.
+  Channel order correction (2026-09-16, first shared session): the
+  stream reached a live consumer with red/blue-swapped colours — the
+  producer declared `BGRx` while the capture readback's Abgr8888 frame
+  bytes arrive R,G,B,A (the same bytes M1 screenshots encode as RGBA
+  PNGs); the offer is now `RGBA`, matching the compositor readback
+  without a channel permute. System reset observation (2026-09-16,
+  unrelated to compositor code): the machine hard-reset mid-share
+  (`x86/amd: Previous system reset reason [0x00010800]: system reset
+  pin BP_SYS_RST_L was tripped`) — no kernel oops, no compositor
+  coredump, the journal simply stops; CoreCtrl's amdgpu Overdrive was
+  active in that session (kernel warns "Overdrive is enabled"). The
+  streaming load under an OC board claim is a suspect to rule out
+  before attributing the reset to the producer.
 - M2.1 portal backend state machine (2026-09-15): the ScreenCast backend owns
   its name on the real session bus only in the seat session (`RUNS_PORTAL_
   BACKEND`); nested and non-session runs stay silent. Every bridged call is

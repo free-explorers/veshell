@@ -1,7 +1,7 @@
 //! PipeWire screen-cast producer (capture specification section 7).
 //!
 //! One video producer stream per consented sharing session. The stream
-//! negotiates one tested SDR packed format (BGRx, physical output size)
+//! negotiates one tested SDR packed format (RGBA, physical output size)
 //! and producer-owned memfd shared-memory buffers. No consumer sees a
 //! node before approval, and every published node contains only its own
 //! source (per source, never a chooser preview or another session's
@@ -85,7 +85,7 @@ pub struct StreamDescriptor {
     pub session_handle: OwnedObjectPath,
     /// PipeWire-consistent identity of the source (an output name today).
     pub source_id: String,
-    /// Physical buffer size for the negotiated BGRx stream.
+    /// Physical buffer size for the negotiated RGBA stream.
     pub size: Size<i32, Physical>,
     /// Global logical position the portal Start result reports.
     pub position: (i32, i32),
@@ -157,7 +157,7 @@ fn make_pod(buffer: &mut Vec<u8>, object: pod::Object) -> &Pod {
     Pod::from_bytes(buffer).expect("pod rehydration from owned memory")
 }
 
-/// One format offer: BGRx only, fixed size, framerate parameterized by
+/// One format offer: RGBA only, fixed size, framerate parameterized by
 /// the output refresh, capped at the 30 FPS budget.
 fn make_video_params(buffer: &mut Vec<u8>, size: Size<i32, Physical>) -> &Pod {
     let object = pod::object!(
@@ -165,7 +165,11 @@ fn make_video_params(buffer: &mut Vec<u8>, size: Size<i32, Physical>) -> &Pod {
         ParamType::EnumFormat,
         pod::property!(FormatProperties::MediaType, Id, MediaType::Video),
         pod::property!(FormatProperties::MediaSubtype, Id, MediaSubtype::Raw),
-        pod::property!(FormatProperties::VideoFormat, Id, VideoFormat::BGRx),
+        // RGBA byte order matches the compositor readback exactly: the
+        // M1 Abgr8888 framebuffer maps back as R,G,B,A bytes, and the
+        // first real session streamed red/blue-swapped because a BGRx
+        // declare was negotiated against those bytes.
+        pod::property!(FormatProperties::VideoFormat, Id, VideoFormat::RGBA),
         pod::property!(
             FormatProperties::VideoSize,
             Rectangle,
@@ -387,8 +391,8 @@ impl Producer {
                         tracing::warn!("error parsing the negotiated format");
                         return;
                     }
-                    if format.format() != VideoFormat::BGRx {
-                        tracing::warn!("pipewire negotiated away BGRx; stream unusable");
+                    if format.format() != VideoFormat::RGBA {
+                        tracing::warn!("pipewire negotiated away RGBA; stream unusable");
                         return;
                     }
                     Size::<i32, Physical>::from((
