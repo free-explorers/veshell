@@ -406,7 +406,13 @@ impl Producer {
             .param_changed(move |stream, (), id, pod| {
                 // The fixate handshake: the daemon picks a format from the
                 // params offered at connect; the producer answers with the
-                // fixed buffer params once the SPA settles.
+                // fixed buffer params once the SPA settles. Trace every
+                // callback first: an unfixated stream is otherwise silent.
+                tracing::debug!(
+                    param_id = id,
+                    pod_size = pod.map(|pod| pod.as_bytes().len()).unwrap_or(0),
+                    "param_changed"
+                );
                 if id != ParamType::Format.as_raw() {
                     return;
                 }
@@ -529,8 +535,12 @@ impl Producer {
         let mut b = Vec::new();
         let pod = make_video_params(&mut b, descriptor.size);
         let mut pods: [&Pod; 1] = [pod];
-        if let Err(error) = stream.connect(Direction::Output, None, StreamFlags::DRIVER, &mut pods)
-        {
+        if let Err(error) = stream.connect(
+            Direction::Output,
+            None,
+            StreamFlags::DRIVER | StreamFlags::ALLOC_BUFFERS,
+            &mut pods,
+        ) {
             let _ = self.to_loop.send(ProducerEvent::Fatal {
                 session_handle: session_handle.clone(),
                 message: format!("stream connect: {error:?}"),
