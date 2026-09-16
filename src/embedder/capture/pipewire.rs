@@ -455,11 +455,33 @@ impl Producer {
 
                 let mut b1 = Vec::new();
                 let mut b2 = Vec::new();
+                // Buffers params carry the MemPtr geometry explicitly:
+                // without size/stride the adapter cannot allocate (a
+                // live failure logged as `alloc buffers: Invalid
+                // argument`), and the buffer count is a range exactly
+                // like the reference producer (2..16, default 8).
+                let stride = expected.w as usize * BYTES_PER_PIXEL;
+                let total = stride * expected.h as usize;
                 let buffers_object = pod::object!(
                     SpaTypes::ObjectParamBuffers,
                     ParamType::Buffers,
-                    Property::new(sys::SPA_PARAM_BUFFERS_buffers, pod::Value::Int(8),),
+                    Property::new(
+                        sys::SPA_PARAM_BUFFERS_buffers,
+                        pod::Value::Choice(ChoiceValue::Int(Choice(
+                            ChoiceFlags::empty(),
+                            ChoiceEnum::Range {
+                                default: 8,
+                                min: 2,
+                                max: 16
+                            }
+                        ))),
+                    ),
                     Property::new(sys::SPA_PARAM_BUFFERS_blocks, pod::Value::Int(1),),
+                    Property::new(sys::SPA_PARAM_BUFFERS_size, pod::Value::Int(total as i32),),
+                    Property::new(
+                        sys::SPA_PARAM_BUFFERS_stride,
+                        pod::Value::Int(stride as i32),
+                    ),
                     Property::new(
                         sys::SPA_PARAM_BUFFERS_dataType,
                         pod::Value::Choice(ChoiceValue::Int(Choice(
@@ -512,6 +534,10 @@ impl Producer {
                     let raw_datas = (*spa_buffer).datas;
                     let mut data = *raw_datas;
                     data.type_ = DataType::MemPtr.as_raw();
+                    // The mapped pointer must accompany the MemPtr type:
+                    // consumers dereference `data.data` directly, and an
+                    // fd-only MemPtr reads as an Invalid-argument buffer.
+                    data.data = memory.data as *mut libc::c_void;
                     data.fd = fd as i64;
                     data.maxsize = total as u32;
                     data.flags = DataFlags::READWRITE.bits();

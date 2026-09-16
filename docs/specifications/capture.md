@@ -133,6 +133,15 @@ Implemented M1 foundations:
   failures that fall through the ordinary failure/closing path instead
   of aborting. NodeReady repeats (Connecting and Paused) also update
   node state idempotently instead of re-emitting the indicator event.
+  Buffer-allocation correction (2026-09-16, same session subject): the
+  fixate completed and the consumer linked, but stream buffer allocation
+  failed (`alloc buffers: Invalid argument`). The MemPtr Buffers pod
+  lacked `size` and `stride`, so the adapter had nothing to allocate
+  against, and the `add_buffer` block did not carry the mapped pointer
+  (`data.data`) that a `MemPtr` spa_data entry must have. The producer
+  now declares size/stride in the Buffers pod (buffer count as a 2..16
+  range, reference style) and installs each producer-owned memfd with
+  its mapped pointer filled in.
 - M2.3 PipeWire producer (2026-09-16): `pipewire-rs` 0.10 with
   `libpipewire-0.3` 1.6 delivers one BGRx stream per consented session
   (`src/embedder/capture/pipewire.rs`). The PipeWire main loop FD is a
