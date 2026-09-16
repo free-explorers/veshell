@@ -77,6 +77,28 @@ Implemented M1 foundations:
   code 1 and closes the session. Picker dismissal is bound to the token
   and every close path (Request.Close, Session.Close, frontend loss)
   revokes an open flow.
+- M2.4 validation and damage tuning (2026-09-16): close-path races are now
+  pinned by ledger tests. Session.Close, manual close, and frontend loss all
+  complete a pending Start reply cancelled (previously a Starting session's
+  reply could leak until shutdown on any close source other than the
+  approval flow); the second close of the same session is a no-op and
+  queues no signal; approval with the stale token after the close attaches
+  to nothing; approval on a session that died resolves cancelled on the
+  spot, so no node may be published for a consent that granted nothing and
+  the picker does not survive its session. The playback kill switch
+  (`ConsentResolution::DeadEnd`/`NotMatched`) prevents delivery start on
+  any unresolved authorization. Frame delivery became damage-coupled: a
+  presented backing store on a session's source output (the authoritative
+  damage signal for this compositor) copies once per output per present
+  and delivers up to the 30 FPS budget per session (`last_frame`
+  timestamps); sessions sharing one output share one capture. A 2 Hz idle
+  fallback timer keeps a static desktop with no Flutter presents
+  refreshing consumers, and stops itself when the session closes
+  (pipewire.rs keeps the PipeWire budget of spec 7). Runtime validation
+  with a real consumer through the system frontend remains the open exit
+  condition for M2; it is a user-assisted DRM run (Chrome/OBS attach,
+  stop paths, consumer disconnect/reconnect observations recorded in this
+  document).
 - M2.3 PipeWire producer (2026-09-16): `pipewire-rs` 0.10 with
   `libpipewire-0.3` 1.6 delivers one BGRx stream per consented session
   (`src/embedder/capture/pipewire.rs`). The PipeWire main loop FD is a
@@ -94,7 +116,8 @@ Implemented M1 foundations:
   / `screen_cast_stopped` platform events) names the shared target with
   the shell Stop action threading `screen_cast_stop` into the close
   path everywhere (user Stop, Session.Close, frontend loss, core
-  failure).
+  failure). Frame delivery timing moved to the M2.4 damage coupling
+  below; the initial full-frame timer copy only stood until validation.
 - M2.1 portal backend state machine (2026-09-15): the ScreenCast backend owns
   its name on the real session bus only in the seat session (`RUNS_PORTAL_
   BACKEND`); nested and non-session runs stay silent. Every bridged call is

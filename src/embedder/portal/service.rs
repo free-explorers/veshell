@@ -188,6 +188,16 @@ pub fn frontend_owner_changed(
     ledger.requests.clear();
     let closed_sessions: Vec<OwnedObjectPath> = ledger.sessions.keys().cloned().collect();
     for session_handle in closed_sessions {
+        // A session denied its Start reply before removal never completes:
+        // any later close path that would answer it is gone with the
+        // session itself (spec 8.3: a cancelled session may not resurrect).
+        if let Some(pending) = ledger
+            .sessions
+            .get_mut(&session_handle)
+            .and_then(|session| session.pending_start.take())
+        {
+            pending.send(cancelled());
+        }
         ledger.sessions.remove(&session_handle);
         actions.push(PortalAction::CloseSession(session_handle.clone()));
     }
@@ -225,13 +235,24 @@ pub fn handle_portal_call<BackendData: crate::backend::Backend + 'static>(
         }
         // Session-level D-Bus closes revoke the producer side too.
         if let PortalAction::CloseSession(session_handle) = action {
-            if let Some(producer) = state.pipe_wire_producer.as_mut() {
-                producer.stop_stream(&session_handle);
-            }
-            if state.active_streams.remove(&session_handle).is_some() {
-                hide_shared_indicator(state, &session_handle);
-            }
+            stop_capture_side(state, &session_handle);
         }
+    }
+}
+
+/// Capture-side revocation for one session: producer teardown and the
+/// indicator. Idempotent — the second call for a closed session is a no-op
+/// (no repeated `screen_cast_stopped` event, no producer work). The
+/// producer stream stop itself is keyed and therefore safe to call again.
+fn stop_capture_side<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    session_handle: &OwnedObjectPath,
+) {
+    if state.active_streams.remove(session_handle).is_some() {
+        if let Some(producer) = state.pipe_wire_producer.as_mut() {
+            producer.stop_stream(session_handle);
+        }
+        hide_shared_indicator(state, session_handle);
     }
 }
 
@@ -422,18 +443,37 @@ pub fn handle_consent_decision<BackendData: crate::backend::Backend + 'static>(
             return;
         };
         // The ledger now holds the reply link pending; the producer
-        // publishes a node and NodeReady completes the flow.
-        handle_consent_through_runtime(state, &session_handle, consent_token, outcome);
+        // publishes a node and NodeReady completes the flow. Approval on a
+        // session that died resolves cancelled without delivery: no node
+        // is published for a consent that granted nothing.
+        if handle_consent_through_runtime(state, &session_handle, consent_token, outcome)
+            != ConsentResolution::Applied
+        {
+            return;
+        }
         begin_shared_stream(state, &session_handle, source);
     } else {
         handle_consent_through_runtime(state, &session_handle, consent_token, outcome);
     }
 }
 
-/// Schedules per-output frame copies into the producer buffers at the
-/// 30 FPS ceiling. Full-frame copies first (spec section 6 allows this as
-/// the initial path); damage-driven tuning is a later optimization the
-/// producer agreement documents honestly.
+/// Frame budget ceiling for damage-driven delivery (30 FPS).
+const MIN_FRAME_INTERVAL: std::time::Duration = std::time::Duration::from_millis(33);
+/// Idle refresh: a static desktop with no Flutter presents still refreshes
+/// consumers at this low rate (cursor moves do not present frames today).
+const IDLE_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// Kicks off the low-rate fallback delivery for an approved session.
+///
+/// The fast path is damage-driven: output presents call
+/// [on_view_frame_presented] and copy only what changed is delivered up to
+/// the 30 FPS budget. This timer covers a completely static scene, where
+/// no present ever fires, so consumers keep a quiet heartbeat instead of
+/// hanging on the last frame.
+///
+/// The timer ends itself once the session closes or is replaced; full-frame
+/// copies first (spec section 6 allows this as the initial delivery
+/// implementation).
 pub fn schedule_frame_delivery<BackendData: crate::backend::Backend + 'static>(
     state: &mut crate::state::State<BackendData>,
     session_handle: &OwnedObjectPath,
@@ -441,26 +481,98 @@ pub fn schedule_frame_delivery<BackendData: crate::backend::Backend + 'static>(
 ) {
     use smithay::reexports::calloop::timer::TimeoutAction;
     let session_handle = session_handle.clone();
-    // The producer only emits a frame when a consumer pulls.
-    let interval = std::time::Duration::from_millis(33);
-    let mut timer = smithay::reexports::calloop::timer::Timer::from_duration(interval);
+    let mut timer = smithay::reexports::calloop::timer::Timer::from_duration(IDLE_REFRESH_INTERVAL);
     state
         .loop_handle
         .insert_source(timer, move |_, _, state| {
-            let pixels = crate::capture::capture_output_pixels(state, &output);
-            match pixels {
-                Ok(snapshot) => {
-                    if let Some(producer) = state.pipe_wire_producer.as_mut() {
-                        producer.queue_frame(session_handle.clone(), &snapshot.pixels);
-                    }
-                }
-                Err(_) => {
-                    tracing::debug!("frame capture failed; producer is quiet until next tick");
-                }
+            if !state.active_streams.contains_key(&session_handle) {
+                return TimeoutAction::Drop;
             }
-            TimeoutAction::ToDuration(interval)
+            deliver_session_frame(state, &session_handle, &output);
+            TimeoutAction::ToDuration(IDLE_REFRESH_INTERVAL)
         })
         .expect("timer can be scheduled");
+}
+
+/// Copies the output into the shared buffers of exactly one session.
+fn deliver_session_frame<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    session_handle: &OwnedObjectPath,
+    output: &smithay::output::Output,
+) {
+    match crate::capture::capture_output_pixels(state, output) {
+        Ok(snapshot) => {
+            if let Some(producer) = state.pipe_wire_producer.as_mut() {
+                producer.queue_frame(session_handle.clone(), &snapshot.pixels);
+            }
+        }
+        Err(_) => {
+            tracing::debug!("frame capture failed; producer is quiet until the next tick");
+        }
+    }
+}
+
+/// Damage-driven frame delivery on the compositor loop.
+///
+/// Called from the Flutter present path whenever a backing store is
+/// presented to a view: this is authoritative output damage. Every
+/// screen-cast session whose source lives on that view's output receives a
+/// frame copy, throttled to the 30 FPS budget per session (damaged faster,
+/// delivered no faster than a consumer reasonably displays).
+pub fn on_view_frame_presented<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    view_id: i64,
+) {
+    let Some(output_name) = state.space.outputs().find_map(|output| {
+        output
+            .user_data()
+            .get::<crate::flutter_engine::view::OutputViewIdWrapper>()
+            .filter(|wrapper| wrapper.view_id == view_id)
+            .map(|_| output.name())
+    }) else {
+        return;
+    };
+    let now = std::time::Instant::now();
+    // Sessions due for a fresh copy from this damage event.
+    let due: Vec<OwnedObjectPath> = state
+        .active_streams
+        .iter()
+        .filter(|(_handle, stream)| {
+            stream.source_id == output_name
+                && stream
+                    .last_frame
+                    .is_none_or(|last| now.duration_since(last) >= MIN_FRAME_INTERVAL)
+        })
+        .map(|(handle, _)| handle.clone())
+        .collect();
+    if due.is_empty() {
+        // No session due (throttled or none on this output): skip without
+        // capturing anything.
+        return;
+    }
+    // All sessions on one output share one capture: their sources are the
+    // same pixels, and the copy is at most once per output per present.
+    let output = state
+        .space
+        .outputs()
+        .find(|output| output.name() == output_name)
+        .cloned();
+    let Some(output) = output else {
+        return;
+    };
+    let captured = crate::capture::capture_output_pixels(state, &output).ok();
+    let Some(captured) = captured else {
+        tracing::debug!("frame capture failed after a present; producer stays quiet");
+        return;
+    };
+    for handle in due {
+        if let Some(producer) = state.pipe_wire_producer.as_mut() {
+            producer.queue_frame(handle.clone(), &captured.pixels);
+        }
+        if let Some(stream) = state.active_streams.get_mut(&handle) {
+            stream.last_frame = Some(now);
+        }
+    }
 }
 
 /// Kicks off the PipeWire stream for the approved session (spec 7).
@@ -513,6 +625,7 @@ fn begin_shared_stream<BackendData: crate::backend::Backend + 'static>(
     };
     let descriptor = StreamDescriptor {
         session_handle: session_handle.clone(),
+        source_id: source.id.clone(),
         size,
         position: (geometry.loc.x as i32, geometry.loc.y as i32),
         label: source.label.clone(),
@@ -522,39 +635,43 @@ fn begin_shared_stream<BackendData: crate::backend::Backend + 'static>(
         session_handle.clone(),
         ActiveStream {
             node_id: 0,
+            source_id: source.id.clone(),
             position: (geometry.loc.x as i32, geometry.loc.y as i32),
             size: (size.w, size.h),
             label: source.label.clone(),
             active: false,
+            last_frame: None,
         },
     );
     // The frame scheduler pulls pixels into the producer buffers.
     schedule_frame_delivery(state, session_handle, output.clone());
 }
 
+/// Applies one consent decision through the ledger runtime, performs the
+/// queued object/UI side effects, and reports whether the token actually
+/// resolved a live picker (the call site only publishes delivery when
+/// authorization truly advanced).
 fn handle_consent_through_runtime<BackendData: crate::backend::Backend + 'static>(
     state: &mut crate::state::State<BackendData>,
     session_handle: &OwnedObjectPath,
     consent_token: u64,
     outcome: ConsentOutcome,
-) {
-    let (actions, ui) = {
+) -> ConsentResolution {
+    let (resolution, actions, ui) = {
         let Some(runtime) = state.portal_runtime.as_mut() else {
-            return;
+            return ConsentResolution::NotMatched;
         };
         let mut actions = Vec::new();
         let mut ui = Vec::new();
-        if !resolve_consent(
+        let resolution = resolve_consent(
             &mut runtime.ledger,
             session_handle,
             consent_token,
             outcome,
             &mut actions,
             &mut ui,
-        ) {
-            return;
-        }
-        (actions, ui)
+        );
+        (resolution, actions, ui)
     };
     for ui_event in ui {
         perform_ui_event(state, ui_event);
@@ -564,6 +681,7 @@ fn handle_consent_through_runtime<BackendData: crate::backend::Backend + 'static
             let _ = runtime.objects.send(action);
         }
     }
+    resolution
 }
 
 /// What the trusted picker reports: the user approved a source, or dropped
@@ -637,10 +755,21 @@ pub fn handle_producer_event<BackendData: crate::backend::Backend + 'static>(
     }
 }
 
+/// The result of applying one picker decision. The call site only
+/// publishes delivery when authorization actually advanced on a live
+/// session.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ConsentResolution {
+    /// A live picker matched the token: the decision is applied.
+    Applied,
+    /// A live picker matched, but the session died before the decision:
+    /// the reply completed cancelled and delivery must not proceed.
+    DeadEnd,
+    /// The token matched nothing: stale, forged, or already consumed.
+    NotMatched,
+}
+
 /// Applies a picker decision that carries a valid consent token.
-///
-/// Returns whether the token matched a live picker for exactly this
-/// session; stale or forged tokens are left alone silently.
 ///
 /// Approval keeps the Start reply pending while the PipeWire producer
 /// negotiates the stream: the session waits in `Starting` and the flow
@@ -653,7 +782,7 @@ pub fn resolve_consent(
     outcome: ConsentOutcome,
     actions: &mut Vec<PortalAction>,
     ui: &mut Vec<PortalUiEvent>,
-) -> bool {
+) -> ConsentResolution {
     let matched = ledger
         .requests
         .iter()
@@ -668,13 +797,13 @@ pub fn resolve_consent(
         .map(|(handle, _)| handle.clone());
     let Some(handle) = matched else {
         tracing::debug!("Ignoring an unmatched or stale consent token");
-        return false;
+        return ConsentResolution::NotMatched;
     };
     let Some(mut request) = ledger.requests.remove(&handle) else {
-        return false;
+        return ConsentResolution::NotMatched;
     };
     let Some(consent) = request.consent.take() else {
-        return false;
+        return ConsentResolution::NotMatched;
     };
     match outcome {
         ConsentOutcome::Approved => {
@@ -688,10 +817,16 @@ pub fn resolve_consent(
                 session.pending_start = Some(consent.reply);
             } else {
                 // Session vanished between picker and approval: a real
-                // close must have happened; keep the reply pending but
-                // the next close path resolves it.
+                // close path owns the session and is gone, so approval
+                // grants nothing (spec 8.3). The reply completes
+                // cancelled right here: no later close path can reach a
+                // request that lost its ledger entry.
                 tracing::warn!("approved consent has no live session");
-                return false;
+                consent.reply.send(cancelled());
+                ui.push(PortalUiEvent::DismissPicker {
+                    consent_token: consent.consent_token,
+                });
+                return ConsentResolution::DeadEnd;
             }
         }
         ConsentOutcome::Cancelled => {
@@ -704,7 +839,7 @@ pub fn resolve_consent(
     ui.push(PortalUiEvent::DismissPicker {
         consent_token: consent.consent_token,
     });
-    true
+    ConsentResolution::Applied
 }
 
 /// Builds the Start result once the producer publishes a node: the
@@ -782,11 +917,7 @@ pub fn close_shared_session<BackendData: crate::backend::Backend + 'static>(
             let _ = runtime.objects.send(action);
         }
     }
-    if let Some(producer) = state.pipe_wire_producer.as_mut() {
-        producer.stop_stream(session_handle);
-    }
-    state.active_streams.remove(session_handle);
-    hide_shared_indicator(state, session_handle);
+    stop_capture_side(state, session_handle);
 }
 
 fn stream_reply(node_id: u32, stream: &ActiveStream) -> PortalReply {
@@ -1036,6 +1167,9 @@ pub fn apply_portal_call(
                 // A session that closes while its picker is open dismisses
                 // the picker and completes the pending Start reply.
                 if let Some(session) = ledger.sessions.remove(&handle) {
+                    if let Some(pending) = session.pending_start {
+                        pending.send(cancelled());
+                    }
                     actions.push(PortalAction::CloseSession(handle.clone()));
                     close_consent_for_session(ledger, &handle, ui);
                 }
@@ -1312,14 +1446,17 @@ mod tests {
         {
             let mut actions = Vec::new();
             let mut ui: Vec<PortalUiEvent> = Vec::new();
-            assert!(!resolve_consent(
-                &mut ledger,
-                &OwnedObjectPath::try_from(SESSION_OK).unwrap(),
-                consent_token + 1,
-                ConsentOutcome::Approved,
-                &mut actions,
-                &mut ui,
-            ));
+            assert_eq!(
+                resolve_consent(
+                    &mut ledger,
+                    &OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                    consent_token + 1,
+                    ConsentOutcome::Approved,
+                    &mut actions,
+                    &mut ui,
+                ),
+                ConsentResolution::NotMatched
+            );
             assert!(ui.is_empty());
         }
 
@@ -1327,14 +1464,17 @@ mod tests {
         {
             let mut actions = Vec::new();
             let mut ui: Vec<PortalUiEvent> = Vec::new();
-            assert!(resolve_consent(
-                &mut ledger,
-                &OwnedObjectPath::try_from(SESSION_OK).unwrap(),
-                consent_token,
-                ConsentOutcome::Cancelled,
-                &mut actions,
-                &mut ui,
-            ));
+            assert_eq!(
+                resolve_consent(
+                    &mut ledger,
+                    &OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                    consent_token,
+                    ConsentOutcome::Cancelled,
+                    &mut actions,
+                    &mut ui,
+                ),
+                ConsentResolution::Applied
+            );
             assert_eq!(
                 pending.recv_blocking().unwrap().response,
                 RESPONSE_CANCELLED
@@ -1398,14 +1538,17 @@ mod tests {
         // Approval keeps the producer handshake pending: the Start reply
         // waits unanswered while the session holds Starting.
         let mut actions = Vec::new();
-        assert!(resolve_consent(
-            &mut ledger,
-            &OwnedObjectPath::try_from(SESSION_OK).unwrap(),
-            consent_token,
-            ConsentOutcome::Approved,
-            &mut actions,
-            &mut Vec::new(),
-        ));
+        assert_eq!(
+            resolve_consent(
+                &mut ledger,
+                &OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                consent_token,
+                ConsentOutcome::Approved,
+                &mut actions,
+                &mut Vec::new(),
+            ),
+            ConsentResolution::Applied
+        );
         assert!(pending.try_recv().is_err(), "approval may not reply yet");
         assert!(!ledger.sessions.is_empty());
         assert_eq!(
@@ -1463,5 +1606,355 @@ mod tests {
             &mut Vec::new(),
         );
         assert_eq!(pending.recv_blocking().unwrap().response, RESPONSE_FAILED);
+    }
+
+    /// Drives create → Start → picker open → approval, leaving the ledger
+    /// with the session in `Starting` and its Start reply pending.
+    fn ledger_with_starting_session() -> (PortalLedger, PendingReply, u64) {
+        let (mut ledger, _guard) = ledger_with_frontend();
+        let mut actions = Vec::new();
+        {
+            let (link, pending) = make_reply_pair();
+            apply_portal_call(
+                &mut ledger,
+                PortalCall::CreateSession {
+                    handle: handle(),
+                    session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                    app_id: "app".into(),
+                    caller: Some(Caller(":1.9".into())),
+                    reply: link,
+                },
+                &mut actions,
+                &mut Vec::new(),
+            );
+            assert_eq!(pending.recv_blocking().unwrap().response, RESPONSE_OK);
+        }
+        let (link, pending) = make_reply_pair();
+        let consent_token = {
+            let mut ui: Vec<PortalUiEvent> = Vec::new();
+            apply_portal_call(
+                &mut ledger,
+                PortalCall::Start {
+                    handle: handle(),
+                    session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                    app_id: "app".into(),
+                    parent_window: "".into(),
+                    constraints: super::super::ScreenCastConstraints {
+                        types: super::super::SourceTypes::MONITOR,
+                        cursor_mode: super::super::CursorModes::HIDDEN,
+                        multiple: false,
+                        restore_token: None,
+                    },
+                    caller: Some(Caller(":1.9".into())),
+                    reply: link,
+                },
+                &mut actions,
+                &mut ui,
+            );
+            assert!(pending.try_recv().is_err(), "picker owns the reply");
+            let PortalUiEvent::OpenPicker { consent_token, .. } = &ui[0] else {
+                panic!("expected picker open");
+            };
+            *consent_token
+        };
+        apply_portal_call_for_consent(
+            &mut ledger,
+            OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+            consent_token,
+            ConsentOutcome::Approved,
+        );
+        assert_eq!(
+            session_state(&ledger, SESSION_OK),
+            Some(SessionState::Starting)
+        );
+        (ledger, pending, consent_token)
+    }
+
+    /// Convenience: applies a consent decision straight through the ledger.
+    fn apply_portal_call_for_consent(
+        ledger: &mut PortalLedger,
+        session: OwnedObjectPath,
+        consent_token: u64,
+        outcome: ConsentOutcome,
+    ) {
+        let mut actions = Vec::new();
+        let mut ui: Vec<PortalUiEvent> = Vec::new();
+        let resolution = resolve_consent(
+            ledger,
+            &session,
+            consent_token,
+            outcome,
+            &mut actions,
+            &mut ui,
+        );
+        assert_eq!(resolution, ConsentResolution::Applied);
+    }
+
+    // Session.Close while the PipeWire producer negotiates (Starting):
+    // the pending Start reply completes cancelled, never leaked or failed.
+    #[test]
+    fn session_close_completes_pending_start_cancelled() {
+        let (mut ledger, pending, _token) = ledger_with_starting_session();
+        let mut actions = Vec::new();
+        let mut ui: Vec<PortalUiEvent> = Vec::new();
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::RequestClose {
+                handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                caller: Some(Caller(":1.9".into())),
+                reply: make_reply_pair().0,
+            },
+            &mut actions,
+            &mut ui,
+        );
+        assert_eq!(
+            pending.recv_blocking().unwrap().response,
+            RESPONSE_CANCELLED,
+            "the pending Start reply must complete cancelled"
+        );
+        assert_eq!(actions.len(), 1, "session close queued");
+        assert!(ledger.sessions.is_empty());
+    }
+
+    // The second close is a no-op: no new action, no reply completion.
+    #[test]
+    fn double_session_close_is_idempotent() {
+        let (mut ledger, _pending, _token) = ledger_with_starting_session();
+        let mut actions = Vec::new();
+        let mut ui: Vec<PortalUiEvent> = Vec::new();
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::RequestClose {
+                handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                caller: Some(Caller(":1.9".into())),
+                reply: make_reply_pair().0,
+            },
+            &mut actions,
+            &mut ui,
+        );
+        let mut second = Vec::new();
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::RequestClose {
+                handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                caller: Some(Caller(":1.9".into())),
+                reply: make_reply_pair().0,
+            },
+            &mut second,
+            &mut ui,
+        );
+        assert!(second.is_empty(), "double close must not re-close");
+        assert!(ledger.sessions.is_empty());
+    }
+
+    // Frontend owner loss while the producer negotiates: the pending Start
+    // reply completes cancelled (never failed, never leaked).
+    #[test]
+    fn frontend_loss_completes_pending_start_cancelled() {
+        let (mut ledger, pending, _token) = ledger_with_starting_session();
+        let mut actions = Vec::new();
+        let mut ui: Vec<PortalUiEvent> = Vec::new();
+        frontend_owner_changed(&mut ledger, &mut actions, &mut ui, None);
+        assert_eq!(
+            pending.recv_blocking().unwrap().response,
+            RESPONSE_CANCELLED
+        );
+        assert!(ledger.sessions.is_empty());
+        assert!(ledger.requests.is_empty());
+        assert_eq!(actions.len(), 1, "session close queued");
+    }
+
+    // Approval that races a session close: the session close completes
+    // the pending Start reply cancelled and invalidates the picker; a
+    // late approval with the stale token can attach to nothing. The
+    // DeadEnd shape never occurs on the ledger because every close
+    // consumes the consent first — this test pins the observable order.
+    #[test]
+    fn approved_consent_on_dead_session_completes_cancelled() {
+        let (mut ledger, _guard) = ledger_with_frontend();
+        let mut actions = Vec::new();
+        {
+            let (link, pending) = make_reply_pair();
+            apply_portal_call(
+                &mut ledger,
+                PortalCall::CreateSession {
+                    handle: handle(),
+                    session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                    app_id: "app".into(),
+                    caller: Some(Caller(":1.9".into())),
+                    reply: link,
+                },
+                &mut actions,
+                &mut Vec::new(),
+            );
+            assert_eq!(pending.recv_blocking().unwrap().response, RESPONSE_OK);
+        }
+        let (link, pending) = make_reply_pair();
+        let consent_token = {
+            let mut ui: Vec<PortalUiEvent> = Vec::new();
+            apply_portal_call(
+                &mut ledger,
+                PortalCall::Start {
+                    handle: handle(),
+                    session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                    app_id: "app".into(),
+                    parent_window: "".into(),
+                    constraints: super::super::ScreenCastConstraints {
+                        types: super::super::SourceTypes::MONITOR,
+                        cursor_mode: super::super::CursorModes::HIDDEN,
+                        multiple: false,
+                        restore_token: None,
+                    },
+                    caller: Some(Caller(":1.9".into())),
+                    reply: link,
+                },
+                &mut actions,
+                &mut ui,
+            );
+            let PortalUiEvent::OpenPicker { consent_token, .. } = &ui[0] else {
+                panic!("expected picker open");
+            };
+            *consent_token
+        };
+        // The session dies while the picker is open: Session.Close on the
+        // session path applies, dismissing the picker and completing the
+        // reply cancelled through the same path every other close funnels
+        // through.
+        let mut close_actions = Vec::new();
+        let mut ui: Vec<PortalUiEvent> = Vec::new();
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::RequestClose {
+                handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                caller: Some(Caller(":1.9".into())),
+                reply: make_reply_pair().0,
+            },
+            &mut close_actions,
+            &mut ui,
+        );
+        assert_eq!(
+            pending.recv_blocking().unwrap().response,
+            RESPONSE_CANCELLED,
+            "session close completes the Start reply"
+        );
+        // The picker dismissal for the session's picker was queued.
+        assert!(
+            ui.iter()
+                .any(|event| matches!(event, PortalUiEvent::DismissPicker { .. })),
+            "the open picker is dismissed by the session close"
+        );
+        // A late approval with the now-stale token matches nothing.
+        let mut actions = Vec::new();
+        let mut ui: Vec<PortalUiEvent> = Vec::new();
+        assert_eq!(
+            resolve_consent(
+                &mut ledger,
+                &OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                consent_token,
+                ConsentOutcome::Approved,
+                &mut actions,
+                &mut ui,
+            ),
+            ConsentResolution::NotMatched
+        );
+        assert!(actions.is_empty());
+        assert!(ui.is_empty());
+    }
+
+    // Start on a request the user already closed: cancelled immediately,
+    // no picker opens, and the request unexports (no resurrection).
+    #[test]
+    fn late_start_after_request_close_reports_cancelled() {
+        let (mut ledger, _guard) = ledger_with_frontend();
+        {
+            let (link, pending) = make_reply_pair();
+            let mut actions = Vec::new();
+            apply_portal_call(
+                &mut ledger,
+                PortalCall::CreateSession {
+                    handle: handle(),
+                    session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                    app_id: "app".into(),
+                    caller: Some(Caller(":1.9".into())),
+                    reply: link,
+                },
+                &mut actions,
+                &mut Vec::new(),
+            );
+            assert_eq!(pending.recv_blocking().unwrap().response, RESPONSE_OK);
+        }
+        {
+            let (link, pending) = make_reply_pair();
+            let mut actions = Vec::new();
+            apply_portal_call(
+                &mut ledger,
+                PortalCall::SelectSources {
+                    handle: handle(),
+                    session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                    app_id: "app".into(),
+                    constraints: super::super::ScreenCastConstraints {
+                        types: super::super::SourceTypes::MONITOR,
+                        cursor_mode: super::super::CursorModes::HIDDEN,
+                        multiple: false,
+                        restore_token: None,
+                    },
+                    caller: Some(Caller(":1.9".into())),
+                    reply: link,
+                },
+                &mut actions,
+                &mut Vec::new(),
+            );
+            assert_eq!(pending.recv_blocking().unwrap().response, RESPONSE_OK);
+        }
+        // The user closes the request object.
+        {
+            let (link, reply_pending) = make_reply_pair();
+            let mut actions = Vec::new();
+            apply_portal_call(
+                &mut ledger,
+                PortalCall::RequestClose {
+                    handle: handle(),
+                    caller: Some(Caller(":1.9".into())),
+                    reply: link,
+                },
+                &mut actions,
+                &mut Vec::new(),
+            );
+            assert_eq!(reply_pending.recv_blocking().unwrap().response, RESPONSE_OK);
+        }
+        // A late Start on the same closed request reports cancelled and
+        // queues the removal.
+        let (link, pending) = make_reply_pair();
+        let mut actions = Vec::new();
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::Start {
+                handle: handle(),
+                session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                app_id: "app".into(),
+                parent_window: "".into(),
+                constraints: super::super::ScreenCastConstraints {
+                    types: super::super::SourceTypes::MONITOR,
+                    cursor_mode: super::super::CursorModes::HIDDEN,
+                    multiple: false,
+                    restore_token: None,
+                },
+                caller: Some(Caller(":1.9".into())),
+                reply: link,
+            },
+            &mut actions,
+            &mut Vec::new(),
+        );
+        assert_eq!(
+            pending.recv_blocking().unwrap().response,
+            RESPONSE_CANCELLED
+        );
+        assert!(
+            actions
+                .iter()
+                .any(|action| matches!(action, PortalAction::UnexportRequest(_))),
+            "the closed request object is removed"
+        );
+        assert!(ledger.requests.is_empty());
     }
 }

@@ -95,6 +95,10 @@ impl FlutterCompositor {
                             {
                                 view.present_backing_store(id);
                             }
+                            // The presented frame is fresh output damage:
+                            // every screen-cast session on this output
+                            // delivers a throttled frame copy now.
+                            crate::portal::service::on_view_frame_presented(data, id.view_id);
                         }
                         BackingStoreEvent::Collected(id) => {
                             if let Some(view) =

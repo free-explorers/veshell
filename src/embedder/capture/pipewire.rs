@@ -83,6 +83,8 @@ pub enum ProducerEvent {
 #[derive(Clone, Debug)]
 pub struct StreamDescriptor {
     pub session_handle: OwnedObjectPath,
+    /// PipeWire-consistent identity of the source (an output name today).
+    pub source_id: String,
     /// Physical buffer size for the negotiated BGRx stream.
     pub size: Size<i32, Physical>,
     /// Global logical position the portal Start result reports.
@@ -95,11 +97,17 @@ pub struct StreamDescriptor {
 #[derive(Clone, Debug)]
 pub struct ActiveStream {
     pub node_id: u32,
+    /// The source the stream was approved from; frame delivery matches
+    /// fresh output damage against this id.
+    pub source_id: String,
     pub position: (i32, i32),
     pub size: (i32, i32),
     pub label: String,
     /// Whether a consumer is pulling frames right now.
     pub active: bool,
+    /// Last frame copy for this stream: the 30 FPS budget is enforced
+    /// against output-damage presents, never above.
+    pub last_frame: Option<std::time::Instant>,
 }
 
 /// The PipeWire global: core plus the calloop integration.
