@@ -105,7 +105,23 @@ Implemented M1 foundations:
   pointer. The placeholder is gone (an `Option` listener stores exactly
   once and `take`s on teardown, registration still completing before
   `connect`); no other zeroed-initialization remains in the capture
-  stack.
+  stack. Node-publication correction (2026-09-16, same first-machine
+  session): approval reached the producer but the Start reply never
+  completed — every attempt stalled at a format-less `Paused`, five
+  Chrome retries in a row. An isolated pipeline run
+  (`videotestsrc ! BGRx ! pipewiresink` on the same daemon) reproduced
+  the mechanism from the other side with `pw-stream: error (-32) no
+  target node available`: on this PipeWire neither a consumer nor a
+  target means no format fixation — and Start gated on fixate while the
+  consumer gated on Start (a deadlock by construction). The producer now
+  publishes `NodeReady` as soon as the stream is accepted into the graph
+  (`Connecting`, Paused as fallback), mutter's ordering; the fixate
+  happens when the daemon links the consumer (`param_changed` fires
+  then). This is what specification section 7 ("never wait for a
+  consuming application to stream") actually mandates; the earlier
+  fixate-gated ReplyLink was that same wait misread as caution. The
+  delivery path was already tolerant of pre-fixate frames (dropped until
+  `ready_size`).
 - M2.3 PipeWire producer (2026-09-16): `pipewire-rs` 0.10 with
   `libpipewire-0.3` 1.6 delivers one BGRx stream per consented session
   (`src/embedder/capture/pipewire.rs`). The PipeWire main loop FD is a

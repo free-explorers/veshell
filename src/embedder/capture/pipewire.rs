@@ -376,11 +376,17 @@ impl Producer {
             .state_changed(move |stream, (), _old, new| {
                 let handle = lock.borrow().descriptor.session_handle.clone();
                 match new {
-                    StreamState::Paused => {
+                    // The node identity exists as soon as the stream is
+                    // accepted in the graph (mutter's ordering, proven by
+                    // `no target node available` when any producer waits
+                    // for a fixate no consumer can initiate). Start
+                    // completes with the node id pre-fixate; the fixate
+                    // itself happens when the daemon links the consumer's
+                    // stream to this node (param_changed fires then).
+                    StreamState::Connecting | StreamState::Paused => {
                         let mut inner = lock.borrow_mut();
                         if inner.ready_size.is_none() {
-                            tracing::debug!("paused before the format fixated");
-                            return;
+                            tracing::debug!(state = ?new, "stream connected; node published before the format fixated");
                         }
                         let node_id = *inner.node_id.get_or_insert_with(|| stream.node_id());
                         let _ = to_loop_paused.send(ProducerEvent::NodeReady {
@@ -400,7 +406,7 @@ impl Producer {
                             active: true,
                         });
                     }
-                    StreamState::Unconnected | StreamState::Connecting => (),
+                    StreamState::Unconnected => (),
                 }
             })
             .param_changed(move |stream, (), id, pod| {
