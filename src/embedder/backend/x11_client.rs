@@ -529,6 +529,11 @@ pub fn run_x11_client() {
                     .capture_session
                     .as_ref()
                     .filter(|session| session.output.name() == output.name()),
+                state
+                    .recording_session
+                    .as_ref()
+                    .filter(|recording| recording.output_name() == output.name())
+                    .map(|recording| recording.chip_data()),
             );
 
             let mut elements2: Vec<VeshellRenderElements<GlesRenderer>> = Vec::new();

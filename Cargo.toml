@@ -82,6 +82,7 @@ pipewire-sys = "0.10.1"
 libc = "0.2.189"
 gstreamer = "0.24.5"
 gstreamer-app = "0.24.5"
+fontdue = "0.9"
 
 
 [build-dependencies]

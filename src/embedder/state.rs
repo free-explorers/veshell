@@ -57,6 +57,7 @@ use smithay::wayland::socket::ListeningSocketSource;
 use smithay::wayland::xwayland_shell::{self, XWAYLAND_SHELL_ROLE};
 use smithay::xwayland::{X11Surface, X11Wm};
 use tracing::{info, warn};
+use xkbcommon::xkb::Keycode;
 use zbus::zvariant::OwnedObjectPath;
 
 use crate::cursor::CursorState;
@@ -68,7 +69,7 @@ use crate::flutter_engine::wayland_messages::{
 use crate::flutter_engine::FlutterEngine;
 use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
 use crate::keyboard::key_repeater::KeyRepeater;
-use crate::keyboard::{handle_keyboard_event, swap_left_alt_and_meta};
+use crate::keyboard::{handle_keyboard_event, swap_left_alt_and_meta, VeshellKeyEvent};
 use crate::meta_window_state::meta_window::MetaWindowPatch;
 use crate::meta_window_state::MetaWindowState;
 use crate::settings::{MonitorConfiguration, SettingsManager, VeshellSettings};
@@ -113,6 +114,7 @@ pub struct State<BackendData: Backend + 'static> {
     pub display_handle: DisplayHandle,
     pub dmabuf_state: Option<DmabufState>,
     pub flutter_engine: Option<Box<FlutterEngine<BackendData>>>,
+    pub flutter_sent_keys: HashMap<Keycode, VeshellKeyEvent>,
     pub gl: Option<Gles2>,
     pub imported_dmabufs: Vec<Dmabuf>,
     pub is_next_flutter_frame_scheduled: bool,
@@ -386,6 +388,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             xdg_shell_state,
             shm_state,
             flutter_engine: None,
+            flutter_sent_keys: HashMap::new(),
             dmabuf_state,
             seat,
             seat_state,

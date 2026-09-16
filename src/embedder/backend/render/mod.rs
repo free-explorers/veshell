@@ -1,6 +1,8 @@
 use smithay::backend::renderer::element::solid;
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex, OnceLock};
+use tracing::{info, warn};
 
+use crate::capture::{RECORDING_CHIP_HEIGHT, RECORDING_CHIP_WIDTH};
 use crate::{
     backend::render::fractionnal_texture::{
         FractionnalTextureBuffer, FractionnalTextureRenderElement,
@@ -14,10 +16,11 @@ use smithay::{
     backend::{
         allocator::{
             dmabuf::{AsDmabuf, Dmabuf},
-            Slot,
+            Fourcc, Slot,
         },
         renderer::{
             element::{
+                memory::{MemoryRenderBuffer, MemoryRenderBufferRenderElement},
                 surface::{render_elements_from_surface_tree, WaylandSurfaceRenderElement},
                 texture::{TextureBuffer, TextureRenderElement},
                 utils::{Relocate, RelocateRenderElement},
@@ -29,7 +32,7 @@ use smithay::{
     input::pointer::CursorImageStatus,
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    utils::{Logical, Monotonic, Physical, Point, Rectangle, Scale, Time, Transform},
+    utils::{Buffer, Logical, Monotonic, Physical, Point, Rectangle, Scale, Size, Time, Transform},
 };
 
 pub static CLEAR_COLOR: [f32; 4] = [0.8, 0.8, 0.9, 1.0];
@@ -38,6 +41,7 @@ mod fractionnal_texture;
 smithay::backend::renderer::element::render_elements! {
     pub VeshellRenderElements<R> where
         R: ImportAll + ImportMem;
+    Memory=MemoryRenderBufferRenderElement<R>,
     Cursor=RelocateRenderElement<CursorRenderElement<R>>,
     Flutter=FractionnalTextureRenderElement<R::TextureId>,
     Surface=WaylandSurfaceRenderElement<R>,
@@ -66,6 +70,7 @@ pub fn get_render_elements<R>(
     flip_flutter_texture: bool,
     surfaces_in_gaming_mode: Vec<&WlSurface>,
     capture_overlay: Option<&CaptureSession>,
+    recording_chip: Option<crate::capture::RecordingChipData>,
 ) -> Vec<VeshellRenderElements<R>>
 where
     R: Renderer + ImportAll + ImportMem + ImportDma,
@@ -87,6 +92,7 @@ where
         flip_flutter_texture,
         surfaces_in_gaming_mode,
         capture_overlay,
+        recording_chip,
     )
 }
 
@@ -244,7 +250,325 @@ where
     elements
 }
 
-/// The rectangles covering `full` but not `hole` (left, right, top, bottom).
+/// The trusted recording indicator: the recorded rectangle's outline,
+/// a dimmed desktop outside it, and a dark chip with a red dot plus the
+/// elapsed time in the shell's own font, inside the rectangle's
+/// bottom-right corner. Print is the only stop action; the capture
+/// render path draws none of this, so recorded frames stay clean
+/// (specification section 9).
+pub fn get_recording_overlay_elements<R>(
+    renderer: &mut R,
+    output_geometry: Rectangle<f64, Logical>,
+    scale: f64,
+    chip: crate::capture::RecordingChipData,
+) -> Vec<VeshellRenderElements<R>>
+where
+    R: Renderer + ImportAll + ImportMem,
+    <R as RendererSuper>::TextureId: Send + Clone + 'static,
+    <R as RendererSuper>::Error:,
+    VeshellRenderElements<R>: RenderElement<R>,
+{
+    // Global logical -> local physical, like the selection overlay.
+    let to_local_physical = |rect: Rectangle<f64, Logical>| -> Rectangle<i32, Physical> {
+        let left = ((rect.loc.x - output_geometry.loc.x) * scale) as i32;
+        let top = ((rect.loc.y - output_geometry.loc.y) * scale) as i32;
+        Rectangle::new(
+            (left, top).into(),
+            (
+                (rect.size.w * scale).ceil() as i32,
+                (rect.size.h * scale).ceil() as i32,
+            )
+                .into(),
+        )
+    };
+
+    let mut elements: Vec<VeshellRenderElements<R>> = Vec::new();
+    // The recorded rectangle gets a visible outline and the desktop
+    // outside it dims to the same scrim the selection uses. The first
+    // element pushed is topmost, so the chip's digits come first and
+    // the dimming scrim is pushed last, beneath all of the chip.
+    let output_size_physical =
+        to_local_physical(Rectangle::new(output_geometry.loc, output_geometry.size));
+    let recorded = to_local_physical(chip.outline);
+    let stroke = SELECTION_LINE_WIDTH;
+    let x = recorded.loc.x;
+    let y = recorded.loc.y;
+    let (width, height) = (recorded.size.w, recorded.size.h);
+
+    // mm:ss rasterized in the shell's own label font and pushed as a
+    // texture so the counter reads like normal UI text.
+    //
+    // This renderer paints the first pushed element last, so the text
+    // comes first and the background, outline, and dimming scrim pile
+    // beneath it.
+    let text_location = Point::<f64, Logical>::new(
+        chip.chip.loc.x - output_geometry.loc.x,
+        chip.chip.loc.y - output_geometry.loc.y,
+    );
+    let imported = recording_counter_bitmap(&chip, scale).and_then(|(data, size)| {
+        // The counter rides the proven memory-buffer path the cursor
+        // uses: MemoryRenderBuffer handles the import, orientation, and
+        // alpha for memory slices itself.
+        let integer_scale = scale.round().max(1.0) as i32;
+        let buffer = MemoryRenderBuffer::from_slice(
+            &data,
+            Fourcc::Argb8888,
+            size,
+            integer_scale,
+            Transform::Normal,
+            None,
+        );
+        let physical_location =
+            Point::<f64, Physical>::new(text_location.x * scale, text_location.y * scale);
+        match MemoryRenderBufferRenderElement::from_buffer(
+            renderer,
+            physical_location,
+            &buffer,
+            None,
+            None,
+            None,
+            Kind::Unspecified,
+        ) {
+            Ok(element) => {
+                info!(
+                    size = ?size,
+                    "recording counter texture built on the memory path"
+                );
+                Some(element)
+            }
+            Err(error) => {
+                info!(
+                    error = ?error,
+                    size = ?size,
+                    "recording counter texture import failed"
+                );
+                None
+            }
+        }
+    });
+    let counter_element = imported.map(VeshellRenderElements::Memory);
+    if let Some(element) = counter_element {
+        elements.push(element);
+    }
+
+    // The chip's chrome (rounded translucent background + red circle)
+    // is one memory texture beneath the text but above the outline and
+    // the dimming scrim; this renderer paints the first pushed element
+    // last.
+    let chrome = recording_chip_bitmap(&chip, scale);
+    let integer_scale = scale.round().max(1.0) as i32;
+    let chip_buffer = MemoryRenderBuffer::from_slice(
+        &chrome.0,
+        Fourcc::Argb8888,
+        chrome.1,
+        integer_scale,
+        Transform::Normal,
+        None,
+    );
+    if let Ok(element) = MemoryRenderBufferRenderElement::from_buffer(
+        renderer,
+        text_location.to_physical(scale),
+        &chip_buffer,
+        None,
+        None,
+        None,
+        Kind::Unspecified,
+    ) {
+        elements.push(VeshellRenderElements::Memory(element));
+    } else {
+        info!("recording chip texture import failed");
+    }
+
+    let mut push_solid = |region: Rectangle<i32, Physical>, color: [f32; 4]| {
+        elements.push(VeshellRenderElements::Solid(
+            solid::SolidColorRenderElement::new(
+                Id::new(),
+                region,
+                1,
+                Color32F::new(color[0], color[1], color[2], color[3]),
+                Kind::Unspecified,
+            ),
+        ));
+    };
+
+    // Outline and scrim sit beneath the chip within the overlay layer
+    // (they are pushed later, and pushing later is pushed deeper).
+    for region in [
+        Rectangle::new(
+            (x - stroke, y - stroke).into(),
+            (width + stroke * 2, stroke).into(),
+        ),
+        Rectangle::new(
+            (x - stroke, y + height).into(),
+            (width + stroke * 2, stroke).into(),
+        ),
+        Rectangle::new((x - stroke, y).into(), (stroke, height).into()),
+        Rectangle::new((x + width, y).into(), (stroke, height).into()),
+    ] {
+        push_solid(region, SELECTION_COLOR);
+    }
+    for region in scrim_regions(output_size_physical, recorded) {
+        push_solid(region, SCRIM_COLOR);
+    }
+
+    elements
+}
+
+/// Rasterizes the counter text with the fontconfig-resolved family
+/// Flutter itself uses, onto a full-chip-sized canvas with the text
+/// right-aligned and vertically centered inside it; returns
+/// premultiplied BGRA with the coverage in every channel (a white pixel
+/// whose alpha is the coverage), or None when the glyph lookup fails.
+fn recording_counter_bitmap(
+    chip: &crate::capture::RecordingChipData,
+    scale: f64,
+) -> Option<(Vec<u8>, Size<i32, Buffer>)> {
+    // Flutter resolves its default font stack through fontconfig: the
+    // engine asks for the "Roboto" family and fontconfig chooses what it
+    // is substituted with. The counter uses the very same resolution so
+    // its text matches the shell's typography on any machine; without
+    // fontconfig the counter is skipped.
+    static FONT: OnceLock<Option<fontdue::Font>> = OnceLock::new();
+    let font = FONT
+        .get_or_init(|| {
+            let file = std::process::Command::new("fc-match")
+                .arg("--format=%{file}")
+                .arg("Roboto")
+                .output()
+                .ok()?
+                .stdout;
+            let file = String::from_utf8(file).ok()?;
+            fontdue::Font::from_bytes(
+                std::fs::read(file.trim_end()).ok()?,
+                fontdue::FontSettings::default(),
+            )
+            .ok()
+        })
+        .as_ref()?;
+
+    let seconds = chip.seconds.min(99 * 60 + 59);
+    let text = format!("{}:{:02}", seconds / 60, seconds % 60);
+
+    // Everything is laid out on a canvas exactly the chip's size in
+    // integer-scale pixels, so the element can be anchored at the chip
+    // rectangle and the alignment cannot drift.
+    let integer_scale = scale.round().max(1.0);
+    let canvas_width = (RECORDING_CHIP_WIDTH * integer_scale).round() as i32;
+    let canvas_height = (RECORDING_CHIP_HEIGHT * integer_scale).round() as i32;
+
+    // Em size to make digit caps fill most of the chip; the digits share
+    // identical metrics, so their common box is the layout reference and
+    // everything else (the colon) is centered inside it.
+    let px = (RECORDING_CHIP_HEIGHT * 0.72 * integer_scale) as f32;
+    let (reference, _) = font.rasterize('0', px);
+    let box_height = reference.height as i32;
+
+    let mut placed = Vec::new();
+    let mut pen_x = 0i32;
+    for glyph in text.chars() {
+        let (metrics, bitmap) = font.rasterize(glyph, px);
+        let x = pen_x + metrics.xmin;
+        let y = ((canvas_height - box_height) / 2) + (box_height - metrics.height as i32) / 2;
+        placed.push((x, y, metrics.width as i32, metrics.height as i32, bitmap));
+        pen_x += metrics.advance_width.round() as i32;
+    }
+
+    // Right-align the drawn text at the chip's right edge inset.
+    const TEXT_RIGHT_INSET: f64 = 6.0;
+    let text_width = pen_x;
+    let text_start_x =
+        canvas_width - (TEXT_RIGHT_INSET * integer_scale).round() as i32 - text_width;
+    let shift_x = text_start_x;
+
+    // Anti-aliased coverage is brightened with a wide gamma so the thin
+    // glyph strokes of a small font render at full white against the
+    // black chip instead of fading to gray.
+    static WHITE_GAMMA: LazyLock<[u8; 256]> = LazyLock::new(|| {
+        let mut table = [0u8; 256];
+        for (coverage, boosted) in table.iter_mut().enumerate() {
+            *boosted = ((coverage as f32 / 255.0).powf(0.45) * 255.0).round() as u8;
+        }
+        table
+    });
+
+    let mut data = vec![0u8; (canvas_width * canvas_height * 4) as usize];
+    for (x, y, glyph_width, glyph_height, bitmap) in placed {
+        for row in 0..glyph_height {
+            for column in 0..glyph_width {
+                let coverage = WHITE_GAMMA[bitmap[(row * glyph_width + column) as usize] as usize];
+                let destination_x = shift_x + x + column;
+                let destination_y = y + row;
+                let destination = (destination_y * canvas_width + destination_x) as usize * 4;
+                data[destination..destination + 4]
+                    .copy_from_slice(&[coverage, coverage, coverage, coverage]);
+            }
+        }
+    }
+    Some((data, Size::from((canvas_width, canvas_height))))
+}
+
+/// Rasterizes the chip's chrome on a chip-sized canvas: a pill-shaped
+/// translucent black background with the red recording circle on its
+/// left, as premultiplied BGRA.
+fn recording_chip_bitmap(
+    _chip: &crate::capture::RecordingChipData,
+    scale: f64,
+) -> (Vec<u8>, Size<i32, Buffer>) {
+    let integer_scale = scale.round().max(1.0);
+    let width = (RECORDING_CHIP_WIDTH * integer_scale).round() as i32;
+    let height = (RECORDING_CHIP_HEIGHT * integer_scale).round() as i32;
+
+    // The pill spans the full height; the red circle sits at the left
+    // with a logical inset.
+    let radius = height as f32 / 2.0;
+    let dot_radius = (height as f32 * 0.2).max(4.0);
+    let dot_center_x = (9.0 * integer_scale) as f32 + dot_radius;
+    let dot_center_y = height as f32 / 2.0;
+
+    // The background keeps some translucency so the desktop shows
+    // through faintly; the red circle blends over it on its left edge.
+    const BACKGROUND_OPACITY: f32 = 0.78;
+
+    let mut data = vec![0u8; (width * height * 4) as usize];
+    for y in 0..height {
+        for x in 0..width {
+            let px = x as f32 + 0.5;
+            let py = y as f32 + 0.5;
+
+            // Signed distance of a pill: rounded rect whose radius is
+            // half the height.
+            let center_x = width as f32 / 2.0;
+            let center_y = height as f32 / 2.0;
+            let half_height = radius;
+            let qx = (px - center_x).abs() - (center_x - radius);
+            let qy = (py - center_y).abs() - (half_height - radius);
+            let outside = (qx.max(0.0)).hypot(qy.max(0.0));
+            let pill_distance = outside + qx.max(qy).min(0.0) - radius;
+            let alpha_bg =
+                (((0.5 - pill_distance).clamp(0.0, 1.0) * BACKGROUND_OPACITY) * 255.0).round();
+
+            let dot_distance = ((px - dot_center_x).hypot(py - dot_center_y)) - dot_radius;
+            let dot_coverage = (0.5 - dot_distance).clamp(0.0, 1.0);
+            let alpha_dot = (dot_coverage * 255.0).round();
+
+            // Memory byte order for Argb8888 is blue, green, red, alpha;
+            // premultiplied white coverage and red: (26, 0, 255).
+            let destination = (y * width + x) as usize * 4;
+            if alpha_dot > alpha_bg || dot_distance <= 0.0 {
+                data[destination..destination + 4].copy_from_slice(&[
+                    (26.0 * dot_coverage) as u8,
+                    0,
+                    (255.0 * dot_coverage) as u8,
+                    alpha_dot as u8,
+                ]);
+            } else {
+                data[destination..destination + 4].copy_from_slice(&[0, 0, 0, alpha_bg as u8]);
+            }
+        }
+    }
+    (data, Size::from((width, height)))
+}
+
 fn scrim_regions(
     full: Rectangle<i32, Physical>,
     hole: Rectangle<i32, Physical>,
@@ -306,6 +630,7 @@ pub fn get_render_elements_from_dmabuf<R>(
     flip_flutter_texture: bool,
     surfaces_in_gaming_mode: Vec<&WlSurface>,
     capture_overlay: Option<&CaptureSession>,
+    recording_chip: Option<crate::capture::RecordingChipData>,
 ) -> Vec<VeshellRenderElements<R>>
 where
     R: Renderer + ImportAll + ImportMem + ImportDma,
@@ -326,6 +651,17 @@ where
             })
             .unwrap_or_default(),
     );
+    // The live recording indicator rides the same overlay layer; the
+    // capture readback path (get_frame_elements_from_dmabuf) draws none
+    // of it, so the chip never reaches the recorded pixels.
+    if let Some(chip) = recording_chip {
+        elements.extend(get_recording_overlay_elements(
+            renderer,
+            output_geometry,
+            scale.fractional_scale(),
+            chip,
+        ));
+    }
 
     if capture_overlay.is_none() && output_geometry.contains(cursor_location) {
         let cursor_element = draw_cursor(
@@ -376,4 +712,59 @@ where
     VeshellRenderElements<R>: RenderElement<R>,
 {
     render_elements_from_surface_tree(renderer, surface, (0, 0), 1.0, 1.0, Kind::Unspecified)
+}
+
+#[cfg(test)]
+mod counter_bitmap_tests {
+    use super::*;
+
+    fn test_chip(seconds: u64) -> crate::capture::RecordingChipData {
+        crate::capture::RecordingChipData {
+            outline: Rectangle::new(Point::new(0.0, 0.0), (200.0, 100.0).into()),
+            chip: Rectangle::new(Point::new(0.0, 0.0), (84.0, 26.0).into()),
+            seconds,
+        }
+    }
+
+    #[test]
+    fn counter_bitmap_is_rasterized() {
+        let (data, size) = recording_counter_bitmap(&test_chip(63), 1.0).expect("bitmap built");
+        assert!(size.w > 20 && size.h > 8, "size {size:?}");
+        let bytes = size.w * size.h * 4;
+        assert_eq!(data.len() as i32, bytes);
+        let max = data.iter().max().copied().unwrap_or(0);
+        let bright = data.iter().filter(|byte| **byte > 128).count();
+        assert!(
+            max == 255 || max > 0,
+            "max coverage {max}, bright bytes {bright}"
+        );
+        eprintln!("bitmap size {size:?}, max {max}, bright bytes {bright}");
+    }
+
+    #[test]
+    fn chip_bitmap_is_pill_with_red_dot() {
+        let (data, size) = recording_chip_bitmap(&test_chip(63), 1.0);
+        assert_eq!((size.w, size.h), (84, 26));
+        let stride = size.w as usize;
+        let alpha_at = |x: usize, y: usize| data[(y * stride + x) * 4 + 3];
+        // Corners outside the pill remain fully transparent.
+        assert_eq!(alpha_at(0, 0), 0);
+        assert_eq!(alpha_at(stride - 1, 0), 0);
+        // The pill center is the translucent background.
+        let center = alpha_at(stride / 2, 13);
+        assert!(
+            (center as i32 - 199).abs() <= 6,
+            "background alpha {center}"
+        );
+        // The dot on the left is fully red (alpha seek the byte with
+        // red 255).
+        for x in 9..16 {
+            let index = (13 * stride + x) * 4;
+            if data[index + 2] == 255 {
+                assert!(data[index + 3] == 255, "dot alpha at {x}");
+                return;
+            }
+        }
+        panic!("no full-red pixel found in the dot area");
+    }
 }

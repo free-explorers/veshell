@@ -800,6 +800,62 @@ impl LiveRecording {
     pub fn output_name(&self) -> String {
         self.output.name()
     }
+
+    /// The trusted indicator data: the recorded rectangle outline plus
+    /// the chip rectangle with the elapsed seconds, anchored to the
+    /// rectangle's bottom-right corner. Recorded frames never contain
+    /// either: the capture render path draws no overlay elements, so
+    /// the indicator may sit on the shared desktop without reaching the
+    /// stream.
+    pub fn chip_data(&self) -> RecordingChipData {
+        RecordingChipData {
+            outline: self.area,
+            chip: recording_chip_rect(self.area, self.output_geometry),
+            seconds: self.started.elapsed().as_secs(),
+        }
+    }
+}
+
+/// Native recording indicator geometry/content for a render pass.
+pub struct RecordingChipData {
+    /// The recorded rectangle, drawn with a visible outline and a
+    /// dimmed desktop outside it.
+    pub outline: Rectangle<f64, Logical>,
+    pub chip: Rectangle<f64, Logical>,
+    pub seconds: u64,
+}
+
+/// Chip metrics in logical units.
+pub(crate) const RECORDING_CHIP_WIDTH: f64 = 84.0;
+pub(crate) const RECORDING_CHIP_HEIGHT: f64 = 26.0;
+
+/// The chip sits inside the recorded rectangle's bottom-right corner; a
+/// selection too small to contain it falls back to just above the
+/// rectangle's right edge, where it remains visibly attached.
+fn recording_chip_rect(
+    area: Rectangle<f64, Logical>,
+    output_geometry: Rectangle<f64, Logical>,
+) -> Rectangle<f64, Logical> {
+    let inset = 6.0;
+    if area.size.w >= RECORDING_CHIP_WIDTH + inset && area.size.h >= RECORDING_CHIP_HEIGHT + inset {
+        let origin = (
+            area.loc.x + area.size.w - inset - RECORDING_CHIP_WIDTH,
+            area.loc.y + area.size.h - inset - RECORDING_CHIP_HEIGHT,
+        );
+        Rectangle::new(
+            origin.into(),
+            (RECORDING_CHIP_WIDTH, RECORDING_CHIP_HEIGHT).into(),
+        )
+    } else {
+        let origin = (
+            (area.loc.x + area.size.w - RECORDING_CHIP_WIDTH).max(output_geometry.loc.x),
+            (area.loc.y - RECORDING_CHIP_HEIGHT - 6.0).max(output_geometry.loc.y),
+        );
+        Rectangle::new(
+            origin.into(),
+            (RECORDING_CHIP_WIDTH, RECORDING_CHIP_HEIGHT).into(),
+        )
+    }
 }
 
 /// Leaves the selection session and starts recording the selected area:

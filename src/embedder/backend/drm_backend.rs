@@ -1256,6 +1256,11 @@ impl State<DrmBackend> {
             .capture_session
             .as_ref()
             .filter(|session| session.output.name() == output.name());
+        let recording_chip = self
+            .recording_session
+            .as_ref()
+            .filter(|recording| recording.output_name() == output.name())
+            .map(|recording| recording.chip_data());
 
         let elements = get_render_elements(
             renderer,
@@ -1280,6 +1285,7 @@ impl State<DrmBackend> {
                 })
                 .collect::<Vec<_>>(),
             capture_overlay,
+            recording_chip,
         );
 
         let rendered = surface.compositor.render_frame(
