@@ -7,3 +7,6 @@ target
 
 // debug config folder
 .veshell
+
+# stale tool checkouts
+.depot_tools/
