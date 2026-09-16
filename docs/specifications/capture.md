@@ -121,7 +121,18 @@ Implemented M1 foundations:
   consuming application to stream") actually mandates; the earlier
   fixate-gated ReplyLink was that same wait misread as caution. The
   delivery path was already tolerant of pre-fixate frames (dropped until
-  `ready_size`).
+  `ready_size`). D-Bus reply correction (2026-09-16, directly
+  after): Start completed through NodeReady and the compositor aborted
+  again at reply construction — `stream_reply` appended bare values
+  into a variant-signature `Dict` (`SignatureMismatch (ii, v)`), so the
+  first real reply never reached the frontend. The reply builder now
+  wraps every `a{sv}` value in `Variant` explicitly, joins the dict
+  field through `append_field` (`add_field` re-wraps an existing Value
+  into a Variant — a second silent signature inversion found by the
+  regression test), and all reply-construction unwraps are graceful
+  failures that fall through the ordinary failure/closing path instead
+  of aborting. NodeReady repeats (Connecting and Paused) also update
+  node state idempotently instead of re-emitting the indicator event.
 - M2.3 PipeWire producer (2026-09-16): `pipewire-rs` 0.10 with
   `libpipewire-0.3` 1.6 delivers one BGRx stream per consented session
   (`src/embedder/capture/pipewire.rs`). The PipeWire main loop FD is a

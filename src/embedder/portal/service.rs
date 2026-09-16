@@ -704,30 +704,65 @@ pub fn handle_producer_event<BackendData: crate::backend::Backend + 'static>(
             session_handle,
             node_id,
         } => {
-            // Complete the Start reply with the real stream list now:
-            // the consumer needs the node id to connect; holding it
-            // further would deadlock startup (spec 7).
-            let information = state.active_streams.get(&session_handle).cloned();
-            let Some(mut stream) = information else {
+            // The producer publishes the node once per event state
+            // (Connecting and then Paused pre-fixate): only the first
+            // Starting -> Active transition completes the Start reply and
+            // shows the indicator; repeats update the node id only.
+            let Some(mut stream) = state.active_streams.get(&session_handle).cloned() else {
                 tracing::debug!("producer node for an unknown stream");
                 return;
             };
-            stream.node_id = node_id;
-            state
-                .active_streams
-                .insert(session_handle.clone(), stream.clone());
-            if let Some(runtime) = state.portal_runtime.as_mut() {
-                if let Some(session) = runtime.ledger.sessions.get_mut(&session_handle) {
-                    session.state = SessionState::Active;
-                    if let Some(reply) = session.pending_start.take() {
-                        reply.send(stream_reply(node_id, &stream));
+            enum NodeAction {
+                Complete,
+                Repeat,
+                UnknownSession,
+            }
+            let (action, pending_reply) = {
+                let Some(runtime) = state.portal_runtime.as_mut() else {
+                    return;
+                };
+                match runtime.ledger.sessions.get_mut(&session_handle) {
+                    Some(session) if session.state == SessionState::Starting => {
+                        session.state = SessionState::Active;
+                        (NodeAction::Complete, session.pending_start.take())
                     }
-                } else {
+                    Some(_) => (NodeAction::Repeat, None),
+                    None => (NodeAction::UnknownSession, None),
+                }
+            };
+            match action {
+                NodeAction::UnknownSession => {
                     tracing::debug!("producer node for an unknown session");
                     let _ = state.active_streams.remove(&session_handle);
                     return;
                 }
+                NodeAction::Repeat => {
+                    stream.node_id = node_id;
+                    state
+                        .active_streams
+                        .insert(session_handle.clone(), stream.clone());
+                    return;
+                }
+                NodeAction::Complete => {}
             }
+            stream.node_id = node_id;
+            if let Some(reply) = pending_reply {
+                match stream_reply(node_id, &stream) {
+                    Some(reply_message) => reply.send(reply_message),
+                    None => {
+                        // A malformed reply is a producer bug, never a
+                        // reason to abort the compositor: the session
+                        // dies through the normal close path.
+                        tracing::warn!(?session_handle, "unable to build the Start result");
+                        reply.send(failed("unable to build the Start result"));
+                        close_shared_session(state, &session_handle);
+                        return;
+                    }
+                }
+            }
+            state
+                .active_streams
+                .insert(session_handle.clone(), stream.clone());
             show_shared_indicator(state, session_handle.clone(), stream);
         }
         crate::capture::pipewire::ProducerEvent::Fatal {
@@ -920,54 +955,62 @@ pub fn close_shared_session<BackendData: crate::backend::Backend + 'static>(
     stop_capture_side(state, session_handle);
 }
 
-fn stream_reply(node_id: u32, stream: &ActiveStream) -> PortalReply {
-    use zbus::zvariant::{Array, Dict, OwnedValue, Signature, Structure, StructureBuilder, Value};
+fn stream_reply(node_id: u32, stream: &ActiveStream) -> Option<PortalReply> {
+    use zbus::zvariant::{Array, Dict, OwnedValue, Signature, StructureBuilder, Value};
 
-    // a{sv}: string keys, variant values.
+    // a{sv}: string keys, variant values — every value carries the `v`
+    // signature itself; a bare structure inside a variant dict is a
+    // signature mismatch that once aborted the compositor.
     let mut dict = Dict::new(&Signature::Str, &Signature::Variant);
+    let position = StructureBuilder::new()
+        .add_field(stream.position.0)
+        .add_field(stream.position.1)
+        .build()
+        .ok()?;
     dict.append(
         Value::new("position"),
-        Value::new(
-            StructureBuilder::new()
-                .add_field(stream.position.0)
-                .add_field(stream.position.1)
-                .build()
-                .unwrap(),
-        ),
+        Value::Value(Box::new(Value::Structure(position))),
     )
-    .unwrap();
+    .ok()?;
+    let size = StructureBuilder::new()
+        .add_field(stream.size.0)
+        .add_field(stream.size.1)
+        .build()
+        .ok()?;
     dict.append(
         Value::new("size"),
-        Value::new(
-            StructureBuilder::new()
-                .add_field(stream.size.0)
-                .add_field(stream.size.1)
-                .build()
-                .unwrap(),
-        ),
+        Value::Value(Box::new(Value::Structure(size))),
     )
-    .unwrap();
-    dict.append(Value::new("source_type"), Value::new(1_u32))
-        .unwrap();
+    .ok()?;
+    dict.append(
+        Value::new("source_type"),
+        Value::Value(Box::new(Value::U32(1))),
+    )
+    .ok()?;
 
-    // a(ua{sv}): (node_id, a{sv}) tuple per stream.
+    // a(ua{sv}): (node_id, a{sv}) tuple per stream. The dict field joins
+    // through append_field: `add_field` wraps an existing Value into a
+    // Variant again (Value::new(Value)), which turned the element
+    // signature into (uv) and once broke the array append.
     let stream_struct = StructureBuilder::new()
-        .add_field(node_id)
-        .add_field(Value::Dict(dict))
+        .append_field(Value::U32(node_id))
+        .append_field(Value::Dict(dict))
         .build()
-        .unwrap();
+        .ok()?;
     let element_signature = Signature::structure([
         Signature::U32,
         Signature::dict(Signature::Str, Signature::Variant),
     ]);
     let mut streams = Array::new(&element_signature);
-    streams.append(Value::new(stream_struct)).unwrap();
+    if streams.append(Value::new(stream_struct)).is_err() {
+        return None;
+    }
     let mut results = HashMap::<String, OwnedValue>::new();
-    results.insert(
-        "streams".to_string(),
-        OwnedValue::try_from(Value::Array(streams)).unwrap(),
-    );
-    PortalReply::new(RESPONSE_OK, results)
+    let Ok(encoded) = OwnedValue::try_from(Value::Array(streams)) else {
+        return None;
+    };
+    results.insert("streams".to_string(), encoded);
+    Some(PortalReply::new(RESPONSE_OK, results))
 }
 
 fn unauthorized() -> PortalReply {
@@ -2143,5 +2186,30 @@ mod tests {
             "the closed request object is removed"
         );
         assert!(ledger.requests.is_empty());
+    }
+
+    // Direct regression for the live crash: the Start result builder is
+    // pure and must construct the `(u, a{sv})` streams payload without
+    // panicking on variant-value signature mismatches. stream_reply
+    // panicked the compositor on the first real approval before this
+    // test existed.
+    #[test]
+    fn stream_reply_builds_the_start_result() {
+        let stream = ActiveStream {
+            node_id: 42,
+            source_id: "DP-2".into(),
+            position: (0, 1080),
+            size: (2560, 1440),
+            label: "DP-2".into(),
+            active: false,
+            last_frame: None,
+        };
+        let reply = stream_reply(42, &stream).expect("the Start result builds");
+        assert_eq!(reply.response, RESPONSE_OK);
+        let streams = reply.results.get("streams");
+        assert!(
+            streams.is_some(),
+            "the streams key carries the node id the consumer needs"
+        );
     }
 }
