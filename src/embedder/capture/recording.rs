@@ -104,11 +104,26 @@ pub fn spawn_recording_worker(
     geometry: RecordingGeometry,
     events: smithay::reexports::calloop::channel::Sender<RecordingEvent>,
 ) -> Result<RecordingHandle, String> {
+    spawn_recording_worker_with_timeout(geometry, events, EOS_COMPLETION_TIMEOUT)
+}
+
+fn spawn_recording_worker_with_timeout(
+    geometry: RecordingGeometry,
+    events: smithay::reexports::calloop::channel::Sender<RecordingEvent>,
+    eos_timeout: Duration,
+) -> Result<RecordingHandle, String> {
     let frame_len = frame_len(&geometry)?;
     let (commands, receiver) = sync_channel::<RecordingCommand>(FRAME_QUEUE_DEPTH);
     let generation = next_recording_generation();
     thread::spawn(move || {
-        run_recording_worker(geometry, frame_len, receiver, events, generation);
+        run_recording_worker(
+            geometry,
+            frame_len,
+            receiver,
+            events,
+            generation,
+            eos_timeout,
+        );
     });
     Ok(RecordingHandle {
         commands,
@@ -178,10 +193,26 @@ impl RunningPipeline {
         if let Err(error) = self.pipeline.set_state(gst::State::Null) {
             warn!(?error, "Unable to stop a failed recording pipeline");
         }
+        // The claim placeholder is the only file the failure leaves
+        // besides the partial recording: an empty final `.webm` next to
+        // the `.part` recovery file is noise the user would see as "the
+        // video is 0 bytes".
+        self.remove_empty_placeholder();
         let _ = events.send(RecordingEvent::Failed {
             message,
             partial: Some(self.part_path.clone()),
         });
+    }
+
+    /// Deletes the destination placeholder while it is still an empty
+    /// claim (never a real recording).
+    fn remove_empty_placeholder(&self) {
+        match fs::metadata(&self.destination) {
+            Ok(metadata) if metadata.len() == 0 && metadata.is_file() => {
+                let _ = fs::remove_file(&self.destination);
+            }
+            _ => {}
+        }
     }
 }
 
@@ -254,12 +285,15 @@ fn build_recording_pipeline(
     gst::Element::link_many([&appsrc_element, &convert, &encoder, &mux, &sink])
         .map_err(|error| format!("Recording pipeline linking failed: {error}"))?;
 
-    let bus = pipeline
-        .bus()
-        .ok_or_else(|| "Recording pipeline has no bus".to_string())?;
-    pipeline
-        .set_state(gst::State::Playing)
-        .map_err(|error| format!("Recording pipeline failed to start: {error}"))?;
+    let bus = pipeline.bus().ok_or_else(|| {
+        fs::remove_file(&destination).ok();
+        "Recording pipeline has no bus".to_string()
+    })?;
+    if let Err(error) = pipeline.set_state(gst::State::Playing) {
+        // The claimed destination is still an empty placeholder here.
+        fs::remove_file(&destination).ok();
+        return Err(format!("Recording pipeline failed to start: {error}"));
+    }
 
     Ok(RunningPipeline {
         appsrc,
@@ -330,6 +364,7 @@ fn run_recording_worker(
     commands: Receiver<RecordingCommand>,
     events: smithay::reexports::calloop::channel::Sender<RecordingEvent>,
     _generation: u64,
+    eos_timeout: Duration,
 ) {
     let started = Instant::now();
 
@@ -409,10 +444,13 @@ fn run_recording_worker(
         info!(?error, "EOS delivery to a recording pipeline failed");
     }
 
-    // EOS plays out asynchronously; the bus reports completion, encoder
-    // or muxer errors, or the deadline passes (the `.part` file stays
-    // recoverable).
-    let deadline = started + EOS_COMPLETION_TIMEOUT;
+    // The playout window opens at the stop, not at the session start:
+    // a long recording must still get the full EOS deadline (the first
+    // runs anchored this at the session start, so any recording longer
+    // than the window skipped the wait outright and left the ".part"
+    // file unpublished).
+    let stop_instant = Instant::now();
+    let deadline = stop_instant + eos_timeout;
     let mut finish: Option<Result<(), String>> = None;
     while Instant::now() < deadline {
         if let Some(message) = running.bus.timed_pop(gst::ClockTime::ZERO) {
@@ -458,6 +496,7 @@ fn run_recording_worker(
                 });
             }
             Err(publish_error) => {
+                running.remove_empty_placeholder();
                 let _ = events.send(RecordingEvent::Failed {
                     message: format!("The recording could not be published: {publish_error}"),
                     partial: Some(running.part_path.clone()),
@@ -523,6 +562,47 @@ mod tests {
             "the published file is a WebM container"
         );
         std::fs::remove_file(path).ok();
+    }
+
+    /// The EOS playout window opens at the Stop, not at the session
+    /// start (the first real runs anchored it at the start, so any
+    /// recording longer than the window skipped the wait and the file
+    /// stayed unpublished). A short playout timeout plus a session that
+    /// far outlives it makes the wrong anchoring fail this test.
+    #[test]
+    fn long_session_still_plays_out_after_stop() {
+        let size: Size<i32, Physical> = (64, 64).into();
+        let (events_sender, events_receiver) = channel::channel::<RecordingEvent>();
+        let mut recorder = spawn_recording_worker_with_timeout(
+            recording_geometry(size),
+            events_sender,
+            Duration::from_millis(300),
+        )
+        .unwrap();
+        let frame = rgba_frame(size, 60);
+        for frame_index in 0..12 {
+            assert!(recorder.push_frame(frame.clone()), "frames must queue");
+            thread::sleep(Duration::from_millis(20));
+            if frame_index >= 10 {
+                // Simulate the encoder being briefly busy right at the
+                // stop; the playout window must still wait, anchored at
+                // the stop.
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+        recorder.stop();
+
+        let outcome = events_receiver
+            .recv()
+            .expect("the worker session must report its result");
+        match outcome {
+            RecordingEvent::Completed { frames, .. } => {
+                assert!(frames > 0, "the recorded session kept its frames");
+            }
+            RecordingEvent::Failed { message, .. } => {
+                panic!("a short playout deadline is a bug, not a recording result: {message}")
+            }
+        }
     }
 
     /// A path is picked beside an existing file: no silent overwrite.

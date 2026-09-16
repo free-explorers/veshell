@@ -76,6 +76,19 @@ reason (no more feeding a doomed pipeline), and the destination `.webm` is
 claimed atomically (`create_new`) so two sessions starting at once cannot
 fight over the same pair of files.
 
+Release validation (2026-09-16, real machine): a long (24 s) recording
+surfaced the start-anchored EOS window (deadline = session start + window),
+so Stop skipped the playout wait outright and the recording stayed
+unpublished; with the window opened at the Stop, the WebM is published
+correctly and plays for the real duration — the static-scene duration check
+passed on the same machine. The "video is 0 bytes" artifacts were the
+destination placeholder claim left behind on failure paths; failures now
+delete the empty claim (only ever while it is still 0 bytes) and keep the
+`.part` file. The desktop stutter during recording traced to the validation
+tooling itself (debug-profile compositor plus `WAYLAND_DEBUG=server`
+tracing): in release the damage-coupled pump runs smooth, matching the M2.4
+sharing experience.
+
 Implemented native area screenshot slice (2026-09-15, fully native, no Flutter
 involvement):
 
