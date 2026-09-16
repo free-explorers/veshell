@@ -1,4 +1,4 @@
-[Portal]
+[portal]
 Title=Veshell
 DBusName=org.freedesktop.impl.portal.desktop.veshell
 # Only implemented contracts are declared; wrap-up docs/spec/capture.

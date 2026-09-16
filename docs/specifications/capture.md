@@ -141,7 +141,12 @@ Implemented M1 foundations:
   `xdg-desktop-portal/portals/` (the only directory xdg-desktop-portal
   scans for backend descriptors); a descriptor directly in
   `xdg-desktop-portal/` is invisible to the frontend and ScreenCast
-  selection silently falls back to the desktop's default backend.
+  selection silently falls back to the desktop's default backend. Descriptor
+  header correction (2026-09-16): the keyfile group must be lowercase
+  `[portal]` (versions installed with `[Portal]` fail to load —
+  "Key file does not have group portal" — and ScreenCast resolution again
+  falls back); both traps are silent, the daemon only logs them at
+  frontend startup.
 - M2.0 portal groundwork (2026-09-15): `zbus` 5 dependency recorded in
   `docs/dependencies.md`; `src/embedder/portal/mod.rs` implements the
   ScreenCast backend v4 contract skeleton (`CreateSession`/`SelectSources`/`Start`
