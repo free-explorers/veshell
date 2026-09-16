@@ -158,6 +158,11 @@ pub struct State<BackendData: Backend + 'static> {
     pub output_layout_revision: u64,
     pub capture_session: Option<crate::capture::CaptureSession>,
     pub screenshot_delivery_sender: channel::Sender<crate::capture::ScreenshotDeliveryEvent>,
+    /// A live local recording, started by the capture flow.
+    pub recording_session: Option<crate::capture::LiveRecording>,
+    /// Events reported by recording worker sessions. The receiver is
+    /// registered in the loop at startup.
+    pub recording_delivery_sender: channel::Sender<crate::capture::recording::RecordingEvent>,
     pub portal_runtime: Option<crate::portal::PortalRuntime>,
     /// PipeWire producer, initialized lazily on the first approval.
     pub pipe_wire_producer: Option<crate::capture::pipewire::Producer>,
@@ -324,6 +329,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             FractionalScaleManagerState::new::<Self>(&display_handle);
         let screenshot_delivery_sender =
             crate::capture::insert_screenshot_delivery_source(&loop_handle);
+        // Recording sessions report final paths and failures here; the
+        // worker thread itself stays off the loop.
+        let recording_delivery_sender =
+            crate::capture::insert_recording_delivery_source(&loop_handle);
         // The PipeWire producer reports node life and failures over this
         // channel; the compositor loop answers with session lifecycle.
         let (producer_delivery_sender, producer_delivery_receiver) =
@@ -419,6 +428,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             output_layout_revision: 0,
             capture_session: None,
             screenshot_delivery_sender,
+            recording_session: None,
+            recording_delivery_sender,
             portal_runtime,
             producer_delivery_sender,
             pipe_wire_producer: None,

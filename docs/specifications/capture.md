@@ -10,6 +10,47 @@ for an implementation agent. The status below records which parts are implemente
 
 ## Current Implementation Status
 
+Implemented M3 local-record foundations (2026-09-16, worker + area flow): the
+GStreamer worker (`src/embedder/capture/recording.rs`, gstreamer/gstreamer-app
+0.24 cargo bindings) encodes RGBA `appsrc` frames through videoconvert →
+vp8enc (realtime deadline=1, cpu-used=8, keyframe distance 90) → webmmux →
+filesink. PTS derive from the pipeline running time at push
+(`do-timestamp=true`), so real elapsed time survives frame drops and idle
+scenes; the EOS bus message is polled up to 10 s before the `.part` file is
+renamed to the final WebM. File lifecycle: destination paths never overwrite
+existing files (collision-suffix search), partial files live beside the
+final name during the recording, and failures keep the `.part` file
+recoverable in the failure report. The handoff is bounded twice: at most 8
+frames travel from the loop to the worker (`SyncSender` try-push) and the
+appsrc byte level caps about two frames before the worker starts dropping
+(spec 6: slow consumers drop frames, not desktop responsiveness). Missing
+plugins are an actionable startup error, and screenshots/sharing keep
+working. The worker runs on its own thread and reports exactly one
+`RecordingEvent` (Completed/Failed) per session through a calloop channel
+into the loop.
+
+The recording flow reuses M1's area selection: Shift+Print begins an
+area-recording selection (plain Print stays a screenshot), sharing the same
+frozen-snapshot capture session. On release the overlay is dismissed and
+recording starts — the first frame is the frozen overlay-free snapshot
+frame; further frames are pumped up to the fixed 30 FPS budget by the
+compositor loop, each an output snapshot cropped with the same
+`compose_desktop_area` used for screenshots, at the pixel geometry captured
+at start. Fixed-geometry policy: an output move (space geometry mismatch),
+removal, or a scale change stops the recording with the reason logged; the
+worker still finalizes and publishes the completed file. Print or Escape
+stops a running recording ("user stop"); the finalize is asynchronous
+(EOS → rename) and the final path/failure surfaces through
+"Recording saved"/failure logs on the loop. Worker tests run the real
+pipeline (16×16, 5 frames, assert the EBML/WebM header) plus the collision
+search.
+
+Still open in M3 (runtime validation + user-facing UI): the trusted overlay
+indicator with elapsed time and a click-Stop is not rendered yet (Stop works
+through Print/Escape and layout changes only); encoder-backpressure
+compositor-responsiveness testing on real hardware; static-scene duration
+correctness verified against the produced file; nested-X11 runs.
+
 Implemented native area screenshot slice (2026-09-15, fully native, no Flutter
 involvement):
 

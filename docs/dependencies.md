@@ -81,6 +81,12 @@
       <td>libpipewire-0.3-dev</td>
     </tr>
     <tr>
+      <td>GStreamer (runtime plugins vp8enc, webmmux, videoconvert, appsrc; gstreamer/gstreamer-app 0.24 cargo bindings; validated on 1.28)</td>
+      <td>gst-plugins-good</td>
+      <td>gst-plugins-good</td>
+      <td>gst-plugins-good</td>
+    </tr>
+    <tr>
       <td>dbus-daemon session bus (tests + portal frontend)</td>
       <td>dbus</td>
       <td>dbus</td>

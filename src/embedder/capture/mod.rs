@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::thread;
 
 pub mod pipewire;
+pub mod recording;
 
 use smithay::backend::allocator::dmabuf::{AsDmabuf, Dmabuf};
 use smithay::backend::allocator::{Fourcc, Slot};
@@ -16,7 +17,7 @@ use smithay::reexports::calloop::{channel, LoopHandle};
 use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
 use smithay::wayland::selection::data_device::set_data_device_selection;
 use smithay::wayland::selection::SelectionTarget;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::backend::render::get_frame_elements_from_dmabuf;
 use crate::flutter_engine::view::OutputViewIdWrapper;
@@ -55,6 +56,7 @@ pub struct CaptureSession {
     pub snapshot: Option<CaptureSnapshot>,
     pub start: Option<Point<f64, Logical>>,
     pub current: Point<f64, Logical>,
+    pub record: bool,
 }
 
 impl CaptureSession {
@@ -92,6 +94,7 @@ impl CaptureSession {
 pub fn begin_capture_session<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     pointer_location: Point<f64, Logical>,
+    record: bool,
 ) {
     let Some((output, geometry)) = state
         .space
@@ -125,13 +128,18 @@ pub fn begin_capture_session<BackendData: Backend + 'static>(
         }
     };
 
-    info!(pointer_location = ?pointer_location, "Entering screenshot capture mode");
+    info!(
+        pointer_location = ?pointer_location,
+        record,
+        "Entering capture mode"
+    );
     state.capture_session = Some(CaptureSession {
         output,
         output_geometry: geometry,
         snapshot: Some(snapshot),
         start: None,
         current: pointer_location,
+        record,
     });
 }
 
@@ -243,6 +251,29 @@ fn finish_capture_inner<BackendData: Backend + 'static>(
         size: snapshot.size,
         pixels: snapshot.pixels,
     }];
+    if session.record {
+        match pixel_size(area.size, snapshot.scale) {
+            Ok(unused_size) => {
+                match compose_desktop_area(area, snapshot.scale, &captured_outputs) {
+                    Ok((first_size, first_pixels))
+                        if first_size.w == unused_size.w && first_size.h == unused_size.h =>
+                    {
+                        start_area_recording(
+                            state,
+                            &session.output,
+                            session.output_geometry,
+                            area,
+                            snapshot.scale,
+                            first_pixels,
+                        );
+                    }
+                    _ => warn!("Recording failed to start: the first frame did not compose"),
+                }
+            }
+            Err(message) => warn!("Recording failed to start: {message}"),
+        }
+        return;
+    }
     match compose_desktop_area(area, snapshot.scale, &captured_outputs) {
         Ok((size, pixels)) => {
             if let Err(message) = deliver_screenshot(state, size, pixels) {
@@ -719,6 +750,252 @@ fn screenshot_directory() -> Result<PathBuf, String> {
     Ok(path)
 }
 
+fn recording_directory() -> Result<PathBuf, String> {
+    let path = xdg_user::videos()
+        .ok()
+        .flatten()
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Videos")))
+        .ok_or_else(|| "Unable to determine the recording directory".to_string())?;
+    fs::create_dir_all(&path).map_err(|error| {
+        format!(
+            "Unable to create recording directory {}: {error}",
+            path.display()
+        )
+    })?;
+    Ok(path)
+}
+
+/// Fixed geometry of one local recording (specification section 5.2/§9:
+/// initial release never resizes a running stream).
+pub struct RecordingGeometry {
+    pub size: Size<i32, Physical>,
+    pub fps: u32,
+}
+
+/// Frame cadence of a local recording, capped at the shared 30 FPS
+/// budget (specification section 6).
+const RECORDING_FPS: u32 = 30;
+const RECORDING_FRAME_INTERVAL: std::time::Duration =
+    std::time::Duration::from_millis(1000 / RECORDING_FPS as u64);
+
+/// A live local recorder. The compositor loop pumps frames at the fixed
+/// FPS interval; geometry changes stop the recording instead of
+/// resizing it.
+pub struct LiveRecording {
+    recorder: crate::capture::recording::RecordingHandle,
+    generation: u64,
+    output: Output,
+    area: Rectangle<f64, Logical>,
+    output_geometry: Rectangle<f64, Logical>,
+    scale: f64,
+    started: std::time::Instant,
+    dropped: u32,
+}
+
+impl LiveRecording {
+    pub fn output_name(&self) -> String {
+        self.output.name()
+    }
+}
+
+/// Leaves the selection session and starts recording the selected area:
+/// the first frame is the frozen, overlay-free snapshot frame; further
+/// frames are live output copies at the fixed pixel geometry.
+fn start_area_recording<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    output: &Output,
+    output_geometry: Rectangle<f64, Logical>,
+    area: Rectangle<f64, Logical>,
+    scale: f64,
+    first_frame: Vec<u8>,
+) {
+    let size = match pixel_size(area.size, scale) {
+        Ok(size) => size,
+        Err(message) => {
+            warn!("Recording failed to start: {message}");
+            return;
+        }
+    };
+    let geometry = RecordingGeometry {
+        size,
+        fps: RECORDING_FPS,
+    };
+    let delivery = state.recording_delivery_sender.clone();
+    let mut recorder = match recording::spawn_recording_worker(geometry, delivery) {
+        Ok(recorder) => recorder,
+        Err(message) => {
+            warn!("Recording failed to start: {message}");
+            return;
+        }
+    };
+    let generation = recorder.generation();
+    if !recorder.push_frame(first_frame) {
+        warn!("Recording failed to start: the first frame was dropped");
+        return;
+    }
+    let live = LiveRecording {
+        recorder,
+        generation,
+        output: output.clone(),
+        area,
+        output_geometry,
+        scale,
+        started: std::time::Instant::now(),
+        dropped: 0,
+    };
+    state.recording_session = Some(live);
+    schedule_recording_pump(state, generation);
+    info!(
+        output = output.name(),
+        area = ?area,
+        size = ?size,
+        "Recording started"
+    );
+}
+
+/// Drives the fixed FPS frame pump for exactly one recording
+/// generation; stale timers of finished recordings drop themselves.
+fn schedule_recording_pump<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    generation: u64,
+) {
+    use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
+    let mut timer = Timer::from_duration(RECORDING_FRAME_INTERVAL);
+    state
+        .loop_handle
+        .insert_source(timer, move |_, _, state| {
+            if !state
+                .recording_session
+                .as_ref()
+                .is_some_and(|recording| recording.generation == generation)
+            {
+                return TimeoutAction::Drop;
+            }
+            pump_recording_frame(state, generation);
+            TimeoutAction::ToDuration(RECORDING_FRAME_INTERVAL)
+        })
+        .expect("Recording pump timer can be scheduled");
+}
+
+/// Copies the output once, crops it to the fixed area, and hands the
+/// pixels to the worker. Layout, mode, or scale changes stop the
+/// recording (specification section 5.1); slow encoding drops frames.
+fn pump_recording_frame<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    generation: u64,
+) {
+    let Some(recording) = state.recording_session.as_ref() else {
+        return;
+    };
+    if recording.generation != generation {
+        return;
+    }
+    let output = recording.output.clone();
+    let area = recording.area;
+    let output_geometry = recording.output_geometry;
+    let scale = recording.scale;
+    let expected = state
+        .space
+        .output_geometry(&output)
+        .map(|geometry| geometry.to_f64());
+    let scale_now = output.current_scale().fractional_scale();
+    if expected != Some(output_geometry) || scale_now != scale {
+        stop_recording(state, "the screen layout changed during the recording");
+        return;
+    }
+
+    let snapshot = match take_output_snapshot(state, &output) {
+        Ok(snapshot) => snapshot,
+        Err(message) => {
+            debug!("Recording frame skipped: {message}");
+            return;
+        }
+    };
+    if snapshot.scale != scale {
+        stop_recording(state, "the output scale changed during the recording");
+        return;
+    }
+    let captured = [CapturedOutput {
+        geometry: output_geometry,
+        size: snapshot.size,
+        pixels: snapshot.pixels,
+    }];
+    let Ok((size, pixels)) = compose_desktop_area(area, snapshot.scale, &captured) else {
+        return;
+    };
+    if let Some(recording) = state.recording_session.as_mut() {
+        if !recording.recorder.push_frame(pixels) {
+            recording.dropped += 1;
+        }
+    }
+}
+
+/// Stops the live recording; the worker finalizes asynchronously and
+/// reports the final path or failure through the delivery channel.
+pub fn stop_recording<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    reason: &str,
+) {
+    if let Some(recording) = state.recording_session.take() {
+        let elapsed_ms = recording.started.elapsed().as_millis() as u64;
+        let output = recording.output_name();
+        recording.recorder.stop();
+        info!(
+            output,
+            elapsed_ms,
+            dropped = recording.dropped,
+            reason,
+            "Recording stop requested"
+        );
+    }
+}
+
+/// Result of a recording worker session, delivered back through a
+/// calloop channel (mirror of the screenshot delivery).
+pub fn insert_recording_delivery_source<BackendData: Backend + 'static>(
+    loop_handle: &LoopHandle<'static, State<BackendData>>,
+) -> channel::Sender<recording::RecordingEvent> {
+    let (sender, receiver) = channel::channel::<recording::RecordingEvent>();
+    loop_handle
+        .insert_source(receiver, |event, _, state| {
+            if let channel::Event::Msg(receipt) = event {
+                handle_recording_event(state, receipt);
+            }
+        })
+        .expect("Failed to init recording delivery channel");
+    sender
+}
+
+fn handle_recording_event<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    outcome: recording::RecordingEvent,
+) {
+    let _ = state;
+    match outcome {
+        recording::RecordingEvent::Completed {
+            path,
+            frames,
+            dropped,
+            elapsed_ms,
+        } => {
+            info!(
+                path = %path.display(),
+                frames,
+                dropped,
+                elapsed_ms,
+                "Recording saved"
+            );
+        }
+        recording::RecordingEvent::Failed { message, partial } => match partial {
+            Some(partial) => warn!(
+                partial = %partial.display(),
+                "Failed: {message}"
+            ),
+            None => warn!("{message}"),
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -838,6 +1115,7 @@ mod tests {
             start: Some((80., 90.).into()),
             current: (10., 20.).into(),
             snapshot: None,
+            record: false,
         };
 
         let rect = session.selection().unwrap();
@@ -854,6 +1132,7 @@ mod tests {
             start: Some((10., 10.).into()),
             current: (10., 10.).into(),
             snapshot: None,
+            record: false,
         };
 
         assert!(session.selection().is_none());

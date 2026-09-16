@@ -80,6 +80,8 @@ async-channel = "2"
 pipewire = "0.10.1"
 pipewire-sys = "0.10.1"
 libc = "0.2.189"
+gstreamer = "0.24.5"
+gstreamer-app = "0.24.5"
 
 
 [build-dependencies]
