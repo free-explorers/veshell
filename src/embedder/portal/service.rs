@@ -1000,188 +1000,203 @@ pub fn apply_portal_call(
     actions: &mut Vec<PortalAction>,
     ui: &mut Vec<PortalUiEvent>,
 ) {
-    if !caller_is_frontend(call.call_identity().as_ref(), ledger.frontend.as_ref()) {
-        call.reply().send(unauthorized());
-        return;
-    }
-
+    // The ownership event is self-generated trust state, not a caller:
+    // it updates the ledger directly and carries no reply.
     match call {
-        // Created -> Configured -> Choosing -> Starting -> Active -> Closed
-        PortalCall::CreateSession {
-            session_handle,
-            reply,
-            ..
-        } => {
-            let response = if !valid_session_path(session_handle.as_str()) {
-                failed("invalid session handle")
-            } else if ledger.sessions.contains_key(&session_handle) {
-                failed("session already exists")
-            } else {
-                tracing::info!(session_path = %session_handle, "Portal session created");
-                actions.push(PortalAction::ExportSession(session_handle.clone()));
-                ledger.sessions.insert(
-                    session_handle,
-                    PortalSession {
-                        state: SessionState::Created,
-                        constraints: None,
-                        pending_start: None,
-                    },
-                );
-                PortalReply::ok()
-            };
-            reply.send(response);
+        PortalCall::FrontendOwnerChanged { owner } => {
+            frontend_owner_changed(ledger, actions, ui, owner);
+            return;
         }
-        PortalCall::SelectSources {
-            handle,
-            session_handle,
-            constraints,
-            reply,
-            ..
-        } => {
-            let response = match ledger.sessions.get_mut(&session_handle) {
-                None => failed("unknown session"),
-                Some(session) => {
-                    if session.state != SessionState::Created
-                        && session.state != SessionState::Configured
-                    {
-                        return write(reply, failed("session not in a configurable state"));
-                    }
-                    // SelectSources stores and validates constraints; it
-                    // does not grant consent.
-                    session.state = SessionState::Configured;
-                    session.constraints = Some(constraints);
-                    if !ledger.requests.contains_key(&handle) {
-                        ledger.requests.insert(
-                            handle.clone(),
-                            PendingRequest {
-                                session_handle,
-                                cancelled: false,
-                                consent: None,
+        call @ (PortalCall::CreateSession { .. }
+        | PortalCall::SelectSources { .. }
+        | PortalCall::Start { .. }
+        | PortalCall::RequestClose { .. }) => {
+            if !caller_is_frontend(call.call_identity().as_ref(), ledger.frontend.as_ref()) {
+                call.reply().send(unauthorized());
+                return;
+            }
+            match call {
+                // Created -> Configured -> Choosing -> Starting -> Active -> Closed
+                PortalCall::CreateSession {
+                    session_handle,
+                    reply,
+                    ..
+                } => {
+                    let response = if !valid_session_path(session_handle.as_str()) {
+                        failed("invalid session handle")
+                    } else if ledger.sessions.contains_key(&session_handle) {
+                        failed("session already exists")
+                    } else {
+                        tracing::info!(session_path = %session_handle, "Portal session created");
+                        actions.push(PortalAction::ExportSession(session_handle.clone()));
+                        ledger.sessions.insert(
+                            session_handle,
+                            PortalSession {
+                                state: SessionState::Created,
+                                constraints: None,
+                                pending_start: None,
                             },
                         );
-                        actions.push(PortalAction::ExportRequest(handle));
-                    }
-                    PortalReply::ok()
+                        PortalReply::ok()
+                    };
+                    reply.send(response);
                 }
-            };
-            write(reply, response);
-        }
-        PortalCall::Start {
-            handle,
-            session_handle,
-            app_id,
-            constraints,
-            reply,
-            ..
-        } => {
-            if matches!(
-                ledger.requests.get(&handle),
-                Some(PendingRequest {
-                    cancelled: true,
+                PortalCall::SelectSources {
+                    handle,
+                    session_handle,
+                    constraints,
+                    reply,
                     ..
-                })
-            ) {
-                // The user closed the request: the late completion never
-                // publishes a node, and no cancelled session restarts.
-                ledger.requests.remove(&handle);
-                actions.push(PortalAction::UnexportRequest(handle));
-                return write(reply, cancelled());
-            }
+                } => {
+                    let response = match ledger.sessions.get_mut(&session_handle) {
+                        None => failed("unknown session"),
+                        Some(session) => {
+                            if session.state != SessionState::Created
+                                && session.state != SessionState::Configured
+                            {
+                                return write(reply, failed("session not in a configurable state"));
+                            }
+                            // SelectSources stores and validates constraints; it
+                            // does not grant consent.
+                            session.state = SessionState::Configured;
+                            session.constraints = Some(constraints);
+                            if !ledger.requests.contains_key(&handle) {
+                                ledger.requests.insert(
+                                    handle.clone(),
+                                    PendingRequest {
+                                        session_handle,
+                                        cancelled: false,
+                                        consent: None,
+                                    },
+                                );
+                                actions.push(PortalAction::ExportRequest(handle));
+                            }
+                            PortalReply::ok()
+                        }
+                    };
+                    write(reply, response);
+                }
+                PortalCall::Start {
+                    handle,
+                    session_handle,
+                    app_id,
+                    constraints,
+                    reply,
+                    ..
+                } => {
+                    if matches!(
+                        ledger.requests.get(&handle),
+                        Some(PendingRequest {
+                            cancelled: true,
+                            ..
+                        })
+                    ) {
+                        // The user closed the request: the late completion never
+                        // publishes a node, and no cancelled session restarts.
+                        ledger.requests.remove(&handle);
+                        actions.push(PortalAction::UnexportRequest(handle));
+                        return write(reply, cancelled());
+                    }
 
-            // SelectSources is optional in the portal contract; Start may
-            // carry the constraints itself and then opens the picker.
-            if let Some(session) = ledger.sessions.get_mut(&session_handle) {
-                match session.state {
-                    SessionState::Created => {
-                        session.state = SessionState::Configured;
-                        session.constraints = Some(constraints.clone());
+                    // SelectSources is optional in the portal contract; Start may
+                    // carry the constraints itself and then opens the picker.
+                    if let Some(session) = ledger.sessions.get_mut(&session_handle) {
+                        match session.state {
+                            SessionState::Created => {
+                                session.state = SessionState::Configured;
+                                session.constraints = Some(constraints.clone());
+                            }
+                            SessionState::Configured => {
+                                // SelectSources already validated the constraints;
+                                // Start's copy is unused.
+                                session.constraints = Some(constraints.clone());
+                            }
+                            SessionState::Choosing | SessionState::Starting => {
+                                return write(reply, failed("a picker is already open"));
+                            }
+                            SessionState::Closed | SessionState::Active => {
+                                return write(reply, failed("session is not in a startable state"));
+                            }
+                        }
+                    } else {
+                        tracing::warn!("unknown session");
+                        return write(reply, failed("unknown session"));
                     }
-                    SessionState::Configured => {
-                        // SelectSources already validated the constraints;
-                        // Start's copy is unused.
-                        session.constraints = Some(constraints.clone());
+
+                    // Only outputs exist in this milestone: a request that cannot
+                    // name a monitor has no supported sources and must fail
+                    // normally instead of opening a picker that could approve
+                    // nothing.
+                    // (SourceTypes and its bits are validated at parse time, and
+                    // the default is MONITOR, so an empty intersection never
+                    // reaches here in practice.)
+                    let session = ledger
+                        .sessions
+                        .get_mut(&session_handle)
+                        .expect("session verified above");
+                    if !session
+                        .constraints
+                        .as_ref()
+                        .is_some_and(|c| c.types.contains(SourceTypes::MONITOR))
+                    {
+                        return write(reply, failed("no supported source types"));
                     }
-                    SessionState::Choosing | SessionState::Starting => {
-                        return write(reply, failed("a picker is already open"));
+                    session.state = SessionState::Choosing;
+
+                    // The picker now owns the Start response. The consent token is
+                    // minted here so a stale or replayed Flutter reply can never
+                    // attach to a different flow, and a reply link lives in the
+                    // ledger until that decision arrives.
+                    let consent_token = ledger.consent_token();
+                    let app_name = app_id;
+                    if !ledger.requests.contains_key(&handle) {
+                        actions.push(PortalAction::ExportRequest(handle.clone()));
                     }
-                    SessionState::Closed | SessionState::Active => {
-                        return write(reply, failed("session is not in a startable state"));
+                    let entry = ledger
+                        .requests
+                        .entry(handle.clone())
+                        .or_insert(PendingRequest {
+                            session_handle: session_handle.clone(),
+                            cancelled: false,
+                            consent: None,
+                        });
+                    entry.consent = Some(ConsentRequest {
+                        consent_token,
+                        app_name: app_name.clone(),
+                        reply,
+                    });
+                    ui.push(PortalUiEvent::OpenPicker {
+                        session_handle,
+                        request_handle: handle,
+                        app_name,
+                        consent_token,
+                    });
+                }
+                PortalCall::RequestClose { handle, reply, .. } => {
+                    if handle.as_str().contains("/session/") {
+                        // A session that closes while its picker is open dismisses
+                        // the picker and completes the pending Start reply.
+                        if let Some(session) = ledger.sessions.remove(&handle) {
+                            if let Some(pending) = session.pending_start {
+                                pending.send(cancelled());
+                            }
+                            actions.push(PortalAction::CloseSession(handle.clone()));
+                            close_consent_for_session(ledger, &handle, ui);
+                        }
+                        write(reply, PortalReply::ok());
+                    } else if let Some(request) = ledger.requests.get_mut(&handle) {
+                        // The request dies here for its own Start: the late reply
+                        // can never start a session after this flag.
+                        request.cancelled = true;
+                        cancel_consent(request, ui);
+                        write(reply, PortalReply::ok());
+                    } else {
+                        write(reply, failed("no such pending request"));
                     }
                 }
-            } else {
-                tracing::warn!("unknown session");
-                return write(reply, failed("unknown session"));
-            }
-
-            // Only outputs exist in this milestone: a request that cannot
-            // name a monitor has no supported sources and must fail
-            // normally instead of opening a picker that could approve
-            // nothing.
-            // (SourceTypes and its bits are validated at parse time, and
-            // the default is MONITOR, so an empty intersection never
-            // reaches here in practice.)
-            let session = ledger
-                .sessions
-                .get_mut(&session_handle)
-                .expect("session verified above");
-            if !session
-                .constraints
-                .as_ref()
-                .is_some_and(|c| c.types.contains(SourceTypes::MONITOR))
-            {
-                return write(reply, failed("no supported source types"));
-            }
-            session.state = SessionState::Choosing;
-
-            // The picker now owns the Start response. The consent token is
-            // minted here so a stale or replayed Flutter reply can never
-            // attach to a different flow, and a reply link lives in the
-            // ledger until that decision arrives.
-            let consent_token = ledger.consent_token();
-            let app_name = app_id;
-            if !ledger.requests.contains_key(&handle) {
-                actions.push(PortalAction::ExportRequest(handle.clone()));
-            }
-            let entry = ledger
-                .requests
-                .entry(handle.clone())
-                .or_insert(PendingRequest {
-                    session_handle: session_handle.clone(),
-                    cancelled: false,
-                    consent: None,
-                });
-            entry.consent = Some(ConsentRequest {
-                consent_token,
-                app_name: app_name.clone(),
-                reply,
-            });
-            ui.push(PortalUiEvent::OpenPicker {
-                session_handle,
-                request_handle: handle,
-                app_name,
-                consent_token,
-            });
-        }
-        PortalCall::RequestClose { handle, reply, .. } => {
-            if handle.as_str().contains("/session/") {
-                // A session that closes while its picker is open dismisses
-                // the picker and completes the pending Start reply.
-                if let Some(session) = ledger.sessions.remove(&handle) {
-                    if let Some(pending) = session.pending_start {
-                        pending.send(cancelled());
-                    }
-                    actions.push(PortalAction::CloseSession(handle.clone()));
-                    close_consent_for_session(ledger, &handle, ui);
+                PortalCall::FrontendOwnerChanged { .. } => {
+                    unreachable!("handled by the outer match; this inner match is the caller case")
                 }
-                write(reply, PortalReply::ok());
-            } else if let Some(request) = ledger.requests.get_mut(&handle) {
-                // The request dies here for its own Start: the late reply
-                // can never start a session after this flag.
-                request.cancelled = true;
-                cancel_consent(request, ui);
-                write(reply, PortalReply::ok());
-            } else {
-                write(reply, failed("no such pending request"));
             }
         }
     }
@@ -1206,6 +1221,8 @@ impl PortalCall {
             | PortalCall::SelectSources { caller, .. }
             | PortalCall::Start { caller, .. }
             | PortalCall::RequestClose { caller, .. } => caller.clone(),
+            // An ownership event carries no caller identity.
+            PortalCall::FrontendOwnerChanged { .. } => None,
         }
     }
 
@@ -1215,6 +1232,11 @@ impl PortalCall {
             | PortalCall::SelectSources { reply, .. }
             | PortalCall::Start { reply, .. }
             | PortalCall::RequestClose { reply, .. } => reply.clone(),
+            // The ownership event carries no reply.
+            PortalCall::FrontendOwnerChanged { .. } => {
+                let (link, _) = make_reply_pair();
+                link
+            }
         }
     }
 }
@@ -1608,6 +1630,170 @@ mod tests {
         assert_eq!(pending.recv_blocking().unwrap().response, RESPONSE_FAILED);
     }
 
+    // The live-rebinding entry point: a frontend restart produces a new
+    // unique owner; the event closes everything the old owner had, binds
+    // the new owner, and the very next call from the new name succeeds.
+    // This is the fresh-login race shape: the backend may start before
+    // the frontend ever claimed its name, and only this event binds it.
+    #[test]
+    fn frontend_rebinding_accepts_the_new_owner() {
+        // Seed: no owner known at startup (backend won the login race).
+        let mut ledger = PortalLedger::default();
+        // ... and the frontend appears for the first time.
+        let mut actions = Vec::new();
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::FrontendOwnerChanged {
+                owner: Some(FrontendOwner(":1.44".into())),
+            },
+            &mut actions,
+            &mut Vec::new(),
+        );
+        assert_ty(&ledger, ":1.44");
+
+        let (link, pending) = make_reply_pair();
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::CreateSession {
+                handle: handle(),
+                session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                app_id: "app".into(),
+                caller: Some(Caller(":1.44".into())),
+                reply: link,
+            },
+            &mut actions,
+            &mut Vec::new(),
+        );
+        assert_eq!(
+            pending.recv_blocking().unwrap().response,
+            RESPONSE_OK,
+            "the frontend owner bound through the event authorizes calls"
+        );
+
+        // Restart: a new owner appears. The old session dies (nothing can
+        // unexport an old frontend's objects) and the new owner binds.
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::FrontendOwnerChanged {
+                owner: Some(FrontendOwner(":1.52".into())),
+            },
+            &mut actions,
+            &mut Vec::new(),
+        );
+        assert!(ledger.sessions.is_empty());
+        assert_ty(&ledger, ":1.52");
+        // The new owner is accepted immediately.
+        let (link, pending) = make_reply_pair();
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::CreateSession {
+                handle: handle(),
+                session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                app_id: "app".into(),
+                caller: Some(Caller(":1.52".into())),
+                reply: link,
+            },
+            &mut actions,
+            &mut Vec::new(),
+        );
+        assert_eq!(pending.recv_blocking().unwrap().response, RESPONSE_OK);
+    }
+
+    /// Asserts the ledger's bound frontend owner by value.
+    fn assert_ty(ledger: &PortalLedger, owner: &str) {
+        assert_eq!(
+            ledger.frontend.as_ref().map(|frontend| frontend.0.as_str()),
+            Some(owner)
+        );
+    }
+
+    // Owner loss through the public entry point — should match the direct
+    // `frontend_owner_changed` semantics: Starting sessions' pending Start
+    // replies complete cancelled and no state survives.
+    #[test]
+    fn owner_change_event_loss_completes_pending_start() {
+        let (ledger, pending, _token) = ledger_with_starting_session();
+        let mut ledger = ledger;
+        let mut actions = Vec::new();
+        let mut ui: Vec<PortalUiEvent> = Vec::new();
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::FrontendOwnerChanged { owner: None },
+            &mut actions,
+            &mut ui,
+        );
+        assert_eq!(
+            pending.recv_blocking().unwrap().response,
+            RESPONSE_CANCELLED
+        );
+        assert!(ledger.sessions.is_empty());
+        assert!(ledger.requests.is_empty());
+        assert!(ledger.frontend.is_none());
+        assert_eq!(actions.len(), 1, "session close queued");
+        // The picker closed at approval time; the loss event dismisses
+        // nothing further.
+        assert!(ui.is_empty());
+    }
+
+    // Owner loss while a picker is still open: the Start reply that owns
+    // the picker completes cancelled immediately and the picker is
+    // dismissed through the same event (spec 8.3).
+    #[test]
+    fn owner_loss_while_picker_open_cancels_start() {
+        let (mut ledger, _guard) = ledger_with_frontend();
+        let mut actions = Vec::new();
+        {
+            let (link, pending) = make_reply_pair();
+            apply_portal_call(
+                &mut ledger,
+                PortalCall::CreateSession {
+                    handle: handle(),
+                    session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                    app_id: "app".into(),
+                    caller: Some(Caller(":1.9".into())),
+                    reply: link,
+                },
+                &mut actions,
+                &mut Vec::new(),
+            );
+            assert_eq!(pending.recv_blocking().unwrap().response, RESPONSE_OK);
+        }
+        let (link, pending) = make_reply_pair();
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::Start {
+                handle: handle(),
+                session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                app_id: "app".into(),
+                parent_window: "".into(),
+                constraints: super::super::ScreenCastConstraints {
+                    types: super::super::SourceTypes::MONITOR,
+                    cursor_mode: super::super::CursorModes::HIDDEN,
+                    multiple: false,
+                    restore_token: None,
+                },
+                caller: Some(Caller(":1.9".into())),
+                reply: link,
+            },
+            &mut actions,
+            &mut Vec::new(),
+        );
+        assert!(pending.try_recv().is_err(), "picker owns the reply");
+
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::FrontendOwnerChanged { owner: None },
+            &mut Vec::new(),
+            &mut Vec::new(),
+        );
+        assert_eq!(
+            pending.recv_blocking().unwrap().response,
+            RESPONSE_CANCELLED,
+            "frontend loss cancels the picker-owned Start reply"
+        );
+        assert!(ledger.sessions.is_empty());
+    }
+
     /// Drives create → Start → picker open → approval, leaving the ledger
     /// with the session in `Starting` and its Start reply pending.
     fn ledger_with_starting_session() -> (PortalLedger, PendingReply, u64) {
@@ -1771,6 +1957,7 @@ mod tests {
     // consumes the consent first — this test pins the observable order.
     #[test]
     fn approved_consent_on_dead_session_completes_cancelled() {
+        // Approval that races a session close: the session close completes
         let (mut ledger, _guard) = ledger_with_frontend();
         let mut actions = Vec::new();
         {

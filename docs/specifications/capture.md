@@ -131,7 +131,18 @@ Implemented M1 foundations:
   (response code 1) until the consent milestone exists - there is no consent
   to betray yet. Session/Request objects are served on a dedicated object
   bridge thread (compositor code stays off async and signals `Closed()`
-  before unexporting).
+  before unexporting). Frontend-owner binding correction (2026-09-16): the
+  startup `get_name_owner` seed is best effort — on a fresh login the
+  backend can start before the frontend claims its name, and frontend
+  restarts change the unique name mid-run, so both leave every call
+  rejected with the old binding. The backend now subscribes to the bus
+  driver's NameOwnerChanged for `org.freedesktop.portal.Desktop` and
+  bridges each event (`None` loss, `Some` rebind) onto the compositor loop
+  channel as its own call kind; the ledger stays loop-side, owner change
+  closes old sessions, and the new owner authorizes immediately. The
+  dead-code gap this closes surfaced on the live machine: two consecutive
+  frontend restarts left every ScreenCast call rejected while auth state
+  was frozen at a pre-restart unique name.
 - Packaging (2026-09-15): `extra/assets/veshell.portal` declares
   `DBusName=org.freedesktop.impl.portal.desktop.veshell` plus the ScreenCast
   interface only; `veshell-portals.conf` selects Veshell for ScreenCast while

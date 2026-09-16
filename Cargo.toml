@@ -74,6 +74,8 @@ bitflags = "2.2.1"
 png = "0.17.16"
 xdg-user = "0.2.1"
 zbus = "5"
+# NameOwnerChanged subscription streams (kept minimal; only StreamExt)
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
 async-channel = "2"
 pipewire = "0.10.1"
 pipewire-sys = "0.10.1"

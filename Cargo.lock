@@ -3420,6 +3420,7 @@ dependencies = [
  "cargo_metadata",
  "chrono",
  "flate2",
+ "futures-util",
  "input-linux",
  "lazy_static",
  "libc",

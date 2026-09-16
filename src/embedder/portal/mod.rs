@@ -25,6 +25,7 @@ pub static HARNESS_TEST_COUNTER: std::sync::atomic::AtomicU64 =
 
 #[cfg(test)]
 mod harness;
+use futures_util::StreamExt;
 use zbus::message::Header;
 use zbus::zvariant::{ObjectPath, OwnedObjectPath, OwnedValue};
 use zbus::{interface, Connection};
@@ -171,6 +172,13 @@ pub enum PortalCall {
         caller: Option<Caller>,
         reply: ReplyLink,
     },
+    /// Live ownership update of `org.freedesktop.portal.Desktop`, bridged
+    /// from the bus driver's NameOwnerChanged signal. `None` is a frontend
+    /// loss (everything closes); `Some(owner)` re-binds authorization.
+    /// The startup `get_name_owner` seed is best effort: a fresh login
+    /// starts the backend before the frontend claims its name, and only
+    /// this event ever supplies the real owner.
+    FrontendOwnerChanged { owner: Option<FrontendOwner> },
 }
 
 /// Validated ScreenCast request options. Defaults follow the portal
@@ -477,15 +485,53 @@ async fn start_portal_backend() -> zbus::Result<(PortalRuntime, CallReceiver)> {
     let (connection, calls, receiver) = build_backend_connection_on_session().await?;
     // The initial frontend owner is bound to the service: requests answered
     // before the owner is known are rejected, so this runs first.
+    // Best effort only: on a fresh login the frontend may not have
+    // claimed its name yet; the NameOwnerChanged subscription below
+    // supplies the real owner the moment it appears.
     let driver = zbus::fdo::DBusProxy::new(&connection).await?;
     let frontend_owner = driver
         .get_name_owner(zbus::names::BusName::try_from(FRONTEND_NAME)? as zbus::names::BusName)
         .await
         .map(|name| FrontendOwner(name.to_string()));
-    let (objects_tx, objects_rx) = std::sync::mpsc::channel::<service::PortalAction>();
-    let bridge_connection = connection.clone();
-    let bridge_calls = calls.clone();
-    std::thread::spawn(move || serve_object_bridge(bridge_connection, bridge_calls, objects_rx));
+
+    // Live frontend owner: every restart of the frontend (and its
+    // first appearance) changes the unique name the backend must
+    // authenticate against. The subscription is serviced by this
+    // connection's internal executor and bridged onto the compositor
+    // loop channel; ledger mutation stays loop-side.
+    let mut subscription = driver
+        .receive_name_owner_changed()
+        .await
+        .map_err(|error| zbus::Error::Failure(error.to_string()))?;
+    let calls_for_events = calls.clone();
+    // The subscription stream is async; this thread block_on-drives it
+    // exactly like the object bridge drives its async actions. Only
+    // owner names cross here, never compositor state and never pixels.
+    std::thread::spawn(move || {
+        while let Some(event) = zbus::block_on(subscription.next()) {
+            let Ok(args) = event.args() else {
+                continue;
+            };
+            if args.name() != FRONTEND_NAME {
+                continue;
+            }
+            let owner = args
+                .new_owner()
+                .as_ref()
+                // An empty new owner is how the driver reports loss.
+                .filter(|new| !new.as_str().is_empty())
+                .map(|new| FrontendOwner(new.to_string()));
+            if calls_for_events
+                .send(PortalCall::FrontendOwnerChanged { owner })
+                .is_err()
+            {
+                return;
+            }
+        }
+        tracing::warn!("frontend ownership watch ended");
+    });
+
+    let objects_tx = spawn_object_bridge(&connection, &calls);
     let runtime = PortalRuntime {
         objects: objects_tx,
         ledger: service::PortalLedger {
@@ -494,6 +540,19 @@ async fn start_portal_backend() -> zbus::Result<(PortalRuntime, CallReceiver)> {
         },
     };
     Ok((runtime, receiver))
+}
+
+/// Starts the object bridge thread: Dispatches Session/Request export- and
+/// close-level actions away from the compositor loop.
+fn spawn_object_bridge(
+    connection: &Connection,
+    calls: &calloop::channel::Sender<PortalCall>,
+) -> std::sync::mpsc::Sender<service::PortalAction> {
+    let (objects_tx, objects_rx) = std::sync::mpsc::channel::<service::PortalAction>();
+    let bridge_connection = connection.clone();
+    let bridge_calls = calls.clone();
+    std::thread::spawn(move || serve_object_bridge(bridge_connection, bridge_calls, objects_rx));
+    objects_tx
 }
 
 async fn build_backend_connection_on_session() -> zbus::Result<(
