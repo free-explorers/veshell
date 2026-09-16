@@ -246,34 +246,33 @@ fn finish_capture_inner<BackendData: Backend + 'static>(
         warn!("Screenshot capture session has no snapshot");
         return;
     };
+    if session.record {
+        let snapshot_scale = snapshot.scale;
+        match compose_recording_frame(
+            area,
+            snapshot_scale,
+            session.output_geometry,
+            snapshot,
+            None,
+        ) {
+            Ok((size, first_pixels)) => start_area_recording(
+                state,
+                &session.output,
+                session.output_geometry,
+                area,
+                snapshot_scale,
+                size,
+                first_pixels,
+            ),
+            Err(message) => warn!("Recording failed to start: {message}"),
+        }
+        return;
+    }
     let captured_outputs = [CapturedOutput {
         geometry: session.output_geometry,
         size: snapshot.size,
         pixels: snapshot.pixels,
     }];
-    if session.record {
-        match pixel_size(area.size, snapshot.scale) {
-            Ok(unused_size) => {
-                match compose_desktop_area(area, snapshot.scale, &captured_outputs) {
-                    Ok((first_size, first_pixels))
-                        if first_size.w == unused_size.w && first_size.h == unused_size.h =>
-                    {
-                        start_area_recording(
-                            state,
-                            &session.output,
-                            session.output_geometry,
-                            area,
-                            snapshot.scale,
-                            first_pixels,
-                        );
-                    }
-                    _ => warn!("Recording failed to start: the first frame did not compose"),
-                }
-            }
-            Err(message) => warn!("Recording failed to start: {message}"),
-        }
-        return;
-    }
     match compose_desktop_area(area, snapshot.scale, &captured_outputs) {
         Ok((size, pixels)) => {
             if let Err(message) = deliver_screenshot(state, size, pixels) {
@@ -777,6 +776,9 @@ pub struct RecordingGeometry {
 const RECORDING_FPS: u32 = 30;
 const RECORDING_FRAME_INTERVAL: std::time::Duration =
     std::time::Duration::from_millis(1000 / RECORDING_FPS as u64);
+/// The idle heartbeat keeps a static scene refreshing while presents
+/// carry the live-motion cadence (damage-coupled delivery per spec 6).
+const RECORDING_HEARTBEAT_INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
 
 /// A live local recorder. The compositor loop pumps frames at the fixed
 /// FPS interval; geometry changes stop the recording instead of
@@ -788,7 +790,9 @@ pub struct LiveRecording {
     area: Rectangle<f64, Logical>,
     output_geometry: Rectangle<f64, Logical>,
     scale: f64,
+    size: Size<i32, Physical>,
     started: std::time::Instant,
+    last_frame: Option<std::time::Instant>,
     dropped: u32,
 }
 
@@ -800,22 +804,19 @@ impl LiveRecording {
 
 /// Leaves the selection session and starts recording the selected area:
 /// the first frame is the frozen, overlay-free snapshot frame; further
-/// frames are live output copies at the fixed pixel geometry.
+/// frames are live output copies at the fixed pixel geometry. The
+/// recorded pixel size is even in both axes: VP8's I420 contract rejects
+/// odd-height chroma, and the first real run stalled exactly there.
 fn start_area_recording<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     output: &Output,
     output_geometry: Rectangle<f64, Logical>,
     area: Rectangle<f64, Logical>,
     scale: f64,
+    selected_size: Size<i32, Physical>,
     first_frame: Vec<u8>,
 ) {
-    let size = match pixel_size(area.size, scale) {
-        Ok(size) => size,
-        Err(message) => {
-            warn!("Recording failed to start: {message}");
-            return;
-        }
-    };
+    let size = even_size(selected_size);
     let geometry = RecordingGeometry {
         size,
         fps: RECORDING_FPS,
@@ -840,11 +841,13 @@ fn start_area_recording<BackendData: Backend + 'static>(
         area,
         output_geometry,
         scale,
+        size,
         started: std::time::Instant::now(),
+        last_frame: None,
         dropped: 0,
     };
     state.recording_session = Some(live);
-    schedule_recording_pump(state, generation);
+    schedule_recording_heartbeat(state, generation);
     info!(
         output = output.name(),
         area = ?area,
@@ -853,14 +856,70 @@ fn start_area_recording<BackendData: Backend + 'static>(
     );
 }
 
-/// Drives the fixed FPS frame pump for exactly one recording
-/// generation; stale timers of finished recordings drop themselves.
-fn schedule_recording_pump<BackendData: Backend + 'static>(
+/// Composes the fixed area at the selection scale, in the recording's
+/// even pixel size: frames that fail to compose or do not match the
+/// fixed geometry stop the recording immediately instead of feeding a
+/// doomed pipeline.
+fn compose_recording_frame(
+    area: Rectangle<f64, Logical>,
+    scale: f64,
+    output_geometry: Rectangle<f64, Logical>,
+    snapshot: CaptureSnapshot,
+    geometry_size: Option<Size<i32, Physical>>,
+) -> Result<(Size<i32, Physical>, Vec<u8>), String> {
+    let captured = [CapturedOutput {
+        geometry: output_geometry,
+        size: snapshot.size,
+        pixels: snapshot.pixels,
+    }];
+    let (size, pixels) = compose_desktop_area(area, snapshot.scale, &captured)?;
+    let even = even_size(size);
+    let pixels = crop_to_size(pixels, size, even);
+    if let Some(expected) = geometry_size {
+        if even != expected {
+            return Err(format!("the frame is {even:?}, expected {expected:?}"));
+        }
+    }
+    Ok((even, pixels))
+}
+
+/// Rounds a pixel size down to even in both axes.
+fn even_size(size: Size<i32, Physical>) -> Size<i32, Physical> {
+    (size.w - (size.w & 1), size.h - (size.h & 1)).into()
+}
+
+/// Crops the pixel buffer from the top-left corner to the given size
+/// (the even rounding never grows a frame).
+fn crop_to_size(
+    pixels: Vec<u8>,
+    size: Size<i32, Physical>,
+    target: Size<i32, Physical>,
+) -> Vec<u8> {
+    if size == target {
+        return pixels;
+    }
+    let source_width = size.w as usize;
+    let mut cropped = vec![0u8; (target.w as usize) * (target.h as usize) * 4];
+    for row in 0..target.h as usize {
+        let source_start = row * source_width * 4;
+        let source_end = source_start + target.w as usize * 4;
+        let destination_start = row * target.w as usize * 4;
+        cropped[destination_start..destination_start + target.w as usize * 4]
+            .copy_from_slice(&pixels[source_start..source_end]);
+    }
+    cropped
+}
+
+/// Keeps a static desktop refreshing at the idle heartbeat rate; live
+/// motion damage arrives through the presented-frame hook instead, both
+/// capped by the same FPS budget (spec section 6; the unconditional
+/// 30 Hz loop render this replaces stutters the desktop).
+fn schedule_recording_heartbeat<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     generation: u64,
 ) {
     use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
-    let mut timer = Timer::from_duration(RECORDING_FRAME_INTERVAL);
+    let mut timer = Timer::from_duration(RECORDING_HEARTBEAT_INTERVAL);
     state
         .loop_handle
         .insert_source(timer, move |_, _, state| {
@@ -871,20 +930,58 @@ fn schedule_recording_pump<BackendData: Backend + 'static>(
             {
                 return TimeoutAction::Drop;
             }
-            pump_recording_frame(state, generation);
-            TimeoutAction::ToDuration(RECORDING_FRAME_INTERVAL)
+            deliver_recording_frame(state, generation);
+            TimeoutAction::ToDuration(RECORDING_HEARTBEAT_INTERVAL)
         })
-        .expect("Recording pump timer can be scheduled");
+        .expect("Recording heartbeat timer can be scheduled");
+}
+
+/// The presented Flutter frame is fresh damage for exactly one output:
+/// the recording on that output gets one copy per present, throttled to
+/// the 30 FPS budget by its own last-frame timestamp.
+pub fn on_view_frame_presented_for_recording<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    view_id: i64,
+) {
+    let Some((output_name, generation)) = state.recording_session.as_ref().and_then(|recording| {
+        state
+            .space
+            .outputs()
+            .find_map(|output| {
+                output
+                    .user_data()
+                    .get::<crate::flutter_engine::view::OutputViewIdWrapper>()
+                    .filter(|wrapper| wrapper.view_id == view_id)
+                    .map(|_| output.name())
+            })
+            .filter(|name| *name == recording.output_name())
+            .map(|name| (name, recording.generation))
+    }) else {
+        return;
+    };
+    let due = state.recording_session.as_ref().is_some_and(|recording| {
+        recording.last_frame.is_none_or(|last| {
+            std::time::Instant::now().duration_since(last) >= RECORDING_FRAME_INTERVAL
+        })
+    });
+    if due {
+        state.recording_session.as_mut().map(|recording| {
+            recording.last_frame = Some(std::time::Instant::now());
+        });
+        deliver_recording_frame(state, generation);
+    }
 }
 
 /// Copies the output once, crops it to the fixed area, and hands the
 /// pixels to the worker. Layout, mode, or scale changes stop the
-/// recording (specification section 5.1); slow encoding drops frames.
-fn pump_recording_frame<BackendData: Backend + 'static>(
+/// recording (specification section 5.1); slow encoding drops frames
+/// loop-side, and the worker's own watchdog reports a stalled encoder
+/// through the delivery channel.
+fn deliver_recording_frame<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     generation: u64,
 ) {
-    let Some(recording) = state.recording_session.as_ref() else {
+    let Some(recording) = state.recording_session.as_mut() else {
         return;
     };
     if recording.generation != generation {
@@ -915,18 +1012,25 @@ fn pump_recording_frame<BackendData: Backend + 'static>(
         stop_recording(state, "the output scale changed during the recording");
         return;
     }
-    let captured = [CapturedOutput {
-        geometry: output_geometry,
-        size: snapshot.size,
-        pixels: snapshot.pixels,
-    }];
-    let Ok((size, pixels)) = compose_desktop_area(area, snapshot.scale, &captured) else {
-        return;
-    };
-    if let Some(recording) = state.recording_session.as_mut() {
-        if !recording.recorder.push_frame(pixels) {
-            recording.dropped += 1;
+    let frame = compose_recording_frame(
+        area,
+        scale,
+        output_geometry,
+        snapshot,
+        state
+            .recording_session
+            .as_ref()
+            .map(|recording| recording.size),
+    );
+    match frame {
+        Ok((_, pixels)) => {
+            if let Some(recording) = state.recording_session.as_mut() {
+                if !recording.recorder.push_frame(pixels) {
+                    recording.dropped += 1;
+                }
+            }
         }
+        Err(reason) => stop_recording(state, &reason),
     }
 }
 

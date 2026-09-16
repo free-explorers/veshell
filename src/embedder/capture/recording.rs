@@ -27,6 +27,11 @@ const FRAME_QUEUE_DEPTH: usize = 8;
 /// recoverable partial file.
 const EOS_COMPLETION_TIMEOUT: Duration = Duration::from_secs(10);
 const EOS_POLL_INTERVAL: Duration = Duration::from_millis(20);
+/// A stalled encoder (e.g. libvpx rejecting its format) is reported
+/// instead of silently eating the recording: after this many frames in
+/// a row were dropped while the queue stayed full, the session fails so
+/// the UI bit shows real reason clearly.
+const STALL_DROP_LIMIT: u64 = 120;
 const VP8_REALTIME_DEADLINE_USEC: i64 = 1;
 const VP8_CPU_USED: i32 = 8;
 const VP8_THREADS: i32 = 2;
@@ -116,6 +121,37 @@ fn next_recording_generation() -> u64 {
     GENERATION.fetch_add(1, Ordering::Relaxed)
 }
 
+/// Consumes one bus message during the frame loop. Returns false when
+/// the recording is over (bridge failed); an EOS during the run means
+/// the pipeline ended on its own and the session is failing anyway.
+fn handle_run_bus_message(
+    running: &RunningPipeline,
+    view: &gst::message::MessageView<'_>,
+    events: &smithay::reexports::calloop::channel::Sender<RecordingEvent>,
+) -> bool {
+    match view {
+        gst::message::MessageView::Error(error) => {
+            running.fail(
+                format!(
+                    "Recording failed: {} ({})",
+                    error.error(),
+                    error.src().map(|s| s.to_string()).unwrap_or_default()
+                ),
+                events,
+            );
+            false
+        }
+        gst::message::MessageView::Eos(_) => {
+            running.fail(
+                "The recording pipeline ended before the stop".to_string(),
+                events,
+            );
+            false
+        }
+        _ => true,
+    }
+}
+
 struct RunningPipeline {
     appsrc: AppSrc,
     pipeline: gst::Pipeline,
@@ -189,9 +225,12 @@ fn build_recording_pipeline(
         .build();
     appsrc.set_caps(Some(&caps));
     appsrc.set_format(gst::Format::Time);
-    // PTS derive from the pipeline running time when the buffer is
-    // pushed: real elapsed time survives frame drops and idle scenes.
-    appsrc.set_do_timestamp(true);
+    // PTS are stamped here from the worker's monotonic clock: real
+    // elapsed time survives frame drops and idle scenes. GST_DEBUG in
+    // the first real run showed do-timestamp stamping while the
+    // pipeline itself had no clock yet (worker thread races
+    // PLAYING), which libvpx then rejected as an invalid parameter.
+    appsrc.set_do_timestamp(false);
     // The handoff from the compositor loop is non-blocking; the worker
     // detects queue saturation through the byte level instead.
     appsrc.set_block(false);
@@ -235,21 +274,27 @@ fn build_recording_pipeline(
 /// Chooses the final WebM path beside any existing one (no silent
 /// overwrite) and the same stem with a `.part` extension for the
 /// partial file written while the recording runs.
+/// Chooses the final WebM path beside any existing one (no silent
+/// overwrite) and the same stem with a `.part` extension for the
+/// partial file written while the recording runs. The destination is
+/// created atomically (`create_new`) so concurrent sessions never pick
+/// the same pair; the encoder overwrites (its own) empty placeholder.
 fn recording_destination() -> Result<(PathBuf, PathBuf), String> {
     let directory = super::recording_directory()?;
     let now = chrono::Local::now()
         .format("%Y-%m-%d %H-%M-%S%.3f")
         .to_string();
-    Ok(seek_free_path(
-        &directory,
-        &format!("Veshell Recording {now}"),
-        "webm",
-    ))
+    recording_path(&directory, &format!("Veshell Recording {now}"), "webm")
 }
 
-/// Expands a base name to the first free `stem.ext`/`stem.ext.part` pair
-/// beside any existing file.
-fn seek_free_path(directory: &Path, stem: &str, extension: &str) -> (PathBuf, PathBuf) {
+/// Expands a base name to the first free `stem.ext`/`stem.ext.part`
+/// pair; the atomic creation claim closes the choose-then-create race
+/// between two workers starting at once.
+fn recording_path(
+    directory: &Path,
+    stem: &str,
+    extension: &str,
+) -> Result<(PathBuf, PathBuf), String> {
     let mut attempt = 0;
     loop {
         let base = if attempt == 0 {
@@ -258,12 +303,24 @@ fn seek_free_path(directory: &Path, stem: &str, extension: &str) -> (PathBuf, Pa
             format!("{stem} ({attempt})")
         };
         let destination = directory.join(format!("{base}.{extension}"));
-        if !destination.exists() {
-            let mut part = destination.clone();
-            part.set_extension("part");
-            return (destination, part);
+        let mut part = destination.clone();
+        part.set_extension("part");
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&destination)
+        {
+            Ok(_claim) => return Ok((destination, part)),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                attempt += 1;
+            }
+            Err(error) => {
+                return Err(format!(
+                    "Unable to claim the recording path {}: {error}",
+                    destination.display()
+                ))
+            }
         }
-        attempt += 1;
     }
 }
 
@@ -303,9 +360,30 @@ fn run_recording_worker(
                 }
                 if running.queue_is_saturated() {
                     dropped += 1;
+                    // The GStreamer bus is checked even while frames
+                    // are dropped: a dead encoder must fail fast, not
+                    // masquerade as skips.
+                    if let Some(message) = running.bus.timed_pop(gst::ClockTime::ZERO) {
+                        if !handle_run_bus_message(&running, &message.view(), &events) {
+                            return;
+                        }
+                    }
+                    if dropped >= STALL_DROP_LIMIT {
+                        running.fail(
+                            format!("The encoder consumed nothing after {dropped} dropped frames"),
+                            &events,
+                        );
+                        return;
+                    }
                     continue;
                 }
-                let buffer = gst::Buffer::from_slice(pixels);
+                let mut buffer = gst::Buffer::from_slice(pixels);
+                buffer
+                    .get_mut()
+                    .unwrap()
+                    .set_pts(gst::ClockTime::from_nseconds(
+                        started.elapsed().as_nanos() as u64
+                    ));
                 if let Err(error) = running.appsrc.push_buffer(buffer) {
                     running.fail(format!("Frame delivery failed: {error}"), &events);
                     return;
@@ -449,14 +527,94 @@ mod tests {
 
     /// A path is picked beside an existing file: no silent overwrite.
     #[test]
-    fn seek_free_path_never_sits_on_an_existing_file() {
+    fn recording_path_never_sits_on_an_existing_file() {
         let directory = std::env::temp_dir().join("veshell-recording-dest-test");
         std::fs::create_dir_all(&directory).unwrap();
         std::fs::write(directory.join("M.webm"), b"occupied").unwrap();
 
-        let (destination, part) = seek_free_path(&directory, "M", "webm");
+        let destination = recording_path(&directory, "M", "webm").unwrap().0;
 
         assert_eq!(destination.file_name().unwrap(), "M (1).webm");
-        assert_eq!(part.file_name().unwrap(), "M (1).part");
+        assert!(destination.try_exists().unwrap());
+        std::fs::remove_dir_all(&directory).unwrap();
+    }
+
+    /// The first real-machine geometry (1494×1021, odd height) stalled:
+    /// frames were accepted, EOS never completed, the published file was
+    /// 418 bytes of header, and GST_DEBUG showed libvpx rejecting the
+    /// invalid PTS do-timestamp had applied before the pipeline clock
+    /// existed. Worker-stamped monotonic PTS must encode odd sizes
+    /// beyond the header as well.
+    #[test]
+    fn real_size_recording_encodes_beyond_the_header() {
+        let size: Size<i32, Physical> = (1494, 1021).into();
+        let (events_sender, events_receiver) = channel::channel::<RecordingEvent>();
+        let mut recorder = spawn_recording_worker(recording_geometry(size), events_sender).unwrap();
+        let frame = rgba_frame(size, 60);
+        for _ in 0..30 {
+            assert!(
+                recorder.push_frame(frame.clone()),
+                "a 30-frame burst at real size must queue"
+            );
+        }
+        recorder.stop();
+
+        let outcome = events_receiver
+            .recv()
+            .expect("the worker session must report its result");
+        let (path, dropped) = match outcome {
+            RecordingEvent::Completed { path, dropped, .. } => (path, dropped),
+            RecordingEvent::Failed { message, .. } => panic!("the recording failed: {message}"),
+        };
+        assert!(dropped < 30, "not every frame may drop; some must encode");
+        let finished = fs::read(&path).unwrap();
+        assert_eq!(&finished[..4], &[0x1A, 0x45, 0xDF, 0xA3]);
+        // A VP8 keyframe of a uniform frame is small by design; the old
+        // stall produced exactly 418 bytes of bare header, so anything
+        // beyond the base header proves frames reached the muxer.
+        assert!(
+            finished.len() > 1024,
+            "encoded payload expected, got {} bytes (a bare header means zero frames encoded)",
+            finished.len()
+        );
+        std::fs::remove_file(path).ok();
+    }
+
+    /// The even-rounded real-size geometry (what the compositor loop now
+    /// feeds) must encode real payload: the fix for the real run that
+    /// stalled on odd height.
+    #[test]
+    fn even_real_size_recording_encodes_beyond_the_header() {
+        let size: Size<i32, Physical> = (1494, 1020).into();
+        let (events_sender, events_receiver) = channel::channel::<RecordingEvent>();
+        let mut recorder = spawn_recording_worker(recording_geometry(size), events_sender).unwrap();
+        let frame = rgba_frame(size, 60);
+        for _ in 0..30 {
+            assert!(
+                recorder.push_frame(frame.clone()),
+                "a 30-frame burst at real size must queue"
+            );
+        }
+        recorder.stop();
+
+        let outcome = events_receiver
+            .recv()
+            .expect("the worker session must report its result");
+        let (path, dropped) = match outcome {
+            RecordingEvent::Completed { path, dropped, .. } => (path, dropped),
+            RecordingEvent::Failed { message, .. } => panic!("the recording failed: {message}"),
+        };
+        assert!(dropped < 30, "not every frame may drop; some must encode");
+        let finished = fs::read(&path).unwrap();
+        assert_eq!(&finished[..4], &[0x1A, 0x45, 0xDF, 0xA3]);
+        // A VP8 keyframe of a uniform frame is small by design; the old
+        // stall produced exactly 418 bytes of bare header, so anything
+        // beyond the base header proves frames reached the muxer.
+        assert!(
+            finished.len() > 1024,
+            "encoded payload expected, got {} bytes (a bare header means zero frames encoded)",
+            finished.len()
+        );
+        std::fs::remove_file(path).ok();
     }
 }

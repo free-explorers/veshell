@@ -99,6 +99,10 @@ impl FlutterCompositor {
                             // every screen-cast session on this output
                             // delivers a throttled frame copy now.
                             crate::portal::service::on_view_frame_presented(data, id.view_id);
+                            // A local recording on this output also
+                            // rides the damage signal instead of
+                            // rendering an unconditional 30 Hz loop.
+                            crate::capture::on_view_frame_presented_for_recording(data, id.view_id);
                         }
                         BackingStoreEvent::Collected(id) => {
                             if let Some(view) =

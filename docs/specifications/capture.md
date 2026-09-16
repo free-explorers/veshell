@@ -51,6 +51,31 @@ through Print/Escape and layout changes only); encoder-backpressure
 compositor-responsiveness testing on real hardware; static-scene duration
 correctness verified against the produced file; nested-X11 runs.
 
+First real-machine validation and fixes (2026-09-16, `veshell.log` + file
+evidence): Shift+Print selection started a recording (1494×1021) that ran 11
+seconds with `dropped=0`, but Stop reported "never finished after the stop"
+and the published file was a 418-byte header with zero frames. GST_DEBUG on
+the reproduced test showed two composite defects: `do-timestamp` was
+stamping pushed buffers before the pipeline clock existed (buffer-provided
+before PLAYING warning), which libvpx then rejected with
+`Failed to encode frame: invalid parameter` mid-run; and the worker only
+read the bus after Stop, so that error sat unread while the frame loop kept
+pushing — EOS could never complete. Fixes, all pinned by worker tests
+(114 total): (1) PTS are stamped by the worker from its monotonic start
+clock (spec's monotonic-derived requirement), no `do-timestamp`; odd
+(1494×1021) and even (1494×1020) real-size geometries both now encode
+payload — odd height was never the defect, the failing PTS was. (2) The
+frame loop drains the bus and reports any mid-run GStreamer error as a
+prompt Failed event; a queue that never drains after 120 dropped frames
+fails too ("encoder consumed nothing"). (3) The pump is damage-coupled like
+the M2.4 sharing path: one copy per presented Flutter frame at the 30 FPS
+budget plus a 2 Hz idle heartbeat timer replaces the unconditional 33 ms
+snapshot loop that made the desktop stutter. (4) Frames that no longer
+compose to the fixed geometry stop the recording immediately with a
+reason (no more feeding a doomed pipeline), and the destination `.webm` is
+claimed atomically (`create_new`) so two sessions starting at once cannot
+fight over the same pair of files.
+
 Implemented native area screenshot slice (2026-09-15, fully native, no Flutter
 involvement):
 
