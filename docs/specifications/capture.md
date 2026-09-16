@@ -137,7 +137,11 @@ Implemented M1 foundations:
   interface only; `veshell-portals.conf` selects Veshell for ScreenCast while
   preserving unrelated GTK/GNOME selections; the Makefile, RPM and DEB
   metadata install and uninstall the descriptor together with the selection
-  file.
+  file. Install-path correction (2026-09-16): the descriptor goes to
+  `xdg-desktop-portal/portals/` (the only directory xdg-desktop-portal
+  scans for backend descriptors); a descriptor directly in
+  `xdg-desktop-portal/` is invisible to the frontend and ScreenCast
+  selection silently falls back to the desktop's default backend.
 - M2.0 portal groundwork (2026-09-15): `zbus` 5 dependency recorded in
   `docs/dependencies.md`; `src/embedder/portal/mod.rs` implements the
   ScreenCast backend v4 contract skeleton (`CreateSession`/`SelectSources`/`Start`

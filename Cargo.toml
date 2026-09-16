@@ -98,7 +98,7 @@ assets = [
     { source = "extra/assets/veshell-session", dest = "/usr/bin/", mode = "755" },
     { source = "extra/assets/veshell.desktop", dest = "/usr/share/wayland-sessions/", mode = "644" },
     { source = "extra/assets/veshell-portals.conf", dest = "/usr/share/xdg-desktop-portal/", mode = "644" },
-    { source = "extra/assets/veshell.portal", dest = "/usr/share/xdg-desktop-portal/", mode = "644" },
+    { source = "extra/assets/veshell.portal", dest = "/usr/share/xdg-desktop-portal/portals/", mode = "644" },
     { source = "extra/assets/veshell.service", dest = "/usr/lib/systemd/user/", mode = "644" },
     { source = "extra/assets/veshell-shutdown.target", dest = "/usr/lib/systemd/user/", mode = "644" },
 ]
@@ -127,7 +127,7 @@ assets = [
     ],
     [
         "extra/assets/veshell.portal",
-        "/usr/share/xdg-desktop-portal/",
+        "/usr/share/xdg-desktop-portal/portals/",
         "644",
     ],
     [
