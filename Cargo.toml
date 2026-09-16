@@ -75,6 +75,9 @@ png = "0.17.16"
 xdg-user = "0.2.1"
 zbus = "5"
 async-channel = "2"
+pipewire = "0.10.1"
+pipewire-sys = "0.10.1"
+libc = "0.2.189"
 
 
 [build-dependencies]

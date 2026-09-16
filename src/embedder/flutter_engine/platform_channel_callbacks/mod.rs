@@ -19,6 +19,7 @@ mod pointer_exit;
 mod pointer_focus;
 mod resize_window;
 mod screen_cast_consent_decision;
+mod screen_cast_stop;
 
 use self::activate_window::activate_window;
 use self::close_window::close_window;
@@ -59,6 +60,9 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
                     result,
                     data,
                 )
+            }
+            "screen_cast_stop" => {
+                self::screen_cast_stop::screen_cast_stop(method_call, result, data)
             }
             _ => result.error(
                 "method_not_found".to_string(),

@@ -16,6 +16,9 @@ use super::{
 
 pub use super::FrontendOwner;
 
+use crate::capture::pipewire::{ActiveStream, StreamDescriptor};
+use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
+
 /// Portal session lifecycle (capture specification section 8.3).
 ///
 /// PipeWire transport state is tracked separately from authorization in the
@@ -35,6 +38,10 @@ pub enum SessionState {
 pub struct PortalSession {
     pub state: SessionState,
     pub constraints: Option<ScreenCastConstraints>,
+    /// While the PipeWire producer negotiates the stream (Starting), Start
+    /// responds only once a node runs. A pending reply link here lives
+    /// until NodeReady answers or the session closes.
+    pub pending_start: Option<ReplyLink>,
 }
 
 /// A pending backend response remembered until it is completed or the user
@@ -77,7 +84,7 @@ pub struct PortalLedger {
 use std::collections::HashMap;
 
 /// Object-level actions the loop hands to the object-bridge thread.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum PortalAction {
     ExportSession(OwnedObjectPath),
     ExportRequest(OwnedObjectPath),
@@ -209,11 +216,20 @@ pub fn handle_portal_call<BackendData: crate::backend::Backend + 'static>(
     for ui_event in ui {
         perform_ui_event(state, ui_event);
     }
-    if let Some(runtime) = state.portal_runtime.as_mut() {
-        for action in portal_actions {
-            if runtime.objects.send(action).is_err() {
+    for action in portal_actions {
+        if let Some(runtime) = state.portal_runtime.as_mut() {
+            if runtime.objects.send(action.clone()).is_err() {
                 tracing::warn!("portal object bridge is gone");
                 return;
+            }
+        }
+        // Session-level D-Bus closes revoke the producer side too.
+        if let PortalAction::CloseSession(session_handle) = action {
+            if let Some(producer) = state.pipe_wire_producer.as_mut() {
+                producer.stop_stream(&session_handle);
+            }
+            if state.active_streams.remove(&session_handle).is_some() {
+                hide_shared_indicator(state, &session_handle);
             }
         }
     }
@@ -367,6 +383,11 @@ pub fn handle_frontend_owner_change<BackendData: crate::backend::Backend + 'stat
             let _ = runtime.objects.send(action);
         }
     }
+    // All shared sessions die with the frontend: revoke producers.
+    let handles: Vec<OwnedObjectPath> = state.active_streams.keys().cloned().collect();
+    for handle in handles {
+        close_shared_session(state, &handle);
+    }
 }
 
 /// Applies the decision the trusted picker reports back.
@@ -383,28 +404,132 @@ pub fn handle_consent_decision<BackendData: crate::backend::Backend + 'static>(
     outcome: ConsentOutcome,
     source_id: Option<String>,
 ) {
-    let approved = outcome == ConsentOutcome::Approved;
-    if approved {
-        let requested = source_id.as_deref();
-        let valid = output_source_entries(state)
-            .iter()
-            .any(|source| Some(source.id.as_str()) == requested);
-        if requested.is_none() || !valid {
-            tracing::debug!(
-                source = requested.unwrap_or("(none)"),
-                "Consent approval ignored: the selected source is not shareable"
-            );
-        }
-        // Whether the registry accepted the source or not, the producer
-        // milestone turns its approval into real streams; until then both
-        // outcomes complete through the same close path.
-    }
     let session_handle = OwnedObjectPath::try_from(session_handle).ok();
     let Some(session_handle) = session_handle else {
         tracing::debug!("Consent decision for an unrenderable session handle");
         return;
     };
-    handle_consent_through_runtime(state, &session_handle, consent_token, outcome);
+    if outcome == ConsentOutcome::Approved {
+        // Rust revalidates the selection against the live output
+        // registry: a vanished target cannot be approved (spec 8.3).
+        let Some(source) = source_id.as_deref().and_then(|requested| {
+            output_source_entries(state)
+                .into_iter()
+                .find(|source| source.id == requested)
+        }) else {
+            tracing::debug!("Consent approval ignored: the selected source is not shareable");
+            close_shared_session(state, &session_handle);
+            return;
+        };
+        // The ledger now holds the reply link pending; the producer
+        // publishes a node and NodeReady completes the flow.
+        handle_consent_through_runtime(state, &session_handle, consent_token, outcome);
+        begin_shared_stream(state, &session_handle, source);
+    } else {
+        handle_consent_through_runtime(state, &session_handle, consent_token, outcome);
+    }
+}
+
+/// Schedules per-output frame copies into the producer buffers at the
+/// 30 FPS ceiling. Full-frame copies first (spec section 6 allows this as
+/// the initial path); damage-driven tuning is a later optimization the
+/// producer agreement documents honestly.
+pub fn schedule_frame_delivery<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    session_handle: &OwnedObjectPath,
+    output: smithay::output::Output,
+) {
+    use smithay::reexports::calloop::timer::TimeoutAction;
+    let session_handle = session_handle.clone();
+    // The producer only emits a frame when a consumer pulls.
+    let interval = std::time::Duration::from_millis(33);
+    let mut timer = smithay::reexports::calloop::timer::Timer::from_duration(interval);
+    state
+        .loop_handle
+        .insert_source(timer, move |_, _, state| {
+            let pixels = crate::capture::capture_output_pixels(state, &output);
+            match pixels {
+                Ok(snapshot) => {
+                    if let Some(producer) = state.pipe_wire_producer.as_mut() {
+                        producer.queue_frame(session_handle.clone(), &snapshot.pixels);
+                    }
+                }
+                Err(_) => {
+                    tracing::debug!("frame capture failed; producer is quiet until next tick");
+                }
+            }
+            TimeoutAction::ToDuration(interval)
+        })
+        .expect("timer can be scheduled");
+}
+
+/// Kicks off the PipeWire stream for the approved session (spec 7).
+fn begin_shared_stream<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    session_handle: &OwnedObjectPath,
+    source: CaptureSource,
+) {
+    let Some(output) = state
+        .space
+        .outputs()
+        .find(|output| output.name() == source.id)
+    else {
+        tracing::warn!("The approved output disappeared before delivery started");
+        close_shared_session(state, session_handle);
+        return;
+    };
+    let geometry = match state.space.output_geometry(output) {
+        Some(geometry) => geometry,
+        None => {
+            tracing::warn!("The approved output has no geometry");
+            close_shared_session(state, session_handle);
+            return;
+        }
+    };
+    let mode = match output.current_mode() {
+        Some(mode) => mode,
+        None => {
+            tracing::warn!("The approved output has no mode");
+            close_shared_session(state, session_handle);
+            return;
+        }
+    };
+    let size = mode.size;
+    if state.pipe_wire_producer.is_none() {
+        match crate::capture::pipewire::Producer::new(
+            &state.loop_handle,
+            state.producer_delivery_sender.clone(),
+        ) {
+            Ok(producer) => {
+                state.pipe_wire_producer = Some(producer);
+            }
+            Err(_) => {}
+        }
+    }
+    let Some(producer) = state.pipe_wire_producer.as_mut() else {
+        tracing::warn!("PipeWire producer is unavailable");
+        close_shared_session(state, session_handle);
+        return;
+    };
+    let descriptor = StreamDescriptor {
+        session_handle: session_handle.clone(),
+        size,
+        position: (geometry.loc.x as i32, geometry.loc.y as i32),
+        label: source.label.clone(),
+    };
+    producer.start_stream(descriptor);
+    state.active_streams.insert(
+        session_handle.clone(),
+        ActiveStream {
+            node_id: 0,
+            position: (geometry.loc.x as i32, geometry.loc.y as i32),
+            size: (size.w, size.h),
+            label: source.label.clone(),
+            active: false,
+        },
+    );
+    // The frame scheduler pulls pixels into the producer buffers.
+    schedule_frame_delivery(state, session_handle, output.clone());
 }
 
 fn handle_consent_through_runtime<BackendData: crate::backend::Backend + 'static>(
@@ -449,16 +574,78 @@ pub enum ConsentOutcome {
     Cancelled,
 }
 
+/// Producer events: lifecycle transitions land here on the compositor
+/// loop. Nothing here blocks; the PipeWire main loop dispatch is a
+/// level-triggered calloop source.
+pub fn handle_producer_event<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    event: crate::capture::pipewire::ProducerEvent,
+) {
+    match event {
+        crate::capture::pipewire::ProducerEvent::NodeReady {
+            session_handle,
+            node_id,
+        } => {
+            // Complete the Start reply with the real stream list now:
+            // the consumer needs the node id to connect; holding it
+            // further would deadlock startup (spec 7).
+            let information = state.active_streams.get(&session_handle).cloned();
+            let Some(mut stream) = information else {
+                tracing::debug!("producer node for an unknown stream");
+                return;
+            };
+            stream.node_id = node_id;
+            state
+                .active_streams
+                .insert(session_handle.clone(), stream.clone());
+            if let Some(runtime) = state.portal_runtime.as_mut() {
+                if let Some(session) = runtime.ledger.sessions.get_mut(&session_handle) {
+                    session.state = SessionState::Active;
+                    if let Some(reply) = session.pending_start.take() {
+                        reply.send(stream_reply(node_id, &stream));
+                    }
+                } else {
+                    tracing::debug!("producer node for an unknown session");
+                    let _ = state.active_streams.remove(&session_handle);
+                    return;
+                }
+            }
+            show_shared_indicator(state, session_handle.clone(), stream);
+        }
+        crate::capture::pipewire::ProducerEvent::Fatal {
+            session_handle,
+            message,
+        } => {
+            tracing::warn!(
+                ?session_handle,
+                ?message,
+                "PipeWire failure: session closed"
+            );
+            close_shared_session(state, &session_handle);
+        }
+        crate::capture::pipewire::ProducerEvent::ConsumerChanged {
+            session_handle,
+            active,
+        } => match state.active_streams.get_mut(&session_handle) {
+            Some(stream) => {
+                stream.active = active;
+            }
+            None => {
+                tracing::debug!("consumer event for an unknown session");
+            }
+        },
+    }
+}
+
 /// Applies a picker decision that carries a valid consent token.
 ///
 /// Returns whether the token matched a live picker for exactly this
 /// session; stale or forged tokens are left alone silently.
 ///
-/// Approval acts as the full authorization in this milestone: the consent
-/// model is real, the PipeWire producer is not. The producer milestone
-/// publishes nodes and completes the Start reply with real streams; every
-/// other consent path (token binding, close, revocation) matches what
-/// that milestone will keep.
+/// Approval keeps the Start reply pending while the PipeWire producer
+/// negotiates the stream: the session waits in `Starting` and the flow
+/// finishes over [ProducerEvent::NodeReady]. Cancellation reports
+/// response 1 and closes the session as before.
 pub fn resolve_consent(
     ledger: &mut PortalLedger,
     session_handle: &OwnedObjectPath,
@@ -489,25 +676,167 @@ pub fn resolve_consent(
     let Some(consent) = request.consent.take() else {
         return false;
     };
-    let reply = match outcome {
-        // The producer milestone replaces this with the real stream list;
-        // today there is no capture delivery to authorize a stream for,
-        // and reporting success with no streams would tell the frontend
-        // nothing arrived.
-        ConsentOutcome::Approved => failed("capture delivery is not implemented"),
-        ConsentOutcome::Cancelled => cancelled(),
-    };
-    consent.reply.send(reply);
+    match outcome {
+        ConsentOutcome::Approved => {
+            // The reply waits until the producer publishes a node. The
+            // session state carries the link so any later close path can
+            // still complete the reply even if the request object has
+            // already been dropped, but no leak is possible since a link
+            // never stores a value until one is sent.
+            if let Some(session) = ledger.sessions.get_mut(session_handle) {
+                session.state = SessionState::Starting;
+                session.pending_start = Some(consent.reply);
+            } else {
+                // Session vanished between picker and approval: a real
+                // close must have happened; keep the reply pending but
+                // the next close path resolves it.
+                tracing::warn!("approved consent has no live session");
+                return false;
+            }
+        }
+        ConsentOutcome::Cancelled => {
+            consent.reply.send(cancelled());
+            if ledger.sessions.remove(session_handle).is_some() {
+                actions.push(PortalAction::CloseSession(session_handle.clone()));
+            }
+        }
+    }
     ui.push(PortalUiEvent::DismissPicker {
         consent_token: consent.consent_token,
     });
-
-    // Consent resolved either way: nothing survives the flow in this
-    // milestone, so the session closes like a rejected session.
-    if ledger.sessions.remove(session_handle).is_some() {
-        actions.push(PortalAction::CloseSession(session_handle.clone()));
-    }
     true
+}
+
+/// Builds the Start result once the producer publishes a node: the
+/// `(u, a{sv})` tuple Chrome and OBS need to connect, with position,
+/// logical size, and the MONITOR source type.
+/// The persistent trusted indicator (spec 8.3): names the shared target
+/// and offers Stop. Appears before delivery begins and stays reachable
+/// across workspaces.
+fn show_shared_indicator<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    session_handle: OwnedObjectPath,
+    stream: ActiveStream,
+) {
+    state
+        .flutter_engine_mut()
+        .platform_method_channel
+        .invoke_method(
+            "screen_cast_active",
+            Some(Box::new(json!({
+                "sessionHandle": session_handle.as_str(),
+                "sourceLabel": stream.label,
+            }))),
+            None,
+        );
+}
+
+/// The shell indicator reports the session is gone (user Stop, session
+/// close, target disappearance, frontend loss).
+fn hide_shared_indicator<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    session_handle: &OwnedObjectPath,
+) {
+    state
+        .flutter_engine_mut()
+        .platform_method_channel
+        .invoke_method(
+            "screen_cast_stopped",
+            Some(Box::new(json!({
+                "sessionHandle": session_handle.as_str(),
+            }))),
+            None,
+        );
+}
+
+/// Closes a shared session end to end: ledger close, producer stop, and
+/// indicator removal. Every close path funnels here for the capture side;
+/// the portal Request/Session close paths handle their own D-Bus plumbing
+/// and then call this for the producer world.
+pub fn close_shared_session<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    session_handle: &OwnedObjectPath,
+) {
+    let actions = match state.portal_runtime.as_mut() {
+        Some(runtime) => {
+            let mut actions = Vec::new();
+            if let Some(session) = runtime.ledger.sessions.get_mut(session_handle) {
+                if let Some(reply) = session.pending_start.take() {
+                    reply.send(cancelled());
+                }
+            }
+            if let Some(session) = runtime.ledger.sessions.remove(session_handle) {
+                let _ = session;
+                actions.push(PortalAction::CloseSession(session_handle.clone()));
+            }
+            runtime
+                .ledger
+                .requests
+                .retain(|_, request| request.session_handle.as_str() != session_handle.as_str());
+            actions
+        }
+        None => Vec::new(),
+    };
+    for action in actions {
+        if let Some(runtime) = state.portal_runtime.as_mut() {
+            let _ = runtime.objects.send(action);
+        }
+    }
+    if let Some(producer) = state.pipe_wire_producer.as_mut() {
+        producer.stop_stream(session_handle);
+    }
+    state.active_streams.remove(session_handle);
+    hide_shared_indicator(state, session_handle);
+}
+
+fn stream_reply(node_id: u32, stream: &ActiveStream) -> PortalReply {
+    use zbus::zvariant::{Array, Dict, OwnedValue, Signature, Structure, StructureBuilder, Value};
+
+    // a{sv}: string keys, variant values.
+    let mut dict = Dict::new(&Signature::Str, &Signature::Variant);
+    dict.append(
+        Value::new("position"),
+        Value::new(
+            StructureBuilder::new()
+                .add_field(stream.position.0)
+                .add_field(stream.position.1)
+                .build()
+                .unwrap(),
+        ),
+    )
+    .unwrap();
+    dict.append(
+        Value::new("size"),
+        Value::new(
+            StructureBuilder::new()
+                .add_field(stream.size.0)
+                .add_field(stream.size.1)
+                .build()
+                .unwrap(),
+        ),
+    )
+    .unwrap();
+    dict.append(Value::new("source_type"), Value::new(1_u32))
+        .unwrap();
+
+    // a(ua{sv}): (node_id, a{sv}) tuple per stream.
+    let stream_struct = StructureBuilder::new()
+        .add_field(node_id)
+        .add_field(Value::Dict(dict))
+        .build()
+        .unwrap();
+    let element_signature = Signature::structure([
+        Signature::U32,
+        Signature::dict(Signature::Str, Signature::Variant),
+    ]);
+    let mut streams = Array::new(&element_signature);
+    streams.append(Value::new(stream_struct)).unwrap();
+    let mut results = HashMap::<String, OwnedValue>::new();
+    results.insert(
+        "streams".to_string(),
+        OwnedValue::try_from(Value::Array(streams)).unwrap(),
+    );
+    PortalReply::new(RESPONSE_OK, results)
 }
 
 fn unauthorized() -> PortalReply {
@@ -564,6 +893,7 @@ pub fn apply_portal_call(
                     PortalSession {
                         state: SessionState::Created,
                         constraints: None,
+                        pending_start: None,
                     },
                 );
                 PortalReply::ok()
@@ -1065,7 +1395,8 @@ mod tests {
             *consent_token
         };
 
-        // Approval reports the producer-less flow honestly.
+        // Approval keeps the producer handshake pending: the Start reply
+        // waits unanswered while the session holds Starting.
         let mut actions = Vec::new();
         assert!(resolve_consent(
             &mut ledger,
@@ -1075,10 +1406,12 @@ mod tests {
             &mut actions,
             &mut Vec::new(),
         ));
-        assert_eq!(pending.recv_blocking().unwrap().response, RESPONSE_FAILED);
-        assert_eq!(actions.len(), 1, "session close queued");
-        assert!(ledger.sessions.is_empty());
-        assert!(ledger.requests.is_empty());
+        assert!(pending.try_recv().is_err(), "approval may not reply yet");
+        assert!(!ledger.sessions.is_empty());
+        assert_eq!(
+            session_state(&ledger, SESSION_OK),
+            Some(SessionState::Starting)
+        );
     }
 
     fn session_state(ledger: &PortalLedger, session: &str) -> Option<SessionState> {

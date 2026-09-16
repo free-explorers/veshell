@@ -75,7 +75,7 @@
       <td colspan=3></td>
     </tr>
     <tr>
-      <td>libpipewire-0.3 >= 1.0 (used from M2.3 / producer)</td>
+      <td>libpipewire-0.3 >= 1.0 (used from M2.3 / producer; pipewire 0.10 cargo bindings)</td>
       <td>pipewire</td>
       <td>pipewire-devel</td>
       <td>libpipewire-0.3-dev</td>

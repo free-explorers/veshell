@@ -16,8 +16,10 @@ import 'package:shell/platform/model/event/meta_window_removed/meta_window_remov
 import 'package:shell/platform/model/event/monitor_layout_changed/monitor_layout_changed.serializable.dart';
 import 'package:shell/platform/model/event/new_subsurface/new_subsurface.serializable.dart';
 import 'package:shell/platform/model/event/new_surface/new_surface.serializable.dart';
+import 'package:shell/capture/model/screen_cast_active/screen_cast_active.serializable.dart';
 import 'package:shell/capture/model/screen_cast_consent/screen_cast_consent.serializable.dart';
 import 'package:shell/capture/model/screen_cast_consent_dismissed/screen_cast_consent_dismissed.serializable.dart';
+import 'package:shell/capture/model/screen_cast_stopped/screen_cast_stopped.serializable.dart';
 import 'package:shell/platform/model/event/set_environment_variables/set_environment_variables.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 
@@ -148,6 +150,18 @@ sealed class PlatformEvent with _$PlatformEvent implements PlatformInteraction {
     required String method,
     required ScreenCastConsentDismissedMessage message,
   }) = ScreenCastConsentDismissedEvent;
+
+  /// Screen cast delivery began: the persistent indicator appears.
+  const factory PlatformEvent.screenCastActive({
+    required String method,
+    required ScreenCastActiveMessage message,
+  }) = ScreenCastActiveEvent;
+
+  /// Screen cast delivery stopped: the persistent indicator hides.
+  const factory PlatformEvent.screenCastStopped({
+    required String method,
+    required ScreenCastStoppedMessage message,
+  }) = ScreenCastStoppedEvent;
 
   /// Gesture Swipe Begin Event
   /// This event is sent when the user performs a swipe gesture.

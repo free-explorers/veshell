@@ -57,6 +57,7 @@ use smithay::wayland::socket::ListeningSocketSource;
 use smithay::wayland::xwayland_shell::{self, XWAYLAND_SHELL_ROLE};
 use smithay::xwayland::{X11Surface, X11Wm};
 use tracing::{info, warn};
+use zbus::zvariant::OwnedObjectPath;
 
 use crate::cursor::CursorState;
 use crate::flutter_engine::view::OutputViewIdWrapper;
@@ -158,6 +159,15 @@ pub struct State<BackendData: Backend + 'static> {
     pub capture_session: Option<crate::capture::CaptureSession>,
     pub screenshot_delivery_sender: channel::Sender<crate::capture::ScreenshotDeliveryEvent>,
     pub portal_runtime: Option<crate::portal::PortalRuntime>,
+    /// PipeWire producer, initialized lazily on the first approval.
+    pub pipe_wire_producer: Option<crate::capture::pipewire::Producer>,
+    /// Events traveling from the producer main loop onto the compositor
+    /// loop. The receiver is registered in the loop at startup.
+    /// Sender kept alive for the producer event channel so the calloop
+    /// source never closes while a compositor runs.
+    pub producer_delivery_sender: channel::Sender<crate::capture::pipewire::ProducerEvent>,
+    /// Live screen cast streams keyed by the portal session handle.
+    pub active_streams: HashMap<OwnedObjectPath, crate::capture::pipewire::ActiveStream>,
     pub pointer_view_id: Option<i64>,
 }
 
@@ -314,6 +324,17 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             FractionalScaleManagerState::new::<Self>(&display_handle);
         let screenshot_delivery_sender =
             crate::capture::insert_screenshot_delivery_source(&loop_handle);
+        // The PipeWire producer reports node life and failures over this
+        // channel; the compositor loop answers with session lifecycle.
+        let (producer_delivery_sender, producer_delivery_receiver) =
+            channel::channel::<crate::capture::pipewire::ProducerEvent>();
+        loop_handle
+            .insert_source(producer_delivery_receiver, |event, _, state| {
+                if let channel::Event::Msg(receipt) = event {
+                    crate::portal::service::handle_producer_event(state, receipt);
+                }
+            })
+            .expect("Failed to init producer channel");
 
         // The portal backend is owned exclusively by the seat session: a
         // nested or foreign-bus run must never answer portal requests.
@@ -399,6 +420,9 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             capture_session: None,
             screenshot_delivery_sender,
             portal_runtime,
+            producer_delivery_sender,
+            pipe_wire_producer: None,
+            active_streams: HashMap::new(),
             pointer_view_id: None,
         }
     }

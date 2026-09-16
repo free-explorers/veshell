@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 
+pub mod pipewire;
+
 use smithay::backend::allocator::dmabuf::{AsDmabuf, Dmabuf};
 use smithay::backend::allocator::{Fourcc, Slot};
 use smithay::backend::renderer::damage::OutputDamageTracker;
@@ -348,6 +350,17 @@ struct CapturedOutput {
 /// event loop thread (the existing present `gl.Finish` barrier applies).
 /// Everything else the capture later sees is owned `Vec<u8>` data, never a
 /// swapchain buffer that could be recycled under it.
+/// Grabs the output's current desktop pixels for a shared stream: the
+/// full-frame path mirrors the screenshot snapshot pipeline (capture
+/// specification section 6 allows full-frame copies as the initial
+/// delivery implementation).
+pub fn capture_output_pixels<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    output: &Output,
+) -> Result<CaptureSnapshot, String> {
+    take_output_snapshot(state, output)
+}
+
 fn take_output_snapshot<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     output: &Output,

@@ -69,6 +69,32 @@ Implemented M1 foundations:
   `Arc` bytes.
 - Physical output location updates remap `Space`, refresh its output bookkeeping,
   and advance an in-process output-layout revision.
+- M2.2 consent picker (2026-09-15): Start defers its portal reply; the
+  backend mints an unguessable consent token, opens the trusted picker
+  through the platform channel (`screen_cast_consent`), and a Rust-side
+  revalidation runs when the decision returns. Approval holds the reply
+  while the PipeWire producer negotiates the stream; cancellation reports
+  code 1 and closes the session. Picker dismissal is bound to the token
+  and every close path (Request.Close, Session.Close, frontend loss)
+  revokes an open flow.
+- M2.3 PipeWire producer (2026-09-16): `pipewire-rs` 0.10 with
+  `libpipewire-0.3` 1.6 delivers one BGRx stream per consented session
+  (`src/embedder/capture/pipewire.rs`). The PipeWire main loop FD is a
+  level-triggered calloop source (Niri's integration pattern, no
+  blocking dispatch). Producer-owned memfd shared memory backs the
+  buffers; the producer publishes a `Video/Source` node only after
+  approval, Start completes once the node identity exists (spec 7: never
+  waiting for the consumer), and the Start result carries
+  `streams: [(node, a{sv})]` with logical position, size, and the
+  MONITOR source type. Frame delivery initially copies full frames on a
+  calloop timer capped at 30 FPS through the M1 snapshot path; damage
+  tuning is tracked as follow-up work. PipeWire failure closes the
+  affected session, revokes the indicator, and never restores old
+  authorization. The persistent trusted indicator (`screen_cast_active`
+  / `screen_cast_stopped` platform events) names the shared target with
+  the shell Stop action threading `screen_cast_stop` into the close
+  path everywhere (user Stop, Session.Close, frontend loss, core
+  failure).
 - M2.1 portal backend state machine (2026-09-15): the ScreenCast backend owns
   its name on the real session bus only in the seat session (`RUNS_PORTAL_
   BACKEND`); nested and non-session runs stay silent. Every bridged call is
