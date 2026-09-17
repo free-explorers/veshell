@@ -32,6 +32,10 @@ void configureLogs() {
 
   persistenceLog.level = logging.Level.OFF;
 
+  // Per-frame surface/window layout traces log at `fine`; keep them out
+  // of the default output so a moving window does not flood the log.
+  geometryLog.level = logging.Level.INFO;
+
   logging.Logger.root.level = logging.Level.ALL; // defaults to Level.INFO
   logging.Logger.root.onRecord.listen((record) {
     final logger =

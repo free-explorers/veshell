@@ -29,13 +29,37 @@ class MonitorWidget extends HookConsumerWidget {
     if (monitorName != null) {
       ref.watch(monitorByNameProvider(monitorName));
     }
+    // The consent picker, screenshot prompt, and cast indicator surface on
+    // the first connected monitor (a portal flow is a single system
+    // dialog). They are drawn in `MaterialApp.builder`, above the
+    // Navigator, so a pushed route can never cover them.
+    final isPrimaryMonitor =
+        monitorName != null &&
+        ref.watch(connectedMonitorListProvider).firstOrNull?.name == monitorName;
     return MaterialApp(
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: ThemeMode.dark,
       builder: (context, child) => Stack(
         fit: StackFit.expand,
-        children: [child ?? const SizedBox.shrink()],
+        children: [
+          child ?? const SizedBox.shrink(),
+          if (isPrimaryMonitor)
+            const Material(
+              type: MaterialType.transparency,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ScreenCastConsentHost(),
+                  ScreenshotPromptHost(),
+                  Align(
+                    alignment: Alignment.bottomLeft,
+                    child: ScreenCastIndicatorBar(),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
       home: Material(
         child: initializationStatus.when(
@@ -101,21 +125,6 @@ class MonitorWidget extends HookConsumerWidget {
                         ],
                       ],
                     ),
-                    // The consent picker surfaces on the first connected
-                    // monitor: a portal flow is a single system dialog.
-                    if (monitorName != null &&
-                        ref
-                                .watch(connectedMonitorListProvider)
-                                .firstOrNull
-                                ?.name ==
-                            monitorName) ...[
-                      const ScreenCastConsentHost(),
-                      const ScreenshotPromptHost(),
-                      Align(
-                        alignment: Alignment.bottomLeft,
-                        child: ScreenCastIndicatorBar(),
-                      ),
-                    ],
                   ],
                 ),
               );

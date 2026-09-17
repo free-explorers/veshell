@@ -7,11 +7,15 @@ import 'package:shell/platform/provider/platform_manager.dart';
 part 'screen_cast_consent.g.dart';
 
 /// State of the trusted screen cast consent picker.
-@riverpod
+///
+/// Kept alive for the whole shell: a portal request may open the picker
+/// on the first monitor while another view is being laid out, and the
+/// event is lost if the provider is disposed and rebuilt between flows.
+@Riverpod(keepAlive: true)
 class ScreenCastConsent extends _$ScreenCastConsent {
   @override
   ScreenCastConsentMessage? build() {
-    ref.watch(platformManagerProvider).listen((next) {
+    final subscription = ref.watch(platformManagerProvider).listen((next) {
       if (next case final ScreenCastConsentEvent event) {
         state = event.message;
       }
@@ -21,6 +25,7 @@ class ScreenCastConsent extends _$ScreenCastConsent {
         }
       }
     });
+    ref.onDispose(subscription.cancel);
 
     return null;
   }

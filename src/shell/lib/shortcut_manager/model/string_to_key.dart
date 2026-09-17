@@ -78,7 +78,6 @@ Map<String, LogicalKeyboardKey> stringToKeyMap = {
   'arrowUp': LogicalKeyboardKey.arrowUp,
   'arrowRight': LogicalKeyboardKey.arrowRight,
   'arrowDown': LogicalKeyboardKey.arrowDown,
-  // GTK reports the physical Print Screen key as the logical `print` key.
   'insert': LogicalKeyboardKey.insert,
   'contextMenu': LogicalKeyboardKey.contextMenu,
   'pause': LogicalKeyboardKey.pause,

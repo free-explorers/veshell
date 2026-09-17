@@ -28,7 +28,7 @@ class PlatformManager extends _$PlatformManager {
       });
       if (event is CommitSurfaceEvent) {
         final message = event.message;
-        geometryLog.info(
+        geometryLog.fine(
           'platform commit_surface surface=${message.surfaceId} '
           'texture=${message.textureId} buffer=${message.bufferSize} '
           'scale=${message.scale} role=${message.role} '

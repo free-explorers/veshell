@@ -19,11 +19,15 @@ class ScreenCastStopRequest extends PlatformRequest {
 }
 
 /// Live screen cast sessions tracked by the persistent indicator.
-@riverpod
+///
+/// Kept alive for the whole shell: the indicator must track casts that
+/// start while its view is not the one rebuilding, and a disposed
+/// provider would drop the start/stop events that follow.
+@Riverpod(keepAlive: true)
 class ScreenCastIndicator extends _$ScreenCastIndicator {
   @override
   Map<String, ScreenCastActiveMessage> build() {
-    ref.watch(platformManagerProvider).listen((next) {
+    final subscription = ref.watch(platformManagerProvider).listen((next) {
       if (next case final ScreenCastActiveEvent event) {
         final next_value = {
           ...state,
@@ -36,6 +40,7 @@ class ScreenCastIndicator extends _$ScreenCastIndicator {
         state = next_value;
       }
     });
+    ref.onDispose(subscription.cancel);
 
     return const {};
   }

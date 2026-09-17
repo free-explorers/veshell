@@ -9,11 +9,14 @@ part 'screenshot_prompt.g.dart';
 /// State of the trusted screenshot/color-pick prompt (capture
 /// specification section 8.4). Dismissal uses the same token-keyed
 /// dismiss event as the screen cast picker.
-@riverpod
+///
+/// Kept alive for the whole shell so a request that arrives before the
+/// hosting view rebuilds is never dropped.
+@Riverpod(keepAlive: true)
 class ScreenshotPrompt extends _$ScreenshotPrompt {
   @override
   ScreenshotPromptMessage? build() {
-    ref.watch(platformManagerProvider).listen((next) {
+    final subscription = ref.watch(platformManagerProvider).listen((next) {
       if (next case final ScreenshotPromptEvent event) {
         state = event.message;
       }
@@ -23,6 +26,7 @@ class ScreenshotPrompt extends _$ScreenshotPrompt {
         }
       }
     });
+    ref.onDispose(subscription.cancel);
 
     return null;
   }

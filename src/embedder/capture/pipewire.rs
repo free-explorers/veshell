@@ -335,6 +335,7 @@ impl Producer {
         let to_loop = self.to_loop.clone();
         let to_loop_paused = to_loop.clone();
         let to_loop_streaming = to_loop.clone();
+        let to_loop_params = to_loop.clone();
         let lock = inner.clone();
         let lock_params = inner.clone();
         let lock_buffers = inner.clone();
@@ -345,19 +346,30 @@ impl Producer {
             .state_changed(move |stream, (), _old, new| {
                 let handle = lock.borrow().descriptor.session_handle.clone();
                 match new {
-                    // The node identity exists as soon as the stream is
-                    // accepted in the graph (mutter's ordering, proven by
-                    // `no target node available` when any producer waits
-                    // for a fixate no consumer can initiate). Start
-                    // completes with the node id pre-fixate; the fixate
-                    // itself happens when the daemon links the consumer's
-                    // stream to this node (param_changed fires then).
-                    StreamState::Connecting | StreamState::Paused => {
+                    // The proxy is not bound yet in Connecting: node_id
+                    // is PW_ID_ANY, so publishing here would latch an
+                    // invalid identity. Paused is the first state with a
+                    // bound node, and it still precedes the consumer's
+                    // fixate handshake (the daemon links the consumer
+                    // after Start returns, which needs this id).
+                    StreamState::Connecting => {
+                        tracing::debug!("stream connecting");
+                    }
+                    StreamState::Paused => {
                         let mut inner = lock.borrow_mut();
+                        if inner.node_id.is_some() {
+                            return;
+                        }
+                        let node_id = stream.node_id();
+                        if node_id == pipewire_crate::constants::ID_ANY {
+                            tracing::warn!("stream paused without a bound node id");
+                            return;
+                        }
+                        inner.node_id = Some(node_id);
                         if inner.ready_size.is_none() {
                             tracing::debug!(state = ?new, "stream connected; node published before the format fixated");
                         }
-                        let node_id = *inner.node_id.get_or_insert_with(|| stream.node_id());
+                        drop(inner);
                         let _ = to_loop_paused.send(ProducerEvent::NodeReady {
                             session_handle: handle,
                             node_id,
@@ -375,7 +387,16 @@ impl Producer {
                             active: true,
                         });
                     }
-                    StreamState::Unconnected => (),
+                    // A stream that falls back to Unconnected after being
+                    // linked has died; the session must close rather than
+                    // keep a dead node. Intentional teardown drops the
+                    // listener before the stream, so it never reaches here.
+                    StreamState::Unconnected => {
+                        let _ = to_loop_paused.send(ProducerEvent::Fatal {
+                            session_handle: handle,
+                            message: "stream disconnected".to_string(),
+                        });
+                    }
                 }
             })
             .param_changed(move |stream, (), id, pod| {
@@ -388,25 +409,40 @@ impl Producer {
                     pod_size = pod.map(|pod| pod.as_bytes().len()).unwrap_or(0),
                     "param_changed"
                 );
+                // A stream that never fixates is silently frameless for
+                // the whole session; before the format is ready, any
+                // unusable negotiation closes the session instead.
+                let fatal = |message: String| {
+                    tracing::warn!("{message}");
+                    if lock_params.borrow().ready_size.is_none() {
+                        let session_handle = lock_params.borrow().descriptor.session_handle.clone();
+                        let _ = to_loop_params.send(ProducerEvent::Fatal {
+                            session_handle,
+                            message,
+                        });
+                    }
+                };
                 if id != ParamType::Format.as_raw() {
                     return;
                 }
                 let Some(pod) = pod else { return };
                 let Ok((m_type, m_subtype)) = parse_format(pod) else {
+                    fatal("pipewire sent an unparsable format".to_string());
                     return;
                 };
                 if m_type != MediaType::Video || m_subtype != MediaSubtype::Raw {
+                    fatal("pipewire negotiated a non-raw-video format".to_string());
                     return;
                 }
 
                 let negotiated_size = {
                     let mut format = VideoInfoRaw::new();
                     if format.parse(pod).is_err() {
-                        tracing::warn!("error parsing the negotiated format");
+                        fatal("error parsing the negotiated format".to_string());
                         return;
                     }
                     if format.format() != VideoFormat::RGBA {
-                        tracing::warn!("pipewire negotiated away RGBA; stream unusable");
+                        fatal("pipewire negotiated away RGBA; stream unusable".to_string());
                         return;
                     }
                     Size::<i32, Physical>::from((
@@ -417,7 +453,7 @@ impl Producer {
 
                 let expected = lock_params.borrow().descriptor.size;
                 if negotiated_size != expected {
-                    tracing::warn!("negotiated size does not match the output size");
+                    fatal("negotiated size does not match the output size".to_string());
                     return;
                 }
                 lock_params.borrow_mut().ready_size = Some(expected);
@@ -514,6 +550,9 @@ impl Producer {
             })
             .remove_buffer(move |_, (), buffer| unsafe {
                 let spa_buffer = (*buffer).buffer;
+                if (*spa_buffer).n_datas < 1 || (*spa_buffer).datas.is_null() {
+                    return;
+                }
                 let mapped = (*(*spa_buffer).datas).data as *mut u8;
                 lock_remove.borrow_mut().buffers.remove(&mapped);
             })
@@ -560,7 +599,18 @@ impl Producer {
             return;
         };
         drop(inner);
-        let _ = size;
+        // The frame geometry is fixed at negotiation: a size drift means
+        // the output mode changed under the session, and a truncated or
+        // short frame would reach the consumer as garbage. Close instead
+        // of silently copying a partial frame.
+        let expected_len = size.w as usize * size.h as usize * BYTES_PER_PIXEL;
+        if pixels.len() != expected_len {
+            let _ = self.to_loop.send(ProducerEvent::Fatal {
+                session_handle,
+                message: format!("frame is {} bytes, expected {expected_len}", pixels.len()),
+            });
+            return;
+        }
         // Dequeue the buffer the consumer handed back for refill.
         let pw_buffer_ptr = unsafe { entry.stream.dequeue_raw_buffer() };
         let Some(pw_buffer_ptr) = std::ptr::NonNull::new(pw_buffer_ptr) else {

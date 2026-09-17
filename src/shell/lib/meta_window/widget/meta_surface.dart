@@ -40,7 +40,7 @@ class MetaSurfaceWidget extends HookConsumerWidget {
     );
 
     final currentMonitor = CurrentMonitorName.of(context);
-    geometryLog.info(
+    geometryLog.fine(
       'window layout id=$metaWindowId surface=$surfaceId '
       'geometry=${metaWindow.geometry} offset=$offset '
       'scale=${metaWindow.scaleRatio} monitor=$currentMonitor',

@@ -1,6 +1,8 @@
 use smithay::backend::renderer::element::solid;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex, OnceLock};
-use tracing::{info, warn};
+use tracing::debug;
 
 use crate::capture::{RECORDING_CHIP_HEIGHT, RECORDING_CHIP_WIDTH};
 use crate::{
@@ -56,6 +58,27 @@ const SELECTION_COLOR: [f32; 4] = [1.0, 1.0, 1.0, 0.9];
 const SELECTION_LINE_WIDTH: i32 = 2;
 /// Half length of the crosshair arms, in physical pixels.
 const CROSSHAIR_HALF_LENGTH: i32 = 16;
+
+// Stable element ids for the capture/recording overlay solids. The damage
+// tracker keys elements by `Id`; a fresh `Id` every frame makes every
+// element look new and repaints the whole output, so the constant solids
+// (scrim, outline, crosshair) reuse one id per role. The ranges keep the
+// two overlays from colliding if both are ever live.
+const ID_SELECTION_CROSSHAIR: u64 = 0x1000;
+const ID_SELECTION_SCRIM: u64 = 0x1100;
+const ID_SELECTION_OUTLINE: u64 = 0x1200;
+const ID_RECORDING_SCRIM: u64 = 0x2000;
+const ID_RECORDING_OUTLINE: u64 = 0x2100;
+
+/// Returns a stable [`Id`] for one overlay role, creating it on first use.
+/// Cloning shares the same id, so the damage tracker sees an unchanged
+/// element when its geometry is unchanged too.
+fn stable_solid_id(key: u64) -> Id {
+    thread_local! {
+        static IDS: RefCell<HashMap<u64, Id>> = RefCell::new(HashMap::new());
+    }
+    IDS.with(|ids| ids.borrow_mut().entry(key).or_insert_with(Id::new).clone())
+}
 
 pub fn get_render_elements<R>(
     renderer: &mut R,
@@ -177,10 +200,10 @@ where
         Rectangle::new((left, top).into(), (width, height).into())
     };
     let mut elements: Vec<VeshellRenderElements<R>> = Vec::new();
-    let mut push_solid = |region: Rectangle<i32, Physical>, color: [f32; 4]| {
+    let mut push_solid = |id_key: u64, region: Rectangle<i32, Physical>, color: [f32; 4]| {
         elements.push(VeshellRenderElements::Solid(
             solid::SolidColorRenderElement::new(
-                Id::new(),
+                stable_solid_id(id_key),
                 region,
                 1,
                 Color32F::new(color[0], color[1], color[2], color[3]),
@@ -198,6 +221,7 @@ where
     let center_x = position.loc.x + width / 2;
     let center_y = position.loc.y + width / 2;
     push_solid(
+        ID_SELECTION_CROSSHAIR,
         Rectangle::new(
             (center_x - half, center_y - width / 2).into(),
             (half * 2, width).into(),
@@ -205,6 +229,7 @@ where
         SELECTION_COLOR,
     );
     push_solid(
+        ID_SELECTION_CROSSHAIR + 1,
         Rectangle::new(
             (center_x - width / 2, center_y - half).into(),
             (width, half * 2).into(),
@@ -218,8 +243,11 @@ where
     match session.selection() {
         Some(selection) => {
             let hole = to_local_physical(selection);
-            for region in scrim_regions(output_size_physical, hole) {
-                push_solid(region, SCRIM_COLOR);
+            for (index, region) in scrim_regions(output_size_physical, hole)
+                .into_iter()
+                .enumerate()
+            {
+                push_solid(ID_SELECTION_SCRIM + index as u64, region, SCRIM_COLOR);
             }
 
             // Outline stroke: four physical rects around the selection.
@@ -227,7 +255,7 @@ where
             let x = hole.loc.x;
             let y = hole.loc.y;
             let (width, height) = (hole.size.w, hole.size.h);
-            for region in [
+            for (index, region) in [
                 Rectangle::new(
                     (x - stroke, y - stroke).into(),
                     (width + stroke * 2, stroke).into(),
@@ -238,16 +266,95 @@ where
                 ),
                 Rectangle::new((x - stroke, y).into(), (stroke, height).into()),
                 Rectangle::new((x + width, y).into(), (stroke, height).into()),
-            ] {
-                push_solid(region, SELECTION_COLOR);
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                push_solid(ID_SELECTION_OUTLINE + index as u64, region, SELECTION_COLOR);
             }
         }
         None => {
-            push_solid(output_size_physical, SCRIM_COLOR);
+            push_solid(ID_SELECTION_SCRIM, output_size_physical, SCRIM_COLOR);
         }
     }
 
     elements
+}
+
+/// Per-thread cache of the recording overlay's memory buffers. Caching the
+/// buffers keeps their `Id` stable across frames, so a static scene only
+/// re-imports the constant chip once and the counter when its displayed
+/// second changes, instead of re-rasterizing and re-importing both every
+/// present.
+#[derive(Default)]
+struct RecordingBuffers {
+    /// The constant chip chrome, keyed by integer scale.
+    chip: Option<(i32, MemoryRenderBuffer)>,
+    /// Counter textures keyed by `(seconds, integer scale)`.
+    counters: HashMap<(u64, i32), MemoryRenderBuffer>,
+}
+
+thread_local! {
+    static RECORDING_BUFFERS: RefCell<RecordingBuffers> = RefCell::new(RecordingBuffers::default());
+}
+
+/// The counter runs at most to 99:59, so the per-second cache is bounded.
+const RECORDING_COUNTER_CACHE_LIMIT: usize = 256;
+
+fn recording_chip_buffer(
+    chip: &crate::capture::RecordingChipData,
+    scale: f64,
+) -> MemoryRenderBuffer {
+    let integer_scale = scale.round().max(1.0) as i32;
+    RECORDING_BUFFERS.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some((cached_scale, buffer)) = cache.chip.as_ref() {
+            if *cached_scale == integer_scale {
+                return buffer.clone();
+            }
+        }
+        let (data, size) = recording_chip_bitmap(chip, scale);
+        let buffer = MemoryRenderBuffer::from_slice(
+            &data,
+            Fourcc::Argb8888,
+            size,
+            integer_scale,
+            Transform::Normal,
+            None,
+        );
+        cache.chip = Some((integer_scale, buffer.clone()));
+        buffer
+    })
+}
+
+fn recording_counter_buffer(
+    chip: &crate::capture::RecordingChipData,
+    scale: f64,
+) -> Option<MemoryRenderBuffer> {
+    let integer_scale = scale.round().max(1.0) as i32;
+    let seconds = chip.seconds.min(99 * 60 + 59);
+    RECORDING_BUFFERS.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(buffer) = cache.counters.get(&(seconds, integer_scale)) {
+            return Some(buffer.clone());
+        }
+        let (data, size) = recording_counter_bitmap(chip, scale)?;
+        let buffer = MemoryRenderBuffer::from_slice(
+            &data,
+            Fourcc::Argb8888,
+            size,
+            integer_scale,
+            Transform::Normal,
+            None,
+        );
+        if cache.counters.len() >= RECORDING_COUNTER_CACHE_LIMIT {
+            cache.counters.clear();
+        }
+        cache
+            .counters
+            .insert((seconds, integer_scale), buffer.clone());
+        Some(buffer)
+    })
 }
 
 /// The trusted recording indicator: the recorded rectangle's outline,
@@ -305,21 +412,13 @@ where
         chip.chip.loc.x - output_geometry.loc.x,
         chip.chip.loc.y - output_geometry.loc.y,
     );
-    let imported = recording_counter_bitmap(&chip, scale).and_then(|(data, size)| {
-        // The counter rides the proven memory-buffer path the cursor
-        // uses: MemoryRenderBuffer handles the import, orientation, and
-        // alpha for memory slices itself.
-        let integer_scale = scale.round().max(1.0) as i32;
-        let buffer = MemoryRenderBuffer::from_slice(
-            &data,
-            Fourcc::Argb8888,
-            size,
-            integer_scale,
-            Transform::Normal,
-            None,
-        );
-        let physical_location =
-            Point::<f64, Physical>::new(text_location.x * scale, text_location.y * scale);
+    // The counter rides the proven memory-buffer path the cursor uses:
+    // MemoryRenderBuffer handles the import, orientation, and alpha for
+    // memory slices itself. The buffer is cached per second, so a static
+    // scene only re-imports the counter when the displayed time changes.
+    let physical_location =
+        Point::<f64, Physical>::new(text_location.x * scale, text_location.y * scale);
+    if let Some(buffer) = recording_counter_buffer(&chip, scale) {
         match MemoryRenderBufferRenderElement::from_buffer(
             renderer,
             physical_location,
@@ -329,42 +428,16 @@ where
             None,
             Kind::Unspecified,
         ) {
-            Ok(element) => {
-                info!(
-                    size = ?size,
-                    "recording counter texture built on the memory path"
-                );
-                Some(element)
-            }
-            Err(error) => {
-                info!(
-                    error = ?error,
-                    size = ?size,
-                    "recording counter texture import failed"
-                );
-                None
-            }
+            Ok(element) => elements.push(VeshellRenderElements::Memory(element)),
+            Err(error) => debug!(?error, "recording counter texture import failed"),
         }
-    });
-    let counter_element = imported.map(VeshellRenderElements::Memory);
-    if let Some(element) = counter_element {
-        elements.push(element);
     }
 
     // The chip's chrome (rounded translucent background + red circle)
     // is one memory texture beneath the text but above the outline and
     // the dimming scrim; this renderer paints the first pushed element
-    // last.
-    let chrome = recording_chip_bitmap(&chip, scale);
-    let integer_scale = scale.round().max(1.0) as i32;
-    let chip_buffer = MemoryRenderBuffer::from_slice(
-        &chrome.0,
-        Fourcc::Argb8888,
-        chrome.1,
-        integer_scale,
-        Transform::Normal,
-        None,
-    );
+    // last. The chrome is constant for the whole recording.
+    let chip_buffer = recording_chip_buffer(&chip, scale);
     if let Ok(element) = MemoryRenderBufferRenderElement::from_buffer(
         renderer,
         text_location.to_physical(scale),
@@ -376,13 +449,13 @@ where
     ) {
         elements.push(VeshellRenderElements::Memory(element));
     } else {
-        info!("recording chip texture import failed");
+        debug!("recording chip texture import failed");
     }
 
-    let mut push_solid = |region: Rectangle<i32, Physical>, color: [f32; 4]| {
+    let mut push_solid = |id_key: u64, region: Rectangle<i32, Physical>, color: [f32; 4]| {
         elements.push(VeshellRenderElements::Solid(
             solid::SolidColorRenderElement::new(
-                Id::new(),
+                stable_solid_id(id_key),
                 region,
                 1,
                 Color32F::new(color[0], color[1], color[2], color[3]),
@@ -392,8 +465,10 @@ where
     };
 
     // Outline and scrim sit beneath the chip within the overlay layer
-    // (they are pushed later, and pushing later is pushed deeper).
-    for region in [
+    // (they are pushed later, and pushing later is pushed deeper). Their
+    // geometry is fixed for the recording, so the stable ids keep them
+    // out of the damage set on frames where only the counter changed.
+    for (index, region) in [
         Rectangle::new(
             (x - stroke, y - stroke).into(),
             (width + stroke * 2, stroke).into(),
@@ -404,14 +479,52 @@ where
         ),
         Rectangle::new((x - stroke, y).into(), (stroke, height).into()),
         Rectangle::new((x + width, y).into(), (stroke, height).into()),
-    ] {
-        push_solid(region, SELECTION_COLOR);
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        push_solid(ID_RECORDING_OUTLINE + index as u64, region, SELECTION_COLOR);
     }
-    for region in scrim_regions(output_size_physical, recorded) {
-        push_solid(region, SCRIM_COLOR);
+    for (index, region) in scrim_regions(output_size_physical, recorded)
+        .into_iter()
+        .enumerate()
+    {
+        push_solid(ID_RECORDING_SCRIM + index as u64, region, SCRIM_COLOR);
     }
 
     elements
+}
+
+/// Resolves (once, process-wide) the fontconfig substitution for the
+/// shell's label font: Flutter asks fontconfig for the "Roboto" family,
+/// and the recording counter uses the same resolution so its text matches
+/// the shell's typography on any machine. The resolution shells out to
+/// `fc-match` and reads a file, so it is pre-warmed at startup and never
+/// runs on the render thread's first recorded frame.
+fn recording_font() -> Option<&'static fontdue::Font> {
+    static FONT: OnceLock<Option<fontdue::Font>> = OnceLock::new();
+    FONT.get_or_init(|| {
+        let file = std::process::Command::new("fc-match")
+            .arg("--format=%{file}")
+            .arg("Roboto")
+            .output()
+            .ok()?
+            .stdout;
+        let file = String::from_utf8(file).ok()?;
+        fontdue::Font::from_bytes(
+            std::fs::read(file.trim_end()).ok()?,
+            fontdue::FontSettings::default(),
+        )
+        .ok()
+    })
+    .as_ref()
+}
+
+/// Pre-resolves the recording counter font. Call from startup so the
+/// first recording never pays the `fc-match` subprocess on the render
+/// thread; absence of fontconfig just disables the counter digits.
+pub fn warm_recording_font() {
+    let _ = recording_font();
 }
 
 /// Rasterizes the counter text with the fontconfig-resolved family
@@ -423,28 +536,7 @@ fn recording_counter_bitmap(
     chip: &crate::capture::RecordingChipData,
     scale: f64,
 ) -> Option<(Vec<u8>, Size<i32, Buffer>)> {
-    // Flutter resolves its default font stack through fontconfig: the
-    // engine asks for the "Roboto" family and fontconfig chooses what it
-    // is substituted with. The counter uses the very same resolution so
-    // its text matches the shell's typography on any machine; without
-    // fontconfig the counter is skipped.
-    static FONT: OnceLock<Option<fontdue::Font>> = OnceLock::new();
-    let font = FONT
-        .get_or_init(|| {
-            let file = std::process::Command::new("fc-match")
-                .arg("--format=%{file}")
-                .arg("Roboto")
-                .output()
-                .ok()?
-                .stdout;
-            let file = String::from_utf8(file).ok()?;
-            fontdue::Font::from_bytes(
-                std::fs::read(file.trim_end()).ok()?,
-                fontdue::FontSettings::default(),
-            )
-            .ok()
-        })
-        .as_ref()?;
+    let font = recording_font()?;
 
     let seconds = chip.seconds.min(99 * 60 + 59);
     let text = format!("{}:{:02}", seconds / 60, seconds % 60);

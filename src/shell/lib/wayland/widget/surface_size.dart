@@ -28,7 +28,7 @@ class SurfaceSize extends ConsumerWidget {
       surfaceSize.width / scaleRatio,
       surfaceSize.height / scaleRatio,
     );
-    geometryLog.info(
+    geometryLog.fine(
       'surface layout surface=$surfaceId texture=$surfaceSize '
       'outputScale=$scaleRatio logicalSize=$logicalSize',
     );

@@ -307,7 +307,7 @@ fn deliver_screenshot<BackendData: Backend + 'static>(
     ));
     let sender = state.screenshot_delivery_sender.clone();
     thread::spawn(move || {
-        let outcome = match encode_and_write_png(size, pixels, &path) {
+        let outcome = match encode_and_write_png(size, &pixels, &path) {
             Ok(png) => ScreenshotDeliveryEvent::Completed {
                 path,
                 png: Arc::new(png),
@@ -674,7 +674,7 @@ pub fn take_portal_pending_snapshot<BackendData: Backend + 'static>(
 }
 
 /// Samples one pixel from a held pre-prompt snapshot (PickColor):
-/// sRGB floats in [0, 1]. The readback byte order is B,G,R,A.
+/// sRGB floats in [0, 1]. The readback byte order is R,G,B,A.
 pub fn sample_pending_pixel(
     pending: &PendingPortalPixels,
     location: Point<f64, Logical>,
@@ -691,16 +691,16 @@ pub fn sample_pending_pixel(
         .get(offset..offset + 4)
         .ok_or_else(|| "The sampled pixel index is out of range".to_string())?;
     Ok((
-        pixel[2] as f64 / 255.0,
-        pixel[1] as f64 / 255.0,
         pixel[0] as f64 / 255.0,
+        pixel[1] as f64 / 255.0,
+        pixel[2] as f64 / 255.0,
     ))
 }
 
 /// Grabs one pixel from the output for a portal PickColor request:
 /// returns sRGB floats in [0, 1] at the pointer's location. The
-/// readback byte order matches the desktop readback (B,G,R,A), so the
-/// channels are swizzled to RGB.
+/// readback byte order matches the desktop readback (R,G,B,A), so the
+/// channels are already in RGB order.
 pub fn sample_output_pixel<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     output: &Output,
@@ -722,22 +722,22 @@ pub fn sample_output_pixel<BackendData: Backend + 'static>(
         .get(offset..offset + 4)
         .ok_or_else(|| "The sampled pixel index is out of range".to_string())?;
     Ok((
-        pixel[2] as f64 / 255.0,
-        pixel[1] as f64 / 255.0,
         pixel[0] as f64 / 255.0,
+        pixel[1] as f64 / 255.0,
+        pixel[2] as f64 / 255.0,
     ))
 }
 
 /// Encodes one PNG for a portal Screenshot request into the shared
 /// screenshot directory: the same atomic part-file rename flow as the
 /// hotkey path so portal consumers receive a fully written file.
-pub fn encode_portal_png(size: Size<i32, Physical>, pixels: &Vec<u8>) -> Result<PathBuf, String> {
+pub fn encode_portal_png(size: Size<i32, Physical>, pixels: &[u8]) -> Result<PathBuf, String> {
     let directory = screenshot_directory()?;
     let path = directory.join(format!(
         "Veshell Screenshot {}",
         chrono::Local::now().format("%Y-%m-%d %H-%M-%S%.3f.png")
     ));
-    encode_and_write_png(size, pixels.clone(), &path)?;
+    encode_and_write_png(size, pixels, &path)?;
     Ok(path)
 }
 
@@ -1138,6 +1138,12 @@ fn orient_pixels(
         ));
     }
 
+    // No rotation: the mapped framebuffer is already in the output's
+    // logical orientation, so skip the allocation and per-pixel remap.
+    if transform == Transform::Normal {
+        return Ok((source_size, readback_pixels));
+    }
+
     let target_size = transform.transform_size(source_size);
     let target_width = usize::try_from(target_size.w)
         .map_err(|_| "Capture target width must be positive".to_string())?;
@@ -1160,7 +1166,7 @@ fn orient_pixels(
 
 fn encode_and_write_png(
     size: Size<i32, Physical>,
-    pixels: Vec<u8>,
+    pixels: &[u8],
     path: &Path,
 ) -> Result<Vec<u8>, String> {
     let png = encode_png(size, pixels)
@@ -1180,14 +1186,14 @@ fn encode_and_write_png(
     result.map(|()| png)
 }
 
-fn encode_png(size: Size<i32, Physical>, pixels: Vec<u8>) -> Result<Vec<u8>, png::EncodingError> {
+fn encode_png(size: Size<i32, Physical>, pixels: &[u8]) -> Result<Vec<u8>, png::EncodingError> {
     let mut png = Vec::new();
     let mut encoder = png::Encoder::new(&mut png, size.w as u32, size.h as u32);
     encoder.set_color(png::ColorType::Rgba);
     encoder.set_depth(png::BitDepth::Eight);
     encoder
         .write_header()
-        .and_then(|mut writer| writer.write_image_data(&pixels))?;
+        .and_then(|mut writer| writer.write_image_data(pixels))?;
     Ok(png)
 }
 
@@ -1587,13 +1593,25 @@ fn handle_recording_event<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     outcome: recording::RecordingEvent,
 ) {
-    let _ = state;
+    // A worker failure can arrive while the session is still live (the
+    // encoder died before any stop): release the loop-side session so
+    // the heartbeat, the presented-frame hook, and the capture freeze
+    // do not keep running against a dead worker. A normal stop already
+    // took the session, so its final event matches nothing.
+    if state
+        .recording_session
+        .as_ref()
+        .is_some_and(|recording| recording.generation == outcome.generation())
+    {
+        state.recording_session.take();
+    }
     match outcome {
         recording::RecordingEvent::Completed {
             path,
             frames,
             dropped,
             elapsed_ms,
+            ..
         } => {
             info!(
                 path = %path.display(),
@@ -1603,7 +1621,9 @@ fn handle_recording_event<BackendData: Backend + 'static>(
                 "Recording saved"
             );
         }
-        recording::RecordingEvent::Failed { message, partial } => match partial {
+        recording::RecordingEvent::Failed {
+            message, partial, ..
+        } => match partial {
             Some(partial) => warn!(
                 partial = %partial.display(),
                 "Failed: {message}"
@@ -1740,7 +1760,7 @@ mod tests {
 
     #[test]
     fn screenshot_png_is_encoded_for_clipboard_and_file() {
-        let encoded = encode_png((1, 1).into(), vec![1, 2, 3, 255]).unwrap();
+        let encoded = encode_png((1, 1).into(), &[1, 2, 3, 255]).unwrap();
 
         assert_eq!(&encoded[..8], b"\x89PNG\r\n\x1a\n");
     }
@@ -1752,7 +1772,7 @@ mod tests {
         fs::create_dir_all(&directory).unwrap();
         let path = directory.join("shot.png");
 
-        let png = encode_and_write_png((1, 1).into(), vec![1, 2, 3, 255], &path).unwrap();
+        let png = encode_and_write_png((1, 1).into(), &[1, 2, 3, 255], &path).unwrap();
 
         assert_eq!(fs::read(&path).unwrap(), png);
         assert!(!directory.join("shot.png.part").exists());
@@ -1765,7 +1785,7 @@ mod tests {
             std::env::temp_dir().join(format!("veshell-capture-missing-{}", std::process::id()));
         let path = directory.join("shot.png");
 
-        assert!(encode_and_write_png((1, 1).into(), vec![1, 2, 3, 255], &path).is_err());
+        assert!(encode_and_write_png((1, 1).into(), &[1, 2, 3, 255], &path).is_err());
 
         assert!(!path.exists());
         assert!(!directory.join("shot.png.part").exists());
@@ -1840,6 +1860,23 @@ mod tests {
         };
 
         assert!(session.selection().is_none());
+    }
+
+    // The framebuffer readback is R,G,B,A (Smithay maps Abgr8888 to
+    // RGBA8); sampling must not swizzle, or a picked colour comes back
+    // with red and blue exchanged.
+    #[test]
+    fn pick_color_returns_channels_in_rgb_order() {
+        let pending = PendingPortalPixels {
+            size: (2, 1).into(),
+            pixels: vec![0x11, 0x22, 0x33, 0xff, 0x44, 0x55, 0x66, 0xff],
+            geometry: Rectangle::new((0., 0.).into(), (2., 1.).into()),
+            pointer: (0., 0.).into(),
+        };
+
+        let sampled = sample_pending_pixel(&pending, (0.25, 0.5).into()).unwrap();
+        let quantize = |channel: u8| channel as f64 / 255.0;
+        assert_eq!(sampled, (quantize(0x11), quantize(0x22), quantize(0x33)));
     }
 
     fn test_output() -> Output {

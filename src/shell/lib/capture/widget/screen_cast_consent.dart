@@ -37,7 +37,7 @@ class ScreenCastConsentPicker extends HookConsumerWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400),
+          constraints: const BoxConstraints(maxWidth: 400, maxHeight: 600),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -62,34 +62,47 @@ class ScreenCastConsentPicker extends HookConsumerWidget {
               // `types: 3` even for a window flow, so a mixed, grouped
               // list is the normal case there. Nothing is preselected —
               // Share stays disabled until an explicit choice, so a
-              // careless click can never approve the wrong target.
-              for (final group in [
-                (CaptureSourceKind.windows, 'Windows'),
-                (CaptureSourceKind.outputs, 'Screens'),
-              ]) ...[
-                if (offersOutputs &&
-                    offersWindows &&
-                    consent.sources.any((s) => s.kind == group.$1))
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 2, left: 8),
-                    child: Text(
-                      group.$2,
-                      style: theme.textTheme.labelSmall,
-                    ),
+              // careless click can never approve the wrong target. The
+              // list scrolls: a busy desktop can offer more windows than
+              // fit the dialog.
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final group in [
+                        (CaptureSourceKind.windows, 'Windows'),
+                        (CaptureSourceKind.outputs, 'Screens'),
+                      ]) ...[
+                        if (offersOutputs &&
+                            offersWindows &&
+                            consent.sources.any((s) => s.kind == group.$1))
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 2, left: 8),
+                            child: Text(
+                              group.$2,
+                              style: theme.textTheme.labelSmall,
+                            ),
+                          ),
+                        for (final source in consent.sources.where(
+                          (s) => s.kind == group.$1,
+                        ))
+                          RadioListTile<String>(
+                            value: source.id,
+                            groupValue: approvedSource,
+                            title: Text(source.label),
+                            onChanged: (value) {
+                              if (value != null) {
+                                selectedSource.value = value;
+                              }
+                            },
+                          ),
+                      ],
+                    ],
                   ),
-                for (final source
-                    in consent.sources.where((s) => s.kind == group.$1))
-                  RadioListTile<String>(
-                    value: source.id,
-                    groupValue: approvedSource,
-                    title: Text(source.label),
-                    onChanged: (value) {
-                      if (value != null) {
-                        selectedSource.value = value;
-                      }
-                    },
-                  ),
-              ],
+                ),
+              ),
               const SizedBox(height: 16),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -145,7 +158,10 @@ class ScreenCastConsentHost extends HookConsumerWidget {
         color: Colors.black.withValues(alpha: 0.4),
         child: Align(
           alignment: Alignment.center,
-          child: ScreenCastConsentPicker(),
+          // Keying by consent token resets the radio selection when a
+          // new flow replaces the current one, so a stale source id can
+          // never stay selected across requests.
+          child: ScreenCastConsentPicker(key: ValueKey(consent.consentToken)),
         ),
       ),
     );

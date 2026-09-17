@@ -64,25 +64,52 @@ impl RecordingHandle {
 
     /// Asks for an asynchronous finish; the worker sends the final
     /// [`RecordingEvent`] on the events channel later.
+    ///
+    /// The frame queue is bounded, so a blocking `send` could stall the
+    /// compositor loop behind a full queue. A short-lived helper owns the
+    /// send instead: `try_send` is the common path, and only a saturated
+    /// queue (stalled encoder) falls back to a detached thread.
     pub fn stop(self) {
-        let _ = self.commands.send(RecordingCommand::Stop);
+        match self.commands.try_send(RecordingCommand::Stop) {
+            Ok(()) | Err(TrySendError::Disconnected(_)) => {}
+            Err(TrySendError::Full(command)) => {
+                let commands = self.commands.clone();
+                thread::spawn(move || {
+                    let _ = commands.send(command);
+                });
+            }
+        }
     }
 }
 
 /// Worker lifecycle results.
 pub enum RecordingEvent {
     Completed {
+        /// Identifies the loop-side session this result belongs to, so a
+        /// late result never tears down a newer recording.
+        generation: u64,
         path: PathBuf,
         frames: u64,
         dropped: u64,
         elapsed_ms: u64,
     },
     Failed {
+        generation: u64,
         message: String,
         /// A `.part` file with the partial recording, when one may be
         /// recoverable.
         partial: Option<PathBuf>,
     },
+}
+
+impl RecordingEvent {
+    /// The loop-side session generation this result belongs to.
+    pub fn generation(&self) -> u64 {
+        match self {
+            RecordingEvent::Completed { generation, .. }
+            | RecordingEvent::Failed { generation, .. } => *generation,
+        }
+    }
 }
 
 pub fn frame_len(geometry: &RecordingGeometry) -> Result<usize, String> {
@@ -174,6 +201,7 @@ struct RunningPipeline {
     queue_limit: u64,
     destination: PathBuf,
     part_path: PathBuf,
+    generation: u64,
 }
 
 impl RunningPipeline {
@@ -199,6 +227,7 @@ impl RunningPipeline {
         // video is 0 bytes".
         self.remove_empty_placeholder();
         let _ = events.send(RecordingEvent::Failed {
+            generation: self.generation,
             message,
             partial: Some(self.part_path.clone()),
         });
@@ -219,6 +248,7 @@ impl RunningPipeline {
 fn build_recording_pipeline(
     geometry: &RecordingGeometry,
     frame_len: usize,
+    generation: u64,
 ) -> Result<RunningPipeline, String> {
     gst::init().map_err(|error| format!("GStreamer is unavailable: {error}"))?;
 
@@ -302,6 +332,7 @@ fn build_recording_pipeline(
         queue_limit,
         destination,
         part_path,
+        generation,
     })
 }
 
@@ -363,15 +394,16 @@ fn run_recording_worker(
     frame_len: usize,
     commands: Receiver<RecordingCommand>,
     events: smithay::reexports::calloop::channel::Sender<RecordingEvent>,
-    _generation: u64,
+    generation: u64,
     eos_timeout: Duration,
 ) {
     let started = Instant::now();
 
-    let running = match build_recording_pipeline(&geometry, frame_len) {
+    let running = match build_recording_pipeline(&geometry, frame_len, generation) {
         Ok(running) => running,
         Err(message) => {
             let _ = events.send(RecordingEvent::Failed {
+                generation,
                 message,
                 partial: None,
             });
@@ -381,6 +413,7 @@ fn run_recording_worker(
 
     let mut frames = 0u64;
     let mut dropped = 0u64;
+    let mut consecutive_dropped = 0u64;
     let mut stop_requested = false;
 
     for command in commands {
@@ -395,6 +428,7 @@ fn run_recording_worker(
                 }
                 if running.queue_is_saturated() {
                     dropped += 1;
+                    consecutive_dropped += 1;
                     // The GStreamer bus is checked even while frames
                     // are dropped: a dead encoder must fail fast, not
                     // masquerade as skips.
@@ -403,9 +437,12 @@ fn run_recording_worker(
                             return;
                         }
                     }
-                    if dropped >= STALL_DROP_LIMIT {
+                    if consecutive_dropped >= STALL_DROP_LIMIT {
                         running.fail(
-                            format!("The encoder consumed nothing after {dropped} dropped frames"),
+                            format!(
+                                "The encoder consumed nothing after {consecutive_dropped} \
+                                 consecutive dropped frames"
+                            ),
                             &events,
                         );
                         return;
@@ -424,6 +461,7 @@ fn run_recording_worker(
                     return;
                 }
                 frames += 1;
+                consecutive_dropped = 0;
             }
             RecordingCommand::Stop => {
                 stop_requested = true;
@@ -489,6 +527,7 @@ fn run_recording_worker(
                     "Recording file finalized"
                 );
                 let _ = events.send(RecordingEvent::Completed {
+                    generation,
                     path: running.destination.clone(),
                     frames,
                     dropped,
@@ -498,6 +537,7 @@ fn run_recording_worker(
             Err(publish_error) => {
                 running.remove_empty_placeholder();
                 let _ = events.send(RecordingEvent::Failed {
+                    generation,
                     message: format!("The recording could not be published: {publish_error}"),
                     partial: Some(running.part_path.clone()),
                 });
@@ -539,6 +579,7 @@ mod tests {
         let size: Size<i32, Physical> = (16, 16).into();
         let (events_sender, events_receiver) = channel::channel::<RecordingEvent>();
         let mut recorder = spawn_recording_worker(recording_geometry(size), events_sender).unwrap();
+        let generation = recorder.generation();
         for frame_index in 0..5u8 {
             assert!(
                 recorder.push_frame(rgba_frame(size, frame_index * 8)),
@@ -551,7 +592,18 @@ mod tests {
             .recv()
             .expect("the worker session must report its result");
         let (path, dropped) = match outcome {
-            RecordingEvent::Completed { path, dropped, .. } => (path, dropped),
+            RecordingEvent::Completed {
+                generation: event_generation,
+                path,
+                dropped,
+                ..
+            } => {
+                assert_eq!(
+                    event_generation, generation,
+                    "the result must identify its own loop-side generation"
+                );
+                (path, dropped)
+            }
             RecordingEvent::Failed { message, .. } => panic!("the recording failed: {message}"),
         };
         assert!(dropped < 5, "not every frame may drop; some must encode");

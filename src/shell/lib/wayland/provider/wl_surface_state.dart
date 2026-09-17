@@ -56,7 +56,7 @@ class WlSurfaceState extends _$WlSurfaceState {
       subsurfacesAbove: subsurfacesAbove,
       inputRegion: inputRegion,
     );
-    geometryLog.info(
+    geometryLog.fine(
       'surface state surface=$surfaceId '
       'texture ${previous.texture?.id}/${previous.texture?.size} -> '
       '$textureId/$surfaceSize scale ${previous.scale} -> $scale '

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/capture/provider/screen_cast_consent.dart';
+import 'package:shell/capture/provider/screen_cast_indicator.dart';
+import 'package:shell/capture/provider/screenshot_prompt.dart';
 import 'package:shell/meta_window/provider/meta_window_manager.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/monitor/widget/monitor.dart';
@@ -163,7 +166,12 @@ class _EagerInitialization extends ConsumerWidget {
       ..watch(metaWindowManagerProvider)
       ..watch(polkitAuthenticationAgentStateProvider)
       ..watch(matchingEngineProvider)
-      ..watch(notificationManagerProvider);
+      ..watch(notificationManagerProvider)
+      // Capture consent/prompt/indicator subscribe at shell start so a
+      // portal flow is never dropped while a view is being rebuilt.
+      ..watch(screenCastConsentProvider)
+      ..watch(screenCastIndicatorProvider)
+      ..watch(screenshotPromptProvider);
 
     return InitializationStatus(
       asyncValue: const AsyncData(true),

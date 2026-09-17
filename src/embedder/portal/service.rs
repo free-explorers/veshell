@@ -253,26 +253,42 @@ fn cancel_consent(request: &mut PendingRequest, ui: &mut Vec<PortalUiEvent>) {
     }
 }
 
-/// Finds the consent bound to a session, if any: every close path (session
-/// close, request close, frontend loss) dismisses the open picker.
-/// A session that closes while its picker is open dismisses the picker
-/// and completes the pending Start reply.
-fn close_consent_for_session(
+/// Queues the full D-Bus teardown of a session object: `Closed()` is
+/// emitted while the object still exists, then the object is removed.
+/// Every ledger removal of a session must go through here, otherwise the
+/// exported object leaks in the zbus object server for the process life.
+fn close_session_actions(actions: &mut Vec<PortalAction>, handle: &OwnedObjectPath) {
+    actions.push(PortalAction::CloseSession(handle.clone()));
+    actions.push(PortalAction::UnexportSession(handle.clone()));
+}
+
+/// Queues the removal of an exported Request object whose ledger entry
+/// was just dropped. Requests have no close signal; they disappear.
+fn unexport_request(actions: &mut Vec<PortalAction>, handle: OwnedObjectPath) {
+    actions.push(PortalAction::UnexportRequest(handle));
+}
+
+/// Closes every request bound to a session: an open picker is dismissed,
+/// its pending Start completed cancelled, and the exported Request
+/// objects removed. A session that closes must not leave a SelectSources
+/// request orphaned in the ledger (it would keep `RequestClose` pointing
+/// at a dead session).
+fn close_requests_for_session(
     ledger: &mut PortalLedger,
     session_handle: &OwnedObjectPath,
+    actions: &mut Vec<PortalAction>,
     ui: &mut Vec<PortalUiEvent>,
 ) {
     let handles: Vec<OwnedObjectPath> = ledger
         .requests
         .iter()
-        .filter(|(_, request)| {
-            request.consent.is_some() && request.session_handle.as_str() == session_handle.as_str()
-        })
+        .filter(|(_, request)| request.session_handle.as_str() == session_handle.as_str())
         .map(|(handle, _)| handle.clone())
         .collect();
     for handle in handles {
         if let Some(mut request) = ledger.requests.remove(&handle) {
             cancel_consent(&mut request, ui);
+            unexport_request(actions, handle);
         }
     }
 }
@@ -316,6 +332,9 @@ pub fn frontend_owner_changed(
             consent.reply.send(cancelled());
         }
     }
+    for handle in ledger.requests.keys().cloned().collect::<Vec<_>>() {
+        unexport_request(actions, handle);
+    }
     ledger.requests.clear();
     for (_handle, entry) in ledger.screenshots.iter_mut() {
         if let Some(consent) = entry.consent.take() {
@@ -324,7 +343,14 @@ pub fn frontend_owner_changed(
                 consent_token: consent.consent_token,
             });
         }
-        entry.capture = None;
+        // An in-flight capture's reply must complete cancelled too: a
+        // dropped link surfaces at the caller as an opaque D-Bus error.
+        if let Some(capture) = entry.capture.take() {
+            capture.reply.send(cancelled());
+        }
+    }
+    for handle in ledger.screenshots.keys().cloned().collect::<Vec<_>>() {
+        unexport_request(actions, handle);
     }
     ledger.screenshots.clear();
     let closed_sessions: Vec<OwnedObjectPath> = ledger.sessions.keys().cloned().collect();
@@ -340,7 +366,7 @@ pub fn frontend_owner_changed(
             pending.send(cancelled());
         }
         ledger.sessions.remove(&session_handle);
-        actions.push(PortalAction::CloseSession(session_handle.clone()));
+        close_session_actions(actions, &session_handle);
     }
     if frontend_lost {
         tracing::info!("Portal frontend lost: all sessions closed");
@@ -499,19 +525,32 @@ fn perform_ui_event<BackendData: crate::backend::Backend + 'static>(
             // identity, requested kinds, live session — applies to a
             // restored grant exactly like a user click.
             if let Some(source) = preselected {
+                // Spec 8.3.1: a restored grant whose source is gone
+                // degrades to the ordinary prompt; it must never close
+                // the session and never restart a stale stream.
+                let live = capture_source_entries(state)
+                    .into_iter()
+                    .any(|entry| entry.id == source.id && entry.kind == source.kind);
+                if live {
+                    tracing::info!(
+                        app = %app_name,
+                        source_label = %source.label,
+                        "Restored authorization approved without a prompt"
+                    );
+                    handle_consent_decision(
+                        state,
+                        session_handle.as_str(),
+                        consent_token,
+                        ConsentOutcome::Approved,
+                        Some(source.id),
+                    );
+                    return;
+                }
                 tracing::info!(
                     app = %app_name,
                     source_label = %source.label,
-                    "Restored authorization approved without a prompt"
+                    "Restored source is gone; prompting instead"
                 );
-                handle_consent_decision(
-                    state,
-                    session_handle.as_str(),
-                    consent_token,
-                    ConsentOutcome::Approved,
-                    Some(source.id),
-                );
-                return;
             }
             // Sources are assembled per requested kind, never by
             // substituting one kind for another (spec 8.2). Window entries
@@ -678,8 +717,9 @@ fn resolve_consent_no_picker(
         })
         .map(|(handle, _)| handle.clone())?;
     let request = ledger.requests.remove(&open)?;
+    unexport_request(actions, open);
     if ledger.sessions.remove(session_handle).is_some() {
-        actions.push(PortalAction::CloseSession(session_handle.clone()));
+        close_session_actions(actions, session_handle);
     }
     request.consent.map(|consent| consent.reply)
 }
@@ -842,11 +882,23 @@ pub fn handle_consent_decision<BackendData: crate::backend::Backend + 'static>(
         // The approval mints a fresh unguessable restore grant owned by
         // the live frontend (spec 8.3, transient persistence): the Start
         // result carries it back and a later flow of this client may
-        // present it to skip the picker.
-        let restore_token = state.portal_runtime.as_mut().and_then(|runtime| {
-            let frontend = runtime.ledger.frontend.clone()?;
-            Some(runtime.ledger.mint_restore_token(frontend, source.clone()))
-        });
+        // present it to skip the picker. Spec 8.1: a grant is minted only
+        // for a flow that requested transient persistence; a client that
+        // never asked is answered `persist_mode = 0` with no token.
+        let persist_requested = state
+            .portal_runtime
+            .as_ref()
+            .and_then(|runtime| runtime.ledger.sessions.get(&session_handle))
+            .and_then(|session| session.constraints.as_ref())
+            .is_some_and(|constraints| constraints.persist_mode != 0);
+        let restore_token = if persist_requested {
+            state.portal_runtime.as_mut().and_then(|runtime| {
+                let frontend = runtime.ledger.frontend.clone()?;
+                Some(runtime.ledger.mint_restore_token(frontend, source.clone()))
+            })
+        } else {
+            None
+        };
         begin_shared_stream(state, &session_handle, source, restore_token);
     } else {
         handle_consent_through_runtime(state, &session_handle, consent_token, outcome);
@@ -1419,10 +1471,11 @@ pub fn handle_producer_event<BackendData: crate::backend::Backend + 'static>(
             session_handle,
             node_id,
         } => {
-            // The producer publishes the node once per event state
-            // (Connecting and then Paused pre-fixate): only the first
-            // Starting -> Active transition completes the Start reply and
-            // shows the indicator; repeats update the node id only.
+            // The producer publishes the node once, on the Paused
+            // transition where the proxy is bound and the id is valid
+            // (pre-fixate): the first Starting -> Active transition
+            // completes the Start reply and shows the indicator; a
+            // repeat updates the node id only.
             let Some(mut stream) = state.active_streams.get(&session_handle).cloned() else {
                 tracing::debug!("producer node for an unknown stream");
                 return;
@@ -1552,6 +1605,7 @@ pub fn resolve_consent(
     let Some(mut request) = ledger.requests.remove(&handle) else {
         return ConsentResolution::NotMatched;
     };
+    unexport_request(actions, handle);
     let Some(consent) = request.consent.take() else {
         return ConsentResolution::NotMatched;
     };
@@ -1582,7 +1636,7 @@ pub fn resolve_consent(
         ConsentOutcome::Cancelled => {
             consent.reply.send(cancelled());
             if ledger.sessions.remove(session_handle).is_some() {
-                actions.push(PortalAction::CloseSession(session_handle.clone()));
+                close_session_actions(actions, session_handle);
             }
         }
     }
@@ -1721,9 +1775,20 @@ fn handle_portal_capture_outcome<BackendData: crate::backend::Backend + 'static>
 
 /// `file://` URI written into the Screenshot results dictionary: the
 /// frontend hands it on, and per spec 8.4 the file already exists on a
-/// path the requesting app can follow.
+/// path the requesting app can follow. Paths routinely contain spaces
+/// ("Veshell Screenshot ....png"), which are not valid in a URI, so every
+/// byte outside the RFC 3986 unreserved set plus `/` is percent-encoded.
 fn uri_for_path(path: &std::path::Path) -> String {
-    "file://".to_string() + &path.to_string_lossy()
+    let mut uri = String::from("file://");
+    for byte in path.to_string_lossy().bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' => {
+                uri.push(byte as char);
+            }
+            _ => uri.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    uri
 }
 
 /// Builds the Start result once the producer publishes a node: the
@@ -1784,14 +1849,23 @@ pub fn close_shared_session<BackendData: crate::backend::Backend + 'static>(
                     reply.send(cancelled());
                 }
             }
-            if let Some(session) = runtime.ledger.sessions.remove(session_handle) {
-                let _ = session;
-                actions.push(PortalAction::CloseSession(session_handle.clone()));
+            if runtime.ledger.sessions.remove(session_handle).is_some() {
+                close_session_actions(&mut actions, session_handle);
             }
+            let orphaned_requests: Vec<OwnedObjectPath> = runtime
+                .ledger
+                .requests
+                .iter()
+                .filter(|(_, request)| request.session_handle.as_str() == session_handle.as_str())
+                .map(|(handle, _)| handle.clone())
+                .collect();
             runtime
                 .ledger
                 .requests
                 .retain(|_, request| request.session_handle.as_str() != session_handle.as_str());
+            for handle in orphaned_requests {
+                unexport_request(&mut actions, handle);
+            }
             actions
         }
         None => Vec::new(),
@@ -2305,8 +2379,8 @@ pub fn apply_portal_call(
                             if let Some(pending) = session.pending_start {
                                 pending.send(cancelled());
                             }
-                            actions.push(PortalAction::CloseSession(handle.clone()));
-                            close_consent_for_session(ledger, &handle, ui);
+                            close_session_actions(actions, &handle);
+                            close_requests_for_session(ledger, &handle, actions, ui);
                         }
                         write(reply, PortalReply::ok());
                     } else if let Some(request) = ledger.requests.get_mut(&handle) {
@@ -2325,10 +2399,11 @@ pub fn apply_portal_call(
                                 consent_token: consent.consent_token,
                             });
                         }
-                        if screenshot.capture.is_some() {
+                        if let Some(capture) = screenshot.capture {
                             tracing::info!("A closed Screenshot request abandons its capture");
+                            capture.reply.send(cancelled());
                         }
-                        actions.push(PortalAction::UnexportRequest(handle.clone()));
+                        unexport_request(actions, handle.clone());
                         write(reply, PortalReply::ok());
                     } else {
                         write(reply, failed("no such pending request"));
@@ -2870,7 +2945,24 @@ mod tests {
                 pending.recv_blocking().unwrap().response,
                 RESPONSE_CANCELLED
             );
-            assert_eq!(actions.len(), 1, "session close queued");
+            assert!(
+                actions
+                    .iter()
+                    .any(|action| matches!(action, PortalAction::CloseSession(_))),
+                "session close queued"
+            );
+            assert!(
+                actions
+                    .iter()
+                    .any(|action| matches!(action, PortalAction::UnexportSession(_))),
+                "session unexport queued"
+            );
+            assert!(
+                actions
+                    .iter()
+                    .any(|action| matches!(action, PortalAction::UnexportRequest(_))),
+                "the Start request object is removed with the session"
+            );
             assert!(ledger.sessions.is_empty());
             assert!(ledger.requests.is_empty());
             assert_eq!(ui.len(), 1, "picker dismissed");
@@ -3330,7 +3422,18 @@ mod tests {
 
         let mut actions = Vec::new();
         frontend_owner_changed(&mut ledger, &mut actions, &mut Vec::new(), None);
-        assert_eq!(actions.len(), 1, "session close queued");
+        assert!(
+            actions
+                .iter()
+                .any(|action| matches!(action, PortalAction::CloseSession(_))),
+            "session close queued"
+        );
+        assert!(
+            actions
+                .iter()
+                .any(|action| matches!(action, PortalAction::UnexportSession(_))),
+            "session unexport queued"
+        );
         assert!(ledger.sessions.is_empty());
         assert!(ledger.frontend.is_none());
 
@@ -3450,7 +3553,12 @@ mod tests {
         assert!(ledger.sessions.is_empty());
         assert!(ledger.requests.is_empty());
         assert!(ledger.frontend.is_none());
-        assert_eq!(actions.len(), 1, "session close queued");
+        assert!(
+            actions
+                .iter()
+                .any(|action| matches!(action, PortalAction::CloseSession(_))),
+            "session close queued"
+        );
         // The picker closed at approval time; the loss event dismisses
         // nothing further.
         assert!(ui.is_empty());
@@ -3623,7 +3731,12 @@ mod tests {
             RESPONSE_CANCELLED,
             "the pending Start reply must complete cancelled"
         );
-        assert_eq!(actions.len(), 1, "session close queued");
+        assert!(
+            actions
+                .iter()
+                .any(|action| matches!(action, PortalAction::CloseSession(_))),
+            "session close queued"
+        );
         assert!(ledger.sessions.is_empty());
     }
 
@@ -3672,7 +3785,12 @@ mod tests {
         );
         assert!(ledger.sessions.is_empty());
         assert!(ledger.requests.is_empty());
-        assert_eq!(actions.len(), 1, "session close queued");
+        assert!(
+            actions
+                .iter()
+                .any(|action| matches!(action, PortalAction::CloseSession(_))),
+            "session close queued"
+        );
     }
 
     // Approval that races a session close: the session close completes
