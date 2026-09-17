@@ -10,17 +10,25 @@ pub mod recording;
 use smithay::backend::allocator::dmabuf::{AsDmabuf, Dmabuf};
 use smithay::backend::allocator::{Fourcc, Slot};
 use smithay::backend::renderer::damage::OutputDamageTracker;
+use smithay::backend::renderer::element::memory::MemoryRenderBufferRenderElement;
+use smithay::backend::renderer::element::solid::SolidColorRenderElement;
+use smithay::backend::renderer::element::surface::render_elements_from_surface_tree;
+use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::gles::{GlesRenderbuffer, GlesRenderer};
-use smithay::backend::renderer::{Bind, ExportMem, Offscreen};
+use smithay::backend::renderer::utils::with_renderer_surface_state;
+use smithay::backend::renderer::{Bind, ExportMem, ImportAll, ImportMem, Offscreen};
 use smithay::output::Output;
 use smithay::reexports::calloop::{channel, LoopHandle};
-use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
+use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
+use smithay::reexports::wayland_server::Resource;
+use smithay::utils::{Buffer, Logical, Physical, Point, Rectangle, Scale, Size, Transform};
 use smithay::wayland::selection::data_device::set_data_device_selection;
 use smithay::wayland::selection::SelectionTarget;
 use tracing::{debug, info, warn};
 
 use crate::backend::render::get_frame_elements_from_dmabuf;
 use crate::flutter_engine::view::OutputViewIdWrapper;
+use crate::meta_window_state::meta_window::MetaWindow;
 use crate::state::{NATIVE_SCREENSHOT_MIME, PNG_MIME};
 use crate::{Backend, State};
 
@@ -391,6 +399,216 @@ pub fn capture_output_pixels<BackendData: Backend + 'static>(
     take_output_snapshot(state, output)
 }
 
+// Element set for the isolated window capture render (a macro invocation: no rustdoc).
+smithay::backend::renderer::element::render_elements! {
+    pub WindowCaptureElements<R> where
+        R: ImportAll + ImportMem;
+    Memory=MemoryRenderBufferRenderElement<R>,
+    Surface=smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement<R>,
+    Solid=SolidColorRenderElement
+}
+
+/// The render scale of a window's isolated viewport: the scale the client
+/// actually renders with, never an output's scale (the shell-view's own
+/// relationship, spec 5.3).
+pub(crate) fn window_render_scale(meta_window: &MetaWindow) -> f64 {
+    meta_window.scale_ratio.max(1.0)
+}
+
+/// The logical viewport a window share composes into, in the window
+/// surface's own coordinate space: the shell-view's content-area geometry
+/// when it exists (which is what the on-screen presentation also shows,
+/// negative origins included), otherwise the surface's natural logical
+/// size anchoring the viewport at its top-left corner.
+pub(crate) fn window_viewport(
+    meta_window: &MetaWindow,
+    surface: Option<&WlSurface>,
+) -> Option<Rectangle<f64, Logical>> {
+    if let Some(geometry) = meta_window.geometry.as_ref() {
+        return Some(Rectangle::new(
+            (geometry.0.loc.x as f64, geometry.0.loc.y as f64).into(),
+            (geometry.0.size.w as f64, geometry.0.size.h as f64).into(),
+        ));
+    }
+    let logical = surface.and_then(|surface| {
+        with_renderer_surface_state(surface, |state| state.surface_size()).unwrap_or(None)
+    })?;
+    Some(Rectangle::new(
+        (0., 0.).into(),
+        (logical.w as f64, logical.h as f64).into(),
+    ))
+}
+
+/// Popup layers of one window in stable stacking order, each with the
+/// popup surface's origin relative to the window surface's top-left
+/// corner (surface-local logical coordinates) and the popup's own render
+/// scale.
+///
+/// Ownership is explicit through the MetaPopup registry, where each
+/// popup's parent is the root meta window id it was positioned under. A
+/// surface the registry cannot bind to this window is omitted entirely —
+/// never guessed by title, pid, or geometry. Stacking follows surface id
+/// order, which is commit order, so the order is stable across frames.
+pub(crate) fn owned_popup_layers(
+    meta_window: &MetaWindow,
+    state: &crate::state::State<impl Backend>,
+) -> Vec<(u64, WlSurface, Point<f64, Logical>, f64)> {
+    let mut popups: Vec<_> = state
+        .meta_window_state
+        .meta_popups
+        .values()
+        .filter(|popup| popup.parent == meta_window.id)
+        .filter_map(|popup| {
+            let surface = state.surfaces.get(&popup.surface_id)?.clone();
+            // The shell view places a popup surface's top-left corner at
+            // `position - content-area top-left`, relative to the window's
+            // own surface origin (see MetaPopupWidget).
+            let origin = match popup.geometry.as_ref() {
+                Some(geometry) => Point::<f64, Logical>::from((
+                    (popup.position.0.x - geometry.0.loc.x) as f64,
+                    (popup.position.0.y - geometry.0.loc.y) as f64,
+                )),
+                None => Point::<f64, Logical>::from((
+                    popup.position.0.x as f64,
+                    popup.position.0.y as f64,
+                )),
+            };
+            Some((
+                popup.surface_id,
+                surface,
+                origin,
+                popup.scale_ratio.max(1.0),
+            ))
+        })
+        .collect();
+    popups.sort_by_key(|(surface_id, _, _, _)| *surface_id);
+    popups
+        .into_iter()
+        .map(|(id, surface, origin, scale)| (id, surface, origin, scale))
+        .collect()
+}
+
+/// Renders one client surface's whole tree (subsurfaces included) at the
+/// given render scale into capture-owned CPU storage, starting at the
+/// surface's own origin. The offscreen readback is synchronous on the
+/// loop exactly like the output snapshot path.
+fn render_surface_layer_pixels(
+    renderer: &mut GlesRenderer,
+    surface: &WlSurface,
+    scale: f64,
+) -> Result<(Size<i32, Logical>, Vec<u8>), String> {
+    let logical_size = with_renderer_surface_state(surface, |state| state.surface_size())
+        .unwrap_or(None)
+        .ok_or_else(|| "Surface has no rendered content yet".to_string())?;
+    let canvas_physical =
+        Size::<f64, Logical>::from((logical_size.w as f64, logical_size.h as f64))
+            .to_physical(Scale { x: scale, y: scale })
+            .to_i32_round();
+    let canvas_buffer = Size::<i32, Buffer>::from((canvas_physical.w, canvas_physical.h));
+    let mut target_buffer =
+        Offscreen::<GlesRenderbuffer>::create_buffer(renderer, Fourcc::Abgr8888, canvas_buffer)
+            .map_err(|error| format!("Unable to create capture buffer: {error}"))?;
+    let mut target = renderer
+        .bind(&mut target_buffer)
+        .map_err(|error| format!("Unable to bind capture buffer: {error}"))?;
+    let elements: Vec<WindowCaptureElements<GlesRenderer>> =
+        render_elements_from_surface_tree(renderer, surface, (0, 0), scale, 1.0, Kind::Unspecified);
+    let mut tracker = OutputDamageTracker::new(canvas_physical, scale, Transform::Normal);
+    tracker
+        .render_output(renderer, &mut target, 0, &elements, [0.0, 0.0, 0.0, 1.0])
+        .map_err(|error| format!("Unable to render capture: {error}"))?;
+    let mapping = renderer
+        .copy_framebuffer(
+            &target,
+            Rectangle::from_size(canvas_buffer),
+            Fourcc::Abgr8888,
+        )
+        .map_err(|error| format!("Unable to read capture buffer: {error}"))?;
+    let pixels = renderer
+        .map_texture(&mapping)
+        .map(|pixels| pixels.to_vec())
+        .map_err(|error| format!("Unable to map capture buffer: {error}"))?;
+    Ok(((canvas_physical.w, canvas_physical.h).into(), pixels))
+}
+
+/// Renders the live client pixels of one MetaWindow viewport into
+/// capture-owned CPU storage.
+///
+/// All renders run synchronously on the event loop with the same GPU
+/// completion semantics as the output snapshot path (gles renderer
+/// commands are serialized here and complete before readback), and the
+/// results are owned `Vec<u8>` copies: nothing later reads a client
+/// buffer.
+pub fn capture_window_pixels<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    meta_window_id: &str,
+) -> Result<(Size<i32, Physical>, Vec<u8>), String> {
+    let (meta_window, root_surface) = {
+        let meta_window = state
+            .meta_window_state
+            .meta_windows
+            .get(meta_window_id)
+            .cloned()
+            .ok_or_else(|| format!("Shared window {meta_window_id} no longer exists"))?;
+        if !meta_window.mapped {
+            return Err(format!("Shared window {meta_window_id} is unmapped"));
+        }
+        let surface = state
+            .surfaces
+            .get(&meta_window.surface_id)
+            .cloned()
+            .ok_or_else(|| format!("Shared window {meta_window_id} has no live surface"))?;
+        (meta_window, surface)
+    };
+
+    let scale = window_render_scale(&meta_window);
+    let viewport = window_viewport(&meta_window, Some(&root_surface))
+        .ok_or_else(|| "Shared window has no rendered content yet".to_string())?;
+
+    // Occlusion and desktop position never matter for a window source:
+    // only this client's own pixels are composed (spec 5.3).
+    let mut ordered: Vec<CapturedWindowLayer> = Vec::new();
+    let popup_layers = owned_popup_layers(&meta_window, state);
+
+    state
+        .backend_data
+        .with_primary_renderer_mut(|renderer| -> Result<(), String> {
+            let (buffer_size, pixels) =
+                render_surface_layer_pixels(renderer, &root_surface, scale)?;
+            ordered.push(CapturedWindowLayer {
+                order: 1,
+                origin_in_viewport: Point::<f64, Logical>::from((-viewport.loc.x, -viewport.loc.y)),
+                buffer_size: Size::from((buffer_size.w, buffer_size.h)),
+                pixels,
+                own_scale: scale,
+            });
+            for (popup_order, (surface_id, popup_surface, origin, popup_scale)) in
+                popup_layers.iter().enumerate()
+            {
+                let _ = surface_id;
+                if let Ok((buffer_size, pixels)) =
+                    render_surface_layer_pixels(renderer, popup_surface, *popup_scale)
+                {
+                    ordered.push(CapturedWindowLayer {
+                        order: popup_order + 2,
+                        origin_in_viewport: Point::<f64, Logical>::from((
+                            origin.x - viewport.loc.x,
+                            origin.y - viewport.loc.y,
+                        )),
+                        buffer_size: Size::from((buffer_size.w, buffer_size.h)),
+                        pixels,
+                        own_scale: *popup_scale,
+                    });
+                }
+            }
+            Ok(())
+        })
+        .ok_or_else(|| "No renderer is available to capture the window".to_string())??;
+    ordered.sort_by_key(|layer| layer.order);
+
+    compose_window_pixels(viewport, scale, &ordered)
+}
+
 /// Captures a whole output natively for a portal Screenshot request
 /// (spec 8.4): the same frozen-desktop snapshot pipeline as the hotkey
 /// flow, composed at full output geometry, with no selection and no
@@ -618,7 +836,114 @@ fn compose_desktop_area(
     Ok((size, pixels))
 }
 
-fn pixel_size(size: Size<f64, Logical>, scale: f64) -> Result<Size<i32, Physical>, String> {
+/// Composes the isolated window viewport from pre-rendered, capture-owned
+/// layers (pure, unit-testable): an opaque black background, the window's
+/// own pixels, then owned popups in stable stacking order, each clipped
+/// to the viewport. Anything the caller does not hand in — another
+/// window, a shell panel, a decoration — can never appear, which is what
+/// keeps an obscured window share free of unrelated content.
+fn compose_window_pixels(
+    viewport: Rectangle<f64, Logical>,
+    viewport_scale: f64,
+    layers: &[CapturedWindowLayer],
+) -> Result<(Size<i32, Physical>, Vec<u8>), String> {
+    let size = pixel_size(viewport.size, viewport_scale)?;
+    let mut pixels = vec![0; pixel_len(size)?];
+    for pixel in pixels.chunks_exact_mut(4) {
+        pixel[3] = 255;
+    }
+
+    let mut ordered: Vec<&CapturedWindowLayer> = layers.iter().collect();
+    ordered.sort_by(|a, b| a.order.cmp(&b.order));
+    for layer in ordered {
+        if !layer.origin_in_viewport.x.is_finite() || !layer.origin_in_viewport.y.is_finite() {
+            return Err("Capture bounds are invalid".to_string());
+        }
+        // Each layer renders at its own scale; map its pixels into the
+        // viewport's scale so a popup at a different client scale would
+        // still align (same relationship the shell view shows).
+        let own = layer.own_scale.max(1e-6);
+        let destination_size = Size::<i32, Physical>::from((
+            (layer.buffer_size.w as f64 * viewport_scale / own).floor() as i32,
+            (layer.buffer_size.h as f64 * viewport_scale / own).floor() as i32,
+        ));
+        let destination_loc = Point::<i32, Physical>::from((
+            (layer.origin_in_viewport.x * viewport_scale).round() as i32,
+            (layer.origin_in_viewport.y * viewport_scale).round() as i32,
+        ));
+        let destination = Rectangle::new(destination_loc, destination_size);
+        blit_clipped(
+            &mut pixels,
+            size,
+            &layer.pixels,
+            layer.buffer_size,
+            destination,
+        )?;
+    }
+
+    Ok((size, pixels))
+}
+
+/// A rendered capture layer for the pure composition step: one surface
+/// tree's pixels at its own render scale, already positioned relative to
+/// the viewport's top-left corner.
+#[derive(Clone)]
+pub(crate) struct CapturedWindowLayer {
+    /// Stable stacking order; 1 is the window itself, 2.. are popups.
+    pub(crate) order: usize,
+    /// Where the layer's buffer top-left sits, in viewport-relative
+    /// logical coordinates (may be negative or beyond the viewport).
+    pub(crate) origin_in_viewport: Point<f64, Logical>,
+    pub(crate) buffer_size: Size<i32, Physical>,
+    pub(crate) pixels: Vec<u8>,
+    /// The layer's own logical-to-physical render scale.
+    pub(crate) own_scale: f64,
+}
+
+/// Copies a source image into a destination with hard clipping on every
+/// side: source and destination regions outside either buffer are cut
+/// (the viewport's popup clip), the rest copies pixel-exact.
+fn blit_clipped(
+    destination_pixels: &mut [u8],
+    destination_size: Size<i32, Physical>,
+    source_pixels: &[u8],
+    source_size: Size<i32, Physical>,
+    destination: Rectangle<i32, Physical>,
+) -> Result<(), String> {
+    // The visible window of both buffers after clipping.
+    let left = destination.loc.x.max(0);
+    let top = destination.loc.y.max(0);
+    let right = (destination.loc.x + destination.size.w).min(destination_size.w);
+    let bottom = (destination.loc.y + destination.size.h).min(destination_size.h);
+    if right <= left || bottom <= top {
+        return Ok(());
+    }
+    let destination_width = destination_size.w as usize;
+    for destination_y in top..bottom {
+        let source_y = destination_y - destination.loc.y;
+        if source_y < 0 || source_y >= source_size.h {
+            continue;
+        }
+        for destination_x in left..right {
+            let source_x = destination_x - destination.loc.x;
+            if source_x < 0 || source_x >= source_size.w {
+                continue;
+            }
+            let source_offset =
+                (source_y as usize * source_size.w as usize + source_x as usize) * 4;
+            let destination_offset =
+                (destination_y as usize * destination_width + destination_x as usize) * 4;
+            destination_pixels[destination_offset..destination_offset + 4]
+                .copy_from_slice(&source_pixels[source_offset..source_offset + 4]);
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn pixel_size(
+    size: Size<f64, Logical>,
+    scale: f64,
+) -> Result<Size<i32, Physical>, String> {
     if !scale.is_finite() || scale <= 0. {
         return Err("Capture scale must be finite and positive".to_string());
     }
@@ -1291,6 +1616,93 @@ fn handle_recording_event<BackendData: Backend + 'static>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn solid_layer(
+        order: usize,
+        origin: (f64, f64),
+        size: (i32, i32),
+        color: [u8; 4],
+    ) -> CapturedWindowLayer {
+        CapturedWindowLayer {
+            order,
+            origin_in_viewport: origin.into(),
+            buffer_size: size.into(),
+            pixels: color.repeat((size.0 * size.1) as usize),
+            own_scale: 1.0,
+        }
+    }
+
+    const RED: [u8; 4] = [1, 2, 3, 255];
+    const GREEN: [u8; 4] = [0, 255, 0, 255];
+
+    // The isolated composition is additive over what the caller hands
+    // in: only the passed layers may appear, the viewport origin maps to
+    // the window's content area, and popups clip to the viewport bounds
+    // (spec 5.3 isolation and popup clip).
+    #[test]
+    fn window_share_composes_window_and_clips_popups_to_the_viewport() {
+        let viewport = Rectangle::new((0., 0.).into(), (4., 2.).into());
+        let window = solid_layer(1, (0., 0.), (3, 2), RED);
+        let popup = solid_layer(2, (2., 0.), (2, 1), GREEN);
+
+        let (size, pixels) = compose_window_pixels(viewport, 1.0, &[window, popup]).unwrap();
+
+        assert_eq!(size, (4, 2).into());
+        let pixel = |x: i32, y: i32| {
+            let offset = ((y * size.w + x) * 4) as usize;
+            let mut p = [0u8; 4];
+            p.copy_from_slice(&pixels[offset..offset + 4]);
+            p
+        };
+        // Window pixels fill the top row up to the popup overlay.
+        assert_eq!(pixel(0, 0), RED);
+        assert_eq!(pixel(2, 0), GREEN, "the popup paints over the window");
+        assert_eq!(pixel(1, 1), RED);
+        // Anything outside every layer is opaque black, never another
+        // window's or the desktop's pixels.
+        let mut blacked = vec![0u8; 4];
+        blacked.copy_from_slice(&pixel(3, 1));
+        assert_eq!(blacked, [0, 0, 0, 255]);
+    }
+
+    // A popup hanging outside the viewport (negative offset, menus
+    // opening upward) contributes only its intersecting part.
+    #[test]
+    fn window_share_clips_partially_outside_popups() {
+        let viewport = Rectangle::new((0., 0.).into(), (2., 2.).into());
+        let popup = solid_layer(2, (-1., 1.), (2, 1), GREEN);
+
+        let (size, pixels) = compose_window_pixels(viewport, 1.0, &[popup]).unwrap();
+
+        assert_eq!(size, (2, 2).into());
+        // The popup covers viewport pixels x in [0, 1) on the last row.
+        let at = |x: i32, y: i32| &pixels[((y * size.w + x) * 4) as usize..][..4];
+        assert_eq!(at(0, 0), &[0, 0, 0, 255], "above the intersect is black");
+        assert_eq!(at(0, 1), &GREEN);
+        assert_eq!(at(1, 1), &[0, 0, 0, 255], "right of the intersect is black");
+    }
+
+    // Scaling maps each layer through its own render scale (mixed client
+    // scales stay aligned like the shell view shows them).
+    #[test]
+    fn window_share_maps_layer_scales_into_the_viewport_scale() {
+        let viewport = Rectangle::new((0., 0.).into(), (2., 1.).into());
+        let mut layer = solid_layer(1, (0., 0.), (2, 1), GREEN);
+        // A source rendered at scale 2 carries double pixels: the same
+        // logical coverage in the scale-1 viewport.
+        layer.own_scale = 2.0;
+        layer.buffer_size = (4, 2).into();
+        layer.pixels = GREEN.repeat(8);
+
+        let (size, pixels) = compose_window_pixels(viewport, 1.0, &[layer]).unwrap();
+
+        assert_eq!(size, (2, 1).into());
+        assert_eq!(
+            pixels,
+            GREEN.repeat(2),
+            "the layer lands on the full viewport"
+        );
+    }
 
     #[test]
     fn readback_is_already_in_png_coordinates() {

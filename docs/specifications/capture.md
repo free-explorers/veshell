@@ -1012,10 +1012,46 @@ any stage (RequestClose, frontend owner loss, in-flight entry) answers
 response 1, dismisses the prompt, and unexports the object; stale tokens and
 unavailable targets fail with response 2. Ledger coverage: the prompt opens
 and holds the reply, RequestClose completes cancelled and unwinds the
-object, and an approval moves the reply into the capture stage. Remaining
-M4 work: window-share lifecycle pieces (isolated client rendering + tests
-before WINDOW advertising), runtime portal-Screenshot validation against a
-real sandboxed app, and portal-restart behavior checks.
+object, and an approval moves the reply into the capture stage.
+
+Window-share slice (2026-09-17, build validated: 128 tests green; runtime
+validation pending) — MetaWindow sharing per spec 5.3. Isolated rendering:
+`capture_window_pixels` renders the window's own surface tree
+(subsurfaces included) at the client's `scale_ratio` — never an output
+scale — with owned popups (the `MetaPopup.parent` == meta window id
+registry, no pid/title/geometry guessing) composited above in surface-id
+stacking order into an opaque-black viewport taken from the client's own
+content geometry (its global logical position and pixel size are the
+Start result's position/size); a pure `compose_window_pixels` +
+`blit_clipped` pair (unit tests: popup clip, negative origins, layer
+scales, black background) makes the privacy property testable: nothing
+except the handed-in layers can appear, so an obscured window or a
+parent opening a separate dialog cannot leak unrelated content. The
+portal backend advertises `AvailableSourceTypes = MONITOR | WINDOW`
+(spec 8.1's gate: both implemented kinds), the Start gate accepts
+either kind, and the picker receives types-tagged sources filtered by the
+request's `types` (a WINDOW-only request cannot offer outputs, pinned by a
+ledger test that also checks the gate behind parsing). windows groups separately and the picker requires an explicit selection
+(no preselected default — approving by a careless click can no longer
+approve a screen instead of a window; 2026-09-17 runtime finding: Brave's
+own window-flow UX still requests the mixed set). A Start-vs-SelectSources
+constraint precedence rule landed the same day: Chromium/OBS call
+SelectSources with `types: 3` and then Start with the option keys omitted,
+and the parse defaults must not clobber the SelectSources-stored kinds (the
+first Brave run lost its windows list exactly there; pinned by ledger
+tests for both directions — stored-kinds survival on a key-less Start and
+explicit Start options overriding the storage); SelectSources and Start
+both log their resolved `requested_types`.
+The consent flow
+revalidates window sources in Rust: an approved id must resolve to a
+live, mapped MetaWindow at approval time and again at delivery start; a
+window stream is torn down on window removal (`remove_meta_window`) and
+on unmap (`UpdateMapped` false) through the ordinary close path — the
+producer stop, ledger close, and indicator all run through the idempotent
+close. Window streams carry `source_type = 2` in the Start result.
+Remaining M4 work: runtime portal-Screenshot validation against a real
+sandboxed app, a real app share an obscured window through the system
+frontend, and portal-restart behavior checks.
 
 ### M5: Existing Screen Sharing
 

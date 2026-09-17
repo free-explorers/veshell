@@ -10,18 +10,19 @@ use serde_json::json;
 use zbus::zvariant::OwnedObjectPath;
 
 use super::{
-    caller_is_frontend, make_reply_pair, Caller, PendingReply, PortalCall, PortalReply, ReplyLink,
+    caller_is_frontend, make_reply_pair, Caller, PortalCall, PortalReply, ReplyLink,
     ScreenCastConstraints, SourceTypes, RESPONSE_CANCELLED, RESPONSE_FAILED, RESPONSE_OK,
 };
 
 pub use super::FrontendOwner;
 
+use smithay::output::Output;
 use smithay::reexports::calloop::channel;
+use smithay::utils::{Physical, Size};
 use std::path::PathBuf;
 use zbus::zvariant::OwnedValue;
 
 use crate::capture::pipewire::{ActiveStream, StreamDescriptor};
-use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 
 /// Portal session lifecycle (capture specification section 8.3).
 ///
@@ -157,6 +158,9 @@ pub enum PortalUiEvent {
         request_handle: OwnedObjectPath,
         app_name: String,
         consent_token: u64,
+        /// The requested source kinds this flow may offer (spec 8.2: the
+        /// picker is filtered by the request's `types`).
+        types: SourceTypes,
     },
     DismissPicker {
         consent_token: u64,
@@ -349,11 +353,62 @@ fn stop_capture_side<BackendData: crate::backend::Backend + 'static>(
     state: &mut crate::state::State<BackendData>,
     session_handle: &OwnedObjectPath,
 ) {
+    let sentinel = session_handle.as_str() == "/org/freedesktop/portal/desktop";
+    if sentinel {
+        // The producer knows each stream by its real session handle: the
+        // sentinel stands in for every live stream whose frontend is
+        // gone, so the teardown reaches each recorded source by its own
+        // key and one stream's teardown can never block another's.
+        if let Some(producer) = state.pipe_wire_producer.as_mut() {
+            for handle in state.active_streams.keys().cloned().collect::<Vec<_>>() {
+                producer.stop_stream(&handle);
+            }
+        }
+        if !state.active_streams.is_empty() {
+            for handle in state.active_streams.keys().cloned().collect::<Vec<_>>() {
+                hide_shared_indicator(state, &handle);
+            }
+        } else {
+            // Nothing live: the indicator still has to disappear for the
+            // sentinel itself (one event covers it).
+            hide_shared_indicator(state, session_handle);
+        }
+        state.active_streams.clear();
+        return;
+    }
     if state.active_streams.remove(session_handle).is_some() {
         if let Some(producer) = state.pipe_wire_producer.as_mut() {
             producer.stop_stream(session_handle);
         }
         hide_shared_indicator(state, session_handle);
+    }
+}
+
+/// Finds the shared sessions whose stream renders a given source id
+/// (window-share session closure, spec 5.3: close on window
+/// destruction, never a stale stream). Pure so the lifecycle shape is
+/// testable without compositor state.
+fn source_share_handles<'a>(
+    active_streams: impl Iterator<Item = (&'a OwnedObjectPath, &'a ActiveStream)>,
+    source_id: &str,
+) -> Vec<OwnedObjectPath> {
+    active_streams
+        .filter(|(_handle, stream)| stream.source_id == source_id)
+        .map(|(handle, _)| handle.clone())
+        .collect()
+}
+
+/// Closes every shared session bound to `source_id` (one removed window,
+/// one unmapped window): producer teardown, ledger close, and indicator
+/// removal run through the ordinary close path per session.
+pub fn close_source_share_sessions<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    source_id: &str,
+) {
+    let handles: Vec<OwnedObjectPath> =
+        source_share_handles(state.active_streams.iter(), source_id);
+    for handle in handles {
+        close_shared_session(state, &handle);
     }
 }
 
@@ -369,13 +424,40 @@ fn perform_ui_event<BackendData: crate::backend::Backend + 'static>(
             request_handle,
             app_name,
             consent_token,
+            types,
         } => {
-            let sources: Vec<serde_json::Value> = output_source_entries(state)
-                .iter()
-                .map(|source| {
+            // Sources are assembled per requested kind, never by
+            // substituting one kind for another (spec 8.2). Window entries
+            // carry their own stable kind tag so the decision can be
+            // validated against the right registry, and the picker groups
+            // outputs and windows separately.
+            let outputs: Vec<(CaptureSource, &'static str)> = types
+                .contains(SourceTypes::MONITOR)
+                .then(|| {
+                    output_source_entries(state)
+                        .into_iter()
+                        .map(|source| (source, "outputs"))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let windows: Vec<(CaptureSource, &'static str)> = types
+                .contains(SourceTypes::WINDOW)
+                .then(|| {
+                    window_source_entries(state)
+                        .into_iter()
+                        .map(|source| (source, "windows"))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let sources: Vec<serde_json::Value> = outputs
+                .clone()
+                .into_iter()
+                .chain(windows.clone())
+                .map(|(source, kind)| {
                     json!({
                         "id": source.id,
                         "label": source.label,
+                        "kind": kind,
                     })
                 })
                 .collect();
@@ -528,6 +610,7 @@ pub fn output_source_entries<BackendData: crate::backend::Backend + 'static>(
         .map(|output| CaptureSource {
             id: output.name(),
             label: output.name(),
+            kind: SourceKind::Monitor,
         })
         .collect()
 }
@@ -538,6 +621,50 @@ pub struct CaptureSource {
     /// Stable identifier the picker echoes back in its decision.
     pub id: String,
     pub label: String,
+    /// Which registry authorized this entry (spec 8.2 mapping): outputs
+    /// are MONITOR sources, windows are WINDOW sources.
+    pub kind: SourceKind,
+}
+
+/// The portal source kind a [CaptureSource] maps to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SourceKind {
+    Monitor,
+    Window,
+}
+
+impl SourceKind {
+    /// The portal `source_type` value the Start result reports.
+    pub fn portal_value(self) -> u32 {
+        match self {
+            SourceKind::Monitor => SourceTypes::MONITOR.bits(),
+            SourceKind::Window => SourceTypes::WINDOW.bits(),
+        }
+    }
+}
+
+/// Window source registry for the picker: one entry per live, mapped
+/// MetaWindow (spec 8.2: application/title and identity). Popups are not
+/// windows; child dialogs are separate MetaWindows and are separate
+/// entries, never auto-included with their parent.
+pub fn window_source_entries<BackendData: crate::backend::Backend + 'static>(
+    state: &crate::state::State<BackendData>,
+) -> Vec<CaptureSource> {
+    state
+        .meta_window_state
+        .meta_windows
+        .values()
+        .filter(|meta_window| meta_window.mapped)
+        .map(|meta_window| CaptureSource {
+            id: meta_window.id.clone(),
+            label: meta_window
+                .title
+                .clone()
+                .or_else(|| meta_window.app_id.clone())
+                .unwrap_or_else(|| "Untitled window".to_string()),
+            kind: SourceKind::Window,
+        })
+        .collect()
 }
 
 /// Applies a frontend-owner change from Rust state (owner loss, shell loss,
@@ -575,11 +702,13 @@ pub fn handle_frontend_owner_change<BackendData: crate::backend::Backend + 'stat
 
 /// Applies the decision the trusted picker reports back.
 ///
-/// The selection is validated in Rust again against the live output
-/// registry (capture specification section 8.3: picker replies revalidate
-/// source type, lifetime, and authorization). An approval without a
-/// currently valid source behaves exactly like a cancelled flow: consent
-/// for a target that vanished cannot grant anything.
+/// The selection is validated in Rust again against the live source
+/// registries and the session's requested types (capture specification
+/// section 8.3: picker replies revalidate source type, lifetime, and
+/// authorization). An approval without a currently valid source behaves
+/// exactly like a cancelled flow: consent for a target that vanished
+/// cannot grant anything, and a source outside the requested kinds can
+/// never be approved.
 pub fn handle_consent_decision<BackendData: crate::backend::Backend + 'static>(
     state: &mut crate::state::State<BackendData>,
     session_handle: &str,
@@ -593,12 +722,22 @@ pub fn handle_consent_decision<BackendData: crate::backend::Backend + 'static>(
         return;
     };
     if outcome == ConsentOutcome::Approved {
-        // Rust revalidates the selection against the live output
-        // registry: a vanished target cannot be approved (spec 8.3).
+        // The session's own constraints bound what may be approved.
+        let allowed_types = state
+            .portal_runtime
+            .as_ref()
+            .and_then(|runtime| runtime.ledger.sessions.get(&session_handle))
+            .and_then(|session| session.constraints.as_ref())
+            .map(|constraints| constraints.types);
+        // Rust revalidates the selection against the live source
+        // registries (spec 8.3): a vanished target cannot be approved,
+        // and a kind the request did not ask for is not a shareable
+        // answer even if an id collides.
         let Some(source) = source_id.as_deref().and_then(|requested| {
-            output_source_entries(state)
-                .into_iter()
-                .find(|source| source.id == requested)
+            capture_source_entries(state).into_iter().find(|source| {
+                source.id == requested
+                    && allowed_types.is_some_and(|types| types.contains(kind_to_types(source.kind)))
+            })
         }) else {
             tracing::debug!("Consent approval ignored: the selected source is not shareable");
             close_shared_session(state, &session_handle);
@@ -616,6 +755,24 @@ pub fn handle_consent_decision<BackendData: crate::backend::Backend + 'static>(
         begin_shared_stream(state, &session_handle, source);
     } else {
         handle_consent_through_runtime(state, &session_handle, consent_token, outcome);
+    }
+}
+
+/// Every shareable target currently live, across kinds: the revalidation
+/// registry consent approvals answer against.
+fn capture_source_entries<BackendData: crate::backend::Backend + 'static>(
+    state: &crate::state::State<BackendData>,
+) -> Vec<CaptureSource> {
+    output_source_entries(state)
+        .into_iter()
+        .chain(window_source_entries(state))
+        .collect()
+}
+
+fn kind_to_types(kind: SourceKind) -> SourceTypes {
+    match kind {
+        SourceKind::Monitor => SourceTypes::MONITOR,
+        SourceKind::Window => SourceTypes::WINDOW,
     }
 }
 
@@ -842,6 +999,60 @@ fn deliver_session_frame<BackendData: crate::backend::Backend + 'static>(
     }
 }
 
+/// The static-desktop heartbeat for a window stream: full-frame isolated
+/// copies at the idle refresh rate without relying on presents, so an
+/// occluded-but-updating client keeps refreshing consumers too.
+pub fn schedule_window_frame_delivery<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    session_handle: &OwnedObjectPath,
+) {
+    use smithay::reexports::calloop::timer::TimeoutAction;
+    let session_handle = session_handle.clone();
+    let mut timer = smithay::reexports::calloop::timer::Timer::from_duration(IDLE_REFRESH_INTERVAL);
+    state
+        .loop_handle
+        .insert_source(timer, move |_, _, state| {
+            if !state.active_streams.contains_key(&session_handle) {
+                return TimeoutAction::Drop;
+            }
+            deliver_window_frame(state, &session_handle);
+            TimeoutAction::ToDuration(IDLE_REFRESH_INTERVAL)
+        })
+        .expect("window frame timer can be scheduled");
+}
+
+/// Copies one isolated window frame into the session's shared buffers.
+/// A window whose viewport can no longer resolve means the share's
+/// geometry authority is gone: the session closes with a clear reason
+/// (spec 5.3: close on window destruction, never a stale stream).
+fn deliver_window_frame<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    session_handle: &OwnedObjectPath,
+) {
+    let Some(stream) = state.active_streams.get(session_handle).cloned() else {
+        return;
+    };
+    match crate::capture::capture_window_pixels(state, &stream.source_id) {
+        Ok((size, pixels)) => {
+            if size != Size::from(stream.size) {
+                tracing::warn!("window share size changed; closing the session");
+                close_shared_session(state, session_handle);
+                return;
+            }
+            if let Some(producer) = state.pipe_wire_producer.as_mut() {
+                producer.queue_frame(session_handle.clone(), &pixels);
+            }
+        }
+        Err(message) => {
+            tracing::debug!(
+                known_source = message.as_str(),
+                "window frame capture failed"
+            );
+            close_shared_session(state, session_handle);
+        }
+    }
+}
+
 /// Damage-driven frame delivery on the compositor loop.
 ///
 /// Called from the Flutter present path whenever a backing store is
@@ -853,6 +1064,29 @@ pub fn on_view_frame_presented<BackendData: crate::backend::Backend + 'static>(
     state: &mut crate::state::State<BackendData>,
     view_id: i64,
 ) {
+    let now = std::time::Instant::now();
+    // Window streams are all due together on any present: every client's
+    // texture is composited into the presented frame, so a present is the
+    // damage beat for every window share, bounded by the same 30 FPS
+    // budget per session.
+    let due_windows: Vec<OwnedObjectPath> = state
+        .active_streams
+        .iter()
+        .filter(|(_handle, stream)| {
+            stream.source_kind == SourceKind::Window
+                && stream
+                    .last_frame
+                    .is_none_or(|last| now.duration_since(last) >= MIN_FRAME_INTERVAL)
+        })
+        .map(|(handle, _)| handle.clone())
+        .collect();
+    for handle in &due_windows {
+        if let Some(stream) = state.active_streams.get_mut(handle) {
+            stream.last_frame = Some(now);
+        }
+        deliver_window_frame(state, handle);
+    }
+
     let Some(output_name) = state.space.outputs().find_map(|output| {
         output
             .user_data()
@@ -906,37 +1140,25 @@ pub fn on_view_frame_presented<BackendData: crate::backend::Backend + 'static>(
 }
 
 /// Kicks off the PipeWire stream for the approved session (spec 7).
+///
+/// The source kind decides the delivery path: outputs copy the composed
+/// output frame, windows render their isolated client viewport (spec
+/// 5.3). Both publish through the same producer contract and answer the
+/// waiting Start reply through NodeReady.
 fn begin_shared_stream<BackendData: crate::backend::Backend + 'static>(
     state: &mut crate::state::State<BackendData>,
     session_handle: &OwnedObjectPath,
     source: CaptureSource,
 ) {
-    let Some(output) = state
-        .space
-        .outputs()
-        .find(|output| output.name() == source.id)
-    else {
-        tracing::warn!("The approved output disappeared before delivery started");
+    let target = match source.kind {
+        SourceKind::Monitor => resolve_monitor_target(state, &source.id),
+        SourceKind::Window => resolve_window_target(state, &source.id),
+    };
+    let Some(target) = target else {
+        tracing::warn!("The approved source disappeared before delivery started");
         close_shared_session(state, session_handle);
         return;
     };
-    let geometry = match state.space.output_geometry(output) {
-        Some(geometry) => geometry,
-        None => {
-            tracing::warn!("The approved output has no geometry");
-            close_shared_session(state, session_handle);
-            return;
-        }
-    };
-    let mode = match output.current_mode() {
-        Some(mode) => mode,
-        None => {
-            tracing::warn!("The approved output has no mode");
-            close_shared_session(state, session_handle);
-            return;
-        }
-    };
-    let size = mode.size;
     if state.pipe_wire_producer.is_none() {
         match crate::capture::pipewire::Producer::new(
             &state.loop_handle,
@@ -956,8 +1178,9 @@ fn begin_shared_stream<BackendData: crate::backend::Backend + 'static>(
     let descriptor = StreamDescriptor {
         session_handle: session_handle.clone(),
         source_id: source.id.clone(),
-        size,
-        position: (geometry.loc.x as i32, geometry.loc.y as i32),
+        source_kind: source.kind,
+        size: target.stream_size,
+        position: target.position,
         label: source.label.clone(),
     };
     producer.start_stream(descriptor);
@@ -966,15 +1189,80 @@ fn begin_shared_stream<BackendData: crate::backend::Backend + 'static>(
         ActiveStream {
             node_id: 0,
             source_id: source.id.clone(),
-            position: (geometry.loc.x as i32, geometry.loc.y as i32),
-            size: (size.w, size.h),
+            source_kind: source.kind,
+            position: target.position,
+            size: (target.stream_size.w, target.stream_size.h),
             label: source.label.clone(),
             active: false,
             last_frame: None,
         },
     );
     // The frame scheduler pulls pixels into the producer buffers.
-    schedule_frame_delivery(state, session_handle, output.clone());
+    match source.kind {
+        SourceKind::Monitor => {
+            let output = target
+                .output
+                .expect("monitor target always carries its output");
+            schedule_frame_delivery(state, session_handle, output.clone());
+        }
+        SourceKind::Window => {
+            schedule_window_frame_delivery(state, session_handle);
+        }
+    }
+}
+
+/// What a monitor source resolves to at delivery start.
+struct CaptureTarget {
+    stream_size: Size<i32, Physical>,
+    /// Global logical position the Start result reports.
+    position: (i32, i32),
+    /// The rendering source for the frame pump; a monitor target renders
+    /// its whole output.
+    output: Option<Output>,
+}
+
+fn resolve_monitor_target<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    output_name: &str,
+) -> Option<CaptureTarget> {
+    let output = state
+        .space
+        .outputs()
+        .find(|output| output.name() == output_name)?;
+    let geometry = state.space.output_geometry(output)?;
+    let mode = output.current_mode()?;
+    Some(CaptureTarget {
+        stream_size: mode.size,
+        position: (geometry.loc.x, geometry.loc.y),
+        output: Some(output.clone()),
+    })
+}
+
+/// Resolves the approved window identity into a live delivery target:
+/// the viewport comes from the client-closest geometry with the window's
+/// scale ratio, so no live client is resized or moved by the share
+/// (spec 5.3), and identity means the *same* live MetaWindow, not a new
+/// window with the same title.
+fn resolve_window_target<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    meta_window_id: &str,
+) -> Option<CaptureTarget> {
+    let meta_window = state
+        .meta_window_state
+        .meta_windows
+        .get(meta_window_id)?
+        .clone();
+    if !meta_window.mapped {
+        return None;
+    }
+    let surface = state.surfaces.get(&meta_window.surface_id)?.clone();
+    let viewport_logical = crate::capture::window_viewport(&meta_window, Some(&surface))?;
+    let scale = crate::capture::window_render_scale(&meta_window);
+    Some(CaptureTarget {
+        stream_size: crate::capture::pixel_size(viewport_logical.size, scale).ok()?,
+        position: (viewport_logical.loc.x as i32, viewport_logical.loc.y as i32),
+        output: None,
+    })
 }
 
 /// Applies one consent decision through the ledger runtime, performs the
@@ -1448,7 +1736,7 @@ fn stream_reply(node_id: u32, stream: &ActiveStream) -> Option<PortalReply> {
     .ok()?;
     dict.append(
         Value::new("source_type"),
-        Value::Value(Box::new(Value::U32(1))),
+        Value::Value(Box::new(Value::U32(stream.source_kind.portal_value()))),
     )
     .ok()?;
 
@@ -1618,6 +1906,10 @@ pub fn apply_portal_call(
                             // SelectSources stores and validates constraints; it
                             // does not grant consent.
                             session.state = SessionState::Configured;
+                            tracing::info!(
+                                requested_types = ?constraints.types,
+                                "Stored the source kinds SelectSources requested"
+                            );
                             session.constraints = Some(constraints);
                             if !ledger.requests.contains_key(&handle) {
                                 ledger.requests.insert(
@@ -1639,7 +1931,9 @@ pub fn apply_portal_call(
                     handle,
                     session_handle,
                     app_id,
+                    parent_window: _,
                     constraints,
+                    options,
                     reply,
                     ..
                 } => {
@@ -1659,6 +1953,18 @@ pub fn apply_portal_call(
 
                     // SelectSources is optional in the portal contract; Start may
                     // carry the constraints itself and then opens the picker.
+                    //
+                    // Constraint precedence (live Chromium/OBS flows found
+                    // this: they call SelectSources with `types: 3` and
+                    // then Start with the option keys omitted, and the
+                    // parse defaults must not clobber the stored WINDOW
+                    // kinds out of the picker):
+                    // - an explicitly sent Start key wins (newest frontend
+                    //   instruction),
+                    // - a key the Start dict omits falls back to what
+                    //   SelectSources stored,
+                    // - with neither SelectSources nor the key, the parse
+                    //   defaults apply.
                     if let Some(session) = ledger.sessions.get_mut(&session_handle) {
                         match session.state {
                             SessionState::Created => {
@@ -1666,9 +1972,30 @@ pub fn apply_portal_call(
                                 session.constraints = Some(constraints.clone());
                             }
                             SessionState::Configured => {
-                                // SelectSources already validated the constraints;
-                                // Start's copy is unused.
-                                session.constraints = Some(constraints.clone());
+                                let start_types_explicit = options.contains_key("types");
+                                let start_cursor_explicit = options.contains_key("cursor_mode");
+                                if !start_types_explicit || !start_cursor_explicit {
+                                    if let Some(stored) = session.constraints.as_ref() {
+                                        let merged = ScreenCastConstraints {
+                                            types: if start_types_explicit {
+                                                constraints.types
+                                            } else {
+                                                stored.types
+                                            },
+                                            cursor_mode: if start_cursor_explicit {
+                                                constraints.cursor_mode
+                                            } else {
+                                                stored.cursor_mode
+                                            },
+                                            ..constraints.clone()
+                                        };
+                                        session.constraints = Some(merged);
+                                    } else {
+                                        session.constraints = Some(constraints.clone());
+                                    }
+                                } else {
+                                    session.constraints = Some(constraints.clone());
+                                }
                             }
                             SessionState::Choosing | SessionState::Starting => {
                                 return write(reply, failed("a picker is already open"));
@@ -1682,25 +2009,43 @@ pub fn apply_portal_call(
                         return write(reply, failed("unknown session"));
                     }
 
-                    // Only outputs exist in this milestone: a request that cannot
-                    // name a monitor has no supported sources and must fail
-                    // normally instead of opening a picker that could approve
-                    // nothing.
-                    // (SourceTypes and its bits are validated at parse time, and
-                    // the default is MONITOR, so an empty intersection never
-                    // reaches here in practice.)
+                    // A request that cannot name a supported source type has
+                    // no supported sources and must fail normally instead of
+                    // opening a picker that could approve nothing (spec 8.2:
+                    // a VIRTUAL-only request fails normally). The
+                    // conjunction rides the same intersection the parse
+                    // produced: an empty advertisement can never reach here
+                    // (SourceTypes bits are validated at parse time).
+                    //
+                    // M2 shipped output sharing; M4's window sharing makes
+                    // both implemented source kinds available, so the start
+                    // gate requires at least one of the two rather than
+                    // MONITOR alone (screencast section 8.2: filter by
+                    // requested types, never substitute).
                     let session = ledger
                         .sessions
                         .get_mut(&session_handle)
                         .expect("session verified above");
-                    if !session
+                    let types = session
                         .constraints
                         .as_ref()
-                        .is_some_and(|c| c.types.contains(SourceTypes::MONITOR))
-                    {
+                        .map(|c| c.types)
+                        .unwrap_or(SourceTypes::empty());
+                    if !types.intersects(SourceTypes::MONITOR | SourceTypes::WINDOW) {
                         return write(reply, failed("no supported source types"));
                     }
                     session.state = SessionState::Choosing;
+
+                    // Runtime diagnostics: which source kinds the caller
+                    // actually requested for this flow (Brave and other
+                    // Chromium clients send `types: 3` even when showing
+                    // their own window/share UX, which is why the mixed
+                    // picker exists).
+                    tracing::info!(
+                        app = %app_id,
+                        requested_types = ?types,
+                        "Opening the consent picker for a screen-cast flow"
+                    );
 
                     // The picker now owns the Start response. The consent token is
                     // minted here so a stale or replayed Flutter reply can never
@@ -1729,6 +2074,7 @@ pub fn apply_portal_call(
                         request_handle: handle,
                         app_name,
                         consent_token,
+                        types,
                     });
                 }
                 PortalCall::Screenshot {
@@ -1856,6 +2202,7 @@ impl PortalCall {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::portal::PendingReply;
     use std::collections::HashMap;
 
     fn ledger_with_frontend() -> (PortalLedger, PendingReply) {
@@ -2042,6 +2389,7 @@ mod tests {
                     session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
                     app_id: "app".into(),
                     parent_window: "".into(),
+                    options: super::super::PortalDict::new(),
                     constraints: super::super::ScreenCastConstraints {
                         types: super::super::SourceTypes::MONITOR,
                         cursor_mode: super::super::CursorModes::HIDDEN,
@@ -2150,6 +2498,7 @@ mod tests {
                     session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
                     app_id: "app".into(),
                     parent_window: "".into(),
+                    options: super::super::PortalDict::new(),
                     constraints: super::super::ScreenCastConstraints {
                         types: super::super::SourceTypes::MONITOR,
                         cursor_mode: super::super::CursorModes::HIDDEN,
@@ -2195,6 +2544,347 @@ mod tests {
             .sessions
             .get(&OwnedObjectPath::try_from(session).unwrap())
             .map(|session| session.state)
+    }
+
+    // The requested kinds decide whether Start may open the picker: a
+    // WINDOW-only request reaches Choosing (window sharing exists in M4)
+    // and carries the constraint kinds into the picker event (spec 8.2:
+    // filter the picker by requested types).
+    #[test]
+    fn start_with_window_only_request_opens_the_picker() {
+        let (mut ledger, _) = ledger_with_frontend();
+        {
+            let (link, pending) = make_reply_pair();
+            let mut actions = Vec::new();
+            apply_portal_call(
+                &mut ledger,
+                PortalCall::CreateSession {
+                    handle: handle(),
+                    session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                    app_id: "app".into(),
+                    caller: Some(Caller(":1.9".into())),
+                    reply: link,
+                },
+                &mut actions,
+                &mut Vec::new(),
+            );
+            assert_eq!(pending.recv_blocking().unwrap().response, RESPONSE_OK);
+        }
+        let (link, pending) = make_reply_pair();
+        let mut actions = Vec::new();
+        let mut ui: Vec<PortalUiEvent> = Vec::new();
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::Start {
+                handle: handle(),
+                session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                app_id: "app".into(),
+                parent_window: "".into(),
+                options: super::super::PortalDict::new(),
+                constraints: ScreenCastConstraints {
+                    types: SourceTypes::WINDOW,
+                    cursor_mode: super::super::CursorModes::HIDDEN,
+                    multiple: false,
+                    restore_token: None,
+                },
+                caller: Some(Caller(":1.9".into())),
+                reply: link,
+            },
+            &mut actions,
+            &mut ui,
+        );
+        let PortalUiEvent::OpenPicker { types, .. } = &ui[0] else {
+            panic!("expected picker open");
+        };
+        assert_eq!(*types, SourceTypes::WINDOW);
+        assert_eq!(
+            session_state(&ledger, SESSION_OK),
+            Some(SessionState::Choosing)
+        );
+        drop(pending);
+    }
+
+    // The live Chromium/Brave flow pinned from the session log: Start
+    // omits its option keys, so the kinds SelectSources stored (`types:
+    // 3` sent even for a window share) must reach the picker untouched —
+    // the parse defaults never clobber them (the missing windows list in
+    // the first runtime run).
+    #[test]
+    fn start_without_types_keeps_the_selectsources_stored_kinds() {
+        let (mut ledger, _) = ledger_with_frontend();
+        {
+            let (link, pending) = make_reply_pair();
+            let mut actions = Vec::new();
+            apply_portal_call(
+                &mut ledger,
+                PortalCall::CreateSession {
+                    handle: handle(),
+                    session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                    app_id: "app".into(),
+                    caller: Some(Caller(":1.9".into())),
+                    reply: link,
+                },
+                &mut actions,
+                &mut Vec::new(),
+            );
+            assert_eq!(pending.recv_blocking().unwrap().response, RESPONSE_OK);
+        }
+        // The frontend's SelectSources: monitor and window kinds.
+        {
+            let (link, pending) = make_reply_pair();
+            let mut actions = Vec::new();
+            apply_portal_call(
+                &mut ledger,
+                PortalCall::SelectSources {
+                    handle: handle(),
+                    session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                    app_id: "app".into(),
+                    constraints: ScreenCastConstraints {
+                        types: SourceTypes::MONITOR | SourceTypes::WINDOW,
+                        cursor_mode: super::super::CursorModes::HIDDEN,
+                        multiple: false,
+                        restore_token: None,
+                    },
+                    caller: Some(Caller(":1.9".into())),
+                    reply: link,
+                },
+                &mut actions,
+                &mut Vec::new(),
+            );
+            assert_eq!(pending.recv_blocking().unwrap().response, RESPONSE_OK);
+        }
+        // Start carries no option keys: the stored kinds govern the picker.
+        let (link, pending) = make_reply_pair();
+        let mut actions = Vec::new();
+        let mut ui: Vec<PortalUiEvent> = Vec::new();
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::Start {
+                handle: handle(),
+                session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                app_id: "app".into(),
+                parent_window: "".into(),
+                options: super::super::PortalDict::new(),
+                constraints: ScreenCastConstraints {
+                    // The parse defaults Start hands over when the keys
+                    // are absent.
+                    types: SourceTypes::MONITOR,
+                    cursor_mode: super::super::CursorModes::HIDDEN,
+                    multiple: false,
+                    restore_token: None,
+                },
+                caller: Some(Caller(":1.9".into())),
+                reply: link,
+            },
+            &mut actions,
+            &mut ui,
+        );
+        let PortalUiEvent::OpenPicker { types, .. } = &ui[0] else {
+            panic!("expected picker open");
+        };
+        assert_eq!(
+            *types,
+            SourceTypes::MONITOR | SourceTypes::WINDOW,
+            "SelectSources' kinds must survive a key-less Start"
+        );
+        drop(pending);
+    }
+
+    // A Start that explicitly re-specifies the kinds is the newest
+    // frontend instruction: it overrides the SelectSources storage.
+    #[test]
+    fn start_with_explicit_types_overrides_the_stored_kinds() {
+        let (mut ledger, _) = ledger_with_frontend();
+        {
+            let (link, pending) = make_reply_pair();
+            let mut actions = Vec::new();
+            apply_portal_call(
+                &mut ledger,
+                PortalCall::CreateSession {
+                    handle: handle(),
+                    session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                    app_id: "app".into(),
+                    caller: Some(Caller(":1.9".into())),
+                    reply: link,
+                },
+                &mut actions,
+                &mut Vec::new(),
+            );
+            assert_eq!(pending.recv_blocking().unwrap().response, RESPONSE_OK);
+        }
+        {
+            let (link, pending) = make_reply_pair();
+            let mut actions = Vec::new();
+            apply_portal_call(
+                &mut ledger,
+                PortalCall::SelectSources {
+                    handle: handle(),
+                    session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                    app_id: "app".into(),
+                    constraints: ScreenCastConstraints {
+                        types: SourceTypes::MONITOR | SourceTypes::WINDOW,
+                        cursor_mode: super::super::CursorModes::HIDDEN,
+                        multiple: false,
+                        restore_token: None,
+                    },
+                    caller: Some(Caller(":1.9".into())),
+                    reply: link,
+                },
+                &mut actions,
+                &mut Vec::new(),
+            );
+            assert_eq!(pending.recv_blocking().unwrap().response, RESPONSE_OK);
+        }
+        let mut options: super::super::PortalDict = HashMap::new();
+        options.insert(
+            "types".to_string(),
+            zbus::zvariant::OwnedValue::from(SourceTypes::WINDOW.bits()),
+        );
+        let (link, pending) = make_reply_pair();
+        let mut actions = Vec::new();
+        let mut ui: Vec<PortalUiEvent> = Vec::new();
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::Start {
+                handle: handle(),
+                session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                app_id: "app".into(),
+                parent_window: "".into(),
+                options,
+                constraints: ScreenCastConstraints {
+                    types: SourceTypes::WINDOW,
+                    cursor_mode: super::super::CursorModes::HIDDEN,
+                    multiple: false,
+                    restore_token: None,
+                },
+                caller: Some(Caller(":1.9".into())),
+                reply: link,
+            },
+            &mut actions,
+            &mut ui,
+        );
+        let PortalUiEvent::OpenPicker { types, .. } = &ui[0] else {
+            panic!("expected picker open");
+        };
+        assert_eq!(*types, SourceTypes::WINDOW);
+        drop(pending);
+    }
+
+    // Window-share session closure binds by the *shared window's* id:
+    // sessions rendering other sources stay untouched (spec 5.3: close
+    // on window destruction, never a stale stream or an unrelated
+    // session).
+    #[test]
+    fn source_share_handles_matches_only_the_shared_source() {
+        let handle_a = OwnedObjectPath::try_from(SESSION_OK).unwrap();
+        let handle_b =
+            OwnedObjectPath::try_from("/org/freedesktop/portal/desktop/session/1_9/other").unwrap();
+        let mut map = HashMap::new();
+        map.insert(
+            handle_a.clone(),
+            ActiveStream {
+                node_id: 1,
+                source_id: "window-1".into(),
+                source_kind: SourceKind::Window,
+                position: (0, 0),
+                size: (100, 100),
+                label: "window-1".into(),
+                active: false,
+                last_frame: None,
+            },
+        );
+        map.insert(
+            handle_b.clone(),
+            ActiveStream {
+                node_id: 2,
+                source_id: "window-2".into(),
+                source_kind: SourceKind::Window,
+                position: (0, 0),
+                size: (100, 100),
+                label: "window-2".into(),
+                active: false,
+                last_frame: None,
+            },
+        );
+        map.insert(
+            OwnedObjectPath::try_from("/org/freedesktop/portal/desktop/session/1_9/monitor")
+                .unwrap(),
+            ActiveStream {
+                node_id: 3,
+                source_id: "DP-1".into(),
+                source_kind: SourceKind::Monitor,
+                position: (0, 0),
+                size: (1920, 1080),
+                label: "DP-1".into(),
+                active: false,
+                last_frame: None,
+            },
+        );
+
+        let matched = source_share_handles(map.iter(), "window-1");
+        assert_eq!(matched, vec![handle_a.clone()]);
+
+        let nothing = source_share_handles(map.iter(), "window-gone");
+        assert!(nothing.is_empty());
+    }
+
+    // A start flow whose constraints name no implemented kind completes
+    // failed without opening a picker: a request that can never name a
+    // shareable source has no supported sources (spec 8.2: a
+    // VIRTUAL-only request fails normally). The gate is a second line of
+    // defense behind option parsing, which rejects such requests first.
+    #[test]
+    fn start_with_no_shareable_source_types_fails_normally() {
+        let (mut ledger, _) = ledger_with_frontend();
+        {
+            let (link, pending) = make_reply_pair();
+            let mut actions = Vec::new();
+            apply_portal_call(
+                &mut ledger,
+                PortalCall::CreateSession {
+                    handle: handle(),
+                    session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                    app_id: "app".into(),
+                    caller: Some(Caller(":1.9".into())),
+                    reply: link,
+                },
+                &mut actions,
+                &mut Vec::new(),
+            );
+            assert_eq!(pending.recv_blocking().unwrap().response, RESPONSE_OK);
+        }
+        let (link, pending) = make_reply_pair();
+        let mut actions = Vec::new();
+        let mut ui_opened: Vec<PortalUiEvent> = Vec::new();
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::Start {
+                handle: handle(),
+                session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                app_id: "app".into(),
+                parent_window: "".into(),
+                options: super::super::PortalDict::new(),
+                constraints: ScreenCastConstraints {
+                    types: SourceTypes::empty(),
+                    cursor_mode: super::super::CursorModes::HIDDEN,
+                    multiple: false,
+                    restore_token: None,
+                },
+                caller: Some(Caller(":1.9".into())),
+                reply: link,
+            },
+            &mut actions,
+            &mut ui_opened,
+        );
+        assert_eq!(
+            pending.recv_blocking().unwrap().response,
+            RESPONSE_FAILED,
+            "no implemented kind means a normal failure"
+        );
+        assert!(
+            ui_opened.is_empty(),
+            "no picker opens without a shareable kind"
+        );
     }
 
     #[test]
@@ -2377,6 +3067,7 @@ mod tests {
                 session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
                 app_id: "app".into(),
                 parent_window: "".into(),
+                options: super::super::PortalDict::new(),
                 constraints: super::super::ScreenCastConstraints {
                     types: super::super::SourceTypes::MONITOR,
                     cursor_mode: super::super::CursorModes::HIDDEN,
@@ -2436,6 +3127,7 @@ mod tests {
                     session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
                     app_id: "app".into(),
                     parent_window: "".into(),
+                    options: super::super::PortalDict::new(),
                     constraints: super::super::ScreenCastConstraints {
                         types: super::super::SourceTypes::MONITOR,
                         cursor_mode: super::super::CursorModes::HIDDEN,
@@ -2597,6 +3289,7 @@ mod tests {
                     session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
                     app_id: "app".into(),
                     parent_window: "".into(),
+                    options: super::super::PortalDict::new(),
                     constraints: super::super::ScreenCastConstraints {
                         types: super::super::SourceTypes::MONITOR,
                         cursor_mode: super::super::CursorModes::HIDDEN,
@@ -2731,6 +3424,7 @@ mod tests {
                 session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
                 app_id: "app".into(),
                 parent_window: "".into(),
+                options: super::super::PortalDict::new(),
                 constraints: super::super::ScreenCastConstraints {
                     types: super::super::SourceTypes::MONITOR,
                     cursor_mode: super::super::CursorModes::HIDDEN,
@@ -2763,9 +3457,10 @@ mod tests {
     // test existed.
     #[test]
     fn stream_reply_builds_the_start_result() {
-        let stream = ActiveStream {
+        let mut stream = ActiveStream {
             node_id: 42,
             source_id: "DP-2".into(),
+            source_kind: SourceKind::Monitor,
             position: (0, 1080),
             size: (2560, 1440),
             label: "DP-2".into(),
@@ -2774,6 +3469,11 @@ mod tests {
         };
         let reply = stream_reply(42, &stream).expect("the Start result builds");
         assert_eq!(reply.response, RESPONSE_OK);
+        // A WINDOW stream's result carries the WINDOW source type so the
+        // frontend can treat a window share correctly (spec 8.2).
+        stream.source_kind = SourceKind::Window;
+        let window_reply = stream_reply(42, &stream).expect("the window result builds");
+        assert_eq!(window_reply.response, RESPONSE_OK);
         let streams = reply.results.get("streams");
         assert!(
             streams.is_some(),

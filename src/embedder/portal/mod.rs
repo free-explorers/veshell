@@ -168,6 +168,14 @@ pub enum PortalCall {
         app_id: String,
         parent_window: String,
         constraints: ScreenCastConstraints,
+        /// The raw Start options dictionary: the ledger needs to know
+        /// which keys the frontend actually sent, because a missing
+        /// `types` key must fall back to the SelectSources-stored
+        /// constraints instead of the parse defaults (the live Chromium
+        /// flow stores `types: 3` in SelectSources and sends Start
+        /// without keys — the parse default would clobber the WINDOW
+        /// kinds out of the picker).
+        options: PortalDict,
         caller: Option<Caller>,
         reply: ReplyLink,
     },
@@ -294,7 +302,10 @@ impl ScreenCastBackend {
 
     #[zbus(property, name = "AvailableSourceTypes")]
     fn available_source_types(&self) -> u32 {
-        SourceTypes::MONITOR.bits()
+        // Both implemented source kinds (spec 8.1): M2's outputs and M4's
+        // windows. Screen sharing joins through the MONITOR picker group
+        // in M5 and does not change this value.
+        (SourceTypes::MONITOR | SourceTypes::WINDOW).bits()
     }
 
     #[zbus(property, name = "version")]
@@ -335,8 +346,13 @@ impl ScreenCastBackend {
         options: PortalDict,
     ) -> zbus::fdo::Result<(u32, PortalDict)> {
         // Contract: SelectSources stores/validates constraints, it does
-        // not grant consent.
-        let constraints = match parse_screen_cast_constraints(&options, SourceTypes::MONITOR) {
+        // not grant consent. The advertisement carries every implemented
+        // source kind (spec 8.1: advertise MONITOR | WINDOW once both
+        // implementations work; M2 outputs, M4 windows).
+        let constraints = match parse_screen_cast_constraints(
+            &options,
+            SourceTypes::MONITOR | SourceTypes::WINDOW,
+        ) {
             Ok(constraints) => constraints,
             Err(message) => {
                 tracing::debug!(message, "Rejecting SelectSources options");
@@ -369,7 +385,10 @@ impl ScreenCastBackend {
         parent_window: String,
         options: PortalDict,
     ) -> zbus::fdo::Result<(u32, PortalDict)> {
-        let constraints = match parse_screen_cast_constraints(&options, SourceTypes::MONITOR) {
+        let constraints = match parse_screen_cast_constraints(
+            &options,
+            SourceTypes::MONITOR | SourceTypes::WINDOW,
+        ) {
             Ok(constraints) => constraints,
             Err(message) => {
                 tracing::debug!(message, "Rejecting Start options");
@@ -387,6 +406,7 @@ impl ScreenCastBackend {
                 app_id,
                 parent_window,
                 constraints,
+                options,
                 caller,
                 reply,
             })
@@ -842,19 +862,20 @@ mod unit_tests {
     }
 
     #[test]
-    fn window_only_request_is_rejected_at_monitor_stage() {
+    fn window_only_request_is_accepted() {
         let requested = parse_screen_cast_constraints(
             &options(&[("types", OwnedValue::from(SourceTypes::WINDOW.bits()))]),
-            SourceTypes::MONITOR,
-        );
-        assert!(requested.is_err());
+            SourceTypes::MONITOR | SourceTypes::WINDOW,
+        )
+        .expect("windows are implemented sources");
+        assert_eq!(requested.types, SourceTypes::WINDOW);
     }
 
     #[test]
     fn virtual_only_request_fails_without_panic() {
         let requested = parse_screen_cast_constraints(
             &options(&[("types", OwnedValue::from(SourceTypes::VIRTUAL.bits()))]),
-            SourceTypes::MONITOR,
+            SourceTypes::MONITOR | SourceTypes::WINDOW,
         );
         assert!(requested.is_err());
     }
@@ -863,7 +884,7 @@ mod unit_tests {
     fn empty_types_request_is_rejected() {
         let requested = parse_screen_cast_constraints(
             &options(&[("types", OwnedValue::from(0u32))]),
-            SourceTypes::MONITOR,
+            SourceTypes::MONITOR | SourceTypes::WINDOW,
         );
         assert!(requested.is_err());
     }

@@ -4,6 +4,10 @@ import 'package:shell/platform/provider/platform_manager.dart';
 part 'screen_cast_consent.serializable.freezed.dart';
 part 'screen_cast_consent.serializable.g.dart';
 
+/// Which portal source kind a shareable target belongs to (spec 8.2
+/// mapping): outputs are MONITOR sources, windows are WINDOW sources.
+enum CaptureSourceKind { outputs, windows }
+
 /// Model for ScreenCastSourceMessage
 @freezed
 sealed class ScreenCastSourceMessage
@@ -13,6 +17,7 @@ sealed class ScreenCastSourceMessage
   factory ScreenCastSourceMessage({
     required String id,
     required String label,
+    required CaptureSourceKind kind,
   }) = _ScreenCastSourceMessage;
 
   factory ScreenCastSourceMessage.fromJson(Map<String, dynamic> json) =>

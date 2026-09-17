@@ -45,9 +45,10 @@ use pipewire::sys::{pw_buffer, pw_stream_queue_buffer, pw_stream_return_buffer};
 
 use smithay::reexports::calloop::generic::Generic;
 use smithay::reexports::calloop::{Interest, LoopHandle, Mode, PostAction, RegistrationToken};
-use smithay::utils::{Logical, Physical, Size};
+use smithay::utils::{Logical, Physical, Point, Rectangle, Size};
 use zbus::zvariant::OwnedObjectPath;
 
+use crate::portal::service::SourceKind;
 use crate::state::State;
 use crate::Backend;
 
@@ -83,8 +84,12 @@ pub enum ProducerEvent {
 #[derive(Clone, Debug)]
 pub struct StreamDescriptor {
     pub session_handle: OwnedObjectPath,
-    /// PipeWire-consistent identity of the source (an output name today).
+    /// PipeWire-consistent identity of the source (an output name or a
+    /// MetaWindow id).
     pub source_id: String,
+    /// The portal source kind the stream was approved for: it decides
+    /// which rendering path fills the buffers.
+    pub source_kind: SourceKind,
     /// Physical buffer size for the negotiated RGBA stream.
     pub size: Size<i32, Physical>,
     /// Global logical position the portal Start result reports.
@@ -100,6 +105,8 @@ pub struct ActiveStream {
     /// The source the stream was approved from; frame delivery matches
     /// fresh output damage against this id.
     pub source_id: String,
+    /// The portal source kind of this stream (monitor or window).
+    pub source_kind: SourceKind,
     pub position: (i32, i32),
     pub size: (i32, i32),
     pub label: String,
@@ -159,6 +166,9 @@ fn make_pod(buffer: &mut Vec<u8>, object: pod::Object) -> &Pod {
 
 /// One format offer: RGBA only, fixed size, framerate parameterized by
 /// the output refresh, capped at the 30 FPS budget.
+/// Retained the shell format offer shape; the stream today connects with
+/// the negotiated params only (this backend's role).
+#[allow(dead_code)]
 fn make_video_params(buffer: &mut Vec<u8>, size: Size<i32, Physical>) -> &Pod {
     let object = pod::object!(
         SpaTypes::ObjectParamFormat,

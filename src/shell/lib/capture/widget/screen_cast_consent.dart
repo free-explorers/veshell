@@ -22,8 +22,15 @@ class ScreenCastConsentPicker extends HookConsumerWidget {
     if (consent == null) {
       return const SizedBox.shrink();
     }
-    final approvedSource =
-        selectedSource.value ?? _resolvedSourceId(consent.sources);
+    final approvedSource = selectedSource.value;
+
+    // Never upscale the request kinds in the copy: a WINDOW-only request
+    // talks about windows, a mixed one names both explicitly (spec 8.2:
+    // the picker is filtered by the request's types, never substituted).
+    final offersOutputs =
+        consent.sources.any((source) => source.kind == CaptureSourceKind.outputs);
+    final offersWindows =
+        consent.sources.any((source) => source.kind == CaptureSourceKind.windows);
 
     return Card(
       color: Theme.of(context).colorScheme.surfaceContainer,
@@ -37,27 +44,51 @@ class ScreenCastConsentPicker extends HookConsumerWidget {
             children: [
               const SizedBox(height: 24),
               Text(
-                'Share your screen?',
+                switch ((offersOutputs, offersWindows)) {
+                  (true, false) => 'Share your screen?',
+                  (false, true) => 'Share a window?',
+                  _ => 'Share a screen or a window?',
+                },
                 style: theme.textTheme.headlineMedium,
               ),
               const SizedBox(height: 8),
               Text(
                 consent.appName.isEmpty
-                    ? 'An application wants to share an output.'
-                    : '${consent.appName} wants to share an output.',
+                    ? 'An application wants shared content.'
+                    : '${consent.appName} wants to share with you.',
               ),
               const SizedBox(height: 24),
-              for (final source in consent.sources) ...[
-                RadioListTile<String>(
-                  value: source.id,
-                  groupValue: approvedSource,
-                  title: Text(source.label),
-                  onChanged: (value) {
-                    if (value != null) {
-                      selectedSource.value = value;
-                    }
-                  },
-                ),
+              // Windows first, then screens: Brave and Chromium send
+              // `types: 3` even for a window flow, so a mixed, grouped
+              // list is the normal case there. Nothing is preselected —
+              // Share stays disabled until an explicit choice, so a
+              // careless click can never approve the wrong target.
+              for (final group in [
+                (CaptureSourceKind.windows, 'Windows'),
+                (CaptureSourceKind.outputs, 'Screens'),
+              ]) ...[
+                if (offersOutputs &&
+                    offersWindows &&
+                    consent.sources.any((s) => s.kind == group.$1))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2, left: 8),
+                    child: Text(
+                      group.$2,
+                      style: theme.textTheme.labelSmall,
+                    ),
+                  ),
+                for (final source
+                    in consent.sources.where((s) => s.kind == group.$1))
+                  RadioListTile<String>(
+                    value: source.id,
+                    groupValue: approvedSource,
+                    title: Text(source.label),
+                    onChanged: (value) {
+                      if (value != null) {
+                        selectedSource.value = value;
+                      }
+                    },
+                  ),
               ],
               const SizedBox(height: 16),
               Row(
@@ -77,7 +108,13 @@ class ScreenCastConsentPicker extends HookConsumerWidget {
                         : () => ref
                             .read(screenCastConsentProvider.notifier)
                             .approve(approvedSource),
-                    child: const Text('Share'),
+                    child: Text(
+                      offersOutputs && offersWindows
+                          ? 'Share'
+                          : offersWindows
+                              ? 'Share window'
+                              : 'Share',
+                    ),
                   ),
                 ],
               ),
@@ -88,11 +125,6 @@ class ScreenCastConsentPicker extends HookConsumerWidget {
       ),
     );
   }
-
-  /// With single-output sessions the only source is the implied choice, so
-  /// the picker still requires the explicit confirmation.
-  String? _resolvedSourceId(List<ScreenCastSourceMessage> sources) =>
-      sources.isEmpty ? null : sources.first.id;
 }
 
 /// Mounts the picker into the shell tree: mounted per monitor by the
