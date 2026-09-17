@@ -1893,7 +1893,7 @@ fn stream_reply(node_id: u32, stream: &ActiveStream) -> Option<PortalReply> {
             tracing::error!("Failed to encode the persistence grant");
             return None;
         };
-        tracing::info!(
+        tracing::debug!(
             token_chars = token.len(),
             "Start result carries the persistence grant (restore_data)"
         );
@@ -2043,7 +2043,7 @@ pub fn apply_portal_call(
                             // SelectSources stores and validates constraints; it
                             // does not grant consent.
                             session.state = SessionState::Configured;
-                            tracing::info!(
+                            tracing::debug!(
                                 requested_types = ?constraints.types,
                                 requested_persist = constraints.persist_mode,
                                 restore_token_present = constraints.restore_token.is_some(),
@@ -2209,7 +2209,7 @@ pub fn apply_portal_call(
                         .map(|token| ledger.restore_source(token))
                         .unwrap_or_default()
                         .filter(|source| kind_to_types(source.kind).intersects(types));
-                    tracing::info!(
+                    tracing::debug!(
                         presented_token = presented_token.is_some(),
                         restore_resolved = restore_source.is_some(),
                         restore_map_size = ledger.restores.len(),

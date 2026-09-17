@@ -877,6 +877,9 @@ slice only (see the 8.1 persistence amendment):
 - True longer-term persistence (PermissionStore, surviving compositor
   restarts) is out of scope and stays deferred (section 13).
 
+Runtime-validated against Brave (2026-09-17): first flow prompts, the
+follow-up flow restores silently, and a new gesture prompts again.
+
 The frontend's restricted remote protects portal clients according to PipeWire's
 access policy. Do not claim this prevents every unrestricted same-user host
 process from accessing PipeWire. Verify the deployed daemon/session-manager policy.
@@ -1123,6 +1126,12 @@ never registered, so the next flow's token was dropped before SelectSources
 reached us. Fix: emit and parse `("veshell", 1, token)` `(suv)` blobs, as
 GNOME and COSMIC backends do; foreign vendors/newer versions degrade to
 the prompt.
+
+Runtime-validated (2026-09-17, Brave): after the fix the first flow of a
+gesture prompts, and the follow-up flow reports
+`presented_token=true restore_resolved=true` and starts silently; a new
+share gesture (no token, fresh grant) prompts again. One consent prompt
+per user gesture, transient for the frontend owner's lifetime.
 
 Remaining M4 work: runtime portal-Screenshot validation against a real
 sandboxed app, a real app share an obscured window through the system

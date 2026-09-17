@@ -380,7 +380,7 @@ pub fn parse_screen_cast_constraints(
     constraints.restore_token =
         lookup_restore_token(options).or_else(|| lookup_string(options, "restore_token"));
     if constraints.restore_token.is_some() {
-        tracing::info!("Portal options carry RestoreData (or a top-level restore token)");
+        tracing::debug!("Portal options carry RestoreData (or a top-level restore token)");
     }
 
     Ok(constraints)
