@@ -41,7 +41,7 @@ impl<BackendData: Backend> State<BackendData> {
         // pointer only drives the native selection, nothing is sent to
         // Flutter or Wayland clients. The Smithay pointer keeps its frozen
         // position; the session accumulates the deltas itself.
-        if self.capture_session.is_some() {
+        if self.capture_state.session.is_some() {
             crate::capture::capture_pointer_motion_delta(self, event.delta());
             return;
         }
@@ -120,7 +120,7 @@ impl<BackendData: Backend> State<BackendData> {
         // clamp to screen limits
         pointer_location = self.clamp_coords(pointer_location);
 
-        if self.capture_session.is_some() {
+        if self.capture_state.session.is_some() {
             crate::capture::capture_pointer_motion_to(self, pointer_location);
             return;
         }
@@ -164,7 +164,7 @@ impl<BackendData: Backend> State<BackendData> {
         // While a screenshot session is active the drag is native: the
         // button never reaches the frozen desktop below. Positions come
         // from the session's own tracking (the Smithay pointer is frozen).
-        if self.capture_session.is_some() {
+        if self.capture_state.session.is_some() {
             let button_code = event.button_code();
             if event.state() == ButtonState::Pressed {
                 crate::capture::capture_pointer_press(self, button_code);
@@ -276,7 +276,7 @@ impl<BackendData: Backend> State<BackendData> {
     {
         // Scroll events are irrelevant while the desktop is frozen for a
         // screenshot selection.
-        if self.capture_session.is_some() {
+        if self.capture_state.session.is_some() {
             return;
         }
         let horizontal_amount = event.amount(input::Axis::Horizontal).unwrap_or_else(|| {

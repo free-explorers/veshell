@@ -6,6 +6,10 @@ use std::thread;
 
 pub mod pipewire;
 pub mod recording;
+pub mod selection;
+pub mod state;
+
+pub use state::CaptureState;
 
 use smithay::backend::allocator::dmabuf::{AsDmabuf, Dmabuf};
 use smithay::backend::allocator::{Fourcc, Slot};
@@ -26,10 +30,10 @@ use smithay::wayland::selection::data_device::set_data_device_selection;
 use smithay::wayland::selection::SelectionTarget;
 use tracing::{debug, info, warn};
 
+use self::selection::{NATIVE_SCREENSHOT_MIME, PNG_MIME};
 use crate::backend::render::get_frame_elements_from_dmabuf;
 use crate::flutter_engine::view::OutputViewIdWrapper;
 use crate::meta_window_state::meta_window::MetaWindow;
-use crate::state::{NATIVE_SCREENSHOT_MIME, PNG_MIME};
 use crate::{Backend, State};
 
 const BTN_LEFT: u32 = 0x110;
@@ -141,7 +145,7 @@ pub fn begin_capture_session<BackendData: Backend + 'static>(
         record,
         "Entering capture mode"
     );
-    state.capture_session = Some(CaptureSession {
+    state.capture_state.session = Some(CaptureSession {
         output,
         output_geometry: geometry,
         snapshot: Some(snapshot),
@@ -159,7 +163,7 @@ pub fn begin_capture_session<BackendData: Backend + 'static>(
 /// would visibly jump back there after the frozen desktop clears.
 /// `set_location` deliberately sends no events and touches no focus.
 fn end_capture_session<BackendData: Backend + 'static>(state: &mut State<BackendData>) {
-    let Some(session) = state.capture_session.take() else {
+    let Some(session) = state.capture_state.session.take() else {
         return;
     };
     state.pointer.set_location(session.current);
@@ -167,7 +171,7 @@ fn end_capture_session<BackendData: Backend + 'static>(state: &mut State<Backend
 
 /// Cancels the running session without taking a screenshot.
 pub fn cancel_capture_session<BackendData: Backend + 'static>(state: &mut State<BackendData>) {
-    if state.capture_session.is_some() {
+    if state.capture_state.session.is_some() {
         end_capture_session(state);
         info!("Screenshot capture cancelled");
     }
@@ -177,7 +181,7 @@ pub fn capture_pointer_press<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     button_code: u32,
 ) {
-    let Some(session) = state.capture_session.as_mut() else {
+    let Some(session) = state.capture_state.session.as_mut() else {
         return;
     };
     // Primary button starts (or restarts) a drag; other buttons cancel.
@@ -195,7 +199,7 @@ pub fn capture_pointer_motion_delta<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     delta: Point<f64, Logical>,
 ) {
-    let Some(session) = state.capture_session.as_mut() else {
+    let Some(session) = state.capture_state.session.as_mut() else {
         return;
     };
     session.current =
@@ -207,7 +211,7 @@ pub fn capture_pointer_motion_to<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     next: Point<f64, Logical>,
 ) {
-    let Some(session) = state.capture_session.as_mut() else {
+    let Some(session) = state.capture_state.session.as_mut() else {
         return;
     };
     session.current = session.clamp_in_output(next);
@@ -217,7 +221,7 @@ pub fn capture_pointer_release<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     button_code: u32,
 ) {
-    if state.capture_session.is_none() {
+    if state.capture_state.session.is_none() {
         return;
     }
     // Left button completes the capture, every other button cancels.
@@ -229,7 +233,7 @@ pub fn capture_pointer_release<BackendData: Backend + 'static>(
 }
 
 fn finish_capture<BackendData: Backend + 'static>(state: &mut State<BackendData>) {
-    let Some(mut session) = state.capture_session.take() else {
+    let Some(mut session) = state.capture_state.session.take() else {
         return;
     };
     let area = session.selection();
@@ -305,7 +309,7 @@ fn deliver_screenshot<BackendData: Backend + 'static>(
         "Veshell Screenshot {}",
         chrono::Local::now().format("%Y-%m-%d %H-%M-%S%.3f.png")
     ));
-    let sender = state.screenshot_delivery_sender.clone();
+    let sender = state.capture_state.screenshot_delivery_sender.clone();
     thread::spawn(move || {
         let outcome = match encode_and_write_png(size, &pixels, &path) {
             Ok(png) => ScreenshotDeliveryEvent::Completed {
@@ -1340,7 +1344,7 @@ fn start_area_recording<BackendData: Backend + 'static>(
         size,
         fps: RECORDING_FPS,
     };
-    let delivery = state.recording_delivery_sender.clone();
+    let delivery = state.capture_state.recording_delivery_sender.clone();
     let mut recorder = match recording::spawn_recording_worker(geometry, delivery) {
         Ok(recorder) => recorder,
         Err(message) => {
@@ -1365,7 +1369,7 @@ fn start_area_recording<BackendData: Backend + 'static>(
         last_frame: None,
         dropped: 0,
     };
-    state.recording_session = Some(live);
+    state.capture_state.recording_session = Some(live);
     schedule_recording_heartbeat(state, generation);
     info!(
         output = output.name(),
@@ -1443,6 +1447,7 @@ fn schedule_recording_heartbeat<BackendData: Backend + 'static>(
         .loop_handle
         .insert_source(timer, move |_, _, state| {
             if !state
+                .capture_state
                 .recording_session
                 .as_ref()
                 .is_some_and(|recording| recording.generation == generation)
@@ -1462,31 +1467,45 @@ pub fn on_view_frame_presented_for_recording<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     view_id: i64,
 ) {
-    let Some((output_name, generation)) = state.recording_session.as_ref().and_then(|recording| {
+    let Some((output_name, generation)) =
         state
-            .space
-            .outputs()
-            .find_map(|output| {
-                output
-                    .user_data()
-                    .get::<crate::flutter_engine::view::OutputViewIdWrapper>()
-                    .filter(|wrapper| wrapper.view_id == view_id)
-                    .map(|_| output.name())
+            .capture_state
+            .recording_session
+            .as_ref()
+            .and_then(|recording| {
+                state
+                    .space
+                    .outputs()
+                    .find_map(|output| {
+                        output
+                            .user_data()
+                            .get::<crate::flutter_engine::view::OutputViewIdWrapper>()
+                            .filter(|wrapper| wrapper.view_id == view_id)
+                            .map(|_| output.name())
+                    })
+                    .filter(|name| *name == recording.output_name())
+                    .map(|name| (name, recording.generation))
             })
-            .filter(|name| *name == recording.output_name())
-            .map(|name| (name, recording.generation))
-    }) else {
+    else {
         return;
     };
-    let due = state.recording_session.as_ref().is_some_and(|recording| {
-        recording.last_frame.is_none_or(|last| {
-            std::time::Instant::now().duration_since(last) >= RECORDING_FRAME_INTERVAL
-        })
-    });
-    if due {
-        state.recording_session.as_mut().map(|recording| {
-            recording.last_frame = Some(std::time::Instant::now());
+    let due = state
+        .capture_state
+        .recording_session
+        .as_ref()
+        .is_some_and(|recording| {
+            recording.last_frame.is_none_or(|last| {
+                std::time::Instant::now().duration_since(last) >= RECORDING_FRAME_INTERVAL
+            })
         });
+    if due {
+        state
+            .capture_state
+            .recording_session
+            .as_mut()
+            .map(|recording| {
+                recording.last_frame = Some(std::time::Instant::now());
+            });
         deliver_recording_frame(state, generation);
     }
 }
@@ -1500,7 +1519,7 @@ fn deliver_recording_frame<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     generation: u64,
 ) {
-    let Some(recording) = state.recording_session.as_mut() else {
+    let Some(recording) = state.capture_state.recording_session.as_mut() else {
         return;
     };
     if recording.generation != generation {
@@ -1537,13 +1556,14 @@ fn deliver_recording_frame<BackendData: Backend + 'static>(
         output_geometry,
         snapshot,
         state
+            .capture_state
             .recording_session
             .as_ref()
             .map(|recording| recording.size),
     );
     match frame {
         Ok((_, pixels)) => {
-            if let Some(recording) = state.recording_session.as_mut() {
+            if let Some(recording) = state.capture_state.recording_session.as_mut() {
                 if !recording.recorder.push_frame(pixels) {
                     recording.dropped += 1;
                 }
@@ -1559,7 +1579,7 @@ pub fn stop_recording<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     reason: &str,
 ) {
-    if let Some(recording) = state.recording_session.take() {
+    if let Some(recording) = state.capture_state.recording_session.take() {
         let elapsed_ms = recording.started.elapsed().as_millis() as u64;
         let output = recording.output_name();
         recording.recorder.stop();
@@ -1599,11 +1619,12 @@ fn handle_recording_event<BackendData: Backend + 'static>(
     // do not keep running against a dead worker. A normal stop already
     // took the session, so its final event matches nothing.
     if state
+        .capture_state
         .recording_session
         .as_ref()
         .is_some_and(|recording| recording.generation == outcome.generation())
     {
-        state.recording_session.take();
+        state.capture_state.recording_session.take();
     }
     match outcome {
         recording::RecordingEvent::Completed {

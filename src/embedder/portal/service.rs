@@ -380,7 +380,7 @@ pub fn handle_portal_call<BackendData: crate::backend::Backend + 'static>(
     state: &mut crate::state::State<BackendData>,
     call: PortalCall,
 ) {
-    let Some(runtime) = state.portal_runtime.as_mut() else {
+    let Some(runtime) = state.portal_state.runtime.as_mut() else {
         tracing::warn!("portal call arrived without a running backend");
         return;
     };
@@ -395,7 +395,7 @@ pub fn handle_portal_call<BackendData: crate::backend::Backend + 'static>(
         perform_ui_event(state, ui_event);
     }
     for action in portal_actions {
-        if let Some(runtime) = state.portal_runtime.as_mut() {
+        if let Some(runtime) = state.portal_state.runtime.as_mut() {
             if runtime.objects.send(action.clone()).is_err() {
                 tracing::warn!("portal object bridge is gone");
                 return;
@@ -415,8 +415,8 @@ pub fn handle_portal_call<BackendData: crate::backend::Backend + 'static>(
 fn reconcile_portal_pending_pixels<BackendData: crate::backend::Backend + 'static>(
     state: &mut crate::state::State<BackendData>,
 ) {
-    let Some(runtime) = state.portal_runtime.as_ref() else {
-        state.portal_pending_pixels.clear();
+    let Some(runtime) = state.portal_state.runtime.as_ref() else {
+        state.portal_state.pending_pixels.clear();
         return;
     };
     let live: std::collections::HashSet<u64> = runtime
@@ -432,7 +432,8 @@ fn reconcile_portal_pending_pixels<BackendData: crate::backend::Backend + 'stati
         })
         .collect();
     state
-        .portal_pending_pixels
+        .portal_state
+        .pending_pixels
         .retain(|token, _| live.contains(&token));
 }
 
@@ -450,13 +451,25 @@ fn stop_capture_side<BackendData: crate::backend::Backend + 'static>(
         // sentinel stands in for every live stream whose frontend is
         // gone, so the teardown reaches each recorded source by its own
         // key and one stream's teardown can never block another's.
-        if let Some(producer) = state.pipe_wire_producer.as_mut() {
-            for handle in state.active_streams.keys().cloned().collect::<Vec<_>>() {
+        if let Some(producer) = state.portal_state.pipewire_producer.as_mut() {
+            for handle in state
+                .portal_state
+                .active_streams
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>()
+            {
                 producer.stop_stream(&handle);
             }
         }
-        if !state.active_streams.is_empty() {
-            for handle in state.active_streams.keys().cloned().collect::<Vec<_>>() {
+        if !state.portal_state.active_streams.is_empty() {
+            for handle in state
+                .portal_state
+                .active_streams
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>()
+            {
                 hide_shared_indicator(state, &handle);
             }
         } else {
@@ -464,11 +477,16 @@ fn stop_capture_side<BackendData: crate::backend::Backend + 'static>(
             // sentinel itself (one event covers it).
             hide_shared_indicator(state, session_handle);
         }
-        state.active_streams.clear();
+        state.portal_state.active_streams.clear();
         return;
     }
-    if state.active_streams.remove(session_handle).is_some() {
-        if let Some(producer) = state.pipe_wire_producer.as_mut() {
+    if state
+        .portal_state
+        .active_streams
+        .remove(session_handle)
+        .is_some()
+    {
+        if let Some(producer) = state.portal_state.pipewire_producer.as_mut() {
             producer.stop_stream(session_handle);
         }
         hide_shared_indicator(state, session_handle);
@@ -497,7 +515,7 @@ pub fn close_source_share_sessions<BackendData: crate::backend::Backend + 'stati
     source_id: &str,
 ) {
     let handles: Vec<OwnedObjectPath> =
-        source_share_handles(state.active_streams.iter(), source_id);
+        source_share_handles(state.portal_state.active_streams.iter(), source_id);
     for handle in handles {
         close_shared_session(state, &handle);
     }
@@ -591,7 +609,7 @@ fn perform_ui_event<BackendData: crate::backend::Backend + 'static>(
                 // The world changed between Start and the picker: no
                 // supported source exists, so open nothing and complete
                 // the request normally.
-                let reply = if let Some(runtime) = state.portal_runtime.as_mut() {
+                let reply = if let Some(runtime) = state.portal_state.runtime.as_mut() {
                     let mut actions = Vec::new();
                     let mut ui: Vec<PortalUiEvent> = Vec::new();
                     let matched = resolve_consent_no_picker(
@@ -652,15 +670,19 @@ fn perform_ui_event<BackendData: crate::backend::Backend + 'static>(
             if let Some(output) = output {
                 match crate::capture::take_portal_pending_snapshot(state, &output, pointer) {
                     Ok(pending) => {
-                        state.portal_pending_pixels.insert(consent_token, pending);
-                        if state.portal_pending_pixels.len() > 4 {
+                        state
+                            .portal_state
+                            .pending_pixels
+                            .insert(consent_token, pending);
+                        if state.portal_state.pending_pixels.len() > 4 {
                             let oldest = *state
-                                .portal_pending_pixels
+                                .portal_state
+                                .pending_pixels
                                 .keys()
                                 .min()
                                 .take()
                                 .expect("len above evict bound");
-                            state.portal_pending_pixels.remove(&oldest);
+                            state.portal_state.pending_pixels.remove(&oldest);
                         }
                     }
                     Err(message) => {
@@ -801,7 +823,7 @@ pub fn handle_frontend_owner_change<BackendData: crate::backend::Backend + 'stat
     owner: Option<FrontendOwner>,
 ) {
     let (actions, ui) = {
-        let Some(runtime) = state.portal_runtime.as_mut() else {
+        let Some(runtime) = state.portal_state.runtime.as_mut() else {
             return;
         };
         let mut actions = Vec::new();
@@ -813,15 +835,15 @@ pub fn handle_frontend_owner_change<BackendData: crate::backend::Backend + 'stat
         perform_ui_event(state, ui_event);
     }
     for action in actions {
-        if let Some(runtime) = state.portal_runtime.as_mut() {
+        if let Some(runtime) = state.portal_state.runtime.as_mut() {
             let _ = runtime.objects.send(action);
         }
     }
     // Pre-prompt pixel holds die with the frontend: their requests are
     // gone, whatever stage they reached.
-    state.portal_pending_pixels.clear();
+    state.portal_state.pending_pixels.clear();
     // All shared sessions die with the frontend: revoke producers.
-    let handles: Vec<OwnedObjectPath> = state.active_streams.keys().cloned().collect();
+    let handles: Vec<OwnedObjectPath> = state.portal_state.active_streams.keys().cloned().collect();
     for handle in handles {
         close_shared_session(state, &handle);
     }
@@ -851,7 +873,8 @@ pub fn handle_consent_decision<BackendData: crate::backend::Backend + 'static>(
     if outcome == ConsentOutcome::Approved {
         // The session's own constraints bound what may be approved.
         let allowed_types = state
-            .portal_runtime
+            .portal_state
+            .runtime
             .as_ref()
             .and_then(|runtime| runtime.ledger.sessions.get(&session_handle))
             .and_then(|session| session.constraints.as_ref())
@@ -886,13 +909,14 @@ pub fn handle_consent_decision<BackendData: crate::backend::Backend + 'static>(
         // for a flow that requested transient persistence; a client that
         // never asked is answered `persist_mode = 0` with no token.
         let persist_requested = state
-            .portal_runtime
+            .portal_state
+            .runtime
             .as_ref()
             .and_then(|runtime| runtime.ledger.sessions.get(&session_handle))
             .and_then(|session| session.constraints.as_ref())
             .is_some_and(|constraints| constraints.persist_mode != 0);
         let restore_token = if persist_requested {
-            state.portal_runtime.as_mut().and_then(|runtime| {
+            state.portal_state.runtime.as_mut().and_then(|runtime| {
                 let frontend = runtime.ledger.frontend.clone()?;
                 Some(runtime.ledger.mint_restore_token(frontend, source.clone()))
             })
@@ -932,7 +956,7 @@ pub fn handle_screenshot_prompt_decision<BackendData: crate::backend::Backend + 
     consent_token: u64,
     outcome: ConsentOutcome,
 ) {
-    let Some(runtime) = state.portal_runtime.as_mut() else {
+    let Some(runtime) = state.portal_state.runtime.as_mut() else {
         tracing::debug!("Screenshot prompt decision without a portal backend");
         return;
     };
@@ -1010,7 +1034,7 @@ fn begin_portal_capture<BackendData: crate::backend::Backend + 'static>(
         })
         .or_else(|| state.space.outputs().next())
         .cloned();
-    let sender = state.portal_capture_sender.clone();
+    let sender = state.portal_state.capture_sender.clone();
     match output {
         None => {
             // No outputs at all: the request completes failed so the app
@@ -1033,7 +1057,7 @@ fn begin_portal_capture<BackendData: crate::backend::Backend + 'static>(
             // The pre-prompt frame freezes the response pixels: the
             // prompt dialog may sit over the desktop while the capture
             // decision waits, and none of it may reach the result.
-            let pending = state.portal_pending_pixels.remove(&consent_token);
+            let pending = state.portal_state.pending_pixels.remove(&consent_token);
             match kind {
                 CaptureKind::Screen => {
                     let captured = match pending {
@@ -1119,7 +1143,11 @@ pub fn schedule_frame_delivery<BackendData: crate::backend::Backend + 'static>(
     state
         .loop_handle
         .insert_source(timer, move |_, _, state| {
-            if !state.active_streams.contains_key(&session_handle) {
+            if !state
+                .portal_state
+                .active_streams
+                .contains_key(&session_handle)
+            {
                 return TimeoutAction::Drop;
             }
             deliver_session_frame(state, &session_handle, &output);
@@ -1136,7 +1164,7 @@ fn deliver_session_frame<BackendData: crate::backend::Backend + 'static>(
 ) {
     match crate::capture::capture_output_pixels(state, output) {
         Ok(snapshot) => {
-            if let Some(producer) = state.pipe_wire_producer.as_mut() {
+            if let Some(producer) = state.portal_state.pipewire_producer.as_mut() {
                 producer.queue_frame(session_handle.clone(), &snapshot.pixels);
             }
         }
@@ -1159,7 +1187,11 @@ pub fn schedule_window_frame_delivery<BackendData: crate::backend::Backend + 'st
     state
         .loop_handle
         .insert_source(timer, move |_, _, state| {
-            if !state.active_streams.contains_key(&session_handle) {
+            if !state
+                .portal_state
+                .active_streams
+                .contains_key(&session_handle)
+            {
                 return TimeoutAction::Drop;
             }
             deliver_window_frame(state, &session_handle);
@@ -1176,7 +1208,12 @@ fn deliver_window_frame<BackendData: crate::backend::Backend + 'static>(
     state: &mut crate::state::State<BackendData>,
     session_handle: &OwnedObjectPath,
 ) {
-    let Some(stream) = state.active_streams.get(session_handle).cloned() else {
+    let Some(stream) = state
+        .portal_state
+        .active_streams
+        .get(session_handle)
+        .cloned()
+    else {
         return;
     };
     match crate::capture::capture_window_pixels(state, &stream.source_id) {
@@ -1186,7 +1223,7 @@ fn deliver_window_frame<BackendData: crate::backend::Backend + 'static>(
                 close_shared_session(state, session_handle);
                 return;
             }
-            if let Some(producer) = state.pipe_wire_producer.as_mut() {
+            if let Some(producer) = state.portal_state.pipewire_producer.as_mut() {
                 producer.queue_frame(session_handle.clone(), &pixels);
             }
         }
@@ -1217,6 +1254,7 @@ pub fn on_view_frame_presented<BackendData: crate::backend::Backend + 'static>(
     // damage beat for every window share, bounded by the same 30 FPS
     // budget per session.
     let due_windows: Vec<OwnedObjectPath> = state
+        .portal_state
         .active_streams
         .iter()
         .filter(|(_handle, stream)| {
@@ -1228,7 +1266,7 @@ pub fn on_view_frame_presented<BackendData: crate::backend::Backend + 'static>(
         .map(|(handle, _)| handle.clone())
         .collect();
     for handle in &due_windows {
-        if let Some(stream) = state.active_streams.get_mut(handle) {
+        if let Some(stream) = state.portal_state.active_streams.get_mut(handle) {
             stream.last_frame = Some(now);
         }
         deliver_window_frame(state, handle);
@@ -1246,6 +1284,7 @@ pub fn on_view_frame_presented<BackendData: crate::backend::Backend + 'static>(
     let now = std::time::Instant::now();
     // Sessions due for a fresh copy from this damage event.
     let due: Vec<OwnedObjectPath> = state
+        .portal_state
         .active_streams
         .iter()
         .filter(|(_handle, stream)| {
@@ -1277,10 +1316,10 @@ pub fn on_view_frame_presented<BackendData: crate::backend::Backend + 'static>(
         return;
     };
     for handle in due {
-        if let Some(producer) = state.pipe_wire_producer.as_mut() {
+        if let Some(producer) = state.portal_state.pipewire_producer.as_mut() {
             producer.queue_frame(handle.clone(), &captured.pixels);
         }
-        if let Some(stream) = state.active_streams.get_mut(&handle) {
+        if let Some(stream) = state.portal_state.active_streams.get_mut(&handle) {
             stream.last_frame = Some(now);
         }
     }
@@ -1307,18 +1346,18 @@ fn begin_shared_stream<BackendData: crate::backend::Backend + 'static>(
         close_shared_session(state, session_handle);
         return;
     };
-    if state.pipe_wire_producer.is_none() {
+    if state.portal_state.pipewire_producer.is_none() {
         match crate::capture::pipewire::Producer::new(
             &state.loop_handle,
-            state.producer_delivery_sender.clone(),
+            state.portal_state.producer_delivery_sender.clone(),
         ) {
             Ok(producer) => {
-                state.pipe_wire_producer = Some(producer);
+                state.portal_state.pipewire_producer = Some(producer);
             }
             Err(_) => {}
         }
     }
-    let Some(producer) = state.pipe_wire_producer.as_mut() else {
+    let Some(producer) = state.portal_state.pipewire_producer.as_mut() else {
         tracing::warn!("PipeWire producer is unavailable");
         close_shared_session(state, session_handle);
         return;
@@ -1332,7 +1371,7 @@ fn begin_shared_stream<BackendData: crate::backend::Backend + 'static>(
         label: source.label.clone(),
     };
     producer.start_stream(descriptor);
-    state.active_streams.insert(
+    state.portal_state.active_streams.insert(
         session_handle.clone(),
         ActiveStream {
             node_id: 0,
@@ -1425,7 +1464,7 @@ fn handle_consent_through_runtime<BackendData: crate::backend::Backend + 'static
     outcome: ConsentOutcome,
 ) -> ConsentResolution {
     let (resolution, actions, ui) = {
-        let Some(runtime) = state.portal_runtime.as_mut() else {
+        let Some(runtime) = state.portal_state.runtime.as_mut() else {
             return ConsentResolution::NotMatched;
         };
         let mut actions = Vec::new();
@@ -1444,7 +1483,7 @@ fn handle_consent_through_runtime<BackendData: crate::backend::Backend + 'static
         perform_ui_event(state, ui_event);
     }
     for action in actions {
-        if let Some(runtime) = state.portal_runtime.as_mut() {
+        if let Some(runtime) = state.portal_state.runtime.as_mut() {
             let _ = runtime.objects.send(action);
         }
     }
@@ -1476,7 +1515,12 @@ pub fn handle_producer_event<BackendData: crate::backend::Backend + 'static>(
             // (pre-fixate): the first Starting -> Active transition
             // completes the Start reply and shows the indicator; a
             // repeat updates the node id only.
-            let Some(mut stream) = state.active_streams.get(&session_handle).cloned() else {
+            let Some(mut stream) = state
+                .portal_state
+                .active_streams
+                .get(&session_handle)
+                .cloned()
+            else {
                 tracing::debug!("producer node for an unknown stream");
                 return;
             };
@@ -1486,7 +1530,7 @@ pub fn handle_producer_event<BackendData: crate::backend::Backend + 'static>(
                 UnknownSession,
             }
             let (action, pending_reply) = {
-                let Some(runtime) = state.portal_runtime.as_mut() else {
+                let Some(runtime) = state.portal_state.runtime.as_mut() else {
                     return;
                 };
                 match runtime.ledger.sessions.get_mut(&session_handle) {
@@ -1501,12 +1545,13 @@ pub fn handle_producer_event<BackendData: crate::backend::Backend + 'static>(
             match action {
                 NodeAction::UnknownSession => {
                     tracing::debug!("producer node for an unknown session");
-                    let _ = state.active_streams.remove(&session_handle);
+                    let _ = state.portal_state.active_streams.remove(&session_handle);
                     return;
                 }
                 NodeAction::Repeat => {
                     stream.node_id = node_id;
                     state
+                        .portal_state
                         .active_streams
                         .insert(session_handle.clone(), stream.clone());
                     return;
@@ -1529,6 +1574,7 @@ pub fn handle_producer_event<BackendData: crate::backend::Backend + 'static>(
                 }
             }
             state
+                .portal_state
                 .active_streams
                 .insert(session_handle.clone(), stream.clone());
             show_shared_indicator(state, session_handle.clone(), stream);
@@ -1547,7 +1593,7 @@ pub fn handle_producer_event<BackendData: crate::backend::Backend + 'static>(
         crate::capture::pipewire::ProducerEvent::ConsumerChanged {
             session_handle,
             active,
-        } => match state.active_streams.get_mut(&session_handle) {
+        } => match state.portal_state.active_streams.get_mut(&session_handle) {
             Some(stream) => {
                 stream.active = active;
             }
@@ -1705,7 +1751,7 @@ fn handle_portal_capture_outcome<BackendData: crate::backend::Backend + 'static>
             ..
         } => (handle.clone(), *consent_token),
     };
-    let Some(runtime) = state.portal_runtime.as_mut() else {
+    let Some(runtime) = state.portal_state.runtime.as_mut() else {
         tracing::warn!("portal capture outcome without a running backend");
         return;
     };
@@ -1841,7 +1887,7 @@ pub fn close_shared_session<BackendData: crate::backend::Backend + 'static>(
     state: &mut crate::state::State<BackendData>,
     session_handle: &OwnedObjectPath,
 ) {
-    let actions = match state.portal_runtime.as_mut() {
+    let actions = match state.portal_state.runtime.as_mut() {
         Some(runtime) => {
             let mut actions = Vec::new();
             if let Some(session) = runtime.ledger.sessions.get_mut(session_handle) {
@@ -1871,7 +1917,7 @@ pub fn close_shared_session<BackendData: crate::backend::Backend + 'static>(
         None => Vec::new(),
     };
     for action in actions {
-        if let Some(runtime) = state.portal_runtime.as_mut() {
+        if let Some(runtime) = state.portal_state.runtime.as_mut() {
             let _ = runtime.objects.send(action);
         }
     }

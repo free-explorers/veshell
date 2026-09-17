@@ -1253,10 +1253,12 @@ impl State<DrmBackend> {
         // The selection overlay only appears on the output the screenshot
         // session attached to; on the others the pointer never goes.
         let capture_overlay = self
-            .capture_session
+            .capture_state
+            .session
             .as_ref()
             .filter(|session| session.output.name() == output.name());
         let recording_chip = self
+            .capture_state
             .recording_session
             .as_ref()
             .filter(|recording| recording.output_name() == output.name())

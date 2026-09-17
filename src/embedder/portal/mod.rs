@@ -18,6 +18,9 @@ use std::collections::HashMap;
 use smithay::reexports::calloop;
 use zbus::connection::Builder as ConnectionBuilder;
 pub mod service;
+pub mod state;
+
+pub use state::PortalState;
 
 #[cfg(test)]
 pub static HARNESS_TEST_COUNTER: std::sync::atomic::AtomicU64 =

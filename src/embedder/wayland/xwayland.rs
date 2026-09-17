@@ -2,6 +2,7 @@ use smithay::xwayland::X11Wm;
 
 pub mod xwayland {
     use crate::backend::Backend;
+    use crate::capture::selection::{send_native_selection, NATIVE_SCREENSHOT_MIME, PNG_MIME};
     use crate::cursor::{load_cursor_theme, Cursor};
     use crate::flutter_engine::wayland_messages::{MapX11Surface, MyPoint, NewX11Surface};
     use crate::focus::KeyboardFocusTarget;
@@ -9,7 +10,6 @@ pub mod xwayland {
     use crate::meta_window_state::meta_resize_edge::MetaResizeEdge;
     use crate::meta_window_state::meta_window::MetaWindowPatch;
     use crate::state::State;
-    use crate::state::{send_native_selection, NATIVE_SCREENSHOT_MIME, PNG_MIME};
     use crate::wayland::wayland::get_surface_id;
     use serde_json::json;
     use smithay::backend::allocator::Fourcc;

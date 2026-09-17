@@ -158,7 +158,7 @@ fn handle_embedder_hotkeys<BackendData: Backend + 'static>(
     // normally; Print is the only finisher the user controls (Escape and
     // clicks are never a stop action). The recording also finalizes on
     // layout changes from its pump.
-    if data.recording_session.is_some() {
+    if data.capture_state.recording_session.is_some() {
         if event.state == KeyState::Pressed && event.keysym == Keysym::Print {
             crate::capture::stop_recording(data, "user stop");
         }
@@ -171,7 +171,7 @@ fn handle_embedder_hotkeys<BackendData: Backend + 'static>(
     // already sent to Flutter gets its matching keyup synthesized too,
     // otherwise Flutter keeps believing that key is held (which froze the
     // shell hotkeys after selection sessions).
-    if data.capture_session.is_some() {
+    if data.capture_state.session.is_some() {
         if event.state == KeyState::Released {
             if data.flutter_sent_keys.remove(&event.key_code).is_some() {
                 data.flutter_engine

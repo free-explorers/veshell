@@ -526,10 +526,12 @@ pub fn run_x11_client() {
                     })
                     .collect::<Vec<_>>(),
                 state
-                    .capture_session
+                    .capture_state
+                    .session
                     .as_ref()
                     .filter(|session| session.output.name() == output.name()),
                 state
+                    .capture_state
                     .recording_session
                     .as_ref()
                     .filter(|recording| recording.output_name() == output.name())

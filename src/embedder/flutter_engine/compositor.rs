@@ -77,7 +77,7 @@ impl FlutterCompositor {
                 if let Msg(event) = event {
                     // Snapshot the freeze flag first: the mutable engine
                     // borrow must not overlap it.
-                    let freeze = data.capture_session.is_some();
+                    let freeze = data.capture_state.session.is_some();
                     let flutter_engine = data.flutter_engine_mut();
                     match event {
                         BackingStoreEvent::Presented(id) => {

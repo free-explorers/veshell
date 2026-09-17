@@ -1,9 +1,7 @@
 use std::collections::{HashMap, HashSet};
-use std::io::{ErrorKind, Write};
 use std::os::fd::OwnedFd;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
-use std::thread;
 
 use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::backend::input::KeyState;
@@ -16,7 +14,7 @@ use smithay::input::pointer::{CursorImageStatus, PointerHandle};
 use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::output::{Output, Scale};
 use smithay::reexports::calloop::generic::Generic;
-use smithay::reexports::calloop::{channel, Interest, LoopHandle, Mode, PostAction};
+use smithay::reexports::calloop::{Interest, LoopHandle, Mode, PostAction};
 use smithay::reexports::input;
 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
@@ -58,7 +56,6 @@ use smithay::wayland::xwayland_shell::{self, XWAYLAND_SHELL_ROLE};
 use smithay::xwayland::{X11Surface, X11Wm};
 use tracing::{info, warn};
 use xkbcommon::xkb::Keycode;
-use zbus::zvariant::OwnedObjectPath;
 
 use crate::cursor::CursorState;
 use crate::flutter_engine::view::OutputViewIdWrapper;
@@ -77,32 +74,6 @@ use crate::texture_swap_chain::TextureSwapChain;
 use crate::wayland::wayland::{get_direct_subsurfaces, get_surface_id};
 use crate::wayland::xwayland::xwayland::XWaylandState;
 use crate::{flutter_engine, Backend, ClientState};
-
-pub const NATIVE_SCREENSHOT_MIME: &str = "application/x-veshell-screenshot";
-pub const PNG_MIME: &str = "image/png";
-pub type SelectionUserData = Option<Arc<Vec<u8>>>;
-
-pub(crate) fn send_native_selection(fd: OwnedFd, data: Arc<Vec<u8>>) {
-    // Selection requests provide a pipe/socket owned by the receiver. Writing it on a
-    // worker keeps a slow receiver from stalling the compositor event loop.
-    thread::spawn(move || {
-        let mut file = std::fs::File::from(fd);
-        let mut written = 0;
-        while written < data.len() {
-            match file.write(&data[written..]) {
-                Ok(0) => break,
-                Ok(count) => written += count,
-                Err(error) if error.kind() == ErrorKind::WouldBlock => {
-                    thread::sleep(std::time::Duration::from_millis(1));
-                }
-                Err(error) => {
-                    warn!(?error, "Failed to write native screenshot selection");
-                    break;
-                }
-            }
-        }
-    });
-}
 
 pub struct State<BackendData: Backend + 'static> {
     pub backend_data: Box<BackendData>,
@@ -158,32 +129,14 @@ pub struct State<BackendData: Backend + 'static> {
     pub fractional_scale_manager_state: FractionalScaleManagerState,
     pub input_devices: HashSet<input::Device>,
     pub output_layout_revision: u64,
-    pub capture_session: Option<crate::capture::CaptureSession>,
-    pub screenshot_delivery_sender: channel::Sender<crate::capture::ScreenshotDeliveryEvent>,
-    /// A live local recording, started by the capture flow.
-    pub recording_session: Option<crate::capture::LiveRecording>,
-    /// Events reported by recording worker sessions. The receiver is
-    /// registered in the loop at startup.
-    pub recording_delivery_sender: channel::Sender<crate::capture::recording::RecordingEvent>,
-    pub portal_runtime: Option<crate::portal::PortalRuntime>,
-    /// Portal screenshot/pick-color captures report their encode result
-    /// here; the receiver is registered on the loop at startup and the
-    /// sender stays alive with the state.
-    pub portal_capture_sender: channel::Sender<crate::portal::service::PortalCaptureOutcome>,
-    /// Pixels frozen at portal request time, before the prompt dialog
-    /// renders over them: the Screenshot/PickColor response comes from
-    /// this pre-prompt frame regardless of the decision delay. Dropped
-    /// at every denial, completion, and eviction.
-    pub portal_pending_pixels: HashMap<u64, crate::capture::PendingPortalPixels>,
-    /// PipeWire producer, initialized lazily on the first approval.
-    pub pipe_wire_producer: Option<crate::capture::pipewire::Producer>,
-    /// Events traveling from the producer main loop onto the compositor
-    /// loop. The receiver is registered in the loop at startup.
-    /// Sender kept alive for the producer event channel so the calloop
-    /// source never closes while a compositor runs.
-    pub producer_delivery_sender: channel::Sender<crate::capture::pipewire::ProducerEvent>,
-    /// Live screen cast streams keyed by the portal session handle.
-    pub active_streams: HashMap<OwnedObjectPath, crate::capture::pipewire::ActiveStream>,
+    /// Capture-owned state: the native selection session, the local recording
+    /// session, and the channels that carry their worker results back onto the
+    /// compositor loop.
+    pub capture_state: crate::capture::CaptureState,
+    /// Portal-owned state: the backend runtime, the screenshot/pick-color
+    /// encode bridge, and the PipeWire producer with its live screen-cast
+    /// streams.
+    pub portal_state: crate::portal::PortalState,
     /// View (monitor) that received the start of the current pointer gesture
     /// (button-held drag, trackpad pan/zoom scroll, or pinch). Every later
     /// event of that gesture is pinned to this view so Flutter sees one
@@ -343,55 +296,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let xdg_decoration_state = XdgDecorationState::new::<Self>(&display_handle);
         let fractional_scale_manager_state =
             FractionalScaleManagerState::new::<Self>(&display_handle);
-        let screenshot_delivery_sender =
-            crate::capture::insert_screenshot_delivery_source(&loop_handle);
-        // Recording sessions report final paths and failures here; the
-        // worker thread itself stays off the loop.
-        let recording_delivery_sender =
-            crate::capture::insert_recording_delivery_source(&loop_handle);
-        // Portal screenshot/pick-color captures report their outcome here
-        // (encoder runs on a worker thread like the hotkey screenshot).
-        let portal_capture_sender =
-            crate::portal::service::insert_portal_capture_source(&loop_handle);
-        // The PipeWire producer reports node life and failures over this
-        // channel; the compositor loop answers with session lifecycle.
-        let (producer_delivery_sender, producer_delivery_receiver) =
-            channel::channel::<crate::capture::pipewire::ProducerEvent>();
-        loop_handle
-            .insert_source(producer_delivery_receiver, |event, _, state| {
-                if let channel::Event::Msg(receipt) = event {
-                    crate::portal::service::handle_producer_event(state, receipt);
-                }
-            })
-            .expect("Failed to init producer channel");
-
-        // The portal backend is owned exclusively by the seat session: a
-        // nested or foreign-bus run must never answer portal requests.
-        let portal_runtime = if <BackendData as Backend>::RUNS_PORTAL_BACKEND {
-            match crate::portal::spawn_portal_runtime() {
-                Some(Ok((runtime, calls))) => {
-                    loop_handle
-                        .insert_source(calls, |event, _, state: &mut Self| {
-                            if let channel::Event::Msg(call) = event {
-                                crate::portal::service::handle_portal_call(state, call);
-                            }
-                        })
-                        .expect("Failed to init portal call bridge");
-                    info!("Portal backend listening on the session bus");
-                    Some(runtime)
-                }
-                Some(Err(error)) => {
-                    warn!(?error, "Portal backend did not start");
-                    None
-                }
-                None => {
-                    warn!("No session bus is available for the portal backend");
-                    None
-                }
-            }
-        } else {
-            None
-        };
+        let capture_state = crate::capture::CaptureState::new::<BackendData>(&loop_handle);
+        let portal_state = crate::portal::PortalState::new::<BackendData>(&loop_handle);
 
         Self {
             running: Arc::new(AtomicBool::new(true)),
@@ -447,16 +353,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             fractional_scale_manager_state,
             input_devices: HashSet::new(),
             output_layout_revision: 0,
-            capture_session: None,
-            screenshot_delivery_sender,
-            recording_session: None,
-            recording_delivery_sender,
-            portal_capture_sender,
-            portal_pending_pixels: HashMap::new(),
-            portal_runtime,
-            producer_delivery_sender,
-            pipe_wire_producer: None,
-            active_streams: HashMap::new(),
+            capture_state,
+            portal_state,
             pointer_gesture_view_id: None,
         }
     }
@@ -732,7 +630,7 @@ impl<BackendData: Backend> SeatHandler for State<BackendData> {
 }
 
 impl<BackendData: Backend> SelectionHandler for State<BackendData> {
-    type SelectionUserData = SelectionUserData;
+    type SelectionUserData = crate::capture::selection::SelectionUserData;
 
     fn new_selection(
         &mut self,
@@ -757,11 +655,13 @@ impl<BackendData: Backend> SelectionHandler for State<BackendData> {
         mime_type: String,
         fd: OwnedFd,
         _seat: Seat<Self>,
-        user_data: &SelectionUserData,
+        user_data: &Self::SelectionUserData,
     ) {
         if let Some(data) = user_data {
-            if mime_type == PNG_MIME || mime_type == NATIVE_SCREENSHOT_MIME {
-                send_native_selection(fd, data.clone());
+            if mime_type == crate::capture::selection::PNG_MIME
+                || mime_type == crate::capture::selection::NATIVE_SCREENSHOT_MIME
+            {
+                crate::capture::selection::send_native_selection(fd, data.clone());
                 return;
             }
         }
