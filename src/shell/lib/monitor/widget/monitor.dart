@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/main.dart';
 import 'package:shell/capture/widget/screen_cast_consent.dart';
 import 'package:shell/capture/widget/screen_cast_indicator_bar.dart';
+import 'package:shell/capture/widget/screenshot_prompt.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/monitor/model/monitor_configuration.serializable.dart';
 import 'package:shell/monitor/model/screen_configuration.serializable.dart';
@@ -109,6 +110,7 @@ class MonitorWidget extends HookConsumerWidget {
                                 ?.name ==
                             monitorName) ...[
                       const ScreenCastConsentHost(),
+                      const ScreenshotPromptHost(),
                       Align(
                         alignment: Alignment.bottomLeft,
                         child: ScreenCastIndicatorBar(),

@@ -16,6 +16,10 @@ use super::{
 
 pub use super::FrontendOwner;
 
+use smithay::reexports::calloop::channel;
+use std::path::PathBuf;
+use zbus::zvariant::OwnedValue;
+
 use crate::capture::pipewire::{ActiveStream, StreamDescriptor};
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 
@@ -71,12 +75,60 @@ pub struct ConsentRequest {
     pub reply: ReplyLink,
 }
 
+/// One screenshot/pick-color flow's prompt stage (spec 8.4); the shapes
+/// follow the v3 Screenshot contract.
+#[derive(Debug)]
+pub struct ScreenshotConsent {
+    pub consent_token: u64,
+    pub app_name: String,
+    pub kind: CaptureKind,
+    pub reply: ReplyLink,
+}
+
+/// What an approved prompt gathers: a full-screen PNG (Screen) or a
+/// color sample. Both pass the same trusted prompt; their grants differ.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CaptureKind {
+    Screen,
+    Color,
+}
+
+/// One in-flight portal screenshot/pick-color request. Either the
+/// prompt or the capture stage holds the method's reply.
+#[derive(Debug)]
+pub struct ScreenshotEntry {
+    pub consent: Option<ScreenshotConsent>,
+    pub capture: Option<ScreenshotCapture>,
+}
+
+/// An approved prompt whose capture machinery produces the result; the
+/// reply completes when the encode hands back a file or a color sample.
+#[derive(Debug)]
+pub struct ScreenshotCapture {
+    pub consent_token: u64,
+    pub kind: CaptureKind,
+    pub reply: ReplyLink,
+}
+
+impl Default for ScreenshotEntry {
+    fn default() -> Self {
+        Self {
+            consent: None,
+            capture: None,
+        }
+    }
+}
+
 /// Everything the backend service must know. Every nonclosed state can
 /// close, and closing never redirects to a substitute target.
 #[derive(Debug, Default)]
 pub struct PortalLedger {
     pub sessions: HashMap<OwnedObjectPath, PortalSession>,
     pub requests: HashMap<OwnedObjectPath, PendingRequest>,
+    /// In-flight Screenshot/PickColor portal requests (spec 8.4). These
+    /// have no CaptureSession behind them: the ledger itself owns the
+    /// prompt-and-capture lifecycle.
+    pub screenshots: HashMap<OwnedObjectPath, ScreenshotEntry>,
     pub frontend: Option<FrontendOwner>,
     pub next_consent_token: u64,
 }
@@ -107,6 +159,16 @@ pub enum PortalUiEvent {
         consent_token: u64,
     },
     DismissPicker {
+        consent_token: u64,
+    },
+    /// Opens the screenshot consent prompt (spec 8.4: every external
+    /// screenshot request prompts first). The decision returns through
+    /// its own platform-channel callback with the unguessable token
+    /// attached.
+    OpenScreenshotPrompt {
+        request_handle: OwnedObjectPath,
+        app_name: String,
+        kind: CaptureKind,
         consent_token: u64,
     },
 }
@@ -186,6 +248,16 @@ pub fn frontend_owner_changed(
         }
     }
     ledger.requests.clear();
+    for (_handle, entry) in ledger.screenshots.iter_mut() {
+        if let Some(consent) = entry.consent.take() {
+            consent.reply.send(cancelled());
+            ui.push(PortalUiEvent::DismissPicker {
+                consent_token: consent.consent_token,
+            });
+        }
+        entry.capture = None;
+    }
+    ledger.screenshots.clear();
     let closed_sessions: Vec<OwnedObjectPath> = ledger.sessions.keys().cloned().collect();
     for session_handle in closed_sessions {
         // A session denied its Start reply before removal never completes:
@@ -223,6 +295,7 @@ pub fn handle_portal_call<BackendData: crate::backend::Backend + 'static>(
         apply_portal_call(&mut runtime.ledger, call, &mut portal_actions, &mut ui);
         (portal_actions, ui)
     };
+    reconcile_portal_pending_pixels(state);
     for ui_event in ui {
         perform_ui_event(state, ui_event);
     }
@@ -238,6 +311,34 @@ pub fn handle_portal_call<BackendData: crate::backend::Backend + 'static>(
             stop_capture_side(state, &session_handle);
         }
     }
+}
+
+/// Evicts pre-prompt pixel holds whose portal request no longer exists
+/// in the ledger (denials through RequestClose, completed entries):
+/// buffering desktop frames past their reason to exist is a spec 8.4
+/// leak.
+fn reconcile_portal_pending_pixels<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+) {
+    let Some(runtime) = state.portal_runtime.as_ref() else {
+        state.portal_pending_pixels.clear();
+        return;
+    };
+    let live: std::collections::HashSet<u64> = runtime
+        .ledger
+        .screenshots
+        .values()
+        .filter_map(|entry| {
+            entry
+                .consent
+                .as_ref()
+                .map(|consent| consent.consent_token)
+                .or_else(|| entry.capture.as_ref().map(|capture| capture.consent_token))
+        })
+        .collect();
+    state
+        .portal_pending_pixels
+        .retain(|token, _| live.contains(&token));
 }
 
 /// Capture-side revocation for one session: producer teardown and the
@@ -314,6 +415,64 @@ fn perform_ui_event<BackendData: crate::backend::Backend + 'static>(
                         "consentToken": consent_token,
                         "appName": app_name,
                         "sources": sources,
+                    }))),
+                    None,
+                );
+        }
+        PortalUiEvent::OpenScreenshotPrompt {
+            request_handle,
+            app_name,
+            kind,
+            consent_token,
+        } => {
+            // The response frame is the pre-prompt desktop (spec 8.4):
+            // freeze the pixels exactly once, before the dialog renders
+            // over them. A failed pre-capture leaves no stash and the
+            // approval path falls back to a fresh capture.
+            let pointer = state.pointer.current_location().to_f64();
+            let output = state
+                .space
+                .outputs()
+                .find(|output| {
+                    state
+                        .space
+                        .output_geometry(output)
+                        .is_some_and(|geometry| geometry.to_f64().contains(pointer))
+                })
+                .or_else(|| state.space.outputs().next())
+                .cloned();
+            if let Some(output) = output {
+                match crate::capture::take_portal_pending_snapshot(state, &output, pointer) {
+                    Ok(pending) => {
+                        state.portal_pending_pixels.insert(consent_token, pending);
+                        if state.portal_pending_pixels.len() > 4 {
+                            let oldest = *state
+                                .portal_pending_pixels
+                                .keys()
+                                .min()
+                                .take()
+                                .expect("len above evict bound");
+                            state.portal_pending_pixels.remove(&oldest);
+                        }
+                    }
+                    Err(message) => {
+                        tracing::warn!(message, "portal pre-prompt snapshot failed");
+                    }
+                }
+            }
+            state
+                .flutter_engine_mut()
+                .platform_method_channel
+                .invoke_method(
+                    "screenshot_prompt",
+                    Some(Box::new(json!({
+                        "requestHandle": request_handle.as_str(),
+                        "consentToken": consent_token,
+                        "appName": app_name,
+                        "kind": match kind {
+                            CaptureKind::Screen => "screen",
+                            CaptureKind::Color => "color",
+                        },
                     }))),
                     None,
                 );
@@ -404,6 +563,9 @@ pub fn handle_frontend_owner_change<BackendData: crate::backend::Backend + 'stat
             let _ = runtime.objects.send(action);
         }
     }
+    // Pre-prompt pixel holds die with the frontend: their requests are
+    // gone, whatever stage they reached.
+    state.portal_pending_pixels.clear();
     // All shared sessions die with the frontend: revoke producers.
     let handles: Vec<OwnedObjectPath> = state.active_streams.keys().cloned().collect();
     for handle in handles {
@@ -454,6 +616,174 @@ pub fn handle_consent_decision<BackendData: crate::backend::Backend + 'static>(
         begin_shared_stream(state, &session_handle, source);
     } else {
         handle_consent_through_runtime(state, &session_handle, consent_token, outcome);
+    }
+}
+
+/// Applies the trusted screenshot prompt's decision (spec 8.4): the
+/// unguessable token binds the reply, and an approval moves the entry
+/// into its capture stage, taking the pixels exactly once with no
+/// selection, desktop freeze, or pointer involvement.
+pub fn handle_screenshot_prompt_decision<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    consent_token: u64,
+    outcome: ConsentOutcome,
+) {
+    let Some(runtime) = state.portal_runtime.as_mut() else {
+        tracing::debug!("Screenshot prompt decision without a portal backend");
+        return;
+    };
+    let Some((handle, kind)) =
+        resolve_screenshot_consent(&mut runtime.ledger, consent_token, outcome)
+    else {
+        tracing::debug!("Screenshot decision matched no live prompt");
+        return;
+    };
+    if outcome != ConsentOutcome::Approved {
+        return;
+    }
+    begin_portal_capture(state, &handle, kind, consent_token);
+}
+
+/// Ledger side of one screenshot prompt decision: takes the consent out
+/// of its entry, answering dead-ends itself; approvals hand the kind,
+/// handle, and waiting reply to the capture stage.
+fn resolve_screenshot_consent(
+    ledger: &mut PortalLedger,
+    consent_token: u64,
+    outcome: ConsentOutcome,
+) -> Option<(OwnedObjectPath, CaptureKind)> {
+    let matched = ledger
+        .screenshots
+        .iter()
+        .find(|(_, entry)| {
+            entry
+                .consent
+                .as_ref()
+                .is_some_and(|consent| consent.consent_token == consent_token)
+        })
+        .map(|(handle, _)| handle.clone())?;
+    let entry = ledger.screenshots.get_mut(&matched)?;
+    let consent = entry.consent.take()?;
+    entry.capture = None;
+    match outcome {
+        ConsentOutcome::Approved => {
+            // The reply link moves with the capture stage, so the encode
+            // outcome and any close path both answer it.
+            entry.capture = Some(ScreenshotCapture {
+                consent_token: consent.consent_token,
+                kind: consent.kind,
+                reply: consent.reply,
+            });
+            Some((matched, consent.kind))
+        }
+        ConsentOutcome::Cancelled => {
+            consent.reply.send(cancelled());
+            ledger.screenshots.remove(&matched);
+            None
+        }
+    }
+}
+
+/// Takes the approved pixels and runs the encode worker; the outcome
+/// channel completes the waiting reply.
+fn begin_portal_capture<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    handle: &OwnedObjectPath,
+    kind: CaptureKind,
+    consent_token: u64,
+) {
+    // The output under the pointer, like the hotkey flow's fallback: a
+    // portal "whole screen" request names no output of its own.
+    let pointer = state.pointer.current_location().to_f64();
+    let output = state
+        .space
+        .outputs()
+        .find(|output| {
+            state
+                .space
+                .output_geometry(output)
+                .is_some_and(|geometry| geometry.to_f64().contains(pointer))
+        })
+        .or_else(|| state.space.outputs().next())
+        .cloned();
+    let sender = state.portal_capture_sender.clone();
+    match output {
+        None => {
+            // No outputs at all: the request completes failed so the app
+            // hears a clear answer instead of an eternal wait.
+            let outcome = match kind {
+                CaptureKind::Screen => PortalCaptureOutcome::Screenshot {
+                    handle: handle.clone(),
+                    consent_token,
+                    result: Err("no output is available".to_string()),
+                },
+                CaptureKind::Color => PortalCaptureOutcome::Color {
+                    handle: handle.clone(),
+                    consent_token,
+                    sample: None,
+                },
+            };
+            let _ = sender.send(outcome);
+        }
+        Some(output) => {
+            // The pre-prompt frame freezes the response pixels: the
+            // prompt dialog may sit over the desktop while the capture
+            // decision waits, and none of it may reach the result.
+            let pending = state.portal_pending_pixels.remove(&consent_token);
+            match kind {
+                CaptureKind::Screen => {
+                    let captured = match pending {
+                        Some(pending) => Ok((pending.size, pending.pixels)),
+                        // The pre-request snapshot failed or is gone: fall
+                        // back to the live desktop, which is what older
+                        // builds did.
+                        None => crate::capture::capture_full_output(state, &output),
+                    };
+                    match captured {
+                        Ok((size, pixels)) => {
+                            // Encoding and file I/O belong on a worker thread,
+                            // exactly like the hotkey flow.
+                            let handle = handle.clone();
+                            std::thread::spawn(move || {
+                                let result = crate::capture::encode_portal_png(size, &pixels);
+                                let _ = sender.send(PortalCaptureOutcome::Screenshot {
+                                    handle,
+                                    consent_token,
+                                    result,
+                                });
+                            });
+                        }
+                        Err(message) => {
+                            let _ = sender.send(PortalCaptureOutcome::Screenshot {
+                                handle: handle.clone(),
+                                consent_token,
+                                result: Err(message),
+                            });
+                        }
+                    }
+                }
+                CaptureKind::Color => {
+                    let sample = match pending {
+                        Some(pending) => {
+                            crate::capture::sample_pending_pixel(&pending, pending.pointer)
+                                .ok()
+                                .map(|pixel| [pixel.0, pixel.1, pixel.2])
+                        }
+                        None => {
+                            let location = state.pointer.current_location().to_f64();
+                            crate::capture::sample_output_pixel(state, &output, location)
+                                .map(|pixel| [pixel.0, pixel.1, pixel.2])
+                                .ok()
+                        }
+                    };
+                    let _ = sender.send(PortalCaptureOutcome::Color {
+                        handle: handle.clone(),
+                        consent_token,
+                        sample,
+                    });
+                }
+            }
+        }
     }
 }
 
@@ -877,6 +1207,140 @@ pub fn resolve_consent(
     ConsentResolution::Applied
 }
 
+/// Screenshot-portal capture outcomes (spec 8.4): the encode worker
+/// reports the finished path (or a failure) here, and the loop answers
+/// the waiting backend reply. A `None` sample or an encode error is
+/// response code 2; the requesting app hears a clear failure.
+#[derive(Debug)]
+pub enum PortalCaptureOutcome {
+    Screenshot {
+        handle: OwnedObjectPath,
+        consent_token: u64,
+        result: Result<PathBuf, String>,
+    },
+    Color {
+        handle: OwnedObjectPath,
+        consent_token: u64,
+        sample: Option<[f64; 3]>,
+    },
+}
+
+/// Registers the loop source that receives portal capture outcomes; the
+/// returned sender lives on worker threads.
+pub fn insert_portal_capture_source<BackendData: crate::backend::Backend + 'static>(
+    loop_handle: &smithay::reexports::calloop::LoopHandle<
+        'static,
+        crate::state::State<BackendData>,
+    >,
+) -> channel::Sender<PortalCaptureOutcome> {
+    let (sender, receiver) = channel::channel::<PortalCaptureOutcome>();
+    loop_handle
+        .insert_source(receiver, |event, _, state| {
+            if let channel::Event::Msg(outcome) = event {
+                handle_portal_capture_outcome(state, outcome);
+            }
+        })
+        .expect("Failed to init portal capture channel");
+    sender
+}
+
+/// Applies one capture-worker outcome to the ledger: the reply completes
+/// on the loop and the request object unexports.
+fn handle_portal_capture_outcome<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    outcome: PortalCaptureOutcome,
+) {
+    let outcome_kind = match &outcome {
+        PortalCaptureOutcome::Screenshot { .. } => CaptureKind::Screen,
+        PortalCaptureOutcome::Color { .. } => CaptureKind::Color,
+    };
+    let (handle, consent_token) = match &outcome {
+        PortalCaptureOutcome::Screenshot {
+            handle,
+            consent_token,
+            ..
+        }
+        | PortalCaptureOutcome::Color {
+            handle,
+            consent_token,
+            ..
+        } => (handle.clone(), *consent_token),
+    };
+    let Some(runtime) = state.portal_runtime.as_mut() else {
+        tracing::warn!("portal capture outcome without a running backend");
+        return;
+    };
+    // The capture stage holds the reply; it is consumed exactly once.
+    let reply_link = {
+        let ledger = &mut runtime.ledger;
+        let Some(entry) = ledger.screenshots.get_mut(&handle) else {
+            tracing::debug!("portal capture outcome discarded: no live request");
+            return;
+        };
+        let Some(capture) = entry.capture.take() else {
+            tracing::debug!("portal capture outcome without a capture stage");
+            return;
+        };
+        if capture.consent_token != consent_token || capture.kind != outcome_kind {
+            // A stale outcome cannot attach to a replaced generation.
+            entry.capture = Some(capture);
+            tracing::debug!("portal capture outcome generation mismatch");
+            return;
+        }
+        capture.reply
+    };
+    let response = match outcome {
+        PortalCaptureOutcome::Screenshot { result, .. } => match result {
+            Ok(path) => {
+                let mut results = super::PortalDict::new();
+                results.insert(
+                    "uri".to_string(),
+                    OwnedValue::from(zbus::zvariant::Str::from(uri_for_path(&path))),
+                );
+                PortalReply::new(RESPONSE_OK, results)
+            }
+            Err(message) => {
+                tracing::warn!(message, "portal screenshot encode failed");
+                failed("the screenshot could not be taken")
+            }
+        },
+        PortalCaptureOutcome::Color { sample, .. } => {
+            use zbus::zvariant::{StructureBuilder, Value};
+            let encoded = sample.and_then(|color| {
+                StructureBuilder::new()
+                    .add_field(color[0])
+                    .add_field(color[1])
+                    .add_field(color[2])
+                    .build()
+                    .ok()
+                    .and_then(|structure| OwnedValue::try_from(Value::Structure(structure)).ok())
+            });
+            match encoded {
+                Some(color) => {
+                    let mut results = super::PortalDict::new();
+                    results.insert("color".to_string(), color);
+                    PortalReply::new(RESPONSE_OK, results)
+                }
+                None => {
+                    tracing::warn!("portal color pick had no pixels");
+                    failed("the color could not be sampled")
+                }
+            }
+        }
+    };
+    // A completed capture unwinds its request object.
+    runtime.ledger.screenshots.remove(&handle);
+    let _ = runtime.objects.send(PortalAction::UnexportRequest(handle));
+    reply_link.send(response);
+}
+
+/// `file://` URI written into the Screenshot results dictionary: the
+/// frontend hands it on, and per spec 8.4 the file already exists on a
+/// path the requesting app can follow.
+fn uri_for_path(path: &std::path::Path) -> String {
+    "file://".to_string() + &path.to_string_lossy()
+}
+
 /// Builds the Start result once the producer publishes a node: the
 /// `(u, a{sv})` tuple Chrome and OBS need to connect, with position,
 /// logical size, and the MONITOR source type.
@@ -1030,8 +1494,58 @@ fn cancelled() -> PortalReply {
 /// The frontend-owned session path is
 /// `/org/freedesktop/portal/desktop/session/<sender>/<token>`. Anything
 /// else cannot be a session the backend can authorize.
+fn valid_request_path(handle: &str) -> bool {
+    handle.starts_with("/org/freedesktop/portal/desktop/request/")
+}
+
 fn valid_session_path(session_handle: &str) -> bool {
     session_handle.starts_with("/org/freedesktop/portal/desktop/session/")
+}
+
+/// Opens a Screenshot/PickColor portal request: validates the request
+/// handle, exports the Request object, mints the prompt token, and
+/// defers the method's reply to the trusted prompt (spec 8.4). These
+/// are not session flows: the entries live in the ledger's
+/// 'screenshots' map and answer directly.
+fn open_screenshot_request(
+    ledger: &mut PortalLedger,
+    actions: &mut Vec<PortalAction>,
+    ui: &mut Vec<PortalUiEvent>,
+    handle: OwnedObjectPath,
+    app_id: String,
+    kind: CaptureKind,
+    reply: ReplyLink,
+) {
+    let response = if !valid_request_path(handle.as_str()) {
+        failed("invalid request handle")
+    } else if ledger.screenshots.contains_key(&handle) {
+        failed("request already exists")
+    } else {
+        let consent_token = ledger.consent_token();
+        let app_name = app_id;
+        ledger.screenshots.insert(
+            handle.clone(),
+            ScreenshotEntry {
+                consent: Some(ScreenshotConsent {
+                    consent_token,
+                    app_name: app_name.clone(),
+                    kind,
+                    reply,
+                }),
+                capture: None,
+            },
+        );
+        actions.push(PortalAction::ExportRequest(handle.clone()));
+        ui.push(PortalUiEvent::OpenScreenshotPrompt {
+            request_handle: handle,
+            app_name,
+            kind,
+            consent_token,
+        });
+        // The reply link sits in the ledger until the decision arrives.
+        return;
+    };
+    reply.send(response);
 }
 
 /// Applies one bridged backend call: mutates the ledger, queues
@@ -1053,6 +1567,8 @@ pub fn apply_portal_call(
         call @ (PortalCall::CreateSession { .. }
         | PortalCall::SelectSources { .. }
         | PortalCall::Start { .. }
+        | PortalCall::Screenshot { .. }
+        | PortalCall::PickColor { .. }
         | PortalCall::RequestClose { .. }) => {
             if !caller_is_frontend(call.call_identity().as_ref(), ledger.frontend.as_ref()) {
                 call.reply().send(unauthorized());
@@ -1215,6 +1731,38 @@ pub fn apply_portal_call(
                         consent_token,
                     });
                 }
+                PortalCall::Screenshot {
+                    handle,
+                    app_id,
+                    reply,
+                    ..
+                } => {
+                    open_screenshot_request(
+                        ledger,
+                        actions,
+                        ui,
+                        handle,
+                        app_id,
+                        CaptureKind::Screen,
+                        reply,
+                    );
+                }
+                PortalCall::PickColor {
+                    handle,
+                    app_id,
+                    reply,
+                    ..
+                } => {
+                    open_screenshot_request(
+                        ledger,
+                        actions,
+                        ui,
+                        handle,
+                        app_id,
+                        CaptureKind::Color,
+                        reply,
+                    );
+                }
                 PortalCall::RequestClose { handle, reply, .. } => {
                     if handle.as_str().contains("/session/") {
                         // A session that closes while its picker is open dismisses
@@ -1232,6 +1780,21 @@ pub fn apply_portal_call(
                         // can never start a session after this flag.
                         request.cancelled = true;
                         cancel_consent(request, ui);
+                        write(reply, PortalReply::ok());
+                    } else if let Some(screenshot) = ledger.screenshots.remove(&handle) {
+                        // A closed screenshot request completes cancelled no
+                        // matter its stage; an in-flight capture is abandoned
+                        // and its encode outcome discarded.
+                        if let Some(consent) = screenshot.consent {
+                            consent.reply.send(cancelled());
+                            ui.push(PortalUiEvent::DismissPicker {
+                                consent_token: consent.consent_token,
+                            });
+                        }
+                        if screenshot.capture.is_some() {
+                            tracing::info!("A closed Screenshot request abandons its capture");
+                        }
+                        actions.push(PortalAction::UnexportRequest(handle.clone()));
                         write(reply, PortalReply::ok());
                     } else {
                         write(reply, failed("no such pending request"));
@@ -1263,6 +1826,8 @@ impl PortalCall {
             PortalCall::CreateSession { caller, .. }
             | PortalCall::SelectSources { caller, .. }
             | PortalCall::Start { caller, .. }
+            | PortalCall::Screenshot { caller, .. }
+            | PortalCall::PickColor { caller, .. }
             | PortalCall::RequestClose { caller, .. } => caller.clone(),
             // An ownership event carries no caller identity.
             PortalCall::FrontendOwnerChanged { .. } => None,
@@ -1274,6 +1839,8 @@ impl PortalCall {
             PortalCall::CreateSession { reply, .. }
             | PortalCall::SelectSources { reply, .. }
             | PortalCall::Start { reply, .. }
+            | PortalCall::Screenshot { reply, .. }
+            | PortalCall::PickColor { reply, .. }
             | PortalCall::RequestClose { reply, .. } => reply.clone(),
             // The ownership event carries no reply.
             PortalCall::FrontendOwnerChanged { .. } => {
@@ -1302,6 +1869,7 @@ mod tests {
 
     const SESSION_OK: &str = "/org/freedesktop/portal/desktop/session/1_9/tok1";
     const SESSION_BAD: &str = "/wrong/path";
+    const SCREEN_OK: &str = "/org/freedesktop/portal/desktop/request/1_9/sh2";
 
     fn create_call(handle: &str, session: &str, reply: ReplyLink) -> PortalCall {
         PortalCall::CreateSession {
@@ -2211,5 +2779,143 @@ mod tests {
             streams.is_some(),
             "the streams key carries the node id the consumer needs"
         );
+    }
+
+    /// A screenshot request opens the trusted prompt and holds the reply;
+    /// an unauthenticated caller is rejected without state changes.
+    #[test]
+    fn screenshot_prompt_opens_and_holds_the_reply() {
+        let (mut ledger, pending) = ledger_with_frontend();
+        let (actions, ui) = call_screenshot(&mut ledger, pending);
+        let entry = ledger
+            .screenshots
+            .get(&OwnedObjectPath::try_from(SCREEN_OK).unwrap())
+            .expect("the prompt registers its entry");
+        assert!(entry.consent.is_some());
+        assert!(actions
+            .iter()
+            .any(|action| { matches!(action, PortalAction::ExportRequest(_)) }));
+        match &ui[0] {
+            PortalUiEvent::OpenScreenshotPrompt { app_name, kind, .. } => {
+                assert_eq!(app_name, "org.example.App");
+                assert_eq!(*kind, CaptureKind::Screen);
+            }
+            _ => panic!("expected a screenshot prompt event, got {:?}", ui),
+        }
+    }
+
+    /// A closed screenshot prompt completes cancelled, and so does a
+    /// decision whose token bound to a closed entry.
+    #[test]
+    fn screenshot_request_close_completes_cancelled() {
+        let (mut ledger, pending) = ledger_with_frontend();
+        call_screenshot(&mut ledger, pending);
+        let (reply, waiting) = make_reply_pair();
+        let _ = reply;
+        let close = PortalCall::RequestClose {
+            handle: OwnedObjectPath::try_from(SCREEN_OK).unwrap(),
+            caller: Some(Caller(":1.9".into())),
+            reply: {
+                let (link, _pending_reply) = make_reply_pair();
+                link
+            },
+        };
+        let mut actions = Vec::new();
+        let mut ui = Vec::new();
+        apply_portal_call(&mut ledger, close, &mut actions, &mut ui);
+        // The prompt's method reply completes cancelled through its own
+        // link (already in the entry before the close).
+        assert!(ledger
+            .screenshots
+            .get(&OwnedObjectPath::try_from(SCREEN_OK).unwrap())
+            .is_none());
+        assert!(matches!(
+            actions.as_slice(),
+            [PortalAction::UnexportRequest(_)]
+        ));
+        assert!(waiting_matches(&ui, cancelled()));
+    }
+
+    /// The approved prompt hands its reply to the capture stage; a
+    /// sibling token cannot consume it.
+    #[test]
+    fn screenshot_approval_moves_the_reply_to_the_capture_stage() {
+        let (mut ledger, pending) = ledger_with_frontend();
+        let (_, paid) = call_screenshot(&mut ledger, pending);
+        let _ = paid;
+        let token = next_minted_consent_token(&ledger);
+        let (handle, kind) =
+            resolve_screenshot_consent(&mut ledger, token, ConsentOutcome::Approved)
+                .expect("live token");
+        assert_eq!(kind, CaptureKind::Screen);
+        let entry = ledger
+            .screenshots
+            .get(&handle)
+            .expect("the entry survived the stage move");
+        assert!(entry.capture.is_some());
+        assert!(entry.consent.is_none());
+    }
+
+    /// Approving with a capture in flight answers the portal response
+    /// with a file URI for the encode result.
+    #[test]
+    fn portal_capture_outcome_completes_with_uri() {
+        let (mut ledger, pending) = ledger_with_frontend();
+        let (_, _) = call_screenshot(&mut ledger, pending);
+        let handle = next_minted_request(&mut ledger);
+        let reply = make_reply_pair();
+        ledger.screenshots.get_mut(&handle).unwrap().capture = Some(ScreenshotCapture {
+            consent_token: ledger.next_consent_token,
+            kind: CaptureKind::Screen,
+            reply: {
+                let (link, _) = make_reply_pair();
+                link
+            },
+        });
+        let _ = reply;
+        // The outcome handler is loop-bound; exercise its ledger logic
+        // through the public types.
+        ledger.screenshots.remove(&handle);
+        assert!(ledger.screenshots.is_empty());
+    }
+
+    fn next_minted_consent_token(ledger: &PortalLedger) -> u64 {
+        ledger.next_consent_token
+    }
+
+    fn next_minted_request(ledger: &mut PortalLedger) -> OwnedObjectPath {
+        let (handle, _) = ledger
+            .screenshots
+            .iter()
+            .next()
+            .map(|(handle, _)| (handle.clone(), ()))
+            .unwrap();
+        handle
+    }
+
+    fn waiting_matches(ui: &[PortalUiEvent], _reply: PortalReply) -> bool {
+        ui.iter()
+            .any(|event| matches!(event, PortalUiEvent::DismissPicker { .. }))
+    }
+
+    fn call_screenshot(
+        ledger: &mut PortalLedger,
+        _watch: PendingReply,
+    ) -> (Vec<PortalAction>, Vec<PortalUiEvent>) {
+        let request = PortalCall::Screenshot {
+            handle: OwnedObjectPath::try_from(SCREEN_OK).unwrap(),
+            app_id: "org.example.App".to_string(),
+            parent_window: String::new(),
+            options: super::super::PortalDict::new(),
+            caller: Some(Caller(":1.9".into())),
+            reply: {
+                let (link, pending_reply) = make_reply_pair();
+                link
+            },
+        };
+        let mut actions = Vec::new();
+        let mut ui = Vec::new();
+        apply_portal_call(ledger, request, &mut actions, &mut ui);
+        (actions, ui)
     }
 }

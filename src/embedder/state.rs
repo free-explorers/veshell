@@ -166,6 +166,15 @@ pub struct State<BackendData: Backend + 'static> {
     /// registered in the loop at startup.
     pub recording_delivery_sender: channel::Sender<crate::capture::recording::RecordingEvent>,
     pub portal_runtime: Option<crate::portal::PortalRuntime>,
+    /// Portal screenshot/pick-color captures report their encode result
+    /// here; the receiver is registered on the loop at startup and the
+    /// sender stays alive with the state.
+    pub portal_capture_sender: channel::Sender<crate::portal::service::PortalCaptureOutcome>,
+    /// Pixels frozen at portal request time, before the prompt dialog
+    /// renders over them: the Screenshot/PickColor response comes from
+    /// this pre-prompt frame regardless of the decision delay. Dropped
+    /// at every denial, completion, and eviction.
+    pub portal_pending_pixels: HashMap<u64, crate::capture::PendingPortalPixels>,
     /// PipeWire producer, initialized lazily on the first approval.
     pub pipe_wire_producer: Option<crate::capture::pipewire::Producer>,
     /// Events traveling from the producer main loop onto the compositor
@@ -335,6 +344,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         // worker thread itself stays off the loop.
         let recording_delivery_sender =
             crate::capture::insert_recording_delivery_source(&loop_handle);
+        // Portal screenshot/pick-color captures report their outcome here
+        // (encoder runs on a worker thread like the hotkey screenshot).
+        let portal_capture_sender =
+            crate::portal::service::insert_portal_capture_source(&loop_handle);
         // The PipeWire producer reports node life and failures over this
         // channel; the compositor loop answers with session lifecycle.
         let (producer_delivery_sender, producer_delivery_receiver) =
@@ -433,6 +446,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             screenshot_delivery_sender,
             recording_session: None,
             recording_delivery_sender,
+            portal_capture_sender,
+            portal_pending_pixels: HashMap::new(),
             portal_runtime,
             producer_delivery_sender,
             pipe_wire_producer: None,

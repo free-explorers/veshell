@@ -697,4 +697,63 @@ mod tests {
         );
         std::fs::remove_file(path).ok();
     }
+
+    /// Backpressure evidence: a producer that floods the handoff (no
+    /// pacing, alternating frames so the encoder cannot skip work) must
+    /// drop frames without growing the queue or failing the session.
+    /// The compositor side only pushes non-blocking, so this is the
+    /// worker-side mirror of the loop's `dropped` counter.
+    #[test]
+    fn saturating_burst_drops_under_backpressure_and_stays_playable() {
+        let size: Size<i32, Physical> = (1494, 1020).into();
+        let (events_sender, events_receiver) = channel::channel::<RecordingEvent>();
+        let mut recorder = spawn_recording_worker(recording_geometry(size), events_sender).unwrap();
+
+        // Alternating colors force the encoder to really spend time on
+        // every accepted frame instead of short-circuiting a static
+        // scene.
+        let frame_a = rgba_frame(size, 60);
+        let frame_b = rgba_frame(size, 200);
+        const BURST: usize = 60;
+        for index in 0..BURST {
+            let frame = if index % 2 == 0 {
+                frame_a.clone()
+            } else {
+                frame_b.clone()
+            };
+            let _queued = recorder.push_frame(frame);
+        }
+        recorder.stop();
+
+        let outcome = events_receiver
+            .recv()
+            .expect("the worker session must report its result");
+        let (path, frames, dropped) = match outcome {
+            RecordingEvent::Completed {
+                path,
+                frames,
+                dropped,
+                ..
+            } => (path, frames, dropped),
+            RecordingEvent::Failed { message, .. } => {
+                panic!("a saturating burst must drop, not fail: {message}")
+            }
+        };
+        assert!(
+            dropped > 0,
+            "an unpaced 60-frame burst must saturate the handoff and drop; got none"
+        );
+        assert!(
+            frames > 0,
+            "even under backpressure some frames must encode"
+        );
+        let finished = fs::read(&path).unwrap();
+        assert_eq!(&finished[..4], &[0x1A, 0x45, 0xDF, 0xA3]);
+        assert!(
+            finished.len() > 1024,
+            "encoded payload expected, got {} bytes",
+            finished.len()
+        );
+        std::fs::remove_file(path).ok();
+    }
 }

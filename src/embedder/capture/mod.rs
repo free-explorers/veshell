@@ -391,6 +391,138 @@ pub fn capture_output_pixels<BackendData: Backend + 'static>(
     take_output_snapshot(state, output)
 }
 
+/// Captures a whole output natively for a portal Screenshot request
+/// (spec 8.4): the same frozen-desktop snapshot pipeline as the hotkey
+/// flow, composed at full output geometry, with no selection and no
+/// pointer involvement.
+pub fn capture_full_output<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    output: &Output,
+) -> Result<(Size<i32, Physical>, Vec<u8>), String> {
+    let snapshot = take_output_snapshot(state, output)?;
+    let geometry = state
+        .space
+        .output_geometry(output)
+        .ok_or_else(|| format!("Output {} has no geometry", output.name()))?
+        .to_f64();
+    let captured = [CapturedOutput {
+        geometry,
+        size: snapshot.size,
+        pixels: snapshot.pixels,
+    }];
+    compose_desktop_area(geometry, snapshot.scale, &captured)
+}
+
+/// A portal request's pixels frozen before the prompt dialog rendered
+/// over the desktop (spec 8.4): the response frame for screenshots, and
+/// the sample source for color picks, capped and evicted by the composit
+/// or loop.
+#[derive(Debug)]
+pub struct PendingPortalPixels {
+    /// The composed output's pixel size.
+    pub size: Size<i32, Physical>,
+    pub pixels: Vec<u8>,
+    /// The logical full-output area the pixels were composed from.
+    pub geometry: Rectangle<f64, Logical>,
+    /// The pointer location at request time (PickColor target).
+    pub pointer: Point<f64, Logical>,
+}
+
+/// Renders and stores the pre-prompt desktop frame for a portal
+/// request.
+pub fn take_portal_pending_snapshot<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    output: &Output,
+    pointer: Point<f64, Logical>,
+) -> Result<PendingPortalPixels, String> {
+    let snapshot = take_output_snapshot(state, output)?;
+    let geometry = state
+        .space
+        .output_geometry(output)
+        .ok_or_else(|| format!("Output {} has no geometry", output.name()))?
+        .to_f64();
+    let captured = [CapturedOutput {
+        geometry,
+        size: snapshot.size,
+        pixels: snapshot.pixels,
+    }];
+    let (size, pixels) = compose_desktop_area(geometry, snapshot.scale, &captured)?;
+    Ok(PendingPortalPixels {
+        size,
+        pixels,
+        geometry,
+        pointer,
+    })
+}
+
+/// Samples one pixel from a held pre-prompt snapshot (PickColor):
+/// sRGB floats in [0, 1]. The readback byte order is B,G,R,A.
+pub fn sample_pending_pixel(
+    pending: &PendingPortalPixels,
+    location: Point<f64, Logical>,
+) -> Result<(f64, f64, f64), String> {
+    let rel_x =
+        ((location.x - pending.geometry.loc.x) / pending.geometry.size.w.max(1e-6)).clamp(0.0, 1.0);
+    let rel_y =
+        ((location.y - pending.geometry.loc.y) / pending.geometry.size.h.max(1e-6)).clamp(0.0, 1.0);
+    let px_x = ((rel_x * pending.size.w as f64) as usize).clamp(0, pending.size.w as usize - 1);
+    let px_y = ((rel_y * pending.size.h as f64) as usize).clamp(0, pending.size.h as usize - 1);
+    let offset = (px_y * pending.size.w as usize + px_x) * 4;
+    let pixel = pending
+        .pixels
+        .get(offset..offset + 4)
+        .ok_or_else(|| "The sampled pixel index is out of range".to_string())?;
+    Ok((
+        pixel[2] as f64 / 255.0,
+        pixel[1] as f64 / 255.0,
+        pixel[0] as f64 / 255.0,
+    ))
+}
+
+/// Grabs one pixel from the output for a portal PickColor request:
+/// returns sRGB floats in [0, 1] at the pointer's location. The
+/// readback byte order matches the desktop readback (B,G,R,A), so the
+/// channels are swizzled to RGB.
+pub fn sample_output_pixel<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    output: &Output,
+    location: Point<f64, Logical>,
+) -> Result<(f64, f64, f64), String> {
+    let snapshot = take_output_snapshot(state, output)?;
+    let geometry = state
+        .space
+        .output_geometry(output)
+        .ok_or_else(|| format!("Output {} has no geometry", output.name()))?
+        .to_f64();
+    let rel_x = ((location.x - geometry.loc.x) / geometry.size.w.max(1e-6)).clamp(0.0, 1.0);
+    let rel_y = ((location.y - geometry.loc.y) / geometry.size.h.max(1e-6)).clamp(0.0, 1.0);
+    let px_x = ((rel_x * snapshot.size.w as f64) as usize).clamp(0, snapshot.size.w as usize - 1);
+    let px_y = ((rel_y * snapshot.size.h as f64) as usize).clamp(0, snapshot.size.h as usize - 1);
+    let offset = (px_y * snapshot.size.w as usize + px_x) * 4;
+    let bytes = snapshot.pixels.as_slice();
+    let pixel = bytes
+        .get(offset..offset + 4)
+        .ok_or_else(|| "The sampled pixel index is out of range".to_string())?;
+    Ok((
+        pixel[2] as f64 / 255.0,
+        pixel[1] as f64 / 255.0,
+        pixel[0] as f64 / 255.0,
+    ))
+}
+
+/// Encodes one PNG for a portal Screenshot request into the shared
+/// screenshot directory: the same atomic part-file rename flow as the
+/// hotkey path so portal consumers receive a fully written file.
+pub fn encode_portal_png(size: Size<i32, Physical>, pixels: &Vec<u8>) -> Result<PathBuf, String> {
+    let directory = screenshot_directory()?;
+    let path = directory.join(format!(
+        "Veshell Screenshot {}",
+        chrono::Local::now().format("%Y-%m-%d %H-%M-%S%.3f.png")
+    ));
+    encode_and_write_png(size, pixels.clone(), &path)?;
+    Ok(path)
+}
+
 fn take_output_snapshot<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     output: &Output,

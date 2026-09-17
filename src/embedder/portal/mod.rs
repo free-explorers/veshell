@@ -39,11 +39,15 @@ pub const FRONTEND_NAME: &str = "org.freedesktop.portal.Desktop";
 pub const DESKTOP_PATH: &str = "/org/freedesktop/portal/desktop";
 
 pub const SCREENCAST_INTERFACE: &str = "org.freedesktop.impl.portal.ScreenCast";
+pub const SCREENSHOT_INTERFACE: &str = "org.freedesktop.impl.portal.Screenshot";
 pub const REQUEST_INTERFACE: &str = "org.freedesktop.impl.portal.Request";
 pub const SESSION_INTERFACE: &str = "org.freedesktop.impl.portal.Session";
 
 /// ScreenCast backend contract version advertised by Veshell.
 pub const SCREENCAST_BACKEND_VERSION: u32 = 4;
+/// Screenshot backend contract version advertised by Veshell: version 3
+/// carries the `Target` and the `AvailableTargets` property.
+pub const SCREENSHOT_BACKEND_VERSION: u32 = 3;
 /// Request/Session object version of the contracts we implement.
 pub const REQUEST_SESSION_VERSION: u32 = 2;
 
@@ -169,6 +173,28 @@ pub enum PortalCall {
     },
     RequestClose {
         handle: OwnedObjectPath,
+        caller: Option<Caller>,
+        reply: ReplyLink,
+    },
+    /// A portal screenshot request (spec section 8.4): one full-screen
+    /// PNG per request, gated by the trusted prompt like every other
+    /// capture flow. The reply completes after the user decides and the
+    /// encode finishes.
+    Screenshot {
+        handle: OwnedObjectPath,
+        app_id: String,
+        parent_window: String,
+        options: PortalDict,
+        caller: Option<Caller>,
+        reply: ReplyLink,
+    },
+    /// A portal color-pick request: the same consent gate, answered with
+    /// the sampled pixel instead of a file.
+    PickColor {
+        handle: OwnedObjectPath,
+        app_id: String,
+        parent_window: String,
+        options: PortalDict,
         caller: Option<Caller>,
         reply: ReplyLink,
     },
@@ -361,6 +387,117 @@ impl ScreenCastBackend {
                 app_id,
                 parent_window,
                 constraints,
+                caller,
+                reply,
+            })
+            .map_err(|_| stopped_error())?;
+        wait_reply(pending).await
+    }
+}
+
+/// The Screenshot backend: `Screenshot` and `PickColor` per the version-3
+/// contract. Both methods block until the loop answers (prompt decision
+/// and capture included), mirroring how the ScreenCast methods wait for
+/// the ledger. Only full-screen targets are supported this milestone.
+struct ScreenshotBackend {
+    calls: calloop::channel::Sender<PortalCall>,
+}
+
+/// Targets advertised by this backend: Screen only (spec 8.4 initial
+/// slice). The host must never request the rejected targets; a targeted
+/// request that still arrives fails with response code 2.
+pub const SCREENSHOT_TARGET_SCREEN: u32 = 1;
+
+/// Validates the Screenshot options: `interactive`/`modal` booleans, and
+/// the optional `target` filter. The result dict is untouched.
+struct ScreenshotOptions {
+    interactive: bool,
+    modal: bool,
+    target: Option<u32>,
+}
+
+fn parse_screenshot_options(options: &PortalDict) -> Result<ScreenshotOptions, String> {
+    let mut parsed = ScreenshotOptions {
+        interactive: false,
+        modal: true,
+        target: None,
+    };
+    if let Some(interactive) = lookup_bool(options, "interactive") {
+        parsed.interactive = interactive;
+    }
+    if let Some(modal) = lookup_bool(options, "modal") {
+        parsed.modal = modal;
+    }
+    if let Some(target) = lookup_u32(options, "target") {
+        if target != SCREENSHOT_TARGET_SCREEN {
+            return Err("Requested screenshot target is unavailable".to_string());
+        }
+        parsed.target = Some(target);
+    }
+    Ok(parsed)
+}
+
+#[interface(name = "org.freedesktop.impl.portal.Screenshot")]
+impl ScreenshotBackend {
+    #[zbus(property, name = "AvailableTargets")]
+    fn available_targets(&self) -> u32 {
+        SCREENSHOT_TARGET_SCREEN
+    }
+
+    #[zbus(property, name = "version")]
+    fn version(&self) -> u32 {
+        SCREENSHOT_BACKEND_VERSION
+    }
+
+    async fn screenshot(
+        &self,
+        #[zbus(header)] header: Header<'_>,
+        handle: ObjectPath<'_>,
+        app_id: String,
+        parent_window: String,
+        options: PortalDict,
+    ) -> zbus::fdo::Result<(u32, PortalDict)> {
+        if let Err(message) = parse_screenshot_options(&options) {
+            tracing::debug!(message, "Rejecting Screenshot options");
+            return Ok((RESPONSE_FAILED, PortalDict::new()));
+        }
+        let handle = OwnedObjectPath::from(handle);
+        let caller = header.sender().map(|sender| Caller(sender.to_string()));
+        let (reply, pending) = make_reply_pair();
+        self.calls
+            .send(PortalCall::Screenshot {
+                handle,
+                app_id,
+                parent_window,
+                options,
+                caller,
+                reply,
+            })
+            .map_err(|_| stopped_error())?;
+        wait_reply(pending).await
+    }
+
+    async fn pick_color(
+        &self,
+        #[zbus(header)] header: Header<'_>,
+        handle: ObjectPath<'_>,
+        app_id: String,
+        parent_window: String,
+        options: PortalDict,
+    ) -> zbus::fdo::Result<(u32, PortalDict)> {
+        if let Err(message) = parse_screenshot_options(&options) {
+            tracing::debug!(message, "Rejecting PickColor options");
+            return Ok((RESPONSE_FAILED, PortalDict::new()));
+        }
+        let handle = OwnedObjectPath::from(handle);
+        let caller = header.sender().map(|sender| Caller(sender.to_string()));
+        let (reply, pending) = make_reply_pair();
+        self.calls
+            .send(PortalCall::PickColor {
+                handle,
+                app_id,
+                parent_window,
+                options,
                 caller,
                 reply,
             })
@@ -569,6 +706,12 @@ async fn build_backend_connection_on_session() -> zbus::Result<(
                 calls: calls.clone(),
             },
         )?
+        .serve_at(
+            DESKTOP_PATH,
+            ScreenshotBackend {
+                calls: calls.clone(),
+            },
+        )?
         .build()
         .await?;
     Ok((connection, calls, receiver))
@@ -652,6 +795,7 @@ pub async fn build_backend_connection(
     let connection = ConnectionBuilder::address(address)?
         .name(BACKEND_NAME)?
         .serve_at(DESKTOP_PATH, ScreenCastBackend { calls: tx.clone() })?
+        .serve_at(DESKTOP_PATH, ScreenshotBackend { calls: tx.clone() })?
         .build()
         .await?;
     Ok((connection, tx, rx))

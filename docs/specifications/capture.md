@@ -89,6 +89,25 @@ tooling itself (debug-profile compositor plus `WAYLAND_DEBUG=server`
 tracing): in release the damage-coupled pump runs smooth, matching the M2.4
 sharing experience.
 
+Indicator iteration (2026-09-16, user-validated in release): the trusted
+overlay now renders the recorded rectangle's outline plus a dimmed desktop
+outside it (the same scrim the selection uses), with a pill-shaped
+translucent chip inside the rectangle's bottom-right holding a circular red
+dot and the elapsed mm:ss left-beside-right-aligned. The counter is real
+Roboto text: it resolves the font family the Flutter engine resolves through
+fontconfig (`fc-match Roboto`) and rasterizes it CPU-side into a
+premultiplied BGRA buffer pushed by the same `MemoryRenderBuffer` path the
+native cursor uses — the element list is front-to-back, so the text element
+is pushed first with the chip, outline, and scrim piled beneath. Keyboard
+down/up pairing: a selection that swallows the release of a key whose press
+already reached Flutter under the frozen desktop now synthesizes the
+matching keyup, fixing the stuck-modifier state that disabled the shell
+hotkeys for the rest of the session. Stop is Print only (click and Escape
+ignored; the layout-change stop remains a safety stop). Backpressure has an
+automated worker-side probe: an unpaced 60-frame burst on the real-size
+geometry must saturate the bounded handoff, drop frames, keep encoding, and
+end in a completed, playable file ("saturating_burst_drops_under_backpressure_and_stays_playable").
+
 Implemented native area screenshot slice (2026-09-15, fully native, no Flutter
 involvement):
 
@@ -966,6 +985,37 @@ Implement isolated client/popup rendering and window lifecycle tests. Advertise
 WINDOW only now. Add Screenshot/PickColor backend methods, cancellation and file
 accessibility tests. Confirm no unrelated window leaks when sharing an obscured
 window or opening an application dialog/menu.
+
+M4 progress (2026-09-17, build validated: 122 tests green; runtime
+validation over a real app pending): the Screenshot portal slice is in. The
+backend exports `org.freedesktop.impl.portal.Screenshot` version 3 on the
+shared `Desktop` object path (`Screenshot`, `PickColor`, `AvailableTargets`
+fixed to Screen=1); `veshell.portal` and the preferred-portals selection
+advertise the interface. The ledger gained a dedicated screenshot map beside
+the capture sessions: a request validates its `request/` handle, exports its
+Request object, mints an unguessable consent token, and defers the method
+reply to a Flutter-side `screenshot_prompt` dialog (Allow/Deny, screen/color
+kind). Approval takes the pixels in Rust through the M1 snapshot pipeline
+composed at full output geometry — no selection, no desktop freeze, no
+pointer grabs — then encodes PNG on a worker thread; the completed response
+carries `uri: file://` into the shared screenshot directory. The response
+frame is the pre-prompt desktop (2026-09-17, Gradia runtime feedback): the
+pixels are frozen once at request arrival — before the `screenshot_prompt`
+dialog renders — and encode from that held frame on approval, so the prompt
+dialog never appears in the result and a denial drops the held buffer; the
+holds are evicted by reconciliation against the ledger after every portal
+call, on frontend loss, and on decisions (runtime check pending for the
+zero-overlay file). PickColor samples the pre-prompt frame at the pointer
+location recorded with the request, so the color is stable while the dialog
+is up, and answers `(ddd)` RGB doubles. Cancellation in
+any stage (RequestClose, frontend owner loss, in-flight entry) answers
+response 1, dismisses the prompt, and unexports the object; stale tokens and
+unavailable targets fail with response 2. Ledger coverage: the prompt opens
+and holds the reply, RequestClose completes cancelled and unwinds the
+object, and an approval moves the reply into the capture stage. Remaining
+M4 work: window-share lifecycle pieces (isolated client rendering + tests
+before WINDOW advertising), runtime portal-Screenshot validation against a
+real sandboxed app, and portal-restart behavior checks.
 
 ### M5: Existing Screen Sharing
 

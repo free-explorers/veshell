@@ -18,6 +18,7 @@ import 'package:shell/platform/model/event/new_subsurface/new_subsurface.seriali
 import 'package:shell/platform/model/event/new_surface/new_surface.serializable.dart';
 import 'package:shell/capture/model/screen_cast_active/screen_cast_active.serializable.dart';
 import 'package:shell/capture/model/screen_cast_consent/screen_cast_consent.serializable.dart';
+import 'package:shell/capture/model/screenshot_prompt/screenshot_prompt.serializable.dart';
 import 'package:shell/capture/model/screen_cast_consent_dismissed/screen_cast_consent_dismissed.serializable.dart';
 import 'package:shell/capture/model/screen_cast_stopped/screen_cast_stopped.serializable.dart';
 import 'package:shell/platform/model/event/set_environment_variables/set_environment_variables.serializable.dart';
@@ -150,6 +151,14 @@ sealed class PlatformEvent with _$PlatformEvent implements PlatformInteraction {
     required String method,
     required ScreenCastConsentDismissedMessage message,
   }) = ScreenCastConsentDismissedEvent;
+
+  /// Screenshot portal prompt event, sent by the compositor when a
+  /// sandboxed app asks the trusted shell to take a screenshot or pick a
+  /// color (capture specification section 8.4).
+  const factory PlatformEvent.screenshotPrompt({
+    required String method,
+    required ScreenshotPromptMessage message,
+  }) = ScreenshotPromptEvent;
 
   /// Screen cast delivery began: the persistent indicator appears.
   const factory PlatformEvent.screenCastActive({
