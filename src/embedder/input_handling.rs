@@ -84,7 +84,7 @@ impl<BackendData: Backend> State<BackendData> {
             .mouse_button_tracker
             .are_any_buttons_pressed()
         {
-            self.pointer_view_id.unwrap_or(current_view_id)
+            self.pointer_gesture_view_id.unwrap_or(current_view_id)
         } else {
             current_view_id
         };
@@ -145,7 +145,7 @@ impl<BackendData: Backend> State<BackendData> {
             .mouse_button_tracker
             .are_any_buttons_pressed()
         {
-            self.pointer_view_id.unwrap_or(current_view_id)
+            self.pointer_gesture_view_id.unwrap_or(current_view_id)
         } else {
             current_view_id
         };
@@ -178,7 +178,7 @@ impl<BackendData: Backend> State<BackendData> {
             .flutter_engine()
             .mouse_button_tracker
             .are_any_buttons_pressed();
-        let event_view_id = self.pointer_view_id.unwrap_or(view_id);
+        let event_view_id = self.pointer_gesture_view_id.unwrap_or(view_id);
         let phase = if event.state() == ButtonState::Pressed {
             let _ = self
                 .flutter_engine_mut()
@@ -187,7 +187,7 @@ impl<BackendData: Backend> State<BackendData> {
             if had_buttons_pressed {
                 FlutterPointerPhase_kMove
             } else {
-                self.pointer_view_id = Some(view_id);
+                self.pointer_gesture_view_id = Some(view_id);
                 FlutterPointerPhase_kDown
             }
         } else {
@@ -262,7 +262,7 @@ impl<BackendData: Backend> State<BackendData> {
                 .mouse_button_tracker
                 .are_any_buttons_pressed()
         {
-            self.pointer_view_id = None;
+            self.pointer_gesture_view_id = None;
         }
     }
 
@@ -367,34 +367,42 @@ impl<BackendData: Backend> State<BackendData> {
                     .trackpad_scrolling_manager
                     .stop_scrolling();
 
+                let gesture_view_id = self.pointer_gesture_view_id.unwrap_or(view_id);
+                let gesture_location = self.relative_pointer_location_for_view(gesture_view_id);
                 self.send_pointer_pan_zoom_event(
                     device_id,
-                    pointer_location.x,
-                    pointer_location.y,
+                    gesture_location.x,
+                    gesture_location.y,
                     FlutterPointerPhase_kPanZoomEnd,
                     0.,
                     0.,
                     0.,
-                    view_id,
+                    gesture_view_id,
                 );
+                self.pointer_gesture_view_id = None;
             } else {
-                if !self
+                let started = !self
                     .flutter_engine()
                     .trackpad_scrolling_manager
-                    .trackpad_scrolling
-                {
+                    .trackpad_scrolling;
+                if started {
                     self.flutter_engine_mut()
                         .trackpad_scrolling_manager
                         .start_scrolling();
+                    self.pointer_gesture_view_id = Some(view_id);
+                }
+                let gesture_view_id = self.pointer_gesture_view_id.unwrap_or(view_id);
+                let gesture_location = self.relative_pointer_location_for_view(gesture_view_id);
+                if started {
                     self.send_pointer_pan_zoom_event(
                         device_id,
-                        pointer_location.x,
-                        pointer_location.y,
+                        gesture_location.x,
+                        gesture_location.y,
                         FlutterPointerPhase_kPanZoomStart,
                         0.,
                         0.,
                         0.,
-                        view_id,
+                        gesture_view_id,
                     );
                 }
                 self.flutter_engine_mut()
@@ -405,13 +413,13 @@ impl<BackendData: Backend> State<BackendData> {
                     );
                 self.send_pointer_pan_zoom_event(
                     device_id,
-                    pointer_location.x,
-                    pointer_location.y,
+                    gesture_location.x,
+                    gesture_location.y,
                     FlutterPointerPhase_kPanZoomUpdate,
                     self.flutter_engine().trackpad_scrolling_manager.pan_x,
                     self.flutter_engine().trackpad_scrolling_manager.pan_y,
                     1.,
-                    view_id,
+                    gesture_view_id,
                 );
             }
         }
@@ -423,13 +431,13 @@ impl<BackendData: Backend> State<BackendData> {
         device_id: i32,
         view_id: i64,
     ) {
-        let pointer: smithay::input::pointer::PointerHandle<State<BackendData>> =
-            self.pointer.clone();
+        self.pointer_gesture_view_id = Some(view_id);
+        let location = self.relative_pointer_location_for_view(view_id);
 
         self.send_pointer_pan_zoom_event(
             device_id,
-            pointer.current_location().x,
-            pointer.current_location().y,
+            location.x,
+            location.y,
             FlutterPointerPhase_kPanZoomStart,
             0.,
             0.,
@@ -443,17 +451,17 @@ impl<BackendData: Backend> State<BackendData> {
         device_id: i32,
         view_id: i64,
     ) {
-        let pointer: smithay::input::pointer::PointerHandle<State<BackendData>> =
-            self.pointer.clone();
+        let gesture_view_id = self.pointer_gesture_view_id.unwrap_or(view_id);
+        let location = self.relative_pointer_location_for_view(gesture_view_id);
         self.send_pointer_pan_zoom_event(
             device_id,
-            pointer.current_location().x,
-            pointer.current_location().y,
+            location.x,
+            location.y,
             FlutterPointerPhase_kPanZoomUpdate,
             event.delta_x(),
             event.delta_y(),
             event.rotation(),
-            view_id,
+            gesture_view_id,
         );
     }
     pub fn on_gesture_pinch_end<B: InputBackend>(
@@ -462,18 +470,19 @@ impl<BackendData: Backend> State<BackendData> {
         device_id: i32,
         view_id: i64,
     ) {
-        let pointer: smithay::input::pointer::PointerHandle<State<BackendData>> =
-            self.pointer.clone();
+        let gesture_view_id = self.pointer_gesture_view_id.unwrap_or(view_id);
+        let location = self.relative_pointer_location_for_view(gesture_view_id);
         self.send_pointer_pan_zoom_event(
             device_id,
-            pointer.current_location().x,
-            pointer.current_location().y,
+            location.x,
+            location.y,
             FlutterPointerPhase_kPanZoomEnd,
             0.,
             0.,
             0.,
-            view_id,
+            gesture_view_id,
         );
+        self.pointer_gesture_view_id = None;
     }
 
     fn register_frame(&mut self) {
@@ -629,13 +638,24 @@ impl<BackendData: Backend> State<BackendData> {
         rotation: f64,
         view_id: i64,
     ) {
-        let scale = self
+        let Some(output) = self
             .space
             .outputs()
             .find(|o| o.user_data().get::<OutputViewIdWrapper>().unwrap().view_id == view_id)
-            .unwrap()
-            .current_scale()
-            .fractional_scale();
+            .or_else(|| {
+                self.space
+                    .output_under(self.pointer.current_location())
+                    .next()
+            })
+        else {
+            return;
+        };
+        let view_id = output
+            .user_data()
+            .get::<OutputViewIdWrapper>()
+            .map(|wrapper| wrapper.view_id)
+            .unwrap_or(view_id);
+        let scale = output.current_scale().fractional_scale();
         self.flutter_engine()
             .send_pointer_event(FlutterPointerEvent {
                 struct_size: size_of::<FlutterPointerEvent>(),

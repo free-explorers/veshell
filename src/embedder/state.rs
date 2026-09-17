@@ -184,7 +184,12 @@ pub struct State<BackendData: Backend + 'static> {
     pub producer_delivery_sender: channel::Sender<crate::capture::pipewire::ProducerEvent>,
     /// Live screen cast streams keyed by the portal session handle.
     pub active_streams: HashMap<OwnedObjectPath, crate::capture::pipewire::ActiveStream>,
-    pub pointer_view_id: Option<i64>,
+    /// View (monitor) that received the start of the current pointer gesture
+    /// (button-held drag, trackpad pan/zoom scroll, or pinch). Every later
+    /// event of that gesture is pinned to this view so Flutter sees one
+    /// consistent `view_id` and coordinate space even if the pointer crosses
+    /// monitors mid-gesture. `None` when no gesture is in progress.
+    pub pointer_gesture_view_id: Option<i64>,
 }
 
 impl<BackendData: Backend + 'static> State<BackendData> {
@@ -452,7 +457,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             producer_delivery_sender,
             pipe_wire_producer: None,
             active_streams: HashMap::new(),
-            pointer_view_id: None,
+            pointer_gesture_view_id: None,
         }
     }
 
