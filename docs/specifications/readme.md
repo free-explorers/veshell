@@ -2,10 +2,6 @@
 
 This is Veshell technical specifications for high level components
 
-## Features
-
-- [Capture, Recording, And Sharing](capture.md)
-
 ## Components
 
 - [Display](/specifications/display.md)
