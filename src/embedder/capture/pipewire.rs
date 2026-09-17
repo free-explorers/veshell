@@ -115,6 +115,10 @@ pub struct ActiveStream {
     /// Last frame copy for this stream: the 30 FPS budget is enforced
     /// against output-damage presents, never above.
     pub last_frame: Option<std::time::Instant>,
+    /// Transient restore grant carried in the Start result (Chromium
+    /// 105+ stream restoration): `Some(token)` means the backend granted
+    /// `persist_mode = 1` for this approval.
+    pub restore_token: Option<String>,
 }
 
 /// The PipeWire global: core plus the calloop integration.

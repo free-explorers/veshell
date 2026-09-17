@@ -45,6 +45,14 @@ pub const SESSION_INTERFACE: &str = "org.freedesktop.impl.portal.Session";
 
 /// ScreenCast backend contract version advertised by Veshell.
 pub const SCREENCAST_BACKEND_VERSION: u32 = 4;
+/// Vendor string inside the backend-facing `restore_data (suv)` blob. The
+/// xdg-desktop-portal frontend stores this blob opaquely, translates it into
+/// the client-facing `restore_token` string, and translates it back on a later
+/// SelectSources. A foreign vendor (for example another desktop's backend)
+/// must degrade to "no restore" and the ordinary prompt.
+pub const RESTORE_DATA_VENDOR: &str = "veshell";
+/// Version of the private payload inside the `(suv)` vendor tuple.
+pub const RESTORE_DATA_VERSION: u32 = 1;
 /// Screenshot backend contract version advertised by Veshell: version 3
 /// carries the `Target` and the `AvailableTargets` property.
 pub const SCREENSHOT_BACKEND_VERSION: u32 = 3;
@@ -222,6 +230,17 @@ pub struct ScreenCastConstraints {
     pub types: SourceTypes,
     pub cursor_mode: CursorModes,
     pub multiple: bool,
+    /// The `persist_mode` the client asked for (portal contract): 0 none,
+    /// 1 transient, 2 persistent. The backend supports transient grants
+    /// only and answers with what it granted in the Start result.
+    pub persist_mode: u32,
+    /// The client's restore token, recovered from the backend-facing
+    /// `restore_data (suv)` blob that the frontend exchanged for the
+    /// client's opaque `restore_token` string. Portal implementations never
+    /// see the token itself: the frontend translates both ways (see
+    /// `encode_restore_data`). An unguessable token grants no access by
+    /// itself: every use revalidates against the live frontend owner and
+    /// live source registries.
     pub restore_token: Option<String>,
 }
 
@@ -246,6 +265,66 @@ fn lookup_string(options: &PortalDict, key: &str) -> Option<String> {
     String::try_from(value.clone()).ok()
 }
 
+/// Wraps the backend's unguessable restore token in the `(suv)` blob the
+/// xdg-desktop-portal frontend exchanges with implementations: vendor,
+/// format version, and an implementation-private variant. The frontend turns
+/// this into the client's opaque `restore_token` string and hands the same
+/// blob back on a later SelectSources, where `lookup_restore_token` unwraps
+/// it again.
+pub fn encode_restore_data(token: &str) -> Option<OwnedValue> {
+    use zbus::zvariant::{Str, StructureBuilder, Value};
+    // `add_field` runs `Value::new` internally, so the private payload is
+    // appended as an already-built variant to keep it a single `v` field.
+    let structure = StructureBuilder::new()
+        .add_field(RESTORE_DATA_VENDOR)
+        .add_field(RESTORE_DATA_VERSION)
+        .append_field(Value::Value(Box::new(Value::Str(Str::from(token)))))
+        .build()
+        .ok()?;
+    OwnedValue::try_from(Value::Structure(structure)).ok()
+}
+
+/// Parses the backend-facing `restore_data (suv)` blob down to Veshell's
+/// restore token. Non-`(suv)` values, foreign vendors, newer private formats,
+/// and empty payloads are ignored rather than fatal: unreadable restore data
+/// must degrade to "no restore" and the ordinary prompt, never to a rejected
+/// request.
+fn lookup_restore_token(options: &PortalDict) -> Option<String> {
+    use zbus::zvariant::{Signature, Value};
+    let raw = options.get("restore_data")?;
+    let Value::Structure(structure) = Value::from(raw.clone()) else {
+        return None;
+    };
+    if structure.signature()
+        != &Signature::structure([Signature::Str, Signature::U32, Signature::Variant])
+    {
+        return None;
+    }
+    let fields = structure.fields();
+    let [vendor, version, payload] = fields else {
+        return None;
+    };
+    let Value::Str(vendor) = vendor else {
+        return None;
+    };
+    if vendor.as_str() != RESTORE_DATA_VENDOR {
+        return None;
+    }
+    let Value::U32(version) = version else {
+        return None;
+    };
+    if *version > RESTORE_DATA_VERSION {
+        return None;
+    }
+    let Value::Value(payload) = payload else {
+        return None;
+    };
+    let Value::Str(token) = &**payload else {
+        return None;
+    };
+    (!token.is_empty()).then(|| token.to_string())
+}
+
 pub fn parse_screen_cast_constraints(
     options: &PortalDict,
     available: SourceTypes,
@@ -254,6 +333,7 @@ pub fn parse_screen_cast_constraints(
         types: SourceTypes::MONITOR,
         cursor_mode: CursorModes::HIDDEN,
         multiple: false,
+        persist_mode: 0,
         restore_token: None,
     };
 
@@ -284,7 +364,24 @@ pub fn parse_screen_cast_constraints(
         constraints.multiple = multiple;
     }
 
-    constraints.restore_token = lookup_string(options, "restore_token");
+    if let Some(mode) = lookup_u32(options, "persist_mode") {
+        // The backend grants transient (1) when the client asks for any
+        // persistence; unknown mode values are invalid per contract.
+        if mode > 2 {
+            return Err("Invalid persist_mode".to_string());
+        }
+        constraints.persist_mode = mode;
+    }
+
+    // The frontend replaces the client's `restore_token` with the backend
+    // `restore_data (suv)` blob it stored earlier. The legacy top-level
+    // `restore_token` key is unreachable through the real frontend but stays
+    // accepted defensively.
+    constraints.restore_token =
+        lookup_restore_token(options).or_else(|| lookup_string(options, "restore_token"));
+    if constraints.restore_token.is_some() {
+        tracing::info!("Portal options carry RestoreData (or a top-level restore token)");
+    }
 
     Ok(constraints)
 }
@@ -925,6 +1022,103 @@ mod unit_tests {
         assert_eq!(constraints.cursor_mode, CursorModes::EMBEDDED);
         assert!(constraints.multiple);
         assert_eq!(constraints.restore_token.as_deref(), Some("t0"));
+        assert_eq!(constraints.persist_mode, 0);
+    }
+
+    /// Builds the `(suv)` wire shape directly so tests pin the contract
+    /// independent of the production encoder.
+    fn restore_data(vendor: &str, version: u32, token: &str) -> OwnedValue {
+        let structure = zbus::zvariant::StructureBuilder::new()
+            .add_field(vendor)
+            .add_field(version)
+            .append_field(zbus::zvariant::Value::Value(Box::new(
+                zbus::zvariant::Value::Str(zbus::zvariant::Str::from(token)),
+            )))
+            .build()
+            .expect("restore_data structure");
+        OwnedValue::try_from(zbus::zvariant::Value::Structure(structure)).expect("owned value")
+    }
+
+    // The backend-facing contract: `restore_data` is `(suv)` (vendor,
+    // version, private payload). The frontend translates the client's
+    // `restore_token` string into this blob; the backend never sees the
+    // token itself.
+    #[test]
+    fn restore_data_suv_parses_down_to_the_token() {
+        let constraints = parse_screen_cast_constraints(
+            &options(&[
+                ("persist_mode", OwnedValue::from(2u32)),
+                ("restore_data", restore_data("veshell", 1, "veshell-grant")),
+            ]),
+            SourceTypes::MONITOR | SourceTypes::WINDOW,
+        )
+        .expect("valid options");
+        assert_eq!(constraints.restore_token.as_deref(), Some("veshell-grant"));
+        assert_eq!(constraints.persist_mode, 2);
+    }
+
+    #[test]
+    fn encoded_restore_data_round_trips() {
+        let encoded = super::encode_restore_data("round-trip").expect("encodes");
+        let constraints = parse_screen_cast_constraints(
+            &options(&[("restore_data", encoded)]),
+            SourceTypes::MONITOR,
+        )
+        .expect("valid options");
+        assert_eq!(constraints.restore_token.as_deref(), Some("round-trip"));
+    }
+
+    // A blob from another portal implementation (for example after a
+    // desktop switch) must degrade to "no restore", never to a rejection.
+    #[test]
+    fn foreign_vendor_restore_data_is_ignored() {
+        let constraints = parse_screen_cast_constraints(
+            &options(&[("restore_data", restore_data("GNOME", 1, "gnome-grant"))]),
+            SourceTypes::MONITOR,
+        )
+        .expect("restore data is never fatal");
+        assert_eq!(constraints.restore_token, None);
+    }
+
+    #[test]
+    fn newer_restore_data_format_is_ignored() {
+        let constraints = parse_screen_cast_constraints(
+            &options(&[("restore_data", restore_data("veshell", 2, "future"))]),
+            SourceTypes::MONITOR,
+        )
+        .expect("restore data is never fatal");
+        assert_eq!(constraints.restore_token, None);
+    }
+
+    // Not-a-`(suv)` restore data degrades to "no restore": it must never
+    // turn a valid request into a rejection.
+    #[test]
+    fn malformed_restore_data_is_ignored() {
+        let wrong_shape = zbus::zvariant::StructureBuilder::new()
+            .add_field(zbus::zvariant::Value::U32(1))
+            .add_field(zbus::zvariant::Value::U32(1))
+            .add_field(zbus::zvariant::Value::U32(1))
+            .build()
+            .expect("structure");
+        let wrong_shape =
+            OwnedValue::try_from(zbus::zvariant::Value::Structure(wrong_shape)).expect("owned");
+        for malformed in [OwnedValue::from(true), OwnedValue::from(7u32), wrong_shape] {
+            let constraints = parse_screen_cast_constraints(
+                &options(&[("restore_data", malformed)]),
+                SourceTypes::MONITOR,
+            )
+            .expect("restore data is never fatal");
+            assert_eq!(constraints.restore_token, None);
+        }
+    }
+
+    #[test]
+    fn invalid_persist_mode_is_rejected() {
+        assert!(parse_screen_cast_constraints(
+            &options(&[("persist_mode", OwnedValue::from(7u32))]),
+            SourceTypes::MONITOR,
+        )
+        .is_err());
     }
 }
 

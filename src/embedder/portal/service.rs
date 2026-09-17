@@ -10,8 +10,9 @@ use serde_json::json;
 use zbus::zvariant::OwnedObjectPath;
 
 use super::{
-    caller_is_frontend, make_reply_pair, Caller, PortalCall, PortalReply, ReplyLink,
-    ScreenCastConstraints, SourceTypes, RESPONSE_CANCELLED, RESPONSE_FAILED, RESPONSE_OK,
+    caller_is_frontend, encode_restore_data, make_reply_pair, Caller, PortalCall, PortalReply,
+    ReplyLink, ScreenCastConstraints, SourceTypes, RESPONSE_CANCELLED, RESPONSE_FAILED,
+    RESPONSE_OK,
 };
 
 pub use super::FrontendOwner;
@@ -132,7 +133,27 @@ pub struct PortalLedger {
     pub screenshots: HashMap<OwnedObjectPath, ScreenshotEntry>,
     pub frontend: Option<FrontendOwner>,
     pub next_consent_token: u64,
+    /// Transient restore grants (Chromium 105+ stream restoration, spec
+    /// 8.3). Each grant binds an unguessable token to the frontend owner
+    /// that approved a source; every use revalidates owner and source
+    /// liveness, and frontend loss/restart clears the whole map.
+    pub restores: HashMap<String, RestoreGrant>,
 }
+
+/// An approved source remembered for stream restoration: Chrome's second
+/// portal flow (the real capture behind its own picker) re-presents the
+/// token and the backend answers without a second prompt.
+#[derive(Debug)]
+pub struct RestoreGrant {
+    pub owner: FrontendOwner,
+    pub source: CaptureSource,
+}
+
+/// The restore map stays bounded: every approval inserts one grant and a
+/// long session can mint many (Chrome reloads, tab switches). Eviction
+/// drops arbitrary entries past the bound — a missing token degrades to
+/// the ordinary prompt, never to a security failure.
+const RESTORE_GRANT_LIMIT: usize = 32;
 
 use std::collections::HashMap;
 
@@ -161,6 +182,11 @@ pub enum PortalUiEvent {
         /// The requested source kinds this flow may offer (spec 8.2: the
         /// picker is filtered by the request's `types`).
         types: SourceTypes,
+        /// A restored authorization (Chromium 105+ stream restoration,
+        /// spec 8.3): when set, the loop approves this source directly
+        /// instead of rendering the picker — after (re)validating the
+        /// source's liveness in Rust, exactly like an explicit choice.
+        preselected: Option<CaptureSource>,
     },
     DismissPicker {
         consent_token: u64,
@@ -182,6 +208,39 @@ impl PortalLedger {
     fn consent_token(&mut self) -> u64 {
         self.next_consent_token += 1;
         self.next_consent_token
+    }
+
+    /// Mints an unguessable restore grant for an approved source. The
+    /// grant binds to the approving frontend owner: a frontend restart
+    /// (and its owner change) invalidates every token wholesale.
+    pub fn mint_restore_token(&mut self, frontend: FrontendOwner, source: CaptureSource) -> String {
+        let token = uuid::Uuid::new_v4().hyphenated().to_string();
+        self.restores.insert(
+            token.clone(),
+            RestoreGrant {
+                owner: frontend,
+                source,
+            },
+        );
+        while self.restores.len() > RESTORE_GRANT_LIMIT {
+            let evicted = self
+                .restores
+                .keys()
+                .next()
+                .cloned()
+                .expect("restore map is above the bound");
+            self.restores.remove(&evicted);
+        }
+        token
+    }
+
+    /// Resolves a presented restore token to its approved source. The
+    /// owner must match the live frontend: a token minted by one
+    /// frontend (or before a restart) authorizes nothing for another.
+    pub fn restore_source(&self, token: &str) -> Option<CaptureSource> {
+        let grant = self.restores.get(token)?;
+        let owner = self.frontend.as_ref()?;
+        (grant.owner.0 == owner.0).then(|| grant.source.clone())
     }
 }
 
@@ -228,6 +287,12 @@ pub fn frontend_owner_changed(
     let next = owner.as_ref().map(|current| current.0.clone());
     let frontend_lost = owner.is_none();
     ledger.frontend = owner;
+    // Every restore grant was minted by the previous owner and every
+    // presented token revalidates against the live owner, but the grants
+    // themselves are dropped eagerly so a stale owner's data never
+    // lingers after a restart (spec 8.3: no silent reauthorization
+    // across frontend generations).
+    ledger.restores.clear();
     if previous.is_some() && previous == next {
         return;
     }
@@ -425,7 +490,29 @@ fn perform_ui_event<BackendData: crate::backend::Backend + 'static>(
             app_name,
             consent_token,
             types,
+            preselected,
         } => {
+            // A restored authorization skips the picker surface entirely
+            // (Chromium 105+ second flow, spec 8.3): the loop routes the
+            // approval through the very same decision path an explicit
+            // choice takes, so the Rust-side revalidation — live source
+            // identity, requested kinds, live session — applies to a
+            // restored grant exactly like a user click.
+            if let Some(source) = preselected {
+                tracing::info!(
+                    app = %app_name,
+                    source_label = %source.label,
+                    "Restored authorization approved without a prompt"
+                );
+                handle_consent_decision(
+                    state,
+                    session_handle.as_str(),
+                    consent_token,
+                    ConsentOutcome::Approved,
+                    Some(source.id),
+                );
+                return;
+            }
             // Sources are assembled per requested kind, never by
             // substituting one kind for another (spec 8.2). Window entries
             // carry their own stable kind tag so the decision can be
@@ -752,7 +839,15 @@ pub fn handle_consent_decision<BackendData: crate::backend::Backend + 'static>(
         {
             return;
         }
-        begin_shared_stream(state, &session_handle, source);
+        // The approval mints a fresh unguessable restore grant owned by
+        // the live frontend (spec 8.3, transient persistence): the Start
+        // result carries it back and a later flow of this client may
+        // present it to skip the picker.
+        let restore_token = state.portal_runtime.as_mut().and_then(|runtime| {
+            let frontend = runtime.ledger.frontend.clone()?;
+            Some(runtime.ledger.mint_restore_token(frontend, source.clone()))
+        });
+        begin_shared_stream(state, &session_handle, source, restore_token);
     } else {
         handle_consent_through_runtime(state, &session_handle, consent_token, outcome);
     }
@@ -1149,6 +1244,7 @@ fn begin_shared_stream<BackendData: crate::backend::Backend + 'static>(
     state: &mut crate::state::State<BackendData>,
     session_handle: &OwnedObjectPath,
     source: CaptureSource,
+    restore_token: Option<String>,
 ) {
     let target = match source.kind {
         SourceKind::Monitor => resolve_monitor_target(state, &source.id),
@@ -1195,6 +1291,7 @@ fn begin_shared_stream<BackendData: crate::backend::Backend + 'static>(
             label: source.label.clone(),
             active: false,
             last_frame: None,
+            restore_token,
         },
     );
     // The frame scheduler pulls pixels into the producer buffers.
@@ -1707,13 +1804,19 @@ pub fn close_shared_session<BackendData: crate::backend::Backend + 'static>(
     stop_capture_side(state, session_handle);
 }
 
-fn stream_reply(node_id: u32, stream: &ActiveStream) -> Option<PortalReply> {
-    use zbus::zvariant::{Array, Dict, OwnedValue, Signature, StructureBuilder, Value};
+/// The stream metadata dictionary inside the Start result; extracted for
+/// direct testing (the outer reply wraps it into the opaque
+/// `(u, a(ua{sv}))` tuple).
+fn stream_dict(stream: &ActiveStream) -> Option<zbus::zvariant::Dict<'static, 'static>> {
+    use zbus::zvariant::{StructureBuilder, Value};
 
     // a{sv}: string keys, variant values — every value carries the `v`
     // signature itself; a bare structure inside a variant dict is a
     // signature mismatch that once aborted the compositor.
-    let mut dict = Dict::new(&Signature::Str, &Signature::Variant);
+    let mut dict = zbus::zvariant::Dict::new(
+        &zbus::zvariant::Signature::Str,
+        &zbus::zvariant::Signature::Variant,
+    );
     let position = StructureBuilder::new()
         .add_field(stream.position.0)
         .add_field(stream.position.1)
@@ -1740,6 +1843,14 @@ fn stream_reply(node_id: u32, stream: &ActiveStream) -> Option<PortalReply> {
     )
     .ok()?;
 
+    Some(dict)
+}
+
+fn stream_reply(node_id: u32, stream: &ActiveStream) -> Option<PortalReply> {
+    use zbus::zvariant::{Array, Signature, StructureBuilder, Value};
+
+    let dict = stream_dict(stream)?;
+
     // a(ua{sv}): (node_id, a{sv}) tuple per stream. The dict field joins
     // through append_field: `add_field` wraps an existing Value into a
     // Variant again (Value::new(Value)), which turned the element
@@ -1762,6 +1873,32 @@ fn stream_reply(node_id: u32, stream: &ActiveStream) -> Option<PortalReply> {
         return None;
     };
     results.insert("streams".to_string(), encoded);
+    // Transient stream restoration (spec 8.3.1): the grant rides the Start
+    // result as the backend-facing `restore_data (suv)` blob, together with
+    // an explicit `persist_mode`. The xdg-desktop-portal frontend turns that
+    // blob into the opaque `restore_token` string the client stores, and
+    // translates it back into `restore_data` on a later SelectSources — so
+    // the client's Chromium, which never sees our key names, can present it.
+    // Emitting the raw `restore_token` string here (the first runtime verify
+    // pass) registered nothing in the frontend, so the token was dropped on
+    // the next flow and the user was prompted twice. Without a grant the
+    // answer is explicitly `persist_mode = 0`, never persistence-by-omission.
+    let granted_persist: u32 = stream.restore_token.is_some().into();
+    results.insert(
+        "persist_mode".to_string(),
+        OwnedValue::from(granted_persist),
+    );
+    if let Some(token) = stream.restore_token.as_ref() {
+        let Some(encoded) = encode_restore_data(token) else {
+            tracing::error!("Failed to encode the persistence grant");
+            return None;
+        };
+        tracing::info!(
+            token_chars = token.len(),
+            "Start result carries the persistence grant (restore_data)"
+        );
+        results.insert("restore_data".to_string(), encoded);
+    }
     Some(PortalReply::new(RESPONSE_OK, results))
 }
 
@@ -1908,7 +2045,9 @@ pub fn apply_portal_call(
                             session.state = SessionState::Configured;
                             tracing::info!(
                                 requested_types = ?constraints.types,
-                                "Stored the source kinds SelectSources requested"
+                                requested_persist = constraints.persist_mode,
+                                restore_token_present = constraints.restore_token.is_some(),
+                                "Stored SelectSources constraints"
                             );
                             session.constraints = Some(constraints);
                             if !ledger.requests.contains_key(&handle) {
@@ -1974,7 +2113,11 @@ pub fn apply_portal_call(
                             SessionState::Configured => {
                                 let start_types_explicit = options.contains_key("types");
                                 let start_cursor_explicit = options.contains_key("cursor_mode");
-                                if !start_types_explicit || !start_cursor_explicit {
+                                if !start_types_explicit
+                                    || !start_cursor_explicit
+                                    || constraints.persist_mode == 0
+                                    || constraints.restore_token.is_none()
+                                {
                                     if let Some(stored) = session.constraints.as_ref() {
                                         let merged = ScreenCastConstraints {
                                             types: if start_types_explicit {
@@ -1987,6 +2130,20 @@ pub fn apply_portal_call(
                                             } else {
                                                 stored.cursor_mode
                                             },
+                                            // Chromium presents its token in
+                                            // SelectSources (and Start); a
+                                            // key-less Start must keep the
+                                            // token/persist request the
+                                            // session already stored.
+                                            persist_mode: if constraints.persist_mode != 0 {
+                                                constraints.persist_mode
+                                            } else {
+                                                stored.persist_mode
+                                            },
+                                            restore_token: constraints
+                                                .restore_token
+                                                .clone()
+                                                .or_else(|| stored.restore_token.clone()),
                                             ..constraints.clone()
                                         };
                                         session.constraints = Some(merged);
@@ -2034,7 +2191,37 @@ pub fn apply_portal_call(
                     if !types.intersects(SourceTypes::MONITOR | SourceTypes::WINDOW) {
                         return write(reply, failed("no supported source types"));
                     }
+                    // A restore token presented with this flow may skip
+                    // the picker (Chromium 105+ stream restoration, spec
+                    // 8.3): the token must resolve inside the ledger and
+                    // its source kind must fit this flow's request. The
+                    // source's live identity is revalidated when the
+                    // (possibly non-interactive) decision lands in Rust —
+                    // every restore use is a full decision path, just
+                    // without the prompt surface.
+                    let presented_token = session
+                        .constraints
+                        .as_ref()
+                        .and_then(|restored| restored.restore_token.clone());
                     session.state = SessionState::Choosing;
+                    let restore_source = presented_token
+                        .as_deref()
+                        .map(|token| ledger.restore_source(token))
+                        .unwrap_or_default()
+                        .filter(|source| kind_to_types(source.kind).intersects(types));
+                    tracing::info!(
+                        presented_token = presented_token.is_some(),
+                        restore_resolved = restore_source.is_some(),
+                        restore_map_size = ledger.restores.len(),
+                        "Start restore-token evaluation"
+                    );
+                    if let Some(source) = restore_source.as_ref() {
+                        tracing::info!(
+                            app = %app_id,
+                            source_label = %source.label,
+                            "Screen-cast flow presents a valid restore token"
+                        );
+                    }
 
                     // Runtime diagnostics: which source kinds the caller
                     // actually requested for this flow (Brave and other
@@ -2075,6 +2262,7 @@ pub fn apply_portal_call(
                         app_name,
                         consent_token,
                         types,
+                        preselected: restore_source,
                     });
                 }
                 PortalCall::Screenshot {
@@ -2281,7 +2469,227 @@ mod tests {
         };
         assert!(applied_again.is_empty());
         drop(pending);
-        drop(pending2);
+    }
+
+    // Transient stream restoration (spec 8.3 amendment, the Chromium 105+
+    // flow): a grant minted for the live frontend resolves for a key-less
+    // Start of a *different* session and preselects its source in the
+    // picker event (so the loop approves without rendering the prompt);
+    // every decision still runs the full Rust-side validation.
+    #[test]
+    fn keyless_start_with_valid_restore_token_preselects_the_grant() {
+        let (mut ledger, _) = ledger_with_frontend();
+        {
+            let (link, pending) = make_reply_pair();
+            let mut actions = Vec::new();
+            apply_portal_call(
+                &mut ledger,
+                PortalCall::CreateSession {
+                    handle: handle(),
+                    session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                    app_id: "app".into(),
+                    caller: Some(Caller(":1.9".into())),
+                    reply: link,
+                },
+                &mut actions,
+                &mut Vec::new(),
+            );
+            assert_eq!(pending.recv_blocking().unwrap().response, RESPONSE_OK);
+        }
+        // An earlier approved flow has minted a window grant.
+        let granted_source = CaptureSource {
+            id: "window-uuid-1".into(),
+            label: "Brave".into(),
+            kind: SourceKind::Window,
+        };
+        let token = ledger.mint_restore_token(FrontendOwner(":1.9".into()), granted_source.clone());
+        {
+            let (link, pending) = make_reply_pair();
+            let mut actions = Vec::new();
+            apply_portal_call(
+                &mut ledger,
+                PortalCall::SelectSources {
+                    handle: handle(),
+                    session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                    app_id: "app".into(),
+                    constraints: ScreenCastConstraints {
+                        types: SourceTypes::MONITOR | SourceTypes::WINDOW,
+                        cursor_mode: super::super::CursorModes::HIDDEN,
+                        persist_mode: 0,
+                        multiple: false,
+                        restore_token: None,
+                    },
+                    caller: Some(Caller(":1.9".into())),
+                    reply: link,
+                },
+                &mut actions,
+                &mut Vec::new(),
+            );
+            assert_eq!(pending.recv_blocking().unwrap().response, RESPONSE_OK);
+        }
+        // Key-less Start (Chromium carries types in SelectSources only),
+        // the token presented in the Start-consumed constraints.
+        let (link, pending) = make_reply_pair();
+        let mut actions = Vec::new();
+        let mut ui: Vec<PortalUiEvent> = Vec::new();
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::Start {
+                handle: handle(),
+                session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                app_id: "app".into(),
+                parent_window: "".into(),
+                options: super::super::PortalDict::new(),
+                constraints: ScreenCastConstraints {
+                    types: SourceTypes::MONITOR,
+                    cursor_mode: super::super::CursorModes::HIDDEN,
+                    persist_mode: 2,
+                    multiple: false,
+                    restore_token: Some(token.clone()),
+                },
+                caller: Some(Caller(":1.9".into())),
+                reply: link,
+            },
+            &mut actions,
+            &mut ui,
+        );
+        let PortalUiEvent::OpenPicker { preselected, .. } = &ui[0] else {
+            panic!("expected a picker event (with preselection)");
+        };
+        assert_eq!(
+            preselected.clone(),
+            Some(granted_source),
+            "a valid restore token preselects its grant"
+        );
+        drop(pending);
+    }
+
+    // The frontend hands the backend the stored `restore_data (suv)` blob,
+    // not the client's token string. A SelectSources that arrives with the
+    // encoded blob must survive the parser and preselect the grant for the
+    // key-less Start that follows.
+    #[test]
+    fn restore_data_blob_preselects_the_grant_through_the_parser() {
+        let (mut ledger, _) = ledger_with_frontend();
+        {
+            let (link, pending) = make_reply_pair();
+            let mut actions = Vec::new();
+            apply_portal_call(
+                &mut ledger,
+                PortalCall::CreateSession {
+                    handle: handle(),
+                    session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                    app_id: "app".into(),
+                    caller: Some(Caller(":1.9".into())),
+                    reply: link,
+                },
+                &mut actions,
+                &mut Vec::new(),
+            );
+            assert_eq!(pending.recv_blocking().unwrap().response, RESPONSE_OK);
+        }
+        let granted_source = CaptureSource {
+            id: "window-uuid-2".into(),
+            label: "Brave".into(),
+            kind: SourceKind::Window,
+        };
+        let token = ledger.mint_restore_token(FrontendOwner(":1.9".into()), granted_source.clone());
+        let mut raw_options = super::super::PortalDict::new();
+        raw_options.insert(
+            "types".to_string(),
+            OwnedValue::from((SourceTypes::MONITOR | SourceTypes::WINDOW).bits()),
+        );
+        raw_options.insert("persist_mode".to_string(), OwnedValue::from(1u32));
+        raw_options.insert(
+            "restore_data".to_string(),
+            super::super::encode_restore_data(&token).expect("encodes"),
+        );
+        let constraints = super::super::parse_screen_cast_constraints(
+            &raw_options,
+            SourceTypes::MONITOR | SourceTypes::WINDOW,
+        )
+        .expect("valid options");
+        assert_eq!(constraints.restore_token.as_deref(), Some(token.as_str()));
+        {
+            let (link, pending) = make_reply_pair();
+            let mut actions = Vec::new();
+            apply_portal_call(
+                &mut ledger,
+                PortalCall::SelectSources {
+                    handle: handle(),
+                    session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                    app_id: "app".into(),
+                    constraints,
+                    caller: Some(Caller(":1.9".into())),
+                    reply: link,
+                },
+                &mut actions,
+                &mut Vec::new(),
+            );
+            assert_eq!(pending.recv_blocking().unwrap().response, RESPONSE_OK);
+        }
+        let (link, pending) = make_reply_pair();
+        let mut actions = Vec::new();
+        let mut ui: Vec<PortalUiEvent> = Vec::new();
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::Start {
+                handle: handle(),
+                session_handle: OwnedObjectPath::try_from(SESSION_OK).unwrap(),
+                app_id: "app".into(),
+                parent_window: "".into(),
+                options: super::super::PortalDict::new(),
+                constraints: ScreenCastConstraints {
+                    types: SourceTypes::MONITOR,
+                    cursor_mode: super::super::CursorModes::HIDDEN,
+                    persist_mode: 0,
+                    multiple: false,
+                    restore_token: None,
+                },
+                caller: Some(Caller(":1.9".into())),
+                reply: link,
+            },
+            &mut actions,
+            &mut ui,
+        );
+        let PortalUiEvent::OpenPicker { preselected, .. } = &ui[0] else {
+            panic!("expected a picker event (with preselection)");
+        };
+        assert_eq!(
+            preselected.clone(),
+            Some(granted_source),
+            "the frontend-supplied restore_data blob preselects its grant"
+        );
+        drop(pending);
+    }
+
+    // A restore grant bound to one frontend owner authorizes nothing
+    // after the owner changed, and a frontend change drops the grants
+    // wholesale (spec 8.3: no silent reauthorization).
+    #[test]
+    fn restore_grants_die_with_the_frontend_owner() {
+        let mut ledger = PortalLedger {
+            frontend: Some(FrontendOwner(":1.9".into())),
+            ..Default::default()
+        };
+        let source = CaptureSource {
+            id: "DP-1".into(),
+            label: "DP-1".into(),
+            kind: SourceKind::Monitor,
+        };
+        let token = ledger.mint_restore_token(FrontendOwner(":1.9".into()), source);
+        let _ = ledger.restore_source(&token);
+        // Owner change: the token of the old owner is gone with it.
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::FrontendOwnerChanged {
+                owner: Some(FrontendOwner(":1.44".into())),
+            },
+            &mut Vec::new(),
+            &mut Vec::new(),
+        );
+        assert!(ledger.restores.is_empty());
+        assert!(ledger.restore_source(&token).is_none());
     }
 
     #[test]
@@ -2364,6 +2772,7 @@ mod tests {
                     constraints: super::super::ScreenCastConstraints {
                         types: super::super::SourceTypes::MONITOR,
                         cursor_mode: super::super::CursorModes::HIDDEN,
+                        persist_mode: 0,
                         multiple: false,
                         restore_token: None,
                     },
@@ -2393,6 +2802,7 @@ mod tests {
                     constraints: super::super::ScreenCastConstraints {
                         types: super::super::SourceTypes::MONITOR,
                         cursor_mode: super::super::CursorModes::HIDDEN,
+                        persist_mode: 0,
                         multiple: false,
                         restore_token: None,
                     },
@@ -2502,6 +2912,7 @@ mod tests {
                     constraints: super::super::ScreenCastConstraints {
                         types: super::super::SourceTypes::MONITOR,
                         cursor_mode: super::super::CursorModes::HIDDEN,
+                        persist_mode: 0,
                         multiple: false,
                         restore_token: None,
                     },
@@ -2584,6 +2995,7 @@ mod tests {
                 constraints: ScreenCastConstraints {
                     types: SourceTypes::WINDOW,
                     cursor_mode: super::super::CursorModes::HIDDEN,
+                    persist_mode: 0,
                     multiple: false,
                     restore_token: None,
                 },
@@ -2642,6 +3054,7 @@ mod tests {
                     constraints: ScreenCastConstraints {
                         types: SourceTypes::MONITOR | SourceTypes::WINDOW,
                         cursor_mode: super::super::CursorModes::HIDDEN,
+                        persist_mode: 0,
                         multiple: false,
                         restore_token: None,
                     },
@@ -2670,6 +3083,7 @@ mod tests {
                     // are absent.
                     types: SourceTypes::MONITOR,
                     cursor_mode: super::super::CursorModes::HIDDEN,
+                    persist_mode: 0,
                     multiple: false,
                     restore_token: None,
                 },
@@ -2724,6 +3138,7 @@ mod tests {
                     constraints: ScreenCastConstraints {
                         types: SourceTypes::MONITOR | SourceTypes::WINDOW,
                         cursor_mode: super::super::CursorModes::HIDDEN,
+                        persist_mode: 0,
                         multiple: false,
                         restore_token: None,
                     },
@@ -2754,6 +3169,7 @@ mod tests {
                 constraints: ScreenCastConstraints {
                     types: SourceTypes::WINDOW,
                     cursor_mode: super::super::CursorModes::HIDDEN,
+                    persist_mode: 0,
                     multiple: false,
                     restore_token: None,
                 },
@@ -2791,6 +3207,7 @@ mod tests {
                 label: "window-1".into(),
                 active: false,
                 last_frame: None,
+                restore_token: None,
             },
         );
         map.insert(
@@ -2804,6 +3221,7 @@ mod tests {
                 label: "window-2".into(),
                 active: false,
                 last_frame: None,
+                restore_token: None,
             },
         );
         map.insert(
@@ -2818,6 +3236,7 @@ mod tests {
                 label: "DP-1".into(),
                 active: false,
                 last_frame: None,
+                restore_token: None,
             },
         );
 
@@ -2867,6 +3286,7 @@ mod tests {
                 constraints: ScreenCastConstraints {
                     types: SourceTypes::empty(),
                     cursor_mode: super::super::CursorModes::HIDDEN,
+                    persist_mode: 0,
                     multiple: false,
                     restore_token: None,
                 },
@@ -3071,6 +3491,7 @@ mod tests {
                 constraints: super::super::ScreenCastConstraints {
                     types: super::super::SourceTypes::MONITOR,
                     cursor_mode: super::super::CursorModes::HIDDEN,
+                    persist_mode: 0,
                     multiple: false,
                     restore_token: None,
                 },
@@ -3131,6 +3552,7 @@ mod tests {
                     constraints: super::super::ScreenCastConstraints {
                         types: super::super::SourceTypes::MONITOR,
                         cursor_mode: super::super::CursorModes::HIDDEN,
+                        persist_mode: 0,
                         multiple: false,
                         restore_token: None,
                     },
@@ -3293,6 +3715,7 @@ mod tests {
                     constraints: super::super::ScreenCastConstraints {
                         types: super::super::SourceTypes::MONITOR,
                         cursor_mode: super::super::CursorModes::HIDDEN,
+                        persist_mode: 0,
                         multiple: false,
                         restore_token: None,
                     },
@@ -3386,6 +3809,7 @@ mod tests {
                     constraints: super::super::ScreenCastConstraints {
                         types: super::super::SourceTypes::MONITOR,
                         cursor_mode: super::super::CursorModes::HIDDEN,
+                        persist_mode: 0,
                         multiple: false,
                         restore_token: None,
                     },
@@ -3428,6 +3852,7 @@ mod tests {
                 constraints: super::super::ScreenCastConstraints {
                     types: super::super::SourceTypes::MONITOR,
                     cursor_mode: super::super::CursorModes::HIDDEN,
+                    persist_mode: 0,
                     multiple: false,
                     restore_token: None,
                 },
@@ -3466,6 +3891,7 @@ mod tests {
             label: "DP-2".into(),
             active: false,
             last_frame: None,
+            restore_token: None,
         };
         let reply = stream_reply(42, &stream).expect("the Start result builds");
         assert_eq!(reply.response, RESPONSE_OK);
@@ -3478,6 +3904,67 @@ mod tests {
         assert!(
             streams.is_some(),
             "the streams key carries the node id the consumer needs"
+        );
+    }
+
+    // Transient persistence (spec 8.3/8.3.1): a granted Start result answers
+    // persist_mode=1 plus a backend-facing `restore_data (suv)` blob. The
+    // xdg-desktop-portal frontend turns the blob into the client's restore
+    // token; emitting a bare `restore_token` string (the first runtime verify
+    // pass) registered nothing and prompted twice.
+    #[test]
+    fn stream_reply_carries_the_persistence_grant() {
+        let base = ActiveStream {
+            node_id: 42,
+            source_id: "DP-2".into(),
+            source_kind: SourceKind::Monitor,
+            position: (0, 0),
+            size: (1920, 1080),
+            label: "DP-2".into(),
+            active: false,
+            last_frame: None,
+            restore_token: None,
+        };
+        let no_grant = stream_reply(42, &base).expect("the Start result builds");
+        let persisted: u32 = no_grant
+            .results
+            .get("persist_mode")
+            .expect("persist_mode is explicit")
+            .try_into()
+            .expect("u32");
+        assert_eq!(persisted, 0, "no grant answers persist_mode=0 explicitly");
+        assert!(no_grant.results.get("restore_token").is_none());
+        assert!(no_grant.results.get("restore_data").is_none());
+
+        let restored = ActiveStream {
+            restore_token: Some("tok-1".into()),
+            ..base
+        };
+        let granted = stream_reply(42, &restored).expect("the Start result builds");
+        let granted_persisted: u32 = granted
+            .results
+            .get("persist_mode")
+            .expect("persist_mode is set")
+            .try_into()
+            .expect("u32");
+        assert_eq!(granted_persisted, 1);
+        assert!(
+            granted.results.get("restore_token").is_none(),
+            "the client-facing token belongs to the frontend, not the backend"
+        );
+        let mut encoded_options = super::super::PortalDict::new();
+        encoded_options.insert(
+            "restore_data".to_string(),
+            granted
+                .results
+                .get("restore_data")
+                .expect("the grant rides restore_data")
+                .clone(),
+        );
+        assert_eq!(
+            super::super::lookup_restore_token(&encoded_options).as_deref(),
+            Some("tok-1"),
+            "the emitted (suv) blob unwraps back to the minted token"
         );
     }
 

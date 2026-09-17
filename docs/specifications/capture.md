@@ -729,9 +729,22 @@ the application-facing methods as its backend API.
 
 Initial ScreenCast backend version: 4. Advertise `AvailableSourceTypes = 3`
 (MONITOR | WINDOW) only once both corresponding implementations work, and
-`AvailableCursorModes = 3` (Hidden | Embedded). Always return `persist_mode = 0`
-in successful Start results, ignore restore data and prompt again. Do not claim
-persistence support by omission. Version 4 is a bounded initial contract, not an
+`AvailableCursorModes = 3` (Hidden | Embedded). Persistence is transient
+only (amended 2026-09-17 for the Chromium 105+ stream-restoration flow,
+which enumerates through a first consented portal session and then starts
+the real capture in a second one): an approval may answer
+`persist_mode = 1` with an unguessable restore token wrapped in the
+impl-facing `restore_data (suv)` blob (`("veshell", 1, token)`; the
+frontend turns it into the client's opaque `restore_token` string); a
+later flow whose SelectSources carries that blob back skips the prompt
+surface, but every restored use still runs the full Rust-side decision
+path (live frontend owner, live source identity, requested kinds — see
+8.3). Permanent (PermissionStore)
+persistence is not claimed: a `persist_mode = 2` request is answered
+transiently, and the token's authority dies with the frontend owner, the
+compositor process, and the source it names. Persisting by omission is
+not allowed: a Start result without a granted token answers
+`persist_mode = 0` explicitly. Version 4 is a bounded initial contract, not an
 excuse to introduce obsolete compositor APIs. Upgrade to version 6 with serial
 metadata once that contract has been tested; retain its required node-ID tuple.
 
@@ -828,6 +841,41 @@ portal authorization so a paused consumer does not trigger a second consent flow
   delivered pixels cannot be recalled, but no newly rendered frame may be sent.
 - No raw public capture endpoint may bypass consent. Native Flutter actions are
   trusted shell actions, not D-Bus calls authorized by app ID or PID alone.
+
+### 8.3.1 Transient Stream Restoration
+
+Chromium's enumerating-then-capturing double session is what other
+compositors solve with remembered consent; Veshell supports the transient
+slice only (see the 8.1 persistence amendment):
+
+- The restore handshake lives at the impl boundary, not in the client's
+  vocabulary. The frontend translates the client's opaque
+  `restore_token (s)` into the backend-facing `restore_data (suv)` blob
+  and back, so the backend never sees the token itself. Veshell emits
+  `("veshell", 1, token)` in the Start results and accepts it in
+  SelectSources options; a blob with another vendor or a newer private
+  version is ignored and degrades to the prompt (the user may have
+  switched desktops). Chromium/GNOME/COSMIC all exchange this `(suv)`
+  shape — a bare `restore_token` string in the backend results registers
+  nothing and prompts twice.
+- An approval may mint one unguessable token, stored Rust-side in
+  lru-bounded memory bound to `(approving frontend owner, approved source
+  identity)`. Start answers `persist_mode = 1` plus the encoded blob; no
+  grant means `persist_mode = 0` explicitly.
+- A presented blob never authorizes by itself: its unwrapped token must
+  match the live frontend owner, its source kind must fit the request's
+  `types`, and the approval decision revalidates the source's live
+  identity (the same registry check an explicit picker click runs). A
+  dead window, a replaced output, or a foreign frontend yields the
+  ordinary prompt instead, never a stale stream.
+- Authorities that kill grants: frontend owner loss/replacement,
+  compositor process exit, and the source's own destruction or unmap
+  (validated per use). Frontend restarts clear the grant map eagerly.
+- Revoked live authorization does not revoke the token, because the
+  point of the grant is a future consent for the still-alive source; a
+  removed source's token resolves to nothing.
+- True longer-term persistence (PermissionStore, surviving compositor
+  restarts) is out of scope and stays deferred (section 13).
 
 The frontend's restricted remote protects portal clients according to PipeWire's
 access policy. Do not claim this prevents every unrestricted same-user host
@@ -1049,6 +1097,33 @@ window stream is torn down on window removal (`remove_meta_window`) and
 on unmap (`UpdateMapped` false) through the ordinary close path — the
 producer stop, ledger close, and indicator all run through the idempotent
 close. Window streams carry `source_type = 2` in the Start result.
+
+Runtime correction (2026-09-17, Brave): Chromium 105+ runs the
+enumerating-then-capturing double portal flow, and the backend's key-less
+Start must keep the SelectSources-stored kinds (pinned by tests; the first
+run lost its windows list there) and support transient stream restoration
+(spec 8.1/8.3.1 amendment): Start answers `persist_mode = 1` with an
+unguessable token bound to the approving frontend owner and source; a
+presented token skips the prompt after the same Rust-side validation an
+explicit choice runs, and frontend owner changes drop the grants
+wholesale. Ledger tests pin the preselected-approval event path, the
+owner death, and the Start-result persistence keys.
+
+Third verify pass (2026-09-17, the actual root cause): the first two
+placements failed because the handshake is not the client's vocabulary at
+all. Veshell is an *impl* backend, and the frontend owns the translation:
+it replaces the client's `restore_token (s)` with the stored backend
+`restore_data (suv)` blob and mints a fresh client token only when the
+backend returns `restore_data` in Start results
+(xdg-desktop-portal `src/xdp-session-persistence.c`
+`replace_restore_token_with_data` /
+`generate_and_save_restore_token`). A bare `restore_token` string in the
+backend results (passes one and two) was passed through to the client but
+never registered, so the next flow's token was dropped before SelectSources
+reached us. Fix: emit and parse `("veshell", 1, token)` `(suv)` blobs, as
+GNOME and COSMIC backends do; foreign vendors/newer versions degrade to
+the prompt.
+
 Remaining M4 work: runtime portal-Screenshot validation against a real
 sandboxed app, a real app share an obscured window through the system
 frontend, and portal-restart behavior checks.
@@ -1126,7 +1201,9 @@ Do not implement these by guessing:
 - Portal Screen-to-MONITOR semantics: the selected policy requires application
   interoperability testing; it is not an upstream-defined Screen type.
 - Sharing a workspace pinned independently of its Screen, new virtual outputs,
-  region sharing, multiple sources per session, remembered consent, metadata
+  region sharing, multiple sources per session, persistent (PermissionStore)
+  consent — the transient restore slice is implemented and specified in 8.3.1,
+  anything surviving compositor restarts stays out — metadata
   cursor, remote input, audio, HDR, hardware encoding and arbitrary public capture
   clients are outside this initial feature.
 - Session lock/deactivation must have a reliable Rust capture-revocation hook
