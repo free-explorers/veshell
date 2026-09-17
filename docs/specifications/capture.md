@@ -350,8 +350,9 @@ User requirements:
 
 - Take screenshots of any rectangular area of the visible desktop.
 - Record any rectangular area of the visible desktop.
-- Share exactly these kinds of sources: Output, existing Veshell virtual Screen,
-  and MetaWindow.
+- Share exactly these kinds of sources: Output and MetaWindow. Sharing an
+  existing Veshell virtual Screen was dropped from the product scope; see
+  section 13.
 - Work with Google Chrome and OBS through their standard Linux portal/PipeWire
   capture paths, including sandboxed installations where supported.
 - Keep the implementation small and tailored to Veshell, without introducing
@@ -361,11 +362,8 @@ Defaults chosen by this specification, not additional user requirements:
 
 - Local area selection can cross output boundaries, including mixed scales and
   negative output coordinates. An area means a rectangle, not a freehand mask.
-- A shared Screen follows its existing Screen ID and selected workspace. It does
-  not pin a workspace, follow keyboard focus, or create a virtual monitor.
-- Initially, Screen sharing is available for Screens assigned to connected
-  outputs. Detached Screen layout/rendering is deferred explicitly, not emulated
-  by sharing another source. See section 13.
+- Veshell Screen sharing is not offered: a Screen is never substituted for an
+  Output or MetaWindow, and no capture view renders one. See section 13.
 - Screenshots are PNG. Initial recordings are silent SDR WebM/VP8 at up to 30 FPS.
 - Local capture can snap selection to output, Screen, or window bounds, but the
   resulting area still means visible desktop pixels. It does not gain the
@@ -424,8 +422,9 @@ Decisions:
 
 - Portal compatibility is the application boundary; it does not dictate the
   compositor's private capture protocol.
-- An existing Veshell Screen is not portal `VIRTUAL`, which requests extending the
-  desktop with a new virtual monitor.
+- An existing Veshell Screen was never portal `VIRTUAL`, which requests extending
+  the desktop with a new virtual monitor; the distinction is moot now that
+  Screen sharing is dropped.
 - A desktop rectangle is not necessarily contained in one source. Modeling every
   local area as `{ source, rectangle }` would omit cross-output capture.
 - A monitor crop is not safe isolated Screen or MetaWindow sharing.
@@ -468,9 +467,6 @@ Mandatory rendering audit findings to address where capture depends on them:
   barrier until a separately verified synchronization replacement exists.
 - A `last_rendered_slot`/DMABUF reference alone must not be assumed to prevent
   reuse for the entire duration of asynchronous encoding or streaming.
-- A shared Screen's content is currently flattened into a monitor Flutter frame.
-  Lazy Workspace/PageView building is not proof that an inactive subtree has been
-  painted. Adding a capture view requires explicit routing and frame scheduling.
 
 Do not use unrelated code cleanup or framework upgrades to hide these issues.
 
@@ -482,8 +478,8 @@ drop-in code or a mandate to introduce all of these names:
 ```rust
 enum ShareTarget {
     Output(OutputIdentity),
-    Screen(ScreenId),
     MetaWindow(MetaWindowId),
+    // Screen(ScreenId) was dropped with Veshell Screen sharing (section 13).
 }
 
 enum CaptureTarget {
@@ -579,60 +575,13 @@ Render independently of desktop occlusion and position:
   focus, activate, or move the real client merely to satisfy the capture target.
 - Scale or resize the output stream as needed without changing client geometry.
 
-### 5.4 Veshell Screen Sharing
+### 5.4 Veshell Screen Sharing (withdrawn)
 
-Share the selected Screen's own presentation, including its selected workspace,
-tiles, Screen/Workspace panels, and Screen-local overview state. Exclude other
-Screens, monitor-global navigation/overlays, debug UI, capture pickers, and sharing
-controls. Source-local changes are visible; switching that Screen's workspace is
-visible. This is not a share of all its workspaces at once.
-
-Implement a render-only Flutter capture view for that Screen. It is not a new
-Wayland Output, monitor configuration entry, or persisted Screen.
-
-Required work:
-
-1. Generalize Flutter view metadata to distinguish display views and capture
-   views. Capture metrics contain Screen ID, measured logical dimensions, scale,
-   and revision. Do not make existing monitor lookup code unwrap a capture view.
-2. Add a capture root in Flutter's view routing. Reuse presentation code from the
-   existing Screen tree rather than reimplementing its layout in Rust.
-3. Separate presentation from side effects. Only the normal display tree may
-   configure client size, set current output, activate windows, manage focus, or
-   enter gaming overlays. Capture views have no input/focus and cannot mutate
-   desktop configuration, including through hooks or dispose callbacks.
-   Identify widget-local presentation state as well: floating-window positions,
-   overview visibility/animation, scroll offsets, and source-local routes must
-   be shared read-only or supplied as a presentation snapshot. Rebuilding a
-   widget from persistent Screen data alone does not reproduce the current scene.
-4. Use the source's measured display layout and client geometry. Opening a share
-   must not reflow or resize live applications. Scale the captured result rather
-   than assigning competing geometry authorities.
-5. Ensure textures are available in both views, retain them through GPU use, and
-   implement capture-view removal and outstanding callback cleanup.
-6. Schedule capture-view frames while subscribed. Respect the existing Flutter
-   task/vsync machinery and coalesce requests; do not simulate input or force
-   whole-desktop continuous redraw just to keep a stream alive.
-7. Render only game-mode content belonging to this Screen; do not reuse the
-   monitor-global gaming Navigator route in the capture tree.
-
-Screen-local menus/overlays are included only when ownership is explicit and they
-can be clipped to this Screen. Monitor-root Navigator routes are excluded unless
-refactored into the source-local presentation model. Do not mirror every global
-route into every capture view.
-
-Use a source registry message from Flutter for Screen ID/label, connected output,
-measured rectangle/scale, and layout revision. Publish removals/invalidation too.
-Rust binds authorization to this registry and validates every asynchronous reply.
-
-A crop of the monitor buffer is not an acceptable final implementation: global
-overlays and neighbouring content can already be baked into that texture. Do not
-advertise Screen sharing until the isolated view passes the privacy tests.
-
-If the Screen moves between connected outputs, follow its identity only after a
-validated new layout/capture frame; clear stale content during transition. Close
-if detached or destroyed. Detached rendering needs a later layout-authority
-decision; it must not be improvised by a coding agent.
+Sharing an existing Veshell virtual Screen as an isolated source is dropped from
+the roadmap (2026-09-17). The product shares Outputs and MetaWindows only; a
+Screen is never substituted for either, and no render-only capture view is built.
+The former design is not retained as a fallback. Do not reintroduce it without a
+new product decision; section 13 records the dropped scope.
 
 ### 5.5 Cursor And Color
 
@@ -778,7 +727,6 @@ D-Bus errors for unauthorized/malformed calls rather than panicking.
 | Veshell source | Portal category/type | Picker behavior |
 | --- | --- | --- |
 | Output | MONITOR = 1 | Output name and icon. |
-| Existing Screen | MONITOR = 1 | Separately labeled "Veshell Screens" group. |
 | MetaWindow | WINDOW = 2 | Application/title and icon. |
 
 The baseline picker is text/icon-only. Do not implement live or cached pixel
@@ -788,13 +736,12 @@ only after capture-transparent trusted UI composition is proven. Output sharing
 can show ordinary text controls just like other visible shell UI; it must not
 gain hidden targets' pixels through the chooser. Test concurrent requests.
 
-Screen-to-MONITOR is a deliberate interoperability policy: the portal has no
-workspace/Screen source type. It is not an explicitly standardized mapping or a
-verified COSMIC convention. Test it in Chrome and OBS before treating it as proven.
-Do not add a private source-type bit or pretend `VIRTUAL = 4` means this feature.
+Veshell Screen sharing is dropped (section 13): the picker has no Screen group,
+no Screen-to-MONITOR mapping is claimed, and no private source-type bit or
+`VIRTUAL = 4` reinterpretation is added.
 
 Filter the picker by requested `types`. A WINDOW-only request cannot choose an
-Output or Screen. Default missing types to MONITOR and cursor to Hidden. A
+Output. Default missing types to MONITOR and cursor to Hidden. A
 VIRTUAL-only request has no supported sources and must fail normally. Validate
 supported bit intersections/options according to the portal contract.
 
@@ -803,8 +750,8 @@ Support independent sessions, not multiple streams per session initially.
 Do not use a global reply channel whose result can be consumed by another request.
 
 Return `source_type` and meaningful logical size metadata. Output position is
-global logical position. Omit meaningless position for an isolated Screen; do not
-invent physical monitor coordinates. Node IDs are not persistent source IDs.
+global logical position; do not invent physical monitor coordinates. Node IDs
+are not persistent source IDs.
 
 The picker names the requesting application, not a supposedly authenticated web
 origin. Chrome's own UI is responsible for website/tab permissions. Browser tab
@@ -986,13 +933,11 @@ screenshot prototype, and do not enable unsupported picker entries.
 
 Inspect the files in section 3 and the official backend XML. Record the chosen
 dependency versions. Establish unit tests for target validation/geometry and an
-isolated session-bus harness for portal calls. Investigate activation integration
-and prove a capture-only Flutter view can render external window textures without
-changing focus/geometry. Include an already-open overview and moved floating
-window, not just a static texture, to expose presentation-state differences.
-These spikes gate M2's portal delivery and M5's Screen delivery respectively, not
-M1's native screenshots or M3's native recording. If a spike fails, record the
-failure and request a decision for that branch; do not fall back to monitor crops.
+isolated session-bus harness for portal calls. Investigate in-process D-Bus
+activation integration. These spikes gate M2's portal delivery, not M1's native
+screenshots or M3's native recording. If a spike fails, record the failure and
+request a decision for that branch. The capture-view spike was tied to Veshell
+Screen sharing and is dropped with it.
 
 ### M1: Native Area Screenshots
 
@@ -1137,16 +1082,12 @@ Remaining M4 work: runtime portal-Screenshot validation against a real
 sandboxed app, a real app share an obscured window through the system
 frontend, and portal-restart behavior checks.
 
-### M5: Existing Screen Sharing
+### M5: Existing Screen Sharing (dropped)
 
-Finish the Screen registry, render-only view, view removal, frame scheduling and
-texture-lifetime work. Add the Screen picker group only after isolation tests pass.
-Verify workspace changes, Screen reordering/moves, game mode and multiple Screens
-per monitor. Opening/closing capture must not change window geometry or focus.
-Test Screen-to-MONITOR mapping with Chrome and OBS; document actual versions.
-
-Exit: all three requested sharing targets work. Detached Screen support remains
-explicitly unavailable, not replaced with another target.
+Dropped from the roadmap (2026-09-17). No Screen registry, render-only capture
+view, view removal, frame scheduling, Screen picker group, or Screen-to-MONITOR
+mapping is implemented. The exit target is reduced to the two offered sources:
+Output and MetaWindow.
 
 ### M6: Performance And Release Validation
 
@@ -1166,7 +1107,7 @@ not a pass. No benchmarks or runtime compatibility have been established yet.
 | --- | --- |
 | Chrome screen sharing and OBS PipeWire source | Consent appears, target is correct, frames update, Stop ends delivery. |
 | Flatpak OBS / sandboxed client | Portal remote and screenshot URI work without broad host capture permission. |
-| Requested source-type filtering | WINDOW-only never offers Outputs/Screens; VIRTUAL creation is not advertised. |
+| Requested source-type filtering | WINDOW-only never offers Outputs; VIRTUAL creation is not advertised. |
 | Two simultaneous applications | Correct per-request results and independent streams; stopping one cannot redirect/stop the other. |
 | Open/cancel another picker during Output sharing | No unselected-source pixel previews leak into the first application's stream. |
 | Direct backend call by another bus client | Rejected even if it supplies a trusted-looking app ID/session path. |
@@ -1174,18 +1115,12 @@ not a pass. No benchmarks or runtime compatibility have been established yet.
 | PipeWire / frontend restart | Sessions end safely; new consent is required to restart. |
 | Lock / session deactivation / shell loss | Delivery ceases; no lockscreen or other session's new pixels are captured. |
 | Output removal and same-name reconnection | Previous authorization is not reused for the replacement. |
-| Multiple Veshell Screens on one output | The selected rectangle includes all visible Screens and shell UI on that output. |
 | Cross-output selection | Selection is clamped to the starting physical output. |
 | Mixed DPI, negative origins, desktop gaps | Outside the initial single-output scope. |
 | Overlay removal for recording | No selection rectangle/picker in the first recorded frame. |
 | Cursor at boundaries, animated or client cursor | Correct hotspot/shape, single compositing, no cursor on an unrelated isolated source. |
 | Occluded MetaWindow / nested popups / XWayland menu | Only selected client and verified owned/clipped popup content. |
 | Parent app opens a separate dialog | Dialog is not automatically included as a same-app window. |
-| Screen with neighbouring sensitive content | Other Screen and monitor-global overlays never appear, even during transitions. |
-| Capture view side effects | Focus, activation, client sizes, output association and persisted layout remain unchanged. |
-| Capture an already-open overview or moved floating window | Capture reflects source-local presentation state, not a newly initialized layout. |
-| Screen workspace switch and move | Follows Screen identity/selection, never whatever occupies its former rectangle. |
-| Detached/destroyed Screen | Source becomes unavailable or session closes with a clear reason. |
 | Game-mode window on nonprimary output | Display/output capture agree; isolated capture includes only owned content. |
 | Slow/no consumer, resize, repeated start/stop | Bounded memory/FDs/views, no premature buffer reuse, no compositor deadlock. |
 | Missing encoder/PipeWire | Clear feature-specific error; unrelated capture and desktop functionality remain usable. |
@@ -1203,13 +1138,11 @@ report pre-existing failures rather than performing unrelated mass fixes.
 
 Do not implement these by guessing:
 
-- Detached Screen sharing: needs a chosen canonical size/scale, frame clock, and
-  a single authority for configuring windows that are not displayed elsewhere.
-- Output-independent Screen capture-view feasibility/texture lifetime and
-  in-process D-Bus activation: prove in M0; stop for review if they fail.
-- Portal Screen-to-MONITOR semantics: the selected policy requires application
-  interoperability testing; it is not an upstream-defined Screen type.
-- Sharing a workspace pinned independently of its Screen, new virtual outputs,
+- Veshell Screen sharing is dropped, not deferred: no Screen registry,
+  render-only capture view, Screen picker group, or Screen-to-MONITOR mapping is
+  built. Reintroducing it requires a new product decision.
+- In-process D-Bus activation: prove in M0; stop for review if it fails.
+- Sharing a workspace pinned independently, new virtual outputs,
   region sharing, multiple sources per session, persistent (PermissionStore)
   consent — the transient restore slice is implemented and specified in 8.3.1,
   anything surviving compositor restarts stays out — metadata

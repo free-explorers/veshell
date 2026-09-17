@@ -400,8 +400,8 @@ impl ScreenCastBackend {
     #[zbus(property, name = "AvailableSourceTypes")]
     fn available_source_types(&self) -> u32 {
         // Both implemented source kinds (spec 8.1): M2's outputs and M4's
-        // windows. Screen sharing joins through the MONITOR picker group
-        // in M5 and does not change this value.
+        // windows. Veshell Screen sharing is dropped (spec section 13) and
+        // does not change this value.
         (SourceTypes::MONITOR | SourceTypes::WINDOW).bits()
     }
 
