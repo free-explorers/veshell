@@ -5,6 +5,7 @@ import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/dev_tools/provider/matching_logs.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
+import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
 import 'package:shell/window/model/window_base.dart';
@@ -237,7 +238,7 @@ class MatchingEngine extends _$MatchingEngine {
   /// Picks the persistent window that should own a newly mapped native
   /// window.
   ///
-  /// The decision is split in two orthogonal steps, in this order:
+  /// The decision is split in three orthogonal steps, in this order:
   ///
   /// 1. **Ordinary matching (baseline).** Candidates are the windows visible
   ///    on an active workspace whose persistent `appId` equals the native
@@ -249,6 +250,12 @@ class MatchingEngine extends _$MatchingEngine {
   ///    step 1 found *nothing* — never to compete with a baseline result. It
   ///    exists because applications report helper identities that resolve to
   ///    no desktop entry and would therefore create a dead-end new window.
+  ///
+  /// 3. **Process-sibling recovery.** Also consulted only when step 1 found
+  ///    *nothing* and step 2 is unavailable (the application was not launched
+  ///    through the tracked launcher). It groups a helper-identified native
+  ///    window with a window of the same process (same pid or per-application
+  ///    cgroup). See [_sameProcessSiblingFor].
   ///
   /// Worked examples:
   ///
@@ -303,6 +310,28 @@ class MatchingEngine extends _$MatchingEngine {
         // batch.
         return (trackedWindowId, 0);
       }
+
+      // Same-process recovery: applications report hollow helper identities
+      // (`electron`, runtime names) on windows that actually belong to a
+      // process whose other window is already owned. This covers sessions
+      // where the application was not started by the tracked launcher (or was
+      // already running across a shell restart), for which cgroup provenance
+      // is unavailable. Consulted only after the tracked-launch owner, so a
+      // real launch attribution always wins.
+      final siblingWindowId = _sameProcessSiblingFor(
+        metaWindow,
+        excludedWindowIds: excludedWindowIds,
+      );
+      if (siblingWindowId != null) {
+        return (siblingWindowId, 0);
+      }
+
+      matchingLog.info(
+        'No candidate for ${metaWindow.id} app_id="${metaWindow.appId}" '
+        'pid=${metaWindow.pid} cgroup=${_cgroupFor(metaWindow) ?? 'unknown'} '
+        '→ creating a new window '
+        '(no app-id candidate, no tracked provenance, no process sibling)',
+      );
       return (null, null);
     }
     final costs = candidateWindowSet.map((windowId) {
@@ -389,6 +418,119 @@ class MatchingEngine extends _$MatchingEngine {
     );
     return trackedWindowId;
   }
+
+  /// Returns the shell window already owning a native window from the *same
+  /// process* (same pid, or same per-application cgroup when pids differ), if
+  /// any.
+  ///
+  /// Motivation: some applications advertise a hollow helper identity
+  /// (`electron`, runtime names) on windows that actually belong to an
+  /// application whose other window is already owned — e.g. Code OSS opening
+  /// its About window with `app_id="electron"` while the main window reports
+  /// `code-oss`. When the application was not launched through the tracked
+  /// launcher (already running across a shell restart, or started by another
+  /// session), [AppLaunch] has no attribution and the window would otherwise
+  /// become a standalone tile.
+  ///
+  /// Only consulted when ordinary app-id matching found nothing and the
+  /// tracked-launch owner is unavailable, so it never overrides a real
+  /// identity match. The recovered destination is returned as a strong
+  /// (cost 0) match, letting the owner's dispatch group the extra window as a
+  /// dialog under its already-displayed sibling — exactly like a helper
+  /// window recovered through cgroup provenance.
+  ///
+  /// Two gates keep the fallback conservative:
+  ///
+  /// 1. The candidate must share the pid, or a *per-application* cgroup
+  ///    (`app-*.scope`). Shared session/wrapper cgroups are ignored because
+  ///    they host unrelated applications.
+  /// 2. The identity must not resolve to a different desktop entry than the
+  ///    sibling tile ([_isUnrelatedApplication]), matching tracked
+  ///    provenance.
+  ///
+  /// Window shape ([MetaWindow.isFixedSized], [MetaWindow.isModal]) is *not*
+  /// required: when no persistent window can host the window, grouping it
+  /// under its process sibling is preferred over a standalone tile.
+  WindowId? _sameProcessSiblingFor(
+    MetaWindow metaWindow, {
+    required List<WindowId> excludedWindowIds,
+  }) {
+    if (metaWindow.pid == 0) {
+      return null;
+    }
+
+    final windowMap = ref.read(metaWindowWindowMapProvider);
+    if (windowMap.isEmpty) {
+      return null;
+    }
+
+    final availableForMatching = ref.read(windowsAvailableForMatchingProvider);
+    final cgroupPath = _cgroupFor(metaWindow);
+
+    for (final entry in windowMap.entries) {
+      final siblingMetaWindowId = entry.key;
+      final siblingWindowId = entry.value;
+      if (siblingMetaWindowId == metaWindow.id) continue;
+      if (excludedWindowIds.contains(siblingWindowId)) continue;
+      if (!availableForMatching.contains(siblingWindowId)) continue;
+
+      final siblingMetaWindow = ref.read(
+        metaWindowStateProvider(siblingMetaWindowId),
+      );
+      final samePid =
+          siblingMetaWindow.pid != 0 && siblingMetaWindow.pid == metaWindow.pid;
+      // A shared cgroup is a weak signal: wrapper scopes (terminals, launcher
+      // scripts, `systemd-run` wrappers) host unrelated applications. Only
+      // trust it for per-application scopes (`app-*.scope`), which systemd
+      // creates one of per launched application.
+      final sameCgroup =
+          !samePid &&
+          cgroupPath != null &&
+          _isPerAppScope(cgroupPath) &&
+          cgroupPath == _cgroupFor(siblingMetaWindow);
+
+      if (!samePid && !sameCgroup) {
+        continue;
+      }
+
+      // A shared process/cgroup is not enough: a helper process can also open
+      // a window that genuinely belongs to another application. Reject the
+      // recovery when the reported identity resolves to a different desktop
+      // entry than the sibling tile, mirroring tracked-launch provenance.
+      if (_isUnrelatedApplication(metaWindow, siblingWindowId)) {
+        matchingLog.info(
+          'Process-sibling rejected: ${metaWindow.id} '
+          'app_id="${metaWindow.appId}" identified as unrelated to '
+          '$siblingWindowId',
+        );
+        continue;
+      }
+
+      matchingLog.info(
+        'Process-sibling recovered ${metaWindow.id} '
+        'pid=${metaWindow.pid} app_id="${metaWindow.appId}" '
+        '(cgroup=${cgroupPath ?? 'unknown'}) '
+        '→ $siblingWindowId '
+        '(same ${samePid ? 'pid' : 'cgroup'} as $siblingMetaWindowId)',
+      );
+      return siblingWindowId;
+    }
+    return null;
+  }
+
+  /// Whether a unified cgroup path names a per-application systemd scope
+  /// (`app-<name>-<pid>.scope`), as opposed to a session/terminal/wrapper
+  /// scope that may host several unrelated applications.
+  bool _isPerAppScope(String cgroupPath) {
+    final basename = cgroupPath.split('/').last;
+    return basename.startsWith('app-') && basename.endsWith('.scope');
+  }
+
+  /// Unified cgroup path of the process behind a native window, or null when
+  /// unreadable. Exposed as a single call site so diagnostics and sibling
+  /// recovery report the same value.
+  String? _cgroupFor(MetaWindow metaWindow) =>
+      ref.read(appLaunchProvider.notifier).cgroupPathForPid(metaWindow.pid);
 
   /// When provenance disagrees with the native window's *own* identity.
   ///
