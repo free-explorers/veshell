@@ -5,6 +5,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/meta_window/provider/meta_window_id_per_surface_id.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/subsurface_state.dart';
+import 'package:shell/shared/util/logger.dart';
 
 part 'wl_surface_state.g.dart';
 
@@ -43,6 +44,7 @@ class WlSurfaceState extends _$WlSurfaceState {
     required IList<int> subsurfacesAbove,
     required Rect inputRegion,
   }) {
+    final previous = state;
     state = state.copyWith(
       role: role ?? state.role,
       texture: SurfaceTexture(
@@ -53,6 +55,12 @@ class WlSurfaceState extends _$WlSurfaceState {
       subsurfacesBelow: subsurfacesBelow,
       subsurfacesAbove: subsurfacesAbove,
       inputRegion: inputRegion,
+    );
+    geometryLog.fine(
+      'surface state surface=$surfaceId '
+      'texture ${previous.texture?.id}/${previous.texture?.size} -> '
+      '$textureId/$surfaceSize scale ${previous.scale} -> $scale '
+      'role ${previous.role} -> $role input=$inputRegion',
     );
   }
 

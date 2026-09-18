@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/model/request/platform_request.dart';
+import 'package:shell/shared/util/logger.dart';
 
 part 'platform_manager.g.dart';
 
@@ -25,9 +26,16 @@ class PlatformManager extends _$PlatformManager {
         'method': call.method,
         'message': (call.arguments as Map).cast<String, dynamic>(),
       });
-      streamCtroller.sink.add(
-        event,
-      );
+      if (event is CommitSurfaceEvent) {
+        final message = event.message;
+        geometryLog.fine(
+          'platform commit_surface surface=${message.surfaceId} '
+          'texture=${message.textureId} buffer=${message.bufferSize} '
+          'scale=${message.scale} role=${message.role} '
+          'below=${message.subsurfacesBelow} above=${message.subsurfacesAbove}',
+        );
+      }
+      streamCtroller.sink.add(event);
     });
 
     return streamCtroller.stream;
@@ -65,10 +73,7 @@ class PlatformManager extends _$PlatformManager {
 /// implemented by [PlatformEvent] and [PlatformRequest]
 abstract class PlatformInteraction {
   /// Factory
-  const PlatformInteraction({
-    required this.method,
-    required this.message,
-  });
+  const PlatformInteraction({required this.method, required this.message});
 
   /// interaction Method
   final String method;
@@ -78,7 +83,6 @@ abstract class PlatformInteraction {
 }
 
 /// base class for serializable wayland message
-/// ignore: one_member_abstracts
 abstract class PlatformMessage {
   /// interaction message need to be serializable
   Map<String, dynamic> toJson();

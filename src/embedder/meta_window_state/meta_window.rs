@@ -129,6 +129,13 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .remove(meta_window_id)
             .unwrap();
 
+        // A window-share session cannot survive its window: closing the
+        // MetaWindow tears the share down through the ordinary close path
+        // (spec 5.3), before the removal event tells the shell the window
+        // is gone. Popups of the dead window disappear from the registry
+        // with it, so their surfaces stop rendering for any session.
+        crate::portal::service::close_source_share_sessions(self, meta_window_id);
+
         if self.meta_window_state.meta_window_in_gaming_mode == Some(meta_window_id.clone()) {
             self.meta_window_state.meta_window_in_gaming_mode = None;
         }
@@ -170,6 +177,12 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         return;
                     }
                     meta_window.mapped = value.clone();
+                }
+                if value == false {
+                    // An unmapped window stops rendering: there is no
+                    // content a window share could keep streaming, so the
+                    // session closes with a clear reason (spec 5.3).
+                    crate::portal::service::close_source_share_sessions(self, &id);
                 }
             }
             MetaWindowPatch::UpdateDisplayMode { id, value } => {
@@ -253,6 +266,12 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 }
             }
             MetaWindowPatch::UpdateGeometry { id, value } => {
+                tracing::info!(
+                    target: "veshell::geometry",
+                    meta_window_id = %id,
+                    geometry = ?value,
+                    "Applying native window geometry patch"
+                );
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
                     let are_equal = match (&meta_window.geometry, &value) {
                         (Some(current_rect), Some(new_rect)) => {
@@ -396,6 +415,14 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     .compositor_state
                     .client_scale();
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
+                    tracing::info!(
+                        target: "veshell::geometry",
+                        meta_window_id = %id,
+                        requested_scale_ratio = value,
+                        previous_scale_ratio = meta_window.scale_ratio,
+                        xwayland_scale_ratio,
+                        "Applying native window scale patch"
+                    );
                     if meta_window.scale_ratio == value.clone() {
                         return;
                     }

@@ -7,7 +7,6 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::Ordering;
 
-use smithay::reexports::rustix::fs::OFlags;
 use sd_notify::NotifyState;
 use serde_json::json;
 use smithay::backend::allocator::dmabuf::{AnyError, AsDmabuf, Dmabuf, DmabufAllocator};
@@ -46,6 +45,7 @@ use smithay::reexports::drm::control::{
 use smithay::reexports::drm::Device as _;
 use smithay::reexports::input::event::gesture::GestureEventCoordinates;
 use smithay::reexports::input::{self, Libinput};
+use smithay::reexports::rustix::fs::OFlags;
 use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::Display;
@@ -57,8 +57,8 @@ use smithay::wayland::dmabuf::{
 use smithay::wayland::drm_lease::DrmLease;
 use tracing::{debug, error, info, warn};
 
-use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
 use smithay_drm_extras::display_info;
+use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
 
 use crate::flutter_engine::embedder::{
     FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
@@ -127,6 +127,8 @@ pub struct DrmBackend {
 
 impl Backend for DrmBackend {
     const HAS_RELATIVE_MOTION: bool = true;
+    const FLIP_FLUTTER_TEXTURE: bool = true;
+    const RUNS_PORTAL_BACKEND: bool = true;
 
     fn seat_name(&self) -> String {
         self.session.seat()
@@ -485,19 +487,6 @@ pub fn run_drm_backend() {
         .handle()
         .insert_source(libinput_backend, move |event, _, data| {
             let _dh = data.display_handle.clone();
-            let pointer = data.pointer.clone();
-            let pointer_location = pointer.current_location();
-            let output_under_pointer = data
-                .space
-                .output_under(pointer_location)
-                .next()
-                .or_else(|| data.space.outputs().next())
-                .unwrap();
-            let view_id = output_under_pointer
-                .user_data()
-                .get::<OutputViewIdWrapper>()
-                .unwrap()
-                .view_id;
             match event {
                 InputEvent::DeviceAdded { mut device } => {
                     data.input_devices.insert(device.clone());
@@ -526,20 +515,20 @@ pub fn run_drm_backend() {
                 }
                 InputEvent::PointerMotion { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_pointer_motion::<LibinputInputBackend>(event, device_id, view_id)
+                    data.on_pointer_motion::<LibinputInputBackend>(event, device_id, 0)
                 }
                 InputEvent::PointerMotionAbsolute { event } => {
                     let device_id = event.device().id_product() as i32;
-                    data.on_pointer_motion_absolute::<LibinputInputBackend>(
-                        event, device_id, view_id,
-                    )
+                    data.on_pointer_motion_absolute::<LibinputInputBackend>(event, device_id, 0)
                 }
                 InputEvent::PointerButton { event } => {
                     let device_id = event.device().id_product() as i32;
+                    let view_id = data.view_id_under_pointer().unwrap_or_default();
                     data.on_pointer_button::<LibinputInputBackend>(event, device_id, view_id)
                 }
                 InputEvent::PointerAxis { event } => {
                     let device_id = event.device().id_product() as i32;
+                    let view_id = data.view_id_under_pointer().unwrap_or_default();
                     data.on_pointer_axis::<LibinputInputBackend>(event, device_id, view_id)
                 }
                 InputEvent::GestureSwipeBegin { event } => {
@@ -596,14 +585,17 @@ pub fn run_drm_backend() {
                 }
                 InputEvent::GesturePinchBegin { event } => {
                     let device_id = event.device().id_product() as i32;
+                    let view_id = data.view_id_under_pointer().unwrap_or_default();
                     data.on_gesture_pinch_begin::<LibinputInputBackend>(event, device_id, view_id)
                 }
                 InputEvent::GesturePinchUpdate { event } => {
                     let device_id = event.device().id_product() as i32;
+                    let view_id = data.view_id_under_pointer().unwrap_or_default();
                     data.on_gesture_pinch_update::<LibinputInputBackend>(event, device_id, view_id)
                 }
                 InputEvent::GesturePinchEnd { event } => {
                     let device_id = event.device().id_product() as i32;
+                    let view_id = data.view_id_under_pointer().unwrap_or_default();
                     data.on_gesture_pinch_end::<LibinputInputBackend>(event, device_id, view_id)
                 }
                 InputEvent::GestureHoldBegin { event: _ } => {}
@@ -882,8 +874,6 @@ impl State<DrmBackend> {
             device_id: node,
         });
 
-        self.space.map_output(&output, position);
-
         let color_formats = if std::env::var("ANVIL_DISABLE_10BIT").is_ok() {
             SUPPORTED_FORMATS_8BIT_ONLY
         } else {
@@ -951,6 +941,7 @@ impl State<DrmBackend> {
 
         device.surfaces.insert(crtc, surface);
 
+        self.map_output(&output, position);
         self.determine_highest_hz_crtc();
         self.on_outputs_changed();
         self.schedule_initial_render(node, crtc, self.loop_handle.clone());
@@ -990,7 +981,7 @@ impl State<DrmBackend> {
             .cloned();
 
         if let Some(output) = output {
-            self.space.unmap_output(&output);
+            self.unmap_output(&output);
         }
 
         self.determine_highest_hz_crtc();
@@ -1079,7 +1070,11 @@ impl State<DrmBackend> {
             return;
         };
 
-        for event in device.drm_scanner.scan_connectors(&device.drm_device).unwrap_or_default() {
+        for event in device
+            .drm_scanner
+            .scan_connectors(&device.drm_device)
+            .unwrap_or_default()
+        {
             match event {
                 DrmScanEvent::Connected {
                     connector,
@@ -1147,21 +1142,15 @@ impl State<DrmBackend> {
         for baton in drained {
             self.flutter_engine().on_vsync(baton, mhz as u32).unwrap();
         }
-        let start_time = std::time::Instant::now();
+        let frame_timestamp = self.frame_timestamp_millis();
         for surface in self.xdg_shell_state.toplevel_surfaces() {
-            send_frames_surface_tree(
-                surface.wl_surface(),
-                start_time.elapsed().as_millis() as u32,
-            );
+            send_frames_surface_tree(surface.wl_surface(), frame_timestamp);
         }
         for surface in self.xdg_popups.values() {
-            send_frames_surface_tree(
-                surface.wl_surface(),
-                start_time.elapsed().as_millis() as u32,
-            );
+            send_frames_surface_tree(surface.wl_surface(), frame_timestamp);
         }
         for surface in self.x11_surface_per_wl_surface.keys() {
-            send_frames_surface_tree(surface, start_time.elapsed().as_millis() as u32);
+            send_frames_surface_tree(surface, frame_timestamp);
         }
         let cursor_status = {
             let cursor_image_status = self.cursor_image_status.lock().unwrap();
@@ -1175,7 +1164,7 @@ impl State<DrmBackend> {
         };
 
         if let CursorImageStatus::Surface(wl_surface) = cursor_status {
-            send_frames_surface_tree(&wl_surface, start_time.elapsed().as_millis() as u32)
+            send_frames_surface_tree(&wl_surface, frame_timestamp)
         }
     }
 
@@ -1261,6 +1250,20 @@ impl State<DrmBackend> {
             None => return,
         };
 
+        // The selection overlay only appears on the output the screenshot
+        // session attached to; on the others the pointer never goes.
+        let capture_overlay = self
+            .capture_state
+            .session
+            .as_ref()
+            .filter(|session| session.output.name() == output.name());
+        let recording_chip = self
+            .capture_state
+            .recording_session
+            .as_ref()
+            .filter(|recording| recording.output_name() == output.name())
+            .map(|recording| recording.chip_data());
+
         let elements = get_render_elements(
             renderer,
             output,
@@ -1283,6 +1286,8 @@ impl State<DrmBackend> {
                     }
                 })
                 .collect::<Vec<_>>(),
+            capture_overlay,
+            recording_chip,
         );
 
         let rendered = surface.compositor.render_frame(

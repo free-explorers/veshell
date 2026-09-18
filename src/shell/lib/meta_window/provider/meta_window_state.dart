@@ -9,6 +9,7 @@ import 'package:shell/platform/model/event/meta_window_patches/meta_window_patch
 import 'package:shell/platform/model/request/close_window/close_window.serializable.dart';
 import 'package:shell/platform/model/request/meta_window_patches/meta_window_patches.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
+import 'package:shell/shared/util/logger.dart';
 
 part 'meta_window_state.g.dart';
 
@@ -22,6 +23,11 @@ class MetaWindowState extends _$MetaWindowState {
   }
 
   Future<void> create(MetaWindowCreatedMessage message) async {
+    geometryLog.info(
+      'window create id=$id surface=${message.surfaceId} '
+      'geometry=${message.geometry} scale=${message.scaleRatio} '
+      'mapped=${message.mapped} parent=${message.parent}',
+    );
     _keepAliveLink?.close();
     _keepAliveLink = ref.keepAlive();
 
@@ -61,6 +67,9 @@ class MetaWindowState extends _$MetaWindowState {
     MetaWindowPatchMessage patch, {
     bool propagate = true,
   }) async {
+    if (patch is UpdateGeometry || patch is UpdateScaleRatio) {
+      geometryLog.info('window patch id=$id value=$patch before=${state}');
+    }
     switch (patch) {
       case UpdateAppId():
         {

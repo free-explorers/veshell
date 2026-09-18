@@ -6,13 +6,15 @@ use std::sync::{Arc, Mutex};
 use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::backend::input::KeyState;
 use smithay::backend::renderer::gles::ffi::Gles2;
+use smithay::delegate_dispatch2;
 use smithay::desktop::{Space, Window};
+use smithay::input::dnd::DndGrabHandler;
 use smithay::input::keyboard::{KeyboardHandle, XkbConfig};
 use smithay::input::pointer::{CursorImageStatus, PointerHandle};
 use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::output::{Output, Scale};
 use smithay::reexports::calloop::generic::Generic;
-use smithay::reexports::calloop::{channel, Interest, LoopHandle, Mode, PostAction};
+use smithay::reexports::calloop::{Interest, LoopHandle, Mode, PostAction};
 use smithay::reexports::input;
 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
@@ -37,7 +39,6 @@ use smithay::wayland::seat::WaylandFocus;
 use smithay::wayland::selection::data_device::{
     set_data_device_focus, DataDeviceHandler, DataDeviceState, WaylandDndGrabHandler,
 };
-use smithay::input::dnd::DndGrabHandler;
 use smithay::wayland::selection::primary_selection::{
     set_primary_focus, PrimarySelectionHandler, PrimarySelectionState,
 };
@@ -53,8 +54,8 @@ use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::wayland::socket::ListeningSocketSource;
 use smithay::wayland::xwayland_shell::{self, XWAYLAND_SHELL_ROLE};
 use smithay::xwayland::{X11Surface, X11Wm};
-use smithay::delegate_dispatch2;
 use tracing::{info, warn};
+use xkbcommon::xkb::Keycode;
 
 use crate::cursor::CursorState;
 use crate::flutter_engine::view::OutputViewIdWrapper;
@@ -65,7 +66,7 @@ use crate::flutter_engine::wayland_messages::{
 use crate::flutter_engine::FlutterEngine;
 use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
 use crate::keyboard::key_repeater::KeyRepeater;
-use crate::keyboard::{handle_keyboard_event, swap_left_alt_and_meta};
+use crate::keyboard::{handle_keyboard_event, swap_left_alt_and_meta, VeshellKeyEvent};
 use crate::meta_window_state::meta_window::MetaWindowPatch;
 use crate::meta_window_state::MetaWindowState;
 use crate::settings::{MonitorConfiguration, SettingsManager, VeshellSettings};
@@ -84,6 +85,7 @@ pub struct State<BackendData: Backend + 'static> {
     pub display_handle: DisplayHandle,
     pub dmabuf_state: Option<DmabufState>,
     pub flutter_engine: Option<Box<FlutterEngine<BackendData>>>,
+    pub flutter_sent_keys: HashMap<Keycode, VeshellKeyEvent>,
     pub gl: Option<Gles2>,
     pub imported_dmabufs: Vec<Dmabuf>,
     pub is_next_flutter_frame_scheduled: bool,
@@ -126,6 +128,21 @@ pub struct State<BackendData: Backend + 'static> {
     pub xdg_decoration_state: XdgDecorationState,
     pub fractional_scale_manager_state: FractionalScaleManagerState,
     pub input_devices: HashSet<input::Device>,
+    pub output_layout_revision: u64,
+    /// Capture-owned state: the native selection session, the local recording
+    /// session, and the channels that carry their worker results back onto the
+    /// compositor loop.
+    pub capture_state: crate::capture::CaptureState,
+    /// Portal-owned state: the backend runtime, the screenshot/pick-color
+    /// encode bridge, and the PipeWire producer with its live screen-cast
+    /// streams.
+    pub portal_state: crate::portal::PortalState,
+    /// View (monitor) that received the start of the current pointer gesture
+    /// (button-held drag, trackpad pan/zoom scroll, or pinch). Every later
+    /// event of that gesture is pinned to this view so Flutter sees one
+    /// consistent `view_id` and coordinate space even if the pointer crosses
+    /// monitors mid-gesture. `None` when no gesture is in progress.
+    pub pointer_gesture_view_id: Option<i64>,
 }
 
 impl<BackendData: Backend + 'static> State<BackendData> {
@@ -153,6 +170,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             key_code = swap_left_alt_and_meta(self, key_code);
             handle_keyboard_event::<BackendData>(self, key_code, KeyState::Released, 0);
         }
+    }
+
+    pub fn frame_timestamp_millis(&self) -> u32 {
+        self.clock.now().as_millis() as u32
     }
 }
 
@@ -275,6 +296,9 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let xdg_decoration_state = XdgDecorationState::new::<Self>(&display_handle);
         let fractional_scale_manager_state =
             FractionalScaleManagerState::new::<Self>(&display_handle);
+        let capture_state = crate::capture::CaptureState::new::<BackendData>(&loop_handle);
+        let portal_state = crate::portal::PortalState::new::<BackendData>(&loop_handle);
+
         Self {
             running: Arc::new(AtomicBool::new(true)),
             display_handle,
@@ -288,6 +312,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             xdg_shell_state,
             shm_state,
             flutter_engine: None,
+            flutter_sent_keys: HashMap::new(),
             dmabuf_state,
             seat,
             seat_state,
@@ -327,6 +352,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             xdg_decoration_state,
             fractional_scale_manager_state,
             input_devices: HashSet::new(),
+            output_layout_revision: 0,
+            capture_state,
+            portal_state,
+            pointer_gesture_view_id: None,
         }
     }
 
@@ -392,7 +421,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 
         let (subsurfaces_below, subsurfaces_above) = get_direct_subsurfaces(surface);
 
-        SurfaceMessage {
+        let message = SurfaceMessage {
             surface_id,
             role,
             texture_id,
@@ -402,7 +431,18 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             input_region: input_region.into(),
             subsurfaces_below,
             subsurfaces_above,
-        }
+        };
+        tracing::debug!(
+            target: "veshell::geometry",
+            surface_id,
+            texture_id = message.texture_id,
+            buffer_size = ?message.buffer_size,
+            buffer_scale = message.scale,
+            buffer_delta = ?message.buffer_delta,
+            input_region = ?message.input_region,
+            "Constructed surface geometry snapshot"
+        );
+        message
     }
 
     fn construct_surface_role_message(&self, surface: &WlSurface) -> Option<SurfaceRole> {
@@ -435,6 +475,24 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         self.space.outputs().find(|output| output.name() == name)
     }
 
+    pub fn map_output(&mut self, output: &Output, location: Point<i32, Logical>) {
+        self.space.map_output(output, location);
+        self.output_layout_changed();
+    }
+
+    pub fn unmap_output(&mut self, output: &Output) {
+        self.space.unmap_output(output);
+        self.output_layout_changed();
+    }
+
+    pub fn output_layout_changed(&mut self) {
+        self.space.refresh();
+        self.output_layout_revision = self.output_layout_revision.wrapping_add(1);
+        // The frozen image no longer describes the layout: abort the
+        // capture session instead of producing a broken screenshot.
+        crate::capture::cancel_capture_session(self);
+    }
+
     pub fn apply_monitor_configuration_to_output(
         &mut self,
         output: &Output,
@@ -462,6 +520,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         // if any new apply changes and return true
         if new_mode.is_some() || new_scale.is_some() || new_location.is_some() {
             output.change_current_state(new_mode, None, new_scale, new_location);
+            if new_location.is_some() {
+                self.space.map_output(output, output.current_location());
+            }
+            self.output_layout_changed();
             if new_mode.is_some() {
                 output.set_preferred(new_mode.unwrap());
             }
@@ -501,8 +563,21 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 
     pub fn on_outputs_changed(&mut self) {
         let outputs = self.space.outputs().cloned().collect::<Vec<_>>();
+        let revision = self.output_layout_revision;
+        for output in &outputs {
+            tracing::info!(
+                target: "veshell::geometry",
+                output = %output.name(),
+                output_id = ?output.user_data().get::<OutputViewIdWrapper>().map(|id| id.view_id),
+                location = ?output.current_location(),
+                size = ?output.current_mode().map(|mode| mode.size),
+                scale = output.current_scale().fractional_scale(),
+                revision,
+                "Publishing output geometry to Flutter"
+            );
+        }
         self.flutter_engine_mut()
-            .monitor_layout_changed(outputs.clone());
+            .monitor_layout_changed(outputs.clone(), revision);
 
         let highest_scale = outputs
             .iter()
@@ -555,7 +630,7 @@ impl<BackendData: Backend> SeatHandler for State<BackendData> {
 }
 
 impl<BackendData: Backend> SelectionHandler for State<BackendData> {
-    type SelectionUserData = ();
+    type SelectionUserData = crate::capture::selection::SelectionUserData;
 
     fn new_selection(
         &mut self,
@@ -563,7 +638,11 @@ impl<BackendData: Backend> SelectionHandler for State<BackendData> {
         source: Option<SelectionSource>,
         _seat: Seat<Self>,
     ) {
-        if let Some(xwm) = self.xwayland_state.as_mut().unwrap().xwm.as_mut() {
+        if let Some(xwm) = self
+            .xwayland_state
+            .as_mut()
+            .and_then(|state| state.xwm.as_mut())
+        {
             if let Err(err) = xwm.new_selection(ty, source.map(|source| source.mime_types())) {
                 warn!(?err, ?ty, "Failed to set Xwayland selection");
             }
@@ -576,9 +655,21 @@ impl<BackendData: Backend> SelectionHandler for State<BackendData> {
         mime_type: String,
         fd: OwnedFd,
         _seat: Seat<Self>,
-        _user_data: &(),
+        user_data: &Self::SelectionUserData,
     ) {
-        if let Some(xwm) = self.xwayland_state.as_mut().unwrap().xwm.as_mut() {
+        if let Some(data) = user_data {
+            if mime_type == crate::capture::selection::PNG_MIME
+                || mime_type == crate::capture::selection::NATIVE_SCREENSHOT_MIME
+            {
+                crate::capture::selection::send_native_selection(fd, data.clone());
+                return;
+            }
+        }
+        if let Some(xwm) = self
+            .xwayland_state
+            .as_mut()
+            .and_then(|state| state.xwm.as_mut())
+        {
             if let Err(err) = xwm.send_selection(ty, mime_type, fd) {
                 warn!(?err, "Failed to send primary (X11 -> Wayland)");
             }

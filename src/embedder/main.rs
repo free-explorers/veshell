@@ -18,6 +18,7 @@ use crate::mouse_button_tracker::MouseButtonTracker;
 use crate::state::State;
 
 mod backend;
+mod capture;
 mod cursor;
 mod flutter_engine;
 mod focus;
@@ -26,6 +27,7 @@ mod input_handling;
 mod keyboard;
 mod meta_window_state;
 mod mouse_button_tracker;
+mod portal;
 mod settings;
 mod state;
 mod texture_swap_chain;
@@ -42,6 +44,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     debug!("Starting Veshell");
+
+    // Resolve the recording counter font once, before the compositor can
+    // render: the lookup shells out to `fc-match`, which must not run on
+    // the render thread's first recorded frame.
+    backend::render::warm_recording_font();
 
     // Fix XWayland crash when too many file descriptors are open.
     let _ = rlimit::increase_nofile_limit(u64::MAX);

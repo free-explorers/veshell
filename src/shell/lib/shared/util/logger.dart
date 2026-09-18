@@ -5,6 +5,7 @@ bool hierarchicalLoggingEnabled = true;
 
 final focusLog = logging.Logger('Focus');
 final persistenceLog = logging.Logger('Persistence');
+final geometryLog = logging.Logger('Geometry');
 final matchingLog = logging.Logger('Matching');
 
 final _simpleLogger = Logger(
@@ -30,6 +31,10 @@ void configureLogs() {
   logging.hierarchicalLoggingEnabled = true;
 
   persistenceLog.level = logging.Level.OFF;
+
+  // Per-frame surface/window layout traces log at `fine`; keep them out
+  // of the default output so a moving window does not flood the log.
+  geometryLog.level = logging.Level.INFO;
 
   logging.Logger.root.level = logging.Level.ALL; // defaults to Level.INFO
   logging.Logger.root.onRecord.listen((record) {

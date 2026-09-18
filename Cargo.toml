@@ -71,6 +71,18 @@ notify = "8.0.0"
 sd-notify = "0.4.3"
 uuid = { version = "1.16.0", features = ["v4"] }
 bitflags = "2.2.1"
+png = "0.17.16"
+xdg-user = "0.2.1"
+zbus = "5"
+# NameOwnerChanged subscription streams (kept minimal; only StreamExt)
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+async-channel = "2"
+pipewire = "0.10.1"
+pipewire-sys = "0.10.1"
+libc = "0.2.189"
+gstreamer = "0.24.5"
+gstreamer-app = "0.24.5"
+fontdue = "0.9"
 
 
 [build-dependencies]
@@ -91,6 +103,7 @@ assets = [
     { source = "extra/assets/veshell-session", dest = "/usr/bin/", mode = "755" },
     { source = "extra/assets/veshell.desktop", dest = "/usr/share/wayland-sessions/", mode = "644" },
     { source = "extra/assets/veshell-portals.conf", dest = "/usr/share/xdg-desktop-portal/", mode = "644" },
+    { source = "extra/assets/veshell.portal", dest = "/usr/share/xdg-desktop-portal/portals/", mode = "644" },
     { source = "extra/assets/veshell.service", dest = "/usr/lib/systemd/user/", mode = "644" },
     { source = "extra/assets/veshell-shutdown.target", dest = "/usr/lib/systemd/user/", mode = "644" },
 ]
@@ -115,6 +128,11 @@ assets = [
     [
         "extra/assets/veshell-portals.conf",
         "/usr/share/xdg-desktop-portal/",
+        "644",
+    ],
+    [
+        "extra/assets/veshell.portal",
+        "/usr/share/xdg-desktop-portal/portals/",
         "644",
     ],
     [

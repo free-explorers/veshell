@@ -49,6 +49,10 @@ package: $(SERVICE_OUTPUT)
 	# Install desktop/session files
 	install -Dm644 $(ASSETS_DIR)/veshell.desktop $(DESTDIR)$(SESSIONDIR)/veshell.desktop
 	install -Dm644 $(ASSETS_DIR)/veshell-portals.conf $(DESTDIR)$(PORTALDIR)/veshell-portals.conf
+	# Portal backend descriptors are only scanned in the portals/ subdirectory
+	# of xdg-desktop-portal's data dir; anything else is invisible to the
+	# frontend and ScreenCast selection falls back to the default backends.
+	install -Dm644 $(ASSETS_DIR)/veshell.portal $(DESTDIR)$(PORTALDIR)/portals/veshell.portal
 
 	# Install systemd user unit (processed)
 	install -Dm644 $(SERVICE_OUTPUT) $(DESTDIR)$(SYSTEMD_USER_DIR)/veshell.service
@@ -81,6 +85,7 @@ uninstall:
 	# Remove desktop/session files
 	rm -f $(DESTDIR)$(SESSIONDIR)/veshell.desktop
 	rm -f $(DESTDIR)$(PORTALDIR)/veshell-portals.conf
+	rm -f $(DESTDIR)$(PORTALDIR)/portals/veshell.portal
 
 	# Remove systemd user units
 	rm -f $(DESTDIR)$(SYSTEMD_USER_DIR)/veshell.service

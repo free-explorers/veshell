@@ -116,6 +116,19 @@ pub fn handle_keyboard_event<BackendData: Backend + 'static>(
         .send_key_event(veshell_key_event, false)
         .expect("Failed to send key event to Flutter");
 
+    // Track what Flutter believes is held: every press is remembered and
+    // its release retires it. The capture-session branch replays a
+    // swallowed release whose press already arrived here so the pairing
+    // survives a selection that starts with a modifier held.
+    match veshell_key_event.state {
+        KeyState::Pressed => {
+            data.flutter_sent_keys.insert(key_code, veshell_key_event);
+        }
+        KeyState::Released => {
+            data.flutter_sent_keys.remove(&key_code);
+        }
+    }
+
     // Initiate key repeat.
     // The callback that gets called repeatedly is defined in the constructor of `State`.
     // Modifier keys do nothing on their own, so it doesn't make sense to repeat them.
@@ -141,6 +154,49 @@ fn handle_embedder_hotkeys<BackendData: Backend + 'static>(
     data: &mut State<BackendData>,
     event: VeshellKeyEvent,
 ) -> bool {
+    // While a recording runs, the desktop stays live and input flows
+    // normally; Print is the only finisher the user controls (Escape and
+    // clicks are never a stop action). The recording also finalizes on
+    // layout changes from its pump.
+    if data.capture_state.recording_session.is_some() {
+        if event.state == KeyState::Pressed && event.keysym == Keysym::Print {
+            crate::capture::stop_recording(data, "user stop");
+        }
+        return false;
+    }
+
+    // While a screenshot session runs, the desktop must stay frozen: keys
+    // are swallowed and never forwarded to a client. One exception keeps
+    // the Flutter key state consistent: a release for a press that was
+    // already sent to Flutter gets its matching keyup synthesized too,
+    // otherwise Flutter keeps believing that key is held (which froze the
+    // shell hotkeys after selection sessions).
+    if data.capture_state.session.is_some() {
+        if event.state == KeyState::Released {
+            if data.flutter_sent_keys.remove(&event.key_code).is_some() {
+                data.flutter_engine
+                    .as_mut()
+                    .unwrap()
+                    .send_key_event(event, false)
+                    .expect("Failed to send pending key release to Flutter");
+            }
+        }
+        if event.keysym == Keysym::Escape && event.state == KeyState::Pressed {
+            crate::capture::cancel_capture_session(data);
+        }
+        return true;
+    }
+
+    // Capture the exact rendering state at the moment the hotkey is
+    // pressed: Rust owns the whole flow, the key never reaches Flutter.
+    // Shift+Print records the dragged area live; plain Print takes a
+    // screenshot.
+    if event.keysym == Keysym::Print && event.state == KeyState::Pressed {
+        let pointer_location = data.pointer.current_location();
+        crate::capture::begin_capture_session(data, pointer_location, event.mods.shift);
+        return true;
+    }
+
     // Switching to another VT
     if (Keysym::XF86_Switch_VT_1.raw()..=Keysym::XF86_Switch_VT_12.raw())
         .contains(&event.keysym.raw())

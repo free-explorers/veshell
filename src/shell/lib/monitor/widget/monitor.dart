@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/capture/widget/capture_prompt_overlay.dart';
 import 'package:shell/main.dart';
 import 'package:shell/monitor/model/monitor_configuration.serializable.dart';
 import 'package:shell/monitor/model/screen_configuration.serializable.dart';
 import 'package:shell/monitor/provider/monitor_by_name.dart';
 import 'package:shell/monitor/provider/monitor_by_view_id.dart';
 import 'package:shell/monitor/provider/monitor_configuration_state.dart';
+import 'package:shell/monitor/provider/navigator_key_for_view.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/screen/widget/screen.dart';
@@ -21,10 +23,26 @@ class MonitorWidget extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final (lightTheme, darkTheme) = ref.watch(veshellThemeProvider);
     final initializationStatus = InitializationStatus.of(context);
+    final monitorName = ref.watch(monitorByViewIdProvider(viewId));
+    if (monitorName != null) {
+      ref.watch(monitorByNameProvider(monitorName));
+    }
+    // Trusted shell dialogs (Polkit) push on this monitor's navigator.
+    final navigatorKey = ref.watch(navigatorKeyForViewProvider(viewId));
     return MaterialApp(
+      navigatorKey: navigatorKey,
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: ThemeMode.dark,
+      // The consent picker and screenshot prompt are drawn above the
+      // Navigator, frozen on the monitor focused when the flow opened.
+      builder: (context, child) => Stack(
+        fit: StackFit.expand,
+        children: [
+          child ?? const SizedBox.shrink(),
+          CapturePromptOverlay(monitorName: monitorName),
+        ],
+      ),
       home: Material(
         child: initializationStatus.when(
           data: (initialized) => HookConsumer(
@@ -38,63 +56,64 @@ class MonitorWidget extends HookConsumerWidget {
                 monitorConfigurationStateProvider(monitorName),
               );
 
-              useEffect(
-                () {
-                  if (monitorConfiguration.screenList.isEmpty) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      final newScreenId = ref
-                          .read(screenManagerProvider.notifier)
-                          .createNewScreen();
-                      ref
-                          .read(
-                            monitorConfigurationStateProvider(monitorName)
-                                .notifier,
-                          )
-                          .addNewScreenConfiguration(newScreenId);
-                    });
-                  }
-                  return null;
-                },
-                [monitorConfiguration.screenList],
-              );
+              useEffect(() {
+                if (monitorConfiguration.screenList.isEmpty) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    final newScreenId = ref
+                        .read(screenManagerProvider.notifier)
+                        .createNewScreen();
+                    ref
+                        .read(
+                          monitorConfigurationStateProvider(
+                            monitorName,
+                          ).notifier,
+                        )
+                        .addNewScreenConfiguration(newScreenId);
+                  });
+                }
+                return null;
+              }, [monitorConfiguration.screenList]);
               return CurrentMonitorName(
                 name: monitorName,
-                child: Flex(
-                  direction: switch (monitorConfiguration.displayMode) {
-                    ScreenDisplayMode.splitVertical => Axis.vertical,
-                    ScreenDisplayMode.splitHorizontal => Axis.horizontal,
-                  },
+                child: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    for (final screenConfiguration
-                        in monitorConfiguration.screenList) ...[
-                      Flexible(
-                        flex: screenConfiguration.flex,
-                        child: ScreenWidget(
-                          screenId: screenConfiguration.screenId,
-                        ),
-                      ),
-                      if (screenConfiguration !=
-                          monitorConfiguration.screenList.last)
-                        ScreenDivider(
-                          screenA: screenConfiguration,
-                          screenB: monitorConfiguration.screenList[
-                              monitorConfiguration.screenList
-                                      .indexOf(screenConfiguration) +
-                                  1],
-                          displayMode: monitorConfiguration.displayMode,
-                        ),
-                    ],
+                    Flex(
+                      direction: switch (monitorConfiguration.displayMode) {
+                        ScreenDisplayMode.splitVertical => Axis.vertical,
+                        ScreenDisplayMode.splitHorizontal => Axis.horizontal,
+                      },
+                      children: [
+                        for (final screenConfiguration
+                            in monitorConfiguration.screenList) ...[
+                          Flexible(
+                            flex: screenConfiguration.flex,
+                            child: ScreenWidget(
+                              screenId: screenConfiguration.screenId,
+                            ),
+                          ),
+                          if (screenConfiguration !=
+                              monitorConfiguration.screenList.last)
+                            ScreenDivider(
+                              screenA: screenConfiguration,
+                              screenB:
+                                  monitorConfiguration
+                                      .screenList[monitorConfiguration
+                                          .screenList
+                                          .indexOf(screenConfiguration) +
+                                      1],
+                              displayMode: monitorConfiguration.displayMode,
+                            ),
+                        ],
+                      ],
+                    ),
                   ],
                 ),
               );
             },
           ),
-          loading: () => const Center(
-            child: CircularProgressIndicator(),
-          ),
-          error: (error, stackTrace) => Center(
-            child: Text(error.toString()),
-          ),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stackTrace) => Center(child: Text(error.toString())),
         ),
       ),
     );
@@ -116,8 +135,6 @@ class ScreenDivider extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final monitorName = CurrentMonitorName.of(context);
     final monitor = ref.watch(monitorByNameProvider(monitorName))!;
-    final monitorConfiguration =
-        ref.watch(monitorConfigurationStateProvider(monitorName));
     final cumulatedDelta = useState<double>(0);
     final resizeInProgress = useState(false);
     return GestureDetector(
@@ -142,14 +159,14 @@ class ScreenDivider extends HookConsumerWidget {
         final numOfSteps = (cumulatedDelta.value / step).truncate();
 
         if (numOfSteps != 0) {
-          // Only consume the portion of cumulated delta that corresponds to complete steps
+          // Consume only the portion corresponding to complete steps.
           cumulatedDelta.value -= numOfSteps * step;
 
           // Calculate new flex values
           final newFlexA = screenA.flex + numOfSteps;
           final newFlexB = screenB.flex - numOfSteps;
 
-          // Apply constraints to prevent extremely small or negative flex values
+          // Prevent extremely small or negative flex values.
           const minFlex = 5; // Minimum flex value (5%)
           if (newFlexA >= minFlex && newFlexB >= minFlex) {
             ref
@@ -172,15 +189,15 @@ class ScreenDivider extends HookConsumerWidget {
         },
         child: switch (displayMode) {
           ScreenDisplayMode.splitVertical => const Divider(
-              thickness: 4,
-              height: 4,
-              color: Colors.black,
-            ),
+            thickness: 4,
+            height: 4,
+            color: Colors.black,
+          ),
           ScreenDisplayMode.splitHorizontal => const VerticalDivider(
-              thickness: 4,
-              width: 4,
-              color: Colors.black,
-            ),
+            thickness: 4,
+            width: 4,
+            color: Colors.black,
+          ),
         },
       ),
     );

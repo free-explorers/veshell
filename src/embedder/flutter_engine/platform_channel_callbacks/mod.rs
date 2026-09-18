@@ -18,6 +18,9 @@ mod on_shell_ready;
 mod pointer_exit;
 mod pointer_focus;
 mod resize_window;
+mod screen_cast_consent_decision;
+mod screen_cast_stop;
+mod screenshot_prompt_decision;
 
 use self::activate_window::activate_window;
 use self::close_window::close_window;
@@ -52,6 +55,23 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             "meta_window_patches" => meta_window_patches(method_call, result, data),
             "meta_popup_patches" => meta_popup_patches(method_call, result, data),
             "shell_ready" => on_shell_ready(method_call, result, data),
+            "screen_cast_consent_decision" => {
+                self::screen_cast_consent_decision::screen_cast_consent_decision(
+                    method_call,
+                    result,
+                    data,
+                )
+            }
+            "screenshot_prompt_decision" => {
+                self::screenshot_prompt_decision::screenshot_prompt_decision(
+                    method_call,
+                    result,
+                    data,
+                )
+            }
+            "screen_cast_stop" => {
+                self::screen_cast_stop::screen_cast_stop(method_call, result, data)
+            }
             _ => result.error(
                 "method_not_found".to_string(),
                 format!("Method {} not found", method_call.method()),

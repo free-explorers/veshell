@@ -31,9 +31,7 @@ class VeshellShortcutManager extends HookConsumerWidget {
             onInvoke: (IncreaseVolume intent) {
               final defaultSink = ref.read(defaultPulseSinkProvider);
               if (defaultSink == null) return;
-              final sink = ref.read(
-                pulseSinkByNameProvider(defaultSink.name),
-              );
+              final sink = ref.read(pulseSinkByNameProvider(defaultSink.name));
               if (sink == null) return;
 
               ref
@@ -47,14 +45,12 @@ class VeshellShortcutManager extends HookConsumerWidget {
             onInvoke: (DecreaseVolume intent) {
               final defaultSink = ref.read(defaultPulseSinkProvider);
               if (defaultSink == null) return;
-              final sink = ref.read(
-                pulseSinkByNameProvider(defaultSink.name),
-              );
+              final sink = ref.read(pulseSinkByNameProvider(defaultSink.name));
               if (sink == null) return;
-              ref.read(pulseClientProvider).requireValue.setSinkVolume(
-                    defaultSink.name,
-                    max(sink.volume - 0.05, 0),
-                  );
+              ref
+                  .read(pulseClientProvider)
+                  .requireValue
+                  .setSinkVolume(defaultSink.name, max(sink.volume - 0.05, 0));
 
               return null;
             },
@@ -63,14 +59,12 @@ class VeshellShortcutManager extends HookConsumerWidget {
             onInvoke: (ToggleMute intent) {
               final defaultSink = ref.read(defaultPulseSinkProvider);
               if (defaultSink == null) return;
-              final sink = ref.read(
-                pulseSinkByNameProvider(defaultSink.name),
-              );
+              final sink = ref.read(pulseSinkByNameProvider(defaultSink.name));
               if (sink == null) return;
-              ref.read(pulseClientProvider).requireValue.setSinkMute(
-                    defaultSink.name,
-                    !sink.mute,
-                  );
+              ref
+                  .read(pulseClientProvider)
+                  .requireValue
+                  .setSinkMute(defaultSink.name, !sink.mute);
               return;
             },
           ),
@@ -103,12 +97,9 @@ class _ShortcutManager extends ShortcutManager {
           intent: overviewIntent,
         );
         if (action != null) {
-          final (bool enabled, Object? invokeResult) =
-              Actions.of(primaryContext).invokeActionIfEnabled(
-            action,
-            overviewIntent,
+          final (bool enabled, Object? invokeResult) = Actions.of(
             primaryContext,
-          );
+          ).invokeActionIfEnabled(action, overviewIntent, primaryContext);
           if (enabled) {
             return action.toKeyEventResult(overviewIntent, invokeResult);
           }

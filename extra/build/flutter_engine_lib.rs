@@ -20,10 +20,8 @@ pub fn link_flutter_engine_shared_library(
     let flutter_engine_revision = get_flutter_engine_revision();
 
     // Check if we need to download the flutter engine library
-    let should_download = should_download_flutter_engine_library(
-        &flutter_engine_revision,
-        flutter_engine_build,
-    );
+    let should_download =
+        should_download_flutter_engine_library(&flutter_engine_revision, flutter_engine_build);
 
     if should_download {
         download_flutter_engine_library(&flutter_engine_revision, flutter_engine_build).unwrap();
@@ -55,9 +53,8 @@ fn should_download_flutter_engine_library(
         return false;
     }
     // Is the revision different? If so, Flutter was probably upgraded.
-    let libs_revision_file = format!(
-        "{FLUTTER_ENGINE_LIBS_DIR}/.flutter_engine_revision.{flutter_engine_build}"
-    );
+    let libs_revision_file =
+        format!("{FLUTTER_ENGINE_LIBS_DIR}/.flutter_engine_revision.{flutter_engine_build}");
     match std::fs::read_to_string(libs_revision_file) {
         Ok(libs_revision) => {
             if libs_revision != flutter_engine_revision {
@@ -148,9 +145,8 @@ fn download_flutter_engine_library(
     }
 
     // Remember the revision.
-    let revision_file_path = format!(
-        "{FLUTTER_ENGINE_LIBS_DIR}/.flutter_engine_revision.{flutter_engine_build}"
-    );
+    let revision_file_path =
+        format!("{FLUTTER_ENGINE_LIBS_DIR}/.flutter_engine_revision.{flutter_engine_build}");
     let mut revision_file = std::fs::File::create(revision_file_path)
         .expect("Failed to create .flutter_engine_revision");
     write!(revision_file, "{}", flutter_engine_revision)

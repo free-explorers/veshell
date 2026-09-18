@@ -9,10 +9,10 @@ use smithay::input::{
     },
     touch::{FrameMarker, TouchTarget},
 };
-use smithay::xwayland::X11Surface;
-use smithay::xwayland::xwm::XwmOfferData;
-use smithay::wayland::selection::data_device::WlOfferData;
 use smithay::reexports::wayland_server::DisplayHandle;
+use smithay::wayland::selection::data_device::WlOfferData;
+use smithay::xwayland::xwm::XwmOfferData;
+use smithay::xwayland::X11Surface;
 pub use smithay::{
     backend::input::KeyState,
     desktop::PopupKind,
@@ -70,49 +70,98 @@ pub enum PointerOfferData<S: Source> {
 
 impl<S: Source> OfferData for PointerOfferData<S> {
     fn disable(&self) {
-        match self { Self::Wl(v) => v.disable(), Self::X11(v) => v.disable() }
+        match self {
+            Self::Wl(v) => v.disable(),
+            Self::X11(v) => v.disable(),
+        }
     }
     fn drop(&self) {
-        match self { Self::Wl(v) => v.drop(), Self::X11(v) => v.drop() }
+        match self {
+            Self::Wl(v) => v.drop(),
+            Self::X11(v) => v.drop(),
+        }
     }
     fn validated(&self) -> bool {
-        match self { Self::Wl(v) => v.validated(), Self::X11(v) => v.validated() }
+        match self {
+            Self::Wl(v) => v.validated(),
+            Self::X11(v) => v.validated(),
+        }
     }
 }
 
 impl<BackendData: Backend + 'static> DndFocus<State<BackendData>> for PointerFocusTarget {
     type OfferData<S: Source> = PointerOfferData<S>;
 
-    fn enter<S: Source>(&self, data: &mut State<BackendData>, dh: &DisplayHandle,
-        source: Arc<S>, seat: &Seat<State<BackendData>>, location: Point<f64, Logical>,
-        serial: &Serial) -> Option<Self::OfferData<S>> {
+    fn enter<S: Source>(
+        &self,
+        data: &mut State<BackendData>,
+        dh: &DisplayHandle,
+        source: Arc<S>,
+        seat: &Seat<State<BackendData>>,
+        location: Point<f64, Logical>,
+        serial: &Serial,
+    ) -> Option<Self::OfferData<S>> {
         match self {
-            Self::WlSurface(surface) => DndFocus::enter(surface, data, dh, source, seat, location, serial).map(PointerOfferData::Wl),
-            Self::X11Surface(surface) => DndFocus::enter(surface, data, dh, source, seat, location, serial).map(PointerOfferData::X11),
+            Self::WlSurface(surface) => {
+                DndFocus::enter(surface, data, dh, source, seat, location, serial)
+                    .map(PointerOfferData::Wl)
+            }
+            Self::X11Surface(surface) => {
+                DndFocus::enter(surface, data, dh, source, seat, location, serial)
+                    .map(PointerOfferData::X11)
+            }
         }
     }
 
-    fn motion<S: Source>(&self, data: &mut State<BackendData>, offer: Option<&mut Self::OfferData<S>>,
-        seat: &Seat<State<BackendData>>, location: Point<f64, Logical>, time: u32) {
+    fn motion<S: Source>(
+        &self,
+        data: &mut State<BackendData>,
+        offer: Option<&mut Self::OfferData<S>>,
+        seat: &Seat<State<BackendData>>,
+        location: Point<f64, Logical>,
+        time: u32,
+    ) {
         match (self, offer) {
-            (Self::WlSurface(surface), Some(PointerOfferData::Wl(offer))) => DndFocus::motion(surface, data, Some(offer), seat, location, time),
-            (Self::X11Surface(surface), Some(PointerOfferData::X11(offer))) => DndFocus::motion(surface, data, Some(offer), seat, location, time),
+            (Self::WlSurface(surface), Some(PointerOfferData::Wl(offer))) => {
+                DndFocus::motion(surface, data, Some(offer), seat, location, time)
+            }
+            (Self::X11Surface(surface), Some(PointerOfferData::X11(offer))) => {
+                DndFocus::motion(surface, data, Some(offer), seat, location, time)
+            }
             _ => {}
         }
     }
 
-    fn leave<S: Source>(&self, data: &mut State<BackendData>, offer: Option<&mut Self::OfferData<S>>, seat: &Seat<State<BackendData>>) {
+    fn leave<S: Source>(
+        &self,
+        data: &mut State<BackendData>,
+        offer: Option<&mut Self::OfferData<S>>,
+        seat: &Seat<State<BackendData>>,
+    ) {
         match (self, offer) {
-            (Self::WlSurface(surface), Some(PointerOfferData::Wl(offer))) => DndFocus::leave(surface, data, Some(offer), seat),
-            (Self::X11Surface(surface), Some(PointerOfferData::X11(offer))) => DndFocus::leave(surface, data, Some(offer), seat),
+            (Self::WlSurface(surface), Some(PointerOfferData::Wl(offer))) => {
+                DndFocus::leave(surface, data, Some(offer), seat)
+            }
+            (Self::X11Surface(surface), Some(PointerOfferData::X11(offer))) => {
+                DndFocus::leave(surface, data, Some(offer), seat)
+            }
             _ => {}
         }
     }
 
-    fn drop<S: Source>(&self, data: &mut State<BackendData>, offer: Option<&mut Self::OfferData<S>>, seat: &Seat<State<BackendData>>) {
+    fn drop<S: Source>(
+        &self,
+        data: &mut State<BackendData>,
+        offer: Option<&mut Self::OfferData<S>>,
+        seat: &Seat<State<BackendData>>,
+    ) {
         match (self, offer) {
-            (Self::WlSurface(surface), Some(PointerOfferData::Wl(offer))) => DndFocus::drop(surface, data, Some(offer), seat),
-            (Self::X11Surface(surface), Some(PointerOfferData::X11(offer))) => DndFocus::drop(surface, data, Some(offer), seat),
+            (Self::WlSurface(surface), Some(PointerOfferData::Wl(offer))) => {
+                DndFocus::drop(surface, data, Some(offer), seat)
+            }
+            (Self::X11Surface(surface), Some(PointerOfferData::X11(offer))) => {
+                DndFocus::drop(surface, data, Some(offer), seat)
+            }
             _ => {}
         }
     }
@@ -423,14 +472,24 @@ impl<BackendData: Backend> TouchTarget<State<BackendData>> for PointerFocusTarge
         }
     }
 
-    fn frame(&self, seat: &Seat<State<BackendData>>, data: &mut State<BackendData>, marker: FrameMarker) {
+    fn frame(
+        &self,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
+        marker: FrameMarker,
+    ) {
         match self {
             PointerFocusTarget::WlSurface(w) => TouchTarget::frame(w, seat, data, marker),
             PointerFocusTarget::X11Surface(w) => TouchTarget::frame(w, seat, data, marker),
         }
     }
 
-    fn cancel(&self, seat: &Seat<State<BackendData>>, data: &mut State<BackendData>, marker: FrameMarker) {
+    fn cancel(
+        &self,
+        seat: &Seat<State<BackendData>>,
+        data: &mut State<BackendData>,
+        marker: FrameMarker,
+    ) {
         match self {
             PointerFocusTarget::WlSurface(w) => TouchTarget::cancel(w, seat, data, marker),
             PointerFocusTarget::X11Surface(w) => TouchTarget::cancel(w, seat, data, marker),
@@ -457,9 +516,7 @@ impl<BackendData: Backend> TouchTarget<State<BackendData>> for PointerFocusTarge
     ) {
         match self {
             PointerFocusTarget::WlSurface(w) => TouchTarget::orientation(w, seat, data, event),
-            PointerFocusTarget::X11Surface(w) => {
-                TouchTarget::orientation(w, seat, data, event)
-            }
+            PointerFocusTarget::X11Surface(w) => TouchTarget::orientation(w, seat, data, event),
         }
     }
 

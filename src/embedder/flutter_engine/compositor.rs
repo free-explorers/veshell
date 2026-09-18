@@ -1,37 +1,37 @@
 use std::ffi::c_void;
 
-use smithay::backend::egl;
-use smithay::backend::renderer::gles::ffi::Gles2;
-use smithay::backend::renderer::gles::GlesError;
-use smithay::reexports::calloop::channel::Event::Msg;
-use smithay::{
-    backend::allocator::dmabuf::Dmabuf,
-    reexports::calloop::{channel, LoopHandle},
-};
-use tracing::debug;
-
-use crate::flutter_engine::RendererData;
 use crate::{
     backend::Backend,
     flutter_engine::{
         embedder::{
             FlutterBackingStore, FlutterBackingStoreConfig,
             FlutterBackingStoreType_kFlutterBackingStoreTypeOpenGL,
-            FlutterBackingStore__bindgen_ty_1, FlutterCompositor, FlutterOpenGLBackingStore,
-            FlutterOpenGLBackingStore__bindgen_ty_1, FlutterOpenGLFramebuffer,
-            FlutterOpenGLTargetType_kFlutterOpenGLTargetTypeFramebuffer, FlutterPresentViewInfo,
+            FlutterBackingStore__bindgen_ty_1, FlutterCompositor,
+            FlutterLayerContentType_kFlutterLayerContentTypeBackingStore,
+            FlutterOpenGLBackingStore, FlutterOpenGLBackingStore__bindgen_ty_1,
+            FlutterOpenGLFramebuffer, FlutterOpenGLTargetType_kFlutterOpenGLTargetTypeFramebuffer,
+            FlutterPresentViewInfo,
         },
+        view::{AcquiredBackingStore, BackingStoreId},
         FlutterEngine,
     },
-    gles_framebuffer_importer::GlesFramebufferImporter,
     state::State,
 };
-type ImportBufferCallback = fn(dmabuf: Dmabuf) -> Result<u32, GlesError>;
+use smithay::reexports::calloop::channel::Event::Msg;
+use smithay::reexports::calloop::{channel, LoopHandle};
+struct BackingStoreRequest {
+    config: FlutterBackingStoreConfig,
+    reply: channel::Sender<Option<AcquiredBackingStore>>,
+}
+
+enum BackingStoreEvent {
+    Presented(BackingStoreId),
+    Collected(BackingStoreId),
+}
 
 pub struct CompositorUserData {
-    pub tx_request_buffer: channel::Sender<FlutterBackingStoreConfig>,
-    pub rx_on_buffer_sent: channel::Channel<Option<Dmabuf>>,
-    pub tx_present_view: channel::Sender<i64>,
+    tx_request_buffer: channel::Sender<BackingStoreRequest>,
+    tx_backing_store_event: channel::Sender<BackingStoreEvent>,
     flutter_engine_ptr: *mut c_void,
 }
 
@@ -43,42 +43,74 @@ impl FlutterCompositor {
     where
         BackendData: Backend + 'static,
     {
-        let (tx_send_buffer, rx_on_buffer_sent) = channel::channel::<Option<Dmabuf>>();
-        let (tx_request_buffer, rx_on_buffer_requested) =
-            channel::channel::<FlutterBackingStoreConfig>();
-        let (tx_present_view, rx_on_present_view) = channel::channel::<i64>();
+        let (tx_request_buffer, rx_on_buffer_requested) = channel::channel::<BackingStoreRequest>();
+        let (tx_backing_store_event, rx_on_backing_store_event) =
+            channel::channel::<BackingStoreEvent>();
 
         loop_handle
-            .insert_source(rx_on_buffer_requested, move |config, _, data| {
-                if let Msg(config) = config {
+            .insert_source(rx_on_buffer_requested, move |request, _, data| {
+                if let Msg(request) = request {
                     let flutter_engine = data.flutter_engine_mut();
-                    let view = flutter_engine
+                    let backing_store = flutter_engine
                         .views_management
                         .views
-                        .get_mut(&config.view_id)
-                        .unwrap();
+                        .get_mut(&request.config.view_id)
+                        .and_then(|view| view.acquire_backing_store());
 
-                    let dmabuf = view.acquire_dmabuf();
-
-                    tx_send_buffer.send(Some(dmabuf)).unwrap();
+                    if let Err(error) = request.reply.send(backing_store) {
+                        if let Some(backing_store) = error.0 {
+                            if let Some(view) = flutter_engine
+                                .views_management
+                                .views
+                                .get_mut(&backing_store.id.view_id)
+                            {
+                                view.discard_backing_store(backing_store.id);
+                            }
+                        }
+                    }
                 }
             })
             .unwrap();
 
         loop_handle
-            .insert_source(rx_on_present_view, move |view_id, _, data| {
-                if let Msg(view_id) = view_id {
+            .insert_source(rx_on_backing_store_event, move |event, _, data| {
+                if let Msg(event) = event {
+                    // Snapshot the freeze flag first: the mutable engine
+                    // borrow must not overlap it.
+                    let freeze = data.capture_state.session.is_some();
                     let flutter_engine = data.flutter_engine_mut();
-                    let view = flutter_engine
-                        .views_management
-                        .views
-                        .get_mut(&view_id)
-                        .unwrap();
-
-                    view.last_rendered_slot = view.current_slot.take();
-
-                    if let Some(ref slot) = view.last_rendered_slot {
-                        view.swapchain.submitted(slot);
+                    match event {
+                        BackingStoreEvent::Presented(id) => {
+                            // While a screenshot session freezes the
+                            // desktop, late Flutter frames must not
+                            // replace the frame captured at hotkey time.
+                            if freeze {
+                                if let Some(view) =
+                                    flutter_engine.views_management.views.get_mut(&id.view_id)
+                                {
+                                    view.hold_backing_store(id);
+                                }
+                            } else if let Some(view) =
+                                flutter_engine.views_management.views.get_mut(&id.view_id)
+                            {
+                                view.present_backing_store(id);
+                            }
+                            // The presented frame is fresh output damage:
+                            // every screen-cast session on this output
+                            // delivers a throttled frame copy now.
+                            crate::portal::service::on_view_frame_presented(data, id.view_id);
+                            // A local recording on this output also
+                            // rides the damage signal instead of
+                            // rendering an unconditional 30 Hz loop.
+                            crate::capture::on_view_frame_presented_for_recording(data, id.view_id);
+                        }
+                        BackingStoreEvent::Collected(id) => {
+                            if let Some(view) =
+                                flutter_engine.views_management.views.get_mut(&id.view_id)
+                            {
+                                view.discard_backing_store(id);
+                            }
+                        }
                     }
                 }
             })
@@ -86,8 +118,7 @@ impl FlutterCompositor {
 
         let user_data = Box::into_raw(Box::new(CompositorUserData {
             tx_request_buffer,
-            rx_on_buffer_sent,
-            tx_present_view,
+            tx_backing_store_event,
             flutter_engine_ptr,
         })) as *mut c_void;
 
@@ -113,23 +144,43 @@ pub unsafe extern "C" fn create_backing_store_callback<BackendData>(
 where
     BackendData: Backend + 'static,
 {
+    if config.is_null() || backing_store_out.is_null() || user_data.is_null() {
+        return false;
+    }
     let compositor_data = &mut *(user_data as *mut CompositorUserData);
     let flutter_engine =
         &mut *(compositor_data.flutter_engine_ptr as *mut FlutterEngine<BackendData>);
-    if compositor_data.tx_request_buffer.send(*config).is_err() {
+    let (reply, response) = channel::channel::<Option<AcquiredBackingStore>>();
+    if compositor_data
+        .tx_request_buffer
+        .send(BackingStoreRequest {
+            config: *config,
+            reply,
+        })
+        .is_err()
+    {
         return false;
     }
 
-    if let Ok(Some(dmabuf)) = compositor_data.rx_on_buffer_sent.recv() {
+    if let Ok(Some(backing_store)) = response.recv() {
         let name = flutter_engine
             .renderer_data
             .framebuffer_importer
-            .import_framebuffer(&flutter_engine.renderer_data.main_egl_context, dmabuf)
+            .import_framebuffer(
+                &flutter_engine.renderer_data.main_egl_context,
+                backing_store.dmabuf,
+            )
             .unwrap_or(0);
+        if name == 0 {
+            let _ = compositor_data
+                .tx_backing_store_event
+                .send(BackingStoreEvent::Collected(backing_store.id));
+            return false;
+        }
 
         *backing_store_out = FlutterBackingStore {
             struct_size: std::mem::size_of::<FlutterBackingStore>(),
-            user_data: std::ptr::null_mut(),
+            user_data: Box::into_raw(Box::new(backing_store.id)) as *mut c_void,
             type_: FlutterBackingStoreType_kFlutterBackingStoreTypeOpenGL,
             did_update: true,
             __bindgen_anon_1: FlutterBackingStore__bindgen_ty_1 {
@@ -160,8 +211,21 @@ pub unsafe extern "C" fn collect_backing_store_callback<BackendData>(
 where
     BackendData: Backend + 'static,
 {
-    // TODO: ensure we don't have a memory leak there
+    if user_data.is_null() {
+        return false;
+    }
     let compositor_data = &mut *(user_data as *mut CompositorUserData);
+    if renderer.is_null() {
+        return false;
+    }
+    let backing_store_id = (*renderer).user_data as *mut BackingStoreId;
+    if backing_store_id.is_null() {
+        return false;
+    }
+    let backing_store_id = *Box::from_raw(backing_store_id);
+    let _ = compositor_data
+        .tx_backing_store_event
+        .send(BackingStoreEvent::Collected(backing_store_id));
 
     true
 }
@@ -172,13 +236,45 @@ pub unsafe extern "C" fn present_view_callback<BackendData>(
 where
     BackendData: Backend + 'static,
 {
+    if info.is_null() {
+        return false;
+    }
     let user_data = (*info).user_data;
+    if user_data.is_null() || (*info).layers.is_null() || (*info).layers_count == 0 {
+        return false;
+    }
     let compositor_data = &mut *(user_data as *mut CompositorUserData);
     let flutter_engine =
         &mut *(compositor_data.flutter_engine_ptr as *mut FlutterEngine<BackendData>);
     flutter_engine.renderer_data.gl.Finish();
-    compositor_data
-        .tx_present_view
-        .send((*info).view_id)
-        .is_ok()
+    let mut backing_store_id = None;
+    for layer in std::slice::from_raw_parts((*info).layers, (*info).layers_count) {
+        if layer.is_null() {
+            return false;
+        }
+        let layer = &**layer;
+        if layer.type_ != FlutterLayerContentType_kFlutterLayerContentTypeBackingStore {
+            continue;
+        }
+        let backing_store = layer.__bindgen_anon_1.backing_store;
+        if backing_store.is_null() {
+            return false;
+        }
+        let id = (*backing_store).user_data as *const BackingStoreId;
+        if id.is_null() || (*id).view_id != (*info).view_id {
+            return false;
+        }
+        if backing_store_id.replace(*id).is_some() {
+            return false;
+        }
+    }
+
+    backing_store_id
+        .and_then(|id| {
+            compositor_data
+                .tx_backing_store_event
+                .send(BackingStoreEvent::Presented(id))
+                .ok()
+        })
+        .is_some()
 }

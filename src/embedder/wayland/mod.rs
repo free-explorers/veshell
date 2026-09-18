@@ -205,6 +205,14 @@ pub mod wayland {
                 let mapped = with_renderer_surface_state(surface, |state| state.buffer().is_some())
                     .unwrap_or(false);
 
+                tracing::info!(
+                    target: "veshell::geometry",
+                    surface_id,
+                    meta_window_id = %meta_window.id,
+                    mapped,
+                    "Updating native surface mapped state"
+                );
+
                 self.patch_meta_window(
                     MetaWindowPatch::UpdateMapped {
                         id: meta_window.id,
@@ -364,6 +372,19 @@ pub mod wayland {
             }
 
             let surface_message = self.construct_surface_message(surface);
+            tracing::info!(
+                target: "veshell::geometry",
+                surface_id = surface_message.surface_id,
+                role = ?surface_message.role,
+                texture_id = surface_message.texture_id,
+                buffer_size = ?surface_message.buffer_size,
+                buffer_scale = surface_message.scale,
+                buffer_delta = ?surface_message.buffer_delta,
+                input_region = ?surface_message.input_region,
+                subsurfaces_below = ?surface_message.subsurfaces_below,
+                subsurfaces_above = ?surface_message.subsurfaces_above,
+                "Sending commit_surface geometry to Flutter"
+            );
 
             let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
             platform_method_channel.invoke_method(

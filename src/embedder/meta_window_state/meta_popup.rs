@@ -38,6 +38,15 @@ pub enum MetaPopupPatch {
 
 impl<BackendData: Backend + 'static> State<BackendData> {
     pub fn create_meta_popup(&mut self, meta_popup: MetaPopup) -> MetaPopup {
+        tracing::info!(
+            target: "veshell::geometry",
+            popup_id = %meta_popup.id,
+            surface_id = meta_popup.surface_id,
+            parent = %meta_popup.parent,
+            position = ?meta_popup.position,
+            geometry = ?meta_popup.geometry,
+            "Publishing popup geometry to Flutter"
+        );
         self.meta_window_state
             .meta_popups
             .insert(meta_popup.id.clone(), meta_popup.clone());
@@ -54,6 +63,12 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         match patch.clone() {
             MetaPopupPatch::UpdatePosition { id, value } => {
                 if let Some(meta_popup) = self.meta_window_state.meta_popups.get_mut(&id) {
+                    tracing::info!(
+                        target: "veshell::geometry",
+                        popup_id = %id,
+                        position = ?value,
+                        "Updating popup position for Flutter"
+                    );
                     meta_popup.position = value.clone();
                 }
             }

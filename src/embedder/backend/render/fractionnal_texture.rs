@@ -1,11 +1,9 @@
 use smithay::backend::allocator::Fourcc;
-use smithay::backend::renderer::element::{
-    Element, Id, Kind, RenderElement, UnderlyingStorage,
-};
-use smithay::utils::user_data::UserDataMap;
+use smithay::backend::renderer::element::{Element, Id, Kind, RenderElement, UnderlyingStorage};
 use smithay::backend::renderer::gles::GlesTexture;
 use smithay::backend::renderer::utils::{CommitCounter, OpaqueRegions};
 use smithay::backend::renderer::{ContextId, Frame as _, ImportMem, Renderer, Texture};
+use smithay::utils::user_data::UserDataMap;
 use smithay::utils::{Buffer, Logical, Physical, Point, Rectangle, Scale, Size, Transform};
 use tracing::warn;
 

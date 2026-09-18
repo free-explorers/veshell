@@ -23,15 +23,15 @@ enum HotkeysAction {
 }
 
 Intent getActionIntent(HotkeysAction action) => switch (action) {
-      HotkeysAction.increaseVolume => const IncreaseVolume(),
-      HotkeysAction.decreaseVolume => const DecreaseVolume(),
-      HotkeysAction.toggleMute => const ToggleMute(),
-      HotkeysAction.focusWorkspaceAbove => const FocusWorkspaceAboveIntent(),
-      HotkeysAction.focusWorkspaceBelow => const FocusWorkspaceBelowIntent(),
-      HotkeysAction.focusLeftTileable => const FocusLeftTileableIntent(),
-      HotkeysAction.focusRightTileable => const FocusRightTileableIntent(),
-      HotkeysAction.closeTileable => const CloseTileableIntent(),
-    };
+  HotkeysAction.increaseVolume => const IncreaseVolume(),
+  HotkeysAction.decreaseVolume => const DecreaseVolume(),
+  HotkeysAction.toggleMute => const ToggleMute(),
+  HotkeysAction.focusWorkspaceAbove => const FocusWorkspaceAboveIntent(),
+  HotkeysAction.focusWorkspaceBelow => const FocusWorkspaceBelowIntent(),
+  HotkeysAction.focusLeftTileable => const FocusLeftTileableIntent(),
+  HotkeysAction.focusRightTileable => const FocusRightTileableIntent(),
+  HotkeysAction.closeTileable => const CloseTileableIntent(),
+};
 
 @riverpod
 class HotkeysActivator extends _$HotkeysActivator {
@@ -52,10 +52,11 @@ class HotkeysActivator extends _$HotkeysActivator {
 
     // add the dev tools shortcuts
     map[const SingleActivator(
-      LogicalKeyboardKey.f12,
-      control: true,
-      shift: true,
-    )] = const ToggleDevToolsIntent();
+          LogicalKeyboardKey.f12,
+          control: true,
+          shift: true,
+        )] =
+        const ToggleDevToolsIntent();
     return map;
   }
 }

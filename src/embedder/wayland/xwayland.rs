@@ -2,6 +2,7 @@ use smithay::xwayland::X11Wm;
 
 pub mod xwayland {
     use crate::backend::Backend;
+    use crate::capture::selection::{send_native_selection, NATIVE_SCREENSHOT_MIME, PNG_MIME};
     use crate::cursor::{load_cursor_theme, Cursor};
     use crate::flutter_engine::wayland_messages::{MapX11Surface, MyPoint, NewX11Surface};
     use crate::focus::KeyboardFocusTarget;
@@ -189,14 +190,13 @@ pub mod xwayland {
                             xwm: None,
                             display: display_number,
                         });
-                        let mut wm =
-                            X11Wm::start_wm(
-                                data.loop_handle.clone(),
-                                &data.display_handle,
-                                x11_socket,
-                                client.clone(),
-                            )
-                                .expect("Failed to attach X11 Window Manager");
+                        let mut wm = X11Wm::start_wm(
+                            data.loop_handle.clone(),
+                            &data.display_handle,
+                            x11_socket,
+                            client.clone(),
+                        )
+                        .expect("Failed to attach X11 Window Manager");
                         let xwayland_state = data.xwayland_state.as_mut().unwrap();
                         xwayland_state.xwm = Some(wm);
                         xwayland_state.reload_cursor(1.);
@@ -601,6 +601,16 @@ pub mod xwayland {
             mime_type: String,
             fd: OwnedFd,
         ) {
+            let native_data = match selection {
+                SelectionTarget::Clipboard => current_data_device_selection_userdata(&self.seat),
+                SelectionTarget::Primary => current_primary_selection_userdata(&self.seat),
+            };
+            if let Some(data) = native_data.as_ref().and_then(|data| data.as_ref()) {
+                if mime_type == PNG_MIME || mime_type == NATIVE_SCREENSHOT_MIME {
+                    send_native_selection(fd, data.clone());
+                    return;
+                }
+            }
             match selection {
                 SelectionTarget::Clipboard => {
                     if let Err(err) =
@@ -633,10 +643,10 @@ pub mod xwayland {
             // TODO check, that focused windows is X11 window before doing this
             match selection {
                 SelectionTarget::Clipboard => {
-                    set_data_device_selection(&self.display_handle, &self.seat, mime_types, ())
+                    set_data_device_selection(&self.display_handle, &self.seat, mime_types, None)
                 }
                 SelectionTarget::Primary => {
-                    set_primary_selection(&self.display_handle, &self.seat, mime_types, ())
+                    set_primary_selection(&self.display_handle, &self.seat, mime_types, None)
                 }
             }
         }
@@ -644,12 +654,16 @@ pub mod xwayland {
         fn cleared_selection(&mut self, _xwm: XwmId, selection: SelectionTarget) {
             match selection {
                 SelectionTarget::Clipboard => {
-                    if current_data_device_selection_userdata(&self.seat).is_some() {
+                    if current_data_device_selection_userdata(&self.seat)
+                        .is_some_and(|data| data.is_none())
+                    {
                         clear_data_device_selection(&self.display_handle, &self.seat)
                     }
                 }
                 SelectionTarget::Primary => {
-                    if current_primary_selection_userdata(&self.seat).is_some() {
+                    if current_primary_selection_userdata(&self.seat)
+                        .is_some_and(|data| data.is_none())
+                    {
                         clear_primary_selection(&self.display_handle, &self.seat)
                     }
                 }

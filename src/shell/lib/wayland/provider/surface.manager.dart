@@ -15,6 +15,7 @@ import 'package:shell/wayland/model/surface_manager_state.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/subsurface_state.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
+import 'package:shell/shared/util/logger.dart';
 
 part 'surface.manager.g.dart';
 
@@ -72,6 +73,13 @@ class SurfaceManager extends _$SurfaceManager {
   }
 
   void _commitSurface(CommitSurfaceMessage message) {
+    geometryLog.info(
+      'surface commit surface=${message.surfaceId} '
+      'texture=${message.textureId} buffer=${message.bufferSize} '
+      'scale=${message.scale} role=${message.role} '
+      'input=${message.inputRegion} '
+      'below=${message.subsurfacesBelow} above=${message.subsurfacesAbove}',
+    );
     final role = switch (message.role) {
       SubsurfaceRoleMessage() => SurfaceRole.subsurface,
       null => null,

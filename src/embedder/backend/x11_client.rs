@@ -297,7 +297,7 @@ pub fn run_x11_client() {
     state.flutter_engine = Some(flutter_engine);
 
     tx_output_height.send(size.h).unwrap();
-    state.space.map_output(&output, (0, 0));
+    state.map_output(&output, output.current_location());
     let output_clone = output.clone();
 
     let view_id = state.flutter_engine_mut().add_view(0, &output);
@@ -335,8 +335,9 @@ pub fn run_x11_client() {
                         }),
                         None,
                         None,
-                        Some((0, 0).into()),
+                        None,
                     );
+                    data.output_layout_changed();
 
                     let _ = tx_output_height.send(new_size.h);
 
@@ -524,6 +525,17 @@ pub fn run_x11_client() {
                         }
                     })
                     .collect::<Vec<_>>(),
+                state
+                    .capture_state
+                    .session
+                    .as_ref()
+                    .filter(|session| session.output.name() == output.name()),
+                state
+                    .capture_state
+                    .recording_session
+                    .as_ref()
+                    .filter(|recording| recording.output_name() == output.name())
+                    .map(|recording| recording.chip_data()),
             );
 
             let mut elements2: Vec<VeshellRenderElements<GlesRenderer>> = Vec::new();
@@ -571,21 +583,15 @@ pub fn run_x11_client() {
                 }
             }
 
-            let start_time = std::time::Instant::now();
+            let frame_timestamp = state.frame_timestamp_millis();
             for surface in state.xdg_shell_state.toplevel_surfaces() {
-                send_frames_surface_tree(
-                    surface.wl_surface(),
-                    start_time.elapsed().as_millis() as u32,
-                );
+                send_frames_surface_tree(surface.wl_surface(), frame_timestamp);
             }
             for surface in state.xdg_popups.values() {
-                send_frames_surface_tree(
-                    surface.wl_surface(),
-                    start_time.elapsed().as_millis() as u32,
-                );
+                send_frames_surface_tree(surface.wl_surface(), frame_timestamp);
             }
             for surface in state.x11_surface_per_wl_surface.keys() {
-                send_frames_surface_tree(surface, start_time.elapsed().as_millis() as u32);
+                send_frames_surface_tree(surface, frame_timestamp);
             }
         }
         let result = event_loop.dispatch(None, &mut state);
