@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/capture/widget/capture_prompt_overlay.dart';
 import 'package:shell/main.dart';
-import 'package:shell/capture/widget/screen_cast_consent.dart';
-import 'package:shell/capture/widget/screen_cast_indicator_bar.dart';
-import 'package:shell/capture/widget/screenshot_prompt.dart';
-import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/monitor/model/monitor_configuration.serializable.dart';
 import 'package:shell/monitor/model/screen_configuration.serializable.dart';
 import 'package:shell/monitor/provider/monitor_by_name.dart';
 import 'package:shell/monitor/provider/monitor_by_view_id.dart';
 import 'package:shell/monitor/provider/monitor_configuration_state.dart';
+import 'package:shell/monitor/provider/navigator_key_for_view.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/screen/widget/screen.dart';
@@ -29,36 +27,20 @@ class MonitorWidget extends HookConsumerWidget {
     if (monitorName != null) {
       ref.watch(monitorByNameProvider(monitorName));
     }
-    // The consent picker, screenshot prompt, and cast indicator surface on
-    // the first connected monitor (a portal flow is a single system
-    // dialog). They are drawn in `MaterialApp.builder`, above the
-    // Navigator, so a pushed route can never cover them.
-    final isPrimaryMonitor =
-        monitorName != null &&
-        ref.watch(connectedMonitorListProvider).firstOrNull?.name == monitorName;
+    // Trusted shell dialogs (Polkit) push on this monitor's navigator.
+    final navigatorKey = ref.watch(navigatorKeyForViewProvider(viewId));
     return MaterialApp(
+      navigatorKey: navigatorKey,
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: ThemeMode.dark,
+      // The consent picker and screenshot prompt are drawn above the
+      // Navigator, frozen on the monitor focused when the flow opened.
       builder: (context, child) => Stack(
         fit: StackFit.expand,
         children: [
           child ?? const SizedBox.shrink(),
-          if (isPrimaryMonitor)
-            const Material(
-              type: MaterialType.transparency,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  ScreenCastConsentHost(),
-                  ScreenshotPromptHost(),
-                  Align(
-                    alignment: Alignment.bottomLeft,
-                    child: ScreenCastIndicatorBar(),
-                  ),
-                ],
-              ),
-            ),
+          CapturePromptOverlay(monitorName: monitorName),
         ],
       ),
       home: Material(

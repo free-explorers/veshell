@@ -25,7 +25,7 @@ class PolkitAuthenticationAgentState extends _$PolkitAuthenticationAgentState {
     try {
       final client = ref.watch(dbusClientProvider);
       final sessionManager = ref.watch(sessionProvider);
-      _agent = PolkitAuthenticationAgent(client, sessionManager);
+      _agent = PolkitAuthenticationAgent(client, sessionManager, ref);
       await client.registerObject(_agent);
       _authority = DBusRemoteObject(
         client,

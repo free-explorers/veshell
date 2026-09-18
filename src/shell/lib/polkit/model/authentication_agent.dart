@@ -1,7 +1,9 @@
 import 'package:collection/collection.dart';
 import 'package:dbus/dbus.dart';
 import 'package:flutter/material.dart';
-import 'package:shell/main.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/monitor/provider/focused_monitor.dart';
+import 'package:shell/monitor/provider/navigator_key_for_view.dart';
 import 'package:shell/polkit/model/org.freedesktop.PolicyKit1.AuthenticationAgent.dart';
 import 'package:shell/polkit/model/polkit-agent-helper.dart';
 import 'package:shell/polkit/widget/polkit_authentication_dialog.dart';
@@ -12,6 +14,7 @@ class PolkitAuthenticationAgent
   PolkitAuthenticationAgent(
     DBusClient client,
     this.manager,
+    this.ref,
   )   : _authority = DBusRemoteObject(
           client,
           name: 'org.freedesktop.PolicyKit1',
@@ -22,6 +25,21 @@ class PolkitAuthenticationAgent
         );
   final DBusRemoteObject _authority;
   final SystemdSessionManager manager;
+  final Ref ref;
+
+  /// The navigator context of the focused monitor, where a trusted dialog
+  /// must be pushed. Null until a monitor view (and its navigator) exists.
+  BuildContext? _focusedNavigatorContext() {
+    final monitor = ref.read(focusedMonitorProvider);
+    if (monitor == null) {
+      return null;
+    }
+    return ref
+        .read(navigatorKeyForViewProvider(monitor.viewId))
+        .currentState
+        ?.overlay
+        ?.context;
+  }
 
   /// Implementation of org.freedesktop.PolicyKit1.AuthenticationAgent.BeginAuthentication()
   @override
@@ -49,11 +67,18 @@ class PolkitAuthenticationAgent
 
       switch (event) {
         case Event.request:
-          // Show password prompt dialog and collect response
-          final password = await showDialog<String?>(
-            context: globalVeshellKey.currentContext!,
-            builder: (context) => PolkitAuthenticationDialog(message),
-          );
+          // Show the prompt on the focused monitor's navigator. There is
+          // no app-wide root navigator: each monitor owns one MaterialApp.
+          final context = _focusedNavigatorContext();
+          if (context == null) {
+            debugPrint('No focused monitor to show the polkit dialog');
+          }
+          final password = context == null || !context.mounted
+              ? null
+              : await showDialog<String?>(
+                  context: context,
+                  builder: (context) => PolkitAuthenticationDialog(message),
+                );
 
           // Send response to Polkit agent helper
           await helper.respond(password ?? '');
