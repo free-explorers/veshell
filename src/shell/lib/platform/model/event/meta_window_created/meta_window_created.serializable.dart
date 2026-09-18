@@ -27,6 +27,8 @@ sealed class MetaWindowCreatedMessage
     String? title,
     String? windowClass,
     String? startupId,
+    @Default(false) bool isFixedSized,
+    @Default(false) bool isModal,
     @RectConverter() Rect? geometry,
   }) = _MetaWindowCreatedMessage;
 

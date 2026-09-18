@@ -46,6 +46,16 @@ sealed class MetaWindowPatchMessage
     String? value,
   }) = UpdateStartupId;
 
+  const factory MetaWindowPatchMessage.updateIsFixedSized({
+    required String id,
+    required bool value,
+  }) = UpdateIsFixedSized;
+
+  const factory MetaWindowPatchMessage.updateIsModal({
+    required String id,
+    required bool value,
+  }) = UpdateIsModal;
+
   const factory MetaWindowPatchMessage.updateDisplayMode({
     required String id,
     MetaWindowDisplayMode? value,

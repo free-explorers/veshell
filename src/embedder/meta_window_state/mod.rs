@@ -40,6 +40,11 @@ pub struct MetaWindowState {
     pub meta_popups: HashMap<String, MetaPopup>,
     pub meta_popup_id_per_surface_id: HashMap<u64, String>,
     pub meta_window_in_gaming_mode: Option<String>,
+    /// Transient parents discovered through `xdg_activation` (see
+    /// `State::request_activation`) for surfaces whose meta window does not
+    /// exist yet. Consumed in [`Self::new_meta_window_for_toplevel`] so the
+    /// relation is available before the window is mapped.
+    pub pending_activation_parent: HashMap<u64, String>,
 }
 
 impl MetaWindowState {
@@ -50,6 +55,7 @@ impl MetaWindowState {
             meta_popups: HashMap::new(),
             meta_popup_id_per_surface_id: HashMap::new(),
             meta_window_in_gaming_mode: None,
+            pending_activation_parent: HashMap::new(),
         }
     }
 
@@ -108,15 +114,28 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .or(surface_app_id)
             .or_else(|| get_binary_name_from_pid(pid));
 
-        let meta_window_parent = match parent_surface {
+        let surface_id = get_surface_id(surface.wl_surface());
+
+        // A parent discovered through `xdg_activation` before this toplevel
+        // had a meta window (the common case: the client activates the window
+        // it is about to map). It is only a fallback: an explicit
+        // `xdg_toplevel.set_parent` is a stronger, client-declared relation.
+        let activation_parent = self
+            .meta_window_state
+            .pending_activation_parent
+            .remove(&surface_id);
+
+        let xdg_parent = match parent_surface {
             Some(parent) => self
                 .meta_window_state
                 .meta_window_id_per_surface_id
-                .get(&get_surface_id(&parent)),
+                .get(&get_surface_id(&parent))
+                .cloned(),
 
             None => None,
         };
-        let surface_id = get_surface_id(surface.wl_surface());
+
+        let meta_window_parent = xdg_parent.or(activation_parent);
 
         let is_decorated = surface.with_cached_state(|state| {
             state
@@ -132,12 +151,14 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             surface_id: surface_id,
             app_id: app_id.clone(),
             pid,
-            parent: meta_window_parent.cloned(),
+            parent: meta_window_parent,
             title: title.clone(),
             mapped: false,
             display_mode: None,
             window_class: None,
             startup_id: None,
+            is_fixed_sized: false,
+            is_modal: modal,
             geometry,
             current_output: None,
             need_decoration: !is_decorated,
@@ -197,6 +218,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             display_mode: None,
             window_class: (!x11_surface.class().is_empty()).then(|| x11_surface.class()),
             startup_id: None,
+            is_fixed_sized: false,
+            is_modal: false,
             current_output: None,
             geometry: Some(x11_surface.geometry().into()),
             need_decoration: !x11_surface.is_decorated(),

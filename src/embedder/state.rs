@@ -46,12 +46,14 @@ use smithay::wayland::selection::wlr_data_control::{DataControlHandler, DataCont
 use smithay::wayland::selection::{SelectionHandler, SelectionSource, SelectionTarget};
 use smithay::wayland::shell::xdg;
 use smithay::wayland::shell::xdg::decoration::XdgDecorationState;
+use smithay::wayland::shell::xdg::dialog::XdgDialogState;
 use smithay::wayland::shell::xdg::{
     PopupSurface, SurfaceCachedState, ToplevelSurface, XdgPopupSurfaceData, XdgShellState,
     XdgToplevelSurfaceData,
 };
 use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::wayland::socket::ListeningSocketSource;
+use smithay::wayland::xdg_activation::XdgActivationState;
 use smithay::wayland::xwayland_shell::{self, XWAYLAND_SHELL_ROLE};
 use smithay::xwayland::{X11Surface, X11Wm};
 use tracing::{info, warn};
@@ -116,6 +118,8 @@ pub struct State<BackendData: Backend + 'static> {
     pub x11_surfaces: HashMap<u64, X11Surface>,
     pub x11_surface_per_wl_surface: HashMap<WlSurface, X11Surface>,
     pub x11_surface_per_x11_window: HashMap<X11Window, X11Surface>,
+    pub xdg_activation_state: XdgActivationState,
+    pub xdg_dialog_state: XdgDialogState,
     pub xdg_popups: HashMap<u64, PopupSurface>,
     pub xdg_shell_state: XdgShellState,
     pub xdg_toplevels: HashMap<u64, ToplevelSurface>,
@@ -294,6 +298,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 
         let xwayland_shell_state = xwayland_shell::XWaylandShellState::new::<Self>(&display_handle);
         let xdg_decoration_state = XdgDecorationState::new::<Self>(&display_handle);
+        let xdg_dialog_state = XdgDialogState::new::<Self>(&display_handle);
+        let xdg_activation_state = XdgActivationState::new::<Self>(&display_handle);
         let fractional_scale_manager_state =
             FractionalScaleManagerState::new::<Self>(&display_handle);
         let capture_state = crate::capture::CaptureState::new::<BackendData>(&loop_handle);
@@ -335,6 +341,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             subsurfaces: HashMap::new(),
             xdg_toplevels: HashMap::new(),
             xdg_popups: HashMap::new(),
+            xdg_dialog_state,
+            xdg_activation_state,
             meta_window_state: MetaWindowState::new(),
             x11_surfaces: HashMap::new(),
             x11_surface_per_x11_window: HashMap::new(),

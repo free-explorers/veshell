@@ -58,6 +58,14 @@ pub enum MetaWindowPatch {
         id: String,
         value: Option<String>,
     },
+    UpdateIsFixedSized {
+        id: String,
+        value: bool,
+    },
+    UpdateIsModal {
+        id: String,
+        value: bool,
+    },
     UpdateDisplayMode {
         id: String,
         value: Option<DisplayMode>,
@@ -101,6 +109,8 @@ pub struct MetaWindow {
     pub title: Option<String>,
     pub window_class: Option<String>,
     pub startup_id: Option<String>,
+    pub is_fixed_sized: bool,
+    pub is_modal: bool,
     pub geometry: Option<MyRectangle<i32, Logical>>,
     pub need_decoration: bool,
     pub current_output: Option<String>,
@@ -263,6 +273,22 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         return;
                     }
                     meta_window.startup_id = value.clone();
+                }
+            }
+            MetaWindowPatch::UpdateIsFixedSized { id, value } => {
+                if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
+                    if meta_window.is_fixed_sized == value {
+                        return;
+                    }
+                    meta_window.is_fixed_sized = value;
+                }
+            }
+            MetaWindowPatch::UpdateIsModal { id, value } => {
+                if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
+                    if meta_window.is_modal == value {
+                        return;
+                    }
+                    meta_window.is_modal = value;
                 }
             }
             MetaWindowPatch::UpdateGeometry { id, value } => {

@@ -48,6 +48,8 @@ class MetaWindowState extends _$MetaWindowState {
       title: message.title,
       windowClass: message.windowClass,
       startupId: message.startupId,
+      isFixedSized: message.isFixedSized,
+      isModal: message.isModal,
       geometry: message.geometry,
       needDecoration: message.needDecoration,
       gameModeActivated: message.gameModeActivated,
@@ -92,6 +94,10 @@ class MetaWindowState extends _$MetaWindowState {
         state = state.copyWith(windowClass: patch.value);
       case UpdateStartupId():
         state = state.copyWith(startupId: patch.value);
+      case UpdateIsFixedSized():
+        state = state.copyWith(isFixedSized: patch.value);
+      case UpdateIsModal():
+        state = state.copyWith(isModal: patch.value);
       case UpdateDisplayMode():
         state = state.copyWith(displayMode: patch.value);
       case UpdateMapped():

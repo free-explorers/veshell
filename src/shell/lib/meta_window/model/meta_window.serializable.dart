@@ -31,6 +31,8 @@ abstract class MetaWindow with _$MetaWindow {
     String? title,
     String? windowClass,
     String? startupId,
+    @Default(false) bool isFixedSized,
+    @Default(false) bool isModal,
     String? currentOutput,
     @RectConverter() Rect? geometry,
   }) = _MetaWindow;
