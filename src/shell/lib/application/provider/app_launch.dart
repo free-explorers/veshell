@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/model/launch_config.serializable.dart';
 import 'package:shell/application/provider/logs_for_pid.dart';
+import 'package:shell/meta_window/provider/process_info_state.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:uuid/uuid.dart';
@@ -26,8 +27,9 @@ part 'app_launch.g.dart';
 /// 1. [launchApplication] spawns `systemd-run --user --wait` and registers
 ///    `(trackedWindowId → unitName)`.
 /// 2. [windowForPid] resolves native window pids back to the placeholder via
-///    `/proc/<pid>/cgroup`, consulted by the matching engine as a last
-///    resort when ordinary app-id matching finds nothing.
+///    the compositor-reported cgroup (the pid table fed by `process_info`),
+///    consulted by the matching engine as a last resort when ordinary app-id
+///    matching finds nothing.
 /// 3. The association is dropped when the tracked service stops (`--wait`
 ///    makes the spawned process exit signal the end), or eagerly through
 ///    [forgetWindow] to prevent a removed placeholder from adopting windows
@@ -148,17 +150,18 @@ class AppLaunch extends _$AppLaunch {
     return process;
   }
 
-  /// Resolves a process back to the placeholder that launched it, reading
-  /// its unified cgroup membership from `/proc/<pid>/cgroup` and matching it
-  /// against the active launch units.
+  /// Resolves a process back to the placeholder that launched it by matching
+  /// its unified cgroup membership, reported by the compositor in the pid
+  /// table (`process_info`), against the active launch units.
   ///
   /// Returns null when the pid is unmapped, its process already exited
   /// (common for bootstrappers that hand windows over and exit), the window's
-  /// cgroup cannot be read, or the process migrated out of the launch cgroup
+  /// cgroup is unknown, or the process migrated out of the launch cgroup
   /// (e.g. applications re-homing into `app-*.scope`). Null simply means "no
   /// attribution available" — the caller keeps its ordinary matching result.
   WindowId? windowForPid(int pid) {
-    final cgroupPath = _cgroupPathForPid(pid);
+    final cgroupPath =
+        ref.read(processInfoStateProvider.notifier).forPid(pid)?.cgroup;
     if (cgroupPath == null) return null;
 
     for (final entry in _trackedLaunches.entries) {
@@ -169,29 +172,10 @@ class AppLaunch extends _$AppLaunch {
     return null;
   }
 
-  /// Unified cgroup path of [pid], exposed for launch-attribution
-  /// diagnostics.
-  String? cgroupPathForPid(int pid) => _cgroupPathForPid(pid);
-
   /// Removes the launch association of a destroyed placeholder so it can no
   /// longer adopt windows (the application itself keeps running).
   void forgetWindow(WindowId windowId) {
     _trackedLaunches.remove(windowId);
-  }
-
-  /// Unified cgroup path of [pid], or null when unreadable: used for
-  /// attribution diagnostics ('Matching' log shows the raw path, which also
-  /// exposes applications that migrated into `app-*.scope`).
-  String? _cgroupPathForPid(int pid) {
-    try {
-      for (final line in File('/proc/$pid/cgroup').readAsLinesSync()) {
-        final separator = line.indexOf('::');
-        if (separator != -1) return line.substring(separator + 2);
-      }
-    } on FileSystemException {
-      return null;
-    }
-    return null;
   }
 
   /// Whether a systemd user manager is reachable, detected through its

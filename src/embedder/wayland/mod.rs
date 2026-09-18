@@ -248,6 +248,14 @@ pub mod wayland {
                     true,
                 );
 
+                let became_mapped = mapped && !meta_window.mapped;
+                if became_mapped {
+                    // The process may have re-homed into its final cgroup by
+                    // the time it presents a buffer; refresh the pid table
+                    // before announcing `mapped`, so matching sees it.
+                    self.emit_process_info(meta_window.pid);
+                }
+
                 self.patch_meta_window(
                     MetaWindowPatch::UpdateMapped {
                         id: meta_window.id,

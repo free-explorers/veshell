@@ -33,6 +33,7 @@ use crate::{
 pub mod meta_popup;
 pub mod meta_resize_edge;
 pub mod meta_window;
+pub mod process_info;
 
 pub struct MetaWindowState {
     pub meta_windows: HashMap<String, MetaWindow>,
@@ -72,6 +73,19 @@ impl MetaWindowState {
 }
 
 impl<BackendData: Backend + 'static> State<BackendData> {
+    /// Sends the process-level facts (`cgroup`, Flatpak/Snap id, binary name)
+    /// of `pid` to the shell.
+    ///
+    /// Emitted when a window first reports a pid, when the pid changes, and
+    /// again when the window is mapped, so the shell's pid table follows the
+    /// process as it re-homes into its final cgroup.
+    pub fn emit_process_info(&mut self, pid: i32) {
+        let info = process_info::ProcessInfo::for_pid(pid);
+        tracing::debug!(target: "veshell::process_info", ?info, "emitting process info");
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method("process_info", Some(Box::new(json!(info))), None);
+    }
+
     pub fn new_meta_window_for_toplevel(&mut self, surface: ToplevelSurface) -> MetaWindow {
         let (title, surface_app_id, parent_surface, modal) =
             with_states(surface.wl_surface(), |surface_data| {
@@ -146,6 +160,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 .unwrap_or(true)
         });
 
+        self.emit_process_info(pid);
+
         let meta_window = self.create_meta_window(MetaWindow {
             id: Uuid::new_v4().hyphenated().to_string(),
             surface_id: surface_id,
@@ -189,6 +205,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             self.meta_window_state
                 .meta_window_id_per_surface_id
                 .get(&parent_id)
+                .cloned()
         });
 
         let pid = x11_surface
@@ -203,12 +220,14 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 get_binary_name_from_pid(pid)
             });
 
+        self.emit_process_info(pid);
+
         let meta_window = self.create_meta_window(MetaWindow {
             id: uuid::Uuid::new_v4().to_string(),
             surface_id: surface_id,
             app_id: app_id.clone(),
             pid,
-            parent: meta_window_parent.cloned(),
+            parent: meta_window_parent,
             title: if !x11_surface.title().is_empty() {
                 Some(x11_surface.title())
             } else {
@@ -245,7 +264,7 @@ pub fn determine_desktop_file_app_id_from_pid(pid: i32) -> Option<String> {
     None
 }
 
-fn get_flatpack_app_id_from_pid(pid: i32) -> (bool, Option<String>) {
+pub(crate) fn get_flatpack_app_id_from_pid(pid: i32) -> (bool, Option<String>) {
     if pid == 0 {
         return (false, None);
     }
@@ -274,7 +293,7 @@ fn get_flatpack_app_id_from_pid(pid: i32) -> (bool, Option<String>) {
     (true, app_id)
 }
 
-fn get_snap_app_id_from_pid(pid: i32) -> (bool, Option<String>) {
+pub(crate) fn get_snap_app_id_from_pid(pid: i32) -> (bool, Option<String>) {
     if pid == 0 {
         return (false, None);
     }
@@ -300,7 +319,7 @@ fn get_snap_app_id_from_pid(pid: i32) -> (bool, Option<String>) {
     (true, Some(security_label_contents.replace('.', "_")))
 }
 
-fn get_binary_name_from_pid(pid: i32) -> Option<String> {
+pub(crate) fn get_binary_name_from_pid(pid: i32) -> Option<String> {
     if pid == 0 {
         return None;
     }

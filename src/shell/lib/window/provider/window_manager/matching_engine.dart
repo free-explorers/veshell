@@ -6,6 +6,7 @@ import 'package:shell/dev_tools/provider/matching_logs.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/meta_window_window_map.dart';
+import 'package:shell/meta_window/provider/process_info_state.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
 import 'package:shell/window/model/window_base.dart';
@@ -376,7 +377,7 @@ class MatchingEngine extends _$MatchingEngine {
     required List<WindowId> excludedWindowIds,
   }) {
     final appLaunch = ref.read(appLaunchProvider.notifier);
-    final cgroupPath = appLaunch.cgroupPathForPid(metaWindow.pid);
+    final cgroupPath = _cgroupFor(metaWindow);
     final trackedWindowId = appLaunch.windowForPid(metaWindow.pid);
     if (trackedWindowId == null) {
       matchingLog.info(
@@ -527,10 +528,14 @@ class MatchingEngine extends _$MatchingEngine {
   }
 
   /// Unified cgroup path of the process behind a native window, or null when
-  /// unreadable. Exposed as a single call site so diagnostics and sibling
-  /// recovery report the same value.
-  String? _cgroupFor(MetaWindow metaWindow) =>
-      ref.read(appLaunchProvider.notifier).cgroupPathForPid(metaWindow.pid);
+  /// unknown. Comes from the compositor-provided process facts (refreshed at
+  /// creation, on pid change and on map), which keeps the value reachable
+  /// after the process exits — unlike a `/proc` read at match time. Exposed as
+  /// a single call site so diagnostics and sibling recovery share it.
+  String? _cgroupFor(MetaWindow metaWindow) {
+    final processInfo = ref.read(processInfoStateProvider.notifier);
+    return processInfo.forPid(metaWindow.pid)?.cgroup;
+  }
 
   /// When provenance disagrees with the native window's *own* identity.
   ///

@@ -16,6 +16,7 @@ import 'package:shell/platform/model/event/meta_window_removed/meta_window_remov
 import 'package:shell/platform/model/event/monitor_layout_changed/monitor_layout_changed.serializable.dart';
 import 'package:shell/platform/model/event/new_subsurface/new_subsurface.serializable.dart';
 import 'package:shell/platform/model/event/new_surface/new_surface.serializable.dart';
+import 'package:shell/platform/model/event/process_info/process_info.serializable.dart';
 import 'package:shell/capture/model/screen_cast_active/screen_cast_active.serializable.dart';
 import 'package:shell/capture/model/screen_cast_consent/screen_cast_consent.serializable.dart';
 import 'package:shell/capture/model/screenshot_prompt/screenshot_prompt.serializable.dart';
@@ -67,6 +68,14 @@ sealed class PlatformEvent with _$PlatformEvent implements PlatformInteraction {
     required String method,
     required MetaWindowRemovedMessage message,
   }) = MetaWindowRemovedEvent;
+
+  /// Process Info Event
+  /// Sent when the compositor learns or refreshes the process facts of a pid
+  /// (cgroup, Flatpak/Snap id, binary name).
+  const factory PlatformEvent.processInfo({
+    required String method,
+    required ProcessInfoMessage message,
+  }) = ProcessInfoEvent;
 
   /// New MetaPopup Event
   /// This event is sent when the a client creates a new meta popup.

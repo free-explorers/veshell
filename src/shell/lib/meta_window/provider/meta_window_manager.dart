@@ -5,6 +5,7 @@ import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_popup_state.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/meta_window_window_map.dart';
+import 'package:shell/meta_window/provider/process_info_state.dart';
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
@@ -36,6 +37,9 @@ class MetaWindowManager extends _$MetaWindowManager {
       }
       if (next case final MetaWindowRemovedEvent event) {
         onMetaWindowRemoved(event.message.id);
+      }
+      if (next case final ProcessInfoEvent event) {
+        ref.read(processInfoStateProvider.notifier).set(event.message);
       }
       if (next case final MetaPopupCreatedEvent event) {
         onNewMetaPopup(event);

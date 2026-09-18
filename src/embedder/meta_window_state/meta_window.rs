@@ -361,11 +361,16 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 }
             }
             MetaWindowPatch::UpdatePid { id, value } => {
+                let mut changed = false;
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
-                    if meta_window.pid == value.clone() {
+                    if meta_window.pid == value {
                         return;
                     }
-                    meta_window.pid = value.clone();
+                    meta_window.pid = value;
+                    changed = true;
+                }
+                if changed {
+                    self.emit_process_info(value);
                 }
             }
             MetaWindowPatch::UpdateNeedDecoration { id, value } => {
