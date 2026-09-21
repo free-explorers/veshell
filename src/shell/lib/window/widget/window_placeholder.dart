@@ -10,6 +10,7 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/application/widget/logs_viewer.dart';
+import 'package:shell/platform/provider/platform_event_recorder.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 
@@ -112,6 +113,17 @@ class WindowPlaceholder extends HookConsumerWidget {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
+                                IconButton(
+                                  tooltip:
+                                      'Launch and record all platform events',
+                                  onPressed: () => ref
+                                      .read(
+                                        platformEventRecorderProvider.notifier,
+                                      )
+                                      .recordLaunch(window.windowId),
+                                  icon: const Icon(MdiIcons.bug),
+                                ),
+                                const SizedBox(width: 8),
                                 DisplayModeRow(
                                   selectedMode: window.displayMode,
                                   onSelectionChanged: (mode) => ref

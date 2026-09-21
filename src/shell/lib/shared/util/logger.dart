@@ -50,6 +50,7 @@ void configureLogs() {
 
     loggerFunc(
       '[${record.loggerName}] ${record.message}',
+      error: record.error,
       stackTrace: record.stackTrace,
     );
   });
