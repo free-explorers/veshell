@@ -11,6 +11,7 @@ import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/widget/window.dart';
+import 'package:shell/window/widget/window_dialogs.dart';
 import 'package:shell/window/widget/window_placeholder.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/current_workspace_id.dart';
@@ -55,6 +56,15 @@ class PersistentWindowTileable extends Tileable {
       return null;
     }, [isSelected]);
 
+    final dialogMetaWindowIds = ref
+        .watch(dialogSetForWindowProvider(windowId))
+        .map(
+          (dialogWindowId) =>
+              ref.read(dialogWindowStateProvider(dialogWindowId)).metaWindowId,
+        )
+        .toList();
+    final metaWindowId = window.metaWindowId;
+
     return ClipRect(
       child: Listener(
         onPointerDown: (event) {
@@ -73,33 +83,33 @@ class PersistentWindowTileable extends Tileable {
           },
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
-            child: window.metaWindowId != null
+            child: metaWindowId != null
                 ? WindowWidget(
-                    metaWindowId: window.metaWindowId!,
+                    metaWindowId: metaWindowId,
                     focusNode: primaryFocusNode,
                     displayMode: window.displayMode,
-                    dialogMetaWindowList: ref
-                        .watch(dialogSetForWindowProvider(window.windowId))
-                        .map((element) {
-                          return ref
-                              .read(dialogWindowStateProvider(element))
-                              .metaWindowId;
-                        })
-                        .toList(),
+                    dialogMetaWindowList: dialogMetaWindowIds,
                   )
-                : WindowPlaceholder(
-                    isSelected: isSelected,
-                    focusNode: primaryFocusNode,
-                    window: window,
-                    onTap: () {
-                      primaryFocusNode.requestFocus();
-                      ref
-                          .read(
-                            persistentWindowStateProvider(windowId).notifier,
-                          )
-                          .launchSelf();
-                    },
-                  ),
+                : dialogMetaWindowIds.isNotEmpty
+                    // A tile whose only windows are popups still renders them,
+                    // over an empty background, instead of hiding them behind
+                    // its placeholder.
+                    ? WindowDialogs(metaWindowIds: dialogMetaWindowIds)
+                    : WindowPlaceholder(
+                        isSelected: isSelected,
+                        focusNode: primaryFocusNode,
+                        window: window,
+                        onTap: () {
+                          primaryFocusNode.requestFocus();
+                          ref
+                              .read(
+                                persistentWindowStateProvider(
+                                  windowId,
+                                ).notifier,
+                              )
+                              .launchSelf();
+                        },
+                      ),
           ),
         ),
       ),

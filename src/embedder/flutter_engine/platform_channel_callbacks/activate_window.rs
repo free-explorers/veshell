@@ -8,8 +8,9 @@ use crate::backend::Backend;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
 
-use crate::focus::KeyboardFocusTarget;
+use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
 use crate::state::State;
+use crate::wayland::wayland::get_surface_id;
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -33,6 +34,18 @@ pub fn activate_window<BackendData: Backend + 'static>(
     let serial = SERIAL_COUNTER.next_serial();
 
     if pointer.is_grabbed() {
+        result.success(None);
+        return;
+    }
+
+    // A press that landed on one of the window's own popups must not
+    // re-activate/raise the parent. Raising the parent puts it above its
+    // popup, so the popup's client sees the press as "outside" itself and
+    // dismisses the menu on mouse-down instead of activating the item on
+    // mouse-up. A window is already active whenever one of its popups is
+    // shown, so the press is inert for the parent.
+    if payload.activate && pointer_over_popup(data) {
+        tracing::info!("activate_window: ignored, pointer is over a popup");
         result.success(None);
         return;
     }
@@ -97,6 +110,7 @@ pub fn activate_window<BackendData: Backend + 'static>(
             x11_surface.set_activated(payload.activate).unwrap();
 
             if payload.activate && !x11_surface.is_override_redirect() {
+                data.last_active_x11_surface = Some(x11_surface.clone());
                 let _ = data
                     .xwayland_state
                     .as_mut()
@@ -128,5 +142,24 @@ pub fn activate_window<BackendData: Backend + 'static>(
             );
             return;
         }
+    }
+}
+
+/// Whether the seat pointer is currently focused on a popup: an X11
+/// override-redirect window or a Wayland xdg-popup.
+///
+/// `PointerFocusTarget::from(&WlSurface)` always yields the `WlSurface`
+/// variant, even for X11-backed surfaces, so resolve the wl_surface against
+/// the X11 associations before falling back to the xdg-popup list.
+fn pointer_over_popup<BackendData: Backend + 'static>(data: &State<BackendData>) -> bool {
+    match data.pointer_focus.as_ref().map(|(target, _)| target) {
+        Some(PointerFocusTarget::X11Surface(surface)) => surface.is_override_redirect(),
+        Some(PointerFocusTarget::WlSurface(surface)) => {
+            if let Some(x11_surface) = data.x11_surface_per_wl_surface.get(surface) {
+                return x11_surface.is_override_redirect();
+            }
+            data.xdg_popups.contains_key(&get_surface_id(surface))
+        }
+        None => false,
     }
 }

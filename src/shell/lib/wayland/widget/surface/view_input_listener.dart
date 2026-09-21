@@ -128,6 +128,13 @@ class ViewInputListener extends HookConsumerWidget {
     Offset globalOffset,
   ) async {
     if (event.kind == PointerDeviceKind.mouse) {
+      // Assert the seat pointer focus on the shell's hit-tested surface before
+      // dispatching the button. Hover already keeps it current in the common
+      // case (a no-op here); this covers surfaces that appear under a
+      // stationary cursor, whose `MouseRegion.onEnter` may not have fired yet.
+      ref.read(pointerFocusManagerProvider.notifier).enterSurface(
+            PointerFocus(surfaceId: surfaceId, globalOffset: globalOffset),
+          );
       await _sendMouseButtonsToPlatform(ref, event.buttons);
       ref.read(pointerFocusManagerProvider.notifier).startPotentialDrag();
     } else if (event.kind == PointerDeviceKind.touch) {

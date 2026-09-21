@@ -9,7 +9,6 @@ pub fn pointer_exit<BackendData: Backend + 'static>(
     data: &mut State<BackendData>,
 ) {
     data.surface_id_under_cursor = None;
-
-    data.pointer_focus = None;
+    data.clear_pointer_focus();
     result.success(None);
 }
