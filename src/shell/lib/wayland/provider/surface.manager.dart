@@ -85,14 +85,6 @@ class SurfaceManager extends _$SurfaceManager {
       null => null,
     };
 
-    try {
-      ref.read(wlSurfaceStateProvider(message.surfaceId));
-    } catch (e) {
-      // ignore: avoid_print
-      print(e);
-      return;
-    }
-
     ref.read(wlSurfaceStateProvider(message.surfaceId).notifier).commit(
           role: role,
           textureId: message.textureId,

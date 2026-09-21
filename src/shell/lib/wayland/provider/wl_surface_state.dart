@@ -15,7 +15,10 @@ class WlSurfaceState extends _$WlSurfaceState {
 
   @override
   WlSurface build(SurfaceId surfaceId) {
-    throw Exception('WlSurface $surfaceId not yet initialized');
+    // The compositor commits some surfaces the shell never receives a
+    // `new_surface` for (e.g. the cursor). Return a valid empty state instead
+    // of throwing, so a stray read can never poison this provider.
+    return _defaultSurface();
   }
 
   void initialize() {
@@ -24,16 +27,18 @@ class WlSurfaceState extends _$WlSurfaceState {
       print('disposing WlSurfaceStateProvider $surfaceId');
     });
 
-    state = WlSurface(
-      surfaceId: surfaceId,
-      role: null,
-      texture: null,
-      scale: 1,
-      subsurfacesBelow: IList(),
-      subsurfacesAbove: IList(),
-      inputRegion: Rect.zero,
-    );
+    state = _defaultSurface();
   }
+
+  WlSurface _defaultSurface() => WlSurface(
+        surfaceId: surfaceId,
+        role: null,
+        texture: null,
+        scale: 1,
+        subsurfacesBelow: IList(),
+        subsurfacesAbove: IList(),
+        inputRegion: Rect.zero,
+      );
 
   void commit({
     required SurfaceRole? role,
