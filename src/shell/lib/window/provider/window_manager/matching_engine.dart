@@ -42,7 +42,6 @@ part 'matching_engine.g.dart';
 /// intentionally not logged to keep the baseline signal-free.
 @riverpod
 class MatchingEngine extends _$MatchingEngine {
-  final ISet<MetaWindowId> _surfaceToMatchSet = ISet<MetaWindowId>();
   @override
   IMap<MetaWindowId, WindowId> build() {
     return IMap();
@@ -65,176 +64,6 @@ class MatchingEngine extends _$MatchingEngine {
           .getMatchingInfo(),
     DialogWindowId() => throw Exception("Dialog don't have matching infos"),
   };
-
-  /// Routine to match surfaces to windows.
-  /*  void checkMatching() {
-    if (_surfaceToMatchSet.isEmpty) {
-      return;
-    }
-
-    // Purge all surfaces that have been matched for too long.
-    for (final surfaceId in _surfaceToMatchSet) {
-      final windowId = ref.read(surfaceWindowMapProvider).get(surfaceId);
-      if (windowId != null) {
-        final matchedAtTime = _getWindowMatchingInfo(windowId).matchedAtTime!;
-        if (DateTime.now().difference(matchedAtTime).inMilliseconds >
-            MAX_WINDOW_REASSOCIATION_TIME_MS) {
-          ref.read(matchingLogsProvider.notifier).print(
-                'Remove $surfaceId, it has been matched for suffisent time',
-              );
-          removeSurface(surfaceId);
-        }
-      }
-    }
-
-    // Filter the list of windows to find matching candidates
-    // We only consider Ephemeral or Persistent Windows
-    // that have no surfaceId or has been matched recently enough.
-    final candidateWindowSet =
-        ref.read(windowManagerProvider).where((windowId) {
-      if (windowId is DialogWindowId) return false;
-
-      final windowState = _getWindowState(windowId);
-      final matchingInfo = _getWindowMatchingInfo(windowId);
-
-      return windowState.surfaceId == null ||
-          DateTime.now()
-                  .difference(matchingInfo.matchedAtTime!)
-                  .inMilliseconds <
-              MAX_WINDOW_REASSOCIATION_TIME_MS;
-    });
-
-    // group surfaceToMatches by appId
-    final surfacesToMatch = <String, List<SurfaceId>>{};
-    for (final surfaceId in _surfaceToMatchSet) {
-      final appId = ref.read(windowPropertiesStateProvider(surfaceId)).appId;
-      surfacesToMatch[appId] ??= [];
-      surfacesToMatch[appId]!.add(surfaceId);
-    }
-
-    // iterate over entries
-    for (final MapEntry(key: appId, value: surfaceIdList)
-        in surfacesToMatch.entries) {
-      final candidateWindowSetForAppId = candidateWindowSet.where((windowId) {
-        final windowState = _getWindowState(windowId);
-        return windowState.properties.appId == appId;
-      });
-      ref.read(matchingLogsProvider.notifier).print(
-            'start assignating surface of $appId, surfaceIdList $surfaceIdList, windowCandidates $candidateWindowSetForAppId',
-          );
-
-      final costMatrix = <List<int>>[];
-      for (final surfaceId in surfaceIdList) {
-        final surfaceWindowProperties =
-            ref.read(windowPropertiesStateProvider(surfaceId));
-        final surfaceMatchInfo =
-            MatchingInfo.fromWindowProperties(surfaceWindowProperties);
-        final costs = candidateWindowSetForAppId.map((windowId) {
-          return windowMatchingCost(
-            surfaceMatchInfo,
-            _getWindowMatchingInfo(windowId),
-            surfaceId,
-            _getWindowState(windowId),
-          );
-        }).toList();
-
-        // Add N items representing potential new windows at the end.
-        // In case there are no existing MsWindows, we want to be able to create new ones
-        for (var i = 0; i < surfaceIdList.length; i++) {
-          costs.add(INF_COST - 1);
-        }
-        costMatrix.add(costs);
-      }
-
-      ref.read(matchingLogsProvider.notifier).print('CostMatrix $costMatrix');
-
-      final WeightedMatchingResult(cost: _, assignments: assignments) =
-          weightedMatching(costMatrix);
-
-      ref.read(matchingLogsProvider.notifier).print('Assignments $assignments');
-
-      // The meta window to be assigned to each MsWindow
-      final windowAssignments =
-          List<SurfaceId?>.filled(candidateWindowSet.length, null);
-      for (var i = 0; i < assignments.length; i++) {
-        final idx = assignments[i];
-        if (idx < candidateWindowSetForAppId.length) {
-          // Found a good match
-          windowAssignments[idx] = surfaceIdList[i];
-        }
-      }
-
-      for (var i = 0; i < candidateWindowSet.length; i++) {
-        final windowId = candidateWindowSet.elementAt(i);
-        final windowState = _getWindowState(windowId);
-        if (windowState.surfaceId != null &&
-            windowState.surfaceId != windowAssignments[i]) {
-          // The contents of this PersistentWindow will be replaced.
-          // This can happen if an application starts and opens multiple windows at the same time.
-          // Initially, these windows might be associated incorrectly, but once the titles get updated,
-          // we can associate them more accurately. This might necessitate swapping some already associated PersistentWindows.
-          // For all PersistentWindows which will need to be changed, we first unassign their surfaces.
-          ref
-              .read(matchingLogsProvider.notifier)
-              .print('UnsetSurface of $windowId');
-          switch (windowId) {
-            case PersistentWindowId():
-              ref
-                  .read(persistentWindowStateProvider(windowId).notifier)
-                  .removeSurface(windowState.surfaceId!);
-            case EphemeralWindowId():
-              ref
-                  .read(ephemeralWindowStateProvider(windowId).notifier)
-                  .removeSurface(windowState.surfaceId!);
-            case _: // ignore: no_default_cases
-          }
-        }
-      }
-
-      for (var i = 0; i < assignments.length; i++) {
-        final idx = assignments[i];
-        if (idx < candidateWindowSetForAppId.length) {
-          // Found a good match
-          final windowId = candidateWindowSetForAppId.elementAt(idx);
-          final windowState = _getWindowState(windowId);
-          // If the window still have a surface associated, that means the persistent window was already associated correctly
-          // and we can skip associating it again.
-          if (windowState.surfaceId == null) {
-            ref.read(matchingLogsProvider.notifier).print(
-                  'Associating ${surfaceIdList[i]} with $windowId',
-                );
-            // Associate the surface with the persistent window.
-            // This promise is designed to run asynchronously and will cancel itself automatically if necessary.
-            switch (windowId) {
-              case PersistentWindowId():
-                ref
-                    .read(persistentWindowStateProvider(windowId).notifier)
-                    .addSurface(surfaceIdList[i]);
-              case EphemeralWindowId():
-                ref
-                    .read(ephemeralWindowStateProvider(windowId).notifier)
-                    .addSurface(surfaceIdList[i]);
-              case _: // ignore: no_default_cases
-            }
-          } else {
-            ref.read(matchingLogsProvider.notifier).print(
-                  'Skip associating ${surfaceIdList[i]} with $windowId as it is already associated with ${windowState.surfaceId}',
-                );
-          }
-        } else {
-          ref.read(matchingLogsProvider.notifier).print(
-                'Creating a PersistentWindow for ${surfaceIdList[i]}',
-              );
-          // Did not find a good match, create a new persistent window instead
-          ref
-              .read(windowManagerProvider.notifier)
-              .createPersistentWindowForSurface(
-                surfaceId: surfaceIdList[i],
-              );
-        }
-      }
-    }
-  } */
 
   /// Picks the persistent window that should own a newly mapped native
   /// window.
@@ -274,9 +103,8 @@ class MatchingEngine extends _$MatchingEngine {
   ///   to a *different* entry than `steam` → provenance rejected → new
   ///   persistent window, exactly like an untracked launch.
   /// - Code OSS restores two windows at once and only one placeholder
-  ///   matches by app id: the loader-side dispatch of
-  ///   [WindowProviderMixin._dispatchExtraMetaWindows] (not this method)
-  ///   sends the overflow to the other placeholder.
+  ///   matches by app id: the tile-side redistributor (not this method) sends
+  ///   the overflow to the other placeholder.
   ///
   /// Returns the destination, or `(null, null)` when the caller should
   /// create a new window for the meta window. `excludedWindowIds` removes
@@ -335,19 +163,173 @@ class MatchingEngine extends _$MatchingEngine {
       );
       return (null, null);
     }
-    final costs = candidateWindowSet.map((windowId) {
-      return windowMatchingCost(
-        metaWindowMatchInfo,
-        _getWindowMatchingInfo(windowId),
-        _getWindowState(windowId),
-      );
+    final candidates = candidateWindowSet.toList();
+    final costs = [
+      for (final windowId in candidates)
+        windowMatchingCost(
+          metaWindowMatchInfo,
+          _getWindowMatchingInfo(windowId),
+          _getWindowState(windowId),
+        ),
+    ];
+
+    // Pick the least cost. The burst mapping order is not stable, so ties are
+    // broken on a fixed key instead of relying on iteration order: two
+    // candidates only tie when every signal is identical, and the choice must
+    // still be reproducible.
+    var bestIndex = 0;
+    for (var i = 1; i < candidates.length; i++) {
+      final betterCost = costs[i] < costs[bestIndex];
+      final tiedButStable =
+          costs[i] == costs[bestIndex] &&
+          _stableWindowKey(candidates[i]).compareTo(
+                _stableWindowKey(candidates[bestIndex]),
+              ) <
+              0;
+      if (betterCost || tiedButStable) {
+        bestIndex = i;
+      }
+    }
+
+    return (candidates[bestIndex], costs[bestIndex]);
+  }
+
+  /// Deterministic ordering key used only to break exact ties between
+  /// candidates. It never overrides a better match.
+  String _stableWindowKey(WindowId windowId) => switch (windowId) {
+        PersistentWindowId() => 'p:${windowId.uuid}',
+        EphemeralWindowId() => 'e:${windowId.uuid}',
+        DialogWindowId() => 'd:${windowId.uuid}',
+      };
+
+  /// Best sibling for [metaWindowId] by **ordinary** app-id matching only.
+  ///
+  /// Deliberately excludes provenance and process-sibling recovery, which are
+  /// resolved once at mapping time. Recovery is symmetric (two same-process
+  /// windows point at each other), so letting it drive the redistribution move
+  /// decisions would make them oscillate; the redistribution compares identity
+  /// cost only, and a strictly lower cost wins.
+  (WindowId?, int?) findBestOrdinarySiblingFor(
+    MetaWindowId metaWindowId, {
+    List<WindowId> excludedWindowIds = const [],
+  }) {
+    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+    final metaWindowMatchInfo = MatchingInfo.fromMetaWindow(metaWindow);
+    final candidates = ref
+        .read(windowsAvailableForMatchingProvider)
+        .where((windowId) {
+      if (excludedWindowIds.contains(windowId)) return false;
+      if (windowId is DialogWindowId) return false;
+      return _getWindowState(windowId).properties.appId ==
+          metaWindowMatchInfo.appId;
     }).toList();
+    if (candidates.isEmpty) {
+      return (null, null);
+    }
+    final costs = [
+      for (final windowId in candidates)
+        windowMatchingCost(
+          metaWindowMatchInfo,
+          _getWindowMatchingInfo(windowId),
+          _getWindowState(windowId),
+        ),
+    ];
+    var bestIndex = 0;
+    for (var i = 1; i < candidates.length; i++) {
+      final better = costs[i] < costs[bestIndex];
+      final tiedButStable =
+          costs[i] == costs[bestIndex] &&
+          _stableWindowKey(candidates[i]).compareTo(
+                _stableWindowKey(candidates[bestIndex]),
+              ) <
+              0;
+      if (better || tiedButStable) {
+        bestIndex = i;
+      }
+    }
+    return (candidates[bestIndex], costs[bestIndex]);
+  }
 
-    // Find the index of the minimum cost
-    final minCostIndex = costs.indexOf(costs.reduce((a, b) => a < b ? a : b));
+  /// The first same-app tile that owns no native window, in the stable
+  /// candidate order. Used to spread leftover windows over empty placeholders
+  /// instead of turning them into dialogs.
+  WindowId? findEmptySiblingForApp(
+    String appId, {
+    List<WindowId> excludedWindowIds = const [],
+  }) {
+    if (appId.isEmpty) {
+      return null;
+    }
+    for (final windowId in ref.read(windowsAvailableForMatchingProvider)) {
+      if (excludedWindowIds.contains(windowId)) continue;
+      if (windowId is DialogWindowId) continue;
+      final state = _getWindowState(windowId);
+      if (state.properties.appId != appId) continue;
+      if (state.metaWindowId == null) {
+        return windowId;
+      }
+    }
+    return null;
+  }
 
-    // Return the candidate window with the least cost
-    return (candidateWindowSet.elementAt(minCostIndex), costs[minCostIndex]);
+  /// Resolves the top-level tile that ultimately owns [windowId].
+  ///
+  /// Dialogs can chain (a dialog opened from a dialog), but a native window
+  /// must always attach to the tile at the root of the chain: a dialog is
+  /// never nested under another dialog.
+  WindowId rootTileFor(WindowId windowId) {
+    var current = windowId;
+    for (var guard = 0; guard < 32 && current is DialogWindowId; guard++) {
+      try {
+        current = ref.read(dialogWindowStateProvider(current)).parentWindowId;
+      } on Object {
+        break;
+      }
+    }
+    return current;
+  }
+
+  /// The tile that should own a dialog-like window, using the explicit
+  /// relations only: client parent, activation "opened from", tracked-launch
+  /// provenance, then process sibling. Returns null when nothing authoritative
+  /// is known, so a weak hint (a lone fixed size) never turns a regular window
+  /// into a dialog.
+  WindowId? dialogOwnerFromRelation(MetaWindowId metaWindowId) {
+    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+    final parentId = metaWindow.parent;
+    if (parentId != null) {
+      final parentTile = ref.read(metaWindowWindowMapProvider).get(parentId);
+      if (parentTile != null) {
+        return rootTileFor(parentTile);
+      }
+    }
+    final activatedById = metaWindow.activatedBy;
+    if (activatedById != null) {
+      final activatedByTile = ref
+          .read(metaWindowWindowMapProvider)
+          .get(activatedById);
+      if (activatedByTile != null) {
+        return rootTileFor(activatedByTile);
+      }
+    }
+    final tracked = _trackedLaunchOwnerFor(
+      metaWindow,
+      excludedWindowIds: const [],
+    );
+    if (tracked != null) {
+      return tracked;
+    }
+    return _sameProcessSiblingFor(metaWindow, excludedWindowIds: const []);
+  }
+
+  /// The tile that should own a dialog-like window, falling back to the
+  /// ordinary best candidate when no explicit relation exists.
+  WindowId? resolveDialogOwnerIfAny(MetaWindowId metaWindowId) {
+    final relation = dialogOwnerFromRelation(metaWindowId);
+    if (relation != null) {
+      return relation;
+    }
+    return findBestWindowCandidateForMetaWindow(metaWindowId).$1;
   }
 
   /// Returns the persistent window owning the tracked launch of the given
@@ -613,11 +595,10 @@ class MatchingEngine extends _$MatchingEngine {
   }
 
   void matchMetaWindowToBestWindowCandidate(MetaWindowId metaWindowId) {
-    final (leastCostCandidate, cost) = findBestWindowCandidateForMetaWindow(
+    final (leastCostCandidate, _) = findBestWindowCandidateForMetaWindow(
       metaWindowId,
     );
 
-    print(leastCostCandidate);
     switch (leastCostCandidate) {
       case PersistentWindowId():
         ref

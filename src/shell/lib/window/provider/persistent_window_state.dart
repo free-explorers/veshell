@@ -10,6 +10,7 @@ import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/shared/provider/persistent_storage_state.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
@@ -21,6 +22,10 @@ import 'package:shell/workspace/provider/workspace_state.dart';
 
 part 'persistent_window_state.g.dart';
 
+/// Storage key under which a persistent tile's state is persisted.
+String persistentWindowStorageKey(PersistentWindowId windowId) =>
+    'persistent_window_${windowId.uuid}';
+
 /// A tile that survives compositor restarts.
 ///
 /// Identity & persistence rules that make it distinct from native windows:
@@ -28,7 +33,10 @@ part 'persistent_window_state.g.dart';
 /// - `properties.appId` is the **desktop entry id** recorded at creation and
 ///   never overwritten by whatever the currently displayed native window
 ///   reports — helper surfaces ("steamwebhelper", dialogs) would otherwise
-///   corrupt the tile's identity and make relaunching impossible.
+///   corrupt the tile's identity and make relaunching impossible. The other
+///   identity fields (title, class, startup id, pid) follow the displayed
+///   window, so a tile remembers the tab it last showed and a relaunch matches
+///   it again even after the window closed.
 /// - Display-mode preferences persist like `displayMode` and are re-applied
 ///   to whatever native window becomes displayed.
 /// - `build` restores without a native window: `isWaitingForSurface`,
@@ -37,7 +45,7 @@ part 'persistent_window_state.g.dart';
 @JsonPersist()
 class PersistentWindowState extends _$PersistentWindowState
     with WindowProviderMixin<PersistentWindow> {
-  String get _persistKey => 'persistent_window_${windowId.uuid}';
+  String get _persistKey => persistentWindowStorageKey(windowId);
   @override
   PersistentWindow build(PersistentWindowId windowId) {
     persist(
@@ -102,6 +110,8 @@ class PersistentWindowState extends _$PersistentWindowState
           state = state.copyWith(isWaitingForSurface: false);
         }),
       );
+    } else {
+      matchingLog.info('Launch of tile $windowId produced no process');
     }
 
     return process;
@@ -138,12 +148,30 @@ class PersistentWindowState extends _$PersistentWindowState
 
   @override
   void onCurrentlyDisplayedMetaWindowChanged(MetaWindowId? metaWindowId) {
+    if (metaWindowId == null) {
+      // The native window is gone: drop the reference so the tile falls back
+      // to its placeholder. Keeping it would make MetaSurfaceWidget read the
+      // destroyed MetaWindowState (and updateMetaWindowDisplayMode patch it).
+      state = state.copyWith(metaWindowId: null, isWaitingForSurface: false);
+      updateMetaWindowDisplayMode();
+      return;
+    }
+    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+    // Keep the appId defined by the desktop entry: the displayed native window
+    // may belong to a helper process with a different or unknown app id. The
+    // other identity fields follow the displayed window so the stored title
+    // tracks what the tile actually shows (used by the next burst and by the
+    // relaunch matching).
     state = state.copyWith(
       metaWindowId: metaWindowId,
       isWaitingForSurface: false,
-      pid: metaWindowId != null
-          ? ref.read(metaWindowStateProvider(metaWindowId)).pid
-          : state.pid,
+      pid: metaWindow.pid,
+      properties: state.properties.copyWith(
+        title: metaWindow.title,
+        windowClass: metaWindow.windowClass,
+        startupId: metaWindow.startupId,
+        pid: metaWindow.pid,
+      ),
     );
     updateMetaWindowDisplayMode();
   }
@@ -164,11 +192,8 @@ class PersistentWindowState extends _$PersistentWindowState
 
   @override
   void closeWindow({bool forceRemove = false}) {
-    if (state.metaWindowId == null) {
-      removeWindow();
-      return;
-    }
-    super.closeWindow();
+    // Close the dialogs first: a tile with no displayed window still owns
+    // them, and removing the tile below would otherwise leave them dangling.
     for (final dialogWindowId in ref.read(
       dialogSetForWindowProvider(windowId),
     )) {
@@ -176,6 +201,11 @@ class PersistentWindowState extends _$PersistentWindowState
           .read(dialogWindowStateProvider(dialogWindowId).notifier)
           .closeWindow();
     }
+    if (state.metaWindowId == null) {
+      removeWindow();
+      return;
+    }
+    super.closeWindow();
     if (forceRemove) {
       removeWindow();
     }
@@ -183,7 +213,6 @@ class PersistentWindowState extends _$PersistentWindowState
 
   @override
   void removeWindow() {
-    ref.read(appLaunchProvider.notifier).forgetWindow(windowId);
     final workspaceId = ref.read(windowWorkspaceMapProvider).get(windowId);
     if (workspaceId != null) {
       ref

@@ -15,7 +15,7 @@ use smithay::{
         compositor::with_states,
         shell::xdg::{SurfaceCachedState, ToplevelSurface, XdgToplevelSurfaceData},
     },
-    xwayland::X11Surface,
+    xwayland::{xwm::MwmInputMode, X11Surface},
 };
 use tracing::info;
 use uuid::Uuid;
@@ -41,10 +41,10 @@ pub struct MetaWindowState {
     pub meta_popups: HashMap<String, MetaPopup>,
     pub meta_popup_id_per_surface_id: HashMap<u64, String>,
     pub meta_window_in_gaming_mode: Option<String>,
-    /// Transient parents discovered through `xdg_activation` (see
-    /// `State::request_activation`) for surfaces whose meta window does not
-    /// exist yet. Consumed in [`Self::new_meta_window_for_toplevel`] so the
-    /// relation is available before the window is mapped.
+    /// `xdg_activation_v1` requesters (see `State::request_activation`) for
+    /// surfaces whose meta window does not exist yet. Consumed in
+    /// [`Self::new_meta_window_for_toplevel`] so the relation is available as
+    /// [`MetaWindow::activated_by`] before the window is mapped.
     pub pending_activation_parent: HashMap<u64, String>,
 }
 
@@ -130,10 +130,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 
         let surface_id = get_surface_id(surface.wl_surface());
 
-        // A parent discovered through `xdg_activation` before this toplevel
-        // had a meta window (the common case: the client activates the window
-        // it is about to map). It is only a fallback: an explicit
-        // `xdg_toplevel.set_parent` is a stronger, client-declared relation.
+        // An activation relation discovered before this toplevel had a meta
+        // window (the common case: the client activates the window it is about
+        // to map). It is recorded as `activated_by`, independently of any
+        // client-declared `xdg_toplevel.set_parent`.
         let activation_parent = self
             .meta_window_state
             .pending_activation_parent
@@ -149,7 +149,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             None => None,
         };
 
-        let meta_window_parent = xdg_parent.or(activation_parent);
+        // A client-declared parent and an activation "opened from" hint are
+        // independent signals and are recorded separately.
+        let meta_window_parent = xdg_parent;
+        let activated_by = activation_parent;
 
         let is_decorated = surface.with_cached_state(|state| {
             state
@@ -168,6 +171,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             app_id: app_id.clone(),
             pid,
             parent: meta_window_parent,
+            activated_by,
             title: title.clone(),
             mapped: false,
             display_mode: None,
@@ -228,6 +232,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             app_id: app_id.clone(),
             pid,
             parent: meta_window_parent,
+            activated_by: None,
             title: if !x11_surface.title().is_empty() {
                 Some(x11_surface.title())
             } else {
@@ -236,9 +241,9 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             mapped: true,
             display_mode: None,
             window_class: (!x11_surface.class().is_empty()).then(|| x11_surface.class()),
-            startup_id: None,
-            is_fixed_sized: false,
-            is_modal: false,
+            startup_id: x11_surface.startup_id(),
+            is_fixed_sized: x11_is_fixed_sized(&x11_surface),
+            is_modal: x11_is_modal(&x11_surface),
             current_output: None,
             geometry: Some(x11_surface.geometry().into()),
             need_decoration: !x11_surface.is_decorated(),
@@ -248,6 +253,27 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         info!("new meta window from x11: {:?}", meta_window);
         meta_window
     }
+}
+
+/// Whether an X11 window is modal, from `_NET_WM_STATE_MODAL` or its MOTIF
+/// input mode. The X11 counterpart of the `xdg_wm_dialog_v1` modal hint.
+pub(crate) fn x11_is_modal(x11_surface: &X11Surface) -> bool {
+    x11_surface.is_modal()
+        || matches!(
+            x11_surface.motif_hints().input_mode,
+            Some(MwmInputMode::PrimaryApplicationModal)
+                | Some(MwmInputMode::SystemModal)
+                | Some(MwmInputMode::FullApplicationModal)
+        )
+}
+
+/// Whether an X11 window is fixed-size: both axes constrained to the same
+/// non-zero size, the X11 counterpart of the Wayland `min == max` check.
+pub(crate) fn x11_is_fixed_sized(x11_surface: &X11Surface) -> bool {
+    x11_surface
+        .min_size()
+        .zip(x11_surface.max_size())
+        .is_some_and(|(min, max)| min.w > 0 && min.h > 0 && min == max)
 }
 
 pub fn determine_desktop_file_app_id_from_pid(pid: i32) -> Option<String> {

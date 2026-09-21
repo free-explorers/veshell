@@ -23,6 +23,7 @@ sealed class MetaWindowCreatedMessage
     required double scaleRatio,
     String? appId,
     String? parent,
+    String? activatedBy,
     String? displayMode,
     String? title,
     String? windowClass,

@@ -26,6 +26,11 @@ sealed class MetaWindowPatchMessage
     String? value,
   }) = UpdateParent;
 
+  const factory MetaWindowPatchMessage.updateActivatedBy({
+    required String id,
+    String? value,
+  }) = UpdateActivatedBy;
+
   const factory MetaWindowPatchMessage.updateTitle({
     required String id,
     String? value,

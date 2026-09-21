@@ -36,16 +36,25 @@ class WindowManager extends _$WindowManager {
 
   @override
   WindowManagerState build() {
+    final storage = ref.watch(persistentStorageStateProvider).requireValue;
     persist(
-      ref.watch(persistentStorageStateProvider).requireValue,
+      storage,
       options: const StorageOptions(cacheTime: StorageCacheTime.unsafe_forever),
     );
 
     return stateOrNull?.copyWith(
-          windows:
-              // Wheretype prevent adding other types later on
-              // ignore: prefer_iterable_wheretype
-              state.windows.where((id) => id is PersistentWindowId).toISet(),
+          windows: state.windows
+              .whereType<PersistentWindowId>()
+              // Drop ids whose state file is missing: such a tile cannot be
+              // restored and reading its provider would throw forever.
+              .where(
+                (id) => storage.read(persistentWindowStorageKey(id)) != null,
+              )
+              // Widen back to `WindowId`: `whereType` would otherwise leave an
+              // `ISet<PersistentWindowId>` behind and adding a dialog/ephemeral
+              // id to it throws at runtime.
+              .map<WindowId>((id) => id)
+              .toISet(),
         ) ??
         WindowManagerState(windows: <WindowId>{}.lock);
   }
@@ -138,32 +147,6 @@ class WindowManager extends _$WindowManager {
         )
         .addWindow(windowId);
 
-    return windowId;
-  }
-
-  EphemeralWindowId createEphemeralWindowForMetaWindow({
-    required MetaWindowId metaWindowId,
-    required ScreenId screenId,
-  }) {
-    // create a new window
-    final windowId = EphemeralWindowId(_uuidGenerator.v4());
-    _log.info(
-      'Creating new EphemeralWindow $windowId for surface $metaWindowId',
-    );
-
-    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
-    final ephemeralWindow = EphemeralWindow(
-      windowId: windowId,
-      screenId: screenId,
-      properties: WindowProperties.fromMetaWindow(metaWindow),
-      metaWindowId: metaWindowId,
-    );
-
-    ref
-        .read(ephemeralWindowStateProvider(windowId).notifier)
-        .initialize(ephemeralWindow);
-
-    state = state.copyWith(windows: state.windows.add(windowId));
     return windowId;
   }
 

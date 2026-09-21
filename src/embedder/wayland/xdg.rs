@@ -575,30 +575,17 @@ pub mod xdg {
             };
 
             if let Some(activated_meta_window_id) = activated_meta_window_id {
-                // An explicit `xdg_toplevel.set_parent` is stronger: only use
-                // the activation relation when the client declared no parent.
-                let already_has_parent = self
-                    .meta_window_state
-                    .meta_windows
-                    .get(&activated_meta_window_id)
-                    .and_then(|window| window.parent.clone())
-                    .is_some();
-                if already_has_parent {
-                    info!(
-                        target: "veshell::geometry",
-                        activated_meta_window_id = %activated_meta_window_id,
-                        "xdg_activation: keeping client-declared parent"
-                    );
-                    return;
-                }
+                // Record the activation relation independently of any
+                // client-declared parent: it is only an owner hint, not a
+                // dialog marker.
                 info!(
                     target: "veshell::geometry",
                     activated_meta_window_id = %activated_meta_window_id,
                     requesting_meta_window_id = %requesting_meta_window_id,
-                    "xdg_activation: assigning transient parent"
+                    "xdg_activation: assigning activation relation"
                 );
                 self.patch_meta_window(
-                    MetaWindowPatch::UpdateParent {
+                    MetaWindowPatch::UpdateActivatedBy {
                         id: activated_meta_window_id,
                         value: Some(requesting_meta_window_id),
                     },

@@ -44,6 +44,7 @@ class MetaWindowState extends _$MetaWindowState {
       appId: desktopEntryForSurface?.desktopEntry.id ?? message.appId,
       surfaceId: message.surfaceId,
       parent: message.parent,
+      activatedBy: message.activatedBy,
       mapped: message.mapped,
       title: message.title,
       windowClass: message.windowClass,
@@ -86,6 +87,8 @@ class MetaWindowState extends _$MetaWindowState {
         }
       case UpdateParent():
         state = state.copyWith(parent: patch.value);
+      case UpdateActivatedBy():
+        state = state.copyWith(activatedBy: patch.value);
       case UpdateTitle():
         state = state.copyWith(title: patch.value);
       case UpdatePid():

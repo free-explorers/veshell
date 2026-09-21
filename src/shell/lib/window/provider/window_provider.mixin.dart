@@ -10,6 +10,7 @@ import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/meta_window_window_map.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
 import 'package:shell/window/model/window_base.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
@@ -33,13 +34,25 @@ import 'package:shell/window/provider/window_manager/window_manager.dart';
 ///   native window reports afterwards (that data flows to the persisted
 ///   `properties` instead — see `onMetaWindowDisplayedPropertiesChanged`
 ///   implementations).
-/// - **Waiting:** [waitForSurface] arms the "newly launched" match bonus
-///   (see `windowMatchingCost`); it is cleared as soon as a native window
-///   attaches.
-/// - **Display selection:** when a shell window owns several native windows,
-///   the cheapest-to-match one is displayed and the overflow is dispatched
-///   ([_dispatchExtraMetaWindows]) after a short settling delay, so bursts
+/// - **Waiting:** [waitForSurface] arms the "newly launched" gather bonus
+///   (see `windowMatchingCost`); it stays armed for the whole burst and is
+///   cleared at the burst settle.
+/// - **Redistribution:** when a shell window owns several native windows, the
+///   cheapest-to-match one is displayed and the rest are redistributed
+///   ([_redistributeOwnedMetaWindows]) after a short settling delay, so bursts
 ///   of same-app windows don't re-route through half-open state.
+/// Maximum automatic reopen attempts for a launched tile whose gathered
+/// windows all ended up better matched by siblings. Bounded so a misbehaving
+/// application cannot loop.
+const _maxLaunchReopenAttempts = 1;
+
+/// Added to the display cost of a fixed-size native window so a tile prefers
+/// the application's real (resizable) window over a transient fixed-size
+/// helper (e.g. Discord's "Discord Updater" while the real "Discord" window is
+/// present). Larger than a title mismatch (50) so it overrides a stale stored
+/// title that exactly matches the helper, smaller than `INF_COST`.
+const _fixedSizeDisplayPenalty = 100;
+
 mixin WindowProviderMixin<T extends Window> {
   T get state;
   set state(T value);
@@ -55,6 +68,18 @@ mixin WindowProviderMixin<T extends Window> {
 
   Timer? _debouncedTimer;
 
+  /// Whether this tile is the origin of an in-flight launch burst: it gathers
+  /// the whole burst (waiting bonus armed), then at the settle it dispatches
+  /// the windows a sibling matches better and keeps the rest. Cleared at the
+  /// burst settle. See [_finalizeLaunchBurst].
+  bool _launchOrigin = false;
+
+  /// Whether the origin owned a native window at some point during this
+  /// launch. Reopening only happens when a window arrived and then left, never
+  /// when the launch produced no window at all.
+  bool _everOwnedWindow = false;
+  int _reopenAttempts = 0;
+
   /// Initialized a Window by keeping it alive and setting the surface.
   void initialize(T window) {
     _keepAliveLink?.close();
@@ -66,12 +91,17 @@ mixin WindowProviderMixin<T extends Window> {
     }
   }
 
-  /// Assign a surface to a Window subscribing to any changes.
+  /// Assign a native window to this tile and subscribe to its changes.
   ///
-  /// Also clears the launch-waiting bonus: from here on the tile believes
-  /// its expectee arrived and matching scores rely on identity only.
+  /// While this tile is a launch origin the waiting bonus stays armed, so the
+  /// whole burst keeps gathering here; it is cleared at the burst settle, after
+  /// which ownership follows the title (see [_finalizeLaunchBurst]).
   void addMetaWindow(MetaWindowId metaWindowId) {
-    _matchingInfo = _matchingInfo.copyWith(waitingForAppSince: null);
+    if (_launchOrigin) {
+      _everOwnedWindow = true;
+    } else {
+      _matchingInfo = _matchingInfo.copyWith(waitingForAppSince: null);
+    }
     ref
         .read(metaWindowWindowMapProvider.notifier)
         .set(metaWindowId, state.windowId);
@@ -86,44 +116,43 @@ mixin WindowProviderMixin<T extends Window> {
   /// (desktop-entry name, class) decide which native window best fits the
   /// tile.
   ///
-  /// A 100 ms settling timer defers the *dispatch* of the overflow (see
-  /// [_dispatchExtraMetaWindows]): restoring multiple windows arrives as a
-  /// burst of events, dispatching on every event would bounce windows
-  /// between placeholders before the set is complete. The delay also
-  /// collapses the intermediate "all windows on one tile" state into a
-  /// single redistribution.
+  /// A 100 ms settling timer defers the *dispatch decision*: a burst arrives
+  /// as a series of events and dispatching on every event would bounce windows
+  /// between placeholders before titles have settled. A launch origin always
+  /// arms it (to finalize the gather), a non-origin tile only when it has an
+  /// overflow to dispatch.
   void _onMetaWindowsChanges() {
-    MetaWindowId? newDisplayedMetaWindowId;
-    // Reset the timer if changes occurs while we are waiting
-
     _debouncedTimer?.cancel();
+    _recomputeDisplayedMetaWindow();
+
+    if (_launchOrigin || _metaWindowSubscriptions.length > 1) {
+      _debouncedTimer = Timer(const Duration(milliseconds: 100), () {
+        if (_launchOrigin) {
+          _finalizeLaunchBurst();
+        } else if (_metaWindowSubscriptions.length > 1) {
+          _redistributeOwnedMetaWindows();
+        }
+      });
+    }
+  }
+
+  /// Picks the displayed native window among the owned ones without arming any
+  /// timer.
+  void _recomputeDisplayedMetaWindow() {
+    MetaWindowId? newDisplayedMetaWindowId;
 
     if (_metaWindowSubscriptions.isNotEmpty) {
       if (_metaWindowSubscriptions.length == 1) {
         newDisplayedMetaWindowId = _metaWindowSubscriptions.keys.first;
       } else {
-        // pick the surface with the lest matching cost
         final metaWindowIdList = _metaWindowSubscriptions.keys.toList();
         final costs = metaWindowIdList.map((metaWindowId) {
           final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
-          final metaWindowMatchInfo = MatchingInfo.fromMetaWindow(metaWindow);
-          return windowMatchingCost(
-            metaWindowMatchInfo,
-            getMatchingInfo(),
-            state,
-          );
+          return _displayCost(metaWindow);
         }).toList();
         final minCost = costs.reduce(min);
         newDisplayedMetaWindowId = metaWindowIdList[costs.indexOf(minCost)];
       }
-
-      // after this timer we need to dispatch any extra surfaces
-      // to the best matches available or create new windows for them
-      _debouncedTimer = Timer(const Duration(milliseconds: 100), () {
-        if (_metaWindowSubscriptions.length > 1) {
-          _dispatchExtraMetaWindows();
-        }
-      });
     }
 
     if (newDisplayedMetaWindowId != _displayedMetaWindowId) {
@@ -131,99 +160,210 @@ mixin WindowProviderMixin<T extends Window> {
       print('new displayed meta window: $_displayedMetaWindowId');
       onCurrentlyDisplayedMetaWindowChanged(_displayedMetaWindowId);
     }
+
+    // A settled single-window tile adopts the displayed window's identity even
+    // when the displayed id did not change. At the burst settle the tile flips
+    // from launch origin to settled while keeping the same window; missing that
+    // adoption would leave `_matchingInfo` stale relative to the title the tile
+    // actually shows, and the next burst would then swap siblings.
+    final displayedMetaWindowId = _displayedMetaWindowId;
+    if (displayedMetaWindowId != null && _canAdoptDisplayedIdentity) {
+      _syncMatchingInfo(
+        ref.read(metaWindowStateProvider(displayedMetaWindowId)),
+      );
+    }
   }
 
-  /// Redistributes owned native windows that this tile is not displaying.
+  /// Display-selection cost for one owned native window.
   ///
-  /// Runs after [_onMetaWindowsChanges]' settling timer, only when more than
-  /// one window is owned. Typical trigger: Code OSS restoring all its
-  /// windows at once on one tile — the overflow must reach the other
-  /// same-app placeholders (each workspace keeps its own member).
-  ///
-  /// Algorithm (repeats until every owned surface found a home):
-  ///
-  /// 1. Ask the matching engine for the best *other* window for each
-  ///    overflow surface, with already-assigned destinations excluded
-  ///    (`excludedWindowIds` grows as assignments happen, and always starts
-  ///    at the current window so a surface never re-attaches to the tile it
-  ///    is overflowing from).
-  /// 2. Resolve strongest matches first: a weak plan must not consume the
-  ///    destination that a better-identified surface still needs.
-  /// 3. Candidate found → reassign it there ; nothing found → attach it as a
-  ///    **dialog** of the current tile, which is how application-opened
-  ///    windows group with their origin (browser Ctrl+N style). Real dialogs
-  ///    — windows reporting a native parent — are routed at mapping time and
-  ///    never reach the dispatch loop.
-  ///
-  /// Batch examples:
-  ///
-  /// - Steam: main surface displayed; "Special Offers"/"Shutdown" overflow →
-  ///   no other `steamwebhelper` candidate → dialogs under Steam.
-  /// - Two Code OSS placeholders: overflow window 2 `appId == second
-  ///   placeholder.appId` → reassignment, no dialog.
-  Future<void> _dispatchExtraMetaWindows() async {
-    final metaWindowsToDispatch = _metaWindowSubscriptions.keys
-        .where((metaWindowId) => metaWindowId != _displayedMetaWindowId)
-        .toSet();
+  /// This is the matcher's identity cost plus [_fixedSizeDisplayPenalty] for a
+  /// fixed-size window. The penalty only orders windows *within* this tile
+  /// (the matcher's ordinary matching and the sibling redistribution use the
+  /// unpenalised cost): when a tile owns both a fixed-size helper and the
+  /// application's real window, the real one is displayed and the helper is
+  /// the better leftover to turn into a dialog.
+  int _displayCost(MetaWindow metaWindow) {
+    final cost = windowMatchingCost(
+      MatchingInfo.fromMetaWindow(metaWindow),
+      getMatchingInfo(),
+      state,
+    );
+    return metaWindow.isFixedSized ? cost + _fixedSizeDisplayPenalty : cost;
+  }
 
-    final excludedWindowIds = [state.windowId];
-    print('Dispatching extra surfaces $metaWindowsToDispatch');
+  /// Whether the displayed window may become the tile's matching identity.
+  ///
+  /// Only a settled, single-window tile adopts it. During a launch burst the
+  /// origin gathers several windows and the displayed one is transient;
+  /// adopting it then would overwrite the tile's stored title before the
+  /// redistribution could match windows against it. A multi-window tile is
+  /// likewise still dispatching.
+  bool get _canAdoptDisplayedIdentity =>
+      !_launchOrigin && _metaWindowSubscriptions.length == 1;
 
-    while (metaWindowsToDispatch.isNotEmpty) {
-      final bestMatchForMetaWindowMap = <MetaWindowId, (WindowId?, int?)>{};
-      for (final metaWindowId in metaWindowsToDispatch) {
-        bestMatchForMetaWindowMap[metaWindowId] = ref
+  /// Mirrors the displayed native window's identity into the tile's matching
+  /// info, so ownership decisions — and the next burst — match against the
+  /// title the tile actually shows.
+  ///
+  /// The tile's own desktop-entry `appId` and the gather `waitingForAppSince`
+  /// are preserved: a tile keeps its application identity and, while it is
+  /// empty, the identity of the last window it displayed (so a relaunch finds
+  /// it again).
+  void _syncMatchingInfo(MetaWindow metaWindow) {
+    _matchingInfo = _matchingInfo.copyWith(
+      title: metaWindow.title,
+      windowClass: metaWindow.windowClass,
+      startupId: metaWindow.startupId,
+      pid: metaWindow.pid,
+    );
+  }
+
+  /// Ends the launch gather and decides ownership by title.
+  ///
+  /// Runs once the burst has settled, when titles are final: the origin
+  /// redistributes what it gathered, then reopens a window for itself if it
+  /// lost everything it had received. A launch that produced no window is left
+  /// alone.
+  void _finalizeLaunchBurst() {
+    if (!_launchOrigin) {
+      return;
+    }
+
+    // Titles have settled: matching is by identity from here on.
+    _matchingInfo = _matchingInfo.copyWith(waitingForAppSince: null);
+    // Clear the origin before redistributing so a throw cannot leave the tile
+    // gathering forever; the reopen branch below re-arms it when needed.
+    _launchOrigin = false;
+    _redistributeOwnedMetaWindows();
+
+    final lostEverything = _metaWindowSubscriptions.isEmpty;
+
+    if (lostEverything &&
+        _everOwnedWindow &&
+        _reopenAttempts < _maxLaunchReopenAttempts) {
+      _reopenAttempts++;
+      _launchOrigin = true;
+      _everOwnedWindow = false;
+      matchingLog.info(
+        'Launched tile ${state.windowId} lost all its windows to '
+        'better-matching siblings; reopening one',
+      );
+      unawaited(launchSelf());
+      return;
+    }
+    _everOwnedWindow = false;
+  }
+
+  /// Redistributes the native windows this tile owns so each lands on its best
+  /// home.
+  ///
+  /// Ownership is decided by identity, principally the title: a sibling that
+  /// matches a window better (strictly lower cost) wins it, strongest match
+  /// first, destinations deduped. A window left without a better home spreads
+  /// to an empty same-app sibling; only when no sibling is free does a leftover
+  /// become a dialog of this tile. The displayed window is included — no tile,
+  /// launched or not, keeps a window it does not fit.
+  void _redistributeOwnedMetaWindows() {
+    final owned = _metaWindowSubscriptions.keys.toList()..sort();
+    if (owned.isEmpty) {
+      return;
+    }
+
+    final taken = <WindowId>{state.windowId};
+    _recomputeDisplayedMetaWindow();
+
+    // 1. Move each window to a strictly better sibling, recomputing the best
+    //    available destination after every move so a taken one falls through to
+    //    the next best.
+    final remaining = owned.toSet();
+    while (remaining.isNotEmpty) {
+      final plans = <(MetaWindowId, WindowId, int)>[];
+      for (final metaWindowId in remaining) {
+        final (other, otherCost) = ref
             .read(matchingEngineProvider.notifier)
-            .findBestWindowCandidateForMetaWindow(
+            .findBestOrdinarySiblingFor(
               metaWindowId,
-              excludedWindowIds: excludedWindowIds,
+              excludedWindowIds: taken.toList(),
             );
-      }
-      // Resolve the strongest matches first so a weak match cannot consume a
-      // candidate needed by a surface with better identity information.
-      final sortedEntries = bestMatchForMetaWindowMap.entries.toList()
-        ..sort(
-          (entry1, entry2) => (entry1.value.$2 ?? INF_COST).compareTo(
-            entry2.value.$2 ?? INF_COST,
-          ),
+        if (other == null || otherCost == null) {
+          continue;
+        }
+        final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+        final ownerCost = windowMatchingCost(
+          MatchingInfo.fromMetaWindow(metaWindow),
+          getMatchingInfo(),
+          state,
         );
-
-      for (final entry in sortedEntries) {
-        final metaWindowId = entry.key;
-        final (windowId, score) = entry.value;
-
-        // If there is no windowId, create a new dialog window for it
-        if (windowId == null) {
-          print('Creating new dialog window for metaWindow $metaWindowId');
-          removeMetaWindow(metaWindowId, shouldNotify: false);
-          final newWindowId = ref
-              .read(windowManagerProvider.notifier)
-              .createDialogWindowForMetaWindow(metaWindowId, state.windowId);
-
-          excludedWindowIds.add(newWindowId);
-          metaWindowsToDispatch.remove(metaWindowId);
-        } else {
-          // If a bestmatch was already found skip to next iteration
-          // Else
-          if (!excludedWindowIds.contains(windowId)) {
-            removeMetaWindow(metaWindowId, shouldNotify: false);
-            switch (windowId) {
-              case PersistentWindowId():
-                ref
-                    .read(persistentWindowStateProvider(windowId).notifier)
-                    .addMetaWindow(metaWindowId);
-              case EphemeralWindowId():
-                ref
-                    .read(ephemeralWindowStateProvider(windowId).notifier)
-                    .addMetaWindow(metaWindowId);
-              case _: // ignore: no_default_cases
-            }
-            excludedWindowIds.add(windowId);
-            metaWindowsToDispatch.remove(metaWindowId);
-          }
+        if (otherCost < ownerCost) {
+          plans.add((metaWindowId, other, otherCost));
         }
       }
+      if (plans.isEmpty) {
+        break;
+      }
+      plans.sort((a, b) {
+        final byCost = a.$3.compareTo(b.$3);
+        return byCost != 0 ? byCost : a.$1.compareTo(b.$1);
+      });
+      var movedAny = false;
+      for (final plan in plans) {
+        if (taken.contains(plan.$2)) {
+          continue;
+        }
+        _moveMetaWindow(plan.$1, plan.$2);
+        taken.add(plan.$2);
+        remaining.remove(plan.$1);
+        movedAny = true;
+      }
+      if (!movedAny) {
+        break;
+      }
     }
+
+    _recomputeDisplayedMetaWindow();
+
+    // 2. A leftover spreads to an empty same-app sibling; when none is free it
+    //    has no home and becomes a dialog.
+    final leftovers = _metaWindowSubscriptions.keys
+        .where((metaWindowId) => metaWindowId != _displayedMetaWindowId)
+        .toList()
+      ..sort();
+    for (final metaWindowId in leftovers) {
+      final appId =
+          ref.read(metaWindowStateProvider(metaWindowId)).appId ?? '';
+      final emptySibling = ref
+          .read(matchingEngineProvider.notifier)
+          .findEmptySiblingForApp(appId, excludedWindowIds: taken.toList());
+      if (emptySibling != null) {
+        _moveMetaWindow(metaWindowId, emptySibling);
+        taken.add(emptySibling);
+      } else {
+        _makeDialog(metaWindowId);
+      }
+    }
+  }
+
+  void _moveMetaWindow(MetaWindowId metaWindowId, WindowId destination) {
+    removeMetaWindow(metaWindowId, shouldNotify: false);
+    switch (destination) {
+      case PersistentWindowId():
+        ref
+            .read(persistentWindowStateProvider(destination).notifier)
+            .addMetaWindow(metaWindowId);
+      case EphemeralWindowId():
+        ref
+            .read(ephemeralWindowStateProvider(destination).notifier)
+            .addMetaWindow(metaWindowId);
+      case _: // ignore: no_default_cases
+    }
+  }
+
+  void _makeDialog(MetaWindowId metaWindowId) {
+    print('Creating new dialog window for metaWindow $metaWindowId');
+    removeMetaWindow(metaWindowId, shouldNotify: false);
+    ref
+        .read(windowManagerProvider.notifier)
+        .createDialogWindowForMetaWindow(metaWindowId, state.windowId);
   }
 
   void removeMetaWindow(MetaWindowId metaWindowId, {bool shouldNotify = true}) {
@@ -240,7 +380,8 @@ mixin WindowProviderMixin<T extends Window> {
   ///
   /// The displayed surface additionally streams property updates to
   /// [onMetaWindowDisplayedPropertiesChanged] (title, pid... used by the
-  /// persisted representation), never the matching snapshot itself.
+  /// persisted representation) and into the tile's matching info, so a title
+  /// that changes while displayed also updates ownership.
   void _listenForMetaWindowChanges(MetaWindowId surfaceId) {
     _closeMetaWindowSubscription(surfaceId);
 
@@ -254,7 +395,8 @@ mixin WindowProviderMixin<T extends Window> {
             previous.startupId != next.startupId ||
             previous.pid != next.pid ||
             previous.mapped != next.mapped ||
-            previous.parent != next.parent) {
+            previous.parent != next.parent ||
+            previous.activatedBy != next.activatedBy) {
           _onMetaWindowsChanges();
         }
         if (surfaceId == _displayedMetaWindowId) {
@@ -276,6 +418,10 @@ mixin WindowProviderMixin<T extends Window> {
     );
 
     if (entry == null) {
+      matchingLog.info(
+        'Cannot launch tile ${state.windowId}: appId '
+        '"${state.properties.appId}" does not resolve to a desktop entry',
+      );
       return null;
     }
     return ref
@@ -297,6 +443,13 @@ mixin WindowProviderMixin<T extends Window> {
       waitingForAppSince: DateTime.now(),
       pid: pid,
     );
+    // A fresh user launch resets the burst state; an internal reopen (see
+    // [_finalizeLaunchBurst]) keeps it so the reopen cannot loop.
+    if (!_launchOrigin) {
+      _everOwnedWindow = false;
+      _reopenAttempts = 0;
+    }
+    _launchOrigin = true;
   }
 
   void onMetaWindowRemoved(MetaWindowId metaWindowId) {
@@ -313,6 +466,8 @@ mixin WindowProviderMixin<T extends Window> {
 
   void dispose() {
     _keepAliveLink?.close();
+    _debouncedTimer?.cancel();
+    _debouncedTimer = null;
   }
 
   void closeWindow() {

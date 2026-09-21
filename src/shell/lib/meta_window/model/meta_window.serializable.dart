@@ -27,6 +27,7 @@ abstract class MetaWindow with _$MetaWindow {
     required double scaleRatio,
     String? appId,
     String? parent,
+    String? activatedBy,
     MetaWindowDisplayMode? displayMode,
     String? title,
     String? windowClass,

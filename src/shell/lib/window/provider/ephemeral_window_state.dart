@@ -6,7 +6,6 @@ import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/window/model/ephemeral_window.dart';
-import 'package:shell/window/model/matching_info.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/model/window_properties.serializable.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
@@ -18,22 +17,9 @@ part 'ephemeral_window_state.g.dart';
 @riverpod
 class EphemeralWindowState extends _$EphemeralWindowState
     with WindowProviderMixin<EphemeralWindow> {
-  late MatchingInfo _matchingInfo;
-
   @override
   EphemeralWindow build(EphemeralWindowId windowId) {
     throw Exception('EphemeralWindowState $windowId not yet initialized');
-  }
-
-  @override
-  MatchingInfo getMatchingInfo() => _matchingInfo;
-
-  @override
-  void initialize(EphemeralWindow window) {
-    _matchingInfo = MatchingInfo.fromWindowProperties(
-      window.properties,
-    );
-    super.initialize(window);
   }
 
   @override
