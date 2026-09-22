@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use std::os::fd::OwnedFd;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::backend::input::KeyState;
@@ -11,7 +10,7 @@ use smithay::delegate_dispatch2;
 use smithay::desktop::{Space, Window};
 use smithay::input::dnd::DndGrabHandler;
 use smithay::input::keyboard::{KeyboardHandle, XkbConfig};
-use smithay::input::pointer::{CursorImageStatus, MotionEvent, PointerHandle};
+use smithay::input::pointer::{CursorImageStatus, PointerHandle};
 use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::output::{Output, Scale};
 use smithay::reexports::calloop::generic::Generic;
@@ -24,10 +23,7 @@ use smithay::reexports::wayland_server::protocol::wl_buffer;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::{Display, DisplayHandle, Resource};
 use smithay::reexports::x11rb::protocol::xproto::Window as X11Window;
-use smithay::utils::{
-    Buffer as BufferCoords, Clock, IsAlive, Logical, Monotonic, Point, Rectangle, Size,
-    SERIAL_COUNTER,
-};
+use smithay::utils::{Buffer as BufferCoords, Clock, Logical, Monotonic, Point, Rectangle, Size};
 use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor::{self, get_parent, RectangleKind};
 use smithay::wayland::compositor::{
@@ -114,18 +110,6 @@ pub struct State<BackendData: Backend + 'static> {
     pub surface_id_per_texture_id: HashMap<i64, u64>,
     pub surface_id_under_cursor: Option<u64>,
     pub pointer_focus: Option<(PointerFocusTarget, Point<f64, Logical>)>,
-    /// Whether a pointer button is currently held down (implicit grab).
-    ///
-    /// While held, hover-driven focus changes are ignored so that press and
-    /// release stay bound to the surface that received the press, matching the
-    /// implicit pointer grab every compositor provides.
-    pub pointer_button_held: bool,
-    /// Most recently activated non-override X11 toplevel.
-    ///
-    /// Last-resort parent for override-redirect popups that declare no
-    /// `WM_TRANSIENT_FOR` and are mapped while no X11 surface has focus: the
-    /// popup is attached to the active application instead of being dropped.
-    pub last_active_x11_surface: Option<X11Surface>,
     pub surfaces: HashMap<u64, WlSurface>,
     pub subsurfaces: HashMap<u64, WlSurface>,
     pub texture_ids_per_surface_id: HashMap<u64, Vec<(i64, Size<i32, BufferCoords>)>>,
@@ -370,8 +354,6 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             xwayland_state: None,
             space: Space::default(),
             pointer_focus: None,
-            pointer_button_held: false,
-            last_active_x11_surface: None,
             cursor_state: CursorState::default(),
             cursor_image_status: Mutex::new(CursorImageStatus::default_named()),
             settings_manager,
@@ -403,66 +385,6 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 },
             )
             .unwrap();
-    }
-
-    /// Applies a pointer focus change to the seat immediately.
-    ///
-    /// `origin` is the target surface's top-left in global logical coordinates
-    /// (Smithay subtracts it from the event location to get surface-local
-    /// coordinates), not the cursor position. Does nothing when the seat is
-    /// already focused on `target` at the same origin.
-    pub fn apply_pointer_focus(&mut self, target: PointerFocusTarget, origin: Point<f64, Logical>) {
-        if self.pointer_button_held {
-            // Implicit grab: keep the press target focused until release. If it
-            // died, drop the grab and let the focus follow the pointer again.
-            let grab_alive = self
-                .pointer_focus
-                .as_ref()
-                .is_some_and(|(target, _)| target.alive());
-            if grab_alive {
-                return;
-            }
-            self.pointer_button_held = false;
-        }
-        if !target.alive() {
-            return;
-        }
-        if let Some((current, current_origin)) = self.pointer_focus.as_ref() {
-            if current == &target && *current_origin == origin {
-                return;
-            }
-        }
-        let pointer = self.pointer.clone();
-        let location = pointer.current_location();
-        let event = MotionEvent {
-            location,
-            serial: SERIAL_COUNTER.next_serial(),
-            time: self.now_msec(),
-        };
-        pointer.motion(self, Some((target.clone(), origin)), &event);
-        self.pointer_focus = Some((target, origin));
-    }
-
-    /// Clears the seat pointer focus and sends the resulting leave event.
-    pub fn clear_pointer_focus(&mut self) {
-        if self.pointer_button_held {
-            return;
-        }
-        if self.pointer_focus.take().is_none() {
-            return;
-        }
-        let pointer = self.pointer.clone();
-        let location = pointer.current_location();
-        let event = MotionEvent {
-            location,
-            serial: SERIAL_COUNTER.next_serial(),
-            time: self.now_msec(),
-        };
-        pointer.motion(self, None, &event);
-    }
-
-    fn now_msec(&self) -> u32 {
-        Duration::from(self.clock.now()).as_millis() as u32
     }
 
     pub fn construct_surface_message(&self, surface: &WlSurface) -> SurfaceMessage {

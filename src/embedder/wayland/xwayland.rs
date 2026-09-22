@@ -261,12 +261,6 @@ pub mod xwayland {
                             })
                         })
                     })
-                    // Chromium popups (menus, bubbles) often set no
-                    // `WM_TRANSIENT_FOR` and are mapped without an X11 surface
-                    // focused, so the two hints above are both empty. Attach
-                    // them to the most recently activated X11 toplevel rather
-                    // than dropping them.
-                    .or_else(|| self.last_active_x11_surface.as_ref())
                     .map(|x11_surface| Self::get_x11_surface_id(x11_surface))
             } else {
                 surface
@@ -375,10 +369,6 @@ pub mod xwayland {
         fn map_window_request(&mut self, _xwm: XwmId, surface: X11Surface) {
             surface.set_mapped(true).unwrap();
             surface.set_activated(true).unwrap();
-            // Track the active toplevel so orphan override-redirect popups can
-            // be attached to it. Managed windows are never override-redirect,
-            // so this cannot point at a menu.
-            self.last_active_x11_surface = Some(surface);
         }
 
         fn map_window_notify(&mut self, _xwm: XwmId, surface: X11Surface) {
@@ -422,13 +412,6 @@ pub mod xwayland {
 
             self.x11_surface_per_x11_window.remove(&surface.window_id());
             self.x11_surfaces.remove(&x11_surface_id);
-            if self
-                .last_active_x11_surface
-                .as_ref()
-                .is_some_and(|active| active.window_id() == surface.window_id())
-            {
-                self.last_active_x11_surface = None;
-            }
         }
 
         fn configure_request(
@@ -819,22 +802,6 @@ pub mod xwayland {
                                     })
                             })
                         })
-                    })
-                    // Chromium popups (menus, bubbles) often set no
-                    // `WM_TRANSIENT_FOR` and are mapped without an X11 surface
-                    // focused, so the two hints above are both empty. Attach
-                    // them to the most recently activated X11 toplevel rather
-                    // than dropping them.
-                    .or_else(|| {
-                        self.last_active_x11_surface
-                            .as_ref()
-                            .and_then(|parent_surface| {
-                                parent_surface.wl_surface().and_then(|parent_surface| {
-                                    self.meta_window_state
-                                        .meta_window_id_per_surface_id
-                                        .get(&get_surface_id(&parent_surface))
-                                })
-                            })
                     })
                 {
                     let geometry = surface.geometry();
