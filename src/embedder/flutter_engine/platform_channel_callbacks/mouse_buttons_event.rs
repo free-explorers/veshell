@@ -37,9 +37,6 @@ pub fn mouse_buttons_event<BackendData: Backend + 'static>(
     let payload: MouseButtonsPayload = serde_json::from_value(args).unwrap();
     info!("mouse_buttons_event: for  {:?}", payload.surface_id);
 
-    // Buttons are delivered to the seat pointer focus, which the shell keeps
-    // current through `pointer_focus` (asserted on press): the payload's
-    // `surface_id` is the shell's hit-tested target, logged for diagnostics.
     for button in payload.buttons {
         pointer.button(
             data,
@@ -55,14 +52,6 @@ pub fn mouse_buttons_event<BackendData: Backend + 'static>(
             },
         );
     }
-
-    // Bind press and release to the surface that received the press: while a
-    // button is held, hover-driven focus changes are ignored (implicit grab).
-    let any_pressed = data
-        .flutter_engine()
-        .mouse_button_tracker
-        .are_any_buttons_pressed();
-    data.pointer_button_held = any_pressed;
 
     pointer.frame(data);
     result.success(None);

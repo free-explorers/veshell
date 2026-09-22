@@ -110,7 +110,6 @@ pub fn activate_window<BackendData: Backend + 'static>(
             x11_surface.set_activated(payload.activate).unwrap();
 
             if payload.activate && !x11_surface.is_override_redirect() {
-                data.last_active_x11_surface = Some(x11_surface.clone());
                 let _ = data
                     .xwayland_state
                     .as_mut()

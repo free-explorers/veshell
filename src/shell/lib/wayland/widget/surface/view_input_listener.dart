@@ -46,11 +46,7 @@ class ViewInputListener extends HookConsumerWidget {
             rect: inputRegion,
             child: ArenaListener(
               onPointerDown: (PointerDownEvent event) {
-                final renderBox =
-                    globalKey.currentContext!.findRenderObject() as RenderBox?;
-                final globalOffset =
-                    renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
-                _onPointerDown(ref, event, globalOffset);
+                _onPointerDown(ref, event);
                 return null;
               },
               onPointerMove:
@@ -122,19 +118,8 @@ class ViewInputListener extends HookConsumerWidget {
     );
   }
 
-  Future<void> _onPointerDown(
-    WidgetRef ref,
-    PointerEvent event,
-    Offset globalOffset,
-  ) async {
+  Future<void> _onPointerDown(WidgetRef ref, PointerEvent event) async {
     if (event.kind == PointerDeviceKind.mouse) {
-      // Assert the seat pointer focus on the shell's hit-tested surface before
-      // dispatching the button. Hover already keeps it current in the common
-      // case (a no-op here); this covers surfaces that appear under a
-      // stationary cursor, whose `MouseRegion.onEnter` may not have fired yet.
-      ref.read(pointerFocusManagerProvider.notifier).enterSurface(
-            PointerFocus(surfaceId: surfaceId, globalOffset: globalOffset),
-          );
       await _sendMouseButtonsToPlatform(ref, event.buttons);
       ref.read(pointerFocusManagerProvider.notifier).startPotentialDrag();
     } else if (event.kind == PointerDeviceKind.touch) {
