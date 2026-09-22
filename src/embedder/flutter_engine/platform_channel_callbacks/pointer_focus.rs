@@ -3,6 +3,7 @@ use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::focus::PointerFocusTarget;
 use crate::state::State;
+use smithay::utils::{Logical, Point};
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,14 +46,19 @@ pub fn pointer_focus<BackendData: Backend + 'static>(
                     .unwrap()
                     .raise_window(&x11_surface);
             }
-            data.pointer_focus = Some((
-                PointerFocusTarget::from(surface),
-                (pointer_focus.global_offset.x, pointer_focus.global_offset.y).into(),
+            // Apply the focus immediately instead of waiting for the next
+            // physical motion, so the seat tracks what the shell highlights and
+            // the next click is delivered to the surface under the cursor.
+            let target = PointerFocusTarget::from(surface);
+            let origin = Point::<f64, Logical>::from((
+                pointer_focus.global_offset.x,
+                pointer_focus.global_offset.y,
             ));
+            data.apply_pointer_focus(target, origin);
         }
     } else {
         data.surface_id_under_cursor = None;
-        data.pointer_focus = None;
+        data.clear_pointer_focus();
     }
     result.success(None);
 }

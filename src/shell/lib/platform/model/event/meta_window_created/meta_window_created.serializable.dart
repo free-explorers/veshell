@@ -23,10 +23,13 @@ sealed class MetaWindowCreatedMessage
     required double scaleRatio,
     String? appId,
     String? parent,
+    String? activatedBy,
     String? displayMode,
     String? title,
     String? windowClass,
     String? startupId,
+    @Default(false) bool isFixedSized,
+    @Default(false) bool isModal,
     @RectConverter() Rect? geometry,
   }) = _MetaWindowCreatedMessage;
 

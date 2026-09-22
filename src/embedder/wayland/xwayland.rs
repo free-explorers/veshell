@@ -261,6 +261,12 @@ pub mod xwayland {
                             })
                         })
                     })
+                    // Chromium popups (menus, bubbles) often set no
+                    // `WM_TRANSIENT_FOR` and are mapped without an X11 surface
+                    // focused, so the two hints above are both empty. Attach
+                    // them to the most recently activated X11 toplevel rather
+                    // than dropping them.
+                    .or_else(|| self.last_active_x11_surface.as_ref())
                     .map(|x11_surface| Self::get_x11_surface_id(x11_surface))
             } else {
                 surface
@@ -369,6 +375,10 @@ pub mod xwayland {
         fn map_window_request(&mut self, _xwm: XwmId, surface: X11Surface) {
             surface.set_mapped(true).unwrap();
             surface.set_activated(true).unwrap();
+            // Track the active toplevel so orphan override-redirect popups can
+            // be attached to it. Managed windows are never override-redirect,
+            // so this cannot point at a menu.
+            self.last_active_x11_surface = Some(surface);
         }
 
         fn map_window_notify(&mut self, _xwm: XwmId, surface: X11Surface) {
@@ -412,6 +422,13 @@ pub mod xwayland {
 
             self.x11_surface_per_x11_window.remove(&surface.window_id());
             self.x11_surfaces.remove(&x11_surface_id);
+            if self
+                .last_active_x11_surface
+                .as_ref()
+                .is_some_and(|active| active.window_id() == surface.window_id())
+            {
+                self.last_active_x11_surface = None;
+            }
         }
 
         fn configure_request(
@@ -527,10 +544,66 @@ pub mod xwayland {
                     WmWindowProperty::TransientFor => {
                         let transient_for = x11_surface.is_transient_for();
                         info!("transient_for changed: {:?}", transient_for);
+                        // Turn a late transient relation into a parent so the
+                        // window is routed as a dialog. Some apps only set it
+                        // after the surface exists.
+                        let parent_meta_window_id = transient_for.and_then(|parent_window| {
+                            self.x11_surface_per_x11_window
+                                .get(&parent_window)
+                                .and_then(|parent_surface| parent_surface.wl_surface())
+                                .and_then(|parent_wl_surface| {
+                                    self.meta_window_state
+                                        .meta_window_id_per_surface_id
+                                        .get(&get_surface_id(&parent_wl_surface))
+                                        .cloned()
+                                })
+                        });
+                        if let Some(parent_meta_window_id) = parent_meta_window_id {
+                            self.patch_meta_window(
+                                MetaWindowPatch::UpdateParent {
+                                    id: meta_window.id,
+                                    value: Some(parent_meta_window_id),
+                                },
+                                true,
+                            );
+                        }
                     }
                     WmWindowProperty::MotifHints => {
-                        let hints = x11_surface.size_hints();
-                        info!("motif_hints changed: {:?}", hints);
+                        let is_modal = crate::meta_window_state::x11_is_modal(&x11_surface);
+                        info!("motif_hints changed: is_modal={is_modal}");
+                        self.patch_meta_window(
+                            MetaWindowPatch::UpdateIsModal {
+                                id: meta_window.id,
+                                value: is_modal,
+                            },
+                            true,
+                        );
+                    }
+                    WmWindowProperty::NormalHints => {
+                        let is_fixed_sized =
+                            crate::meta_window_state::x11_is_fixed_sized(&x11_surface);
+                        info!("normal_hints changed: is_fixed_sized={is_fixed_sized}");
+                        self.patch_meta_window(
+                            MetaWindowPatch::UpdateIsFixedSized {
+                                id: meta_window.id,
+                                value: is_fixed_sized,
+                            },
+                            true,
+                        );
+                    }
+                    WmWindowProperty::StartupId => {
+                        let startup_id = x11_surface.startup_id();
+                        info!("startup_id changed: {:?}", startup_id);
+                        self.patch_meta_window(
+                            MetaWindowPatch::UpdateStartupId {
+                                id: meta_window.id,
+                                value: startup_id,
+                            },
+                            true,
+                        );
+                    }
+                    WmWindowProperty::WindowType => {
+                        info!("window_type changed: {:?}", x11_surface.window_type());
                     }
 
                     _ => {}
@@ -746,6 +819,22 @@ pub mod xwayland {
                                     })
                             })
                         })
+                    })
+                    // Chromium popups (menus, bubbles) often set no
+                    // `WM_TRANSIENT_FOR` and are mapped without an X11 surface
+                    // focused, so the two hints above are both empty. Attach
+                    // them to the most recently activated X11 toplevel rather
+                    // than dropping them.
+                    .or_else(|| {
+                        self.last_active_x11_surface
+                            .as_ref()
+                            .and_then(|parent_surface| {
+                                parent_surface.wl_surface().and_then(|parent_surface| {
+                                    self.meta_window_state
+                                        .meta_window_id_per_surface_id
+                                        .get(&get_surface_id(&parent_surface))
+                                })
+                            })
                     })
                 {
                     let geometry = surface.geometry();

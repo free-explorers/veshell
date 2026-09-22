@@ -27,10 +27,13 @@ abstract class MetaWindow with _$MetaWindow {
     required double scaleRatio,
     String? appId,
     String? parent,
+    String? activatedBy,
     MetaWindowDisplayMode? displayMode,
     String? title,
     String? windowClass,
     String? startupId,
+    @Default(false) bool isFixedSized,
+    @Default(false) bool isModal,
     String? currentOutput,
     @RectConverter() Rect? geometry,
   }) = _MetaWindow;

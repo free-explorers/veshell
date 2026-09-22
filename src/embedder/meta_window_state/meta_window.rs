@@ -38,7 +38,15 @@ pub enum MetaWindowPatch {
         id: String,
         value: Option<String>,
     },
+    /// Client-declared transient relation (`xdg_toplevel.set_parent`, X11
+    /// transient). Authoritative: the window is a dialog of its owner's tile.
     UpdateParent {
+        id: String,
+        value: Option<String>,
+    },
+    /// `xdg_activation_v1` "opened from" relation: the surface whose activation
+    /// opened this window. Only an owner hint, never a dialog trigger on its own.
+    UpdateActivatedBy {
         id: String,
         value: Option<String>,
     },
@@ -57,6 +65,14 @@ pub enum MetaWindowPatch {
     UpdateStartupId {
         id: String,
         value: Option<String>,
+    },
+    UpdateIsFixedSized {
+        id: String,
+        value: bool,
+    },
+    UpdateIsModal {
+        id: String,
+        value: bool,
     },
     UpdateDisplayMode {
         id: String,
@@ -95,12 +111,19 @@ pub struct MetaWindow {
     pub app_id: Option<String>,
     pub pid: i32,
     pub surface_id: u64,
+    /// Client-declared parent (`xdg_toplevel.set_parent`, X11 transient).
     pub parent: Option<String>,
+    /// `xdg_activation_v1` requester: the window this one was opened from. An
+    /// owner hint only; unlike [`MetaWindow::parent`] it never makes the window
+    /// a dialog by itself.
+    pub activated_by: Option<String>,
     pub mapped: bool,
     pub display_mode: Option<DisplayMode>,
     pub title: Option<String>,
     pub window_class: Option<String>,
     pub startup_id: Option<String>,
+    pub is_fixed_sized: bool,
+    pub is_modal: bool,
     pub geometry: Option<MyRectangle<i32, Logical>>,
     pub need_decoration: bool,
     pub current_output: Option<String>,
@@ -265,6 +288,22 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     meta_window.startup_id = value.clone();
                 }
             }
+            MetaWindowPatch::UpdateIsFixedSized { id, value } => {
+                if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
+                    if meta_window.is_fixed_sized == value {
+                        return;
+                    }
+                    meta_window.is_fixed_sized = value;
+                }
+            }
+            MetaWindowPatch::UpdateIsModal { id, value } => {
+                if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
+                    if meta_window.is_modal == value {
+                        return;
+                    }
+                    meta_window.is_modal = value;
+                }
+            }
             MetaWindowPatch::UpdateGeometry { id, value } => {
                 tracing::info!(
                     target: "veshell::geometry",
@@ -334,12 +373,25 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     meta_window.parent = value.clone();
                 }
             }
-            MetaWindowPatch::UpdatePid { id, value } => {
+            MetaWindowPatch::UpdateActivatedBy { id, value } => {
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
-                    if meta_window.pid == value.clone() {
+                    if meta_window.activated_by == value.clone() {
                         return;
                     }
-                    meta_window.pid = value.clone();
+                    meta_window.activated_by = value.clone();
+                }
+            }
+            MetaWindowPatch::UpdatePid { id, value } => {
+                let mut changed = false;
+                if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
+                    if meta_window.pid == value {
+                        return;
+                    }
+                    meta_window.pid = value;
+                    changed = true;
+                }
+                if changed {
+                    self.emit_process_info(value);
                 }
             }
             MetaWindowPatch::UpdateNeedDecoration { id, value } => {

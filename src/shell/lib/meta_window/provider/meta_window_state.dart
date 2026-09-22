@@ -44,10 +44,13 @@ class MetaWindowState extends _$MetaWindowState {
       appId: desktopEntryForSurface?.desktopEntry.id ?? message.appId,
       surfaceId: message.surfaceId,
       parent: message.parent,
+      activatedBy: message.activatedBy,
       mapped: message.mapped,
       title: message.title,
       windowClass: message.windowClass,
       startupId: message.startupId,
+      isFixedSized: message.isFixedSized,
+      isModal: message.isModal,
       geometry: message.geometry,
       needDecoration: message.needDecoration,
       gameModeActivated: message.gameModeActivated,
@@ -84,6 +87,8 @@ class MetaWindowState extends _$MetaWindowState {
         }
       case UpdateParent():
         state = state.copyWith(parent: patch.value);
+      case UpdateActivatedBy():
+        state = state.copyWith(activatedBy: patch.value);
       case UpdateTitle():
         state = state.copyWith(title: patch.value);
       case UpdatePid():
@@ -92,6 +97,10 @@ class MetaWindowState extends _$MetaWindowState {
         state = state.copyWith(windowClass: patch.value);
       case UpdateStartupId():
         state = state.copyWith(startupId: patch.value);
+      case UpdateIsFixedSized():
+        state = state.copyWith(isFixedSized: patch.value);
+      case UpdateIsModal():
+        state = state.copyWith(isModal: patch.value);
       case UpdateDisplayMode():
         state = state.copyWith(displayMode: patch.value);
       case UpdateMapped():

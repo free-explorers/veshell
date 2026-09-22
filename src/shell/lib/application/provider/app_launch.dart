@@ -1,44 +1,53 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/model/launch_config.serializable.dart';
 import 'package:shell/application/provider/logs_for_pid.dart';
+import 'package:shell/meta_window/provider/process_info_state.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
+import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:uuid/uuid.dart';
 
 part 'app_launch.g.dart';
 
+/// systemd unit name prefix identifying every launch of [trackedWindowId]:
+/// `veshell-launch-<tile-uuid>-`. The trailing `-` separates it from the
+/// per-launch suffix, so matching the prefix never collides with another
+/// tile's (full, fixed-length) uuid.
+String _launchUnitPrefix(WindowId trackedWindowId) =>
+    'veshell-launch-${_windowKey(trackedWindowId)}-';
+
+String _windowKey(WindowId windowId) => switch (windowId) {
+      DialogWindowId(:final uuid) => uuid,
+      PersistentWindowId(:final uuid) => uuid,
+      EphemeralWindowId(:final uuid) => uuid,
+    };
+
 /// Single launch entry point of the compositor.
 ///
 /// Every application started by the shell runs inside a disposable systemd
-/// user service named `veshell-launch-<uuid>.service` whose cgroup is
-/// registered here for launch attribution. Descendants inherit the cgroup,
-/// so the association survives helper processes, `exec` and launcher
-/// wrappers exiting — which is how a placeholder "knows" that windows
-/// reported afterwards belong to its application even when they surface
-/// unrelated ids (`steamwebhelper`, Electron runtimes, games started from
-/// Steam).
+/// user service named after the launching tile:
+/// `veshell-launch-<tile-uuid>-<launch-suffix>.service`. Descendants inherit
+/// the cgroup, so the association survives helper processes, `exec` and
+/// launcher wrappers exiting — which is how a placeholder "knows" that
+/// windows reported afterwards belong to its application even when they
+/// surface unrelated ids (`steamwebhelper`, Electron runtimes, games started
+/// from Steam).
 ///
-/// Lifecycle of an association:
-///
-/// 1. [launchApplication] spawns `systemd-run --user --wait` and registers
-///    `(trackedWindowId → unitName)`.
-/// 2. [windowForPid] resolves native window pids back to the placeholder via
-///    `/proc/<pid>/cgroup`, consulted by the matching engine as a last
-///    resort when ordinary app-id matching finds nothing.
-/// 3. The association is dropped when the tracked service stops (`--wait`
-///    makes the spawned process exit signal the end), or eagerly through
-///    [forgetWindow] to prevent a removed placeholder from adopting windows
-///    afterwards. A relaunch replaces the previous association.
+/// The tile uuid inside the unit name is what makes attribution stable across
+/// relaunches and shell restarts, without any lookup table: [windowForPid]
+/// recognizes the tile from the process cgroup alone. A single-instance
+/// application that keeps running in the cgroup of its *first* launch therefore
+/// stays attributable when the tile relaunches it later (the new launch only
+/// asks the running instance to open a window), and after a shell restart the
+/// prefix is recomputed from the persisted tile. The suffix only has to keep
+/// concurrent launches of the same tile distinct for `systemd-run`.
 ///
 /// Attribution is never a security boundary — cgroups are user-visible and
 /// pids are recycled — it is only matching evidence.
 @Riverpod(keepAlive: true)
 class AppLaunch extends _$AppLaunch {
-  final Map<WindowId, _TrackedLaunch> _trackedLaunches = {};
-
   @override
   void build() {}
 
@@ -93,7 +102,12 @@ class AppLaunch extends _$AppLaunch {
     final environment = await ref
         .read(platformManagerProvider.notifier)
         .fetchLaunchEnvironment();
-    final unitName = 'veshell-launch-${const Uuid().v4()}';
+    // The tile uuid is the stable part; the short suffix only makes this
+    // particular launch's unit unique for `systemd-run` (a unit name cannot be
+    // reused while it is still active).
+    final unitName =
+        '${_launchUnitPrefix(trackedWindowId)}'
+        '${const Uuid().v4().substring(0, 8)}';
     late final Process process;
     try {
       process = await Process.start('systemd-run', [
@@ -103,9 +117,10 @@ class AppLaunch extends _$AppLaunch {
         // Forward service stdio to this process, so the shell-side execution
         // log viewer shows the application's output.
         '--pipe',
-        // Stay alive until the service stops: process.exitCode below relies
-        // on it to clear the launch association exactly when the application
-        // (and its descendants, see ExitType) are gone.
+        // Stay alive until the service stops, so the placeholder's execution
+        // log viewer and waiting state track the application's lifetime.
+        // Attribution does *not* depend on this process exiting: it is keyed
+        // by the unit cgroup and outlives the supervisor (see below).
         '--wait',
         // Transient unit immediately garbage-collected after exit — no
         // stale "veshell-launch-*" units in `systemctl --user`.
@@ -133,63 +148,32 @@ class AppLaunch extends _$AppLaunch {
       return _launchStandard(config);
     }
 
-    // Keep the launch association for as long as the application is alive.
-    // `systemd-run --wait` only exits once the tracked service has stopped,
-    // so its exitCode marks the end of the application.
-    final launch = _TrackedLaunch(unitName);
-    _trackedLaunches[trackedWindowId] = launch;
-    unawaited(
-      process.exitCode.then((_) {
-        if (_trackedLaunches[trackedWindowId] == launch) {
-          _trackedLaunches.remove(trackedWindowId);
-        }
-      }),
-    );
     return process;
   }
 
-  /// Resolves a process back to the placeholder that launched it, reading
-  /// its unified cgroup membership from `/proc/<pid>/cgroup` and matching it
-  /// against the active launch units.
+  /// Resolves a process back to the placeholder that launched it by matching
+  /// its unified cgroup membership, reported by the compositor in the pid
+  /// table (`process_info`), against every tile's launch prefix.
+  ///
+  /// The prefix is derived from the persisted tile id, so this needs no lookup
+  /// table and keeps working after a shell restart and across relaunches: a
+  /// single-instance application keeps the cgroup of its first launch even
+  /// when the tile launches it again.
   ///
   /// Returns null when the pid is unmapped, its process already exited
   /// (common for bootstrappers that hand windows over and exit), the window's
-  /// cgroup cannot be read, or the process migrated out of the launch cgroup
+  /// cgroup is unknown, or the process migrated out of the launch cgroup
   /// (e.g. applications re-homing into `app-*.scope`). Null simply means "no
   /// attribution available" — the caller keeps its ordinary matching result.
   WindowId? windowForPid(int pid) {
-    final cgroupPath = _cgroupPathForPid(pid);
+    final cgroupPath =
+        ref.read(processInfoStateProvider.notifier).forPid(pid)?.cgroup;
     if (cgroupPath == null) return null;
 
-    for (final entry in _trackedLaunches.entries) {
-      if (cgroupPath.contains('/${entry.value.unitName}.service')) {
-        return entry.key;
+    for (final windowId in ref.read(windowManagerProvider).windows) {
+      if (cgroupPath.contains('/${_launchUnitPrefix(windowId)}')) {
+        return windowId;
       }
-    }
-    return null;
-  }
-
-  /// Unified cgroup path of [pid], exposed for launch-attribution
-  /// diagnostics.
-  String? cgroupPathForPid(int pid) => _cgroupPathForPid(pid);
-
-  /// Removes the launch association of a destroyed placeholder so it can no
-  /// longer adopt windows (the application itself keeps running).
-  void forgetWindow(WindowId windowId) {
-    _trackedLaunches.remove(windowId);
-  }
-
-  /// Unified cgroup path of [pid], or null when unreadable: used for
-  /// attribution diagnostics ('Matching' log shows the raw path, which also
-  /// exposes applications that migrated into `app-*.scope`).
-  String? _cgroupPathForPid(int pid) {
-    try {
-      for (final line in File('/proc/$pid/cgroup').readAsLinesSync()) {
-        final separator = line.indexOf('::');
-        if (separator != -1) return line.substring(separator + 2);
-      }
-    } on FileSystemException {
-      return null;
     }
     return null;
   }
@@ -205,10 +189,4 @@ class AppLaunch extends _$AppLaunch {
     }
     return File('$runtimeDirectory/systemd/private').existsSync();
   }
-}
-
-class _TrackedLaunch {
-  _TrackedLaunch(this.unitName);
-
-  final String unitName;
 }

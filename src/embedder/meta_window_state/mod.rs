@@ -15,7 +15,7 @@ use smithay::{
         compositor::with_states,
         shell::xdg::{SurfaceCachedState, ToplevelSurface, XdgToplevelSurfaceData},
     },
-    xwayland::X11Surface,
+    xwayland::{xwm::MwmInputMode, X11Surface},
 };
 use tracing::info;
 use uuid::Uuid;
@@ -33,6 +33,7 @@ use crate::{
 pub mod meta_popup;
 pub mod meta_resize_edge;
 pub mod meta_window;
+pub mod process_info;
 
 pub struct MetaWindowState {
     pub meta_windows: HashMap<String, MetaWindow>,
@@ -40,6 +41,11 @@ pub struct MetaWindowState {
     pub meta_popups: HashMap<String, MetaPopup>,
     pub meta_popup_id_per_surface_id: HashMap<u64, String>,
     pub meta_window_in_gaming_mode: Option<String>,
+    /// `xdg_activation_v1` requesters (see `State::request_activation`) for
+    /// surfaces whose meta window does not exist yet. Consumed in
+    /// [`Self::new_meta_window_for_toplevel`] so the relation is available as
+    /// [`MetaWindow::activated_by`] before the window is mapped.
+    pub pending_activation_parent: HashMap<u64, String>,
 }
 
 impl MetaWindowState {
@@ -50,6 +56,7 @@ impl MetaWindowState {
             meta_popups: HashMap::new(),
             meta_popup_id_per_surface_id: HashMap::new(),
             meta_window_in_gaming_mode: None,
+            pending_activation_parent: HashMap::new(),
         }
     }
 
@@ -66,6 +73,19 @@ impl MetaWindowState {
 }
 
 impl<BackendData: Backend + 'static> State<BackendData> {
+    /// Sends the process-level facts (`cgroup`, Flatpak/Snap id, binary name)
+    /// of `pid` to the shell.
+    ///
+    /// Emitted when a window first reports a pid, when the pid changes, and
+    /// again when the window is mapped, so the shell's pid table follows the
+    /// process as it re-homes into its final cgroup.
+    pub fn emit_process_info(&mut self, pid: i32) {
+        let info = process_info::ProcessInfo::for_pid(pid);
+        tracing::debug!(target: "veshell::process_info", ?info, "emitting process info");
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method("process_info", Some(Box::new(json!(info))), None);
+    }
+
     pub fn new_meta_window_for_toplevel(&mut self, surface: ToplevelSurface) -> MetaWindow {
         let (title, surface_app_id, parent_surface, modal) =
             with_states(surface.wl_surface(), |surface_data| {
@@ -108,15 +128,31 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .or(surface_app_id)
             .or_else(|| get_binary_name_from_pid(pid));
 
-        let meta_window_parent = match parent_surface {
+        let surface_id = get_surface_id(surface.wl_surface());
+
+        // An activation relation discovered before this toplevel had a meta
+        // window (the common case: the client activates the window it is about
+        // to map). It is recorded as `activated_by`, independently of any
+        // client-declared `xdg_toplevel.set_parent`.
+        let activation_parent = self
+            .meta_window_state
+            .pending_activation_parent
+            .remove(&surface_id);
+
+        let xdg_parent = match parent_surface {
             Some(parent) => self
                 .meta_window_state
                 .meta_window_id_per_surface_id
-                .get(&get_surface_id(&parent)),
+                .get(&get_surface_id(&parent))
+                .cloned(),
 
             None => None,
         };
-        let surface_id = get_surface_id(surface.wl_surface());
+
+        // A client-declared parent and an activation "opened from" hint are
+        // independent signals and are recorded separately.
+        let meta_window_parent = xdg_parent;
+        let activated_by = activation_parent;
 
         let is_decorated = surface.with_cached_state(|state| {
             state
@@ -127,17 +163,22 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 .unwrap_or(true)
         });
 
+        self.emit_process_info(pid);
+
         let meta_window = self.create_meta_window(MetaWindow {
             id: Uuid::new_v4().hyphenated().to_string(),
             surface_id: surface_id,
             app_id: app_id.clone(),
             pid,
-            parent: meta_window_parent.cloned(),
+            parent: meta_window_parent,
+            activated_by,
             title: title.clone(),
             mapped: false,
             display_mode: None,
             window_class: None,
             startup_id: None,
+            is_fixed_sized: false,
+            is_modal: modal,
             geometry,
             current_output: None,
             need_decoration: !is_decorated,
@@ -168,6 +209,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             self.meta_window_state
                 .meta_window_id_per_surface_id
                 .get(&parent_id)
+                .cloned()
         });
 
         let pid = x11_surface
@@ -182,12 +224,15 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 get_binary_name_from_pid(pid)
             });
 
+        self.emit_process_info(pid);
+
         let meta_window = self.create_meta_window(MetaWindow {
             id: uuid::Uuid::new_v4().to_string(),
             surface_id: surface_id,
             app_id: app_id.clone(),
             pid,
-            parent: meta_window_parent.cloned(),
+            parent: meta_window_parent,
+            activated_by: None,
             title: if !x11_surface.title().is_empty() {
                 Some(x11_surface.title())
             } else {
@@ -196,7 +241,9 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             mapped: true,
             display_mode: None,
             window_class: (!x11_surface.class().is_empty()).then(|| x11_surface.class()),
-            startup_id: None,
+            startup_id: x11_surface.startup_id(),
+            is_fixed_sized: x11_is_fixed_sized(&x11_surface),
+            is_modal: x11_is_modal(&x11_surface),
             current_output: None,
             geometry: Some(x11_surface.geometry().into()),
             need_decoration: !x11_surface.is_decorated(),
@@ -206,6 +253,27 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         info!("new meta window from x11: {:?}", meta_window);
         meta_window
     }
+}
+
+/// Whether an X11 window is modal, from `_NET_WM_STATE_MODAL` or its MOTIF
+/// input mode. The X11 counterpart of the `xdg_wm_dialog_v1` modal hint.
+pub(crate) fn x11_is_modal(x11_surface: &X11Surface) -> bool {
+    x11_surface.is_modal()
+        || matches!(
+            x11_surface.motif_hints().input_mode,
+            Some(MwmInputMode::PrimaryApplicationModal)
+                | Some(MwmInputMode::SystemModal)
+                | Some(MwmInputMode::FullApplicationModal)
+        )
+}
+
+/// Whether an X11 window is fixed-size: both axes constrained to the same
+/// non-zero size, the X11 counterpart of the Wayland `min == max` check.
+pub(crate) fn x11_is_fixed_sized(x11_surface: &X11Surface) -> bool {
+    x11_surface
+        .min_size()
+        .zip(x11_surface.max_size())
+        .is_some_and(|(min, max)| min.w > 0 && min.h > 0 && min == max)
 }
 
 pub fn determine_desktop_file_app_id_from_pid(pid: i32) -> Option<String> {
@@ -222,7 +290,7 @@ pub fn determine_desktop_file_app_id_from_pid(pid: i32) -> Option<String> {
     None
 }
 
-fn get_flatpack_app_id_from_pid(pid: i32) -> (bool, Option<String>) {
+pub(crate) fn get_flatpack_app_id_from_pid(pid: i32) -> (bool, Option<String>) {
     if pid == 0 {
         return (false, None);
     }
@@ -251,7 +319,7 @@ fn get_flatpack_app_id_from_pid(pid: i32) -> (bool, Option<String>) {
     (true, app_id)
 }
 
-fn get_snap_app_id_from_pid(pid: i32) -> (bool, Option<String>) {
+pub(crate) fn get_snap_app_id_from_pid(pid: i32) -> (bool, Option<String>) {
     if pid == 0 {
         return (false, None);
     }
@@ -277,7 +345,7 @@ fn get_snap_app_id_from_pid(pid: i32) -> (bool, Option<String>) {
     (true, Some(security_label_contents.replace('.', "_")))
 }
 
-fn get_binary_name_from_pid(pid: i32) -> Option<String> {
+pub(crate) fn get_binary_name_from_pid(pid: i32) -> Option<String> {
     if pid == 0 {
         return None;
     }

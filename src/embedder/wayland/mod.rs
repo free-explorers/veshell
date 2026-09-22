@@ -27,8 +27,8 @@ pub mod wayland {
             },
             fractional_scale::with_fractional_scale,
             shell::xdg::{
-                self, ToplevelSurface, XdgPopupSurfaceData, XdgToplevelSurfaceData,
-                XDG_TOPLEVEL_ROLE,
+                self, dialog::ToplevelDialogHint, SurfaceCachedState, ToplevelSurface,
+                XdgPopupSurfaceData, XdgToplevelSurfaceData, XDG_TOPLEVEL_ROLE,
             },
             xwayland_shell::XWAYLAND_SHELL_ROLE,
         },
@@ -205,13 +205,56 @@ pub mod wayland {
                 let mapped = with_renderer_surface_state(surface, |state| state.buffer().is_some())
                     .unwrap_or(false);
 
+                // The xdg-dialog protocol can mark a toplevel as a modal
+                // dialog, and toolkits present non-resizable windows by
+                // constraining both axes to the same size (min == max).
+                let (is_fixed_sized, is_modal) = with_states(surface, |surface_data| {
+                    let Some(toplevel_data) = surface_data.data_map.get::<XdgToplevelSurfaceData>()
+                    else {
+                        return (false, false);
+                    };
+                    let dialog_hint = toplevel_data.lock().unwrap().dialog_hint;
+                    let mut cached_state = surface_data.cached_state.get::<SurfaceCachedState>();
+                    let cached = cached_state.current();
+                    let fixed_size = cached.min_size.w > 0
+                        && cached.min_size.h > 0
+                        && cached.min_size == cached.max_size;
+                    (fixed_size, dialog_hint == ToplevelDialogHint::Modal)
+                });
+
                 tracing::info!(
                     target: "veshell::geometry",
                     surface_id,
                     meta_window_id = %meta_window.id,
                     mapped,
+                    is_fixed_sized,
+                    is_modal,
                     "Updating native surface mapped state"
                 );
+
+                self.patch_meta_window(
+                    MetaWindowPatch::UpdateIsFixedSized {
+                        id: meta_window.id.clone(),
+                        value: is_fixed_sized,
+                    },
+                    true,
+                );
+
+                self.patch_meta_window(
+                    MetaWindowPatch::UpdateIsModal {
+                        id: meta_window.id.clone(),
+                        value: is_modal,
+                    },
+                    true,
+                );
+
+                let became_mapped = mapped && !meta_window.mapped;
+                if became_mapped {
+                    // The process may have re-homed into its final cgroup by
+                    // the time it presents a buffer; refresh the pid table
+                    // before announcing `mapped`, so matching sees it.
+                    self.emit_process_info(meta_window.pid);
+                }
 
                 self.patch_meta_window(
                     MetaWindowPatch::UpdateMapped {

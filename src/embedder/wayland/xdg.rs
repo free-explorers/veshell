@@ -19,9 +19,14 @@ pub mod xdg {
             compositor::{self, add_post_commit_hook, with_states},
             fractional_scale::with_fractional_scale,
             shell::xdg::{
-                decoration::XdgDecorationHandler, Configure, PopupSurface, PositionerState,
-                SurfaceCachedState, ToplevelSurface, XdgPopupSurfaceData, XdgShellHandler,
-                XdgShellState, XdgToplevelSurfaceData,
+                decoration::XdgDecorationHandler,
+                dialog::{ToplevelDialogHint, XdgDialogHandler},
+                Configure, PopupSurface, PositionerState, SurfaceCachedState, ToplevelSurface,
+                XdgPopupSurfaceData, XdgShellHandler, XdgShellState, XdgToplevelSurfaceData,
+            },
+            xdg_activation::{
+                XdgActivationHandler, XdgActivationState, XdgActivationToken,
+                XdgActivationTokenData,
             },
         },
     };
@@ -30,6 +35,7 @@ pub mod xdg {
 
     use crate::{
         flutter_engine::wayland_messages::MyPoint,
+        focus::KeyboardFocusTarget,
         meta_window_state::{
             meta_popup::{self, MetaPopup, MetaPopupPatch},
             meta_resize_edge::MetaResizeEdge,
@@ -481,6 +487,117 @@ pub mod xdg {
             // wasn't sent, then we will send this as part of the initial configure later.
             if toplevel.is_initial_configure_sent() {
                 toplevel.send_configure();
+            }
+        }
+    }
+
+    /// Advertises `xdg_dialog_v1` so toolkits can mark modal/dialog toplevels.
+    /// The hint is also read from the toplevel state on each commit (see the
+    /// mapped-state update in `wayland::commit`); patching it here makes the
+    /// change visible immediately.
+    impl<BackendData: Backend> XdgDialogHandler for State<BackendData> {
+        fn dialog_hint_changed(&mut self, toplevel: ToplevelSurface, hint: ToplevelDialogHint) {
+            let surface_id = get_surface_id(toplevel.wl_surface());
+            let Some(meta_window_id) = self
+                .meta_window_state
+                .meta_window_id_per_surface_id
+                .get(&surface_id)
+                .cloned()
+            else {
+                return;
+            };
+            self.patch_meta_window(
+                MetaWindowPatch::UpdateIsModal {
+                    id: meta_window_id,
+                    value: hint == ToplevelDialogHint::Modal,
+                },
+                true,
+            );
+        }
+    }
+
+    /// Advertises `xdg_activation_v1`. The activation token carries the
+    /// surface that requested the activation (e.g. the main Code OSS window),
+    /// which is a per-window "opened from" relation that toolkits such as
+    /// Electron rely on instead of `xdg_toplevel.set_parent`. When known, it
+    /// is turned into a transient parent so the existing dialog routing groups
+    /// the new window under the correct application instance.
+    impl<BackendData: Backend> XdgActivationHandler for State<BackendData> {
+        fn activation_state(&mut self) -> &mut XdgActivationState {
+            &mut self.xdg_activation_state
+        }
+
+        fn request_activation(
+            &mut self,
+            _token: XdgActivationToken,
+            token_data: XdgActivationTokenData,
+            surface: WlSurface,
+        ) {
+            let activated_surface_id = get_surface_id(&surface);
+
+            let focused_surface = match self.keyboard.current_focus() {
+                Some(KeyboardFocusTarget::WlSurface(focused)) => Some(focused),
+                _ => None,
+            };
+
+            // Prefer the surface the requesting client declared; fall back to
+            // the currently keyboard-focused surface, which for a freshly
+            // opened child is the window the user acted on.
+            let requesting_surface = token_data
+                .surface
+                .clone()
+                .or_else(|| focused_surface.clone());
+
+            let requesting_meta_window_id = requesting_surface.and_then(|requesting| {
+                let requesting_surface_id = get_surface_id(&requesting);
+                if requesting_surface_id == activated_surface_id {
+                    return None;
+                }
+                self.meta_window_state
+                    .meta_window_id_per_surface_id
+                    .get(&requesting_surface_id)
+                    .cloned()
+            });
+
+            let activated_meta_window_id = self
+                .meta_window_state
+                .meta_window_id_per_surface_id
+                .get(&activated_surface_id)
+                .cloned();
+
+            let Some(requesting_meta_window_id) = requesting_meta_window_id else {
+                info!(
+                    target: "veshell::geometry",
+                    activated_surface_id,
+                    "xdg_activation: no requesting window to associate"
+                );
+                return;
+            };
+
+            if let Some(activated_meta_window_id) = activated_meta_window_id {
+                // Record the activation relation independently of any
+                // client-declared parent: it is only an owner hint, not a
+                // dialog marker.
+                info!(
+                    target: "veshell::geometry",
+                    activated_meta_window_id = %activated_meta_window_id,
+                    requesting_meta_window_id = %requesting_meta_window_id,
+                    "xdg_activation: assigning activation relation"
+                );
+                self.patch_meta_window(
+                    MetaWindowPatch::UpdateActivatedBy {
+                        id: activated_meta_window_id,
+                        value: Some(requesting_meta_window_id),
+                    },
+                    true,
+                );
+            } else {
+                // The activated surface has no meta window yet; remember the
+                // relation so `new_meta_window_for_toplevel` applies it at
+                // creation, before the window is mapped.
+                self.meta_window_state
+                    .pending_activation_parent
+                    .insert(activated_surface_id, requesting_meta_window_id);
             }
         }
     }

@@ -11,6 +11,7 @@ import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/widget/container_with_positionnable_children/container_with_positionnable_children.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/widget/floatable_window.dart';
+import 'package:shell/window/widget/window_dialogs.dart';
 
 class WindowWidget extends HookConsumerWidget {
   const WindowWidget({
@@ -135,15 +136,7 @@ class WindowWidget extends HookConsumerWidget {
             ),
             if (dialogMetaWindowList.isNotEmpty) ...[
               const Positioned.fill(child: ColoredBox(color: Colors.black38)),
-              ContainerWithPositionnableChildren(
-                children: dialogMetaWindowList
-                    .map(
-                      (e) => FloatableWindow(
-                        metaWindowId: e,
-                      ),
-                    )
-                    .toList(),
-              ),
+              WindowDialogs(metaWindowIds: dialogMetaWindowList),
             ],
           ],
         ),

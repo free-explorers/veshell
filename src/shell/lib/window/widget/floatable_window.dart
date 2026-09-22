@@ -26,9 +26,12 @@ class FloatableWindow extends HookConsumerWidget {
     final resizeInProgress =
         ref.watch(metaWindowResizingStateProvider(metaWindowId));
     final metaWindow = ref.watch(metaWindowStateProvider(metaWindowId));
+    // `texture` is null until the surface commits its first buffer; a null
+    // check here would make a not-yet-committed dialog crash instead of
+    // appearing as soon as it is ready.
     final surfaceSize = ref.watch(
       wlSurfaceStateProvider(metaWindow.surfaceId).select(
-        (v) => v.texture!.size,
+        (v) => v.texture?.size,
       ),
     );
 
@@ -37,8 +40,8 @@ class FloatableWindow extends HookConsumerWidget {
 
     final metaSize = useMemoized(
       () {
-        final width = metaWindow.geometry?.width ?? surfaceSize.width;
-        var height = metaWindow.geometry?.height ?? surfaceSize.height;
+        final width = metaWindow.geometry?.width ?? surfaceSize?.width ?? 0;
+        var height = metaWindow.geometry?.height ?? surfaceSize?.height ?? 0;
         if (metaWindow.needDecoration) {
           height += 40;
         }

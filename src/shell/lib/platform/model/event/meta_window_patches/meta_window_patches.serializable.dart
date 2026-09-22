@@ -26,6 +26,11 @@ sealed class MetaWindowPatchMessage
     String? value,
   }) = UpdateParent;
 
+  const factory MetaWindowPatchMessage.updateActivatedBy({
+    required String id,
+    String? value,
+  }) = UpdateActivatedBy;
+
   const factory MetaWindowPatchMessage.updateTitle({
     required String id,
     String? value,
@@ -45,6 +50,16 @@ sealed class MetaWindowPatchMessage
     required String id,
     String? value,
   }) = UpdateStartupId;
+
+  const factory MetaWindowPatchMessage.updateIsFixedSized({
+    required String id,
+    required bool value,
+  }) = UpdateIsFixedSized;
+
+  const factory MetaWindowPatchMessage.updateIsModal({
+    required String id,
+    required bool value,
+  }) = UpdateIsModal;
 
   const factory MetaWindowPatchMessage.updateDisplayMode({
     required String id,
