@@ -9,10 +9,11 @@ import 'package:shell/meta_window/widget/meta_popup.dart';
 import 'package:shell/meta_window/widget/meta_surface_decoration.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
+import 'package:shell/shared/util/logger.dart';
+import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/wayland/widget/surface.dart';
 import 'package:shell/wayland/widget/surface/pointer_listener.dart';
 import 'package:shell/wayland/widget/surface/surface_focus.dart';
-import 'package:shell/shared/util/logger.dart';
 
 class MetaSurfaceWidget extends HookConsumerWidget {
   const MetaSurfaceWidget({
@@ -44,6 +45,46 @@ class MetaSurfaceWidget extends HookConsumerWidget {
       'window layout id=$metaWindowId surface=$surfaceId '
       'geometry=${metaWindow.geometry} offset=$offset '
       'scale=${metaWindow.scaleRatio} monitor=$currentMonitor',
+    );
+
+    // Measure the sizing contract: the shell patches `geometry` to the tile
+    // bounds in maximized/fullscreen mode and the client is expected to commit
+    // a buffer of the same logical size. A client that ignores the configure
+    // (e.g. a fixed-size window) leaves the committed texture at its own size,
+    // which shows up here as `match=false`. Logged only when the measured
+    // tuple changes so a repainting client does not flood the log.
+    final committedSurfaceSize = ref.watch(
+      wlSurfaceStateProvider(surfaceId).select((v) => v.texture?.size),
+    );
+    final targetSize = metaWindow.geometry?.size;
+    final logicalSize = committedSurfaceSize == null
+        ? null
+        : Size(
+            committedSurfaceSize.width / metaWindow.scaleRatio,
+            committedSurfaceSize.height / metaWindow.scaleRatio,
+          );
+    final lastSizingSignature = useRef<String?>(null);
+    final sizingSignature = '$targetSize|$logicalSize|'
+        '${metaWindow.isFixedSized}|${metaWindow.scaleRatio}';
+    useEffect(
+      () {
+        if (lastSizingSignature.value == sizingSignature) {
+          return null;
+        }
+        lastSizingSignature.value = sizingSignature;
+        final matches = targetSize != null &&
+            logicalSize != null &&
+            (targetSize.width - logicalSize.width).abs() < 1 &&
+            (targetSize.height - logicalSize.height).abs() < 1;
+        geometryLog.info(
+          'sizing surface id=$metaWindowId surface=$surfaceId '
+          'target=$targetSize actual=$logicalSize '
+          'fixed=${metaWindow.isFixedSized} '
+          'scale=${metaWindow.scaleRatio} match=$matches',
+        );
+        return null;
+      },
+      [sizingSignature],
     );
     useEffect(
       () {

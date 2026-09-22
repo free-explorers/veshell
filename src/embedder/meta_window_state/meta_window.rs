@@ -5,7 +5,7 @@ use smithay::{
         decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode as DecorationMode,
         shell::server::xdg_toplevel,
     },
-    utils::{Logical, Rectangle, Transform},
+    utils::{Logical, Rectangle, Size, Transform},
     wayland::{
         compositor::{send_surface_state, with_states},
         fractional_scale::with_fractional_scale,
@@ -131,6 +131,24 @@ pub struct MetaWindow {
     pub game_mode_activated: bool,
 }
 
+impl MetaWindow {
+    /// The size a maximized or fullscreen xdg toplevel must be configured
+    /// with, taken from the geometry the shell last pushed.
+    ///
+    /// A state-only configure leaves `state.size` unset, which the client
+    /// reads as "choose your own size" and can answer with its minimum size
+    /// (Chromium does). Carrying the geometry keeps the maximize contract.
+    /// `None` while no geometry is known or the window is floating.
+    pub fn maximized_size(&self) -> Option<Size<i32, Logical>> {
+        match self.display_mode {
+            Some(DisplayMode::Maximized | DisplayMode::Fullscreen) => {
+                self.geometry.as_ref().map(|rect| rect.0.size)
+            }
+            _ => None,
+        }
+    }
+}
+
 impl<BackendData: Backend + 'static> State<BackendData> {
     pub fn create_meta_window(&mut self, meta_window: MetaWindow) -> MetaWindow {
         self.meta_window_state
@@ -211,6 +229,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             MetaWindowPatch::UpdateDisplayMode { id, value } => {
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
                     meta_window.display_mode = value.clone();
+                    // A maximized/fullscreen xdg configure must carry the size,
+                    // otherwise the client reads `(0, 0)` as "choose yourself"
+                    // and can fall back to its minimum size.
+                    let target_size = meta_window.maximized_size();
                     let Some(wl_surface) = self.surfaces.get(&meta_window.surface_id).cloned()
                     else {
                         return;
@@ -220,14 +242,23 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         Some(XDG_TOPLEVEL_ROLE) => {
                             if let Some(toplevel) = self.xdg_toplevels.get(&meta_window.surface_id)
                             {
+                                tracing::info!(
+                                    target: "veshell::geometry",
+                                    meta_window_id = %id,
+                                    display_mode = ?value,
+                                    pending_size = ?target_size,
+                                    "Sending xdg display-mode configure"
+                                );
                                 toplevel.with_pending_state(|state| match value {
                                     Some(DisplayMode::Maximized) => {
                                         state.states.set(xdg_toplevel::State::Maximized);
                                         state.states.unset(xdg_toplevel::State::Fullscreen);
+                                        state.size = target_size;
                                     }
                                     Some(DisplayMode::Fullscreen) => {
                                         state.states.set(xdg_toplevel::State::Fullscreen);
                                         state.states.set(xdg_toplevel::State::Maximized);
+                                        state.size = target_size;
                                     }
                                     Some(DisplayMode::Floating) => {
                                         state.states.unset(xdg_toplevel::State::Fullscreen);
@@ -311,6 +342,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     geometry = ?value,
                     "Applying native window geometry patch"
                 );
+                let mut size_changed = false;
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
                     let are_equal = match (&meta_window.geometry, &value) {
                         (Some(current_rect), Some(new_rect)) => {
@@ -326,6 +358,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     if are_equal {
                         return;
                     }
+                    // A size change moves the constraint box the window's
+                    // popups are placed in; the popups must be re-constrained.
+                    size_changed = meta_window.geometry.as_ref().map(|rect| rect.0.size)
+                        != value.as_ref().map(|rect| rect.0.size);
                     meta_window.geometry = value.clone();
                     if propagate == false {
                         let Some(wl_surface) = self.surfaces.get(&meta_window.surface_id).cloned()
@@ -363,6 +399,9 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                             _ => {}
                         }
                     }
+                }
+                if size_changed {
+                    self.reconstrain_popups_for_root(&id);
                 }
             }
             MetaWindowPatch::UpdateParent { id, value } => {

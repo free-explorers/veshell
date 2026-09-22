@@ -465,11 +465,17 @@ impl<BackendData: Backend + 'static> State<BackendData> {
     }
 
     pub fn construct_subsurface_role_message(surface: &WlSurface) -> SubsurfaceMessage {
+        // `wl_subsurface.set_position` modifies double-buffered state of the
+        // *parent* surface, so it takes effect on the parent's commit even when
+        // the child is desynchronized and never committed itself. Smithay only
+        // moves the child's pending location to `current` on the child's own
+        // commit, so read the pending one: the parent-commit recursion below
+        // re-emits this message precisely to surface such state.
         let location = with_states(surface, |surface_data| {
             surface_data
                 .cached_state
                 .get::<SubsurfaceCachedState>()
-                .current()
+                .pending()
                 .location
         });
 
