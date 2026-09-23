@@ -485,6 +485,8 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
         })
         .unwrap();
 
+    State::<Winit>::start_xwayland(&mut state);
+
     while state.running.load(Ordering::SeqCst) {
         let result = event_loop.dispatch(None, &mut state);
 
