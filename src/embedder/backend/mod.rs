@@ -9,8 +9,7 @@ use smithay::backend::{
 
 pub mod drm_backend;
 pub mod render;
-// pub mod winit;
-pub mod x11_client;
+pub mod winit;
 pub trait Backend {
     const HAS_RELATIVE_MOTION: bool = false;
     const FLIP_FLUTTER_TEXTURE: bool = false;

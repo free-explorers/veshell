@@ -53,10 +53,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Fix XWayland crash when too many file descriptors are open.
     let _ = rlimit::increase_nofile_limit(u64::MAX);
 
-    if env::var("DISPLAY").is_ok() || env::var("WAYLAND_DISPLAY").is_ok() {
-        backend::x11_client::run_x11_client();
-    } else {
-        backend::drm_backend::run_drm_backend();
+    // Backend selection: `VESHELL_BACKEND={drm,winit}` forces a backend,
+    // otherwise a nested session (DISPLAY/WAYLAND_DISPLAY set) uses winit and
+    // a bare TTY session uses the DRM backend.
+    let requested = env::var("VESHELL_BACKEND").unwrap_or_default();
+    let nested = env::var("DISPLAY").is_ok() || env::var("WAYLAND_DISPLAY").is_ok();
+    match requested.as_str() {
+        "drm" => backend::drm_backend::run_drm_backend(),
+        "winit" => backend::winit::run_winit_backend()?,
+        _ if nested => backend::winit::run_winit_backend()?,
+        _ => backend::drm_backend::run_drm_backend(),
     }
 
     Ok(())

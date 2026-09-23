@@ -32,7 +32,6 @@ features = [
     "backend_session_libseat",
     "backend_udev",
     "backend_vulkan",
-    "backend_x11",
     "backend_winit",
     "desktop",
     "renderer_gl",

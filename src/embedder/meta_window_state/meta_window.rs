@@ -496,22 +496,20 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 }
             }
             MetaWindowPatch::UpdateScaleRatio { id, value } => {
+                // XWayland may not be ready yet (or not be running at all):
+                // then there is no client scale to mirror on x11 surfaces.
                 let xwayland_scale_ratio = self
                     .xwayland_state
                     .as_ref()
-                    .unwrap()
-                    .client
-                    .get_data::<XWaylandClientData>()
-                    .unwrap()
-                    .compositor_state
-                    .client_scale();
+                    .and_then(|state| state.client.get_data::<XWaylandClientData>())
+                    .map(|data| data.compositor_state.client_scale());
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
                     tracing::info!(
                         target: "veshell::geometry",
                         meta_window_id = %id,
                         requested_scale_ratio = value,
                         previous_scale_ratio = meta_window.scale_ratio,
-                        xwayland_scale_ratio,
+                        xwayland_scale_ratio = ?xwayland_scale_ratio,
                         "Applying native window scale patch"
                     );
                     if meta_window.scale_ratio == value.clone() {
@@ -522,7 +520,9 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     if let Some(surface) = self.surfaces.get(&meta_window.surface_id) {
                         if let Some(x11_surface) = self.x11_surface_per_wl_surface.get(surface) {
                             // for xwayland force scale ratio to be the same as the client scale
-                            meta_window.scale_ratio = xwayland_scale_ratio;
+                            if let Some(xwayland_scale_ratio) = xwayland_scale_ratio {
+                                meta_window.scale_ratio = xwayland_scale_ratio;
+                            }
                         } else {
                             with_states(surface, |data| {
                                 with_fractional_scale(data, |fractional| {
