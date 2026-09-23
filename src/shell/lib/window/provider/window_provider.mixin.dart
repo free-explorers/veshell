@@ -11,11 +11,13 @@ import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/shared/util/logger.dart';
+import 'package:shell/window/model/matching_decision.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
 import 'package:shell/window/model/window_base.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
+import 'package:shell/window/provider/window_manager/matching_decision_recorder.dart';
 import 'package:shell/window/provider/window_manager/matching_engine.dart';
 import 'package:shell/window/provider/window_manager/matching_utils.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
@@ -150,14 +152,18 @@ mixin WindowProviderMixin<T extends Window> {
           final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
           return _displayCost(metaWindow);
         }).toList();
-        final minCost = costs.reduce(min);
-        newDisplayedMetaWindowId = metaWindowIdList[costs.indexOf(minCost)];
+        final totals = [
+          for (final cost in costs) cost.cost.total + cost.fixedSizePenalty,
+        ];
+        final minCost = totals.reduce(min);
+        newDisplayedMetaWindowId = metaWindowIdList[totals.indexOf(minCost)];
       }
     }
 
     if (newDisplayedMetaWindowId != _displayedMetaWindowId) {
       _displayedMetaWindowId = newDisplayedMetaWindowId;
       print('new displayed meta window: $_displayedMetaWindowId');
+      _recordDisplayDecision(_displayedMetaWindowId);
       onCurrentlyDisplayedMetaWindowChanged(_displayedMetaWindowId);
     }
 
@@ -182,13 +188,44 @@ mixin WindowProviderMixin<T extends Window> {
   /// unpenalised cost): when a tile owns both a fixed-size helper and the
   /// application's real window, the real one is displayed and the helper is
   /// the better leftover to turn into a dialog.
-  int _displayCost(MetaWindow metaWindow) {
+  ({MatchingCost cost, int fixedSizePenalty}) _displayCost(
+    MetaWindow metaWindow,
+  ) {
     final cost = windowMatchingCost(
       MatchingInfo.fromMetaWindow(metaWindow),
       getMatchingInfo(),
       state,
     );
-    return metaWindow.isFixedSized ? cost + _fixedSizeDisplayPenalty : cost;
+    return (
+      cost: cost,
+      fixedSizePenalty: metaWindow.isFixedSized ? _fixedSizeDisplayPenalty : 0,
+    );
+  }
+
+  /// Records which owned window the tile chose to display, with the cost and
+  /// fixed-size penalty of each candidate (debug recorder only).
+  void _recordDisplayDecision(MetaWindowId? displayed) {
+    recordMatchingDecision(
+      ref,
+      () => MatchingDecision.display(
+        windowId: windowIdKey(state.windowId),
+        displayedWindowId: displayed,
+        owned: [
+          for (final metaWindowId in _metaWindowSubscriptions.keys)
+            _displayCostEntry(metaWindowId),
+        ],
+      ),
+    );
+  }
+
+  Map<String, Object?> _displayCostEntry(MetaWindowId metaWindowId) {
+    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+    final cost = _displayCost(metaWindow);
+    return {
+      'metaWindowId': metaWindowId,
+      'cost': cost.cost.toJson(),
+      'fixedSizePenalty': cost.fixedSizePenalty,
+    };
   }
 
   /// Whether the displayed window may become the tile's matching identity.
@@ -235,6 +272,13 @@ mixin WindowProviderMixin<T extends Window> {
     // gathering forever; the reopen branch below re-arms it when needed.
     _launchOrigin = false;
     _redistributeOwnedMetaWindows();
+    recordMatchingDecision(
+      ref,
+      () => MatchingDecision.burst(
+        windowId: windowIdKey(state.windowId),
+        phase: 'settled',
+      ),
+    );
 
     final lostEverything = _metaWindowSubscriptions.isEmpty;
 
@@ -247,6 +291,13 @@ mixin WindowProviderMixin<T extends Window> {
       matchingLog.info(
         'Launched tile ${state.windowId} lost all its windows to '
         'better-matching siblings; reopening one',
+      );
+      recordMatchingDecision(
+        ref,
+        () => MatchingDecision.burst(
+          windowId: windowIdKey(state.windowId),
+          phase: 'reopened',
+        ),
       );
       unawaited(launchSelf());
       return;
@@ -277,7 +328,7 @@ mixin WindowProviderMixin<T extends Window> {
     //    the next best.
     final remaining = owned.toSet();
     while (remaining.isNotEmpty) {
-      final plans = <(MetaWindowId, WindowId, int)>[];
+      final plans = <(MetaWindowId, WindowId, MatchingCost)>[];
       for (final metaWindowId in remaining) {
         final (other, otherCost) = ref
             .read(matchingEngineProvider.notifier)
@@ -294,7 +345,7 @@ mixin WindowProviderMixin<T extends Window> {
           getMatchingInfo(),
           state,
         );
-        if (otherCost < ownerCost) {
+        if (otherCost.total < ownerCost.total) {
           plans.add((metaWindowId, other, otherCost));
         }
       }
@@ -302,7 +353,7 @@ mixin WindowProviderMixin<T extends Window> {
         break;
       }
       plans.sort((a, b) {
-        final byCost = a.$3.compareTo(b.$3);
+        final byCost = a.$3.total.compareTo(b.$3.total);
         return byCost != 0 ? byCost : a.$1.compareTo(b.$1);
       });
       var movedAny = false;
@@ -310,7 +361,7 @@ mixin WindowProviderMixin<T extends Window> {
         if (taken.contains(plan.$2)) {
           continue;
         }
-        _moveMetaWindow(plan.$1, plan.$2);
+        _moveMetaWindow(plan.$1, plan.$2, reason: 'sibling', cost: plan.$3);
         taken.add(plan.$2);
         remaining.remove(plan.$1);
         movedAny = true;
@@ -335,7 +386,7 @@ mixin WindowProviderMixin<T extends Window> {
           .read(matchingEngineProvider.notifier)
           .findEmptySiblingForApp(appId, excludedWindowIds: taken.toList());
       if (emptySibling != null) {
-        _moveMetaWindow(metaWindowId, emptySibling);
+        _moveMetaWindow(metaWindowId, emptySibling, reason: 'emptySibling');
         taken.add(emptySibling);
       } else {
         _makeDialog(metaWindowId);
@@ -343,7 +394,22 @@ mixin WindowProviderMixin<T extends Window> {
     }
   }
 
-  void _moveMetaWindow(MetaWindowId metaWindowId, WindowId destination) {
+  void _moveMetaWindow(
+    MetaWindowId metaWindowId,
+    WindowId destination, {
+    required String reason,
+    MatchingCost? cost,
+  }) {
+    recordMatchingDecision(
+      ref,
+      () => MatchingDecision.move(
+        windowId: windowIdKey(state.windowId),
+        metaWindowId: metaWindowId,
+        toWindowId: windowIdKey(destination),
+        reason: reason,
+        cost: cost?.toJson(),
+      ),
+    );
     removeMetaWindow(metaWindowId, shouldNotify: false);
     switch (destination) {
       case PersistentWindowId():
@@ -360,6 +426,13 @@ mixin WindowProviderMixin<T extends Window> {
 
   void _makeDialog(MetaWindowId metaWindowId) {
     print('Creating new dialog window for metaWindow $metaWindowId');
+    recordMatchingDecision(
+      ref,
+      () => MatchingDecision.dialog(
+        windowId: windowIdKey(state.windowId),
+        metaWindowId: metaWindowId,
+      ),
+    );
     removeMetaWindow(metaWindowId, shouldNotify: false);
     ref
         .read(windowManagerProvider.notifier)

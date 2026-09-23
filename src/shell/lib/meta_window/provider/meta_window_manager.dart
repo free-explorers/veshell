@@ -9,10 +9,12 @@ import 'package:shell/meta_window/provider/process_info_state.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
+import 'package:shell/window/model/matching_decision.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
+import 'package:shell/window/provider/window_manager/matching_decision_recorder.dart';
 import 'package:shell/window/provider/window_manager/matching_engine.dart';
 import 'package:shell/window/provider/window_manager/matching_utils.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
@@ -127,7 +129,9 @@ class MetaWindowManager extends _$MetaWindowManager {
         }
         return;
       }
-      _createDialog(id, engine.rootTileFor(parentWindowId));
+      final owner = engine.rootTileFor(parentWindowId);
+      _recordRouting(metaWindow, branch: 'clientParent', owner: owner);
+      _createDialog(id, owner);
       return;
     }
 
@@ -137,7 +141,9 @@ class MetaWindowManager extends _$MetaWindowManager {
     if (metaWindow.isModal) {
       final owner = engine.resolveDialogOwnerIfAny(id);
       if (owner != null) {
-        _createDialog(id, engine.rootTileFor(owner));
+        final rootOwner = engine.rootTileFor(owner);
+        _recordRouting(metaWindow, branch: 'modal', owner: rootOwner);
+        _createDialog(id, rootOwner);
         return;
       }
     }
@@ -157,11 +163,36 @@ class MetaWindowManager extends _$MetaWindowManager {
       relationOwner = null;
     }
     if (relationOwner != null) {
-      _createDialog(id, engine.rootTileFor(relationOwner));
+      final rootOwner = engine.rootTileFor(relationOwner);
+      _recordRouting(metaWindow, branch: 'relation', owner: rootOwner);
+      _createDialog(id, rootOwner);
       return;
     }
 
+    _recordRouting(metaWindow, branch: 'ordinary');
     engine.addMetaWindow(id);
+  }
+
+  /// Records the routing branch chosen for [metaWindow] for the debug recorder.
+  void _recordRouting(
+    MetaWindow metaWindow, {
+    required String branch,
+    WindowId? owner,
+  }) {
+    recordMatchingDecision(
+      ref,
+      () => MatchingDecision.routing(
+        metaWindowId: metaWindow.id,
+        appId: metaWindow.appId ?? '',
+        pid: metaWindow.pid,
+        parent: metaWindow.parent,
+        activatedBy: metaWindow.activatedBy,
+        isModal: metaWindow.isModal,
+        isFixedSized: metaWindow.isFixedSized,
+        branch: branch,
+        ownerWindowId: owner == null ? null : windowIdKey(owner),
+      ),
+    );
   }
 
   void _createDialog(MetaWindowId id, WindowId owner) {
@@ -209,6 +240,19 @@ class MetaWindowManager extends _$MetaWindowManager {
     if (rootOwner == currentOwner) {
       return;
     }
+    recordMatchingDecision(
+      ref,
+      () => MatchingDecision.reroute(
+        metaWindowId: id,
+        fromWindowId: windowIdKey(currentOwner),
+        toWindowId: windowIdKey(rootOwner),
+        reason: metaWindow.parent != null
+            ? 'parent'
+            : metaWindow.isModal
+            ? 'modal'
+            : 'activation',
+      ),
+    );
     (switch (currentOwner) {
               PersistentWindowId() => ref.read(
                 persistentWindowStateProvider(currentOwner).notifier,
