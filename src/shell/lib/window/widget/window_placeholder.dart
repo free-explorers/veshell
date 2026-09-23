@@ -40,6 +40,8 @@ class WindowPlaceholder extends HookConsumerWidget {
     useListenable(focusNode ?? Listenable.merge([]));
     final isFocused = focusNode?.hasFocus ?? false;
     final backgroundFocusNode = useFocusNode(debugLabel: 'background InkWell');
+    final moreMenuController = useMemoized(MenuController.new);
+    const moreMenuLabel = 'Launch and record all platform events';
 
     // The process of the launch this placeholder started, and whether it
     // exited with a non-zero code. Kept locally: the failure only affects the
@@ -94,14 +96,6 @@ class WindowPlaceholder extends HookConsumerWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  IconButton(
-                    tooltip: 'Launch and record all platform events',
-                    onPressed: () => ref
-                        .read(platformEventRecorderProvider.notifier)
-                        .recordLaunch(window.windowId),
-                    icon: const Icon(MdiIcons.bug),
-                  ),
-                  const SizedBox(width: 8),
                   DisplayModeRow(
                     selectedMode: window.displayMode,
                     onSelectionChanged: (mode) => ref
@@ -111,6 +105,44 @@ class WindowPlaceholder extends HookConsumerWidget {
                           ).notifier,
                         )
                         .setDisplayMode(mode),
+                  ),
+                  const SizedBox(width: 16),
+                  // An RTL directionality makes MenuAnchor right-align the menu
+                  // with the trigger, so its trailing icon lines up under the
+                  // three-dot icon. The menu item is forced back to LTR so the
+                  // label stays left-aligned and the icon stays at the end.
+                  Directionality(
+                    textDirection: TextDirection.rtl,
+                    child: MenuAnchor(
+                      controller: moreMenuController,
+                      consumeOutsideTap: true,
+                      style: const MenuStyle(
+                        alignment: AlignmentDirectional.bottomStart,
+                      ),
+                      alignmentOffset: const Offset(0, 4),
+                      menuChildren: [
+                        Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: MenuItemButton(
+                            trailingIcon: const Icon(MdiIcons.bug),
+                            onPressed: () {
+                              ref
+                                  .read(platformEventRecorderProvider.notifier)
+                                  .recordLaunch(window.windowId);
+                              moreMenuController.close();
+                            },
+                            child: const Text(moreMenuLabel),
+                          ),
+                        ),
+                      ],
+                      builder: (context, controller, child) => IconButton(
+                        tooltip: 'More',
+                        onPressed: () => controller.isOpen
+                            ? controller.close()
+                            : controller.open(),
+                        icon: const Icon(MdiIcons.dotsVertical),
+                      ),
+                    ),
                   ),
                 ],
               ),
