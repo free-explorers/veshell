@@ -185,7 +185,10 @@ class WindowWidget extends HookConsumerWidget {
             ),
             if (dialogMetaWindowList.isNotEmpty) ...[
               const Positioned.fill(child: ColoredBox(color: Colors.black38)),
-              WindowDialogs(metaWindowIds: dialogMetaWindowList),
+              WindowDialogs(
+                metaWindowIds: dialogMetaWindowList,
+                maxSizeFactor: 0.9,
+              ),
             ],
           ],
         ),

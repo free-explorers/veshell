@@ -94,7 +94,14 @@ class PersistentWindowTileable extends Tileable {
                     // A tile whose only windows are popups still renders them,
                     // over an empty background, instead of hiding them behind
                     // its placeholder.
-                    ? WindowDialogs(metaWindowIds: dialogMetaWindowIds)
+                    ? WindowDialogs(
+                        metaWindowIds: dialogMetaWindowIds,
+                        maxSizeFactor: switch (window.displayMode) {
+                          DisplayMode.maximized ||
+                          DisplayMode.fullscreen => 0.9,
+                          _ => 1,
+                        },
+                      )
                     : WindowPlaceholder(
                         isSelected: isSelected,
                         focusNode: primaryFocusNode,

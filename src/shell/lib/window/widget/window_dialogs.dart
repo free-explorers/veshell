@@ -10,9 +10,16 @@ import 'package:shell/window/widget/floatable_window.dart';
 /// content). [ContainerWithPositionnableChildren] provides the
 /// `RepositionnableControllerWidget` that [FloatableWindow] relies on.
 class WindowDialogs extends StatelessWidget {
-  const WindowDialogs({required this.metaWindowIds, super.key});
+  const WindowDialogs({
+    required this.metaWindowIds,
+    this.maxSizeFactor = 1,
+    super.key,
+  });
 
   final List<MetaWindowId> metaWindowIds;
+
+  /// Forwarded to each [FloatableWindow] to cap its size.
+  final double maxSizeFactor;
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +29,10 @@ class WindowDialogs extends StatelessWidget {
     return ContainerWithPositionnableChildren(
       children: [
         for (final metaWindowId in metaWindowIds)
-          FloatableWindow(metaWindowId: metaWindowId),
+          FloatableWindow(
+            metaWindowId: metaWindowId,
+            maxSizeFactor: maxSizeFactor,
+          ),
       ],
     );
   }
