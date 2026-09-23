@@ -12,7 +12,11 @@ class LogsForPid extends _$LogsForPid {
     return [];
   }
 
-  void setProcess(Process process) {
+  void setProcess(Process process, {String? command}) {
+    if (command != null && command.trim().isNotEmpty) {
+      state = [...state, '\$ $command\n'];
+    }
+
     void onEvent(List<int> event) {
       final string = String.fromCharCodes(event);
       state = [...state, string];
