@@ -9,7 +9,7 @@ use smithay::backend::{
 
 pub mod drm_backend;
 pub mod render;
-// pub mod winit;
+pub mod winit;
 pub mod x11_client;
 pub trait Backend {
     const HAS_RELATIVE_MOTION: bool = false;

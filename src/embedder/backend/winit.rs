@@ -1,41 +1,43 @@
+use std::os::fd::OwnedFd;
 use std::sync::atomic::Ordering;
 
-use smithay::{
-    backend::{
-        allocator::dmabuf::Dmabuf,
-        egl::EGLDevice,
-        input::{Event, InputEvent, KeyboardKeyEvent},
-        renderer::{
-            damage::OutputDamageTracker, element::surface::WaylandSurfaceRenderElement,
-            gles::GlesRenderer, ImportDma, ImportEgl,
-        },
-        winit::{self, WinitEvent, WinitGraphicsBackend, WinitInput},
-    },
-    output::{Mode, Output, PhysicalProperties, Subpixel},
-    reexports::{calloop::EventLoop, wayland_server::Display},
-    utils::{Rectangle, Transform},
-    wayland::dmabuf::{
-        DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier,
-    },
+use smithay::backend::allocator::dmabuf::{AnyError, Dmabuf, DmabufAllocator};
+use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags};
+use smithay::backend::allocator::{Allocator, Fourcc, Swapchain};
+use smithay::backend::egl::{self, EGLDevice};
+use smithay::backend::input::{Event, InputEvent, KeyState, KeyboardKeyEvent};
+use smithay::backend::renderer::damage::OutputDamageTracker;
+use smithay::backend::renderer::element::texture::TextureRenderElement;
+use smithay::backend::renderer::gles::ffi::Gles2;
+use smithay::backend::renderer::gles::GlesRenderer;
+use smithay::backend::renderer::{ImportDma, ImportEgl};
+use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend, WinitInput};
+use smithay::output::{Mode, Output, PhysicalProperties, Scale, Subpixel};
+use smithay::reexports::calloop::channel::Event as CalloopEvent;
+use smithay::reexports::calloop::EventLoop;
+use smithay::reexports::gbm;
+use smithay::reexports::wayland_server::protocol::wl_shm;
+use smithay::reexports::wayland_server::Display;
+use smithay::utils::{DeviceFd, Transform};
+use smithay::wayland::dmabuf::{
+    DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier,
 };
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
-use crate::{
-    flutter_engine::{
-        embedder::FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse, EmbedderChannels,
-        FlutterEngine,
-    },
-    keyboard::handle_keyboard_event,
-    settings,
-    state::State,
-};
+use crate::flutter_engine::view::OutputViewIdWrapper;
+use crate::flutter_engine::{EmbedderChannels, FlutterEngine};
+use crate::keyboard::handle_keyboard_event;
+use crate::settings::{self, MonitorConfiguration};
+use crate::{send_frames_surface_tree, State};
 
+use super::render::get_render_elements;
 use super::Backend;
 
 pub struct Winit {
     backend: WinitGraphicsBackend<GlesRenderer>,
     damage_tracker: OutputDamageTracker,
     output: Output,
+    gbm_device: gbm::Device<DeviceFd>,
 }
 
 impl Backend for Winit {
@@ -54,8 +56,22 @@ impl Backend for Winit {
         Some(f(self.backend.renderer()))
     }
 
-    fn get_buffer_for_view(&mut self, view_id: i64) -> Option<Dmabuf> {
-        None
+    fn new_swapchain(
+        &mut self,
+        width: u32,
+        height: u32,
+    ) -> Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>> {
+        let dmabuf_formats = self.backend.renderer().dmabuf_formats();
+        let dmabuf_allocator: Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>> = {
+            let gbm_allocator =
+                GbmAllocator::new(self.gbm_device.clone(), GbmBufferFlags::RENDERING);
+            Box::new(DmabufAllocator(gbm_allocator))
+        };
+        let modifiers = dmabuf_formats
+            .iter()
+            .map(|format| format.modifier)
+            .collect::<Vec<_>>();
+        Swapchain::new(dmabuf_allocator, width, height, Fourcc::Argb8888, modifiers)
     }
 }
 
@@ -91,10 +107,38 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
 
     let (mut backend, winit) = winit::init::<GlesRenderer>()?;
 
+    // The Flutter engine renders into dmabufs, so we need a GBM allocator on
+    // the same GPU that backs the winit EGL context. Derive that GPU's render
+    // node from the EGL device and open it directly.
+    let render_node = EGLDevice::device_for_display(backend.renderer().egl_context().display())
+        .and_then(|device| device.try_get_render_node());
+    let render_node = match render_node {
+        Ok(Some(node)) => node,
+        Ok(None) => {
+            return Err(
+                "winit EGL device has no DRM render node: cannot allocate Flutter buffers".into(),
+            )
+        }
+        Err(err) => {
+            return Err(format!("failed to query the winit EGL device render node: {err}").into())
+        }
+    };
+    let render_path = render_node
+        .dev_path()
+        .ok_or("winit render node has no device path")?;
+    let render_file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&render_path)?;
+    let gbm_device = gbm::Device::new(DeviceFd::from(OwnedFd::from(render_file)))
+        .map_err(|err| format!("failed to open GBM device {}: {err}", render_path.display()))?;
+    info!(?render_node, "Using render node for Flutter buffers");
+
     let mode = Mode {
         size: backend.window_size(),
         refresh: 60_000,
     };
+    let initial_size = mode.size;
 
     let output = Output::new(
         "winit".to_string(),
@@ -103,58 +147,28 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
             subpixel: Subpixel::Unknown,
             make: "Veshell".into(),
             model: "Winit".into(),
+            serial_number: String::new(),
         },
     );
-
     let _global = output.create_global::<State<Winit>>(&display_handle);
-
     output.change_current_state(
         Some(mode),
         Some(Transform::Flipped180),
-        None,
+        Some(Scale::Fractional(backend.scale_factor())),
         Some((0, 0).into()),
     );
     output.set_preferred(mode);
+    let damage_tracker = OutputDamageTracker::from_output(&output);
 
-    let render_node = EGLDevice::device_for_display(backend.renderer().egl_context().display())
-        .and_then(|device| device.try_get_render_node());
-
-    let dmabuf_default_feedback = match render_node {
-        Ok(Some(node)) => {
-            let dmabuf_formats = backend.renderer().dmabuf_formats();
-            let dmabuf_default_feedback = DmabufFeedbackBuilder::new(node.dev_id(), dmabuf_formats)
-                .build()
-                .unwrap();
-
-            Some(dmabuf_default_feedback)
-        }
-        Ok(None) => {
-            warn!("failed to query render node, dmabuf will use v3");
-            None
-        }
-        Err(err) => {
-            warn!(?err, "failed to egl device for display, dmabuf will use v3");
-            None
-        }
-    };
-
-    // if we failed to build dmabuf feedback we fall back to dmabuf v3
-    // Note: egl on Mesa requires either v4 or wl_drm (initialized with bind_wl_display)
-    let (dmabuf_state, _dmabuf_global, _dmabuf_default_feedback) =
-        if let Some(default_feedback) = dmabuf_default_feedback {
-            let mut dmabuf_state = DmabufState::new();
-            let dmabuf_global = dmabuf_state.create_global_with_default_feedback::<State<Winit>>(
-                &display.handle(),
-                &default_feedback,
-            );
-            (dmabuf_state, dmabuf_global, Some(default_feedback))
-        } else {
-            let dmabuf_formats = backend.renderer().dmabuf_formats();
-            let mut dmabuf_state = DmabufState::new();
-            let dmabuf_global =
-                dmabuf_state.create_global::<State<Winit>>(&display.handle(), dmabuf_formats);
-            (dmabuf_state, dmabuf_global, None)
-        };
+    let dmabuf_formats = backend.renderer().dmabuf_formats();
+    let dmabuf_default_feedback = DmabufFeedbackBuilder::new(render_node.dev_id(), dmabuf_formats)
+        .build()
+        .unwrap();
+    let mut dmabuf_state = DmabufState::new();
+    let _dmabuf_global = dmabuf_state.create_global_with_default_feedback::<State<Winit>>(
+        &display.handle(),
+        &dmabuf_default_feedback,
+    );
 
     if backend
         .renderer()
@@ -164,60 +178,136 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
         info!("EGL hardware-acceleration enabled");
     };
 
-    /*     let dmabuf_allocator: Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>> = {
-        let gbm_allocator = GbmAllocator::new(gbm_device.clone(), GbmBufferFlags::RENDERING);
-        Box::new(DmabufAllocator(gbm_allocator))
-    };
-
-    let modifiers = renderer
-        .egl_context()
-        .dmabuf_texture_formats()
-        .iter()
-        .map(|format| format.modifier)
-        .collect::<Vec<_>>();
-
-    let swapchain = Some(Swapchain::new(
-        dmabuf_allocator,
-        0,
-        0,
-        Fourcc::Argb8888,
-        modifiers,
-    )); */
-
     let settings_manager = settings::SettingsManager::new(
         event_loop.handle(),
         |data: &mut State<Winit>| {
             let settings = data.settings_manager.get_settings();
             data.apply_veshell_settings(&settings);
         },
-        |_data, monitor_name| {
+        |data: &mut State<Winit>, monitor_name| {
             info!("Monitor settings updated of {}", monitor_name);
+            let config: MonitorConfiguration = data
+                .settings_manager
+                .get_monitor_configuration(monitor_name)
+                .unwrap();
+            if let Some(output) = data.get_output_by_name(monitor_name) {
+                let any_changes =
+                    data.apply_monitor_configuration_to_output(&output.clone(), config);
+
+                if any_changes {
+                    data.on_outputs_changed();
+                }
+            }
         },
     );
 
-    let mut damage_tracker = OutputDamageTracker::from_output(&output);
+    let mut state = State::new(
+        display,
+        event_loop.handle(),
+        Winit {
+            backend,
+            damage_tracker,
+            output: output.clone(),
+            gbm_device,
+        },
+        Some(dmabuf_state),
+        settings_manager,
+    );
+
+    if let Some(monitor_setting) = state
+        .settings_manager
+        .get_monitor_configuration(&output.name())
+    {
+        state.apply_monitor_configuration_to_output(&output, monitor_setting);
+    }
+
+    state.gl = Some(Gles2::load_with(|s| unsafe {
+        egl::get_proc_address(s) as *const _
+    }));
+
+    let (
+        flutter_engine,
+        EmbedderChannels {
+            tx_output_height,
+            rx_baton,
+        },
+    ) = FlutterEngine::new(&mut state).unwrap();
+
+    state.flutter_engine = Some(flutter_engine);
+
+    tx_output_height.send(initial_size.h as u16).unwrap();
+    state.map_output(&output, output.current_location());
+
+    let view_id = state.flutter_engine_mut().add_view(0, &output);
+
+    output
+        .user_data()
+        .insert_if_missing(|| OutputViewIdWrapper { view_id });
+
+    state.on_outputs_changed();
+
+    // Mandatory formats by the Wayland spec.
+    state
+        .shm_state
+        .update_formats([wl_shm::Format::Argb8888, wl_shm::Format::Xrgb8888]);
 
     event_loop
         .handle()
-        .insert_source(winit, move |event, _, data| {
-            let display = &mut data.display_handle;
-
+        .insert_source(winit, move |event, _, data: &mut State<Winit>| {
             match event {
-                WinitEvent::Resized { size, .. } => {
+                WinitEvent::Resized { size, scale_factor } => {
+                    let scale_changed =
+                        data.backend_data.output.current_scale().fractional_scale() != scale_factor;
+                    let new_scale = scale_changed.then(|| Scale::Fractional(scale_factor));
+
                     data.backend_data.output.change_current_state(
                         Some(Mode {
                             size,
                             refresh: 60_000,
                         }),
                         None,
-                        None,
+                        new_scale,
                         None,
                     );
+
+                    // The damage tracker captures the output scale/transform at
+                    // creation, so it must be rebuilt when the scale changes.
+                    if scale_changed {
+                        data.backend_data.damage_tracker =
+                            OutputDamageTracker::from_output(&data.backend_data.output);
+                    }
+
+                    data.output_layout_changed();
+
+                    let _ = tx_output_height.send(size.h as u16);
+
+                    let resized_output = data.backend_data.output.clone();
+                    data.flutter_engine_mut()
+                        .resize_view(view_id, &resized_output)
+                        .unwrap();
+
+                    data.on_outputs_changed();
+                    data.backend_data.backend.window().request_redraw();
                 }
                 WinitEvent::Input(event) => match event {
-                    InputEvent::DeviceAdded { mut device } => {}
+                    InputEvent::DeviceAdded { device: _ } => {}
                     InputEvent::DeviceRemoved { device: _ } => {}
                     InputEvent::Keyboard { event } => {
+                        let keyboard = data.keyboard.clone();
+
+                        // Ignore release events for keys that are not pressed.
+                        // This can happen when using Alt+Tab to switch windows
+                        // and focus the compositor. Flutter doesn't expect to
+                        // receive release events for keys that are not pressed.
+                        if event.state() == KeyState::Released
+                            && !keyboard.pressed_keys().contains(&event.key_code())
+                        {
+                            info!(
+                                "Ignoring key {:?} release event because it was not pressed.",
+                                event.key_code()
+                            );
+                            return;
+                        }
                         handle_keyboard_event(
                             data,
                             event.key_code(),
@@ -225,15 +315,17 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                             event.time_msec(),
                         );
                     }
-                    InputEvent::PointerMotion { event } => {}
+                    InputEvent::PointerMotion { event } => {
+                        data.on_pointer_motion::<WinitInput>(event, 0, view_id)
+                    }
                     InputEvent::PointerMotionAbsolute { event } => {
-                        data.on_pointer_motion_absolute::<WinitInput>(event, 0)
+                        data.on_pointer_motion_absolute::<WinitInput>(event, 0, view_id)
                     }
                     InputEvent::PointerButton { event } => {
-                        data.on_pointer_button::<WinitInput>(event, 0)
+                        data.on_pointer_button::<WinitInput>(event, 0, view_id)
                     }
                     InputEvent::PointerAxis { event } => {
-                        data.on_pointer_axis::<WinitInput>(event, 0)
+                        data.on_pointer_axis::<WinitInput>(event, 0, view_id)
                     }
                     InputEvent::GestureSwipeBegin { event: _ } => {}
                     InputEvent::GestureSwipeUpdate { event: _ } => {}
@@ -255,82 +347,143 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                     InputEvent::SwitchToggle { event: _ } => {}
                     InputEvent::Special(_) => {}
                 },
-                WinitEvent::Redraw => {
-                    let size = data.backend_data.backend.window_size();
-                    let damage = Rectangle::from_size(size);
-
-                    {
-                        let (renderer, mut framebuffer) = data.backend_data.backend.bind().unwrap();
-                        smithay::desktop::space::render_output::<
-                            _,
-                            WaylandSurfaceRenderElement<GlesRenderer>,
-                            _,
-                            _,
-                        >(
-                            &data.backend_data.output,
-                            renderer,
-                            &mut framebuffer,
-                            1.0,
-                            0,
-                            [&data.space],
-                            &[],
-                            &mut data.backend_data.damage_tracker,
-                            [0.1, 0.1, 0.1, 1.0],
-                        )
-                        .unwrap();
+                WinitEvent::Focus(focused) => {
+                    if !focused {
+                        data.release_all_keys();
                     }
-                    data.backend_data.backend.submit(Some(&[damage])).unwrap();
+                }
+                WinitEvent::Redraw => {
+                    let output = data.backend_data.output.clone();
+                    let age = data.backend_data.backend.buffer_age().unwrap_or(0);
+                    let geometry = match data.space.output_geometry(&output) {
+                        Some(geometry) => geometry.to_f64(),
+                        None => return,
+                    };
 
-                    /*                     state.space.elements().for_each(|window| {
-                        window.send_frame(
-                            &output,
-                            state.start_time.elapsed(),
-                            Some(Duration::ZERO),
-                            |_, _| Some(output.clone()),
-                        )
-                    }); */
+                    let render_result = match data.backend_data.backend.bind() {
+                        Ok((renderer, mut framebuffer)) => {
+                            let slot = data
+                                .flutter_engine
+                                .as_ref()
+                                .unwrap()
+                                .views_management
+                                .views
+                                .get(&view_id)
+                                .and_then(|view| view.last_rendered_slot.as_ref());
 
-                    data.space.refresh();
+                            Some(match slot {
+                                Some(slot) => {
+                                    let elements = get_render_elements(
+                                        renderer,
+                                        &output,
+                                        slot,
+                                        geometry,
+                                        data.clock.now(),
+                                        &data.cursor_image_status,
+                                        &data.cursor_state,
+                                        data.pointer.current_location(),
+                                        data.surface_id_under_cursor != None,
+                                        <Winit as Backend>::FLIP_FLUTTER_TEXTURE,
+                                        data.meta_window_state
+                                            .meta_windows
+                                            .values()
+                                            .filter_map(|meta_window| {
+                                                meta_window
+                                                    .game_mode_activated
+                                                    .then(|| {
+                                                        data.surfaces.get(&meta_window.surface_id)
+                                                    })
+                                                    .flatten()
+                                            })
+                                            .collect::<Vec<_>>(),
+                                        data.capture_state.session.as_ref().filter(|session| {
+                                            session.output.name() == output.name()
+                                        }),
+                                        data.capture_state
+                                            .recording_session
+                                            .as_ref()
+                                            .filter(|recording| {
+                                                recording.output_name() == output.name()
+                                            })
+                                            .map(|recording| recording.chip_data()),
+                                    );
 
-                    let _ = display.flush_clients();
+                                    data.backend_data.damage_tracker.render_output(
+                                        renderer,
+                                        &mut framebuffer,
+                                        age,
+                                        &elements,
+                                        [0.0, 0.0, 0.0, 0.0],
+                                    )
+                                }
+                                // Flutter hasn't rendered anything yet: clear
+                                // the window to keep the host scheduling us.
+                                None => data
+                                    .backend_data
+                                    .damage_tracker
+                                    .render_output::<TextureRenderElement<_>, _>(
+                                        renderer,
+                                        &mut framebuffer,
+                                        age,
+                                        &[],
+                                        [0.0, 0.0, 0.0, 0.0],
+                                    ),
+                            })
+                        }
+                        Err(err) => {
+                            error!("Failed to bind winit backend: {}", err);
+                            None
+                        }
+                    };
 
-                    // Ask for redraw to schedule new frame.
+                    if let Some(render_result) = render_result {
+                        match render_result {
+                            Ok(_) => {
+                                if let Err(err) = data.backend_data.backend.submit(None) {
+                                    warn!("Failed to submit winit buffer: {}", err);
+                                }
+
+                                let drained: Vec<_> = data.batons.drain(..).collect();
+                                for baton in drained {
+                                    data.flutter_engine().on_vsync(baton, 60_000).unwrap();
+                                }
+
+                                let frame_timestamp = data.frame_timestamp_millis();
+                                for surface in data.xdg_shell_state.toplevel_surfaces() {
+                                    send_frames_surface_tree(surface.wl_surface(), frame_timestamp);
+                                }
+                                for surface in data.xdg_popups.values() {
+                                    send_frames_surface_tree(surface.wl_surface(), frame_timestamp);
+                                }
+                                for surface in data.x11_surface_per_wl_surface.keys() {
+                                    send_frames_surface_tree(surface, frame_timestamp);
+                                }
+
+                                data.space.refresh();
+                            }
+                            Err(err) => {
+                                error!("Rendering error: {}", err);
+                            }
+                        }
+                    }
+
+                    // Ask for another redraw to keep presenting frames.
                     data.backend_data.backend.window().request_redraw();
                 }
                 WinitEvent::CloseRequested => {
                     data.running.store(false, Ordering::SeqCst);
                 }
-                _ => (),
             };
         })?;
 
-    let mut state = State::new(
-        display,
-        event_loop.handle(),
-        Winit {
-            backend,
-            damage_tracker,
-            output,
-        },
-        Some(dmabuf_state),
-        settings_manager,
-    );
-
-    let (
-        flutter_engine,
-        EmbedderChannels {
-            rx_present,
-            rx_request_fbo,
-            tx_fbo,
-            tx_output_height,
-            rx_baton,
-        },
-    ) = FlutterEngine::new(&mut state).unwrap();
-
-    state.tx_fbo = Some(tx_fbo.clone());
-    state.flutter_engine = Some(flutter_engine);
-
-    state.space.map_output(&state.backend_data.output, (0, 0));
+    event_loop
+        .handle()
+        .insert_source(rx_baton, move |baton, _, data| {
+            if let CalloopEvent::Msg(baton) = baton {
+                data.batons.push(baton);
+            }
+        })
+        .unwrap();
 
     while state.running.load(Ordering::SeqCst) {
         let result = event_loop.dispatch(None, &mut state);
