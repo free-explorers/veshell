@@ -293,8 +293,13 @@ class MatchingEngine extends _$MatchingEngine {
   /// relations only: client parent, activation "opened from", tracked-launch
   /// provenance, then process sibling. Returns null when nothing authoritative
   /// is known, so a weak hint (a lone fixed size) never turns a regular window
-  /// into a dialog.
-  WindowId? dialogOwnerFromRelation(MetaWindowId metaWindowId) {
+  /// into a dialog. [log] is forwarded to the recovery lookups; it is turned
+  /// off on the ordinary matching path so a plain new window does not emit
+  /// provenance diagnostics.
+  WindowId? dialogOwnerFromRelation(
+    MetaWindowId metaWindowId, {
+    bool log = true,
+  }) {
     final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
     final parentId = metaWindow.parent;
     if (parentId != null) {
@@ -315,11 +320,16 @@ class MatchingEngine extends _$MatchingEngine {
     final tracked = _trackedLaunchOwnerFor(
       metaWindow,
       excludedWindowIds: const [],
+      log: log,
     );
     if (tracked != null) {
       return tracked;
     }
-    return _sameProcessSiblingFor(metaWindow, excludedWindowIds: const []);
+    return _sameProcessSiblingFor(
+      metaWindow,
+      excludedWindowIds: const [],
+      log: log,
+    );
   }
 
   /// The tile that should own a dialog-like window, falling back to the
@@ -331,6 +341,92 @@ class MatchingEngine extends _$MatchingEngine {
     }
     return findBestWindowCandidateForMetaWindow(metaWindowId).$1;
   }
+
+  /// Whether the launch burst that produced [metaWindowId] is still gathering,
+  /// so the window must go through ordinary matching instead of attaching as a
+  /// dialog of the window it was opened from.
+  ///
+  /// This is the temporal half of the burst-vs-further-opening distinction.
+  /// The primary signal is a tile of the same application currently gathering a
+  /// launch (waiting bonus armed): while it is armed the burst must collect and
+  /// redistribute, and the clicked tile's waiting bonus already wins the
+  /// ordinary match. Relations recorded on the window (`activatedBy`,
+  /// provenance, process sibling) are then only owner hints — the lookups are
+  /// deliberately silent, unlike [_trackedLaunchOwnerFor] and
+  /// [_sameProcessSiblingFor], so the ordinary matching path stays free of
+  /// recovery logging.
+  bool isLaunchBurstInProgressFor(MetaWindowId metaWindowId) {
+    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+    final metaAppId = MatchingInfo.fromMetaWindow(metaWindow).appId;
+
+    // A clicked placeholder may be gathering a launch for an application whose
+    // already-running process keeps no provenance (single-instance apps re-home
+    // into `app-*.scope`) and opens windows attributed to the first launch's
+    // tile. While a placeholder of this app is gathering, route through
+    // ordinary matching so the window lands on the clicked tile — its waiting
+    // bonus wins — instead of becoming a dialog of the already-assigned one.
+    for (final windowId in ref.read(windowManagerProvider).windows) {
+      if (windowId is DialogWindowId) continue;
+      if (!_isGatheringLaunch(windowId)) continue;
+      if (_getWindowState(windowId).properties.appId == metaAppId) {
+        return true;
+      }
+    }
+
+    // The tile that launched the window's process. Covers single-instance
+    // relaunches, where the window is created by the already-running instance
+    // (keeping the first launch's cgroup) and the activation relation may
+    // point at another window.
+    final launchingTile = ref
+        .read(appLaunchProvider.notifier)
+        .windowForPid(metaWindow.pid);
+    if (launchingTile != null && _isGatheringLaunch(launchingTile)) {
+      return true;
+    }
+
+    // The window this one was opened from (activation or client parent).
+    for (final ancestor in [metaWindow.activatedBy, metaWindow.parent]) {
+      if (ancestor == null) continue;
+      final ancestorTile = ref.read(metaWindowWindowMapProvider).get(ancestor);
+      if (ancestorTile != null && _isGatheringLaunch(ancestorTile)) {
+        return true;
+      }
+    }
+
+    // Process-sibling fallback for launches without tracked provenance (no
+    // systemd user manager): the burst window shares the pid or the
+    // per-application cgroup with an already-gathered window.
+    final cgroupPath = _cgroupFor(metaWindow);
+    for (final entry in ref.read(metaWindowWindowMapProvider).entries) {
+      if (entry.key == metaWindow.id) continue;
+      final siblingTile = entry.value;
+      if (siblingTile is DialogWindowId) continue;
+      if (!_isGatheringLaunch(siblingTile)) continue;
+      final sibling = ref.read(metaWindowStateProvider(entry.key));
+      final samePid = sibling.pid != 0 && sibling.pid == metaWindow.pid;
+      final sameCgroup =
+          !samePid &&
+          cgroupPath != null &&
+          _isPerAppScope(cgroupPath) &&
+          cgroupPath == _cgroupFor(sibling);
+      if (samePid || sameCgroup) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /// Whether [windowId] is a tile currently gathering a launch burst.
+  bool _isGatheringLaunch(WindowId windowId) => switch (windowId) {
+        EphemeralWindowId() => ref
+            .read(ephemeralWindowStateProvider(windowId).notifier)
+            .isGatheringLaunch,
+        PersistentWindowId() => ref
+            .read(persistentWindowStateProvider(windowId).notifier)
+            .isGatheringLaunch,
+        DialogWindowId() => false,
+      };
 
   /// Returns the persistent window owning the tracked launch of the given
   /// native window, if provenance is known and the window is still an eligible
@@ -357,48 +453,59 @@ class MatchingEngine extends _$MatchingEngine {
   WindowId? _trackedLaunchOwnerFor(
     MetaWindow metaWindow, {
     required List<WindowId> excludedWindowIds,
+    bool log = true,
   }) {
     final appLaunch = ref.read(appLaunchProvider.notifier);
     final cgroupPath = _cgroupFor(metaWindow);
     final trackedWindowId = appLaunch.windowForPid(metaWindow.pid);
     if (trackedWindowId == null) {
-      matchingLog.info(
-        'Provenance unavailable for ${metaWindow.id} '
-        'pid=${metaWindow.pid} app_id="${metaWindow.appId}" '
-        'cgroup=${cgroupPath ?? 'unknown'}',
-      );
+      if (log) {
+        matchingLog.info(
+          'Provenance unavailable for ${metaWindow.id} '
+          'pid=${metaWindow.pid} app_id="${metaWindow.appId}" '
+          'cgroup=${cgroupPath ?? 'unknown'}',
+        );
+      }
       return null;
     }
     if (excludedWindowIds.contains(trackedWindowId)) {
-      matchingLog.info(
-        'Provenance owner $trackedWindowId excluded for ${metaWindow.id} '
-        'pid=${metaWindow.pid} app_id="${metaWindow.appId}"',
-      );
+      if (log) {
+        matchingLog.info(
+          'Provenance owner $trackedWindowId excluded for ${metaWindow.id} '
+          'pid=${metaWindow.pid} app_id="${metaWindow.appId}"',
+        );
+      }
       return null;
     }
     if (!ref
         .read(windowsAvailableForMatchingProvider)
         .contains(trackedWindowId)) {
-      matchingLog.info(
-        'Provenance owner $trackedWindowId not available for matching '
-        '(meta window ${metaWindow.id} app_id="${metaWindow.appId}")',
-      );
+      if (log) {
+        matchingLog.info(
+          'Provenance owner $trackedWindowId not available for matching '
+          '(meta window ${metaWindow.id} app_id="${metaWindow.appId}")',
+        );
+      }
       return null;
     }
 
     if (_isUnrelatedApplication(metaWindow, trackedWindowId)) {
-      matchingLog.info(
-        'Provenance rejected: ${metaWindow.id} app_id="${metaWindow.appId}" '
-        'identified as unrelated to launch $trackedWindowId',
-      );
+      if (log) {
+        matchingLog.info(
+          'Provenance rejected: ${metaWindow.id} app_id="${metaWindow.appId}" '
+          'identified as unrelated to launch $trackedWindowId',
+        );
+      }
       return null;
     }
 
-    matchingLog.info(
-      'Provenance recovered ${metaWindow.id} '
-      'pid=${metaWindow.pid} app_id="${metaWindow.appId}" '
-      '→ $trackedWindowId',
-    );
+    if (log) {
+      matchingLog.info(
+        'Provenance recovered ${metaWindow.id} '
+        'pid=${metaWindow.pid} app_id="${metaWindow.appId}" '
+        '→ $trackedWindowId',
+      );
+    }
     return trackedWindowId;
   }
 
@@ -437,6 +544,7 @@ class MatchingEngine extends _$MatchingEngine {
   WindowId? _sameProcessSiblingFor(
     MetaWindow metaWindow, {
     required List<WindowId> excludedWindowIds,
+    bool log = true,
   }) {
     if (metaWindow.pid == 0) {
       return null;
@@ -481,21 +589,25 @@ class MatchingEngine extends _$MatchingEngine {
       // recovery when the reported identity resolves to a different desktop
       // entry than the sibling tile, mirroring tracked-launch provenance.
       if (_isUnrelatedApplication(metaWindow, siblingWindowId)) {
-        matchingLog.info(
-          'Process-sibling rejected: ${metaWindow.id} '
-          'app_id="${metaWindow.appId}" identified as unrelated to '
-          '$siblingWindowId',
-        );
+        if (log) {
+          matchingLog.info(
+            'Process-sibling rejected: ${metaWindow.id} '
+            'app_id="${metaWindow.appId}" identified as unrelated to '
+            '$siblingWindowId',
+          );
+        }
         continue;
       }
 
-      matchingLog.info(
-        'Process-sibling recovered ${metaWindow.id} '
-        'pid=${metaWindow.pid} app_id="${metaWindow.appId}" '
-        '(cgroup=${cgroupPath ?? 'unknown'}) '
-        '→ $siblingWindowId '
-        '(same ${samePid ? 'pid' : 'cgroup'} as $siblingMetaWindowId)',
-      );
+      if (log) {
+        matchingLog.info(
+          'Process-sibling recovered ${metaWindow.id} '
+          'pid=${metaWindow.pid} app_id="${metaWindow.appId}" '
+          '(cgroup=${cgroupPath ?? 'unknown'}) '
+          '→ $siblingWindowId '
+          '(same ${samePid ? 'pid' : 'cgroup'} as $siblingMetaWindowId)',
+        );
+      }
       return siblingWindowId;
     }
     return null;

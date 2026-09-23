@@ -14,6 +14,74 @@ int matchingCost<T>(T desired, T found, int mismatchCost, int skipCost) {
 
 const INF_COST = 100000;
 
+/// Maximum cost for a title mismatch.
+///
+/// A title mismatch is graded down when the two titles share a long contiguous
+/// chunk, so a title that only changed in its volatile parts (an unread count,
+/// a collapsed page title) scores far below an unrelated title. Bounded by the
+/// old flat mismatch value, so the field keeps its weight against the other
+/// signals.
+const _titleMismatchCost = 50;
+
+String _normalizeTitle(String title) =>
+    title.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
+
+/// Longest run of identical characters between [a] and [b]. Both sides are
+/// normalized by the caller.
+int _longestCommonSubstringLength(String a, String b) {
+  if (a.isEmpty || b.isEmpty) {
+    return 0;
+  }
+  var previous = List<int>.filled(b.length + 1, 0);
+  var longest = 0;
+  for (var i = 1; i <= a.length; i++) {
+    final current = List<int>.filled(b.length + 1, 0);
+    for (var j = 1; j <= b.length; j++) {
+      if (a.codeUnitAt(i - 1) == b.codeUnitAt(j - 1)) {
+        current[j] = previous[j - 1] + 1;
+        if (current[j] > longest) {
+          longest = current[j];
+        }
+      }
+    }
+    previous = current;
+  }
+  return longest;
+}
+
+/// Cost for matching the native window's [windowTitle] against a candidate's
+/// stored [storedTitle].
+///
+/// Exact match is free, no stored title is a skip (1), and everything else is
+/// graded in `[1, _titleMismatchCost]` by the longest common substring relative
+/// to the *shorter* title. A near miss (a title that changed in its volatile
+/// parts, or one title contained in the other) therefore scores well under a
+/// total mismatch, while a short or generic title stays at the flat mismatch so
+/// it cannot win on a shared app suffix alone.
+int titleMatchingCost(String? storedTitle, String? windowTitle) {
+  if (storedTitle == null) {
+    return 1;
+  }
+  final stored = _normalizeTitle(storedTitle);
+  final window = _normalizeTitle(windowTitle ?? '');
+  if (stored == window) {
+    return 0;
+  }
+  if (stored.isEmpty || window.isEmpty) {
+    return _titleMismatchCost;
+  }
+  final overlap = _longestCommonSubstringLength(stored, window);
+  final shortest =
+      stored.length < window.length ? stored.length : window.length;
+  if (shortest < 8 || overlap < 4) {
+    return _titleMismatchCost;
+  }
+  final coverage = overlap / shortest;
+  return (_titleMismatchCost * (1 - coverage))
+      .round()
+      .clamp(1, _titleMismatchCost);
+}
+
 /// After a meta window has been associated with an MsWindow, we allow this association to change
 /// for a small amount of time.
 ///
@@ -36,7 +104,7 @@ const MAX_WINDOW_REASSOCIATION_TIME_MS = 3000;
 /// | Signal            | Match | Mismatch | Not set on candidate |
 /// |-------------------|-------|----------|----------------------|
 /// | windowClass       | 0     | INF_COST (hard identity, e.g. X11 class) | 1 |
-/// | title             | 0     | 50       | 1                     |
+/// | title             | 0     | 1..50, graded by longest common substring (50 when unrelated/below the overlap floor) | 1 |
 /// | startupId         | 0     | 1        | 1                     |
 /// | pid               | 0     | 1        | 1                     |
 /// | waiting           | 100 → 90 over the first second since the app was launched | 200 (not waiting) |
@@ -59,8 +127,9 @@ const MAX_WINDOW_REASSOCIATION_TIME_MS = 3000;
 /// Worked example — two placeholders for the same desktop entry, none
 /// waiting, native window title "Document — Code":
 ///
-/// - placeholder with desktop-entry name "Code - OSS" → 1 + 50 + 1 + 1 + 200
-///   = 253 (class/title/startup/pid skips+mismatch, not waiting)
+/// - placeholder with desktop-entry name "Code - OSS" → 1 + 30 + 1 + 1 + 200
+///   = 233 (class/title/startup/pid, the title sharing only its short app
+///   suffix stays near the flat mismatch)
 /// - placeholder renamed "Document — Code" via custom title → 203
 /// → the custom-title placeholder wins, without any provenance involved.
 int windowMatchingCost(
@@ -76,7 +145,10 @@ int windowMatchingCost(
     INF_COST,
     1,
   );
-  cost += matchingCost(windowMatchInfo.title, metaWindowMatchInfo.title, 50, 1);
+  cost += titleMatchingCost(
+    windowMatchInfo.title,
+    metaWindowMatchInfo.title,
+  );
   cost += matchingCost(
     windowMatchInfo.startupId,
     metaWindowMatchInfo.startupId,

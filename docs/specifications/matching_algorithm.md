@@ -55,7 +55,7 @@ Signals, in order of reliability / fallback:
 1. Client-declared `parent` (`xdg_toplevel.set_parent`, X11 transient) — authoritative, makes the window a dialog of the parent's tile.
 2. `xdg_wm_dialog_v1` hint (`Dialog`/`Modal`) — authoritative.
 3. Window shape — `min == max` on both axes (fixed-size) **with a resolvable owner relation** strongly suggests a dialog.
-4. `activatedBy` (`xdg_activation_v1`) — **owner hint only**, never a dialog trigger by itself: it only says the window was opened from another, so it picks the owner when the window is a dialog for other reasons.
+4. `activatedBy` (`xdg_activation_v1`) — an "opened from" relation, not a dialog marker on its own: it only says the window was opened from another. During a launch burst it is an owner hint (it picks the owner when the window is a dialog for other reasons); once the burst has settled it does route an otherwise regular toplevel as a dialog of the window it was opened from. See [Dialog routing](#dialog-routing).
 5. Process grouping — same `pid` / `app-*.scope` as the owner.
 6. Tracked launch provenance — the helper inherits the launch cgroup.
 7. Fallback — attach as a dialog to the best-matching tile rather than a standalone tile.
@@ -72,7 +72,7 @@ None of these signals is authoritative on its own, and every one may be absent, 
   - Notes: can be hollow or a helper identity (`electron`, runtime names) and can change after the window is mapped. Normalised to a desktop-entry id when possible (Flatpak/Snap, desktop database, binary name). Primary application-level identity.
 - **Window title (`title`)** — usually available, but often only after the first commit; high reliability when specific, none when generic.
   - Source: `xdg_toplevel.title`; X11 title.
-  - Notes: frequently the only signal that distinguishes several tiles of the same application (see [parallel windows](#parallel-windows)). Generic during startup (`Code - OSS`), then becomes specific; can change repeatedly.
+  - Notes: frequently the only signal that distinguishes several tiles of the same application (see [parallel windows](#parallel-windows)). Generic during startup (`Code - OSS`), then becomes specific; can change repeatedly. The cost is graded by the longest common substring relative to the shorter title, so a title that only changed in its volatile parts (an unread count, a collapsed page title) still counts as a near match, while a short or generic title stays a weak signal.
 - **Process ID (`pid`)** — always available; weak as an identity, strong as a join key.
   - Source: Wayland client credentials; X11.
   - Notes: multi-process applications report helper pids and the launched pid usually differs from the window pid. Mainly used to join the process-based signals below.
@@ -162,6 +162,16 @@ All of these are observed on the live surfaces and, where meaningful, mirrored o
 - **One redistributor, displayed window included.** The same pass runs for the
   clicked tile at its burst settle and for any other tile with an overflow. No
   tile — launched or not — keeps a window it does not fit.
+- **Burst first, then further openings.** Relations (`activatedBy`, tracked
+  provenance, process sibling) are owner hints while a launch burst is still
+  gathering, so the burst can collect and redistribute its windows. Once the
+  burst has settled, a window opened from an owned window attaches as a dialog of
+  that window instead of being matched onto an empty sibling. A relaunch of a
+  running single-instance application through a placeholder is a fresh burst, not
+  a further opening: the already-running process keeps the first launch's tile
+  (and its windows may report no relation or point at the already-assigned tile),
+  so the signal is the clicked placeholder still gathering a launch for that
+  application — its waiting bonus then wins the ordinary match.
 - **A stored identity follows the displayed window.** Once a tile has settled
   (single window, not gathering), it adopts the title, class, startup id and pid
   of the window it displays; the tile's desktop-entry `appId` is preserved. An
@@ -203,15 +213,19 @@ A window is routed to a dialog before ordinary matching when it has a
 client-declared `parent`, a modal hint (`xdg_wm_dialog_v1` Modal / X11 motif
 modal), or a fixed size **with a resolvable owner relation** (parent,
 tracked-launch provenance or process sibling) — a lone fixed size never turns a
-regular toplevel into a dialog. The activation relation (`activatedBy`) is only
-an owner hint: it never makes an otherwise regular toplevel a dialog, so an
-activated browser tab still goes through normal matching and lands on an empty
-same-app tile when one is available. The owner is resolved by client `parent`,
-then `activatedBy`, then provenance, then process sibling, falling back to the
-ordinary best candidate for an authoritative hint. Owner resolution always walks
-dialog chains up to the owning tile, so a native window is never nested under
-another dialog. A client-parent/modal hint that arrives after mapping re-routes
-the already-matched window while it is still inside its settle window.
+regular toplevel into a dialog. The activation relation (`activatedBy`) is not a
+dialog marker while the launch burst is gathering: during the burst it only says
+the window was opened from another, so the window goes through normal matching
+and the burst can collect and redistribute first. **Once the burst has settled,
+any owner relation on an otherwise regular toplevel — `activatedBy`, tracked
+provenance or process sibling — turns it into a dialog of the window it was
+opened from**, instead of landing on an empty same-app tile. The owner is
+resolved by client `parent`, then `activatedBy`, then provenance, then process
+sibling, falling back to the ordinary best candidate only for an authoritative
+hint. Owner resolution always walks dialog chains up to the owning tile, so a
+native window is never nested under another dialog. A parent, modal or activation
+hint that arrives after mapping re-routes the already-matched window while it is
+still inside its settle window.
 
 A tile renders its dialogs whether or not it currently has a main window
 (`WindowDialogs`, shared with `WindowWidget`): when the only windows an

@@ -438,6 +438,14 @@ mixin WindowProviderMixin<T extends Window> {
 
   MatchingInfo getMatchingInfo() => _matchingInfo;
 
+  /// Whether this tile is the origin of an in-flight launch burst, i.e. still
+  /// gathering the windows the launch produced. While it is true, relations
+  /// (`activatedBy`, provenance, process sibling) stay owner hints and must not
+  /// turn a sibling window into a dialog; the burst needs to gather and
+  /// redistribute first. Cleared at the burst settle
+  /// ([_finalizeLaunchBurst]).
+  bool get isGatheringLaunch => _launchOrigin;
+
   void waitForSurface(int? pid) {
     _matchingInfo = _matchingInfo.copyWith(
       waitingForAppSince: DateTime.now(),

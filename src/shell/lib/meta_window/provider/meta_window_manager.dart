@@ -39,10 +39,12 @@ class MetaWindowManager extends _$MetaWindowManager {
               propagate: false,
             )
             .then((_) {
-          // A parent/modal hint can arrive after the window was already
-          // matched (Electron sets it late). Re-route it as a dialog while it
-          // is still inside its settle window.
-          if (patch is UpdateParent || patch is UpdateIsModal) {
+          // A parent/modal/activation hint can arrive after the window was
+          // already matched (Electron sets them late). Re-route it as a dialog
+          // while it is still inside its settle window.
+          if (patch is UpdateParent ||
+              patch is UpdateIsModal ||
+              patch is UpdateActivatedBy) {
             _maybeRerouteAsDialog(patch.id);
           }
         });
@@ -129,22 +131,36 @@ class MetaWindowManager extends _$MetaWindowManager {
       return;
     }
 
-    // Dialog hints without a client parent: a modal hint is authoritative, a
+    // Dialog hints without a client parent: a modal hint is authoritative. A
     // fixed size alone only counts when a real owner relation exists, so a
     // legitimate fixed-size toplevel is never turned into a dialog.
-    final dialogOwner = metaWindow.isModal
-        ? engine.resolveDialogOwnerIfAny(id)
-        : metaWindow.isFixedSized
-            ? engine.dialogOwnerFromRelation(id)
-            : null;
-    if (dialogOwner != null) {
-      _createDialog(id, engine.rootTileFor(dialogOwner));
+    if (metaWindow.isModal) {
+      final owner = engine.resolveDialogOwnerIfAny(id);
+      if (owner != null) {
+        _createDialog(id, engine.rootTileFor(owner));
+        return;
+      }
+    }
+
+    // A window opened from an owned window once the launch burst has settled
+    // (any owner relation: activation, tracked provenance, process sibling)
+    // attaches as a dialog of that owner instead of matching an empty same-app
+    // tile. While a burst is still gathering the relation stays an "opened
+    // from" hint so the gather/redistribute can run first. The recovery
+    // lookups stay silent on this ordinary path.
+    final WindowId? relationOwner;
+    if (metaWindow.isFixedSized) {
+      relationOwner = engine.dialogOwnerFromRelation(id);
+    } else if (!engine.isLaunchBurstInProgressFor(id)) {
+      relationOwner = engine.dialogOwnerFromRelation(id, log: false);
+    } else {
+      relationOwner = null;
+    }
+    if (relationOwner != null) {
+      _createDialog(id, engine.rootTileFor(relationOwner));
       return;
     }
 
-    // An activation-derived parent is only an "opened from" hint: this is an
-    // ordinary toplevel and goes through normal matching, so it can land on an
-    // empty same-app tile instead of becoming a dialog.
     engine.addMetaWindow(id);
   }
 
@@ -155,8 +171,13 @@ class MetaWindowManager extends _$MetaWindowManager {
   }
 
   /// Converts an already-matched window into a dialog when a client-declared
-  /// parent or a modal hint arrives after mapping, while it is still inside its
-  /// settle window.
+  /// parent, a modal hint or an activation relation arrives after mapping,
+  /// while it is still inside its settle window.
+  ///
+  /// A parent or modal hint is authoritative and reroutes unconditionally. An
+  /// activation relation only counts for a regular toplevel once the launch
+  /// burst has settled, and only when it resolves to a real owner (it never
+  /// falls back to the ordinary best candidate), matching [onMetaWindowMapped].
   void _maybeRerouteAsDialog(MetaWindowId id) {
     final mappedAt = _mappedAt[id];
     if (mappedAt == null ||
@@ -165,17 +186,23 @@ class MetaWindowManager extends _$MetaWindowManager {
       return;
     }
     final metaWindow = ref.read(metaWindowStateProvider(id));
-    final isDialogHint = metaWindow.isModal || metaWindow.parent != null;
-    if (!isDialogHint) {
+    final engine = ref.read(matchingEngineProvider.notifier);
+
+    final WindowId? owner;
+    if (metaWindow.isModal || metaWindow.parent != null) {
+      owner = engine.resolveDialogOwnerIfAny(id);
+    } else if (metaWindow.activatedBy != null &&
+        !engine.isLaunchBurstInProgressFor(id)) {
+      owner = engine.dialogOwnerFromRelation(id);
+    } else {
       return;
     }
+    if (owner == null) {
+      return;
+    }
+
     final currentOwner = ref.read(metaWindowWindowMapProvider).get(id);
     if (currentOwner == null || currentOwner is DialogWindowId) {
-      return;
-    }
-    final engine = ref.read(matchingEngineProvider.notifier);
-    final owner = engine.resolveDialogOwnerIfAny(id);
-    if (owner == null) {
       return;
     }
     final rootOwner = engine.rootTileFor(owner);
