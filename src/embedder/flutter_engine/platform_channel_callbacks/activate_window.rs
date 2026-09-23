@@ -73,11 +73,21 @@ pub fn activate_window<BackendData: Backend + 'static>(
                 return;
             };
 
+            // Keep the maximized size in the configure: a state-only
+            // activation configure with no size lets the client fall back to
+            // its minimum size instead of staying tiled.
+            let maximized_size = data
+                .get_meta_window(payload.surface_id)
+                .and_then(|meta_window| meta_window.maximized_size());
+
             toplevel.with_pending_state(|state| {
                 if payload.activate {
                     state.states.set(xdg_toplevel::State::Activated);
                 } else {
                     state.states.unset(xdg_toplevel::State::Activated);
+                }
+                if let Some(size) = maximized_size {
+                    state.size = Some(size);
                 }
             });
             toplevel.send_pending_configure();

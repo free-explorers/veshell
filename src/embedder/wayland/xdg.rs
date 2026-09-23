@@ -295,17 +295,21 @@ pub mod xdg {
                 .get(&get_surface_id(surface.wl_surface()))
                 .cloned()
             {
-                surface.with_pending_state(|state| {
-                    let position = state.geometry.loc
-                        + get_popup_toplevel_coords(&PopupKind::Xdg(surface.clone()));
-                    self.patch_meta_popup(
-                        MetaPopupPatch::UpdatePosition {
-                            id: meta_popup_id,
-                            value: position.into(),
-                        },
-                        true,
-                    );
-                });
+                // Read the location under the popup lock, but compute the
+                // toplevel-relative position after releasing it:
+                // `get_popup_toplevel_coords` re-locks the popup's own
+                // `XdgPopupSurfaceData` through `parent()`, which deadlocks if
+                // nested inside `with_pending_state`.
+                let geometry_loc = surface.with_pending_state(|state| state.geometry.loc);
+                let position =
+                    geometry_loc + get_popup_toplevel_coords(&PopupKind::Xdg(surface.clone()));
+                self.patch_meta_popup(
+                    MetaPopupPatch::UpdatePosition {
+                        id: meta_popup_id,
+                        value: position.into(),
+                    },
+                    true,
+                );
             }
             surface.send_repositioned(token);
             if let Err(err) = surface.send_configure() {
@@ -637,6 +641,60 @@ pub mod xdg {
             popup.with_pending_state(|state| {
                 state.geometry = state.positioner.get_unconstrained_geometry(target)
             });
+        }
+
+        /// Re-constrain every popup owned by `meta_window_id` against the
+        /// window's current geometry and push the updated positions to Flutter.
+        ///
+        /// A popup's geometry is only computed when it is created or the client
+        /// repositions it. A tiled window is resized by the shell, so an open
+        /// popup would otherwise keep a position derived from the previous
+        /// toplevel size and end up outside the new tile.
+        pub(crate) fn reconstrain_popups_for_root(&mut self, meta_window_id: &str) {
+            let popups: Vec<(String, PopupSurface)> = self
+                .meta_window_state
+                .meta_popups
+                .values()
+                .filter(|popup| popup.parent.as_str() == meta_window_id)
+                .filter_map(|popup| {
+                    self.xdg_popups
+                        .get(&popup.surface_id)
+                        .cloned()
+                        .map(|surface| (popup.id.clone(), surface))
+                })
+                .collect();
+
+            for (meta_popup_id, surface) in popups {
+                let previous_position = self
+                    .meta_window_state
+                    .meta_popups
+                    .get(&meta_popup_id)
+                    .map(|popup| popup.position.0);
+                self.constrain_popup_to_parent(&PopupKind::Xdg(surface.clone()));
+                // `get_popup_toplevel_coords` re-locks the popup's own
+                // `XdgPopupSurfaceData` via `parent()`, so it must run after
+                // `with_pending_state` has released the lock.
+                let geometry_loc = surface.with_pending_state(|state| state.geometry.loc);
+                let new_position =
+                    geometry_loc + get_popup_toplevel_coords(&PopupKind::Xdg(surface.clone()));
+                if previous_position == Some(new_position) {
+                    continue;
+                }
+                info!(
+                    target: "veshell::geometry",
+                    popup_id = %meta_popup_id,
+                    old_position = ?previous_position,
+                    new_position = ?new_position,
+                    "Re-constraining popup after root resize"
+                );
+                self.patch_meta_popup(
+                    MetaPopupPatch::UpdatePosition {
+                        id: meta_popup_id,
+                        value: new_position.into(),
+                    },
+                    true,
+                );
+            }
         }
     }
 }

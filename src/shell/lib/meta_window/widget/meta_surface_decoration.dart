@@ -33,7 +33,7 @@ class MetaSurfaceDecoration extends HookConsumerWidget {
     if (metaWindow.geometry?.height != null) {
       height =
           metaWindow.geometry!.height +
-          (metaWindow.needDecoration == true ? 40 : 0);
+          (metaWindow.needDecoration ? WindowTitleBar.height : 0);
     }
     if (!enabled) {
       return child;
@@ -62,6 +62,9 @@ class WindowTitleBar extends HookConsumerWidget {
   const WindowTitleBar(this.metaWindowId, {super.key});
   final String metaWindowId;
 
+  /// Height of the shell-drawn title bar added above a decorated surface.
+  static const double height = 40;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final metaWindow = ref.watch(metaWindowStateProvider(metaWindowId));
@@ -82,7 +85,7 @@ class WindowTitleBar extends HookConsumerWidget {
       child: Material(
         color: Theme.of(context).colorScheme.surfaceContainer,
         child: SizedBox(
-          height: 40,
+          height: WindowTitleBar.height,
           child: Row(
             children: [
               const SizedBox(width: 16),

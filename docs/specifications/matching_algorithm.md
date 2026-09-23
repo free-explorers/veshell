@@ -218,7 +218,11 @@ A tile renders its dialogs whether or not it currently has a main window
 application opened so far are dialog-like (for example an updater or a splash
 that reports a fixed size before the real window appears) they are shown as
 floating surfaces over the empty tile, rather than hidden behind its
-placeholder.
+placeholder. On a maximized or fullscreen tile the dialogs are capped at 90%
+of the tile's biggest size: a dialog bigger than the cap and resizable is
+configured down to it, while a fixed-size one is scaled down uniformly. A
+dialog already smaller than the cap is left alone, so a manual resize survives.
+Either way a margin is left through which the window behind stays visible.
 
 ### Tie-break
 
