@@ -44,26 +44,26 @@ class LogsViewer extends HookConsumerWidget {
           height: 1.4,
         );
 
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: SingleChildScrollView(
-        controller: scrollController,
-        child: SelectableText.rich(
-          TextSpan(
-            children: [
-              TextSpan(text: logs.join()),
-              TextSpan(
-                text: '█',
-                style: TextStyle(
-                  color: cursorVisible.value
-                      ? Theme.of(context).colorScheme.onSurface
-                      : Colors.transparent,
-                ),
-              ),
-            ],
+    final lines = logs.lines.join().split('\n');
+    final spans = <InlineSpan>[
+      for (var i = 0; i < lines.length; i++)
+        TextSpan(text: i == lines.length - 1 ? lines[i] : '${lines[i]}\n'),
+      if (logs.isRunning)
+        TextSpan(
+          text: '█',
+          style: TextStyle(
+            color: cursorVisible.value
+                ? Theme.of(context).colorScheme.onSurface
+                : Colors.transparent,
           ),
-          style: textStyle,
         ),
+    ];
+
+    return SingleChildScrollView(
+      controller: scrollController,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: SelectableText.rich(TextSpan(children: spans), style: textStyle),
       ),
     );
   }

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
 
@@ -19,13 +20,17 @@ class WindowPlaceholder extends HookConsumerWidget {
     required this.isSelected,
     required this.window,
     this.focusNode,
-    this.onTap,
+    this.onLaunch,
     super.key,
   });
   final FocusNode? focusNode;
   final bool isSelected;
   final PersistentWindow window;
-  final void Function()? onTap;
+
+  /// Launches the application and returns the spawned process, so the
+  /// placeholder can follow its exit code and keep its logs on screen when the
+  /// launch fails.
+  final Future<Process?> Function()? onLaunch;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -35,6 +40,32 @@ class WindowPlaceholder extends HookConsumerWidget {
     useListenable(focusNode ?? Listenable.merge([]));
     final isFocused = focusNode?.hasFocus ?? false;
     final backgroundFocusNode = useFocusNode(debugLabel: 'background InkWell');
+
+    // The process of the launch this placeholder started, and whether it
+    // exited with a non-zero code. Kept locally: the failure only affects the
+    // placeholder's own display and does not belong in the persisted model.
+    final launchedProcess = useRef<Process?>(null);
+    final launchFailed = useState(false);
+
+    Future<void> launch() async {
+      final process = await onLaunch?.call();
+      if (process == null) return;
+      launchedProcess.value = process;
+      launchFailed.value = false;
+      final exitCode = await process.exitCode;
+      // Ignore a stale process: another launch may have replaced it, and the
+      // widget may have been disposed while the process was running.
+      if (!context.mounted || !identical(launchedProcess.value, process)) {
+        return;
+      }
+      launchFailed.value = exitCode != 0;
+    }
+
+    // The execution logs replace the launcher while the app is starting and
+    // stay on screen after a non-zero exit, so a failed launch can be read.
+    final showLaunchLogs =
+        window.pid != null &&
+        (window.isWaitingForSurface || launchFailed.value);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -174,7 +205,7 @@ class WindowPlaceholder extends HookConsumerWidget {
               child: InkWell(
                 focusNode: backgroundFocusNode,
                 canRequestFocus: false,
-                onTap: entry != null ? onTap : null,
+                onTap: entry != null && !showLaunchLogs ? launch : null,
                 child: ColoredBox(
                   color: Theme.of(context).colorScheme.surface.withAlpha(150),
                 ),
@@ -193,7 +224,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                   color: Theme.of(context).colorScheme.surface.withAlpha(150),
                   child: InkWell(
                     canRequestFocus: false,
-                    onTap: entry != null ? onTap : null,
+                    onTap: entry != null && !showLaunchLogs ? launch : null,
                     splashColor: Theme.of(
                       context,
                     ).colorScheme.primary.withAlpha(32),
@@ -203,8 +234,25 @@ class WindowPlaceholder extends HookConsumerWidget {
                     child: Focus(
                       focusNode: focusNode,
                       autofocus: true,
-                      child: window.isWaitingForSurface && window.pid != null
-                          ? LogsViewer(pid: window.pid!)
+                      child: showLaunchLogs
+                          ? Stack(
+                              children: [
+                                Positioned.fill(
+                                  child: LogsViewer(pid: window.pid!),
+                                ),
+                                if (launchFailed.value)
+                                  Positioned(
+                                    top: 8,
+                                    right: 8,
+                                    child: IconButton(
+                                      tooltip: 'Close logs',
+                                      onPressed: () =>
+                                          launchFailed.value = false,
+                                      icon: const Icon(MdiIcons.close),
+                                    ),
+                                  ),
+                              ],
+                            )
                           : buildLaunchContent(),
                     ),
                   ),
