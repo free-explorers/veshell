@@ -106,9 +106,9 @@ class PersistentWindowTileable extends Tileable {
                         isSelected: isSelected,
                         focusNode: primaryFocusNode,
                         window: window,
-                        onTap: () {
+                        onLaunch: () {
                           primaryFocusNode.requestFocus();
-                          ref
+                          return ref
                               .read(
                                 persistentWindowStateProvider(
                                   windowId,

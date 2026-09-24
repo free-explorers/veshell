@@ -12,6 +12,7 @@ import 'package:shell/shared/util/logger.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
+import 'package:shell/window/provider/window_manager/matching_decision_recorder.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/workspace/provider/window_workspace_map.dart';
 
@@ -60,12 +61,18 @@ const _structuralEventMethods = <String>{
 /// tile and every tile sharing its app id, and a trailing `_process_info` with
 /// the pid-keyed `/proc` facts (cgroup, Flatpak/Snap id, binary name).
 ///
-/// Used by the placeholder's debug button to gather raw signal traces without
-/// any shell matching feedback.
+/// The shell's matching decisions taken during the recording are interleaved
+/// as `_matching` records (routing, candidate costs, fallbacks, dispatch moves
+/// and dialog conversions), so the raw compositor events and the shell's
+/// reaction to them share one timeline. See `MatchingDecision`.
+///
+/// Used by the placeholder's debug button to gather raw signal traces together
+/// with the matching feedback they produced.
 @Riverpod(keepAlive: true)
 class PlatformEventRecorder extends _$PlatformEventRecorder {
   StreamSubscription<PlatformEvent>? _events;
   ProviderSubscription<PersistentWindow>? _target;
+  void Function()? _decisionSubscription;
   Timer? _settleTimer;
   Timer? _timeoutTimer;
   final List<Map<String, Object?>> _buffer = [];
@@ -142,6 +149,21 @@ class PlatformEventRecorder extends _$PlatformEventRecorder {
         }
       });
 
+      // Matching decisions taken while the recording is active are appended to
+      // the same buffer, so the raw compositor events and the shell's reaction
+      // to them share one timeline.
+      final decisionRecorder = ref.read(
+        matchingDecisionRecorderProvider.notifier,
+      );
+      _decisionSubscription = decisionRecorder.listen((decision) {
+        _buffer.add({
+          't': _stopwatch?.elapsedMilliseconds,
+          'method': '_matching',
+          'message': decision.toJson(),
+        });
+      });
+      decisionRecorder.start();
+
       _target = ref.listen<PersistentWindow>(
         persistentWindowStateProvider(windowId),
         (previous, next) {
@@ -185,7 +207,15 @@ class PlatformEventRecorder extends _$PlatformEventRecorder {
     _events = null;
     _target?.close();
     _target = null;
+    _stopDecisionRecording();
     _targetWindowId = null;
+  }
+
+  /// Stops collecting matching decisions and unregisters the listener.
+  void _stopDecisionRecording() {
+    ref.read(matchingDecisionRecorderProvider.notifier).stop();
+    _decisionSubscription?.call();
+    _decisionSubscription = null;
   }
 
   /// First record of a dump: the tile that launched, plus every persistent
@@ -280,6 +310,7 @@ class PlatformEventRecorder extends _$PlatformEventRecorder {
     _events = null;
     _target?.close();
     _target = null;
+    _stopDecisionRecording();
 
     final windowId = _targetWindowId;
     _targetWindowId = null;

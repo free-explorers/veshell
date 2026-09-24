@@ -8,12 +8,14 @@ import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/meta_window/provider/process_info_state.dart';
 import 'package:shell/shared/util/logger.dart';
+import 'package:shell/window/model/matching_decision.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
 import 'package:shell/window/model/window_base.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
+import 'package:shell/window/provider/window_manager/matching_decision_recorder.dart';
 import 'package:shell/window/provider/window_manager/matching_utils.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/window/provider/window_manager/windows_available_for_matching.dart';
@@ -137,6 +139,17 @@ class MatchingEngine extends _$MatchingEngine {
         // Cost 0 marks recovered matches as strong, and keeps them winning
         // the dispatch ordering against ordinary candidates of the same
         // batch.
+        recordMatchingDecision(
+          ref,
+          () => MatchingDecision.fallback(
+            metaWindowId: metaWindow.id,
+            appId: metaWindowMatchInfo.appId,
+            pid: metaWindow.pid,
+            cgroup: _cgroupFor(metaWindow),
+            outcome: 'provenance',
+            trackedWindowId: windowIdKey(trackedWindowId),
+          ),
+        );
         return (trackedWindowId, 0);
       }
 
@@ -152,6 +165,17 @@ class MatchingEngine extends _$MatchingEngine {
         excludedWindowIds: excludedWindowIds,
       );
       if (siblingWindowId != null) {
+        recordMatchingDecision(
+          ref,
+          () => MatchingDecision.fallback(
+            metaWindowId: metaWindow.id,
+            appId: metaWindowMatchInfo.appId,
+            pid: metaWindow.pid,
+            cgroup: _cgroupFor(metaWindow),
+            outcome: 'processSibling',
+            siblingWindowId: windowIdKey(siblingWindowId),
+          ),
+        );
         return (siblingWindowId, 0);
       }
 
@@ -160,6 +184,16 @@ class MatchingEngine extends _$MatchingEngine {
         'pid=${metaWindow.pid} cgroup=${_cgroupFor(metaWindow) ?? 'unknown'} '
         '→ creating a new window '
         '(no app-id candidate, no tracked provenance, no process sibling)',
+      );
+      recordMatchingDecision(
+        ref,
+        () => MatchingDecision.fallback(
+          metaWindowId: metaWindow.id,
+          appId: metaWindowMatchInfo.appId,
+          pid: metaWindow.pid,
+          cgroup: _cgroupFor(metaWindow),
+          outcome: 'newWindow',
+        ),
       );
       return (null, null);
     }
@@ -179,9 +213,9 @@ class MatchingEngine extends _$MatchingEngine {
     // still be reproducible.
     var bestIndex = 0;
     for (var i = 1; i < candidates.length; i++) {
-      final betterCost = costs[i] < costs[bestIndex];
+      final betterCost = costs[i].total < costs[bestIndex].total;
       final tiedButStable =
-          costs[i] == costs[bestIndex] &&
+          costs[i].total == costs[bestIndex].total &&
           _stableWindowKey(candidates[i]).compareTo(
                 _stableWindowKey(candidates[bestIndex]),
               ) <
@@ -191,7 +225,33 @@ class MatchingEngine extends _$MatchingEngine {
       }
     }
 
-    return (candidates[bestIndex], costs[bestIndex]);
+    final bestCost = costs[bestIndex].total;
+    recordMatchingDecision(
+      ref,
+      () => MatchingDecision.candidates(
+        metaWindowId: metaWindow.id,
+        appId: metaWindowMatchInfo.appId,
+        pid: metaWindow.pid,
+        excludedWindowIds: [
+          for (final windowId in excludedWindowIds) windowIdKey(windowId),
+        ],
+        candidates: [
+          for (var i = 0; i < candidates.length; i++)
+            {
+              'windowId': windowIdKey(candidates[i]),
+              'appId': _getWindowState(candidates[i]).properties.appId,
+              'title': _getWindowMatchingInfo(candidates[i]).title,
+              'windowClass': _getWindowMatchingInfo(candidates[i]).windowClass,
+              'cost': costs[i].toJson(),
+            },
+        ],
+        chosenWindowId: windowIdKey(candidates[bestIndex]),
+        chosenCost: bestCost,
+        tieBreak: costs.where((c) => c.total == bestCost).length > 1,
+      ),
+    );
+
+    return (candidates[bestIndex], bestCost);
   }
 
   /// Deterministic ordering key used only to break exact ties between
@@ -209,7 +269,7 @@ class MatchingEngine extends _$MatchingEngine {
   /// windows point at each other), so letting it drive the redistribution move
   /// decisions would make them oscillate; the redistribution compares identity
   /// cost only, and a strictly lower cost wins.
-  (WindowId?, int?) findBestOrdinarySiblingFor(
+  (WindowId?, MatchingCost?) findBestOrdinarySiblingFor(
     MetaWindowId metaWindowId, {
     List<WindowId> excludedWindowIds = const [],
   }) {
@@ -236,9 +296,9 @@ class MatchingEngine extends _$MatchingEngine {
     ];
     var bestIndex = 0;
     for (var i = 1; i < candidates.length; i++) {
-      final better = costs[i] < costs[bestIndex];
+      final better = costs[i].total < costs[bestIndex].total;
       final tiedButStable =
-          costs[i] == costs[bestIndex] &&
+          costs[i].total == costs[bestIndex].total &&
           _stableWindowKey(candidates[i]).compareTo(
                 _stableWindowKey(candidates[bestIndex]),
               ) <

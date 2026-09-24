@@ -56,7 +56,9 @@ class AppLaunch extends _$AppLaunch {
     required WindowId trackedWindowId,
   }) async {
     final process = await _launchTracked(config, trackedWindowId);
-    ref.read(logsForPidProvider(process.pid).notifier).setProcess(process);
+    ref
+        .read(logsForPidProvider(process.pid).notifier)
+        .setProcess(process, command: config.command);
     return process;
   }
 

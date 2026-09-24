@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
 
@@ -19,13 +20,17 @@ class WindowPlaceholder extends HookConsumerWidget {
     required this.isSelected,
     required this.window,
     this.focusNode,
-    this.onTap,
+    this.onLaunch,
     super.key,
   });
   final FocusNode? focusNode;
   final bool isSelected;
   final PersistentWindow window;
-  final void Function()? onTap;
+
+  /// Launches the application and returns the spawned process, so the
+  /// placeholder can follow its exit code and keep its logs on screen when the
+  /// launch fails.
+  final Future<Process?> Function()? onLaunch;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -35,6 +40,34 @@ class WindowPlaceholder extends HookConsumerWidget {
     useListenable(focusNode ?? Listenable.merge([]));
     final isFocused = focusNode?.hasFocus ?? false;
     final backgroundFocusNode = useFocusNode(debugLabel: 'background InkWell');
+    final moreMenuController = useMemoized(MenuController.new);
+    const moreMenuLabel = 'Launch and record all platform events';
+
+    // The process of the launch this placeholder started, and whether it
+    // exited with a non-zero code. Kept locally: the failure only affects the
+    // placeholder's own display and does not belong in the persisted model.
+    final launchedProcess = useRef<Process?>(null);
+    final launchFailed = useState(false);
+
+    Future<void> launch() async {
+      final process = await onLaunch?.call();
+      if (process == null) return;
+      launchedProcess.value = process;
+      launchFailed.value = false;
+      final exitCode = await process.exitCode;
+      // Ignore a stale process: another launch may have replaced it, and the
+      // widget may have been disposed while the process was running.
+      if (!context.mounted || !identical(launchedProcess.value, process)) {
+        return;
+      }
+      launchFailed.value = exitCode != 0;
+    }
+
+    // The execution logs replace the launcher while the app is starting and
+    // stay on screen after a non-zero exit, so a failed launch can be read.
+    final showLaunchLogs =
+        window.pid != null &&
+        (window.isWaitingForSurface || launchFailed.value);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -56,6 +89,135 @@ class WindowPlaceholder extends HookConsumerWidget {
             6 /
             sqrt(constraints.biggest.longestSide / 1.2) /
             8;
+        Widget buildLaunchContent() => Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  DisplayModeRow(
+                    selectedMode: window.displayMode,
+                    onSelectionChanged: (mode) => ref
+                        .read(
+                          persistentWindowStateProvider(
+                            window.windowId,
+                          ).notifier,
+                        )
+                        .setDisplayMode(mode),
+                  ),
+                  const SizedBox(width: 16),
+                  // An RTL directionality makes MenuAnchor right-align the menu
+                  // with the trigger, so its trailing icon lines up under the
+                  // three-dot icon. The menu item is forced back to LTR so the
+                  // label stays left-aligned and the icon stays at the end.
+                  Directionality(
+                    textDirection: TextDirection.rtl,
+                    child: MenuAnchor(
+                      controller: moreMenuController,
+                      consumeOutsideTap: true,
+                      style: const MenuStyle(
+                        alignment: AlignmentDirectional.bottomStart,
+                      ),
+                      alignmentOffset: const Offset(0, 4),
+                      menuChildren: [
+                        Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: MenuItemButton(
+                            trailingIcon: const Icon(MdiIcons.bug),
+                            onPressed: () {
+                              ref
+                                  .read(platformEventRecorderProvider.notifier)
+                                  .recordLaunch(window.windowId);
+                              moreMenuController.close();
+                            },
+                            child: const Text(moreMenuLabel),
+                          ),
+                        ),
+                      ],
+                      builder: (context, controller, child) => IconButton(
+                        tooltip: 'More',
+                        onPressed: () => controller.isOpen
+                            ? controller.close()
+                            : controller.open(),
+                        icon: const Icon(MdiIcons.dotsVertical),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: displayDirection == Axis.horizontal ? 4 : 5,
+              child: Padding(
+                padding: displayDirection == Axis.horizontal
+                    ? EdgeInsets.symmetric(horizontal: magicSpacing)
+                    : EdgeInsets.symmetric(vertical: magicSpacing),
+                child: Flex(
+                  direction: displayDirection,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  spacing: magicSpacing,
+                  children: [
+                    SizedBox(
+                      height: iconHeight,
+                      width: iconWidth,
+                      child: AppIconById(id: appId),
+                    ),
+                    Flexible(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: displayDirection == Axis.horizontal
+                            ? CrossAxisAlignment.start
+                            : CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            entry?.entries[DesktopEntryKey.name.string] ??
+                                'Unknown',
+                            style: Theme.of(context).textTheme.displayMedium,
+                            textAlign: TextAlign.center,
+                            softWrap: false,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 16),
+                          ExecCommandEditor(
+                            maxWidth: displayDirection == Axis.horizontal
+                                ? constraints.maxWidth / 3 - iconWidth
+                                : constraints.maxWidth / 4,
+                            originalExec:
+                                entry?.entries[DesktopEntryKey.exec.string] ??
+                                entry?.entries[DesktopEntryKey
+                                    .tryExec
+                                    .string] ??
+                                'Unknown',
+                            customExec: window.customExec,
+                            onChanged: (customExec) => ref
+                                .read(
+                                  persistentWindowStateProvider(
+                                    window.windowId,
+                                  ).notifier,
+                                )
+                                .setCustomExec(customExec),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                'Click to start the application',
+                style: Theme.of(context).textTheme.headlineSmall!.copyWith(
+                  color: isFocused
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).disabledColor,
+                ),
+              ),
+            ),
+          ],
+        );
+
         return Stack(
           children: [
             Positioned.fill(
@@ -71,13 +233,11 @@ class WindowPlaceholder extends HookConsumerWidget {
                 ),
               ),
             ),
-            if (window.isWaitingForSurface && window.pid != null)
-              Positioned.fill(child: LogsViewer(pid: window.pid!)),
             Positioned.fill(
               child: InkWell(
                 focusNode: backgroundFocusNode,
                 canRequestFocus: false,
-                onTap: entry != null ? onTap : null,
+                onTap: entry != null && !showLaunchLogs ? launch : null,
                 child: ColoredBox(
                   color: Theme.of(context).colorScheme.surface.withAlpha(150),
                 ),
@@ -96,7 +256,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                   color: Theme.of(context).colorScheme.surface.withAlpha(150),
                   child: InkWell(
                     canRequestFocus: false,
-                    onTap: entry != null ? onTap : null,
+                    onTap: entry != null && !showLaunchLogs ? launch : null,
                     splashColor: Theme.of(
                       context,
                     ).colorScheme.primary.withAlpha(32),
@@ -106,122 +266,26 @@ class WindowPlaceholder extends HookConsumerWidget {
                     child: Focus(
                       focusNode: focusNode,
                       autofocus: true,
-                      child: Column(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
+                      child: showLaunchLogs
+                          ? Stack(
                               children: [
-                                IconButton(
-                                  tooltip:
-                                      'Launch and record all platform events',
-                                  onPressed: () => ref
-                                      .read(
-                                        platformEventRecorderProvider.notifier,
-                                      )
-                                      .recordLaunch(window.windowId),
-                                  icon: const Icon(MdiIcons.bug),
+                                Positioned.fill(
+                                  child: LogsViewer(pid: window.pid!),
                                 ),
-                                const SizedBox(width: 8),
-                                DisplayModeRow(
-                                  selectedMode: window.displayMode,
-                                  onSelectionChanged: (mode) => ref
-                                      .read(
-                                        persistentWindowStateProvider(
-                                          window.windowId,
-                                        ).notifier,
-                                      )
-                                      .setDisplayMode(mode),
-                                ),
+                                if (launchFailed.value)
+                                  Positioned(
+                                    top: 8,
+                                    right: 8,
+                                    child: IconButton(
+                                      tooltip: 'Close logs',
+                                      onPressed: () =>
+                                          launchFailed.value = false,
+                                      icon: const Icon(MdiIcons.close),
+                                    ),
+                                  ),
                               ],
-                            ),
-                          ),
-                          Expanded(
-                            flex: displayDirection == Axis.horizontal ? 4 : 5,
-                            child: Padding(
-                              padding: displayDirection == Axis.horizontal
-                                  ? EdgeInsets.symmetric(
-                                      horizontal: magicSpacing,
-                                    )
-                                  : EdgeInsets.symmetric(
-                                      vertical: magicSpacing,
-                                    ),
-                              child: Flex(
-                                direction: displayDirection,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                spacing: magicSpacing,
-                                children: [
-                                  SizedBox(
-                                    height: iconHeight,
-                                    width: iconWidth,
-                                    child: AppIconById(id: appId),
-                                  ),
-                                  Flexible(
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      crossAxisAlignment:
-                                          displayDirection == Axis.horizontal
-                                          ? CrossAxisAlignment.start
-                                          : CrossAxisAlignment.center,
-                                      children: [
-                                        Text(
-                                          entry?.entries[DesktopEntryKey
-                                                  .name
-                                                  .string] ??
-                                              'Unknown',
-                                          style: Theme.of(
-                                            context,
-                                          ).textTheme.displayMedium,
-                                          textAlign: TextAlign.center,
-                                          softWrap: false,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        const SizedBox(height: 16),
-                                        ExecCommandEditor(
-                                          maxWidth:
-                                              displayDirection ==
-                                                  Axis.horizontal
-                                              ? constraints.maxWidth / 3 -
-                                                    iconWidth
-                                              : constraints.maxWidth / 4,
-                                          originalExec:
-                                              entry?.entries[DesktopEntryKey
-                                                  .exec
-                                                  .string] ??
-                                              entry?.entries[DesktopEntryKey
-                                                  .tryExec
-                                                  .string] ??
-                                              'Unknown',
-                                          customExec: window.customExec,
-                                          onChanged: (customExec) => ref
-                                              .read(
-                                                persistentWindowStateProvider(
-                                                  window.windowId,
-                                                ).notifier,
-                                              )
-                                              .setCustomExec(customExec),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Text(
-                              'Click to start the application',
-                              style: Theme.of(context).textTheme.headlineSmall!
-                                  .copyWith(
-                                    color: isFocused
-                                        ? Theme.of(context).colorScheme.primary
-                                        : Theme.of(context).disabledColor,
-                                  ),
-                            ),
-                          ),
-                        ],
-                      ),
+                            )
+                          : buildLaunchContent(),
                     ),
                   ),
                 ),

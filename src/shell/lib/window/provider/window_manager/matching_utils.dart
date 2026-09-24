@@ -132,33 +132,30 @@ const MAX_WINDOW_REASSOCIATION_TIME_MS = 3000;
 ///   suffix stays near the flat mismatch)
 /// - placeholder renamed "Document — Code" via custom title → 203
 /// → the custom-title placeholder wins, without any provenance involved.
-int windowMatchingCost(
+MatchingCost windowMatchingCost(
   MatchingInfo metaWindowMatchInfo,
   MatchingInfo windowMatchInfo,
   Window window,
 ) {
-  var cost = 0;
   // The wmClass *must* match if specified
-  cost += matchingCost(
+  final windowClass = matchingCost(
     windowMatchInfo.windowClass,
     metaWindowMatchInfo.windowClass,
     INF_COST,
     1,
   );
-  cost += titleMatchingCost(
+  final title = titleMatchingCost(
     windowMatchInfo.title,
     metaWindowMatchInfo.title,
   );
-  cost += matchingCost(
+  final startupId = matchingCost(
     windowMatchInfo.startupId,
     metaWindowMatchInfo.startupId,
     1,
     1,
   );
-
-  cost += matchingCost(windowMatchInfo.pid, metaWindowMatchInfo.pid, 1, 1);
-
-  cost += windowMatchInfo.waitingForAppSince != null
+  final pid = matchingCost(windowMatchInfo.pid, metaWindowMatchInfo.pid, 1, 1);
+  final waiting = windowMatchInfo.waitingForAppSince != null
       ? 100 -
             (DateTime.now()
                         .difference(windowMatchInfo.waitingForAppSince!)
@@ -168,5 +165,45 @@ int windowMatchingCost(
                 .round() // Clamp the difference to be between 0 and 1000 milliseconds
       : 200;
 
-  return cost;
+  return MatchingCost(
+    windowClass: windowClass,
+    title: title,
+    startupId: startupId,
+    pid: pid,
+    waiting: waiting,
+  );
+}
+
+/// Per-signal cost of matching a native window to a shell window.
+///
+/// [total] is the value the matcher ranks on; the individual fields keep a
+/// matching decision explainable (read by the debug launch recorder).
+class MatchingCost {
+  const MatchingCost({
+    required this.windowClass,
+    required this.title,
+    required this.startupId,
+    required this.pid,
+    required this.waiting,
+  });
+
+  final int windowClass;
+  final int title;
+  final int startupId;
+  final int pid;
+  final int waiting;
+
+  int get total => windowClass + title + startupId + pid + waiting;
+
+  Map<String, Object?> toJson() => {
+        'windowClass': windowClass,
+        'title': title,
+        'startupId': startupId,
+        'pid': pid,
+        'waiting': waiting,
+        'total': total,
+      };
+
+  @override
+  String toString() => 'MatchingCost(total: $total)';
 }
