@@ -41,15 +41,14 @@ class SurfaceManager extends _$SurfaceManager {
           break;
       }
     });
-    return SurfaceManagerState(
-      wlSurfaces: ISet(),
-      subSurfaces: ISet(),
-    );
+    return SurfaceManagerState(wlSurfaces: ISet(), subSurfaces: ISet());
   }
 
   /// Send a [UnregisterViewTextureRequest] to the Wayland compositor
   Future<void> unregisterViewTexture(int textureId) {
-    return ref.read(platformManagerProvider.notifier).request(
+    return ref
+        .read(platformManagerProvider.notifier)
+        .request(
           UnregisterViewTextureRequest(
             message: UnregisterViewTextureMessage(textureId: textureId),
           ),
@@ -58,15 +57,13 @@ class SurfaceManager extends _$SurfaceManager {
 
   void _newSurface(NewSurfaceMessage message) {
     ref.read(wlSurfaceStateProvider(message.surfaceId).notifier).initialize();
-    state = state.copyWith(
-      wlSurfaces: state.wlSurfaces.add(message.surfaceId),
-    );
+    state = state.copyWith(wlSurfaces: state.wlSurfaces.add(message.surfaceId));
   }
 
   void _newSubsurface(NewSubsurfaceMessage message) {
-    ref.read(subsurfaceStateProvider(message.surfaceId).notifier).initialize(
-          parent: message.parent,
-        );
+    ref
+        .read(subsurfaceStateProvider(message.surfaceId).notifier)
+        .initialize(parent: message.parent);
     state = state.copyWith(
       subSurfaces: state.subSurfaces.add(message.surfaceId),
     );
@@ -85,7 +82,9 @@ class SurfaceManager extends _$SurfaceManager {
       null => null,
     };
 
-    ref.read(wlSurfaceStateProvider(message.surfaceId).notifier).commit(
+    ref
+        .read(wlSurfaceStateProvider(message.surfaceId).notifier)
+        .commit(
           role: role,
           textureId: message.textureId,
           surfaceSize: Size(
@@ -101,9 +100,9 @@ class SurfaceManager extends _$SurfaceManager {
     final surfaceRole = message.role;
     switch (surfaceRole) {
       case SubsurfaceRoleMessage():
-        ref.read(subsurfaceStateProvider(message.surfaceId).notifier).commit(
-              position: surfaceRole.position,
-            );
+        ref
+            .read(subsurfaceStateProvider(message.surfaceId).notifier)
+            .commit(position: surfaceRole.position);
       // Nothing to do.
       case null:
         break;
@@ -116,27 +115,67 @@ class SurfaceManager extends _$SurfaceManager {
 
     final wlSurfaceState = ref.read(wlSurfaceStateProvider(message.surfaceId));
 
-    // TODO: Patch Smithay to send destroy events for subsurfaces and xdg surfaces.
-    // Especially important for subsurfaces because when a subsurface is destroyed,
-    // it must be unmapped immediately.
-    if (wlSurfaceState.role == SurfaceRole.subsurface) {
-      _destroySubsurface(
-        DestroySubsurfaceMessage(surfaceId: message.surfaceId),
+    // The compositor may commit or destroy surfaces the shell never received
+    // a `new_surface` for, and their state providers can fail to tear down.
+    // Contain the damage to that one surface so the manager keeps working.
+    try {
+      // TODO: Patch Smithay to send destroy events for subsurfaces and xdg surfaces.
+      // Especially important for subsurfaces because when a subsurface is destroyed,
+      // it must be unmapped immediately.
+      if (wlSurfaceState.role == SurfaceRole.subsurface) {
+        _destroySubsurface(
+          DestroySubsurfaceMessage(surfaceId: message.surfaceId),
+        );
+      }
+    } on Object catch (error, stackTrace) {
+      geometryLog.warning(
+        'destroy surface=${message.surfaceId} subsurface teardown failed',
+        error,
+        stackTrace,
       );
     }
 
-    ref.read(wlSurfaceStateProvider(message.surfaceId).notifier).dispose();
+    try {
+      ref.read(wlSurfaceStateProvider(message.surfaceId).notifier).dispose();
+    } on Object catch (error, stackTrace) {
+      geometryLog.warning(
+        'surface=${message.surfaceId} dispose failed',
+        error,
+        stackTrace,
+      );
+    }
+
     state = state.copyWith(
       wlSurfaces: state.wlSurfaces.remove(message.surfaceId),
     );
   }
 
   void _destroySubsurface(DestroySubsurfaceMessage message) {
-    final parent = ref.read(subsurfaceStateProvider(message.surfaceId)).parent;
-    ref
-        .read(wlSurfaceStateProvider(parent).notifier)
-        .removeSubsurface(message.surfaceId);
-    ref.read(subsurfaceStateProvider(message.surfaceId).notifier).dispose();
+    try {
+      final parent = ref
+          .read(subsurfaceStateProvider(message.surfaceId))
+          .parent;
+      ref
+          .read(wlSurfaceStateProvider(parent).notifier)
+          .removeSubsurface(message.surfaceId);
+    } on Object catch (error, stackTrace) {
+      geometryLog.warning(
+        'destroy subsurface=${message.surfaceId} parent removal failed',
+        error,
+        stackTrace,
+      );
+    }
+
+    try {
+      ref.read(subsurfaceStateProvider(message.surfaceId).notifier).dispose();
+    } on Object catch (error, stackTrace) {
+      geometryLog.warning(
+        'subsurface=${message.surfaceId} dispose failed',
+        error,
+        stackTrace,
+      );
+    }
+
     state = state.copyWith(
       subSurfaces: state.subSurfaces.remove(message.surfaceId),
     );

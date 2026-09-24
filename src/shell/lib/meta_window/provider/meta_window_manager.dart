@@ -9,6 +9,7 @@ import 'package:shell/meta_window/provider/process_info_state.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:shell/window/model/matching_decision.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
@@ -26,6 +27,17 @@ part 'meta_window_manager.g.dart';
 class MetaWindowManager extends _$MetaWindowManager {
   final Map<MetaWindowId, ProviderSubscription<bool>> _mappedSubscriptions = {};
   final Map<MetaWindowId, DateTime> _mappedAt = {};
+
+  // Creations whose [MetaWindowState.create] is still awaiting (the desktop
+  // entry lookup). If a removal arrives meanwhile, the window must be
+  // destroyed as soon as the creation completes instead of being revived.
+  final Set<MetaWindowId> _pendingCreated = {};
+  final Set<MetaWindowId> _removedWhilePending = {};
+
+  // Popups created through onNewMetaPopup, tracked so a patch or removal
+  // racing past the creation event cannot mount the uninitialized provider.
+  final Set<String> _popupIds = {};
+
   @override
   ISet<MetaWindowId> build() {
     ref.watch(platformManagerProvider).listen((next) {
@@ -34,22 +46,24 @@ class MetaWindowManager extends _$MetaWindowManager {
       }
       if (next case final MetaWindowPatchEvent event) {
         final patch = event.message;
+        if (!state.contains(patch.id)) {
+          geometryLog.warning('window patch $patch dropped for unknown window');
+          return;
+        }
         ref
             .read(metaWindowStateProvider(patch.id).notifier)
-            .patch(
-              patch,
-              propagate: false,
-            )
+            .patch(patch, propagate: false)
             .then((_) {
-          // A parent/modal/activation hint can arrive after the window was
-          // already matched (Electron sets them late). Re-route it as a dialog
-          // while it is still inside its settle window.
-          if (patch is UpdateParent ||
-              patch is UpdateIsModal ||
-              patch is UpdateActivatedBy) {
-            _maybeRerouteAsDialog(patch.id);
-          }
-        });
+              // A parent/modal/activation hint can arrive after the window was
+              // already matched (Electron sets them late). Re-route it
+              // as a dialog
+              // while it is still inside its settle window.
+              if (patch is UpdateParent ||
+                  patch is UpdateIsModal ||
+                  patch is UpdateActivatedBy) {
+                _maybeRerouteAsDialog(patch.id);
+              }
+            });
       }
       if (next case final MetaWindowRemovedEvent event) {
         onMetaWindowRemoved(event.message.id);
@@ -61,12 +75,15 @@ class MetaWindowManager extends _$MetaWindowManager {
         onNewMetaPopup(event);
       }
       if (next case final MetaPopupPatchEvent event) {
+        if (!_popupIds.contains(event.message.id)) {
+          geometryLog.warning(
+            'popup patch dropped for unknown popup ${event.message.id}',
+          );
+          return;
+        }
         ref
             .read(metaPopupStateProvider(event.message.id).notifier)
-            .patch(
-              event.message,
-              propagate: false,
-            );
+            .patch(event.message, propagate: false);
       }
       if (next case final MetaPopupRemovedEvent event) {
         onMetaPopupRemoved(event.message.id);
@@ -78,16 +95,32 @@ class MetaWindowManager extends _$MetaWindowManager {
 
   Future<void> onNewMetaWindow(MetaWindowCreatedEvent event) async {
     final metaWindowId = event.message.id;
-    await ref
-        .read(metaWindowStateProvider(metaWindowId).notifier)
-        .create(
-          event.message,
-        );
+    _pendingCreated.add(metaWindowId);
+    try {
+      await ref
+          .read(metaWindowStateProvider(metaWindowId).notifier)
+          .create(event.message);
+    } finally {
+      _pendingCreated.remove(metaWindowId);
+    }
+
+    // If the window was removed during the creation await, destroy it now
+    // instead of leaking a revived zombie window (its providers were already
+    // torn down and must not be re-added).
+    if (_removedWhilePending.remove(metaWindowId)) {
+      _destroyMetaWindowState(metaWindowId);
+      geometryLog.info(
+        'window=$metaWindowId creation completed after removal, dropped',
+      );
+      return;
+    }
+    if (state.contains(metaWindowId)) {
+      return;
+    }
+    state = state.add(metaWindowId);
 
     _mappedSubscriptions[metaWindowId] = ref.listen(
-      metaWindowStateProvider(metaWindowId).select(
-        (value) => value.mapped,
-      ),
+      metaWindowStateProvider(metaWindowId).select((value) => value.mapped),
       (previouslyMapped, isMapped) {
         if (isMapped && previouslyMapped != isMapped) {
           onMetaWindowMapped(metaWindowId);
@@ -95,14 +128,19 @@ class MetaWindowManager extends _$MetaWindowManager {
       },
     );
 
-    state = state.add(metaWindowId);
-
     if (event.message.mapped) {
       onMetaWindowMapped(metaWindowId);
     }
   }
 
   void onMetaWindowMapped(MetaWindowId id, {int retryCount = 0}) {
+    // Delays retry (Future.delayed) and interleaved events can land here
+    // after the window was destroyed; a read would mount the uninitialized
+    // provider.
+    if (!state.contains(id)) {
+      geometryLog.warning('window=$id mapped event dropped, no longer tracked');
+      return;
+    }
     final metaWindow = ref.read(metaWindowStateProvider(id));
 
     if (ref.read(metaWindowWindowMapProvider).get(id) != null) {
@@ -121,7 +159,8 @@ class MetaWindowManager extends _$MetaWindowManager {
           .read(metaWindowWindowMapProvider)
           .get(metaWindow.parent!);
       if (parentWindowId == null) {
-        // try again after a short delay because the parent window might not be mapped yet
+        // try again after a short delay because the parent window might
+        // not be mapped yet
         if (retryCount < 10) {
           Future.delayed(const Duration(milliseconds: 100), () {
             onMetaWindowMapped(id, retryCount: retryCount + 1);
@@ -210,6 +249,11 @@ class MetaWindowManager extends _$MetaWindowManager {
   /// burst has settled, and only when it resolves to a real owner (it never
   /// falls back to the ordinary best candidate), matching [onMetaWindowMapped].
   void _maybeRerouteAsDialog(MetaWindowId id) {
+    // A removal can race past the patch event between dispatches.
+    if (!state.contains(id)) {
+      geometryLog.warning('window=$id reroute dropped, no longer tracked');
+      return;
+    }
     final mappedAt = _mappedAt[id];
     if (mappedAt == null ||
         DateTime.now().difference(mappedAt).inMilliseconds >
@@ -288,17 +332,43 @@ class MetaWindowManager extends _$MetaWindowManager {
     }
     _mappedSubscriptions.remove(id)?.close();
     _mappedAt.remove(id);
-    ref.read(metaWindowStateProvider(id).notifier).destroy();
     state = state.remove(id);
+
+    // During this removal, MetaWindowState.create may still be awaiting in
+    // onNewMetaWindow. Deferring the destroy keeps the removal ordered
+    // against the late completion and the state provider never gets
+    // re-initialized by a stray interceptor.
+    if (_pendingCreated.contains(id)) {
+      _removedWhilePending.add(id);
+      return;
+    }
+    _destroyMetaWindowState(id);
+  }
+
+  /// Destroys the state provider for [id], tolerating the (never initialized)
+  /// error state it throws in when the creation never reached this shell.
+  void _destroyMetaWindowState(MetaWindowId id) {
+    try {
+      ref.read(metaWindowStateProvider(id).notifier).destroy();
+    } on Object catch (error) {
+      geometryLog.warning('destroy of window=$id failed', error);
+    }
   }
 
   void onNewMetaPopup(MetaPopupCreatedEvent event) {
+    _popupIds.add(event.message.id);
     ref
         .read(metaPopupStateProvider(event.message.id).notifier)
         .create(event.message);
   }
 
   void onMetaPopupRemoved(String id) {
+    // A removal racing past the creation event would mount the
+    // uninitialized provider, which throws by design.
+    if (!_popupIds.remove(id)) {
+      geometryLog.warning('popup=$id removal dropped, was not tracked');
+      return;
+    }
     ref.read(metaPopupStateProvider(id).notifier).destroy();
   }
 }

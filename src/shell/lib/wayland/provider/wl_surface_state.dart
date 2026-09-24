@@ -11,7 +11,11 @@ part 'wl_surface_state.g.dart';
 
 @riverpod
 class WlSurfaceState extends _$WlSurfaceState {
-  late final KeepAliveLink _keepAliveLink;
+  // Nullable so `dispose()` is safe even when the compositor commits or
+  // destroys a surface the shell never received a `new_surface` for, and so
+  // a re-`initialize` (duplicate `new_surface` for the same id) cannot
+  // re-assign a `late final`.
+  KeepAliveLink? _keepAliveLink;
 
   @override
   WlSurface build(SurfaceId surfaceId) {
@@ -22,6 +26,8 @@ class WlSurfaceState extends _$WlSurfaceState {
   }
 
   void initialize() {
+    // Tolerate a duplicate `new_surface` for a surface that is still alive.
+    _keepAliveLink?.close();
     _keepAliveLink = ref.keepAlive();
     ref.onDispose(() {
       print('disposing WlSurfaceStateProvider $surfaceId');
@@ -31,14 +37,14 @@ class WlSurfaceState extends _$WlSurfaceState {
   }
 
   WlSurface _defaultSurface() => WlSurface(
-        surfaceId: surfaceId,
-        role: null,
-        texture: null,
-        scale: 1,
-        subsurfacesBelow: IList(),
-        subsurfacesAbove: IList(),
-        inputRegion: Rect.zero,
-      );
+    surfaceId: surfaceId,
+    role: null,
+    texture: null,
+    scale: 1,
+    subsurfacesBelow: IList(),
+    subsurfacesAbove: IList(),
+    inputRegion: Rect.zero,
+  );
 
   void commit({
     required SurfaceRole? role,
@@ -52,10 +58,7 @@ class WlSurfaceState extends _$WlSurfaceState {
     final previous = state;
     state = state.copyWith(
       role: role ?? state.role,
-      texture: SurfaceTexture(
-        id: textureId,
-        size: surfaceSize,
-      ),
+      texture: SurfaceTexture(id: textureId, size: surfaceSize),
       scale: scale,
       subsurfacesBelow: subsurfacesBelow,
       subsurfacesAbove: subsurfacesAbove,
@@ -79,8 +82,8 @@ class WlSurfaceState extends _$WlSurfaceState {
   bool mapped() {
     switch (state.role) {
       case SurfaceRole.xdgToplevel ||
-            SurfaceRole.xdgPopup ||
-            SurfaceRole.x11Surface:
+          SurfaceRole.xdgPopup ||
+          SurfaceRole.x11Surface:
         return ref.read(metaWindowIdPerSurfaceIdProvider(surfaceId)) != null;
       case SurfaceRole.subsurface:
         return ref.read(subsurfaceStateProvider(surfaceId)).mapped;
@@ -90,6 +93,7 @@ class WlSurfaceState extends _$WlSurfaceState {
   }
 
   void dispose() {
-    _keepAliveLink.close();
+    _keepAliveLink?.close();
+    _keepAliveLink = null;
   }
 }

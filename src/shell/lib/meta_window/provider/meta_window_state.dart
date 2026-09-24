@@ -17,12 +17,19 @@ part 'meta_window_state.g.dart';
 class MetaWindowState extends _$MetaWindowState {
   KeepAliveLink? _keepAliveLink;
 
+  // `build()` throws until [create] runs; trackers such as
+  // [MetaWindowManager] mount this provider only after a creation event, and
+  // these guards keep a teardown or patch event racing past that mount from
+  // crashing on the uninitialized provider.
+  bool _created = false;
+
   @override
   MetaWindow build(String id) {
     throw Exception('MetaWindowState $id not yet initialized');
   }
 
   Future<void> create(MetaWindowCreatedMessage message) async {
+    _created = true;
     geometryLog.info(
       'window create id=$id surface=${message.surfaceId} '
       'geometry=${message.geometry} scale=${message.scaleRatio} '
@@ -58,9 +65,7 @@ class MetaWindowState extends _$MetaWindowState {
     );
 
     ref
-        .read(
-          metaWindowIdPerSurfaceIdProvider(message.surfaceId).notifier,
-        )
+        .read(metaWindowIdPerSurfaceIdProvider(message.surfaceId).notifier)
         .set(id);
 
     ref.watch(pidToMetaWindowIdProvider(message.pid).notifier).set(id);
@@ -70,6 +75,10 @@ class MetaWindowState extends _$MetaWindowState {
     MetaWindowPatchMessage patch, {
     bool propagate = true,
   }) async {
+    if (!_created) {
+      geometryLog.warning('window patch $patch dropped for id=$id not created');
+      return;
+    }
     if (patch is UpdateGeometry || patch is UpdateScaleRatio) {
       geometryLog.info('window patch id=$id value=$patch before=${state}');
     }
@@ -119,31 +128,30 @@ class MetaWindowState extends _$MetaWindowState {
     if (propagate == true) {
       await ref
           .read(platformManagerProvider.notifier)
-          .request(
-            MetaWindowPatchesRequest(
-              message: patch,
-            ),
-          );
+          .request(MetaWindowPatchesRequest(message: patch));
     }
   }
 
   void destroy() {
     _keepAliveLink?.close();
+    if (!_created) {
+      return;
+    }
+    _created = false;
     ref
-        .read(
-          metaWindowIdPerSurfaceIdProvider(state.surfaceId).notifier,
-        )
+        .read(metaWindowIdPerSurfaceIdProvider(state.surfaceId).notifier)
         .clear();
   }
 
   void requestToClose() {
+    if (!_created) {
+      return;
+    }
     ref
         .read(platformManagerProvider.notifier)
         .request(
           CloseWindowRequest(
-            message: CloseWindowMessage(
-              metaWindowId: state.id,
-            ),
+            message: CloseWindowMessage(metaWindowId: state.id),
           ),
         );
   }

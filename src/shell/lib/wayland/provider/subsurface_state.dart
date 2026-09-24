@@ -10,7 +10,11 @@ part 'subsurface_state.g.dart';
 
 @riverpod
 class SubsurfaceState extends _$SubsurfaceState {
-  late final KeepAliveLink _keepAliveLink;
+  // Nullable so `dispose()` is safe even when a subsurface is destroyed for
+  // which the shell never received a `new_subsurface`, and so a
+  // re-`initialize` (e.g. after an earlier destroy failed) cannot re-assign
+  // a `late final`.
+  KeepAliveLink? _keepAliveLink;
 
   ProviderSubscription<SurfaceRole?>? _parentRoleSub;
   ProviderSubscription<bool>? _parentMappedSub;
@@ -20,9 +24,9 @@ class SubsurfaceState extends _$SubsurfaceState {
     throw Exception('Subsurface $surfaceId state was not initialized');
   }
 
-  void initialize({
-    required SurfaceId parent,
-  }) {
+  void initialize({required SurfaceId parent}) {
+    // Tolerate a duplicate `new_subsurface` for a subsurface still alive.
+    _keepAliveLink?.close();
     _keepAliveLink = ref.keepAlive();
     ref.onDispose(() {
       print('disposing SubsurfaceStateProvider $surfaceId');
@@ -57,21 +61,19 @@ class SubsurfaceState extends _$SubsurfaceState {
   }
 
   void setParent(int parent) {
-    state = state.copyWith(
-      parent: parent,
-    );
+    state = state.copyWith(parent: parent);
   }
 
   void commit({required Offset position}) {
-    state = state.copyWith(
-      committed: true,
-      position: position,
-    );
+    state = state.copyWith(committed: true, position: position);
   }
 
   void dispose() {
     _parentRoleSub?.close();
     _parentMappedSub?.close();
-    _keepAliveLink.close();
+    _parentRoleSub = null;
+    _parentMappedSub = null;
+    _keepAliveLink?.close();
+    _keepAliveLink = null;
   }
 }
