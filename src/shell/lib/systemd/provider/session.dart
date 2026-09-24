@@ -39,7 +39,9 @@ class Session extends _$Session {
 
   Future<void> reboot() => state.reboot(true);
 
-  Future<void> sleep() => state.reboot(true);
+  Future<void> sleep() => state.suspend(true);
+
+  Future<void> hibernate() => state.hibernate(true);
 
   Future<void> logout() async {
     final session = await getActiveUserSession();

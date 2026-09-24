@@ -4,9 +4,7 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:shell/systemd/provider/session.dart';
 
 class SessionControls extends HookConsumerWidget {
-  const SessionControls({
-    super.key,
-  });
+  const SessionControls({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -31,8 +29,19 @@ class SessionControls extends HookConsumerWidget {
               icon: const Icon(MdiIcons.logout),
             ),
             IconButton(
-              onPressed: () {},
+              tooltip: 'Sleep',
+              onPressed: () {
+                ref.read(sessionProvider.notifier).sleep();
+              },
               icon: const Icon(MdiIcons.powerSleep),
+              style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
+            ),
+            IconButton(
+              tooltip: 'Hibernate',
+              onPressed: () {
+                ref.read(sessionProvider.notifier).hibernate();
+              },
+              icon: const Icon(MdiIcons.snowflake),
               style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
             ),
             IconButton(

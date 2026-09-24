@@ -154,6 +154,35 @@ class SettingsProperties extends _$SettingsProperties {
           ),
         },
       ),
+      'idle': const SettingGroup(
+        name: 'Idle and Power',
+        description: 'Screen dimming and automatic power actions',
+        icon: MdiIcons.power,
+        children: {
+          'dimTimeoutSeconds': SettingProperty<int>(
+            name: 'Dim After (seconds)',
+            description: 'Set to 0 to disable idle dimming',
+          ),
+          'blankTimeoutSeconds': SettingProperty<int>(
+            name: 'Blank After (seconds)',
+            description: 'Set to 0 to disable display blanking',
+          ),
+          'fadeSeconds': SettingProperty<double>(
+            name: 'Dim Fade Duration (seconds)',
+            description: 'Duration of the transition to the dimmed screen',
+          ),
+          'automaticPowerAction': SettingProperty<String>(
+            name: 'Automatic Power Action',
+            description:
+                'suspendThenHibernate uses logind when available, otherwise it suspends',
+          ),
+          'automaticPowerTimeoutSeconds': SettingProperty<int>(
+            name: 'Automatic Power After (seconds)',
+            description:
+                'Default is 600 seconds; set to 0 to disable automatic sleep or hibernate',
+          ),
+        },
+      ),
       'theme': const SettingGroup(
         name: 'Theme',
         description: null,

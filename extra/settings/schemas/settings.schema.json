@@ -101,6 +101,19 @@
                 "fadeSeconds": {
                     "type": "number",
                     "minimum": 0
+                },
+                "automaticPowerAction": {
+                    "type": "string",
+                    "enum": [
+                        "disabled",
+                        "suspend",
+                        "hibernate",
+                        "suspendThenHibernate"
+                    ]
+                },
+                "automaticPowerTimeoutSeconds": {
+                    "type": "integer",
+                    "minimum": 0
                 }
             },
             "additionalProperties": false

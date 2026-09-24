@@ -6,9 +6,15 @@ use smithay::reexports::calloop::channel;
 use tracing::warn;
 use zbus::interface;
 use zbus::message::Header;
+use zbus::{Connection, Proxy};
+
+use crate::settings::AutomaticPowerAction;
 
 const SCREENSAVER_NAME: &str = "org.freedesktop.ScreenSaver";
 const SCREENSAVER_PATH: &str = "/org/freedesktop/ScreenSaver";
+const LOGIN1_NAME: &str = "org.freedesktop.login1";
+const LOGIN1_PATH: &str = "/org/freedesktop/login1";
+const LOGIN1_MANAGER: &str = "org.freedesktop.login1.Manager";
 
 #[derive(Debug, Clone, Copy)]
 pub enum IdleDbusEvent {
@@ -84,6 +90,83 @@ pub fn spawn(events: channel::Sender<IdleDbusEvent>) {
             warn!(?error, "Screensaver D-Bus service did not start");
         }
     });
+}
+
+/// Queue logind power requests off the compositor thread.
+pub fn spawn_power_worker() -> std::sync::mpsc::Sender<AutomaticPowerAction> {
+    let (sender, requests) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        while let Ok(action) = requests.recv() {
+            if action == AutomaticPowerAction::Disabled {
+                continue;
+            }
+            if let Err(error) = zbus::block_on(request_logind_power_action(action)) {
+                warn!(?action, ?error, "Automatic logind power action failed");
+            }
+        }
+    });
+    sender
+}
+
+async fn request_logind_power_action(action: AutomaticPowerAction) -> zbus::Result<()> {
+    let connection = Connection::system().await?;
+    let proxy = Proxy::new(&connection, LOGIN1_NAME, LOGIN1_PATH, LOGIN1_MANAGER).await?;
+    let action = match action {
+        AutomaticPowerAction::SuspendThenHibernate => {
+            let capability = proxy
+                .call::<_, _, String>("CanSuspendThenHibernate", &())
+                .await;
+            let capability = match capability {
+                Ok(capability) => Some(capability),
+                Err(error) => {
+                    warn!(?error, "Could not query SuspendThenHibernate capability");
+                    None
+                }
+            };
+            select_suspend_then_hibernate_action(capability.as_deref())
+        }
+        action => action,
+    };
+    let method = match action {
+        AutomaticPowerAction::Disabled => return Ok(()),
+        AutomaticPowerAction::Suspend => "Suspend",
+        AutomaticPowerAction::Hibernate => "Hibernate",
+        AutomaticPowerAction::SuspendThenHibernate => "SuspendThenHibernate",
+    };
+    proxy.call_method(method, &(false,)).await?;
+    Ok(())
+}
+
+fn select_suspend_then_hibernate_action(capability: Option<&str>) -> AutomaticPowerAction {
+    if capability == Some("yes") {
+        AutomaticPowerAction::SuspendThenHibernate
+    } else {
+        tracing::info!(
+            ?capability,
+            "SuspendThenHibernate is unavailable; falling back to Suspend"
+        );
+        AutomaticPowerAction::Suspend
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::select_suspend_then_hibernate_action;
+    use crate::settings::AutomaticPowerAction;
+
+    #[test]
+    fn suspend_then_hibernate_is_selected_only_when_logind_says_yes() {
+        assert_eq!(
+            select_suspend_then_hibernate_action(Some("yes")),
+            AutomaticPowerAction::SuspendThenHibernate
+        );
+        for capability in [Some("no"), Some("challenge"), Some("na"), None] {
+            assert_eq!(
+                select_suspend_then_hibernate_action(capability),
+                AutomaticPowerAction::Suspend
+            );
+        }
+    }
 }
 
 async fn serve(events: channel::Sender<IdleDbusEvent>) -> zbus::Result<()> {

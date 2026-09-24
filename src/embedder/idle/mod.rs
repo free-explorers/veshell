@@ -6,7 +6,7 @@ use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::Resource;
 
 use crate::backend::Backend;
-use crate::settings::IdleSettings;
+use crate::settings::{AutomaticPowerAction, IdleSettings};
 use crate::state::State;
 
 mod dbus;
@@ -35,12 +35,17 @@ pub struct IdleState<BackendData: Backend + 'static> {
     dim_timeout: Duration,
     blank_timeout: Duration,
     fade_duration: Duration,
+    automatic_power_action: AutomaticPowerAction,
+    automatic_power_timeout: Duration,
     fade_started: Option<Instant>,
     dim_token: Option<RegistrationToken>,
     blank_token: Option<RegistrationToken>,
     fade_token: Option<RegistrationToken>,
+    automatic_power_token: Option<RegistrationToken>,
+    automatic_power_triggered: bool,
     pub(crate) inhibiting_surfaces: Vec<WlSurface>,
     dbus_inhibited: bool,
+    power_sender: Option<std::sync::mpsc::Sender<AutomaticPowerAction>>,
     /// Backend hook that re-drives rendering after waking/blanking.
     request_render: fn(&mut State<BackendData>),
     /// Backend hook that powers the outputs down (`CAN_BLANK` backends only).
@@ -69,6 +74,7 @@ impl<BackendData: Backend + 'static> IdleState<BackendData> {
         if BackendData::RUNS_PORTAL_BACKEND {
             dbus::spawn(dbus_events);
         }
+        let power_sender = BackendData::RUNS_PORTAL_BACKEND.then(dbus::spawn_power_worker);
 
         Self {
             loop_handle,
@@ -77,12 +83,19 @@ impl<BackendData: Backend + 'static> IdleState<BackendData> {
             dim_timeout: Duration::from_secs(settings.dim_timeout_seconds as u64),
             blank_timeout: Duration::from_secs(settings.blank_timeout_seconds as u64),
             fade_duration: Duration::from_secs_f32(settings.fade_seconds.max(0.0)),
+            automatic_power_action: settings.automatic_power_action,
+            automatic_power_timeout: Duration::from_secs(
+                settings.automatic_power_timeout_seconds as u64,
+            ),
             fade_started: None,
             dim_token: None,
             blank_token: None,
             fade_token: None,
+            automatic_power_token: None,
+            automatic_power_triggered: false,
             inhibiting_surfaces: Vec::new(),
             dbus_inhibited: false,
+            power_sender,
             request_render: no_op,
             apply_blank: no_op,
         }
@@ -110,6 +123,7 @@ impl<BackendData: Backend + 'static> IdleState<BackendData> {
             self.dim_token.take(),
             self.blank_token.take(),
             self.fade_token.take(),
+            self.automatic_power_token.take(),
         ]
         .into_iter()
         .flatten()
@@ -123,6 +137,7 @@ impl<BackendData: Backend + 'static> IdleState<BackendData> {
     /// from "now". A no-op while idle inhibition is active.
     pub(crate) fn arm_activity_timers(&mut self) {
         self.cancel_all();
+        self.automatic_power_triggered = false;
         if !self.dim_timeout.is_zero() {
             let dim_timeout = self.dim_timeout;
             self.dim_token = self
@@ -147,6 +162,35 @@ impl<BackendData: Backend + 'static> IdleState<BackendData> {
                 })
                 .ok();
         }
+        if !self.automatic_power_timeout.is_zero()
+            && self.automatic_power_action != AutomaticPowerAction::Disabled
+            && self.power_sender.is_some()
+        {
+            let timeout = self.automatic_power_timeout;
+            self.automatic_power_token = self
+                .loop_handle
+                .insert_source(Timer::from_duration(timeout), {
+                    move |_, _, state| {
+                        automatic_power_fired(state);
+                        TimeoutAction::Drop
+                    }
+                })
+                .ok();
+        }
+    }
+
+    fn cancel_visual_timers(&mut self) {
+        for token in [
+            self.dim_token.take(),
+            self.blank_token.take(),
+            self.fade_token.take(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            self.loop_handle.remove(token);
+        }
+        self.fade_started = None;
     }
 }
 
@@ -209,6 +253,9 @@ pub fn apply_idle_settings<D: Backend + 'static>(state: &mut State<D>, settings:
     state.idle.dim_timeout = Duration::from_secs(settings.dim_timeout_seconds as u64);
     state.idle.blank_timeout = Duration::from_secs(settings.blank_timeout_seconds as u64);
     state.idle.fade_duration = Duration::from_secs_f32(settings.fade_seconds.max(0.0));
+    state.idle.automatic_power_action = settings.automatic_power_action;
+    state.idle.automatic_power_timeout =
+        Duration::from_secs(settings.automatic_power_timeout_seconds as u64);
     if state.idle.stage == IdleStage::Active {
         if is_inhibited(state) {
             state.idle.cancel_all();
@@ -267,7 +314,7 @@ fn blank_fired<D: Backend + 'static>(state: &mut State<D>) {
     }
     state.idle.blank_token = None;
     state.idle.dim_alpha = 1.0;
-    state.idle.cancel_all();
+    state.idle.cancel_visual_timers();
     if <D as Backend>::CAN_BLANK {
         state.idle.stage = IdleStage::Blank;
         (state.idle.apply_blank)(state);
@@ -277,9 +324,24 @@ fn blank_fired<D: Backend + 'static>(state: &mut State<D>) {
     }
 }
 
+fn automatic_power_fired<D: Backend + 'static>(state: &mut State<D>) {
+    state.idle.automatic_power_token = None;
+    if state.idle.automatic_power_triggered || is_inhibited(state) {
+        return;
+    }
+
+    state.idle.automatic_power_triggered = true;
+    let action = state.idle.automatic_power_action;
+    if let Some(sender) = &state.idle.power_sender {
+        if sender.send(action).is_err() {
+            tracing::warn!("Automatic power action worker is unavailable");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::settings::IdleSettings;
+    use crate::settings::{AutomaticPowerAction, IdleSettings};
 
     #[test]
     fn default_settings_use_five_minute_dim_and_ten_minute_blank() {
@@ -287,6 +349,37 @@ mod tests {
         assert_eq!(settings.dim_timeout_seconds, 300);
         assert_eq!(settings.blank_timeout_seconds, 600);
         assert_eq!(settings.fade_seconds, 3.0);
+        assert_eq!(
+            settings.automatic_power_action,
+            AutomaticPowerAction::SuspendThenHibernate
+        );
+        assert_eq!(settings.automatic_power_timeout_seconds, 600);
+    }
+
+    #[test]
+    fn automatic_power_actions_use_settings_json_names() {
+        for (json, expected) in [
+            ("\"disabled\"", AutomaticPowerAction::Disabled),
+            ("\"suspend\"", AutomaticPowerAction::Suspend),
+            ("\"hibernate\"", AutomaticPowerAction::Hibernate),
+            (
+                "\"suspendThenHibernate\"",
+                AutomaticPowerAction::SuspendThenHibernate,
+            ),
+        ] {
+            assert_eq!(
+                serde_json::from_str::<AutomaticPowerAction>(json).unwrap(),
+                expected
+            );
+        }
+        let unknown = serde_json::from_str::<IdleSettings>(
+            r#"{"dimTimeoutSeconds":300,"blankTimeoutSeconds":600,"fadeSeconds":3.0,"automaticPowerAction":"invalid","automaticPowerTimeoutSeconds":1800}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            unknown.automatic_power_action,
+            AutomaticPowerAction::Disabled
+        );
     }
 
     #[test]
