@@ -91,6 +91,19 @@ int titleMatchingCost(String? storedTitle, String? windowTitle) {
 /// have loaded the window titles change and we might be able to make better associations.
 const MAX_WINDOW_REASSOCIATION_TIME_MS = 3000;
 
+/// Upper bound on how long a launch burst keeps gathering while the only
+/// windows it has produced are fixed-size (a splash or updater).
+///
+/// Applications with a splash/updater map a transient fixed-size window first
+/// and the real (resizable) window hundreds of milliseconds later. Settling on
+/// the helper alone would make the real window look like a *further opening*
+/// and turn it into a dialog. The gather is therefore deferred until a
+/// resizable window arrives, but only up to this bound, so a genuinely
+/// fixed-size final surface still settles as the tile's own window. Chosen
+/// above the observed GIMP splash gap (~1.3 s) with headroom, below
+/// [MAX_WINDOW_REASSOCIATION_TIME_MS].
+const MAX_SPLASH_GATHER_TIME_MS = 2000;
+
 /// Cost for associating the the given metaWindow to the msWindow.
 ///
 /// windowInfo are the matching details for the meta window, for example its window title.

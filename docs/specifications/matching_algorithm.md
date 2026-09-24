@@ -34,6 +34,14 @@ Signals, in order of reliability / fallback:
 5. Window title — used to choose which overlapping surface to display, by matching the tile's title.
 6. Order and time — the first mapped surface is presumed transient; once it closes the tile settles on the best remaining match.
 
+A splash or updater is usually the first window and reports a fixed size. While
+it is the only window the tile has gathered, the burst does not settle: it keeps
+the waiting bonus armed and waits for the real window, so the real window is
+collected and redistributed by title instead of being mistaken for a further
+opening. The wait is bounded, so an application whose final surface really is
+fixed-size still settles with that surface as its own window. See
+[Settle](#flow).
+
 ### Parallel Windows: Application that when launched create multiple windows in parallel to restore a session
 Applications that create several windows when launched to restore previously opened windows. Typically for browsers or IDEs or documents viewers.
 In this case however we want to restore each surfaces in its own Persistent window.
@@ -187,7 +195,14 @@ All of these are observed on the live surfaces and, where meaningful, mirrored o
    the clicked tile first.
 2. **Settle.** After the burst's last change (short debounce) titles are final;
    no dispatch decision is taken before that. This is what removes the need for
-   any later re-association.
+   any later re-association. The settle is deferred while the only window the
+   gather has produced is fixed-size (a splash or updater) and no resizable
+   window has arrived yet: applications map their transient helper first and
+   the real window hundreds of milliseconds later, and settling on the helper
+   alone would make the real window a further opening (see
+   [Dialog routing](#dialog-routing)). The deferral is bounded (currently 2 s)
+   so a genuinely fixed-size final surface still settles as the tile's own
+   window rather than becoming a dialog.
 3. **Redistribute by identity, displayed window included.** For each owned
    window, a sibling whose match cost is strictly lower (principally a stored
    title match; provenance/process-sibling recovery also counts) wins it,
@@ -203,9 +218,11 @@ All of these are observed on the live surfaces and, where meaningful, mirrored o
    empty same-app sibling if one exists, instead of becoming a dialog.
 5. **Dialog only when no sibling is free.** A leftover that finds no empty
    sibling becomes a dialog of its tile.
-6. **Reopen when emptied.** If the clicked tile had received a window and ended
-   with none, it reopens one window, bounded to a single attempt. A launch that
-   never produced a window is never relaunched.
+6. **Reopen when emptied.** If the clicked tile had received a resizable window
+   and ended with none, it reopens one window, bounded to a single attempt. A
+   launch that never produced a window is never relaunched, and neither is one
+   whose only window was fixed-size (a splash/updater or a genuinely fixed-size
+   final surface): losing it to a close is not a mis-dispatch to recover from.
 
 ### Dialog routing
 
@@ -225,7 +242,11 @@ sibling, falling back to the ordinary best candidate only for an authoritative
 hint. Owner resolution always walks dialog chains up to the owning tile, so a
 native window is never nested under another dialog. A parent, modal or activation
 hint that arrives after mapping re-routes the already-matched window while it is
-still inside its settle window.
+still inside its settle window. A splash or updater that maps first does not
+make the real window a further opening: while the only gathered window is
+fixed-size the burst is still gathering (bounded), so the relation on the real
+window stays an owner hint and the real window is matched onto the tile. The
+helper then becomes the leftover that is turned into a dialog at the settle.
 
 A tile renders its dialogs whether or not it currently has a main window
 (`WindowDialogs`, shared with `WindowWidget`): when the only windows an

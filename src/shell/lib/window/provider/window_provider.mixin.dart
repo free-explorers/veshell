@@ -80,7 +80,18 @@ mixin WindowProviderMixin<T extends Window> {
   /// launch. Reopening only happens when a window arrived and then left, never
   /// when the launch produced no window at all.
   bool _everOwnedWindow = false;
+
+  /// Whether the origin owned a *resizable* native window at some point during
+  /// this launch. Reopening is gated on this, not on [_everOwnedWindow]: a
+  /// burst that only ever produced a fixed-size helper/splash (Discord's
+  /// updater) or a genuinely fixed-size final surface must not relaunch the
+  /// application when that window closes.
+  bool _everOwnedResizableWindow = false;
   int _reopenAttempts = 0;
+
+  /// When the in-flight launch gather started, used to bound the fixed-size
+  /// deferral in [_shouldDeferSettleForFixedSize].
+  DateTime? _launchGatherStartedAt;
 
   /// Initialized a Window by keeping it alive and setting the surface.
   void initialize(T window) {
@@ -101,6 +112,9 @@ mixin WindowProviderMixin<T extends Window> {
   void addMetaWindow(MetaWindowId metaWindowId) {
     if (_launchOrigin) {
       _everOwnedWindow = true;
+      if (!ref.read(metaWindowStateProvider(metaWindowId)).isFixedSized) {
+        _everOwnedResizableWindow = true;
+      }
     } else {
       _matchingInfo = _matchingInfo.copyWith(waitingForAppSince: null);
     }
@@ -128,15 +142,63 @@ mixin WindowProviderMixin<T extends Window> {
     _recomputeDisplayedMetaWindow();
 
     if (_launchOrigin || _metaWindowSubscriptions.length > 1) {
-      _debouncedTimer = Timer(const Duration(milliseconds: 100), () {
-        if (_launchOrigin) {
-          _finalizeLaunchBurst();
-        } else if (_metaWindowSubscriptions.length > 1) {
-          _redistributeOwnedMetaWindows();
-        }
-      });
+      _debouncedTimer = Timer(
+        const Duration(milliseconds: 100),
+        _onSettleTimer,
+      );
     }
   }
+
+  /// Fires after the 100 ms settle debounce. A launch origin finalizes its
+  /// gather, unless the only windows it has produced so far are fixed-size and
+  /// the splash deferral budget is not exhausted yet, in which case the timer
+  /// is re-armed. A non-origin tile with an overflow redistributes.
+  void _onSettleTimer() {
+    if (_launchOrigin) {
+      if (_shouldDeferSettleForFixedSize()) {
+        _debouncedTimer = Timer(
+          const Duration(milliseconds: 100),
+          _onSettleTimer,
+        );
+        return;
+      }
+      _finalizeLaunchBurst();
+    } else if (_metaWindowSubscriptions.length > 1) {
+      _redistributeOwnedMetaWindows();
+    }
+  }
+
+  /// Whether the launch gather must stay open because the only windows it has
+  /// produced so far are fixed-size (a splash or updater).
+  ///
+  /// Such applications map a transient fixed-size helper first and the real
+  /// window hundreds of milliseconds later. Settling on the helper alone would
+  /// make the real window look like a *further opening* and turn it into a
+  /// dialog instead of the tile's displayed window. The deferral is bounded by
+  /// [MAX_SPLASH_GATHER_TIME_MS] so a genuinely fixed-size final surface still
+  /// settles as the tile's own window. A state with no owned window at all is
+  /// also deferred: a splash that closes before the real window appears must
+  /// not end the gather early.
+  bool _shouldDeferSettleForFixedSize() {
+    if (!_launchOrigin) {
+      return false;
+    }
+    final startedAt = _launchGatherStartedAt;
+    if (startedAt == null) {
+      return false;
+    }
+    if (DateTime.now().difference(startedAt).inMilliseconds >=
+        MAX_SPLASH_GATHER_TIME_MS) {
+      return false;
+    }
+    return !_hasResizableOwnedWindow;
+  }
+
+  /// Whether this tile currently owns at least one resizable native window.
+  bool get _hasResizableOwnedWindow => _metaWindowSubscriptions.keys.any(
+    (metaWindowId) =>
+        !ref.read(metaWindowStateProvider(metaWindowId)).isFixedSized,
+  );
 
   /// Picks the displayed native window among the owned ones without arming any
   /// timer.
@@ -271,6 +333,7 @@ mixin WindowProviderMixin<T extends Window> {
     // Clear the origin before redistributing so a throw cannot leave the tile
     // gathering forever; the reopen branch below re-arms it when needed.
     _launchOrigin = false;
+    _launchGatherStartedAt = null;
     _redistributeOwnedMetaWindows();
     recordMatchingDecision(
       ref,
@@ -284,10 +347,13 @@ mixin WindowProviderMixin<T extends Window> {
 
     if (lostEverything &&
         _everOwnedWindow &&
+        _everOwnedResizableWindow &&
         _reopenAttempts < _maxLaunchReopenAttempts) {
       _reopenAttempts++;
       _launchOrigin = true;
+      _launchGatherStartedAt = DateTime.now();
       _everOwnedWindow = false;
+      _everOwnedResizableWindow = false;
       matchingLog.info(
         'Launched tile ${state.windowId} lost all its windows to '
         'better-matching siblings; reopening one',
@@ -303,6 +369,7 @@ mixin WindowProviderMixin<T extends Window> {
       return;
     }
     _everOwnedWindow = false;
+    _everOwnedResizableWindow = false;
   }
 
   /// Redistributes the native windows this tile owns so each lands on its best
@@ -528,9 +595,11 @@ mixin WindowProviderMixin<T extends Window> {
     // [_finalizeLaunchBurst]) keeps it so the reopen cannot loop.
     if (!_launchOrigin) {
       _everOwnedWindow = false;
+      _everOwnedResizableWindow = false;
       _reopenAttempts = 0;
     }
     _launchOrigin = true;
+    _launchGatherStartedAt = DateTime.now();
   }
 
   void onMetaWindowRemoved(MetaWindowId metaWindowId) {
