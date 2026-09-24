@@ -21,9 +21,23 @@ class LocalizedDesktopEntryForId extends _$LocalizedDesktopEntryForId {
   FutureOr<LocalizedDesktopEntry?> build(String appId) async {
     final binaryToAppId = await ref.watch(binaryToAppIdProvider.future);
     return ref.watch(
-      localizedDesktopEntriesProvider.selectAsync(
-        (data) => data[appId] ?? data[binaryToAppId[appId]],
-      ),
+      localizedDesktopEntriesProvider.selectAsync((data) {
+        final direct = data[appId] ?? data[binaryToAppId[appId]];
+        if (direct != null) return direct;
+        // Clients often report an `appId`/`WM_CLASS` that matches the desktop
+        // entry's `StartupWMClass` rather than its file id or binary name
+        // (e.g. an Electron app reporting `hermes` for `hermes-desktop.desktop`
+        // whose `StartupWMClass=Hermes`). The comparison is case-insensitive:
+        // the class the toolkit reports is not case-stable.
+        final normalized = appId.toLowerCase();
+        for (final entry in data.values) {
+          final wmClass = entry.entries[DesktopEntryKey.startupWmClass.string];
+          if (wmClass != null && wmClass.toLowerCase() == normalized) {
+            return entry;
+          }
+        }
+        return null;
+      }),
     );
   }
 }

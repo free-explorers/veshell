@@ -69,7 +69,7 @@ None of these signals is authoritative on its own, and every one may be absent, 
 
 - **Application ID (`appId`) / X11 `WM_CLASS`** — always available, medium reliability.
   - Source: `xdg_toplevel.app_id`; X11 class and instance.
-  - Notes: can be hollow or a helper identity (`electron`, runtime names) and can change after the window is mapped. Normalised to a desktop-entry id when possible (Flatpak/Snap, desktop database, binary name). Primary application-level identity.
+  - Notes: can be hollow or a helper identity (`electron`, runtime names) and can change after the window is mapped. Normalised to a desktop-entry id when possible (Flatpak/Snap, desktop database, binary name, case-insensitive `StartupWMClass`). Primary application-level identity.
 - **Window title (`title`)** — usually available, but often only after the first commit; high reliability when specific, none when generic.
   - Source: `xdg_toplevel.title`; X11 title.
   - Notes: frequently the only signal that distinguishes several tiles of the same application (see [parallel windows](#parallel-windows)). Generic during startup (`Code - OSS`), then becomes specific; can change repeatedly. The cost is graded by the longest common substring relative to the shorter title, so a title that only changed in its volatile parts (an unread count, a collapsed page title) still counts as a near match, while a short or generic title stays a weak signal.
