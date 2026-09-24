@@ -23,6 +23,7 @@ mod cursor;
 mod flutter_engine;
 mod focus;
 mod gles_framebuffer_importer;
+mod idle;
 mod input_handling;
 mod keyboard;
 mod meta_window_state;

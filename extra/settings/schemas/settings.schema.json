@@ -86,6 +86,24 @@
                 }
             },
             "additionalProperties": false
+        },
+        "idle": {
+            "type": "object",
+            "properties": {
+                "dimTimeoutSeconds": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "blankTimeoutSeconds": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "fadeSeconds": {
+                    "type": "number",
+                    "minimum": 0
+                }
+            },
+            "additionalProperties": false
         }
     }
 }

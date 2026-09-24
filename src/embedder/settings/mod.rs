@@ -40,12 +40,35 @@ pub struct ThemeSettings {
     pub icon_theme: String,
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct IdleSettings {
+    /// Seconds of inactivity before the dim fade starts. `0` disables dimming.
+    pub dim_timeout_seconds: u32,
+    /// Seconds of inactivity before the outputs are powered down.
+    /// `0` disables blanking.
+    pub blank_timeout_seconds: u32,
+    /// Fade duration in seconds, from nothing to fully black.
+    pub fade_seconds: f32,
+}
+impl Default for IdleSettings {
+    fn default() -> Self {
+        Self {
+            dim_timeout_seconds: 300,
+            blank_timeout_seconds: 600,
+            fade_seconds: 3.0,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VeshellSettings {
     pub keyboard: KeyboardSettings,
     pub mouse_and_touchpad: MouseAndTouchpadSettings,
     pub theme: ThemeSettings,
+    #[serde(default)]
+    pub idle: IdleSettings,
 }
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]

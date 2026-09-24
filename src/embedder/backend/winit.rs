@@ -293,6 +293,7 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                     InputEvent::DeviceAdded { device: _ } => {}
                     InputEvent::DeviceRemoved { device: _ } => {}
                     InputEvent::Keyboard { event } => {
+                        crate::idle::on_activity(data);
                         let keyboard = data.keyboard.clone();
 
                         // Ignore release events for keys that are not pressed.
@@ -316,15 +317,19 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                         );
                     }
                     InputEvent::PointerMotion { event } => {
+                        crate::idle::on_activity(data);
                         data.on_pointer_motion::<WinitInput>(event, 0, view_id)
                     }
                     InputEvent::PointerMotionAbsolute { event } => {
+                        crate::idle::on_activity(data);
                         data.on_pointer_motion_absolute::<WinitInput>(event, 0, view_id)
                     }
                     InputEvent::PointerButton { event } => {
+                        crate::idle::on_activity(data);
                         data.on_pointer_button::<WinitInput>(event, 0, view_id)
                     }
                     InputEvent::PointerAxis { event } => {
+                        crate::idle::on_activity(data);
                         data.on_pointer_axis::<WinitInput>(event, 0, view_id)
                     }
                     InputEvent::GestureSwipeBegin { event: _ } => {}
@@ -384,6 +389,7 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                                         data.pointer.current_location(),
                                         data.surface_id_under_cursor != None,
                                         <Winit as Backend>::FLIP_FLUTTER_TEXTURE,
+                                        data.idle.dim_alpha(),
                                         data.meta_window_state
                                             .meta_windows
                                             .values()

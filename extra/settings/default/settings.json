@@ -27,5 +27,10 @@
         "gtkTheme": "Adwaita-dark",
         "iconTheme": "Adwaita"
     },
+    "idle": {
+        "dimTimeoutSeconds": 60,
+        "blankTimeoutSeconds": 240,
+        "fadeSeconds": 3.0
+    },
     "$schema": "../schemas/settings.schema.json"
 }

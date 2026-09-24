@@ -13,6 +13,10 @@ pub mod winit;
 pub trait Backend {
     const HAS_RELATIVE_MOTION: bool = false;
     const FLIP_FLUTTER_TEXTURE: bool = false;
+    /// Whether the backend can power outputs down at the KMS level when the
+    /// screensaver reaches full dim. Backends without KMS access (nested)
+    /// keep rendering the black overlay instead.
+    const CAN_BLANK: bool = false;
     /// Only the real seat session (DRM) owns the portal backend name; a
     /// nested or non-session run must not answer portal requests on a
     /// foreign bus.
