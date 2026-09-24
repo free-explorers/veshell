@@ -12,3 +12,5 @@ Before=xdg-desktop-autostart.target
 Slice=session.slice
 Type=notify
 ExecStart=@bindir@/veshell --session
+ExecStop=@bindir@/veshell-session-stop
+TimeoutStopSec=10s

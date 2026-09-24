@@ -1,0 +1,14 @@
+#!/bin/sh
+
+# Runs as the ExecStop of veshell.service, so the session teardown happens
+# whenever the compositor stops, no matter who asked (clean exit, crash, or
+# the session wrapper having been killed before it could do it).
+
+# Force stop of graphical-session.target so the user manager never keeps an
+# orphaned active target after the compositor is gone.
+systemctl --user start --job-mode=replace-irreversibly veshell-shutdown.target
+
+# Unset the environment that the compositor/session wrapper has set. DISPLAY
+# and WAYLAND_SOCKET included: GDM re-propagates them for the next session,
+# so a stale value must not survive the dead one.
+systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY WAYLAND_SOCKET XDG_SESSION_TYPE XDG_CURRENT_DESKTOP

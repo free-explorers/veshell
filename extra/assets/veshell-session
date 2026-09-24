@@ -11,8 +11,50 @@ if [ -n "$SHELL" ] &&
   fi
 fi
 
+# A live graphical session only exists if logind still tracks an active
+# wayland session of this user besides the one we are starting.
+has_live_graphical_session() {
+    user=$(id -un)
+    for id in $(loginctl list-sessions --no-legend 2>/dev/null | awk '{print $1}'); do
+        [ "$id" = "${XDG_SESSION_ID-}" ] && continue
+        if [ "$(loginctl show-session "$id" -p Name | cut -d= -f2)" = "$user" ] &&
+            [ "$(loginctl show-session "$id" -p State | cut -d= -f2)" = "active" ] &&
+            [ "$(loginctl show-session "$id" -p Type | cut -d= -f2)" = "wayland" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 # Try to detect the service manager that is being used
 if hash systemctl &> /dev/null; then
+    # A session that died uncleanly (crash, kill of the session wrapper) can
+    # leave veshell.service and graphical-session.target active in the user
+    # manager with no real session behind them, which would make every
+    # further login (veshell or GNOME) fail until reboot.
+    #
+    # Recover from that stale state instead of failing: if some other live
+    # graphical session of this user is really still running, refuse; if not,
+    # tear the stale state down and proceed.
+    if systemctl --user -q is-active veshell.service || systemctl --user -q is-active graphical-session.target; then
+        if has_live_graphical_session; then
+            echo 'A graphical session is already running.'
+            exit 1
+        fi
+
+        echo 'Recovering stale veshell session state...'
+        systemctl --user start --job-mode=replace-irreversibly veshell-shutdown.target
+
+        # Wait until the user manager reports no stale state left, so the
+        # start below cannot race with the recovery.
+        i=0
+        while systemctl --user -q is-active veshell.service || systemctl --user -q is-active graphical-session.target; do
+            [ $i -lt 20 ] || exit 1
+            sleep 0.5
+            i=$((i + 1))
+        done
+    fi
+
     # Make sure there's no already running session.
     if systemctl --user -q is-active veshell.service; then
       echo 'A veshell session is already running.'
@@ -33,14 +75,22 @@ if hash systemctl &> /dev/null; then
         dbus-update-activation-environment --all
     fi
 
+    # GDM propagates the WAYLAND_DISPLAY (and DISPLAY) of the previous session
+    # in its session environment; imported above, they would make the fresh
+    # compositor believe it is a nested one and connect to a dead socket.
+    # The real values are published by the compositor itself once it starts.
+    systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY WAYLAND_SOCKET
+
     # Start veshell and wait for it to terminate.
     systemctl --user --wait start veshell.service
 
     # Force stop of graphical-session.target.
     systemctl --user start --job-mode=replace-irreversibly veshell-shutdown.target
 
-    # Unset environment that we've set.
-    systemctl --user unset-environment WAYLAND_DISPLAY XDG_SESSION_TYPE XDG_CURRENT_DESKTOP
+    # Unset environment that we've set (the compositor has published its own
+    # WAYLAND_DISPLAY/DISPLAY for dbus activation; with the session gone they
+    # must not linger for the next login).
+    systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY WAYLAND_SOCKET XDG_SESSION_TYPE XDG_CURRENT_DESKTOP
 elif hash dinitctl &> /dev/null; then
     # Check that the user dinit daemon is running
     if ! pgrep -u $(id -u) dinit &> /dev/null; then

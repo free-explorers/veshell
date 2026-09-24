@@ -45,6 +45,7 @@ package: $(SERVICE_OUTPUT)
 	# Install binaries
 	install -Dm755 $(BIN) $(DESTDIR)$(BINDIR)/veshell
 	install -Dm755 $(ASSETS_DIR)/veshell-session $(DESTDIR)$(BINDIR)/veshell-session
+	install -Dm755 $(ASSETS_DIR)/veshell-session-stop $(DESTDIR)$(BINDIR)/veshell-session-stop
 
 	# Install desktop/session files
 	install -Dm644 $(ASSETS_DIR)/veshell.desktop $(DESTDIR)$(SESSIONDIR)/veshell.desktop
@@ -81,6 +82,7 @@ uninstall:
 	# Remove binaries
 	rm -f $(DESTDIR)$(BINDIR)/veshell
 	rm -f $(DESTDIR)$(BINDIR)/veshell-session
+	rm -f $(DESTDIR)$(BINDIR)/veshell-session-stop
 
 	# Remove desktop/session files
 	rm -f $(DESTDIR)$(SESSIONDIR)/veshell.desktop
