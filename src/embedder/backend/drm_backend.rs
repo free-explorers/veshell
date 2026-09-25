@@ -50,7 +50,7 @@ use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::DisplayHandle;
-use smithay::utils::{DeviceFd, IsAlive, Logical, Point, Rectangle, Size};
+use smithay::utils::{DeviceFd, IsAlive, Logical, Point, Rectangle};
 use smithay::wayland::dmabuf::{
     DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier,
 };
@@ -740,14 +740,11 @@ impl State<DrmBackend> {
     /// current layout's rightmost edge, or the origin when no output is
     /// mapped yet.
     fn default_output_position(&self) -> Point<i32, Logical> {
-        let rightmost = self
-            .space
-            .outputs()
-            .filter_map(|output| self.space.output_geometry(output))
-            .map(|geometry| geometry.loc.x + geometry.size.w)
-            .max()
-            .unwrap_or(0);
-        (rightmost, 0).into()
+        place_new_output(
+            self.space
+                .outputs()
+                .filter_map(|output| self.space.output_geometry(output)),
+        )
     }
 
     fn determine_highest_hz_crtc(&mut self) {
@@ -767,6 +764,21 @@ impl State<DrmBackend> {
         self.backend_data.highest_hz_crtc = per_node;
         self.backend_data.pacing_crtc = pacing;
     }
+}
+
+/// Placement for a newly connected output: to the right of the current
+/// layout's rightmost edge, or the origin when nothing is mapped.
+///
+/// Kept free of `self` so the placement rule can be unit tested independently
+/// of a live compositor.
+fn place_new_output(
+    existing: impl Iterator<Item = Rectangle<i32, Logical>>,
+) -> Point<i32, Logical> {
+    let rightmost = existing
+        .map(|geometry| geometry.loc.x + geometry.size.w)
+        .max()
+        .unwrap_or(0);
+    (rightmost, 0).into()
 }
 
 /// Pick the fastest-refresh CRTC for every node, plus the single
@@ -1727,5 +1739,30 @@ mod tests {
 
         assert!(per_node.is_empty());
         assert_eq!(pacing, None);
+    }
+
+    fn rect(x: i32, y: i32, w: i32, h: i32) -> Rectangle<i32, Logical> {
+        Rectangle::from_loc_and_size((x, y), (w, h))
+    }
+
+    #[test]
+    fn placement_uses_the_rightmost_edge_not_a_width_sum() {
+        // The second monitor sits at x=3000; a width sum would place the new
+        // one at 1920+2560=4480, overlapping it.
+        let existing = [rect(0, 0, 1920, 1080), rect(3000, 0, 2560, 1440)];
+
+        assert_eq!(place_new_output(existing.into_iter()), (5560, 0).into());
+    }
+
+    #[test]
+    fn placement_uses_the_rightmost_edge_for_stacked_outputs() {
+        let existing = [rect(0, 0, 1280, 720), rect(0, 720, 1920, 1080)];
+
+        assert_eq!(place_new_output(existing.into_iter()), (1920, 0).into());
+    }
+
+    #[test]
+    fn placement_without_outputs_is_the_origin() {
+        assert_eq!(place_new_output(std::iter::empty()), (0, 0).into());
     }
 }
