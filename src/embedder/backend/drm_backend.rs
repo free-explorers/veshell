@@ -501,13 +501,7 @@ pub fn run_drm_backend() {
 
     state.dmabuf_state = Some(dmabuf_state);
     // Start the Flutter engine.
-    let (
-        flutter_engine,
-        EmbedderChannels {
-            tx_output_height: _,
-            rx_baton,
-        },
-    ) = FlutterEngine::new(&mut state).unwrap();
+    let (flutter_engine, EmbedderChannels { rx_baton }) = FlutterEngine::new(&mut state).unwrap();
     state.flutter_engine = Some(flutter_engine);
 
     let nodes_available: Vec<DrmNode> = state

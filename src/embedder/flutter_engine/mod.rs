@@ -142,7 +142,6 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
     pub fn new(
         server_state: &mut State<BackendData>,
     ) -> Result<(Box<Self>, EmbedderChannels), Box<dyn std::error::Error>> {
-        let (tx_output_height, rx_output_height) = channel::channel::<u16>();
         let (tx_baton, rx_baton) = channel::channel::<Baton>();
         let (tx_reschedule_task_runner_timer, rx_reschedule_task_runner_timer) =
             channel::channel::<Duration>();
@@ -154,17 +153,13 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             channel::channel::<(VeshellKeyEvent, bool)>();
 
         let flutter_engine_channels = FlutterEngineChannels {
-            rx_output_height,
             tx_baton,
             tx_request_external_texture_name,
             rx_external_texture_name,
             tx_flutter_handled_key_event,
         };
 
-        let embedder_channels = EmbedderChannels {
-            tx_output_height,
-            rx_baton,
-        };
+        let embedder_channels = EmbedderChannels { rx_baton };
 
         let arch = if cfg!(target_arch = "x86_64") {
             "x64"
@@ -780,7 +775,6 @@ struct RendererData {
     gl: Gles2,
     main_egl_context: EGLContext,
     resource_egl_context: EGLContext,
-    output_height: Option<u16>,
     channels: FlutterEngineChannels,
     framebuffer_importer: GlesFramebufferImporter,
 }
@@ -820,7 +814,6 @@ impl RendererData {
                 gl_attributes,
                 pixel_format_requirements,
             )?,
-            output_height: None,
             channels,
             framebuffer_importer: unsafe { GlesFramebufferImporter::new(egl_display.clone())? },
         })
@@ -828,7 +821,6 @@ impl RendererData {
 }
 
 pub struct FlutterEngineChannels {
-    rx_output_height: channel::Channel<u16>,
     tx_baton: channel::Sender<Baton>,
     tx_request_external_texture_name: channel::Sender<i64>,
     rx_external_texture_name: channel::Channel<(u32, u32)>,
@@ -836,7 +828,6 @@ pub struct FlutterEngineChannels {
 }
 
 pub struct EmbedderChannels {
-    pub tx_output_height: channel::Sender<u16>,
     pub rx_baton: channel::Channel<Baton>,
 }
 
