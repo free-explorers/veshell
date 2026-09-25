@@ -623,7 +623,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             physical: physical_key,
             logical: logical_key,
             character: character.as_ref().map_or(null(), |value| value.as_ptr()),
-            synthesized: false,
+            synthesized: event.synthesized,
             device_type: 1,
         };
 

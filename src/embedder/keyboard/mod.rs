@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
@@ -23,6 +24,136 @@ pub struct VeshellKeyEvent {
     pub time: u32,
     pub mods: ModifiersState,
     pub mods_changed: bool,
+    pub synthesized: bool,
+}
+
+#[derive(Default)]
+pub struct SuperKeyForwarding {
+    // Flutter sees these immediately; clients only see them once the shortcut is resolved.
+    pending: Vec<VeshellKeyEvent>,
+    consumed: HashMap<Keycode, VeshellKeyEvent>,
+    forwarded: HashSet<Keycode>,
+}
+
+impl SuperKeyForwarding {
+    fn resolve(&mut self, event: VeshellKeyEvent, handled: bool) -> Vec<VeshellKeyEvent> {
+        if event.state == KeyState::Released {
+            if self.forwarded.remove(&event.key_code) {
+                self.consumed.remove(&event.key_code);
+                return vec![event];
+            }
+            if self.consumed.remove(&event.key_code).is_some() {
+                return Vec::new();
+            }
+        }
+
+        if handled {
+            self.consume_pending();
+            if event.state == KeyState::Pressed {
+                self.consumed.insert(event.key_code, event);
+            }
+            return Vec::new();
+        }
+
+        let is_super = matches!(event.keysym, Keysym::Super_L | Keysym::Super_R);
+        if self.pending.is_empty() {
+            if is_super && event.state == KeyState::Pressed {
+                self.pending.push(event);
+                return Vec::new();
+            }
+            if is_super && event.state == KeyState::Released {
+                return Vec::new();
+            }
+            if event.state == KeyState::Pressed && !Self::is_modifier(event.keysym) {
+                let mut modifiers: Vec<_> = self
+                    .consumed
+                    .values()
+                    .copied()
+                    .filter(|down| Self::is_modifier(down.keysym))
+                    .collect();
+                modifiers.sort_by_key(|down| down.time);
+                if !modifiers.is_empty() {
+                    for down in &modifiers {
+                        self.consumed.remove(&down.key_code);
+                        self.track_forwarded(*down);
+                    }
+                    self.track_forwarded(event);
+                    modifiers.push(event);
+                    return modifiers;
+                }
+            }
+            self.track_forwarded(event);
+            return vec![event];
+        }
+
+        // A key already held before Super is unrelated to this shortcut sequence.
+        if event.state == KeyState::Released
+            && !self
+                .pending
+                .iter()
+                .any(|down| down.key_code == event.key_code && down.state == KeyState::Pressed)
+        {
+            return vec![event];
+        }
+
+        self.pending.push(event);
+        if Self::is_modifier(event.keysym) && !(is_super && event.state == KeyState::Released) {
+            return Vec::new();
+        }
+
+        let events = std::mem::take(&mut self.pending);
+        for event in &events {
+            self.track_forwarded(*event);
+        }
+        events
+    }
+
+    fn is_modifier(keysym: Keysym) -> bool {
+        matches!(
+            keysym,
+            Keysym::Super_L
+                | Keysym::Super_R
+                | Keysym::Shift_L
+                | Keysym::Shift_R
+                | Keysym::Control_L
+                | Keysym::Control_R
+                | Keysym::Alt_L
+                | Keysym::Alt_R
+                | Keysym::Meta_L
+                | Keysym::Meta_R
+                | Keysym::ISO_Level3_Shift
+        )
+    }
+
+    fn clear(&mut self) {
+        self.pending.clear();
+        self.consumed.clear();
+        self.forwarded.clear();
+    }
+
+    fn consume_pending(&mut self) {
+        for event in self.pending.drain(..) {
+            match event.state {
+                KeyState::Pressed => {
+                    self.consumed.insert(event.key_code, event);
+                }
+                KeyState::Released => {
+                    self.consumed.remove(&event.key_code);
+                }
+            }
+        }
+    }
+
+    fn track_forwarded(&mut self, event: VeshellKeyEvent) {
+        match event.state {
+            KeyState::Pressed => {
+                self.forwarded.insert(event.key_code);
+            }
+            KeyState::Released => {
+                self.forwarded.remove(&event.key_code);
+            }
+        }
+    }
 }
 
 pub fn swap_left_alt_and_meta<BackendData: Backend + 'static>(
@@ -58,6 +189,7 @@ pub fn handle_keyboard_event<BackendData: Backend + 'static>(
     mut key_code: Keycode,
     state: KeyState,
     time: u32,
+    synthesized: bool,
 ) {
     // Update the state of the keyboard.
     // Every key event must be passed through `glfw_key_codes.input_intercept`
@@ -91,10 +223,12 @@ pub fn handle_keyboard_event<BackendData: Backend + 'static>(
         time,
         mods,
         mods_changed,
+        synthesized,
     };
 
     // 3. Check if the keystroke result in compositor hotkeys shortcuts
     if handle_embedder_hotkeys(data, veshell_key_event) {
+        data.super_key_forwarding.consume_pending();
         return;
     }
 
@@ -239,14 +373,10 @@ pub fn post_flutter_handle_key_event<BackendData: Backend + 'static>(
     event: VeshellKeyEvent,
     handled: bool,
 ) {
-    if handled {
-        // Flutter consumed this event. Probably a keyboard shortcut.
-        return;
-    }
-
     let text_input = &mut data.flutter_engine.as_mut().unwrap().text_input;
     if text_input.is_active() {
-        if event.state == KeyState::Pressed && !event.mods.ctrl && !event.mods.alt {
+        data.super_key_forwarding.clear();
+        if !handled && event.state == KeyState::Pressed && !event.mods.ctrl && !event.mods.alt {
             text_input.press_key(event.keysym);
         }
         // It doesn't matter if the text field captured the key event or not.
@@ -254,15 +384,165 @@ pub fn post_flutter_handle_key_event<BackendData: Backend + 'static>(
         return;
     }
 
-    // The compositor was not interested in this event,
-    // so we forward it to the Wayland client in focus if there is one.
+    // Replay an unhandled prefix before its chord key, or drop a handled sequence.
     let keyboard = data.keyboard.clone();
-    keyboard.input_forward(
-        data,
-        event.key_code,
-        event.state,
-        SERIAL_COUNTER.next_serial(),
-        event.time,
-        event.mods_changed,
-    );
+    for client_event in data.super_key_forwarding.resolve(event, handled) {
+        keyboard.input_forward(
+            data,
+            client_event.key_code,
+            client_event.state,
+            SERIAL_COUNTER.next_serial(),
+            client_event.time,
+            client_event.mods_changed,
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn key(key_code: u32, keysym: Keysym, state: KeyState) -> VeshellKeyEvent {
+        VeshellKeyEvent {
+            key_code: Keycode::new(key_code),
+            raw_keysym: Some(keysym),
+            keysym,
+            state,
+            time: 0,
+            mods: ModifiersState::default(),
+            mods_changed: false,
+            synthesized: false,
+        }
+    }
+
+    #[test]
+    fn overview_tap_never_reaches_client() {
+        let mut forwarding = SuperKeyForwarding::default();
+        let down = key(133, Keysym::Super_L, KeyState::Pressed);
+        let up = key(133, Keysym::Super_L, KeyState::Released);
+        assert!(forwarding.resolve(down, false).is_empty());
+        assert!(forwarding.resolve(up, true).is_empty());
+        assert!(forwarding.pending.is_empty());
+    }
+
+    #[test]
+    fn unhandled_super_chord_forwards_modifier_first() {
+        let mut forwarding = SuperKeyForwarding::default();
+        let down = key(133, Keysym::Super_L, KeyState::Pressed);
+        let up = key(133, Keysym::Super_L, KeyState::Released);
+        let chord = key(38, Keysym::a, KeyState::Pressed);
+        assert!(forwarding.resolve(down, false).is_empty());
+        let events = forwarding.resolve(chord, false);
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].key_code, down.key_code);
+        assert_eq!(events[1].key_code, chord.key_code);
+        assert_eq!(forwarding.resolve(up, false).len(), 1);
+    }
+
+    #[test]
+    fn configured_super_chords_consume_press_and_release() {
+        for (code, symbol) in [
+            (25, Keysym::w),
+            (39, Keysym::s),
+            (40, Keysym::d),
+            (38, Keysym::a),
+            (24, Keysym::q),
+        ] {
+            let mut forwarding = SuperKeyForwarding::default();
+            let super_down = key(133, Keysym::Super_L, KeyState::Pressed);
+            let super_up = key(133, Keysym::Super_L, KeyState::Released);
+            let chord_down = key(code, symbol, KeyState::Pressed);
+            let chord_up = key(code, symbol, KeyState::Released);
+            assert!(forwarding.resolve(super_down, false).is_empty());
+            assert!(forwarding.resolve(chord_down, true).is_empty());
+            assert!(forwarding.resolve(chord_up, false).is_empty());
+            assert!(forwarding.resolve(super_up, false).is_empty());
+        }
+    }
+
+    #[test]
+    fn unhandled_super_tap_forwards_both_events() {
+        let mut forwarding = SuperKeyForwarding::default();
+        let down = key(133, Keysym::Super_L, KeyState::Pressed);
+        let up = key(133, Keysym::Super_L, KeyState::Released);
+        assert!(forwarding.resolve(down, false).is_empty());
+        let events = forwarding.resolve(up, false);
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].state, KeyState::Pressed);
+        assert_eq!(events[1].state, KeyState::Released);
+    }
+
+    #[test]
+    fn consumed_super_press_does_not_forward_its_release() {
+        let mut forwarding = SuperKeyForwarding::default();
+        let down = key(133, Keysym::Super_L, KeyState::Pressed);
+        let up = key(133, Keysym::Super_L, KeyState::Released);
+        assert!(forwarding.resolve(down, true).is_empty());
+        assert!(forwarding.resolve(up, false).is_empty());
+    }
+
+    #[test]
+    fn shifted_host_chord_does_not_leak_any_keys() {
+        let mut forwarding = SuperKeyForwarding::default();
+        let super_down = key(133, Keysym::Super_L, KeyState::Pressed);
+        let shift_down = key(50, Keysym::Shift_L, KeyState::Pressed);
+        let shift_up = key(50, Keysym::Shift_L, KeyState::Released);
+        let chord_down = key(25, Keysym::w, KeyState::Pressed);
+        let chord_up = key(25, Keysym::w, KeyState::Released);
+        let super_up = key(133, Keysym::Super_L, KeyState::Released);
+        for (event, handled) in [
+            (super_down, false),
+            (shift_down, false),
+            (chord_down, true),
+            (chord_up, false),
+            (shift_up, false),
+            (super_up, false),
+        ] {
+            assert!(forwarding.resolve(event, handled).is_empty());
+        }
+    }
+
+    #[test]
+    fn unhandled_shifted_chord_replays_prefix_in_order() {
+        let mut forwarding = SuperKeyForwarding::default();
+        let super_down = key(133, Keysym::Super_L, KeyState::Pressed);
+        let shift_down = key(50, Keysym::Shift_L, KeyState::Pressed);
+        let chord_down = key(25, Keysym::w, KeyState::Pressed);
+        assert!(forwarding.resolve(super_down, false).is_empty());
+        assert!(forwarding.resolve(shift_down, false).is_empty());
+        let events = forwarding.resolve(chord_down, false);
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[0].key_code, super_down.key_code);
+        assert_eq!(events[1].key_code, shift_down.key_code);
+        assert_eq!(events[2].key_code, chord_down.key_code);
+        assert_eq!(
+            forwarding
+                .resolve(key(50, Keysym::Shift_L, KeyState::Released), true)
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn later_unhandled_chord_replays_held_super_after_host_shortcut() {
+        let mut forwarding = SuperKeyForwarding::default();
+        let super_down = key(133, Keysym::Super_L, KeyState::Pressed);
+        let host_down = key(25, Keysym::w, KeyState::Pressed);
+        let client_down = key(52, Keysym::z, KeyState::Pressed);
+        forwarding.resolve(super_down, false);
+        forwarding.resolve(host_down, true);
+        assert!(forwarding
+            .resolve(key(25, Keysym::w, KeyState::Released), false)
+            .is_empty());
+        let events = forwarding.resolve(client_down, false);
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].key_code, super_down.key_code);
+        assert_eq!(events[1].key_code, client_down.key_code);
+        assert_eq!(
+            forwarding
+                .resolve(key(133, Keysym::Super_L, KeyState::Released), false)
+                .len(),
+            1
+        );
+    }
 }

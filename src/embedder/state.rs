@@ -90,6 +90,7 @@ pub struct State<BackendData: Backend + 'static> {
     pub dmabuf_state: Option<DmabufState>,
     pub flutter_engine: Option<Box<FlutterEngine<BackendData>>>,
     pub flutter_sent_keys: HashMap<Keycode, VeshellKeyEvent>,
+    pub super_key_forwarding: crate::keyboard::SuperKeyForwarding,
     pub gl: Option<Gles2>,
     pub imported_dmabufs: Vec<Dmabuf>,
     pub is_next_flutter_frame_scheduled: bool,
@@ -180,7 +181,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let keyboard = self.keyboard.clone();
         for mut key_code in keyboard.pressed_keys() {
             key_code = swap_left_alt_and_meta(self, key_code);
-            handle_keyboard_event::<BackendData>(self, key_code, KeyState::Released, 0);
+            // Focus loss is not a user key-up gesture, but Flutter still needs its key state cleared.
+            handle_keyboard_event::<BackendData>(self, key_code, KeyState::Released, 0, true);
         }
     }
 
@@ -331,6 +333,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             shm_state,
             flutter_engine: None,
             flutter_sent_keys: HashMap::new(),
+            super_key_forwarding: Default::default(),
             dmabuf_state,
             seat,
             seat_state,

@@ -86,6 +86,12 @@ class _ShortcutManager extends ShortcutManager {
     print('is overview ${event.logicalKey == overviewKey}');
     if (event is KeyUpEvent &&
         event.logicalKey == overviewKey &&
+        event.synthesized) {
+      _isOverviewKeySolePressed = false;
+      return KeyEventResult.handled;
+    }
+    if (event is KeyUpEvent &&
+        event.logicalKey == overviewKey &&
         _isOverviewKeySolePressed) {
       print('inside overview');
 

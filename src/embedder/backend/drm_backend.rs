@@ -555,7 +555,13 @@ pub fn run_drm_backend() {
                     data.input_devices.remove(&device);
                 }
                 InputEvent::Keyboard { event } => {
-                    handle_keyboard_event(data, event.key_code(), event.state(), event.time_msec());
+                    handle_keyboard_event(
+                        data,
+                        event.key_code(),
+                        event.state(),
+                        event.time_msec(),
+                        false,
+                    );
                 }
                 InputEvent::PointerMotion { event } => {
                     let device_id = event.device().id_product() as i32;
