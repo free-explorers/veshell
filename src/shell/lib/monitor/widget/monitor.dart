@@ -10,6 +10,7 @@ import 'package:shell/monitor/provider/monitor_by_view_id.dart';
 import 'package:shell/monitor/provider/monitor_configuration_state.dart';
 import 'package:shell/monitor/provider/navigator_key_for_view.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
+import 'package:shell/monitor/widget/empty_monitor.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/screen/widget/screen.dart';
 import 'package:shell/theme/provider/theme.dart';
@@ -57,57 +58,75 @@ class MonitorWidget extends HookConsumerWidget {
                 monitorConfigurationStateProvider(monitorName),
               );
 
+              // Only fill a monitor the shell has never configured. A monitor
+              // whose screens the user deliberately removed stays empty while
+              // it stays connected: a monitor emptied by hotplug reconciliation
+              // is refilled by `MonitorManager`, and a brand new monitor is
+              // filled here as a fallback when the reconcile listener has not
+              // run yet.
               useEffect(() {
-                if (monitorConfiguration.screenList.isEmpty) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    final newScreenId = ref
-                        .read(screenManagerProvider.notifier)
-                        .createNewScreen();
-                    ref
-                        .read(
-                          monitorConfigurationStateProvider(
-                            monitorName,
-                          ).notifier,
-                        )
-                        .addNewScreenConfiguration(newScreenId);
-                  });
+                final notifier = ref.read(
+                  monitorConfigurationStateProvider(monitorName).notifier,
+                );
+                if (monitorConfiguration.screenList.isNotEmpty ||
+                    notifier.isInitialized) {
+                  return null;
                 }
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  final currentConfiguration = ref.read(
+                    monitorConfigurationStateProvider(monitorName),
+                  );
+                  final currentNotifier = ref.read(
+                    monitorConfigurationStateProvider(monitorName).notifier,
+                  );
+                  if (currentConfiguration.screenList.isNotEmpty ||
+                      currentNotifier.isInitialized) {
+                    return;
+                  }
+                  final newScreenId = ref
+                      .read(screenManagerProvider.notifier)
+                      .createNewScreen();
+                  currentNotifier.addNewScreenConfiguration(newScreenId);
+                });
                 return null;
-              }, [monitorConfiguration.screenList]);
+              }, [monitorName, monitorConfiguration.screenList]);
               return CurrentMonitorName(
                 name: monitorName,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Flex(
-                      direction: switch (monitorConfiguration.displayMode) {
-                        ScreenDisplayMode.splitVertical => Axis.vertical,
-                        ScreenDisplayMode.splitHorizontal => Axis.horizontal,
-                      },
-                      children: [
-                        for (final screenConfiguration
-                            in monitorConfiguration.screenList) ...[
-                          Flexible(
-                            flex: screenConfiguration.flex,
-                            child: ScreenWidget(
-                              screenId: screenConfiguration.screenId,
+                    if (monitorConfiguration.screenList.isEmpty)
+                      EmptyMonitor(monitorName: monitorName)
+                    else
+                      Flex(
+                        direction: switch (monitorConfiguration.displayMode) {
+                          ScreenDisplayMode.splitVertical => Axis.vertical,
+                          ScreenDisplayMode.splitHorizontal => Axis.horizontal,
+                        },
+                        children: [
+                          for (final screenConfiguration
+                              in monitorConfiguration.screenList) ...[
+                            Flexible(
+                              flex: screenConfiguration.flex,
+                              child: ScreenWidget(
+                                screenId: screenConfiguration.screenId,
+                              ),
                             ),
-                          ),
-                          if (screenConfiguration !=
-                              monitorConfiguration.screenList.last)
-                            ScreenDivider(
-                              screenA: screenConfiguration,
-                              screenB:
-                                  monitorConfiguration
-                                      .screenList[monitorConfiguration
-                                          .screenList
-                                          .indexOf(screenConfiguration) +
-                                      1],
-                              displayMode: monitorConfiguration.displayMode,
-                            ),
+                            if (screenConfiguration !=
+                                monitorConfiguration.screenList.last)
+                              ScreenDivider(
+                                screenA: screenConfiguration,
+                                screenB:
+                                    monitorConfiguration
+                                        .screenList[monitorConfiguration
+                                            .screenList
+                                            .indexOf(screenConfiguration) +
+                                        1],
+                                displayMode: monitorConfiguration.displayMode,
+                              ),
+                          ],
                         ],
-                      ],
-                    ),
+                      ),
                   ],
                 ),
               );

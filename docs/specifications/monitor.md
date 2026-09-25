@@ -39,7 +39,9 @@ Rules:
 - `MonitorConfigurationState` is **Flutter-only**: it is never written to
   `monitor/<connector>.json`, and Rust does not know about screens or split
   direction. It is the authoritative shell layout, keyed by the same connector
-  name (persist key `MonitorConfigurationState(<connector>)`).
+  name (persist key `MonitorConfigurationState(<connector>)`). Its `screenList`
+  is kept summing to a fixed total; screens are redistributed proportionally
+  when one is added or removed, so repeated edits do not drift.
 - The Dart `Monitor` model is a read-only projection of Rust's `Output`. It is
   not persisted and Flutter never writes it. Its live fields are kept alongside
   `MonitorSetting` because the settings UI needs data the desired-geometry file
@@ -87,6 +89,15 @@ Behaviour:
   single reconcile point, driven by the `connectedMonitorListProvider` diff).
   The reconnecting monitor then restores only the screens nobody else claimed
   and gets a fresh screen if nothing is left.
+- **An emptied monitor stays empty while connected.** Deleting every screen of
+  a monitor from the screen menu is an intentional user action and is not
+  immediately undone. Because the screen configuration menu lives inside a
+  screen, an empty monitor renders a monitor-level fallback (`EmptyMonitor`)
+  that creates a screen or adopts an unowned one, so the monitor is never a
+  dead end. A screen is also created automatically for a monitor the shell has
+  never configured, or for a monitor left with no screens when it (re)connects;
+  restarting the shell therefore refills an intentionally emptied monitor
+  rather than leaving it unusable.
 
 ## Client fractional scale
 

@@ -6,6 +6,7 @@ import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/model/monitor_manager_state.serializable.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/monitor/provider/monitor_configuration_state.dart';
+import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/shared/provider/persistent_storage_state.dart';
 
 part 'monitor_manager.g.dart';
@@ -46,7 +47,7 @@ class MonitorManager extends _$MonitorManager {
           <MonitorId>{}.lock;
       final connectedIds = next.map((monitor) => monitor.name).toISet();
       for (final monitorId in connectedIds.difference(previousIds)) {
-        _dropReassignedScreens(monitorId, connectedIds);
+        _reconcileConnectedMonitor(monitorId, connectedIds);
       }
     });
 
@@ -59,6 +60,33 @@ class MonitorManager extends _$MonitorManager {
     );
 
     return state;
+  }
+
+  /// Reconciles the shell layout of [monitorId] after it just connected.
+  ///
+  /// Screens another connected monitor claimed while [monitorId] was away are
+  /// dropped from its configuration (the current owner keeps them), and a
+  /// monitor left with no screens is given a fresh one. The fresh screen is
+  /// created here rather than in the widget so the widget's auto-create can be
+  /// limited to monitors the shell has never configured; a user who empties a
+  /// monitor therefore keeps it empty while it stays connected.
+  void _reconcileConnectedMonitor(
+    MonitorId monitorId,
+    ISet<MonitorId> connectedIds,
+  ) {
+    _dropReassignedScreens(monitorId, connectedIds);
+    final configuration = ref.read(
+      monitorConfigurationStateProvider(monitorId),
+    );
+    if (configuration.screenList.isNotEmpty) {
+      return;
+    }
+    final newScreenId = ref
+        .read(screenManagerProvider.notifier)
+        .createNewScreen();
+    ref
+        .read(monitorConfigurationStateProvider(monitorId).notifier)
+        .addNewScreenConfiguration(newScreenId);
   }
 
   /// Removes from [monitorId]'s configuration every screen another connected

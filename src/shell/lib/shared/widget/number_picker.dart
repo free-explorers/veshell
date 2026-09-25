@@ -6,14 +6,17 @@ class NumberPicker extends HookConsumerWidget {
   const NumberPicker({
     required this.value,
     required this.onValueChange,
-    this.enabled = true,
+    this.allowKeyboardInput = true,
     this.maxValue,
     this.minValue,
     super.key,
   });
   final int value;
-  final bool enabled;
-  final Function(int value) onValueChange;
+
+  /// Whether the count field can be edited with the keyboard. The `+`/`-`
+  /// buttons always work; this only gates direct text input.
+  final bool allowKeyboardInput;
+  final void Function(int value) onValueChange;
   final int? minValue;
   final int? maxValue;
   @override
@@ -48,7 +51,7 @@ class NumberPicker extends HookConsumerWidget {
           SizedBox(
             width: 40,
             child: TextField(
-              enabled: enabled,
+              enabled: allowKeyboardInput,
               controller: textcontroller,
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
