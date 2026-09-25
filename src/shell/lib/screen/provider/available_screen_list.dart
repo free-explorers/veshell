@@ -1,8 +1,8 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/monitor/provider/active_monitor_ids.dart';
 import 'package:shell/monitor/provider/monitor_configuration_state.dart';
-import 'package:shell/monitor/provider/monitor_manager.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
 
@@ -15,14 +15,10 @@ ISet<ScreenId> availableScreenList(Ref ref) {
       (value) => value.screenIds,
     ),
   );
-  final knownMonitorIds = ref.watch(
-    monitorManagerProvider.select(
-      (value) => value.knownMonitorIds,
-    ),
-  );
+  final monitorIds = ref.watch(activeMonitorIdsProvider);
 
   return screenList.where((screenId) {
-    return !knownMonitorIds.any((monitorId) {
+    return !monitorIds.any((monitorId) {
       final monitorConfiguration = ref.watch(
         monitorConfigurationStateProvider(monitorId),
       );

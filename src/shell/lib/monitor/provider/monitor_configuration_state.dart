@@ -78,6 +78,18 @@ class MonitorConfigurationState extends _$MonitorConfigurationState {
     );
   }
 
+  /// Removes the configuration for [screenId] without reflowing the remaining
+  /// screens; Flutter normalises the leftover flex values.
+  void removeScreenConfiguration(ScreenId screenId) {
+    final screenList = state.screenList
+        .where((configuration) => configuration.screenId != screenId)
+        .toIList();
+    if (screenList.length == state.screenList.length) {
+      return;
+    }
+    state = state.copyWith(screenList: screenList);
+  }
+
   void setScreenIdForScreenConfiguration(
     ScreenConfiguration screenConfiguration,
     ScreenId screenId,

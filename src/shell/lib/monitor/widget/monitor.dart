@@ -49,7 +49,8 @@ class MonitorWidget extends HookConsumerWidget {
             builder: (context, ref, child) {
               final monitorName = ref.watch(monitorByViewIdProvider(viewId));
               if (monitorName == null) {
-                return const Center(child: CircularProgressIndicator());
+                // The view is gone (or not yet associated with a monitor).
+                return const SizedBox.shrink();
               }
 
               final monitorConfiguration = ref.watch(

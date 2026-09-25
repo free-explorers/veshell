@@ -6,6 +6,7 @@ import 'package:shell/capture/provider/screen_cast_indicator.dart';
 import 'package:shell/capture/provider/screenshot_prompt.dart';
 import 'package:shell/meta_window/provider/meta_window_manager.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
+import 'package:shell/monitor/provider/monitor_manager.dart';
 import 'package:shell/monitor/widget/monitor.dart';
 import 'package:shell/notification/provider/notification_manager.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_client.dart';
@@ -135,7 +136,11 @@ class _EagerInitialization extends ConsumerWidget {
       ref.watch(upowerClientProvider),
     ];
 
-    ref.watch(connectedMonitorListProvider);
+    // Keep the monitor registry (and its hotplug reconcile listener) alive from
+    // startup, even before any screen UI mounts.
+    ref
+      ..watch(connectedMonitorListProvider)
+      ..watch(monitorManagerProvider);
 
     // Handle error states and loading states
     if (results.any(
