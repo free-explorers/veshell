@@ -5,6 +5,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/monitor/provider/monitor_by_name.dart';
+import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/platform/model/request/mouse_buttons_event/mouse_buttons_event.serializable.dart';
 import 'package:shell/platform/model/request/touch/touch.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
@@ -33,7 +35,26 @@ class ViewInputListener extends HookConsumerWidget {
     final inputRegion = ref
         .watch(wlSurfaceStateProvider(surfaceId).select((v) => v.inputRegion));
 
+    // `localToGlobal` is relative to this monitor's Flutter view, but the
+    // compositor expects the surface origin in global compositor space to
+    // derive surface-relative pointer coordinates. On a monitor whose
+    // compositor origin is not (0, 0), omitting this offset makes the pointer
+    // land far outside the surface, so hover and clicks never reach it.
+    final monitorName = CurrentMonitorName.of(context);
+    final monitorLocation =
+        ref.watch(monitorByNameProvider(monitorName))?.location ?? Offset.zero;
+
     final globalKey = useMemoized(GlobalKey.new);
+
+    // Surface origin in global compositor space: its view-local render
+    // position plus the monitor's compositor origin.
+    Offset globalOffsetForSurface() {
+      final renderBox =
+          globalKey.currentContext?.findRenderObject() as RenderBox?;
+      return (renderBox?.localToGlobal(Offset.zero) ?? Offset.zero) +
+          monitorLocation;
+    }
+
     return DeferPointer(
       child: Stack(
         key: globalKey,
@@ -54,11 +75,7 @@ class ViewInputListener extends HookConsumerWidget {
                 if (disposition == GestureDisposition.rejected) {
                   return;
                 }
-                final renderBox =
-                    globalKey.currentContext!.findRenderObject() as RenderBox?;
-                final globalOffset =
-                    renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
-                _onPointerMove(ref, event, globalOffset);
+                _onPointerMove(ref, event, globalOffsetForSurface());
                 return null;
               },
               onPointerUp:
@@ -76,12 +93,7 @@ class ViewInputListener extends HookConsumerWidget {
               child: Listener(
                 onPointerHover: (PointerHoverEvent event) {
                   if (event.kind == PointerDeviceKind.mouse) {
-                    final renderBox = globalKey.currentContext!
-                        .findRenderObject() as RenderBox?;
-                    final globalOffset =
-                        renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
-
-                    _pointerMoved(ref, globalOffset);
+                    _pointerMoved(ref, globalOffsetForSurface());
                   }
                 },
                 onPointerSignal: (PointerSignalEvent event) {
@@ -96,15 +108,10 @@ class ViewInputListener extends HookConsumerWidget {
                 },
                 child: MouseRegion(
                   onEnter: (_) {
-                    final renderBox = globalKey.currentContext!
-                        .findRenderObject() as RenderBox?;
-                    final globalOffset =
-                        renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
-
                     pointerFocusManager.enterSurface(
                       PointerFocus(
                         surfaceId: surfaceId,
-                        globalOffset: globalOffset,
+                        globalOffset: globalOffsetForSurface(),
                       ),
                     );
                   },
