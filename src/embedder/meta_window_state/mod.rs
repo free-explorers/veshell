@@ -60,6 +60,13 @@ impl MetaWindowState {
         }
     }
 
+    /// Windows whose `current_output` is the given output.
+    ///
+    /// Output identity is the connector name (`Output::name()`, also
+    /// `Monitor.name` in the shell). It is the same value the shell writes back
+    /// through `MetaWindowPatch::UpdateCurrentOutput`, so a lookup here matches
+    /// the placement the shell reported. The connector name survives a
+    /// disconnect/reconnect of the same monitor.
     pub fn get_meta_windows_for_output(&mut self, output: Output) -> Vec<MetaWindow> {
         let mut meta_windows = Vec::new();
         let some_name = Some(output.name());
@@ -84,6 +91,40 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         tracing::debug!(target: "veshell::process_info", ?info, "emitting process info");
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method("process_info", Some(Box::new(json!(info))), None);
+    }
+
+    /// Fractional scale of the connected output named `name`.
+    ///
+    /// This is the single output-scale lookup. `name` is the connector name
+    /// (`Output::name()`), which is what `MetaWindow::current_output` stores and
+    /// what the shell reports back as `updateCurrentOutput`.
+    pub fn output_scale_for_name(&self, name: &str) -> Option<f64> {
+        self.space
+            .outputs()
+            .find(|output| output.name() == name)
+            .map(|output| output.current_scale().fractional_scale())
+    }
+
+    /// Preferred scale for a meta window that has no `current_output` yet.
+    ///
+    /// Window placement is owned by the shell, so at creation time Rust cannot
+    /// know which monitor a window will land on: the shell only reports it
+    /// after rendering the window, which then drives the `UpdateScaleRatio`
+    /// round-trip. Until that happens the window is given the scale of the
+    /// output under the pointer, falling back to the first connected output.
+    /// A native client therefore never starts at the implicit 1.0 on a scaled
+    /// monitor; `UpdateScaleRatio` replaces this value as soon as the real
+    /// output is known.
+    ///
+    /// This is also the documented "no current output" default: unplaced
+    /// windows are assumed to open on the monitor the user is interacting with.
+    pub fn fallback_scale_ratio(&self) -> f64 {
+        self.space
+            .output_under(self.pointer.current_location())
+            .next()
+            .or_else(|| self.space.outputs().next())
+            .map(|output| output.current_scale().fractional_scale())
+            .unwrap_or(1.0)
     }
 
     pub fn new_meta_window_for_toplevel(&mut self, surface: ToplevelSurface) -> MetaWindow {
@@ -165,6 +206,11 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 
         self.emit_process_info(pid);
 
+        // Placement is the shell's call, so the real output is not known yet;
+        // seed the client scale from the output under the pointer. See
+        // `State::fallback_scale_ratio`.
+        let fallback_scale_ratio = self.fallback_scale_ratio();
+
         let meta_window = self.create_meta_window(MetaWindow {
             id: Uuid::new_v4().hyphenated().to_string(),
             surface_id: surface_id,
@@ -182,7 +228,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             geometry,
             current_output: None,
             need_decoration: !is_decorated,
-            scale_ratio: 1.0,
+            scale_ratio: fallback_scale_ratio,
             game_mode_activated: false,
         });
         info!(
@@ -198,6 +244,12 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         meta_window
     }
 
+    /// Creates the meta window for an XWayland surface.
+    ///
+    /// `scale_ratio` is the XWayland compositor's global client scale, not the
+    /// output scale. X11 clients have no per-surface fractional scale, so their
+    /// X surfaces are forced to this value (`UpdateScaleRatio` overwrites any
+    /// requested scale with it); this is intentional, not a bug.
     pub fn new_meta_window_for_x11_surface(
         &mut self,
         x11_surface: X11Surface,

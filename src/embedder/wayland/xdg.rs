@@ -65,6 +65,18 @@ pub mod xdg {
                 .meta_window_id_per_surface_id
                 .insert(surface_id, meta_window.id.clone());
 
+            // A client may create its `wp_fractional_scale` object before the
+            // toplevel, so `new_fractional_scale` ran before this meta window
+            // existed and set nothing. Seed the preferred scale now (smithay
+            // stores it until the object exists) so the client renders on the
+            // first buffer at the fallback scale even if no later patch changes
+            // the value. `set_preferred_scale` is idempotent.
+            with_states(surface.wl_surface(), |data| {
+                with_fractional_scale(data, |fractional| {
+                    fractional.set_preferred_scale(meta_window.scale_ratio);
+                });
+            });
+
             compositor::add_post_commit_hook(
                 surface.wl_surface(),
                 |state: &mut Self, _, surface| {

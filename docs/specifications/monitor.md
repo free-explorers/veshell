@@ -44,3 +44,22 @@ Behaviour:
   single reconcile point, driven by the `connectedMonitorListProvider` diff).
   The reconnecting monitor then restores only the screens nobody else claimed
   and gets a fresh screen if nothing is left.
+
+## Client fractional scale
+
+Native Wayland clients learn the monitor scale through
+`wp_fractional_scale_v1`. Rust owns the value: `MetaWindow.scale_ratio` is the
+single source of truth and the value written to `set_preferred_scale`.
+XWayland is the deliberate exception — its X surfaces have no per-surface
+fractional scale and are forced to the global XWayland client scale.
+
+- **At creation** the shell has not placed the window yet, so `scale_ratio`
+  defaults to the scale of the output under the pointer, falling back to the
+  first connected output (`State::fallback_scale_ratio`). A native client
+  therefore never starts at the implicit 1.0 on a scaled monitor.
+- **At placement** the shell owns the output choice: when it renders a window
+  on a monitor it reports `updateCurrentOutput` with the connector name
+  (`Monitor.name` == `Output::name()`). Rust patches `UpdateScaleRatio` with
+  that output's scale, replacing the fallback.
+- **On scale change** every window whose `current_output` is the changed
+  connector is patched with the new scale, so open windows rescale.
