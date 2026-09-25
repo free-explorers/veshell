@@ -14,49 +14,77 @@ class SessionControls extends HookConsumerWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            IconButton(
-              onPressed: () {
-                ref.read(sessionProvider.notifier).lock();
-              },
-              style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
-              icon: const Icon(MdiIcons.lock),
+            Tooltip(
+              message: 'Lock',
+              preferBelow: true,
+              verticalOffset: 32,
+              child: IconButton(
+                onPressed: () {
+                  ref.read(sessionProvider.notifier).lock();
+                },
+                style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
+                icon: const Icon(MdiIcons.lock),
+              ),
             ),
-            IconButton(
-              onPressed: () {
-                ref.read(sessionProvider.notifier).logout();
-              },
-              style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
-              icon: const Icon(MdiIcons.logout),
+            Tooltip(
+              message: 'Log out',
+              preferBelow: true,
+              verticalOffset: 32,
+              child: IconButton(
+                onPressed: () {
+                  ref.read(sessionProvider.notifier).logout();
+                },
+                style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
+                icon: const Icon(MdiIcons.logout),
+              ),
             ),
-            IconButton(
-              tooltip: 'Sleep',
-              onPressed: () {
-                ref.read(sessionProvider.notifier).sleep();
-              },
-              icon: const Icon(MdiIcons.powerSleep),
-              style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
+            Tooltip(
+              message: 'Sleep',
+              preferBelow: true,
+              verticalOffset: 32,
+              child: IconButton(
+                onPressed: () {
+                  ref.read(sessionProvider.notifier).sleep();
+                },
+                icon: const Icon(MdiIcons.powerSleep),
+                style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
+              ),
             ),
-            IconButton(
-              tooltip: 'Hibernate',
-              onPressed: () {
-                ref.read(sessionProvider.notifier).hibernate();
-              },
-              icon: const Icon(MdiIcons.snowflake),
-              style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
+            Tooltip(
+              message: 'Hibernate',
+              preferBelow: true,
+              verticalOffset: 32,
+              child: IconButton(
+                onPressed: () {
+                  ref.read(sessionProvider.notifier).hibernate();
+                },
+                icon: const Icon(MdiIcons.snowflake),
+                style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
+              ),
             ),
-            IconButton(
-              onPressed: () {
-                ref.read(sessionProvider.notifier).reboot();
-              },
-              icon: const Icon(MdiIcons.restart),
-              style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
+            Tooltip(
+              message: 'Reboot',
+              preferBelow: true,
+              verticalOffset: 32,
+              child: IconButton(
+                onPressed: () {
+                  ref.read(sessionProvider.notifier).reboot();
+                },
+                icon: const Icon(MdiIcons.restart),
+                style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
+              ),
             ),
-            IconButton(
-              onPressed: () {
-                ref.read(sessionProvider.notifier).shutdown();
-              },
-              style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
-              icon: const Icon(MdiIcons.power),
+            Tooltip(
+              message: 'Shut down',
+              preferBelow: true,
+              verticalOffset: 32,
+              child: IconButton(
+                onPressed: () {
+                  ref.read(sessionProvider.notifier).shutdown();
+                },
+                style: IconButton.styleFrom(padding: const EdgeInsets.all(12)),
+                icon: const Icon(MdiIcons.power),
+              ),
             ),
           ],
         ),

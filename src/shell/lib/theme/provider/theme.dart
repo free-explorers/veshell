@@ -47,6 +47,13 @@ class VeshellTheme extends _$VeshellTheme {
       colorScheme: colorScheme,
       highlightColor: lighterSurface.withAlpha(30),
       focusColor: lighterSurface.withAlpha(60),
+      tooltipTheme: defaultTheme.tooltipTheme.copyWith(
+        decoration: BoxDecoration(
+          color: colorScheme.surface.withAlpha(200),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        textStyle: TextStyle(color: colorScheme.onSurface),
+      ),
       hoverColor: lighterSurface.withAlpha(20),
     );
 
