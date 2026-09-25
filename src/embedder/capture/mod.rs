@@ -153,6 +153,7 @@ pub fn begin_capture_session<BackendData: Backend + 'static>(
         current: pointer_location,
         record,
     });
+    crate::idle::refresh_idle_inhibit(state);
 }
 
 /// Ends the session by teleporting the compositor pointer back to the last
@@ -167,6 +168,7 @@ fn end_capture_session<BackendData: Backend + 'static>(state: &mut State<Backend
         return;
     };
     state.pointer.set_location(session.current);
+    crate::idle::refresh_idle_inhibit(state);
 }
 
 /// Cancels the running session without taking a screenshot.
@@ -1370,6 +1372,7 @@ fn start_area_recording<BackendData: Backend + 'static>(
         dropped: 0,
     };
     state.capture_state.recording_session = Some(live);
+    crate::idle::refresh_idle_inhibit(state);
     schedule_recording_heartbeat(state, generation);
     info!(
         output = output.name(),
@@ -1590,6 +1593,7 @@ pub fn stop_recording<BackendData: Backend + 'static>(
             reason,
             "Recording stop requested"
         );
+        crate::idle::refresh_idle_inhibit(state);
     }
 }
 

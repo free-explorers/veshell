@@ -52,6 +52,10 @@ smithay::backend::renderer::element::render_elements! {
 
 /// Half-transparent black used to dim everything outside the selection.
 const SCRIM_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.4];
+/// Screensaver dim overlay: black at full coverage, alpha driven by idle.
+const DIM_BASE_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.9];
+/// Element id for the screensaver dim overlay, stable across frames.
+const ID_IDLE_DIM: u64 = 0x3000;
 /// Bright translucent white used for the selection outline and crosshair.
 const SELECTION_COLOR: [f32; 4] = [1.0, 1.0, 1.0, 0.9];
 /// Thickness of the selection outline and crosshair, in physical pixels.
@@ -91,6 +95,7 @@ pub fn get_render_elements<R>(
     cursor_location: Point<f64, Logical>,
     is_surface_under_pointer: bool,
     flip_flutter_texture: bool,
+    idle_dim_alpha: f32,
     surfaces_in_gaming_mode: Vec<&WlSurface>,
     capture_overlay: Option<&CaptureSession>,
     recording_chip: Option<crate::capture::RecordingChipData>,
@@ -113,6 +118,7 @@ where
         cursor_location,
         is_surface_under_pointer,
         flip_flutter_texture,
+        idle_dim_alpha,
         surfaces_in_gaming_mode,
         capture_overlay,
         recording_chip,
@@ -720,6 +726,7 @@ pub fn get_render_elements_from_dmabuf<R>(
     cursor_location: Point<f64, Logical>,
     is_surface_under_pointer: bool,
     flip_flutter_texture: bool,
+    idle_dim_alpha: f32,
     surfaces_in_gaming_mode: Vec<&WlSurface>,
     capture_overlay: Option<&CaptureSession>,
     recording_chip: Option<crate::capture::RecordingChipData>,
@@ -732,6 +739,30 @@ where
 {
     let scale = output.current_scale();
     let mut elements: Vec<VeshellRenderElements<R>> = Vec::new();
+
+    // The screensaver dim overlay is the topmost element while active:
+    // pushed first because the damage tracker paints deepest-first. It is
+    // never drawn during a capture session (the frozen frame must stay
+    // clean) and only once the fade has begun.
+    if idle_dim_alpha > 0.001 && capture_overlay.is_none() {
+        let width = (output_geometry.size.w * scale.fractional_scale()).ceil() as i32;
+        let height = (output_geometry.size.h * scale.fractional_scale()).ceil() as i32;
+        let color = [
+            DIM_BASE_COLOR[0],
+            DIM_BASE_COLOR[1],
+            DIM_BASE_COLOR[2],
+            DIM_BASE_COLOR[3] * idle_dim_alpha,
+        ];
+        elements.push(VeshellRenderElements::Solid(
+            solid::SolidColorRenderElement::new(
+                stable_solid_id(ID_IDLE_DIM),
+                Rectangle::new((0, 0).into(), (width, height).into()),
+                1,
+                Color32F::new(color[0], color[1], color[2], color[3]),
+                Kind::Unspecified,
+            ),
+        ));
+    }
 
     // While a screenshot session freezes the desktop, the real cursor is
     // replaced by the native crosshair + selection overlay. The client may

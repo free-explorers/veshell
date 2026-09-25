@@ -125,10 +125,35 @@ pub struct DrmBackend {
     highest_hz_crtc: Option<(i32, crtc::Handle)>,
 }
 
+/// Screensaver wake hook: re-insert every blanked output into the render loop.
+fn idle_request_render(state: &mut State<DrmBackend>) {
+    let nodes: Vec<DrmNode> = state.backend_data.gpus.keys().copied().collect();
+    for node in nodes {
+        state
+            .loop_handle
+            .insert_idle(move |data| data.render(node, None));
+    }
+}
+
+/// Screensaver blank hook: put every KMS surface into DPMS-off state. Smithay's
+/// clear() disables the active planes/CRTC and clears queued frames; its next
+/// queue_frame() re-enables the surface. Frame queueing stops while blanked
+/// because `State::render_surface` early-returns.
+fn idle_apply_blank(state: &mut State<DrmBackend>) {
+    for gpu in state.backend_data.gpus.values_mut() {
+        for surface in gpu.surfaces.values_mut() {
+            if let Err(err) = surface.compositor.clear() {
+                warn!("Failed to blank drm surface: {err:?}");
+            }
+        }
+    }
+}
+
 impl Backend for DrmBackend {
     const HAS_RELATIVE_MOTION: bool = true;
     const FLIP_FLUTTER_TEXTURE: bool = true;
     const RUNS_PORTAL_BACKEND: bool = true;
+    const CAN_BLANK: bool = true;
 
     fn seat_name(&self) -> String {
         self.session.seat()
@@ -348,6 +373,8 @@ pub fn run_drm_backend() {
         None,
         settings_manager,
     );
+    state.idle.set_request_render(idle_request_render);
+    state.idle.set_apply_blank(idle_apply_blank);
 
     event_loop
         .handle()
@@ -394,8 +421,19 @@ pub fn run_drm_backend() {
                             warn!("Failed to reset drm surface state: {}", err);
                         }
                     }
-                    data.loop_handle
-                        .insert_idle(move |data| data.render(node, None));
+                    if data.idle.is_blank() {
+                        // Activation may restore connector power behind our
+                        // back. Re-apply DPMS-off after Smithay refreshes its
+                        // view of the resumed KMS state.
+                        for surface in backend.surfaces.values_mut() {
+                            if let Err(err) = surface.compositor.clear() {
+                                warn!("Failed to restore DPMS-off after session activation: {err}");
+                            }
+                        }
+                    } else {
+                        data.loop_handle
+                            .insert_idle(move |data| data.render(node, None));
+                    }
                 }
             }
         })
@@ -487,6 +525,12 @@ pub fn run_drm_backend() {
         .handle()
         .insert_source(libinput_backend, move |event, _, data| {
             let _dh = data.display_handle.clone();
+            if !matches!(
+                event,
+                InputEvent::DeviceAdded { .. } | InputEvent::DeviceRemoved { .. }
+            ) {
+                crate::idle::on_activity(data);
+            }
             match event {
                 InputEvent::DeviceAdded { mut device } => {
                     data.input_devices.insert(device.clone());
@@ -909,7 +953,7 @@ impl State<DrmBackend> {
             planes.overlay = vec![];
         }
 
-        let compositor = match DrmCompositor::new(
+        let mut compositor = match DrmCompositor::new(
             &output,
             surface,
             Some(planes),
@@ -926,6 +970,14 @@ impl State<DrmBackend> {
                 return;
             }
         };
+
+        // A display connected while the screensaver is already blank must
+        // not remain powered until the next user activity.
+        if self.idle.is_blank() {
+            if let Err(err) = compositor.clear() {
+                warn!(output = %output_name, "Failed to DPMS-off newly connected output: {err}");
+            }
+        }
 
         let surface = SurfaceData {
             name: output_name.clone(),
@@ -1193,6 +1245,11 @@ impl State<DrmBackend> {
     // TODO: I don't think this method should be here.
     // It should probably be in GpuData or SurfaceData.
     pub fn render_surface(&mut self, node: DrmNode, crtc: crtc::Handle) {
+        if self.idle.is_blank() {
+            // Outputs are powered down for the screensaver; rendering (and
+            // the frame callback that would revive them) is suspended.
+            return;
+        }
         let (surface, renderer) = {
             let gpu_data = self.backend_data.gpus.get_mut(&node);
             let gpu_data = if let Some(gpu_data) = gpu_data {
@@ -1275,6 +1332,7 @@ impl State<DrmBackend> {
             self.pointer.current_location(),
             self.surface_id_under_cursor != None,
             true,
+            self.idle.dim_alpha(),
             self.meta_window_state
                 .meta_windows
                 .values()

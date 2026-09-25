@@ -33,6 +33,8 @@ use smithay::wayland::dmabuf::DmabufState;
 use smithay::wayland::fractional_scale::{
     with_fractional_scale, FractionalScaleHandler, FractionalScaleManagerState,
 };
+use smithay::wayland::idle_inhibit::{IdleInhibitHandler, IdleInhibitManagerState};
+use smithay::wayland::idle_notify::{IdleNotifierHandler, IdleNotifierState};
 use smithay::wayland::output::OutputHandler;
 use smithay::wayland::relative_pointer::RelativePointerManagerState;
 use smithay::wayland::seat::WaylandFocus;
@@ -133,6 +135,12 @@ pub struct State<BackendData: Backend + 'static> {
     pub fractional_scale_manager_state: FractionalScaleManagerState,
     pub input_devices: HashSet<input::Device>,
     pub output_layout_revision: u64,
+    /// Screensaver: idle stage machine driving the dim overlay and blanking.
+    pub idle: crate::idle::IdleState<BackendData>,
+    /// ext-idle-notify-v1: lets clients learn when the user became active.
+    pub idle_notifier_state: IdleNotifierState<State<BackendData>>,
+    /// idle-inhibit-unstable-v1: clients can suppress idleness from here.
+    pub idle_inhibit_manager_state: IdleInhibitManagerState,
     /// Capture-owned state: the native selection session, the local recording
     /// session, and the channels that carry their worker results back onto the
     /// compositor loop.
@@ -304,8 +312,12 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             FractionalScaleManagerState::new::<Self>(&display_handle);
         let capture_state = crate::capture::CaptureState::new::<BackendData>(&loop_handle);
         let portal_state = crate::portal::PortalState::new::<BackendData>(&loop_handle);
+        let idle_notifier_state =
+            IdleNotifierState::<Self>::new(&display_handle, loop_handle.clone());
+        let idle_inhibit_manager_state = IdleInhibitManagerState::new::<Self>(&display_handle);
+        let idle = crate::idle::IdleState::new(loop_handle.clone(), &settings.idle);
 
-        Self {
+        let mut state = Self {
             running: Arc::new(AtomicBool::new(true)),
             display_handle,
             loop_handle,
@@ -364,7 +376,13 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             capture_state,
             portal_state,
             pointer_gesture_view_id: None,
-        }
+            idle,
+            idle_notifier_state,
+            idle_inhibit_manager_state,
+        };
+        // Start watching for idleness right away.
+        state.idle.arm_activity_timers();
+        state
     }
 
     pub fn change_keyboard_repeat_info(&mut self, repeat_delay: u64, repeat_rate: u64) {
@@ -375,6 +393,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
     }
 
     pub fn apply_veshell_settings(&mut self, settings: &VeshellSettings) {
+        crate::idle::apply_idle_settings(self, &settings.idle);
         let keyboard = self.keyboard.clone();
         keyboard
             .set_xkb_config(
@@ -709,5 +728,23 @@ impl<BackendData: Backend> PrimarySelectionHandler for State<BackendData> {
 impl<BackendData: Backend> DataControlHandler for State<BackendData> {
     fn data_control_state(&mut self) -> &mut DataControlState {
         &mut self.data_control_state
+    }
+}
+
+impl<BackendData: Backend> IdleNotifierHandler for State<BackendData> {
+    fn idle_notifier_state(&mut self) -> &mut IdleNotifierState<Self> {
+        &mut self.idle_notifier_state
+    }
+}
+
+impl<BackendData: Backend> IdleInhibitHandler for State<BackendData> {
+    fn inhibit(&mut self, surface: WlSurface) {
+        self.idle.inhibiting_surfaces.push(surface);
+        crate::idle::refresh_idle_inhibit(self);
+    }
+
+    fn uninhibit(&mut self, surface: WlSurface) {
+        self.idle.inhibiting_surfaces.retain(|s| *s != surface);
+        crate::idle::refresh_idle_inhibit(self);
     }
 }

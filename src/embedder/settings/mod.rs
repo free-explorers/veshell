@@ -40,12 +40,73 @@ pub struct ThemeSettings {
     pub icon_theme: String,
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum AutomaticPowerAction {
+    Disabled,
+    Suspend,
+    Hibernate,
+    /// Ask logind to suspend, then hibernate after its configured delay.
+    SuspendThenHibernate,
+}
+
+fn deserialize_automatic_power_action<'de, D>(
+    deserializer: D,
+) -> Result<AutomaticPowerAction, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+    Ok(match value.as_str() {
+        "suspend" => AutomaticPowerAction::Suspend,
+        "hibernate" => AutomaticPowerAction::Hibernate,
+        "suspendThenHibernate" => AutomaticPowerAction::SuspendThenHibernate,
+        _ => AutomaticPowerAction::Disabled,
+    })
+}
+
+impl Default for AutomaticPowerAction {
+    fn default() -> Self {
+        Self::SuspendThenHibernate
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct IdleSettings {
+    /// Seconds of inactivity before the dim fade starts. `0` disables dimming.
+    pub dim_timeout_seconds: u32,
+    /// Seconds of inactivity before the outputs are powered down.
+    /// `0` disables blanking.
+    pub blank_timeout_seconds: u32,
+    /// Fade duration in seconds, from nothing to fully black.
+    pub fade_seconds: f32,
+    /// Automatic power action after the machine has remained idle.
+    #[serde(deserialize_with = "deserialize_automatic_power_action")]
+    pub automatic_power_action: AutomaticPowerAction,
+    /// Seconds idle before the automatic power action; `0` disables it.
+    pub automatic_power_timeout_seconds: u32,
+}
+impl Default for IdleSettings {
+    fn default() -> Self {
+        Self {
+            dim_timeout_seconds: 300,
+            blank_timeout_seconds: 600,
+            fade_seconds: 3.0,
+            automatic_power_action: AutomaticPowerAction::default(),
+            automatic_power_timeout_seconds: 600,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VeshellSettings {
     pub keyboard: KeyboardSettings,
     pub mouse_and_touchpad: MouseAndTouchpadSettings,
     pub theme: ThemeSettings,
+    #[serde(default)]
+    pub idle: IdleSettings,
 }
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]

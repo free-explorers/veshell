@@ -6,24 +6,23 @@ class NumberPicker extends HookConsumerWidget {
   const NumberPicker({
     required this.value,
     required this.onValueChange,
+    this.enabled = true,
     this.maxValue,
     this.minValue,
     super.key,
   });
   final int value;
+  final bool enabled;
   final Function(int value) onValueChange;
   final int? minValue;
   final int? maxValue;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final textcontroller = useTextEditingController(text: value.toString());
-    useEffect(
-      () {
-        textcontroller.text = value.toString();
-        return null;
-      },
-      [value],
-    );
+    useEffect(() {
+      textcontroller.text = value.toString();
+      return null;
+    }, [value]);
     return Container(
       constraints: const BoxConstraints(maxHeight: 36),
       decoration: BoxDecoration(
@@ -44,21 +43,17 @@ class NumberPicker extends HookConsumerWidget {
             },
             icon: const Icon(Icons.remove),
             iconSize: 20,
-            style: IconButton.styleFrom(
-              shape: LinearBorder.none,
-            ),
+            style: IconButton.styleFrom(shape: LinearBorder.none),
           ),
           SizedBox(
             width: 40,
             child: TextField(
-              enabled: false,
+              enabled: enabled,
               controller: textcontroller,
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
               decoration: const InputDecoration(
-                border: OutlineInputBorder(
-                  borderSide: BorderSide.none,
-                ),
+                border: OutlineInputBorder(borderSide: BorderSide.none),
                 contentPadding: EdgeInsets.all(0),
                 filled: true,
               ),
@@ -74,9 +69,7 @@ class NumberPicker extends HookConsumerWidget {
             },
             icon: const Icon(Icons.add),
             iconSize: 20,
-            style: IconButton.styleFrom(
-              shape: LinearBorder.none,
-            ),
+            style: IconButton.styleFrom(shape: LinearBorder.none),
           ),
         ],
       ),

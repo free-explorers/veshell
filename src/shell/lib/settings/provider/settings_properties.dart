@@ -47,12 +47,11 @@ class SettingsProperties extends _$SettingsProperties {
                         property: property,
                         buildValue: (context, value, {required isExpanded}) =>
                             MonitorResolutionValue(path: path),
-                        buildEditor:
-                            (BuildContext context, {required isExpanded}) =>
-                                MonitorResolutionEditor(
-                                  path: path,
-                                  property: property,
-                                ),
+                        buildEditor: (context, {required isExpanded}) =>
+                            MonitorResolutionEditor(
+                              path: path,
+                              property: property,
+                            ),
                       ),
                 ),
                 'refreshRate': SettingProperty<MonitorRefreshRate>(
@@ -64,12 +63,11 @@ class SettingsProperties extends _$SettingsProperties {
                         property: property,
                         buildValue: (context, value, {required isExpanded}) =>
                             MonitorRefreshRateValue(path: path),
-                        buildEditor:
-                            (BuildContext context, {required isExpanded}) =>
-                                MonitorRefreshRateEditor(
-                                  path: path,
-                                  property: property,
-                                ),
+                        buildEditor: (context, {required isExpanded}) =>
+                            MonitorRefreshRateEditor(
+                              path: path,
+                              property: property,
+                            ),
                       ),
                 ),
                 'fractionnalScale': const SettingProperty<double>(
@@ -151,6 +149,35 @@ class SettingsProperties extends _$SettingsProperties {
             name: 'Natural Scrolling',
             description:
                 'Toggle Natural scrolling (reversed scrolling direction)',
+          ),
+        },
+      ),
+      'idle': const SettingGroup(
+        name: 'Power and Idle',
+        description: null,
+        icon: MdiIcons.lightningBolt,
+        children: {
+          'dimTimeoutSeconds': SettingProperty<int>(
+            name: 'Dim After (seconds)',
+            description: 'Set to 0 to disable idle dimming',
+          ),
+          'blankTimeoutSeconds': SettingProperty<int>(
+            name: 'Blank After (seconds)',
+            description: 'Set to 0 to disable display blanking',
+          ),
+          'fadeSeconds': SettingProperty<double>(
+            name: 'Dim Fade Duration (seconds)',
+            description: 'Duration of the transition to the dimmed screen',
+          ),
+          'automaticPowerAction': SettingProperty<String>(
+            name: 'Automatic Power Action',
+            description:
+                'suspendThenHibernate uses logind when available, otherwise it suspends',
+          ),
+          'automaticPowerTimeoutSeconds': SettingProperty<int>(
+            name: 'Automatic Power After (seconds)',
+            description:
+                'Default is 600 seconds; set to 0 to disable automatic sleep or hibernate',
           ),
         },
       ),
