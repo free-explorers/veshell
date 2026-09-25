@@ -1017,15 +1017,17 @@ impl State<DrmBackend> {
             return;
         };
 
-        if let Some(pos) = device
+        let view_id = if let Some(pos) = device
             .non_desktop_connectors
             .iter()
             .position(|(handle, _)| *handle == connector.handle())
         {
+            // Leased connectors never had a Flutter view created for them.
             let _ = device.non_desktop_connectors.remove(pos);
+            None
         } else {
-            device.surfaces.remove(&crtc);
-        }
+            device.surfaces.remove(&crtc).map(|surface| surface.view_id)
+        };
 
         let output = self
             .space
@@ -1037,6 +1039,10 @@ impl State<DrmBackend> {
                     .unwrap_or(false)
             })
             .cloned();
+
+        if let Some(view_id) = view_id {
+            self.flutter_engine.as_mut().unwrap().remove_view(view_id);
+        }
 
         if let Some(output) = output {
             self.unmap_output(&output);
