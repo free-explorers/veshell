@@ -12,6 +12,12 @@ typedef MonitorResolution = Size;
 typedef MonitorRefreshRate = int;
 
 /// a Monitor represent a physical display device used to render Veshell
+///
+/// This is a read-only projection of Rust's live `Output`, received through
+/// `monitor_layout_changed`. It is not persisted and Flutter never writes it;
+/// the live fields (`modes`, `currentMode`, ...) exist for the settings UI's
+/// "reset to detected" path. See `docs/specifications/monitor.md` (section
+/// "State ownership").
 @freezed
 abstract class Monitor with _$Monitor {
   /// Factory

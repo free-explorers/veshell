@@ -21,6 +21,9 @@ part 'monitor_manager.g.dart';
 /// reconnects, screens it used that were reassigned to another connected
 /// monitor while it was away are dropped from its configuration so the current
 /// owner keeps them.
+///
+/// See `docs/specifications/monitor.md` (sections "State ownership" and
+/// "Disconnect and reconnect") for the full model.
 @Riverpod(keepAlive: true)
 @JsonPersist()
 class MonitorManager extends _$MonitorManager {

@@ -529,6 +529,13 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         crate::capture::cancel_capture_session(self);
     }
 
+    /// Applies a desired [`MonitorConfiguration`] to a live `Output`,
+    /// best-effort.
+    ///
+    /// Requested changes the hardware rejects simply do not happen; the next
+    /// `output_layout_changed` publishes the actual state back to Flutter.
+    /// Rust's `Output` remains the authoritative *actual* state. See
+    /// `docs/specifications/monitor.md` (section "State ownership").
     pub fn apply_monitor_configuration_to_output(
         &mut self,
         output: &Output,

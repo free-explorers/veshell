@@ -11,7 +11,13 @@ import 'package:shell/shared/provider/persistent_storage_state.dart';
 
 part 'monitor_configuration_state.g.dart';
 
-/// Monitor provider
+/// Authoritative **shell layout** for one monitor: the screens it shows and the
+/// split direction between them.
+///
+/// This state is Flutter-only and keyed by the monitor's connector name; it is
+/// never written to `monitor/<connector>.json` and Rust does not consume it.
+/// See `docs/specifications/monitor.md`, section "State ownership", for the
+/// full ownership model.
 @Riverpod(keepAlive: true)
 @JsonPersist()
 class MonitorConfigurationState extends _$MonitorConfigurationState {

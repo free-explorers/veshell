@@ -883,6 +883,9 @@ impl State<DrmBackend> {
 
         info!("output_name: {}", output_name);
 
+        // Desired geometry persisted under the connector name; absent means
+        // "use the detected defaults". See `docs/specifications/monitor.md`
+        // (section "State ownership").
         let monitor_configuration = self
             .settings_manager
             .get_monitor_configuration(&output_name);

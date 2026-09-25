@@ -10,7 +10,11 @@ enum ScreenDisplayMode {
   splitVertical,
 }
 
+/// Flutter-only shell layout for one monitor: its screens and split direction.
 ///
+/// Persisted by `MonitorConfigurationState`; never written to the Rust-side
+/// `monitor/<connector>.json`. See `docs/specifications/monitor.md` (section
+/// "State ownership").
 @freezed
 abstract class MonitorConfiguration with _$MonitorConfiguration {
   /// Factory
