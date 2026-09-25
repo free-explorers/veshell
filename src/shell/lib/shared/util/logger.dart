@@ -7,13 +7,11 @@ final focusLog = logging.Logger('Focus');
 final persistenceLog = logging.Logger('Persistence');
 final geometryLog = logging.Logger('Geometry');
 final matchingLog = logging.Logger('Matching');
+final polkitLog = logging.Logger('Polkit');
 
 final _simpleLogger = Logger(
   printer: HybridPrinter(
-    PrettyPrinter(
-      methodCount: 0,
-      noBoxingByDefault: true,
-    ),
+    PrettyPrinter(methodCount: 0, noBoxingByDefault: true),
     info: PrettyPrinter(
       methodCount: 0,
       noBoxingByDefault: true,
@@ -22,9 +20,7 @@ final _simpleLogger = Logger(
   ),
 );
 
-final _stacktraceLogger = Logger(
-  printer: PrettyPrinter(),
-);
+final _stacktraceLogger = Logger(printer: PrettyPrinter());
 
 /// Configures the logging system to print logs to the console.
 void configureLogs() {
@@ -38,8 +34,9 @@ void configureLogs() {
 
   logging.Logger.root.level = logging.Level.ALL; // defaults to Level.INFO
   logging.Logger.root.onRecord.listen((record) {
-    final logger =
-        record.stackTrace != null ? _stacktraceLogger : _simpleLogger;
+    final logger = record.stackTrace != null
+        ? _stacktraceLogger
+        : _simpleLogger;
 
     final loggerFunc = switch (record.level) {
       logging.Level.INFO => logger.i,

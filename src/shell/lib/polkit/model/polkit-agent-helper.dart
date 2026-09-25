@@ -2,63 +2,107 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-const helperPath = '/usr/lib/polkit-1/polkit-agent-helper-1';
+import 'package:shell/shared/util/logger.dart';
 
-enum Event {
-  failed,
-  request,
-  showError,
-  showDebug,
-  complete,
-}
+const helperPath = '/usr/lib/polkit-1/polkit-agent-helper-1';
+const helperSocketPath = '/run/polkit/agent-helper.socket';
+
+enum Event { failed, request, showError, showDebug, complete }
 
 class PolkitAgentHelper {
-  PolkitAgentHelper._(this.process, this.stdout, this.stdin);
-  final Process process;
-  final Stream<String> stdout;
+  PolkitAgentHelper._(this.stdout, this.stdin, this._closeTransport);
+  final StreamIterator<String> stdout;
   final IOSink stdin;
+  final Future<void> Function() _closeTransport;
 
   static Future<PolkitAgentHelper> start(String userName, String cookie) async {
-    final process = await Process.start(
-      helperPath,
-      [userName],
-    );
+    Socket? socket;
+    try {
+      socket = await Socket.connect(
+        InternetAddress(helperSocketPath, type: InternetAddressType.unix),
+        0,
+      );
+    } catch (socketError) {
+      polkitLog.warning(
+        'Could not connect to helper socket; trying setuid helper fallback: '
+        '$socketError',
+      );
+    }
 
-    final stdout = process.stdout.transform(utf8.decoder).asBroadcastStream();
-    final stdin = process.stdin;
+    if (socket != null) {
+      final connectedSocket = socket;
+      try {
+        final stdout = _lineIterator(connectedSocket);
+        connectedSocket.writeln(userName);
+        connectedSocket.writeln(cookie);
+        await connectedSocket.flush();
+        return PolkitAgentHelper._(
+          stdout,
+          connectedSocket,
+          () async => connectedSocket.destroy(),
+        );
+      } catch (error, stackTrace) {
+        connectedSocket.destroy();
+        polkitLog.severe(
+          'failed to initialize socket-activated helper',
+          error,
+          stackTrace,
+        );
+        rethrow;
+      }
+    }
 
-    stdin.writeln(cookie);
-    await stdin.flush();
-
-    return PolkitAgentHelper._(process, stdout, stdin);
+    Process? process;
+    try {
+      process = await Process.start(helperPath, [userName]);
+      final child = process;
+      final stdout = _lineIterator(child.stdout);
+      child.stdin.writeln(cookie);
+      await child.stdin.flush();
+      return PolkitAgentHelper._(stdout, child.stdin, () async {
+        child.kill();
+      });
+    } catch (error, stackTrace) {
+      process?.kill();
+      polkitLog.severe('failed to start Polkit helper', error, stackTrace);
+      rethrow;
+    }
   }
 
+  static StreamIterator<String> _lineIterator(Stream<List<int>> stream) =>
+      StreamIterator<String>(
+        stream
+            .cast<List<int>>()
+            .transform(utf8.decoder)
+            .transform(const LineSplitter()),
+      );
+
   Future<Event> nextEvent() async {
-    final line = await stdout.firstWhere(
-      (line) => line.isNotEmpty,
-      orElse: () => '',
-    );
+    while (await stdout.moveNext()) {
+      final line = stdout.current.trim();
+      if (line.isEmpty) continue;
 
-    final parts = line.trim().split(' ');
-    final prefix = parts[0];
+      final prefix = line.split(' ').first;
 
-    switch (prefix) {
-      case 'PAM_PROMPT_ECHO_OFF':
-        return Event.request;
-      case 'PAM_PROMPT_ECHO_ON':
-        return Event.request;
-      case 'PAM_ERROR_MSG':
-        return Event.showError;
-      case 'PAM_TEXT_INFO':
-        return Event.showDebug;
-      case 'SUCCESS':
-        return Event.complete;
-      case 'FAILURE':
-        return Event.failed;
-      default:
-        print('Unknown line from Polkit agent helper: $line');
-        return Event.failed;
+      switch (prefix) {
+        case 'PAM_PROMPT_ECHO_OFF':
+        case 'PAM_PROMPT_ECHO_ON':
+          return Event.request;
+        case 'PAM_ERROR_MSG':
+          return Event.showError;
+        case 'PAM_TEXT_INFO':
+          return Event.showDebug;
+        case 'SUCCESS':
+          return Event.complete;
+        case 'FAILURE':
+          return Event.failed;
+        default:
+          polkitLog.warning('unknown response from agent helper: $prefix');
+          return Event.failed;
+      }
     }
+    polkitLog.warning('agent helper closed stdout without a result');
+    return Event.failed;
   }
 
   Future<void> respond(String response) async {
@@ -67,6 +111,7 @@ class PolkitAgentHelper {
   }
 
   Future<void> close() async {
-    process.kill();
+    await stdout.cancel();
+    await _closeTransport();
   }
 }

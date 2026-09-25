@@ -7,22 +7,21 @@ import 'package:shell/monitor/provider/navigator_key_for_view.dart';
 import 'package:shell/polkit/model/org.freedesktop.PolicyKit1.AuthenticationAgent.dart';
 import 'package:shell/polkit/model/polkit-agent-helper.dart';
 import 'package:shell/polkit/widget/polkit_authentication_dialog.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:ubuntu_session/ubuntu_session.dart';
+
+const polkitAuthenticationAgentPath =
+    '/org/veshell/PolicyKit1/AuthenticationAgent';
 
 class PolkitAuthenticationAgent
     extends OrgFreedesktopPolicyKit1AuthenticationAgent {
-  PolkitAuthenticationAgent(
-    DBusClient client,
-    this.manager,
-    this.ref,
-  )   : _authority = DBusRemoteObject(
-          client,
-          name: 'org.freedesktop.PolicyKit1',
-          path: DBusObjectPath('/org/freedesktop/PolicyKit1/Authority'),
-        ),
-        super(
-          path: DBusObjectPath('/org/veshell/PolicyKit1/AuthenticationAgent'),
-        );
+  PolkitAuthenticationAgent(DBusClient client, this.manager, this.ref)
+    : _authority = DBusRemoteObject(
+        client,
+        name: 'org.freedesktop.PolicyKit1',
+        path: DBusObjectPath('/org/freedesktop/PolicyKit1/Authority'),
+      ),
+      super(path: DBusObjectPath(polkitAuthenticationAgentPath));
   final DBusRemoteObject _authority;
   final SystemdSessionManager manager;
   final Ref ref;
@@ -53,52 +52,49 @@ class PolkitAuthenticationAgent
   ) async {
     final selectedUser = await selectUserFromIdentities(identities);
     if (selectedUser == null) {
-      return DBusMethodErrorResponse.failed(
-        'No user selected',
-      );
+      return DBusMethodErrorResponse.failed('No user selected');
     }
 
-    final helper = await PolkitAgentHelper.start(
-      selectedUser.$2,
-      cookie,
-    );
-    while (true) {
-      final event = await helper.nextEvent();
+    final helper = await PolkitAgentHelper.start(selectedUser.$2, cookie);
+    try {
+      while (true) {
+        final event = await helper.nextEvent();
 
-      switch (event) {
-        case Event.request:
-          // Show the prompt on the focused monitor's navigator. There is
-          // no app-wide root navigator: each monitor owns one MaterialApp.
-          final context = _focusedNavigatorContext();
-          if (context == null) {
-            debugPrint('No focused monitor to show the polkit dialog');
-          }
-          final password = context == null || !context.mounted
-              ? null
-              : await showDialog<String?>(
-                  context: context,
-                  builder: (context) => PolkitAuthenticationDialog(message),
-                );
+        switch (event) {
+          case Event.request:
+            // Show the prompt on the focused monitor's navigator. There is
+            // no app-wide root navigator: each monitor owns one MaterialApp.
+            final context = _focusedNavigatorContext();
+            if (context == null || !context.mounted) {
+              polkitLog.warning(
+                'No focused monitor navigator for Polkit prompt',
+              );
+            }
+            final password = context == null || !context.mounted
+                ? null
+                : await showDialog<String?>(
+                    context: context,
+                    builder: (context) => PolkitAuthenticationDialog(message),
+                  );
 
-          // Send response to Polkit agent helper
-          await helper.respond(password ?? '');
+            // Send response to Polkit agent helper
+            await helper.respond(password ?? '');
 
-        case Event.showError:
-          // Show error message to user
-          print('showError $event');
-        case Event.showDebug:
-          // Show debug message to user
-          print('showDebug $event');
+          case Event.showError:
+            polkitLog.warning('helper reported an authentication error');
+          case Event.showDebug:
+            break;
 
-        case Event.complete:
-          // Authentication complete, dismiss dialog
-          return DBusMethodSuccessResponse();
-        case Event.failed:
-          // Authentication failed, dismiss dialog
-          return DBusMethodErrorResponse.failed(
-            'Failed',
-          );
+          case Event.complete:
+            // Authentication complete, dismiss dialog
+            return DBusMethodSuccessResponse();
+          case Event.failed:
+            // Authentication failed, dismiss dialog
+            return DBusMethodErrorResponse.failed('Failed');
+        }
       }
+    } finally {
+      await helper.close();
     }
   }
 
@@ -117,14 +113,10 @@ class PolkitAuthenticationAgent
       [
         DBusStruct([
           const DBusString('unix-session'),
-          DBusDict.stringVariant(
-            {
-              'session-id': DBusString(sessionId),
-            },
-          ),
+          DBusDict.stringVariant({'session-id': DBusString(sessionId)}),
         ]),
         const DBusString('en_US.UTF-8'),
-        const DBusString('/org/veshell/PolicyKit1/AuthenticationAgent'),
+        const DBusString(polkitAuthenticationAgentPath),
       ],
     );
   }
@@ -136,11 +128,11 @@ class PolkitAuthenticationAgent
     for (final ident in identities) {
       final kind = ident.elementAt(0).asString();
       final details = ident.elementAt(1).asStringVariantDict();
-      print('$kind $details');
       // `unix-user` is apparently a thing, but Gnome Shell doesn't seem to handle it...
       if (kind == 'unix-user') {
-        final uid =
-            details.containsKey('uid') ? details['uid']!.asUint32() : null;
+        final uid = details.containsKey('uid')
+            ? details['uid']!.asUint32()
+            : null;
         if (uid != null) {
           uids.add(uid);
         }
@@ -153,9 +145,7 @@ class PolkitAuthenticationAgent
     final activeUid = await activeUser?.uid;
 
     var uid = uids.firstWhereOrNull((uid) => uid == activeUid);
-    uid ??= uids.firstWhereOrNull(
-      (uid) => uid == 0,
-    );
+    uid ??= uids.firstWhereOrNull((uid) => uid == 0);
     if (uid == null && uids.isNotEmpty) {
       uid = uids.first;
     }
