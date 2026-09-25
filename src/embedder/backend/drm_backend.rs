@@ -122,7 +122,13 @@ pub struct DrmBackend {
     gpus: HashMap<DrmNode, GpuData>,
     primary_gpu: DrmNode,
     //gpu_manager: GpuManager<GbmGlesBackend<GlesRenderer, DrmDeviceFd>>,
-    highest_hz_crtc: Option<(i32, crtc::Handle)>,
+    /// Fastest-refresh CRTC per DRM node. A node's vblank drives rendering of
+    /// that node's surfaces only when it comes from this CRTC.
+    highest_hz_crtc: HashMap<DrmNode, (i32, crtc::Handle)>,
+    /// Globally fastest `(refresh, node, crtc)`. Because the Flutter context is
+    /// shared by all outputs, this single CRTC paces `on_vsync` baton delivery
+    /// so Flutter sees exactly one frame callback per frame.
+    pacing_crtc: Option<(i32, DrmNode, crtc::Handle)>,
 }
 
 /// Screensaver wake hook: re-insert every blanked output into the render loop.
@@ -368,7 +374,8 @@ pub fn run_drm_backend() {
             gpus: HashMap::new(),
             //gpu_manager: gpu_manager,
             primary_gpu,
-            highest_hz_crtc: None,
+            highest_hz_crtc: HashMap::new(),
+            pacing_crtc: None,
         },
         None,
         settings_manager,
@@ -736,20 +743,58 @@ pub fn run_drm_backend() {
 
 impl State<DrmBackend> {
     fn determine_highest_hz_crtc(&mut self) {
-        self.backend_data.highest_hz_crtc = self
+        let outputs: Vec<(DrmNode, crtc::Handle, i32)> = self
             .space
             .outputs()
-            // Ignore outputs that don't have a mode.
-            .filter_map(|output| output.current_mode().map(|mode| (mode.refresh, output)))
-            // Take the one with the highest refresh rate.
-            .max_by_key(|(refresh, _)| *refresh)
-            .map(|(refresh, output)| {
-                (
-                    refresh,
-                    output.user_data().get::<UdevOutputId>().unwrap().crtc,
-                )
-            });
+            .filter_map(|output| {
+                // Ignore outputs that don't have a mode or an id (e.g. leased
+                // or non-desktop outputs).
+                let refresh = output.current_mode()?.refresh;
+                let id = output.user_data().get::<UdevOutputId>()?;
+                Some((id.device_id, id.crtc, refresh))
+            })
+            .collect();
+
+        let (per_node, pacing) = select_pacing_crtcs(&outputs);
+        self.backend_data.highest_hz_crtc = per_node;
+        self.backend_data.pacing_crtc = pacing;
     }
+}
+
+/// Pick the fastest-refresh CRTC for every node, plus the single
+/// globally-fastest `(refresh, node, crtc)`.
+///
+/// The per-node maxima drive each node's own rendering, while the global
+/// maximum paces the shared Flutter context. Kept free of `self` (and generic
+/// over the node key) so the selection can be unit tested.
+fn select_pacing_crtcs<K>(
+    outputs: &[(K, crtc::Handle, i32)],
+) -> (
+    HashMap<K, (i32, crtc::Handle)>,
+    Option<(i32, K, crtc::Handle)>,
+)
+where
+    K: Copy + Eq + std::hash::Hash,
+{
+    let mut per_node: HashMap<K, (i32, crtc::Handle)> = HashMap::new();
+    let mut pacing: Option<(i32, K, crtc::Handle)> = None;
+
+    for &(node, crtc, refresh) in outputs {
+        per_node
+            .entry(node)
+            .and_modify(|current| {
+                if refresh > current.0 {
+                    *current = (refresh, crtc);
+                }
+            })
+            .or_insert((refresh, crtc));
+
+        if pacing.map(|(best, _, _)| refresh > best).unwrap_or(true) {
+            pacing = Some((refresh, node, crtc));
+        }
+    }
+
+    (per_node, pacing)
 }
 
 #[allow(dead_code)]
@@ -1183,23 +1228,34 @@ impl State<DrmBackend> {
     }
 
     fn on_vblank(&mut self, node: DrmNode, crtc: crtc::Handle, _meta: DrmEventMetadata) {
-        // Since the Flutter context is shared among all outputs we need to render all of them at the frequence of the highest Hz output.
-        let gpu_data = self.backend_data.gpus.get_mut(&node).unwrap();
-
-        if let Some(surface) = gpu_data.surfaces.get_mut(&crtc) {
-            let _ = surface.compositor.frame_submitted();
+        // Acknowledge the frame submitted on the CRTC that fired, even when we
+        // don't render it (e.g. the slower CRTC of a node).
+        if let Some(gpu_data) = self.backend_data.gpus.get_mut(&node) {
+            if let Some(surface) = gpu_data.surfaces.get_mut(&crtc) {
+                let _ = surface.compositor.frame_submitted();
+            }
         }
 
-        let (mhz, highest_hz_crtc) = match self.backend_data.highest_hz_crtc {
-            Some(highest_hz_crtc) => highest_hz_crtc,
+        // Each DRM node renders its own surfaces, driven by its fastest CRTC.
+        // This keeps nodes that don't own the globally fastest output alive.
+        if let Some(&(_, fastest_crtc)) = self.backend_data.highest_hz_crtc.get(&node) {
+            if fastest_crtc == crtc {
+                self.render(node, None);
+            }
+        }
+
+        // The Flutter context is shared among all outputs, so its vsync batons
+        // must be delivered once per frame rather than once per node. The
+        // globally fastest CRTC paces that delivery; a node rendering on its
+        // own schedule does not drain a second baton.
+        let (mhz, pacing_node, pacing_crtc) = match self.backend_data.pacing_crtc {
+            Some(pacing_crtc) => pacing_crtc,
             None => return,
         };
 
-        if highest_hz_crtc != crtc {
+        if pacing_node != node || pacing_crtc != crtc {
             return;
         }
-
-        self.render(node, None);
 
         let drained: Vec<_> = self.batons.drain(..).collect(); // Mutable borrow ends here
 
@@ -1591,5 +1647,70 @@ fn import_environment() {
         Err(err) => {
             warn!("error spawning shell to import environment: {err:?}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn handle(raw: u32) -> crtc::Handle {
+        control::from_u32(raw).expect("crtc handle must be non-zero")
+    }
+
+    #[test]
+    fn per_node_maxima_and_global_pacing() {
+        let outputs = [
+            (0u32, handle(10), 60_000),
+            (0u32, handle(11), 144_000),
+            (1u32, handle(20), 75_000),
+            (1u32, handle(21), 30_000),
+        ];
+
+        let (per_node, pacing) = select_pacing_crtcs(&outputs);
+
+        assert_eq!(per_node.get(&0), Some(&(144_000, handle(11))));
+        assert_eq!(per_node.get(&1), Some(&(75_000, handle(20))));
+        assert_eq!(pacing, Some((144_000, 0, handle(11))));
+    }
+
+    #[test]
+    fn single_node_paces_on_faster_refresh() {
+        let outputs = [(0u32, handle(1), 60_000), (0u32, handle(2), 120_000)];
+
+        let (per_node, pacing) = select_pacing_crtcs(&outputs);
+
+        assert_eq!(per_node.len(), 1);
+        assert_eq!(per_node.get(&0), Some(&(120_000, handle(2))));
+        assert_eq!(pacing, Some((120_000, 0, handle(2))));
+    }
+
+    #[test]
+    fn every_node_gets_its_own_fastest_even_when_not_global() {
+        let outputs = [(0u32, handle(1), 144_000), (1u32, handle(2), 60_000)];
+
+        let (per_node, pacing) = select_pacing_crtcs(&outputs);
+
+        assert_eq!(per_node.get(&1), Some(&(60_000, handle(2))));
+        assert_eq!(pacing, Some((144_000, 0, handle(1))));
+    }
+
+    #[test]
+    fn ties_resolve_to_first_seen() {
+        let outputs = [(0u32, handle(1), 60_000), (1u32, handle(2), 60_000)];
+
+        let (per_node, pacing) = select_pacing_crtcs(&outputs);
+
+        assert_eq!(per_node.get(&0), Some(&(60_000, handle(1))));
+        assert_eq!(per_node.get(&1), Some(&(60_000, handle(2))));
+        assert_eq!(pacing, Some((60_000, 0, handle(1))));
+    }
+
+    #[test]
+    fn no_outputs_yields_no_selection() {
+        let (per_node, pacing) = select_pacing_crtcs::<u32>(&[]);
+
+        assert!(per_node.is_empty());
+        assert_eq!(pacing, None);
     }
 }
