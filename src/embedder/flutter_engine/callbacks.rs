@@ -13,7 +13,8 @@ use crate::flutter_engine::embedder::{
     FlutterDamage, FlutterOpenGLBackingStore, FlutterOpenGLBackingStore__bindgen_ty_1,
     FlutterOpenGLFramebuffer, FlutterOpenGLTargetType_kFlutterOpenGLTargetTypeFramebuffer,
     FlutterOpenGLTexture, FlutterPlatformMessage, FlutterPresentInfo, FlutterPresentViewInfo,
-    FlutterRect, FlutterTask, FlutterTransformation,
+    FlutterRect, FlutterTask, FlutterTransformation, FlutterViewFocusChangeRequest,
+    FlutterViewFocusState_kFocused,
 };
 use crate::flutter_engine::platform_channels::basic_message_channel::BasicMessageChannel;
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
@@ -282,3 +283,34 @@ pub unsafe extern "C" fn key_event_callback(handled: bool, user_data: *mut c_voi
 }
 
 // add view callback
+
+/// Invoked by the engine when Flutter wants native view focus to move (for
+/// example after a keyboard focus transition crossed Flutter views).
+///
+/// The compositor has no separate native window focus to move: it mirrors the
+/// requested view into its own focus source of truth, which reports the new
+/// focus back to the engine via `FlutterEngine::set_focused_view`.
+pub unsafe extern "C" fn view_focus_change_request_callback<BackendData>(
+    request: *const FlutterViewFocusChangeRequest,
+    user_data: *mut c_void,
+) where
+    BackendData: Backend + 'static,
+{
+    let request = &*request;
+    // Only the newly focused view drives the compositor focus; the losing view
+    // is unfocused as part of the same transition.
+    if request.state != FlutterViewFocusState_kFocused {
+        return;
+    }
+    let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
+    // Ignore requests for views the compositor does not own (e.g. the
+    // implicit Flutter view or a view that was already removed).
+    if !flutter_engine
+        .views_management
+        .views
+        .contains_key(&request.view_id)
+    {
+        return;
+    }
+    flutter_engine.set_focused_view(Some(request.view_id));
+}

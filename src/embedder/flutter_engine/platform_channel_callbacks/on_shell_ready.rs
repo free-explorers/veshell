@@ -70,5 +70,10 @@ pub fn on_shell_ready<BackendData: Backend + 'static>(
 
     // send new meta_window for all existing meta_window
 
+    // Seed the focus source of truth before any user interaction: the view
+    // under the pointer is focused, falling back to the first output when the
+    // pointer has not moved yet. This makes startup focus deterministic.
+    data.focus_view_under_pointer();
+
     result.success(None);
 }

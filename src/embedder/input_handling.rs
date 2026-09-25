@@ -79,6 +79,7 @@ impl<BackendData: Backend> State<BackendData> {
             return;
         }
         let current_view_id = self.view_id_under_pointer().unwrap_or(view_id);
+        self.focus_view_under_pointer();
         let view_id = if self
             .flutter_engine()
             .mouse_button_tracker
@@ -140,6 +141,7 @@ impl<BackendData: Backend> State<BackendData> {
             return;
         }
         let current_view_id = self.view_id_under_pointer().unwrap_or(view_id);
+        self.focus_view_under_pointer();
         let view_id = if self
             .flutter_engine()
             .mouse_button_tracker
@@ -566,6 +568,17 @@ impl<BackendData: Backend> State<BackendData> {
             .or_else(|| self.space.outputs().next())
             .and_then(|output| output.user_data().get::<OutputViewIdWrapper>())
             .map(|wrapper| wrapper.view_id)
+    }
+
+    /// Makes the output view under the pointer the platform-focused view.
+    ///
+    /// This is the compositor side of the focus source of truth: moving the
+    /// pointer onto a monitor focuses it even when no Flutter widget focus
+    /// transition happens, so trusted prompts and window placement follow the
+    /// pointer. The engine is only notified when the view actually changes.
+    pub(crate) fn focus_view_under_pointer(&mut self) {
+        let view_id = self.view_id_under_pointer();
+        self.flutter_engine_mut().set_focused_view(view_id);
     }
 
     fn send_motion_event(&mut self, location: Point<f64, Logical>, device_id: i32, view_id: i64)

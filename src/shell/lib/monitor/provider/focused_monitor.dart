@@ -11,7 +11,10 @@ part 'focused_monitor.g.dart';
 /// The monitor a trusted shell prompt should surface on: the monitor that
 /// owns the focused Veshell Screen.
 ///
-/// Falls back to the first connected monitor only while no Screen exists
+/// The focused screen is driven by the compositor's platform view focus (the
+/// view under the pointer, or the view the engine asked to focus), so this
+/// follows the pointer without requiring a click. Falls back to the first
+/// connected monitor in compositor layout order only while no Screen exists
 /// yet (early startup), never as a steady-state default.
 @riverpod
 Monitor? focusedMonitor(Ref ref) {

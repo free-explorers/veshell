@@ -1,3 +1,5 @@
+import 'dart:ui' show ViewFocusEvent, ViewFocusState;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -7,6 +9,7 @@ import 'package:shell/capture/provider/screenshot_prompt.dart';
 import 'package:shell/meta_window/provider/meta_window_manager.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/monitor/provider/monitor_manager.dart';
+import 'package:shell/monitor/provider/platform_focused_view.dart';
 import 'package:shell/monitor/widget/monitor.dart';
 import 'package:shell/notification/provider/notification_manager.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_client.dart';
@@ -89,6 +92,18 @@ class _VeshellState extends ConsumerState<Veshell> with WidgetsBindingObserver {
   void didChangeMetrics() {
     print('didChangeMetrics');
     setState(() {});
+  }
+
+  /// The compositor is the single source of truth for which monitor is
+  /// focused. Platform view focus follows the pointer (and keyboard view
+  /// transitions); record it so `focusedScreenProvider` and monitor placement
+  /// derive from it.
+  @override
+  void didChangeViewFocus(ViewFocusEvent event) {
+    if (event.state != ViewFocusState.focused) {
+      return;
+    }
+    ref.read(platformFocusedViewIdProvider.notifier).set(event.viewId);
   }
 
   @override
