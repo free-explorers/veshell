@@ -14,18 +14,8 @@ class VeshellTheme extends _$VeshellTheme {
     final color = ref.watch(themeColorSettingProvider);
 
     return (
-      _buildTheme(
-        ThemeData.light(
-          useMaterial3: true,
-        ),
-        color,
-      ),
-      _buildTheme(
-        ThemeData.dark(
-          useMaterial3: true,
-        ),
-        color,
-      )
+      _buildTheme(ThemeData.light(useMaterial3: true), color),
+      _buildTheme(ThemeData.dark(useMaterial3: true), color),
     );
   }
 
@@ -35,11 +25,7 @@ class VeshellTheme extends _$VeshellTheme {
       brightness: defaultTheme.brightness,
     );
 
-    final lighterSurface = Color.lerp(
-      colorScheme.surface,
-      Colors.white,
-      0.4,
-    )!;
+    final lighterSurface = Color.lerp(colorScheme.surface, Colors.white, 0.4)!;
 
     final theme = defaultTheme.copyWith(
       visualDensity: VisualDensity.standard,
@@ -47,6 +33,7 @@ class VeshellTheme extends _$VeshellTheme {
       colorScheme: colorScheme,
       highlightColor: lighterSurface.withAlpha(30),
       focusColor: lighterSurface.withAlpha(60),
+      hoverColor: lighterSurface.withAlpha(20),
       tooltipTheme: defaultTheme.tooltipTheme.copyWith(
         decoration: BoxDecoration(
           color: colorScheme.surface.withAlpha(200),
@@ -54,7 +41,6 @@ class VeshellTheme extends _$VeshellTheme {
         ),
         textStyle: TextStyle(color: colorScheme.onSurface),
       ),
-      hoverColor: lighterSurface.withAlpha(20),
     );
 
     return _applyCardTheme(theme);

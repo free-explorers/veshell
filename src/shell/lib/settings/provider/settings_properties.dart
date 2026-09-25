@@ -47,12 +47,11 @@ class SettingsProperties extends _$SettingsProperties {
                         property: property,
                         buildValue: (context, value, {required isExpanded}) =>
                             MonitorResolutionValue(path: path),
-                        buildEditor:
-                            (BuildContext context, {required isExpanded}) =>
-                                MonitorResolutionEditor(
-                                  path: path,
-                                  property: property,
-                                ),
+                        buildEditor: (context, {required isExpanded}) =>
+                            MonitorResolutionEditor(
+                              path: path,
+                              property: property,
+                            ),
                       ),
                 ),
                 'refreshRate': SettingProperty<MonitorRefreshRate>(
@@ -64,12 +63,11 @@ class SettingsProperties extends _$SettingsProperties {
                         property: property,
                         buildValue: (context, value, {required isExpanded}) =>
                             MonitorRefreshRateValue(path: path),
-                        buildEditor:
-                            (BuildContext context, {required isExpanded}) =>
-                                MonitorRefreshRateEditor(
-                                  path: path,
-                                  property: property,
-                                ),
+                        buildEditor: (context, {required isExpanded}) =>
+                            MonitorRefreshRateEditor(
+                              path: path,
+                              property: property,
+                            ),
                       ),
                 ),
                 'fractionnalScale': const SettingProperty<double>(
@@ -155,9 +153,9 @@ class SettingsProperties extends _$SettingsProperties {
         },
       ),
       'idle': const SettingGroup(
-        name: 'Idle and Power',
-        description: 'Screen dimming and automatic power actions',
-        icon: MdiIcons.power,
+        name: 'Power and Idle',
+        description: null,
+        icon: MdiIcons.lightningBolt,
         children: {
           'dimTimeoutSeconds': SettingProperty<int>(
             name: 'Dim After (seconds)',
