@@ -30,8 +30,7 @@ class MonitorConfigurationState extends _$MonitorConfigurationState {
   /// It only stops the widget from refilling a monitor, so an emptied monitor
   /// stays empty while it is connected; reconnecting or restarting the shell
   /// goes through `MonitorManager`, which gives a monitor with no screens a
-  /// fresh one. See
-  /// `docs/multi-monitor/09-monitor-config-state-correctness.md`.
+  /// fresh one.
   bool get isInitialized => _initialized ?? false;
   bool? _initialized;
 
