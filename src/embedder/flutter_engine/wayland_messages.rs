@@ -4,7 +4,7 @@ use smithay::output::{Mode, Output, PhysicalProperties};
 use smithay::utils::{Buffer as BufferCoords, Coordinate, Logical, Point, Rectangle, Size};
 use std::collections::HashMap;
 
-use crate::flutter_engine::view::OutputViewIdWrapper;
+use crate::flutter_engine::view::view_id_for_output;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -253,12 +253,9 @@ impl Serialize for MyOutput {
         S: serde::Serializer,
     {
         let output = &self.0;
-        let view_id = output
-            .user_data()
-            .get::<OutputViewIdWrapper>()
-            .unwrap()
-            .view_id;
-        let mut state = serializer.serialize_struct("Output", 7)?;
+        let view_id =
+            view_id_for_output(output).expect("a mapped output always has a Flutter view");
+        let mut state = serializer.serialize_struct("Output", 9)?;
         state.serialize_field("name", &output.name())?;
         state.serialize_field("description", &output.description())?;
         state.serialize_field(

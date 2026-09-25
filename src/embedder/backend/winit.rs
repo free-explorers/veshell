@@ -323,11 +323,11 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     InputEvent::PointerButton { event } => {
                         crate::idle::on_activity(data);
-                        data.on_pointer_button::<WinitInput>(event, 0, view_id)
+                        data.on_pointer_button::<WinitInput>(event, 0, Some(view_id))
                     }
                     InputEvent::PointerAxis { event } => {
                         crate::idle::on_activity(data);
-                        data.on_pointer_axis::<WinitInput>(event, 0, view_id)
+                        data.on_pointer_axis::<WinitInput>(event, 0, Some(view_id))
                     }
                     InputEvent::GestureSwipeBegin { event: _ } => {}
                     InputEvent::GestureSwipeUpdate { event: _ } => {}

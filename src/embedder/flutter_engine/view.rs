@@ -19,6 +19,19 @@ pub struct OutputViewIdWrapper {
     pub view_id: i64,
 }
 
+/// Returns the Flutter view id assigned to `output`, if any.
+///
+/// An output can be present in the space slightly before its view id is
+/// inserted (connect/disconnect races, or leased/non-desktop connectors that
+/// never get a view). Callers that route input must treat `None` as "no view"
+/// instead of assuming the wrapper is always there.
+pub fn view_id_for_output(output: &Output) -> Option<i64> {
+    output
+        .user_data()
+        .get::<OutputViewIdWrapper>()
+        .map(|wrapper| wrapper.view_id)
+}
+
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct BackingStoreId {
     pub view_id: i64,

@@ -50,7 +50,7 @@ use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::DisplayHandle;
-use smithay::utils::{DeviceFd, IsAlive, Rectangle, Size};
+use smithay::utils::{DeviceFd, IsAlive, Logical, Point, Rectangle, Size};
 use smithay::wayland::dmabuf::{
     DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier,
 };
@@ -64,7 +64,7 @@ use crate::flutter_engine::embedder::{
     FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
     FlutterPointerDeviceKind_kFlutterPointerDeviceKindTouch,
 };
-use crate::flutter_engine::view::OutputViewIdWrapper;
+use crate::flutter_engine::view::{view_id_for_output, OutputViewIdWrapper};
 use crate::flutter_engine::wayland_messages::{
     GestureSwipeBeginEventMessage, GestureSwipeEndEventMessage, GestureSwipeUpdateEventMessage,
 };
@@ -574,13 +574,13 @@ pub fn run_drm_backend() {
                 }
                 InputEvent::PointerButton { event } => {
                     let device_id = event.device().id_product() as i32;
-                    let view_id = data.view_id_under_pointer().unwrap_or_default();
-                    data.on_pointer_button::<LibinputInputBackend>(event, device_id, view_id)
+                    let view_id = data.view_id_under_pointer();
+                    data.on_pointer_button::<LibinputInputBackend>(event, device_id, view_id);
                 }
                 InputEvent::PointerAxis { event } => {
                     let device_id = event.device().id_product() as i32;
-                    let view_id = data.view_id_under_pointer().unwrap_or_default();
-                    data.on_pointer_axis::<LibinputInputBackend>(event, device_id, view_id)
+                    let view_id = data.view_id_under_pointer();
+                    data.on_pointer_axis::<LibinputInputBackend>(event, device_id, view_id);
                 }
                 InputEvent::GestureSwipeBegin { event } => {
                     let fingers = event.fingers();
@@ -636,18 +636,18 @@ pub fn run_drm_backend() {
                 }
                 InputEvent::GesturePinchBegin { event } => {
                     let device_id = event.device().id_product() as i32;
-                    let view_id = data.view_id_under_pointer().unwrap_or_default();
-                    data.on_gesture_pinch_begin::<LibinputInputBackend>(event, device_id, view_id)
+                    let view_id = data.view_id_under_pointer();
+                    data.on_gesture_pinch_begin::<LibinputInputBackend>(event, device_id, view_id);
                 }
                 InputEvent::GesturePinchUpdate { event } => {
                     let device_id = event.device().id_product() as i32;
-                    let view_id = data.view_id_under_pointer().unwrap_or_default();
-                    data.on_gesture_pinch_update::<LibinputInputBackend>(event, device_id, view_id)
+                    let view_id = data.view_id_under_pointer();
+                    data.on_gesture_pinch_update::<LibinputInputBackend>(event, device_id, view_id);
                 }
                 InputEvent::GesturePinchEnd { event } => {
                     let device_id = event.device().id_product() as i32;
-                    let view_id = data.view_id_under_pointer().unwrap_or_default();
-                    data.on_gesture_pinch_end::<LibinputInputBackend>(event, device_id, view_id)
+                    let view_id = data.view_id_under_pointer();
+                    data.on_gesture_pinch_end::<LibinputInputBackend>(event, device_id, view_id);
                 }
                 InputEvent::GestureHoldBegin { event: _ } => {}
                 InputEvent::GestureHoldEnd { event: _ } => {}
@@ -736,6 +736,20 @@ pub fn run_drm_backend() {
 }
 
 impl State<DrmBackend> {
+    /// Default placement for a newly connected output: to the right of the
+    /// current layout's rightmost edge, or the origin when no output is
+    /// mapped yet.
+    fn default_output_position(&self) -> Point<i32, Logical> {
+        let rightmost = self
+            .space
+            .outputs()
+            .filter_map(|output| self.space.output_geometry(output))
+            .map(|geometry| geometry.loc.x + geometry.size.w)
+            .max()
+            .unwrap_or(0);
+        (rightmost, 0).into()
+    }
+
     fn determine_highest_hz_crtc(&mut self) {
         let outputs: Vec<(DrmNode, crtc::Handle, i32)> = self
             .space
@@ -829,6 +843,8 @@ impl State<DrmBackend> {
     ) {
         let interface_id = connector.interface_id() as u64;
         let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
+        // Computed before borrowing the GPU state so it can read the space.
+        let default_position = self.default_output_position();
 
         let device = if let Some(device) = self.backend_data.gpus.get_mut(&node) {
             device
@@ -933,13 +949,7 @@ impl State<DrmBackend> {
 
         let position = monitor_configuration
             .map(|monitor_configuration| monitor_configuration.location.into())
-            .unwrap_or_else(|| {
-                // Put the new output at the right of the last one.
-                let x = self.space.outputs().fold(0, |acc, o| {
-                    acc + self.space.output_geometry(o).unwrap().size.w
-                });
-                (x, 0).into()
-            });
+            .unwrap_or(default_position);
         let scale = monitor_configuration
             .map(|m| m.fractionnal_scale)
             .unwrap_or(1.0);
@@ -965,6 +975,14 @@ impl State<DrmBackend> {
             crtc,
             device_id: node,
         });
+
+        // The wrapper must exist before the output is mapped, otherwise input
+        // routing can observe a mapped output without a view id.
+        debug_assert_eq!(
+            view_id_for_output(&output),
+            Some(view_id),
+            "output view id must be assigned before the output is mapped"
+        );
 
         let color_formats = if std::env::var("ANVIL_DISABLE_10BIT").is_ok() {
             SUPPORTED_FORMATS_8BIT_ONLY
