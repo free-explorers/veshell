@@ -497,6 +497,30 @@ impl<BackendData: Backend> State<BackendData> {
         self.pointer_gesture_view_id = None;
     }
 
+    /// Re-drives the Smithay pointer with the current `pointer_focus`.
+    ///
+    /// Flutter is the authority on which surface is under the cursor, but
+    /// Smithay only learns about a focus change through `PointerHandle::motion`.
+    /// When a window slides under a stationary cursor (keyboard window or
+    /// workspace navigation), Flutter reports the new surface without any
+    /// physical motion. Without this refresh Smithay keeps routing `axis`
+    /// (scroll), `button` and frames to the previously focused surface until
+    /// the user moves the pointer.
+    pub(crate) fn refresh_pointer_focus(&mut self)
+    where
+        BackendData: Backend + 'static,
+    {
+        let pointer = self.pointer.clone();
+        let focus = self.pointer_focus.clone();
+        let event = MotionEvent {
+            location: pointer.current_location(),
+            serial: SERIAL_COUNTER.next_serial(),
+            time: self.frame_timestamp_millis(),
+        };
+        pointer.motion(self, focus, &event);
+        self.register_frame();
+    }
+
     fn register_frame(&mut self) {
         if self.pointer_frame_pending {
             return;
