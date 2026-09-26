@@ -13,7 +13,8 @@ use crate::flutter_engine::embedder::{
     FlutterDamage, FlutterOpenGLBackingStore, FlutterOpenGLBackingStore__bindgen_ty_1,
     FlutterOpenGLFramebuffer, FlutterOpenGLTargetType_kFlutterOpenGLTargetTypeFramebuffer,
     FlutterOpenGLTexture, FlutterPlatformMessage, FlutterPresentInfo, FlutterPresentViewInfo,
-    FlutterRect, FlutterTask, FlutterTransformation,
+    FlutterRect, FlutterTask, FlutterTransformation, FlutterViewFocusChangeRequest,
+    FlutterViewFocusState_kFocused,
 };
 use crate::flutter_engine::platform_channels::basic_message_channel::BasicMessageChannel;
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
@@ -113,46 +114,37 @@ pub unsafe extern "C" fn populate_existing_damage<BackendData>(
     existing_damage.damage = &FLUTTER_RECT as *const _ as *mut _;
 }
 
+/// Transformation the engine applies to the rendering surface before drawing.
+///
+/// The engine invokes this once per view it rasterizes in a frame
+/// (`Rasterizer::DrawToSurfaceUnsafe`), but the callback receives only
+/// `user_data`: there is no view identifier and no way to associate a returned
+/// value with a specific view. Any transform returned here is therefore
+/// engine-global, while Veshell's views can have independent heights. A shared
+/// `transY` would silently flip the wrong views, so this callback is
+/// deliberately kept as the identity.
+///
+/// Backends that must correct the Flutter texture orientation (Flutter renders
+/// with a bottom-left origin) do it at composite time via
+/// [`Backend::FLIP_FLUTTER_TEXTURE`], which is applied per view and per
+/// render target. Multi-output backends must not rely on this callback for a
+/// per-view flip.
 pub unsafe extern "C" fn surface_transformation<BackendData>(
-    user_data: *mut c_void,
+    _user_data: *mut c_void,
 ) -> FlutterTransformation
 where
     BackendData: Backend + 'static,
 {
-    let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
-
-    while let Ok(output_height) = flutter_engine
-        .renderer_data
-        .channels
-        .rx_output_height
-        .try_recv()
-    {
-        flutter_engine.renderer_data.output_height = Some(output_height);
-    }
-
-    match flutter_engine.renderer_data.output_height {
-        Some(output_height) => FlutterTransformation {
-            scaleX: 1.0,
-            skewX: 0.0,
-            transX: 0.0,
-            skewY: 0.0,
-            scaleY: -1.0,
-            transY: output_height as f64,
-            pers0: 0.0,
-            pers1: 0.0,
-            pers2: 1.0,
-        },
-        None => FlutterTransformation {
-            scaleX: 1.0,
-            skewX: 0.0,
-            transX: 0.0,
-            skewY: 0.0,
-            scaleY: 1.0,
-            transY: 0.0,
-            pers0: 0.0,
-            pers1: 0.0,
-            pers2: 1.0,
-        },
+    FlutterTransformation {
+        scaleX: 1.0,
+        skewX: 0.0,
+        transX: 0.0,
+        skewY: 0.0,
+        scaleY: 1.0,
+        transY: 0.0,
+        pers0: 0.0,
+        pers1: 0.0,
+        pers2: 1.0,
     }
 }
 
@@ -282,3 +274,34 @@ pub unsafe extern "C" fn key_event_callback(handled: bool, user_data: *mut c_voi
 }
 
 // add view callback
+
+/// Invoked by the engine when Flutter wants native view focus to move (for
+/// example after a keyboard focus transition crossed Flutter views).
+///
+/// The compositor has no separate native window focus to move: it mirrors the
+/// requested view into its own focus source of truth, which reports the new
+/// focus back to the engine via `FlutterEngine::set_focused_view`.
+pub unsafe extern "C" fn view_focus_change_request_callback<BackendData>(
+    request: *const FlutterViewFocusChangeRequest,
+    user_data: *mut c_void,
+) where
+    BackendData: Backend + 'static,
+{
+    let request = &*request;
+    // Only the newly focused view drives the compositor focus; the losing view
+    // is unfocused as part of the same transition.
+    if request.state != FlutterViewFocusState_kFocused {
+        return;
+    }
+    let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
+    // Ignore requests for views the compositor does not own (e.g. the
+    // implicit Flutter view or a view that was already removed).
+    if !flutter_engine
+        .views_management
+        .views
+        .contains_key(&request.view_id)
+    {
+        return;
+    }
+    flutter_engine.set_focused_view(Some(request.view_id));
+}

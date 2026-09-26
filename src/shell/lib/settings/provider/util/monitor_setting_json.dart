@@ -9,6 +9,12 @@ import 'package:shell/settings/provider/util/config_directory.dart';
 
 part 'monitor_setting_json.g.dart';
 
+/// Read side of the desired geometry for one monitor.
+///
+/// Watches `monitor/<monitorId>.json` and, when it is absent, seeds a transient
+/// configuration from the live `Monitor` (reset to detected) without writing
+/// the file. `MonitorSettingState` is the only writer. See
+/// `docs/specifications/monitor.md` (section "State ownership").
 @riverpod
 class MonitorSettingJson extends _$MonitorSettingJson {
   StreamSubscription<FileSystemEvent>? _subscription;

@@ -38,6 +38,14 @@ Run from `src/shell/`, using `.flutter_sdk/bin/dart`:
 - `flutter build linux --debug` reproduces the Dart compile errors on their
   own, without the full cargo gate.
 
+## Dart tests
+
+The root `cargo test` gate does not run Flutter tests. Run them with the
+project SDK from `src/shell/`:
+
+- `../.flutter_sdk/bin/flutter test` (all tests), or
+- `../.flutter_sdk/bin/flutter test test/<file>_test.dart` (one file).
+
 ## Where things live
 
 - `docs/dependencies.md`: dependency versions and system packages.

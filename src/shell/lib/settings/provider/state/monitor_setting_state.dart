@@ -11,6 +11,12 @@ import 'package:shell/shared/util/file.dart';
 
 part 'monitor_setting_state.g.dart';
 
+/// Single writer of the desired geometry for one monitor.
+///
+/// Persists `monitor/<monitorId>.json`, the authoritative desired mode, scale
+/// and location that Rust's `SettingsManager` applies at connect time. This is
+/// the Flutter side of the ownership model in
+/// `docs/specifications/monitor.md` (section "State ownership").
 @riverpod
 class MonitorSettingState extends _$MonitorSettingState {
   @override

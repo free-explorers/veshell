@@ -5,22 +5,21 @@ import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/monitor/provider/monitor_by_name.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/screen/provider/monitor_for_screen.dart';
-import 'package:shell/screen/provider/screen_manager.dart';
 
 part 'focused_monitor.g.dart';
 
 /// The monitor a trusted shell prompt should surface on: the monitor that
 /// owns the focused Veshell Screen.
 ///
-/// Falls back to the first connected monitor only while no Screen exists
+/// The focused screen is driven by the compositor's platform view focus (the
+/// view under the pointer, or the view the engine asked to focus), so this
+/// follows the pointer without requiring a click. Falls back to the first
+/// connected monitor in compositor layout order only while no Screen exists
 /// yet (early startup), never as a steady-state default.
 @riverpod
 Monitor? focusedMonitor(Ref ref) {
-  final screenIds = ref.watch(
-    screenManagerProvider.select((value) => value.screenIds),
-  );
-  if (screenIds.isNotEmpty) {
-    final screenId = ref.watch(focusedScreenProvider);
+  final screenId = ref.watch(focusedScreenProvider);
+  if (screenId != null) {
     final monitorId = ref.watch(monitorForScreenProvider(screenId));
     if (monitorId != null) {
       final monitor = ref.watch(monitorByNameProvider(monitorId));

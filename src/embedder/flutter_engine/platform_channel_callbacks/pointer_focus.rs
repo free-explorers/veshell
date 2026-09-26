@@ -34,8 +34,8 @@ pub fn pointer_focus<BackendData: Backend + 'static>(
 
     if let Some(pointer_focus) = payload.focus {
         data.surface_id_under_cursor = Some(pointer_focus.surface_id);
-        if let Some(surface) = data.surfaces.get(&pointer_focus.surface_id) {
-            if let Some(x11_surface) = data.x11_surface_per_wl_surface.get(surface).cloned() {
+        if let Some(surface) = data.surfaces.get(&pointer_focus.surface_id).cloned() {
+            if let Some(x11_surface) = data.x11_surface_per_wl_surface.get(&surface).cloned() {
                 let _ = data
                     .xwayland_state
                     .as_mut()
@@ -45,14 +45,24 @@ pub fn pointer_focus<BackendData: Backend + 'static>(
                     .unwrap()
                     .raise_window(&x11_surface);
             }
-            data.pointer_focus = Some((
-                PointerFocusTarget::from(surface),
+            let next_focus = (
+                PointerFocusTarget::from(&surface),
                 (pointer_focus.global_offset.x, pointer_focus.global_offset.y).into(),
-            ));
+            );
+            let target_changed =
+                data.pointer_focus.as_ref().map(|(target, _)| target) != Some(&next_focus.0);
+            data.pointer_focus = Some(next_focus);
+            if target_changed {
+                data.refresh_pointer_focus();
+            }
         }
     } else {
+        let had_focus = data.pointer_focus.is_some();
         data.surface_id_under_cursor = None;
         data.pointer_focus = None;
+        if had_focus {
+            data.refresh_pointer_focus();
+        }
     }
     result.success(None);
 }

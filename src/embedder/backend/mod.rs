@@ -12,6 +12,15 @@ pub mod render;
 pub mod winit;
 pub trait Backend {
     const HAS_RELATIVE_MOTION: bool = false;
+    /// Whether the compositor flips the Flutter texture vertically when it
+    /// imports it.
+    ///
+    /// Flutter renders with a bottom-left origin, so its texture is upside
+    /// down for the compositor. The engine-wide `surface_transformation`
+    /// callback cannot express a per-view correction (it receives no view
+    /// identifier; see `flutter_engine::callbacks::surface_transformation`),
+    /// so backends correct the orientation here instead. This applies once per
+    /// view and per render target, and is safe for multi-output setups.
     const FLIP_FLUTTER_TEXTURE: bool = false;
     /// Whether the backend can power outputs down at the KMS level when the
     /// screensaver reaches full dim. Backends without KMS access (nested)

@@ -77,13 +77,12 @@ class NotificationManager extends _$NotificationManager {
             ),
             lastIndex: newId,
           );
-          ref
-              .read(
-                notificationChannelProvider(
-                  ref.read(focusedScreenProvider),
-                ).notifier,
-              )
-              .add(notification);
+          final focusedScreenId = ref.read(focusedScreenProvider);
+          if (focusedScreenId != null) {
+            ref
+                .read(notificationChannelProvider(focusedScreenId).notifier)
+                .add(notification);
+          }
           return newId;
         }
       },

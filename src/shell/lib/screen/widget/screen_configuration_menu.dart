@@ -43,12 +43,13 @@ class ScreenConfigurationMenu extends HookConsumerWidget {
                 ),
               ),
               NumberPicker(
-                enabled: false,
+                allowKeyboardInput: false,
                 value: screenConfiguration.screenList.length,
+                minValue: 0,
                 onValueChange: (value) {
                   if (value > screenConfiguration.screenList.length) {
                     var screenToUse = ref
-                        .watch(availableScreenListProvider)
+                        .read(availableScreenListProvider)
                         .firstOrNull;
                     screenToUse ??= ref
                         .read(screenManagerProvider.notifier)

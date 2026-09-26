@@ -447,11 +447,9 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         return;
                     }
                     meta_window.current_output = value.clone();
-                    let scale = self
-                        .space
-                        .outputs()
-                        .find(|output| output.name() == value.clone().unwrap_or("".to_string()))
-                        .map(|output| output.current_scale().fractional_scale());
+                    let scale = value
+                        .as_deref()
+                        .and_then(|name| self.output_scale_for_name(name));
                     if let Some(scale) = scale {
                         self.patch_meta_window(
                             MetaWindowPatch::UpdateScaleRatio {

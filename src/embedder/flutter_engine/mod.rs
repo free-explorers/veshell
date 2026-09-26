@@ -46,7 +46,7 @@ use crate::backend::Backend;
 use crate::flutter_engine::callbacks::{
     gl_external_texture_frame_callback, key_event_callback, platform_message_callback,
     populate_existing_damage, post_task_callback, runs_task_on_current_thread_callback,
-    vsync_callback, FlutterKeyEventData,
+    view_focus_change_request_callback, vsync_callback, FlutterKeyEventData,
 };
 use crate::flutter_engine::embedder::{
     FlutterAddViewInfo, FlutterBackingStore, FlutterBackingStoreConfig,
@@ -58,11 +58,13 @@ use crate::flutter_engine::embedder::{
     FlutterEngineDisplaysUpdateType_kFlutterEngineDisplaysUpdateTypeStartup,
     FlutterEngineInitialize, FlutterEngineMarkExternalTextureFrameAvailable,
     FlutterEngineNotifyDisplayUpdate, FlutterEngineRegisterExternalTexture,
-    FlutterEngineRunInitialized, FlutterEngineRunTask, FlutterEngineSendKeyEvent,
-    FlutterEngineSendPointerEvent, FlutterOpenGLBackingStore,
-    FlutterOpenGLBackingStore__bindgen_ty_1, FlutterOpenGLFramebuffer,
+    FlutterEngineRemoveView, FlutterEngineRunInitialized, FlutterEngineRunTask,
+    FlutterEngineSendKeyEvent, FlutterEngineSendPointerEvent, FlutterEngineSendViewFocusEvent,
+    FlutterOpenGLBackingStore, FlutterOpenGLBackingStore__bindgen_ty_1, FlutterOpenGLFramebuffer,
     FlutterOpenGLTargetType_kFlutterOpenGLTargetTypeFramebuffer, FlutterPointerEvent,
     FlutterRendererType_kOpenGL, FlutterTaskRunnerDescription,
+    FlutterViewFocusDirection_kUndefined, FlutterViewFocusEvent, FlutterViewFocusState,
+    FlutterViewFocusState_kFocused, FlutterViewFocusState_kUnfocused,
 };
 use crate::flutter_engine::platform_channel_callbacks::platform_channel_method_handler;
 use crate::flutter_engine::platform_channels::basic_message_channel::BasicMessageChannel;
@@ -125,6 +127,11 @@ pub struct FlutterEngine<BackendData: Backend + 'static> {
     rx_request_external_texture_name_registration_token: calloop::RegistrationToken,
     pub trackpad_scrolling_manager: TrackpadScrollingManager,
     pub views_management: ViewsManagement,
+    /// The output view that currently owns platform focus, as last reported to
+    /// the Flutter engine. This is the single source of truth for monitor-level
+    /// focus, kept in sync by both the pointer path (compositor-driven) and the
+    /// engine's `view_focus_change_request_callback` (keyboard-driven).
+    focused_view_id: Option<i64>,
 }
 
 /// I don't want people to clone it because it's UB to call [FlutterEngine::on_vsync] multiple times
@@ -135,7 +142,6 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
     pub fn new(
         server_state: &mut State<BackendData>,
     ) -> Result<(Box<Self>, EmbedderChannels), Box<dyn std::error::Error>> {
-        let (tx_output_height, rx_output_height) = channel::channel::<u16>();
         let (tx_baton, rx_baton) = channel::channel::<Baton>();
         let (tx_reschedule_task_runner_timer, rx_reschedule_task_runner_timer) =
             channel::channel::<Duration>();
@@ -147,17 +153,13 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             channel::channel::<(VeshellKeyEvent, bool)>();
 
         let flutter_engine_channels = FlutterEngineChannels {
-            rx_output_height,
             tx_baton,
             tx_request_external_texture_name,
             rx_external_texture_name,
             tx_flutter_handled_key_event,
         };
 
-        let embedder_channels = EmbedderChannels {
-            tx_output_height,
-            rx_baton,
-        };
+        let embedder_channels = EmbedderChannels { rx_baton };
 
         let arch = if cfg!(target_arch = "x86_64") {
             "x64"
@@ -301,7 +303,9 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     update_semantics_callback: None,
                     update_semantics_callback2: None,
                     channel_update_callback: None,
-                    view_focus_change_request_callback: None,
+                    view_focus_change_request_callback: Some(
+                        view_focus_change_request_callback::<BackendData>,
+                    ),
                     engine_id: 0,
                 };
 
@@ -489,6 +493,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     rx_request_external_texture_name_registration_token,
                     trackpad_scrolling_manager: TrackpadScrollingManager::new(),
                     views_management: ViewsManagement::new(),
+                    focused_view_id: None,
                 });
 
                 // TODO: Delete this function once Box::assume_init gets stabilized.
@@ -536,6 +541,45 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             return Err(format!("Could not send pointer event, error {result}").into());
         }
         Ok(())
+    }
+
+    /// Sets the output view that owns platform focus, notifying the engine when
+    /// it changes.
+    ///
+    /// The unfocused view is notified before the newly focused one so that a
+    /// common consumer (e.g. a keyboard-parked root scope) is released first.
+    /// Passing `None` clears platform focus without focusing another view.
+    pub fn set_focused_view(&mut self, view_id: Option<i64>) {
+        if self.focused_view_id == view_id {
+            return;
+        }
+        let previous = self.focused_view_id;
+        self.focused_view_id = view_id;
+        if let Some(previous) = previous {
+            self.send_view_focus_event(previous, FlutterViewFocusState_kUnfocused);
+        }
+        if let Some(view_id) = view_id {
+            self.send_view_focus_event(view_id, FlutterViewFocusState_kFocused);
+        }
+    }
+
+    fn send_view_focus_event(&self, view_id: i64, state: FlutterViewFocusState) {
+        let event = FlutterViewFocusEvent {
+            struct_size: size_of::<FlutterViewFocusEvent>(),
+            view_id,
+            state,
+            direction: FlutterViewFocusDirection_kUndefined,
+        };
+        let result = unsafe { FlutterEngineSendViewFocusEvent(self.handle, &event as *const _) };
+        if result != 0 {
+            tracing::warn!(
+                target: "veshell::geometry",
+                view_id,
+                state,
+                error = result,
+                "Could not send view focus event"
+            );
+        }
     }
 
     pub fn send_key_event(
@@ -731,7 +775,6 @@ struct RendererData {
     gl: Gles2,
     main_egl_context: EGLContext,
     resource_egl_context: EGLContext,
-    output_height: Option<u16>,
     channels: FlutterEngineChannels,
     framebuffer_importer: GlesFramebufferImporter,
 }
@@ -771,7 +814,6 @@ impl RendererData {
                 gl_attributes,
                 pixel_format_requirements,
             )?,
-            output_height: None,
             channels,
             framebuffer_importer: unsafe { GlesFramebufferImporter::new(egl_display.clone())? },
         })
@@ -779,7 +821,6 @@ impl RendererData {
 }
 
 pub struct FlutterEngineChannels {
-    rx_output_height: channel::Channel<u16>,
     tx_baton: channel::Sender<Baton>,
     tx_request_external_texture_name: channel::Sender<i64>,
     rx_external_texture_name: channel::Channel<(u32, u32)>,
@@ -787,7 +828,6 @@ pub struct FlutterEngineChannels {
 }
 
 pub struct EmbedderChannels {
-    pub tx_output_height: channel::Sender<u16>,
     pub rx_baton: channel::Channel<Baton>,
 }
 

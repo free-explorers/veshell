@@ -29,7 +29,7 @@ class WorkspacePanel extends HookConsumerWidget implements PreferredSizeWidget {
           children: [
             Expanded(child: TileableListView(tileableList: tileableList)),
             NumberPicker(
-              enabled: false,
+              allowKeyboardInput: false,
               value: visibleLength,
               minValue: 0,
               onValueChange: onVisibleLengthChange,

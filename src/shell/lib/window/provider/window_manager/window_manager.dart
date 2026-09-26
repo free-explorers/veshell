@@ -9,6 +9,7 @@ import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
+import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/shared/provider/persistent_storage_state.dart';
 import 'package:shell/window/model/dialog_window.dart';
@@ -136,8 +137,19 @@ class WindowManager extends _$WindowManager {
 
     state = state.copyWith(windows: state.windows.add(windowId));
 
-    final currentScreenId = ref.read(focusedScreenProvider);
-    final screenState = ref.read(screenStateProvider(currentScreenId));
+    final focusedScreenId = ref.read(focusedScreenProvider);
+    final screenIds = ref.read(screenManagerProvider).screenIds;
+    final targetScreenId =
+        focusedScreenId ?? (screenIds.isEmpty ? null : screenIds.first);
+
+    if (targetScreenId == null) {
+      _log.warning(
+        'No screen available; window $windowId was created but not placed',
+      );
+      return windowId;
+    }
+
+    final screenState = ref.read(screenStateProvider(targetScreenId));
 
     await ref
         .read(

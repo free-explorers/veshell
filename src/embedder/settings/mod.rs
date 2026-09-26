@@ -180,9 +180,13 @@ impl From<Point<i32, Logical>> for MonitorLocation {
     }
 }
 
+/// Desired geometry for one monitor, persisted as `monitor/<connector>.json`.
+///
+/// This is the single Rust-side consumer of the desired-geometry store written
+/// by Dart's `MonitorSettingState`. Actual hardware state lives in the live
+/// `Output`; see `docs/specifications/monitor.md` (section "State ownership").
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
-
 pub struct MonitorConfiguration {
     pub mode: MonitorMode,
     pub location: MonitorLocation,
@@ -304,6 +308,12 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
         serde_json::from_value(settings_json).expect("Unable to convert JSON to VeshellSettings")
     }
 
+    /// Reads the desired geometry written by Dart `MonitorSettingState`.
+    ///
+    /// Single consumer of `monitor/<connector>.json`; the returned
+    /// [`MonitorConfiguration`] is applied best-effort and may be rejected by
+    /// the hardware. See `docs/specifications/monitor.md` (section "State
+    /// ownership").
     pub fn get_monitor_configuration(&self, monitor_id: &str) -> Option<MonitorConfiguration> {
         let monitor_configuration_path = Path::new(&self.config_folder_path)
             .join("monitor")

@@ -79,6 +79,8 @@ dev_dependencies:
   # rules and activating additional ones.
   build_runner: ^2.6.0
   flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
   riverpod_generator: ^4.0.0+1
   very_good_analysis: ^11.0.0
   custom_lint: ^0.8.0

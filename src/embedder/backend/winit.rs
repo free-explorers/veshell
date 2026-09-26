@@ -41,6 +41,12 @@ pub struct Winit {
 }
 
 impl Backend for Winit {
+    /// Winit has a single output/view, but it uses the same composite-time
+    /// flip as DRM so the engine never applies an engine-global
+    /// `surface_transformation` (see `surface_transformation` in
+    /// `flutter_engine::callbacks`).
+    const FLIP_FLUTTER_TEXTURE: bool = true;
+
     fn seat_name(&self) -> String {
         "winit".to_string()
     }
@@ -138,7 +144,6 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
         size: backend.window_size(),
         refresh: 60_000,
     };
-    let initial_size = mode.size;
 
     let output = Output::new(
         "winit".to_string(),
@@ -225,17 +230,10 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
         egl::get_proc_address(s) as *const _
     }));
 
-    let (
-        flutter_engine,
-        EmbedderChannels {
-            tx_output_height,
-            rx_baton,
-        },
-    ) = FlutterEngine::new(&mut state).unwrap();
+    let (flutter_engine, EmbedderChannels { rx_baton }) = FlutterEngine::new(&mut state).unwrap();
 
     state.flutter_engine = Some(flutter_engine);
 
-    tx_output_height.send(initial_size.h as u16).unwrap();
     state.map_output(&output, output.current_location());
 
     let view_id = state.flutter_engine_mut().add_view(0, &output);
@@ -278,8 +276,6 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                     }
 
                     data.output_layout_changed();
-
-                    let _ = tx_output_height.send(size.h as u16);
 
                     let resized_output = data.backend_data.output.clone();
                     data.flutter_engine_mut()
@@ -327,11 +323,11 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     InputEvent::PointerButton { event } => {
                         crate::idle::on_activity(data);
-                        data.on_pointer_button::<WinitInput>(event, 0, view_id)
+                        data.on_pointer_button::<WinitInput>(event, 0, Some(view_id))
                     }
                     InputEvent::PointerAxis { event } => {
                         crate::idle::on_activity(data);
-                        data.on_pointer_axis::<WinitInput>(event, 0, view_id)
+                        data.on_pointer_axis::<WinitInput>(event, 0, Some(view_id))
                     }
                     InputEvent::GestureSwipeBegin { event: _ } => {}
                     InputEvent::GestureSwipeUpdate { event: _ } => {}

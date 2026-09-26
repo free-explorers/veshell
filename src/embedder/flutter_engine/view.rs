@@ -3,8 +3,9 @@ use std::ffi::c_void;
 
 use crate::flutter_engine::channel::Event::Msg;
 use crate::flutter_engine::embedder::{
-    FlutterAddViewInfo, FlutterAddViewResult, FlutterEngineAddView,
-    FlutterEngineSendWindowMetricsEvent, FlutterWindowMetricsEvent,
+    FlutterAddViewInfo, FlutterAddViewResult, FlutterEngineAddView, FlutterEngineRemoveView,
+    FlutterEngineSendWindowMetricsEvent, FlutterRemoveViewInfo, FlutterRemoveViewResult,
+    FlutterWindowMetricsEvent,
 };
 use crate::{backend::Backend, flutter_engine::FlutterEngine};
 use smithay::backend::allocator::dmabuf::{AnyError, AsDmabuf, Dmabuf};
@@ -16,6 +17,19 @@ use smithay::utils::SerialCounter;
 use tracing::debug;
 pub struct OutputViewIdWrapper {
     pub view_id: i64,
+}
+
+/// Returns the Flutter view id assigned to `output`, if any.
+///
+/// An output can be present in the space slightly before its view id is
+/// inserted (connect/disconnect races, or leased/non-desktop connectors that
+/// never get a view). Callers that route input must treat `None` as "no view"
+/// instead of assuming the wrapper is always there.
+pub fn view_id_for_output(output: &Output) -> Option<i64> {
+    output
+        .user_data()
+        .get::<OutputViewIdWrapper>()
+        .map(|wrapper| wrapper.view_id)
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -101,6 +115,11 @@ impl VeshellView {
 }
 
 struct AddViewData {
+    tx_done: channel::Sender<(i64, bool)>,
+    view_id: i64,
+}
+
+struct RemoveViewData {
     tx_done: channel::Sender<(i64, bool)>,
     view_id: i64,
 }
@@ -196,6 +215,69 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         view_id
     }
 
+    /// Removes the Flutter view for a disconnected output.
+    ///
+    /// The removal is asynchronous: the backing [`VeshellView`] (and therefore
+    /// its swapchain and in-flight slots) is only dropped once the engine
+    /// reports the view as removed, as required by the embedder API.
+    pub fn remove_view(&mut self, view_id: i64) {
+        let (tx_done, rx_done) = channel::channel::<(i64, bool)>();
+
+        let remove_view_data = Box::new(RemoveViewData { tx_done, view_id });
+
+        self.loop_handle
+            .insert_source(rx_done, move |event, _, data| {
+                if let Msg((view_id, removed)) = event {
+                    if removed {
+                        let engine = data.flutter_engine_mut();
+                        let removed = engine.views_management.views.remove(&view_id).is_some();
+                        tracing::info!(
+                            target: "veshell::geometry",
+                            view_id,
+                            removed,
+                            remaining_views = engine.views_management.views.len(),
+                            "Removed Flutter output view"
+                        );
+                    } else {
+                        tracing::warn!(
+                            target: "veshell::geometry",
+                            view_id,
+                            "Flutter engine did not remove output view"
+                        );
+                    }
+                }
+            })
+            .unwrap();
+
+        let user_data = Box::into_raw(remove_view_data) as *mut c_void;
+        let result = unsafe {
+            FlutterEngineRemoveView(
+                self.handle,
+                &FlutterRemoveViewInfo {
+                    struct_size: size_of::<FlutterRemoveViewInfo>(),
+                    view_id,
+                    user_data,
+                    remove_view_callback: Some(remove_view_callback),
+                },
+            )
+        };
+
+        if result != 0 {
+            // The engine will not invoke the callback when the request is
+            // rejected, so reclaim the view here to avoid leaking its
+            // swapchain.
+            unsafe { drop(Box::from_raw(user_data as *mut RemoveViewData)) };
+            if self.views_management.views.remove(&view_id).is_some() {
+                tracing::warn!(
+                    target: "veshell::geometry",
+                    view_id,
+                    error = result,
+                    "FlutterEngineRemoveView failed; reclaimed view locally"
+                );
+            }
+        }
+    }
+
     pub fn resize_view(
         &mut self,
         view_id: i64,
@@ -258,4 +340,14 @@ where
         .send((add_view_data.view_id, result.added))
         .unwrap();
     debug!("add_view_callback: done");
+}
+
+pub unsafe extern "C" fn remove_view_callback(result: *const FlutterRemoveViewResult) {
+    debug!("remove_view_callback: {:?}", result);
+    let result = &*result;
+    let remove_view_data = Box::from_raw(result.user_data as *mut RemoveViewData);
+    let _ = remove_view_data
+        .tx_done
+        .send((remove_view_data.view_id, result.removed));
+    debug!("remove_view_callback: done");
 }

@@ -4,7 +4,7 @@ use smithay::output::{Mode, Output, PhysicalProperties};
 use smithay::utils::{Buffer as BufferCoords, Coordinate, Logical, Point, Rectangle, Size};
 use std::collections::HashMap;
 
-use crate::flutter_engine::view::OutputViewIdWrapper;
+use crate::flutter_engine::view::view_id_for_output;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -253,12 +253,9 @@ impl Serialize for MyOutput {
         S: serde::Serializer,
     {
         let output = &self.0;
-        let view_id = output
-            .user_data()
-            .get::<OutputViewIdWrapper>()
-            .unwrap()
-            .view_id;
-        let mut state = serializer.serialize_struct("Output", 7)?;
+        let view_id =
+            view_id_for_output(output).expect("a mapped output always has a Flutter view");
+        let mut state = serializer.serialize_struct("Output", 9)?;
         state.serialize_field("name", &output.name())?;
         state.serialize_field("description", &output.description())?;
         state.serialize_field(
@@ -363,4 +360,63 @@ pub struct GestureSwipeEndEventMessage {
     pub time: u32,
     pub fingers: u32,
     pub cancelled: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::flutter_engine::view::OutputViewIdWrapper;
+    use smithay::output::Subpixel;
+
+    fn output(view_id: i64) -> Output {
+        let output = Output::new(
+            "DP-1".to_string(),
+            PhysicalProperties {
+                size: (600, 340).into(),
+                subpixel: Subpixel::Unknown,
+                make: "Acme".into(),
+                model: "Panel".into(),
+                serial_number: "0".into(),
+            },
+        );
+        output.change_current_state(
+            Some(Mode {
+                size: (1920, 1080).into(),
+                refresh: 60_000,
+            }),
+            None,
+            None,
+            Some((100, 50).into()),
+        );
+        output
+            .user_data()
+            .insert_if_missing(|| OutputViewIdWrapper { view_id });
+        output
+    }
+
+    #[test]
+    fn output_serializes_every_declared_field() {
+        let value = serde_json::to_value(MyOutput(output(42))).unwrap();
+        let object = value.as_object().unwrap();
+
+        let mut keys = object.keys().map(String::as_str).collect::<Vec<_>>();
+        keys.sort_unstable();
+
+        assert_eq!(
+            keys,
+            [
+                "currentMode",
+                "description",
+                "location",
+                "modes",
+                "name",
+                "physicalProperties",
+                "preferredMode",
+                "scale",
+                "viewId",
+            ]
+        );
+        assert_eq!(object["viewId"], serde_json::json!(42));
+        assert_eq!(object["location"], serde_json::json!({ "x": 100, "y": 50 }));
+    }
 }

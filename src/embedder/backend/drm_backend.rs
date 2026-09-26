@@ -50,7 +50,7 @@ use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::DisplayHandle;
-use smithay::utils::{DeviceFd, IsAlive, Rectangle, Size};
+use smithay::utils::{DeviceFd, IsAlive, Logical, Point, Rectangle};
 use smithay::wayland::dmabuf::{
     DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier,
 };
@@ -64,7 +64,7 @@ use crate::flutter_engine::embedder::{
     FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
     FlutterPointerDeviceKind_kFlutterPointerDeviceKindTouch,
 };
-use crate::flutter_engine::view::OutputViewIdWrapper;
+use crate::flutter_engine::view::{view_id_for_output, OutputViewIdWrapper};
 use crate::flutter_engine::wayland_messages::{
     GestureSwipeBeginEventMessage, GestureSwipeEndEventMessage, GestureSwipeUpdateEventMessage,
 };
@@ -122,7 +122,13 @@ pub struct DrmBackend {
     gpus: HashMap<DrmNode, GpuData>,
     primary_gpu: DrmNode,
     //gpu_manager: GpuManager<GbmGlesBackend<GlesRenderer, DrmDeviceFd>>,
-    highest_hz_crtc: Option<(i32, crtc::Handle)>,
+    /// Fastest-refresh CRTC per DRM node. A node's vblank drives rendering of
+    /// that node's surfaces only when it comes from this CRTC.
+    highest_hz_crtc: HashMap<DrmNode, (i32, crtc::Handle)>,
+    /// Globally fastest `(refresh, node, crtc)`. Because the Flutter context is
+    /// shared by all outputs, this single CRTC paces `on_vsync` baton delivery
+    /// so Flutter sees exactly one frame callback per frame.
+    pacing_crtc: Option<(i32, DrmNode, crtc::Handle)>,
 }
 
 /// Screensaver wake hook: re-insert every blanked output into the render loop.
@@ -368,7 +374,8 @@ pub fn run_drm_backend() {
             gpus: HashMap::new(),
             //gpu_manager: gpu_manager,
             primary_gpu,
-            highest_hz_crtc: None,
+            highest_hz_crtc: HashMap::new(),
+            pacing_crtc: None,
         },
         None,
         settings_manager,
@@ -494,13 +501,7 @@ pub fn run_drm_backend() {
 
     state.dmabuf_state = Some(dmabuf_state);
     // Start the Flutter engine.
-    let (
-        flutter_engine,
-        EmbedderChannels {
-            tx_output_height: _,
-            rx_baton,
-        },
-    ) = FlutterEngine::new(&mut state).unwrap();
+    let (flutter_engine, EmbedderChannels { rx_baton }) = FlutterEngine::new(&mut state).unwrap();
     state.flutter_engine = Some(flutter_engine);
 
     let nodes_available: Vec<DrmNode> = state
@@ -573,13 +574,13 @@ pub fn run_drm_backend() {
                 }
                 InputEvent::PointerButton { event } => {
                     let device_id = event.device().id_product() as i32;
-                    let view_id = data.view_id_under_pointer().unwrap_or_default();
-                    data.on_pointer_button::<LibinputInputBackend>(event, device_id, view_id)
+                    let view_id = data.view_id_under_pointer();
+                    data.on_pointer_button::<LibinputInputBackend>(event, device_id, view_id);
                 }
                 InputEvent::PointerAxis { event } => {
                     let device_id = event.device().id_product() as i32;
-                    let view_id = data.view_id_under_pointer().unwrap_or_default();
-                    data.on_pointer_axis::<LibinputInputBackend>(event, device_id, view_id)
+                    let view_id = data.view_id_under_pointer();
+                    data.on_pointer_axis::<LibinputInputBackend>(event, device_id, view_id);
                 }
                 InputEvent::GestureSwipeBegin { event } => {
                     let fingers = event.fingers();
@@ -635,18 +636,18 @@ pub fn run_drm_backend() {
                 }
                 InputEvent::GesturePinchBegin { event } => {
                     let device_id = event.device().id_product() as i32;
-                    let view_id = data.view_id_under_pointer().unwrap_or_default();
-                    data.on_gesture_pinch_begin::<LibinputInputBackend>(event, device_id, view_id)
+                    let view_id = data.view_id_under_pointer();
+                    data.on_gesture_pinch_begin::<LibinputInputBackend>(event, device_id, view_id);
                 }
                 InputEvent::GesturePinchUpdate { event } => {
                     let device_id = event.device().id_product() as i32;
-                    let view_id = data.view_id_under_pointer().unwrap_or_default();
-                    data.on_gesture_pinch_update::<LibinputInputBackend>(event, device_id, view_id)
+                    let view_id = data.view_id_under_pointer();
+                    data.on_gesture_pinch_update::<LibinputInputBackend>(event, device_id, view_id);
                 }
                 InputEvent::GesturePinchEnd { event } => {
                     let device_id = event.device().id_product() as i32;
-                    let view_id = data.view_id_under_pointer().unwrap_or_default();
-                    data.on_gesture_pinch_end::<LibinputInputBackend>(event, device_id, view_id)
+                    let view_id = data.view_id_under_pointer();
+                    data.on_gesture_pinch_end::<LibinputInputBackend>(event, device_id, view_id);
                 }
                 InputEvent::GestureHoldBegin { event: _ } => {}
                 InputEvent::GestureHoldEnd { event: _ } => {}
@@ -735,21 +736,85 @@ pub fn run_drm_backend() {
 }
 
 impl State<DrmBackend> {
+    /// Default placement for a newly connected output: to the right of the
+    /// current layout's rightmost edge, or the origin when no output is
+    /// mapped yet.
+    fn default_output_position(&self) -> Point<i32, Logical> {
+        place_new_output(
+            self.space
+                .outputs()
+                .filter_map(|output| self.space.output_geometry(output)),
+        )
+    }
+
     fn determine_highest_hz_crtc(&mut self) {
-        self.backend_data.highest_hz_crtc = self
+        let outputs: Vec<(DrmNode, crtc::Handle, i32)> = self
             .space
             .outputs()
-            // Ignore outputs that don't have a mode.
-            .filter_map(|output| output.current_mode().map(|mode| (mode.refresh, output)))
-            // Take the one with the highest refresh rate.
-            .max_by_key(|(refresh, _)| *refresh)
-            .map(|(refresh, output)| {
-                (
-                    refresh,
-                    output.user_data().get::<UdevOutputId>().unwrap().crtc,
-                )
-            });
+            .filter_map(|output| {
+                // Ignore outputs that don't have a mode or an id (e.g. leased
+                // or non-desktop outputs).
+                let refresh = output.current_mode()?.refresh;
+                let id = output.user_data().get::<UdevOutputId>()?;
+                Some((id.device_id, id.crtc, refresh))
+            })
+            .collect();
+
+        let (per_node, pacing) = select_pacing_crtcs(&outputs);
+        self.backend_data.highest_hz_crtc = per_node;
+        self.backend_data.pacing_crtc = pacing;
     }
+}
+
+/// Placement for a newly connected output: to the right of the current
+/// layout's rightmost edge, or the origin when nothing is mapped.
+///
+/// Kept free of `self` so the placement rule can be unit tested independently
+/// of a live compositor.
+fn place_new_output(
+    existing: impl Iterator<Item = Rectangle<i32, Logical>>,
+) -> Point<i32, Logical> {
+    let rightmost = existing
+        .map(|geometry| geometry.loc.x + geometry.size.w)
+        .max()
+        .unwrap_or(0);
+    (rightmost, 0).into()
+}
+
+/// Pick the fastest-refresh CRTC for every node, plus the single
+/// globally-fastest `(refresh, node, crtc)`.
+///
+/// The per-node maxima drive each node's own rendering, while the global
+/// maximum paces the shared Flutter context. Kept free of `self` (and generic
+/// over the node key) so the selection can be unit tested.
+fn select_pacing_crtcs<K>(
+    outputs: &[(K, crtc::Handle, i32)],
+) -> (
+    HashMap<K, (i32, crtc::Handle)>,
+    Option<(i32, K, crtc::Handle)>,
+)
+where
+    K: Copy + Eq + std::hash::Hash,
+{
+    let mut per_node: HashMap<K, (i32, crtc::Handle)> = HashMap::new();
+    let mut pacing: Option<(i32, K, crtc::Handle)> = None;
+
+    for &(node, crtc, refresh) in outputs {
+        per_node
+            .entry(node)
+            .and_modify(|current| {
+                if refresh > current.0 {
+                    *current = (refresh, crtc);
+                }
+            })
+            .or_insert((refresh, crtc));
+
+        if pacing.map(|(best, _, _)| refresh > best).unwrap_or(true) {
+            pacing = Some((refresh, node, crtc));
+        }
+    }
+
+    (per_node, pacing)
 }
 
 #[allow(dead_code)]
@@ -790,6 +855,8 @@ impl State<DrmBackend> {
     ) {
         let interface_id = connector.interface_id() as u64;
         let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
+        // Computed before borrowing the GPU state so it can read the space.
+        let default_position = self.default_output_position();
 
         let device = if let Some(device) = self.backend_data.gpus.get_mut(&node) {
             device
@@ -844,6 +911,9 @@ impl State<DrmBackend> {
 
         info!("output_name: {}", output_name);
 
+        // Desired geometry persisted under the connector name; absent means
+        // "use the detected defaults". See `docs/specifications/monitor.md`
+        // (section "State ownership").
         let monitor_configuration = self
             .settings_manager
             .get_monitor_configuration(&output_name);
@@ -891,13 +961,7 @@ impl State<DrmBackend> {
 
         let position = monitor_configuration
             .map(|monitor_configuration| monitor_configuration.location.into())
-            .unwrap_or_else(|| {
-                // Put the new output at the right of the last one.
-                let x = self.space.outputs().fold(0, |acc, o| {
-                    acc + self.space.output_geometry(o).unwrap().size.w
-                });
-                (x, 0).into()
-            });
+            .unwrap_or(default_position);
         let scale = monitor_configuration
             .map(|m| m.fractionnal_scale)
             .unwrap_or(1.0);
@@ -923,6 +987,14 @@ impl State<DrmBackend> {
             crtc,
             device_id: node,
         });
+
+        // The wrapper must exist before the output is mapped, otherwise input
+        // routing can observe a mapped output without a view id.
+        debug_assert_eq!(
+            view_id_for_output(&output),
+            Some(view_id),
+            "output view id must be assigned before the output is mapped"
+        );
 
         let color_formats = if std::env::var("ANVIL_DISABLE_10BIT").is_ok() {
             SUPPORTED_FORMATS_8BIT_ONLY
@@ -1017,15 +1089,17 @@ impl State<DrmBackend> {
             return;
         };
 
-        if let Some(pos) = device
+        let view_id = if let Some(pos) = device
             .non_desktop_connectors
             .iter()
             .position(|(handle, _)| *handle == connector.handle())
         {
+            // Leased connectors never had a Flutter view created for them.
             let _ = device.non_desktop_connectors.remove(pos);
+            None
         } else {
-            device.surfaces.remove(&crtc);
-        }
+            device.surfaces.remove(&crtc).map(|surface| surface.view_id)
+        };
 
         let output = self
             .space
@@ -1037,6 +1111,10 @@ impl State<DrmBackend> {
                     .unwrap_or(false)
             })
             .cloned();
+
+        if let Some(view_id) = view_id {
+            self.flutter_engine.as_mut().unwrap().remove_view(view_id);
+        }
 
         if let Some(output) = output {
             self.unmap_output(&output);
@@ -1177,23 +1255,34 @@ impl State<DrmBackend> {
     }
 
     fn on_vblank(&mut self, node: DrmNode, crtc: crtc::Handle, _meta: DrmEventMetadata) {
-        // Since the Flutter context is shared among all outputs we need to render all of them at the frequence of the highest Hz output.
-        let gpu_data = self.backend_data.gpus.get_mut(&node).unwrap();
-
-        if let Some(surface) = gpu_data.surfaces.get_mut(&crtc) {
-            let _ = surface.compositor.frame_submitted();
+        // Acknowledge the frame submitted on the CRTC that fired, even when we
+        // don't render it (e.g. the slower CRTC of a node).
+        if let Some(gpu_data) = self.backend_data.gpus.get_mut(&node) {
+            if let Some(surface) = gpu_data.surfaces.get_mut(&crtc) {
+                let _ = surface.compositor.frame_submitted();
+            }
         }
 
-        let (mhz, highest_hz_crtc) = match self.backend_data.highest_hz_crtc {
-            Some(highest_hz_crtc) => highest_hz_crtc,
+        // Each DRM node renders its own surfaces, driven by its fastest CRTC.
+        // This keeps nodes that don't own the globally fastest output alive.
+        if let Some(&(_, fastest_crtc)) = self.backend_data.highest_hz_crtc.get(&node) {
+            if fastest_crtc == crtc {
+                self.render(node, None);
+            }
+        }
+
+        // The Flutter context is shared among all outputs, so its vsync batons
+        // must be delivered once per frame rather than once per node. The
+        // globally fastest CRTC paces that delivery; a node rendering on its
+        // own schedule does not drain a second baton.
+        let (mhz, pacing_node, pacing_crtc) = match self.backend_data.pacing_crtc {
+            Some(pacing_crtc) => pacing_crtc,
             None => return,
         };
 
-        if highest_hz_crtc != crtc {
+        if pacing_node != node || pacing_crtc != crtc {
             return;
         }
-
-        self.render(node, None);
 
         let drained: Vec<_> = self.batons.drain(..).collect(); // Mutable borrow ends here
 
@@ -1585,5 +1674,95 @@ fn import_environment() {
         Err(err) => {
             warn!("error spawning shell to import environment: {err:?}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn handle(raw: u32) -> crtc::Handle {
+        control::from_u32(raw).expect("crtc handle must be non-zero")
+    }
+
+    #[test]
+    fn per_node_maxima_and_global_pacing() {
+        let outputs = [
+            (0u32, handle(10), 60_000),
+            (0u32, handle(11), 144_000),
+            (1u32, handle(20), 75_000),
+            (1u32, handle(21), 30_000),
+        ];
+
+        let (per_node, pacing) = select_pacing_crtcs(&outputs);
+
+        assert_eq!(per_node.get(&0), Some(&(144_000, handle(11))));
+        assert_eq!(per_node.get(&1), Some(&(75_000, handle(20))));
+        assert_eq!(pacing, Some((144_000, 0, handle(11))));
+    }
+
+    #[test]
+    fn single_node_paces_on_faster_refresh() {
+        let outputs = [(0u32, handle(1), 60_000), (0u32, handle(2), 120_000)];
+
+        let (per_node, pacing) = select_pacing_crtcs(&outputs);
+
+        assert_eq!(per_node.len(), 1);
+        assert_eq!(per_node.get(&0), Some(&(120_000, handle(2))));
+        assert_eq!(pacing, Some((120_000, 0, handle(2))));
+    }
+
+    #[test]
+    fn every_node_gets_its_own_fastest_even_when_not_global() {
+        let outputs = [(0u32, handle(1), 144_000), (1u32, handle(2), 60_000)];
+
+        let (per_node, pacing) = select_pacing_crtcs(&outputs);
+
+        assert_eq!(per_node.get(&1), Some(&(60_000, handle(2))));
+        assert_eq!(pacing, Some((144_000, 0, handle(1))));
+    }
+
+    #[test]
+    fn ties_resolve_to_first_seen() {
+        let outputs = [(0u32, handle(1), 60_000), (1u32, handle(2), 60_000)];
+
+        let (per_node, pacing) = select_pacing_crtcs(&outputs);
+
+        assert_eq!(per_node.get(&0), Some(&(60_000, handle(1))));
+        assert_eq!(per_node.get(&1), Some(&(60_000, handle(2))));
+        assert_eq!(pacing, Some((60_000, 0, handle(1))));
+    }
+
+    #[test]
+    fn no_outputs_yields_no_selection() {
+        let (per_node, pacing) = select_pacing_crtcs::<u32>(&[]);
+
+        assert!(per_node.is_empty());
+        assert_eq!(pacing, None);
+    }
+
+    fn rect(x: i32, y: i32, w: i32, h: i32) -> Rectangle<i32, Logical> {
+        Rectangle::from_loc_and_size((x, y), (w, h))
+    }
+
+    #[test]
+    fn placement_uses_the_rightmost_edge_not_a_width_sum() {
+        // The second monitor sits at x=3000; a width sum would place the new
+        // one at 1920+2560=4480, overlapping it.
+        let existing = [rect(0, 0, 1920, 1080), rect(3000, 0, 2560, 1440)];
+
+        assert_eq!(place_new_output(existing.into_iter()), (5560, 0).into());
+    }
+
+    #[test]
+    fn placement_uses_the_rightmost_edge_for_stacked_outputs() {
+        let existing = [rect(0, 0, 1280, 720), rect(0, 720, 1920, 1080)];
+
+        assert_eq!(place_new_output(existing.into_iter()), (1920, 0).into());
+    }
+
+    #[test]
+    fn placement_without_outputs_is_the_origin() {
+        assert_eq!(place_new_output(std::iter::empty()), (0, 0).into());
     }
 }

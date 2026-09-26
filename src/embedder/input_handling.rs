@@ -19,7 +19,7 @@ use crate::flutter_engine::embedder::{
     FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
     FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
 };
-use crate::flutter_engine::view::OutputViewIdWrapper;
+use crate::flutter_engine::view::view_id_for_output;
 use crate::flutter_engine::{view, FlutterEngine};
 use crate::settings::MouseAndTouchpadSettings;
 use crate::state::State;
@@ -29,7 +29,7 @@ impl<BackendData: Backend> State<BackendData> {
         &mut self,
         event: B::PointerMotionEvent,
         device_id: i32,
-        view_id: i64,
+        _view_id: i64,
     ) where
         BackendData: Backend + 'static,
     {
@@ -78,25 +78,29 @@ impl<BackendData: Backend> State<BackendData> {
         if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
             return;
         }
-        let current_view_id = self.view_id_under_pointer().unwrap_or(view_id);
+        let current_view_id = self.view_id_under_pointer();
+        self.focus_view_under_pointer();
         let view_id = if self
             .flutter_engine()
             .mouse_button_tracker
             .are_any_buttons_pressed()
         {
-            self.pointer_gesture_view_id.unwrap_or(current_view_id)
+            self.pointer_gesture_view_id.or(current_view_id)
         } else {
             current_view_id
         };
-        let relative_location = self.relative_pointer_location_for_view(view_id);
-        self.send_motion_event(relative_location, device_id, view_id)
+        let Some(view_id) = view_id else {
+            debug!("dropping pointer motion: pointer is not over a mapped output");
+            return;
+        };
+        self.send_motion_event(device_id, view_id)
     }
 
     pub fn on_pointer_motion_absolute<B: InputBackend>(
         &mut self,
         event: B::PointerMotionAbsoluteEvent,
         device_id: i32,
-        view_id: i64,
+        _view_id: i64,
     ) where
         BackendData: Backend + 'static,
     {
@@ -139,25 +143,29 @@ impl<BackendData: Backend> State<BackendData> {
         if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
             return;
         }
-        let current_view_id = self.view_id_under_pointer().unwrap_or(view_id);
+        let current_view_id = self.view_id_under_pointer();
+        self.focus_view_under_pointer();
         let view_id = if self
             .flutter_engine()
             .mouse_button_tracker
             .are_any_buttons_pressed()
         {
-            self.pointer_gesture_view_id.unwrap_or(current_view_id)
+            self.pointer_gesture_view_id.or(current_view_id)
         } else {
             current_view_id
         };
-        let relative_location = self.relative_pointer_location_for_view(view_id);
-        self.send_motion_event(relative_location, device_id, view_id)
+        let Some(view_id) = view_id else {
+            debug!("dropping pointer motion: pointer is not over a mapped output");
+            return;
+        };
+        self.send_motion_event(device_id, view_id)
     }
 
     pub fn on_pointer_button<B: InputBackend>(
         &mut self,
         event: B::PointerButtonEvent,
         device_id: i32,
-        view_id: i64,
+        view_id: Option<i64>,
     ) where
         BackendData: Backend + 'static,
     {
@@ -178,7 +186,7 @@ impl<BackendData: Backend> State<BackendData> {
             .flutter_engine()
             .mouse_button_tracker
             .are_any_buttons_pressed();
-        let event_view_id = self.pointer_gesture_view_id.unwrap_or(view_id);
+        let event_view_id = self.pointer_gesture_view_id.or(view_id);
         let phase = if event.state() == ButtonState::Pressed {
             let _ = self
                 .flutter_engine_mut()
@@ -187,7 +195,7 @@ impl<BackendData: Backend> State<BackendData> {
             if had_buttons_pressed {
                 FlutterPointerPhase_kMove
             } else {
-                self.pointer_gesture_view_id = Some(view_id);
+                self.pointer_gesture_view_id = event_view_id;
                 FlutterPointerPhase_kDown
             }
         } else {
@@ -221,15 +229,35 @@ impl<BackendData: Backend> State<BackendData> {
             pointer.frame(self);
             return;
         }
-        let scale = self
-            .space
-            .outputs()
-            .find(|o| o.user_data().get::<OutputViewIdWrapper>().unwrap().view_id == event_view_id)
-            .unwrap()
-            .current_scale()
-            .fractional_scale();
-
-        let pointer_location = self.relative_pointer_location_for_view(event_view_id);
+        if event.state() == ButtonState::Released
+            && !self
+                .flutter_engine()
+                .mouse_button_tracker
+                .are_any_buttons_pressed()
+        {
+            self.pointer_gesture_view_id = None;
+        }
+        // The button tracker is updated above even when there is no view, so a
+        // button released between outputs cannot get stuck. Only the Flutter
+        // event is dropped, so input never reaches an unrelated view.
+        let Some(event_view_id) = event_view_id else {
+            debug!("dropping pointer button: pointer is not over a mapped output");
+            return;
+        };
+        let Some(scale) = self.scale_for_view(event_view_id) else {
+            debug!(
+                view_id = event_view_id,
+                "dropping pointer button: no output owns view"
+            );
+            return;
+        };
+        let Some(pointer_location) = self.relative_pointer_location_for_view(event_view_id) else {
+            debug!(
+                view_id = event_view_id,
+                "dropping pointer button: no geometry for view output"
+            );
+            return;
+        };
         self.flutter_engine()
             .send_pointer_event(FlutterPointerEvent {
                 struct_size: size_of::<FlutterPointerEvent>(),
@@ -256,21 +284,13 @@ impl<BackendData: Backend> State<BackendData> {
                 pressure_max: 0.0,
             })
             .unwrap();
-        if event.state() == ButtonState::Released
-            && !self
-                .flutter_engine()
-                .mouse_button_tracker
-                .are_any_buttons_pressed()
-        {
-            self.pointer_gesture_view_id = None;
-        }
     }
 
     pub fn on_pointer_axis<B: InputBackend>(
         &mut self,
         event: B::PointerAxisEvent,
         device_id: i32,
-        view_id: i64,
+        view_id: Option<i64>,
     ) where
         BackendData: Backend + 'static,
     {
@@ -317,10 +337,20 @@ impl<BackendData: Backend> State<BackendData> {
         let pointer = self.pointer.clone();
         pointer.axis(self, frame);
         self.register_frame();
-        let pointer_location = self.relative_pointer_location();
 
         // Flutter distinguish Mouse and Trackpad scrolls, so we need to send a separate event for each
         if event.source() == AxisSource::Wheel || event.source() == AxisSource::WheelTilt {
+            let Some(view_id) = view_id else {
+                debug!("dropping wheel scroll: pointer is not over a mapped output");
+                return;
+            };
+            let Some(pointer_location) = self.relative_pointer_location_for_view(view_id) else {
+                debug!(
+                    view_id,
+                    "dropping wheel scroll: no geometry for view output"
+                );
+                return;
+            };
             self.flutter_engine()
                 .send_pointer_event(FlutterPointerEvent {
                     struct_size: size_of::<FlutterPointerEvent>(),
@@ -367,12 +397,9 @@ impl<BackendData: Backend> State<BackendData> {
                     .trackpad_scrolling_manager
                     .stop_scrolling();
 
-                let gesture_view_id = self.pointer_gesture_view_id.unwrap_or(view_id);
-                let gesture_location = self.relative_pointer_location_for_view(gesture_view_id);
+                let gesture_view_id = self.pointer_gesture_view_id.or(view_id);
                 self.send_pointer_pan_zoom_event(
                     device_id,
-                    gesture_location.x,
-                    gesture_location.y,
                     FlutterPointerPhase_kPanZoomEnd,
                     0.,
                     0.,
@@ -389,15 +416,12 @@ impl<BackendData: Backend> State<BackendData> {
                     self.flutter_engine_mut()
                         .trackpad_scrolling_manager
                         .start_scrolling();
-                    self.pointer_gesture_view_id = Some(view_id);
+                    self.pointer_gesture_view_id = view_id;
                 }
-                let gesture_view_id = self.pointer_gesture_view_id.unwrap_or(view_id);
-                let gesture_location = self.relative_pointer_location_for_view(gesture_view_id);
+                let gesture_view_id = self.pointer_gesture_view_id.or(view_id);
                 if started {
                     self.send_pointer_pan_zoom_event(
                         device_id,
-                        gesture_location.x,
-                        gesture_location.y,
                         FlutterPointerPhase_kPanZoomStart,
                         0.,
                         0.,
@@ -413,8 +437,6 @@ impl<BackendData: Backend> State<BackendData> {
                     );
                 self.send_pointer_pan_zoom_event(
                     device_id,
-                    gesture_location.x,
-                    gesture_location.y,
                     FlutterPointerPhase_kPanZoomUpdate,
                     self.flutter_engine().trackpad_scrolling_manager.pan_x,
                     self.flutter_engine().trackpad_scrolling_manager.pan_y,
@@ -429,15 +451,11 @@ impl<BackendData: Backend> State<BackendData> {
         &mut self,
         event: B::GesturePinchBeginEvent,
         device_id: i32,
-        view_id: i64,
+        view_id: Option<i64>,
     ) {
-        self.pointer_gesture_view_id = Some(view_id);
-        let location = self.relative_pointer_location_for_view(view_id);
-
+        self.pointer_gesture_view_id = view_id;
         self.send_pointer_pan_zoom_event(
             device_id,
-            location.x,
-            location.y,
             FlutterPointerPhase_kPanZoomStart,
             0.,
             0.,
@@ -449,14 +467,11 @@ impl<BackendData: Backend> State<BackendData> {
         &mut self,
         event: B::GesturePinchUpdateEvent,
         device_id: i32,
-        view_id: i64,
+        view_id: Option<i64>,
     ) {
-        let gesture_view_id = self.pointer_gesture_view_id.unwrap_or(view_id);
-        let location = self.relative_pointer_location_for_view(gesture_view_id);
+        let gesture_view_id = self.pointer_gesture_view_id.or(view_id);
         self.send_pointer_pan_zoom_event(
             device_id,
-            location.x,
-            location.y,
             FlutterPointerPhase_kPanZoomUpdate,
             event.delta_x(),
             event.delta_y(),
@@ -468,14 +483,11 @@ impl<BackendData: Backend> State<BackendData> {
         &mut self,
         _event: B::GesturePinchEndEvent,
         device_id: i32,
-        view_id: i64,
+        view_id: Option<i64>,
     ) {
-        let gesture_view_id = self.pointer_gesture_view_id.unwrap_or(view_id);
-        let location = self.relative_pointer_location_for_view(gesture_view_id);
+        let gesture_view_id = self.pointer_gesture_view_id.or(view_id);
         self.send_pointer_pan_zoom_event(
             device_id,
-            location.x,
-            location.y,
             FlutterPointerPhase_kPanZoomEnd,
             0.,
             0.,
@@ -483,6 +495,30 @@ impl<BackendData: Backend> State<BackendData> {
             gesture_view_id,
         );
         self.pointer_gesture_view_id = None;
+    }
+
+    /// Re-drives the Smithay pointer with the current `pointer_focus`.
+    ///
+    /// Flutter is the authority on which surface is under the cursor, but
+    /// Smithay only learns about a focus change through `PointerHandle::motion`.
+    /// When a window slides under a stationary cursor (keyboard window or
+    /// workspace navigation), Flutter reports the new surface without any
+    /// physical motion. Without this refresh Smithay keeps routing `axis`
+    /// (scroll), `button` and frames to the previously focused surface until
+    /// the user moves the pointer.
+    pub(crate) fn refresh_pointer_focus(&mut self)
+    where
+        BackendData: Backend + 'static,
+    {
+        let pointer = self.pointer.clone();
+        let focus = self.pointer_focus.clone();
+        let event = MotionEvent {
+            location: pointer.current_location(),
+            serial: SERIAL_COUNTER.next_serial(),
+            time: self.frame_timestamp_millis(),
+        };
+        pointer.motion(self, focus, &event);
+        self.register_frame();
     }
 
     fn register_frame(&mut self) {
@@ -526,70 +562,69 @@ impl<BackendData: Backend> State<BackendData> {
         }
     }
 
-    fn relative_pointer_location(&mut self) -> Point<f64, Logical> {
-        let view_id = self.view_id_under_pointer().unwrap_or_default();
-        self.relative_pointer_location_for_view(view_id)
+    /// Fractional scale of the output that owns `view_id`, if any.
+    fn scale_for_view(&self, view_id: i64) -> Option<f64> {
+        self.space
+            .outputs()
+            .find(|output| view_id_for_output(output) == Some(view_id))
+            .map(|output| output.current_scale().fractional_scale())
     }
 
-    fn relative_pointer_location_for_view(&self, view_id: i64) -> Point<f64, Logical> {
+    /// Pointer location relative to the output that owns `view_id`.
+    ///
+    /// Returns `None` when no mapped output owns the view (the view was torn
+    /// down, or the connector is leased), so input is dropped instead of being
+    /// routed with coordinates taken from an unrelated output.
+    fn relative_pointer_location_for_view(&self, view_id: i64) -> Option<Point<f64, Logical>> {
         let location = self.pointer.current_location();
-        let output_under_pointer_geometry = self
+        let output_geometry = self
             .space
             .outputs()
-            .find(|output| {
-                output
-                    .user_data()
-                    .get::<OutputViewIdWrapper>()
-                    .is_some_and(|wrapper| wrapper.view_id == view_id)
-            })
-            .and_then(|output| self.space.output_geometry(output))
-            .or_else(|| {
-                self.space
-                    .output_under(location)
-                    .next()
-                    .or_else(|| self.space.outputs().next())
-                    .and_then(|output| self.space.output_geometry(output))
-            })
-            .unwrap()
+            .find(|output| view_id_for_output(output) == Some(view_id))
+            .and_then(|output| self.space.output_geometry(output))?
             .to_f64();
-        (
-            location.x - output_under_pointer_geometry.loc.x,
-            location.y - output_under_pointer_geometry.loc.y,
+        Some(
+            (
+                location.x - output_geometry.loc.x,
+                location.y - output_geometry.loc.y,
+            )
+                .into(),
         )
-            .into()
     }
 
     pub(crate) fn view_id_under_pointer(&self) -> Option<i64> {
         self.space
             .output_under(self.pointer.current_location())
             .next()
-            .or_else(|| self.space.outputs().next())
-            .and_then(|output| output.user_data().get::<OutputViewIdWrapper>())
-            .map(|wrapper| wrapper.view_id)
+            .and_then(view_id_for_output)
     }
 
-    fn send_motion_event(&mut self, location: Point<f64, Logical>, device_id: i32, view_id: i64)
+    /// Makes the output view under the pointer the platform-focused view.
+    ///
+    /// This is the compositor side of the focus source of truth: moving the
+    /// pointer onto a monitor focuses it even when no Flutter widget focus
+    /// transition happens, so trusted prompts and window placement follow the
+    /// pointer. The engine is only notified when the view actually changes.
+    pub(crate) fn focus_view_under_pointer(&mut self) {
+        let view_id = self.view_id_under_pointer();
+        self.flutter_engine_mut().set_focused_view(view_id);
+    }
+
+    fn send_motion_event(&mut self, device_id: i32, view_id: i64)
     where
         BackendData: Backend + 'static,
     {
-        let Some(output) = self
-            .space
-            .outputs()
-            .find(|o| o.user_data().get::<OutputViewIdWrapper>().unwrap().view_id == view_id)
-            .or_else(|| {
-                self.space
-                    .output_under(self.pointer.current_location())
-                    .next()
-            })
-        else {
+        let Some(scale) = self.scale_for_view(view_id) else {
+            debug!(view_id, "dropping pointer motion: no output owns view");
             return;
         };
-        let view_id = output
-            .user_data()
-            .get::<OutputViewIdWrapper>()
-            .map(|wrapper| wrapper.view_id)
-            .unwrap_or(view_id);
-        let scale = output.current_scale().fractional_scale();
+        let Some(location) = self.relative_pointer_location_for_view(view_id) else {
+            debug!(
+                view_id,
+                "dropping pointer motion: no geometry for view output"
+            );
+            return;
+        };
 
         self.flutter_engine()
             .send_pointer_event(FlutterPointerEvent {
@@ -630,39 +665,34 @@ impl<BackendData: Backend> State<BackendData> {
     fn send_pointer_pan_zoom_event(
         &mut self,
         device_id: i32,
-        x: f64,
-        y: f64,
         phase: FlutterPointerPhase,
         pan_x: f64,
         pan_y: f64,
         rotation: f64,
-        view_id: i64,
+        view_id: Option<i64>,
     ) {
-        let Some(output) = self
-            .space
-            .outputs()
-            .find(|o| o.user_data().get::<OutputViewIdWrapper>().unwrap().view_id == view_id)
-            .or_else(|| {
-                self.space
-                    .output_under(self.pointer.current_location())
-                    .next()
-            })
-        else {
+        let Some(view_id) = view_id else {
+            debug!("dropping pointer pan/zoom: pointer is not over a mapped output");
             return;
         };
-        let view_id = output
-            .user_data()
-            .get::<OutputViewIdWrapper>()
-            .map(|wrapper| wrapper.view_id)
-            .unwrap_or(view_id);
-        let scale = output.current_scale().fractional_scale();
+        let Some(scale) = self.scale_for_view(view_id) else {
+            debug!(view_id, "dropping pointer pan/zoom: no output owns view");
+            return;
+        };
+        let Some(location) = self.relative_pointer_location_for_view(view_id) else {
+            debug!(
+                view_id,
+                "dropping pointer pan/zoom: no geometry for view output"
+            );
+            return;
+        };
         self.flutter_engine()
             .send_pointer_event(FlutterPointerEvent {
                 struct_size: size_of::<FlutterPointerEvent>(),
                 phase,
                 timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
-                x,
-                y,
+                x: location.x,
+                y: location.y,
                 device: device_id,
                 signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
                 scroll_delta_x: 0.0,
