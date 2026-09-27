@@ -5,6 +5,7 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
+import 'package:shell/monitor/widget/monitor_arrangement/monitor_arrangement_editor.dart';
 import 'package:shell/settings/model/setting_group.dart';
 import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/provider/state/monitor_setting_state.dart';
@@ -33,6 +34,22 @@ class SettingsProperties extends _$SettingsProperties {
         description: null,
         icon: MdiIcons.monitor,
         children: {
+          // Arranging is only meaningful with more than one monitor.
+          if (monitors.length > 1)
+            'arrange': SettingProperty<void>(
+              name: 'Arrange Monitors',
+              description: 'Position monitors relative to each other',
+              buildSearchResult: (context, path, property) =>
+                  ExpandableSearchResult<void>(
+                    path: path,
+                    property: property,
+                    buildValue: (context, value, {required isExpanded}) => Icon(
+                      isExpanded ? MdiIcons.chevronUp : MdiIcons.chevronDown,
+                    ),
+                    buildEditor: (context, {required isExpanded}) =>
+                        const MonitorArrangementEditor(),
+                  ),
+            ),
           for (final e in monitors)
             e.name: SettingGroup(
               name: e.name,

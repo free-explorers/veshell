@@ -8,7 +8,7 @@ part 'json_value_by_path.g.dart';
 dynamic jsonValueByPath(Ref ref, String path) {
   final pathParts = path.split('.');
   dynamic value;
-  if (pathParts.first == 'monitors') {
+  if (pathParts.first == 'monitors' && pathParts.length >= 3) {
     value = ref.watch(monitorSettingJsonProvider(pathParts[1]));
     pathParts.removeRange(0, 2);
   } else {

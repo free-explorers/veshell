@@ -46,7 +46,8 @@ Rules:
   not persisted and Flutter never writes it. Its live fields are kept alongside
   `MonitorSetting` because the settings UI needs data the desired-geometry file
   does not carry: the modes the display supports (`Monitor.modes`) and the
-  currently applied mode (`Monitor.currentMode`), used to reset to detected.
+  currently applied mode (`Monitor.currentMode`), used to reset to the default
+  location and the detected configuration.
 - All four stores key on the connector name, which is stable per physical port
   (`Output::name()` = `"<interface>-<id>"`, e.g. `DP-1`). Identical monitors on
   different ports get different keys, and two connectors cannot collide.
@@ -56,6 +57,35 @@ There is no migration for existing state: the persistence keys
 (`monitor_manager`, `MonitorConfigurationState(<connector>)`) and the
 `monitor/<connector>.json` file name are unchanged. A future change to any of
 these keys must ship a migration or a version bump.
+
+## Arrangement
+
+Monitors are positioned relative to each other through the **Arrange Monitors**
+entry in the Monitors settings group. Expanding it (`ExpandableSearchResult`)
+shows the inline `MonitorArrangementEditor`: a canvas of draggable monitor
+rectangles plus `Reset to default` / `Apply` actions.
+
+- The editor reads the live `Monitor` projection plus the desired geometry file
+  and lays every connected monitor out proportionally to its **logical** size
+  (`MonitorMode` size divided by `fractionnalScale`).
+- The editor only manipulates **relative** positions: the arrangement is
+  normalised so its bounding-box top-left sits at `(0, 0)` for display and
+  dragging, independently of the current absolute base.
+- Dragging stages positions locally; nothing is written while dragging. A
+  drag is tracked by the canvas itself (one gesture recognizer), so it survives
+  the page rebuilding while the overlap warning appears.
+- `Reset to default` stages only the **locations** in the compositor's default
+  left-to-right layout (from the origin, using each monitor's current logical
+  size). Mode and scale overrides are preserved.
+- Applying **transposes** the relative layout to a `(0, 0)`-based absolute
+  location and writes every monitor whose absolute position changed, through
+  the existing `MonitorSettingState.setLocation`, so the single-writer rule for
+  `monitor/<connector>.json` above is preserved. Rust applies the file live and
+  publishes the actual geometry back through `monitor_layout_changed`.
+- Overlapping monitors are rejected on apply: the editor warns and disables the
+  button, while touching edges is allowed.
+- No new persistence: the arrangement is derived, only absolute `location`
+  values are stored.
 
 ## Disconnect and reconnect
 
