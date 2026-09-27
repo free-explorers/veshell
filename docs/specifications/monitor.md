@@ -21,7 +21,7 @@ Flutter) is the stable identity key used by all of them.
 | State | Store | Single writer | Readers | Persistence |
 | ----- | ----- | ------------- | ------- | ----------- |
 | **Actual** hardware state (mode, scale, location, connector) | Rust `Output` in `Space` | Rust backend (`drm_backend`, apply/input paths) | Flutter via `monitor_layout_changed` → `connectedMonitorListProvider` → `Monitor`; Rust internals | none (live) |
-| **Desired geometry** (mode, `fractionnalScale`, location) | `monitor/<connector>.json` | Dart `MonitorSettingState` (`updateFile`) | Rust `SettingsManager::get_monitor_configuration`, applied at connect | one JSON file per monitor |
+| **Desired geometry** (mode, `fractionnalScale`, location, transform, mirror target) | `monitor/<connector>.json` | Dart `MonitorSettingState` (`updateFile`) | Rust `SettingsManager::get_monitor_configuration`, applied at connect | one JSON file per monitor |
 | **Shell layout** (screens, `displayMode`) | `MonitorConfigurationState` (Riverpod) | the notifier's own setters; `MonitorManager` calls `removeScreenConfiguration` during hotplug reconcile | Flutter monitor/screen providers | Riverpod JSON persist, **Flutter-only** |
 | **Screen/workspace content** | `ScreenState` / `WorkspaceState` | their notifiers | Flutter | Riverpod JSON persist |
 
@@ -86,6 +86,86 @@ rectangles plus `Reset to default` / `Apply` actions.
   button, while touching edges is allowed.
 - No new persistence: the arrangement is derived, only absolute `location`
   values are stored.
+
+## Transform
+
+A monitor's display can be transformed with the full set of eight output
+transforms: `Normal` (the default), the quarter/half/three-quarter clockwise
+rotations (`Rotate90`, `Rotate180`, `Rotate270`) and the mirrored variants
+(`Flipped`, `Flipped90`, `Flipped180`, `Flipped270`). The choice is a
+desired-geometry field (`transform`) written by `MonitorSettingState.setTransform`
+and read by Rust as part of `MonitorConfiguration`.
+
+- Rust maps it to the live `Output` transform (`Rotate90` → `Transform::_90`,
+  `Flipped90` → `Transform::Flipped90`, and so on) through
+  `change_current_state`, both at connect (`connector_connected`) and on live
+  re-apply (`State::apply_monitor_configuration_to_output`). Hardware rejection
+  is best-effort like every other desired field: the applied transform is
+  published back through `monitor_layout_changed`.
+- The Flutter view is sized to the **transformed** logical size: `add_view` and
+  `resize_view` use `output.current_transform().transform_size(mode)`, so the
+  quarter-turn variants lay out a portrait surface and the compositor's output
+  transform maps it onto the physical framebuffer. The mode itself is unchanged.
+- The nested (winit) backend does not support output transforms
+  (`Backend::SUPPORTS_OUTPUT_TRANSFORM == false`): its `Flipped180` correction is
+  never overwritten by the setting.
+- The arrangement canvas transposes the monitor's logical size for the
+  quarter-turn transforms (`MonitorTransform.isTransposed`), so the editor shows
+  the same footprint Rust lays out.
+- `transform` is `#[serde(default)]` on the Rust side and defaults to normal on
+  the Dart side, so files written before the field existed keep working.
+
+## Mirroring
+
+A monitor can be configured to **mirror** another monitor by setting `mirrorOf`
+to the target's connector name in its own `monitor/<connector>.json`. The shell
+then presents the target's content on it. The field is optional; absent means a
+regular display.
+
+- Resolution is dynamic and one level deep (`State::mirror_source`): the target
+  must be connected **and** must itself be a regular display (it must not have a
+  `mirrorOf` setting of its own). In any other case — target absent, target is
+  self, or the target is itself a follower — the monitor **falls back to a
+  regular display**. This is re-evaluated on every connect, disconnect and
+  configuration change, so unplugging the target simply restores the follower's
+  own desktop.
+- Rendering is a native compositor mirror: the DRM render path resolves the
+  source output and presents the **source's Flutter frame** (its backing-store
+  slot), scaled to the follower's own output geometry. Each output keeps its own
+  view; the follower's own Flutter view is suppressed.
+- Input follows the mirror: `view_id_under_pointer` routes to the source's view,
+  and pointer coordinates are mapped proportionally from the follower's logical
+  box to the source's so a click lands at the same relative spot.
+- On the Flutter side `effectiveMirrorSource` reproduces the same resolution
+  from the desired files and the connected list. A mirroring monitor renders
+  nothing (its frame is composited by Rust), is not given a fallback screen by
+  `MonitorManager`, and is excluded from the arrangement canvas. Its retained
+  screen configuration is untouched and is restored when the mirror is turned
+  off.
+- `mirrorOf` is `#[serde(default)]` on the Rust side and nullable on the Dart
+  side, so files written before the field existed keep working.
+
+## Change confirmation
+
+Display settings that can leave a monitor unusable — mode (resolution/refresh),
+fractional scale and transform — go through a confirmation guard instead of
+being written directly.
+
+- `MonitorSettingState` routes those setters through
+  `MonitorSettingChangeConfirmation.propose`: the new desired geometry is
+  written immediately (so Rust applies it live) and a timer is started
+  (`monitorSettingConfirmationTimeout`, 15 s by default).
+- The prompt is mounted in every monitor's `MaterialApp.builder`
+  (`MonitorSettingChangeConfirmationOverlay`), above the capture prompts, so it
+  is visible on a still-working monitor even when the changed one is unusable.
+  `Keep` cancels the timer; `Revert` — or the timer expiring — writes the last
+  confirmed geometry back, which Rust applies live and republishes through
+  `monitor_layout_changed`.
+- The rollback timer lives in the notifier, not the widget, so it fires even if
+  no view can draw the prompt.
+- Location and mirror changes are written directly: the arrangement editor
+  already has its own apply/cancel step, and a mirror is visible and instantly
+  reversible.
 
 ## Disconnect and reconnect
 

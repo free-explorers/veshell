@@ -28,11 +28,12 @@ class MonitorPlacement {
   factory MonitorPlacement.fromMonitor({
     required Monitor monitor,
     required double scale,
+    bool transposed = false,
   }) {
     return MonitorPlacement(
       monitorId: monitor.name,
       description: monitor.description,
-      logicalSize: monitorLogicalSize(monitor, scale),
+      logicalSize: monitorLogicalSize(monitor, scale, transposed: transposed),
       location: monitor.location,
       scale: scale,
     );
@@ -69,12 +70,21 @@ class MonitorPlacement {
 }
 
 /// Logical size (physical pixels divided by the fractional scale) of [monitor].
-Size monitorLogicalSize(Monitor monitor, double scale) {
+///
+/// When [transposed] is set the monitor is laid out vertically, so the width
+/// and height are swapped (its physical mode is still landscape).
+Size monitorLogicalSize(
+  Monitor monitor,
+  double scale, {
+  bool transposed = false,
+}) {
   final mode = monitor.currentMode;
   if (mode == null || scale <= 0) {
     return Size.zero;
   }
-  return Size(mode.size.width / scale, mode.size.height / scale);
+  final width = mode.size.width / scale;
+  final height = mode.size.height / scale;
+  return transposed ? Size(height, width) : Size(width, height);
 }
 
 /// The compositor's default arrangement: [placements] laid left-to-right at

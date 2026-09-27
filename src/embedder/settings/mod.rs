@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use smithay::output::Mode;
 use smithay::reexports::calloop::LoopHandle;
-use smithay::utils::{Logical, Physical, Point, Size};
+use smithay::utils::{Logical, Physical, Point, Size, Transform};
 use std::fs::File;
 use std::path::Path;
 use tracing::info;
@@ -180,17 +180,65 @@ impl From<Point<i32, Logical>> for MonitorLocation {
     }
 }
 
+/// User-facing display transform of one monitor.
+///
+/// Exposes the full set of Smithay output transforms. `Normal` is the panel's
+/// native orientation; `Rotate90/180/270` turn it clockwise and the `Flipped*`
+/// variants additionally mirror it. The transform is applied to the live
+/// `Output`; the Flutter view is sized to the transformed size, so the
+/// 90/270 variants (a quarter turn) lay out a portrait surface while the
+/// others keep the mode's dimensions.
+#[derive(Serialize, Deserialize, Default, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum MonitorTransform {
+    #[default]
+    Normal,
+    Rotate90,
+    Rotate180,
+    Rotate270,
+    Flipped,
+    Flipped90,
+    Flipped180,
+    Flipped270,
+}
+
+impl From<MonitorTransform> for Transform {
+    fn from(transform: MonitorTransform) -> Self {
+        match transform {
+            MonitorTransform::Normal => Transform::Normal,
+            MonitorTransform::Rotate90 => Transform::_90,
+            MonitorTransform::Rotate180 => Transform::_180,
+            MonitorTransform::Rotate270 => Transform::_270,
+            MonitorTransform::Flipped => Transform::Flipped,
+            MonitorTransform::Flipped90 => Transform::Flipped90,
+            MonitorTransform::Flipped180 => Transform::Flipped180,
+            MonitorTransform::Flipped270 => Transform::Flipped270,
+        }
+    }
+}
+
 /// Desired geometry for one monitor, persisted as `monitor/<connector>.json`.
 ///
 /// This is the single Rust-side consumer of the desired-geometry store written
 /// by Dart's `MonitorSettingState`. Actual hardware state lives in the live
 /// `Output`; see `docs/specifications/monitor.md` (section "State ownership").
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+///
+/// New fields are `#[serde(default)]` so files written before the field existed
+/// keep deserializing: `transform` defaults to normal and `mirror_of` defaults
+/// to "not mirrored" (a regular display).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct MonitorConfiguration {
     pub mode: MonitorMode,
     pub location: MonitorLocation,
     pub fractionnal_scale: f64,
+    #[serde(default)]
+    pub transform: MonitorTransform,
+    /// Connector name of the monitor this one mirrors, if any. The mirror is
+    /// best-effort: when the target is absent (or is itself mirroring) the
+    /// monitor falls back to a regular display.
+    #[serde(default)]
+    pub mirror_of: Option<String>,
 }
 
 pub struct SettingsManager<BackendData: Backend + 'static> {
@@ -383,5 +431,82 @@ fn watch_monitors_changes<BackendData: Backend + 'static>(
                 _ => {}
             })
             .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod monitor_configuration_tests {
+    use super::*;
+
+    /// A configuration written before transform / mirror existed must keep
+    /// deserializing, defaulting to a normal regular display.
+    #[test]
+    fn legacy_monitor_configuration_defaults_new_fields() {
+        let json = r#"{
+            "mode": { "size": { "width": 1920, "height": 1080 }, "refreshRate": 60000 },
+            "fractionnalScale": 1.5,
+            "location": { "x": 10, "y": 20 }
+        }"#;
+
+        let config: MonitorConfiguration = serde_json::from_str(json).unwrap();
+
+        assert_eq!(config.transform, MonitorTransform::Normal);
+        assert_eq!(config.mirror_of, None);
+        assert_eq!(config.fractionnal_scale, 1.5);
+    }
+
+    #[test]
+    fn transform_maps_to_output_transform() {
+        assert_eq!(Transform::from(MonitorTransform::Normal), Transform::Normal);
+        assert_eq!(Transform::from(MonitorTransform::Rotate90), Transform::_90);
+        assert_eq!(
+            Transform::from(MonitorTransform::Rotate180),
+            Transform::_180
+        );
+        assert_eq!(
+            Transform::from(MonitorTransform::Rotate270),
+            Transform::_270
+        );
+        assert_eq!(
+            Transform::from(MonitorTransform::Flipped),
+            Transform::Flipped
+        );
+        assert_eq!(
+            Transform::from(MonitorTransform::Flipped90),
+            Transform::Flipped90
+        );
+        assert_eq!(
+            Transform::from(MonitorTransform::Flipped180),
+            Transform::Flipped180
+        );
+        assert_eq!(
+            Transform::from(MonitorTransform::Flipped270),
+            Transform::Flipped270
+        );
+    }
+
+    #[test]
+    fn monitor_configuration_round_trips_new_fields() {
+        let config = MonitorConfiguration {
+            mode: MonitorMode {
+                size: MonitorResolution {
+                    width: 1080,
+                    height: 1920,
+                },
+                refresh_rate: 60_000,
+            },
+            location: MonitorLocation { x: 0, y: 0 },
+            fractionnal_scale: 1.0,
+            transform: MonitorTransform::Rotate90,
+            mirror_of: Some("DP-2".to_string()),
+        };
+
+        let value = serde_json::to_value(config).unwrap();
+        assert_eq!(value["transform"], "rotate90");
+        assert_eq!(value["mirrorOf"], "DP-2");
+
+        let decoded: MonitorConfiguration = serde_json::from_value(value).unwrap();
+        assert_eq!(decoded.transform, MonitorTransform::Rotate90);
+        assert_eq!(decoded.mirror_of.as_deref(), Some("DP-2"));
     }
 }

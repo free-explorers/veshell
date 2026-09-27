@@ -594,6 +594,26 @@ impl<BackendData: Backend> State<BackendData> {
     /// routed with coordinates taken from an unrelated output.
     fn relative_pointer_location_for_view(&self, view_id: i64) -> Option<Point<f64, Logical>> {
         let location = self.pointer.current_location();
+
+        // When `view_id` belongs to a monitor mirrored by the output under the
+        // pointer, map the pointer proportionally from the follower's logical
+        // box to the source's so input lands at the same relative spot.
+        if let Some(follower) = self.space.output_under(location).next() {
+            if let Some(source) = self.mirror_source(follower) {
+                if view_id_for_output(&source) == Some(view_id) {
+                    let follower_geometry = self.space.output_geometry(follower)?.to_f64();
+                    let source_geometry = self.space.output_geometry(&source)?.to_f64();
+                    if follower_geometry.size.w > 0.0 && follower_geometry.size.h > 0.0 {
+                        let nx = (location.x - follower_geometry.loc.x) / follower_geometry.size.w;
+                        let ny = (location.y - follower_geometry.loc.y) / follower_geometry.size.h;
+                        return Some(
+                            (nx * source_geometry.size.w, ny * source_geometry.size.h).into(),
+                        );
+                    }
+                }
+            }
+        }
+
         let output_geometry = self
             .space
             .outputs()
@@ -610,10 +630,13 @@ impl<BackendData: Backend> State<BackendData> {
     }
 
     pub(crate) fn view_id_under_pointer(&self) -> Option<i64> {
-        self.space
+        let output = self
+            .space
             .output_under(self.pointer.current_location())
-            .next()
-            .and_then(view_id_for_output)
+            .next()?;
+        // A mirroring output routes input to the monitor it mirrors.
+        let target = self.mirror_source(output).unwrap_or_else(|| output.clone());
+        view_id_for_output(&target)
     }
 
     /// Makes the output view under the pointer the platform-focused view.

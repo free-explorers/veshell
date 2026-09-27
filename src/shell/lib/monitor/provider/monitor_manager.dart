@@ -5,6 +5,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/model/monitor_manager_state.serializable.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
+import 'package:shell/monitor/provider/effective_mirror_source.dart';
 import 'package:shell/monitor/provider/monitor_configuration_state.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/shared/provider/persistent_storage_state.dart';
@@ -74,6 +75,12 @@ class MonitorManager extends _$MonitorManager {
     MonitorId monitorId,
     ISet<MonitorId> connectedIds,
   ) {
+    // A mirroring monitor presents the source monitor's content and must not
+    // be given screens of its own. Its retained configuration is restored when
+    // the mirror is turned off.
+    if (ref.read(effectiveMirrorSourceProvider(monitorId)) != null) {
+      return;
+    }
     _dropReassignedScreens(monitorId, connectedIds);
     final configuration = ref.read(
       monitorConfigurationStateProvider(monitorId),
