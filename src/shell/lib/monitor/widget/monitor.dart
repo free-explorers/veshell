@@ -5,6 +5,7 @@ import 'package:shell/capture/widget/capture_prompt_overlay.dart';
 import 'package:shell/main.dart';
 import 'package:shell/monitor/model/monitor_configuration.serializable.dart';
 import 'package:shell/monitor/model/screen_configuration.serializable.dart';
+import 'package:shell/monitor/provider/effective_mirror_source.dart';
 import 'package:shell/monitor/provider/monitor_by_name.dart';
 import 'package:shell/monitor/provider/monitor_by_view_id.dart';
 import 'package:shell/monitor/provider/monitor_configuration_state.dart';
@@ -13,6 +14,7 @@ import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/monitor/widget/empty_monitor.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/screen/widget/screen.dart';
+import 'package:shell/settings/widget/monitor_setting_change_confirmation_overlay.dart';
 import 'package:shell/theme/provider/theme.dart';
 
 /// Widget that represent the Monitor in the widget tree
@@ -27,6 +29,11 @@ class MonitorWidget extends HookConsumerWidget {
     final monitorName = ref.watch(monitorByViewIdProvider(viewId));
     if (monitorName != null) {
       ref.watch(monitorByNameProvider(monitorName));
+      // A mirroring output has the source monitor's frame composited onto it
+      // by Rust, so this view must not render its own screens.
+      if (ref.watch(effectiveMirrorSourceProvider(monitorName)) != null) {
+        return const SizedBox.shrink();
+      }
     }
     // Trusted shell dialogs (Polkit) push on this monitor's navigator.
     final navigatorKey = ref.watch(navigatorKeyForViewProvider(viewId));
@@ -42,6 +49,9 @@ class MonitorWidget extends HookConsumerWidget {
         children: [
           child ?? const SizedBox.shrink(),
           CapturePromptOverlay(monitorName: monitorName),
+          // Display-setting confirmation sits above everything, including the
+          // capture prompts, so a pending rollback can never be hidden.
+          const MonitorSettingChangeConfirmationOverlay(),
         ],
       ),
       home: Material(

@@ -30,6 +30,10 @@ pub trait Backend {
     /// nested or non-session run must not answer portal requests on a
     /// foreign bus.
     const RUNS_PORTAL_BACKEND: bool = false;
+    /// Whether the backend applies the user-facing monitor transform as an
+    /// output transform. The nested backend pins a `Flipped180` correction, so
+    /// it must not have it overwritten by the (normal by default) setting.
+    const SUPPORTS_OUTPUT_TRANSFORM: bool = false;
 
     fn seat_name(&self) -> String;
 

@@ -50,7 +50,7 @@ use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::DisplayHandle;
-use smithay::utils::{DeviceFd, IsAlive, Logical, Point, Rectangle};
+use smithay::utils::{DeviceFd, IsAlive, Logical, Point, Rectangle, Transform};
 use smithay::wayland::dmabuf::{
     DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier,
 };
@@ -160,6 +160,7 @@ impl Backend for DrmBackend {
     const FLIP_FLUTTER_TEXTURE: bool = true;
     const RUNS_PORTAL_BACKEND: bool = true;
     const CAN_BLANK: bool = true;
+    const SUPPORTS_OUTPUT_TRANSFORM: bool = true;
 
     fn seat_name(&self) -> String {
         self.session.seat()
@@ -918,13 +919,29 @@ impl State<DrmBackend> {
             .settings_manager
             .get_monitor_configuration(&output_name);
 
+        // Remember the desired mirror target so it can be resolved against the
+        // live outputs (the target may connect or disconnect later). Direct
+        // field access because `device` holds a mutable borrow of
+        // `self.backend_data`.
+        match monitor_configuration
+            .as_ref()
+            .and_then(|c| c.mirror_of.clone())
+        {
+            Some(target) => {
+                self.mirror_of.insert(output_name.clone(), target);
+            }
+            None => {
+                self.mirror_of.remove(&output_name);
+            }
+        }
+
         info!(
             "monitor_configuration: {:?}",
             monitor_configuration.is_some()
         );
 
         // Determine DRM mode from the monitor configuration or fallback to the preferred mode
-        let (mode_to_use, preferred_mode) = pick_mode(&connector, monitor_configuration);
+        let (mode_to_use, preferred_mode) = pick_mode(&connector, monitor_configuration.as_ref());
 
         // Create the DrmSurface
         let surface =
@@ -960,14 +977,20 @@ impl State<DrmBackend> {
         }
 
         let position = monitor_configuration
+            .as_ref()
             .map(|monitor_configuration| monitor_configuration.location.into())
             .unwrap_or(default_position);
         let scale = monitor_configuration
+            .as_ref()
             .map(|m| m.fractionnal_scale)
             .unwrap_or(1.0);
+        let transform = monitor_configuration
+            .as_ref()
+            .map(|m| Transform::from(m.transform))
+            .unwrap_or(Transform::Normal);
         output.change_current_state(
             Some(Mode::from(mode_to_use)),
-            None,
+            Some(transform),
             Some(Scale::Fractional(scale)),
             Some(position),
         );
@@ -1345,6 +1368,33 @@ impl State<DrmBackend> {
             // the frame callback that would revive them) is suspended.
             return;
         }
+
+        // Resolve the output and, when it mirrors another monitor, the
+        // source's Flutter view. This reads the whole `State`, so it must
+        // happen before the GPU state is borrowed mutably below.
+        let output = self
+            .space
+            .outputs()
+            .find(|output| {
+                output
+                    .user_data()
+                    .get::<UdevOutputId>()
+                    .map(|id| id.device_id == node && id.crtc == crtc)
+                    .unwrap_or(false)
+            })
+            .cloned();
+        let Some(output) = output else {
+            return;
+        };
+
+        // A mirroring output presents the source monitor's Flutter frame,
+        // scaled to its own geometry; otherwise it presents its own view.
+        let mirror_source = self.mirror_source(&output);
+        let slot_view_id = match &mirror_source {
+            Some(source) => view_id_for_output(source),
+            None => view_id_for_output(&output),
+        };
+
         let (surface, renderer) = {
             let gpu_data = self.backend_data.gpus.get_mut(&node);
             let gpu_data = if let Some(gpu_data) = gpu_data {
@@ -1364,13 +1414,14 @@ impl State<DrmBackend> {
         };
 
         let slot = {
-            let view = self
-                .flutter_engine
-                .as_mut()
-                .unwrap()
-                .views_management
-                .views
-                .get(&surface.view_id);
+            let view = slot_view_id.and_then(|view_id| {
+                self.flutter_engine
+                    .as_mut()
+                    .unwrap()
+                    .views_management
+                    .views
+                    .get(&view_id)
+            });
 
             let last_renderer_slot = if let Some(view) = view {
                 &view.last_rendered_slot
@@ -1389,19 +1440,6 @@ impl State<DrmBackend> {
             slot
         };
 
-        let output = self.space.outputs().find(|output| {
-            output
-                .user_data()
-                .get::<UdevOutputId>()
-                .map(|id| id.device_id == surface.device_id && id.crtc == surface.crtc)
-                .unwrap_or(false)
-        });
-
-        let output = match output {
-            Some(output) => output,
-            None => return,
-        };
-
         // The selection overlay only appears on the output the screenshot
         // session attached to; on the others the pointer never goes.
         let capture_overlay = self
@@ -1418,9 +1456,9 @@ impl State<DrmBackend> {
 
         let elements = get_render_elements(
             renderer,
-            output,
+            &output,
             slot,
-            self.space.output_geometry(output).unwrap().to_f64(),
+            self.space.output_geometry(&output).unwrap().to_f64(),
             self.clock.now(),
             &self.cursor_image_status,
             &self.cursor_state,
@@ -1518,7 +1556,7 @@ impl State<DrmBackend> {
                         .connectors()
                         .get(&surface.connector_handle)
                     {
-                        let (mode_to_use, _) = pick_mode(&connector, Some(config.clone()));
+                        let (mode_to_use, _) = pick_mode(&connector, Some(config));
                         if let Err(err) = surface.compositor.use_mode(mode_to_use) {
                             warn!("error changing mode: {err:?}");
                         }
@@ -1552,7 +1590,7 @@ pub type GbmDrmCompositor = DrmCompositor<
 
 fn pick_mode(
     connector: &connector::Info,
-    target: Option<MonitorConfiguration>,
+    target: Option<&MonitorConfiguration>,
 ) -> (control::Mode, Option<control::Mode>) {
     let mut mode_to_use: Option<control::Mode> = None;
     let mut preferred_mode: Option<control::Mode> = None;

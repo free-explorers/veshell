@@ -47,9 +47,7 @@ class MonitorSettingJson extends _$MonitorSettingJson {
     });
 
     try {
-      return jsonDecode(
-        file.readAsStringSync(),
-      ) as Map<String, dynamic>;
+      return jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
     } on Exception catch (_) {
       return getInitialConfiguration();
     }

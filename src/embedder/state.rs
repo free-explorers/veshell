@@ -23,7 +23,9 @@ use smithay::reexports::wayland_server::protocol::wl_buffer;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::{Display, DisplayHandle, Resource};
 use smithay::reexports::x11rb::protocol::xproto::Window as X11Window;
-use smithay::utils::{Buffer as BufferCoords, Clock, Logical, Monotonic, Point, Rectangle, Size};
+use smithay::utils::{
+    Buffer as BufferCoords, Clock, Logical, Monotonic, Point, Rectangle, Size, Transform,
+};
 use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor::{self, get_parent, RectangleKind};
 use smithay::wayland::compositor::{
@@ -156,6 +158,13 @@ pub struct State<BackendData: Backend + 'static> {
     /// consistent `view_id` and coordinate space even if the pointer crosses
     /// monitors mid-gesture. `None` when no gesture is in progress.
     pub pointer_gesture_view_id: Option<i64>,
+    /// Desired mirror source (connector name) per monitor, keyed by connector.
+    ///
+    /// Written from each monitor's `monitor/<connector>.json` when its
+    /// configuration is applied; resolved against the live outputs by
+    /// [`State::mirror_source`]. Absent means a regular display. See
+    /// `docs/specifications/monitor.md`.
+    pub mirror_of: HashMap<String, String>,
 }
 
 impl<BackendData: Backend + 'static> State<BackendData> {
@@ -379,6 +388,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             capture_state,
             portal_state,
             pointer_gesture_view_id: None,
+            mirror_of: HashMap::new(),
             idle,
             idle_notifier_state,
             idle_inhibit_manager_state,
@@ -560,9 +570,43 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             None
         };
 
+        // The transform is only meaningful on backends that apply an output
+        // transform; a nested backend keeps its own correction transform.
+        let desired_transform = if BackendData::SUPPORTS_OUTPUT_TRANSFORM {
+            Transform::from(configuration.transform)
+        } else {
+            output.current_transform()
+        };
+        let new_transform = if output.current_transform() != desired_transform {
+            Some(desired_transform)
+        } else {
+            None
+        };
+
+        // The desired mirror target is resolved against the live outputs at
+        // render and input time; here we only record it and notice the change
+        // so the layout is republished.
+        let previous_mirror = self.mirror_of.get(&output.name()).cloned();
+        let mirror_changed = previous_mirror.as_deref() != configuration.mirror_of.as_deref();
+        if mirror_changed {
+            match &configuration.mirror_of {
+                Some(target) => {
+                    self.mirror_of.insert(output.name(), target.clone());
+                }
+                None => {
+                    self.mirror_of.remove(&output.name());
+                }
+            }
+        }
+
         // if any new apply changes and return true
-        if new_mode.is_some() || new_scale.is_some() || new_location.is_some() {
-            output.change_current_state(new_mode, None, new_scale, new_location);
+        if new_mode.is_some()
+            || new_scale.is_some()
+            || new_location.is_some()
+            || new_transform.is_some()
+            || mirror_changed
+        {
+            output.change_current_state(new_mode, new_transform, new_scale, new_location);
             if new_location.is_some() {
                 self.space.map_output(output, output.current_location());
             }
@@ -585,7 +629,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     );
                 }
             }
-            // if mode changed update the view size
+            // if mode or transform changed update the view size (a quarter
+            // turn transposes the output's logical size)
             if let Some(view_id) = output
                 .user_data()
                 .get::<OutputViewIdWrapper>()
@@ -602,6 +647,21 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         } else {
             false
         }
+    }
+
+    /// Resolves the live monitor that `output` should mirror right now.
+    ///
+    /// The mirror is one level deep: the target must be connected and must
+    /// itself be a regular display (not configured to mirror). Any other
+    /// situation — absent target, self target, or a target that is itself a
+    /// follower — falls back to `None`, i.e. a regular display. See
+    /// `docs/specifications/monitor.md`.
+    pub fn mirror_source(&self, output: &Output) -> Option<Output> {
+        let target_name = self.mirror_of.get(&output.name())?;
+        if target_name == &output.name() || self.mirror_of.contains_key(target_name) {
+            return None;
+        }
+        self.get_output_by_name(target_name).cloned()
     }
 
     pub fn on_outputs_changed(&mut self) {

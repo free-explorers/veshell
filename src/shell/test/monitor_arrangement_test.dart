@@ -59,6 +59,19 @@ void main() {
 
       expect(monitorLogicalSize(monitor, 1), Size.zero);
     });
+
+    test('swaps width and height when transposed', () {
+      final monitor = _monitor(
+        name: 'DP-1',
+        modeSize: const Size(3840, 2160),
+        location: Offset.zero,
+      );
+
+      expect(
+        monitorLogicalSize(monitor, 2, transposed: true),
+        const Size(1080, 1920),
+      );
+    });
   });
 
   group('boundingBoxOf', () {

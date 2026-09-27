@@ -134,13 +134,17 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         let add_view_data = Box::new(AddViewData { tx_done, view_id });
 
         let mode = output.current_mode().unwrap();
+        // A rotated output lays out its Flutter surface at the transposed
+        // (logical) size; the compositor's output transform maps it back onto
+        // the physical framebuffer.
+        let size = output.current_transform().transform_size(mode.size);
         tracing::info!(
             target: "veshell::geometry",
             view_id,
             display_id,
             output = %output.name(),
-            width = mode.size.w,
-            height = mode.size.h,
+            width = size.w,
+            height = size.h,
             pixel_ratio = output.current_scale().fractional_scale(),
             location = ?output.current_location(),
             "Adding Flutter output view"
@@ -154,7 +158,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                             view_id: event_view_id,
                             swapchain: data
                                 .backend_data
-                                .new_swapchain(mode.size.w as u32, mode.size.h as u32),
+                                .new_swapchain(size.w as u32, size.h as u32),
                             next_backing_store_generation: 1,
                             in_flight_slots: HashMap::new(),
                             last_rendered_slot: None,
@@ -189,8 +193,8 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     view_id,
                     view_metrics: &FlutterWindowMetricsEvent {
                         struct_size: size_of::<FlutterWindowMetricsEvent>(),
-                        width: mode.size.w as usize,
-                        height: mode.size.h as usize,
+                        width: size.w as usize,
+                        height: size.h as usize,
                         pixel_ratio: output.current_scale().fractional_scale(),
                         left: 0,
                         top: 0,
@@ -284,7 +288,9 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         output: &Output,
     ) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(view) = self.views_management.views.get_mut(&view_id) {
-            let size = output.current_mode().unwrap().size;
+            let size = output
+                .current_transform()
+                .transform_size(output.current_mode().unwrap().size);
             tracing::info!(
                 target: "veshell::geometry",
                 view_id,

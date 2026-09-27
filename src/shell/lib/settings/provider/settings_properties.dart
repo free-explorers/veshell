@@ -8,15 +8,20 @@ import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/monitor/widget/monitor_arrangement/monitor_arrangement_editor.dart';
 import 'package:shell/settings/model/setting_group.dart';
 import 'package:shell/settings/model/setting_property.dart';
+import 'package:shell/settings/model/types/monitor_setting.serializable.dart';
 import 'package:shell/settings/provider/state/monitor_setting_state.dart';
 import 'package:shell/settings/provider/util/config_directory.dart';
 import 'package:shell/settings/provider/util/configured_settings_json.dart';
 import 'package:shell/settings/provider/util/default_settings_json.dart';
 import 'package:shell/settings/widget/expandable_search_result.dart';
+import 'package:shell/settings/widget/monitor/monitor_mirror_editor.dart';
+import 'package:shell/settings/widget/monitor/monitor_mirror_value.dart';
 import 'package:shell/settings/widget/monitor/monitor_refresh_rate_editor.dart';
 import 'package:shell/settings/widget/monitor/monitor_refresh_rate_value.dart';
 import 'package:shell/settings/widget/monitor/monitor_resolution_editor.dart';
 import 'package:shell/settings/widget/monitor/monitor_resolution_value.dart';
+import 'package:shell/settings/widget/monitor/monitor_transform_editor.dart';
+import 'package:shell/settings/widget/monitor/monitor_transform_value.dart';
 import 'package:shell/shared/util/file.dart';
 import 'package:shell/shared/util/json_converter/color.dart';
 import 'package:shell/shared/util/json_converter/logical_key_set.dart';
@@ -90,6 +95,35 @@ class SettingsProperties extends _$SettingsProperties {
                 'fractionnalScale': const SettingProperty<double>(
                   name: 'Fractionnal Scale',
                   description: 'Monitor fractionnal scaling',
+                ),
+                'transform': SettingProperty<MonitorTransform>(
+                  name: 'Transform',
+                  description: 'Display rotation and mirroring',
+                  buildSearchResult: (context, path, property) =>
+                      ExpandableSearchResult<MonitorTransform>(
+                        path: path,
+                        property: property,
+                        buildValue: (context, value, {required isExpanded}) =>
+                            MonitorTransformValue(path: path),
+                        buildEditor: (context, {required isExpanded}) =>
+                            MonitorTransformEditor(
+                              path: path,
+                              property: property,
+                            ),
+                      ),
+                ),
+                'mirrorOf': SettingProperty<String?>(
+                  name: 'Mirror',
+                  description: 'Mirror another monitor on this one',
+                  buildSearchResult: (context, path, property) =>
+                      ExpandableSearchResult<String?>(
+                        path: path,
+                        property: property,
+                        buildValue: (context, value, {required isExpanded}) =>
+                            MonitorMirrorValue(path: path),
+                        buildEditor: (context, {required isExpanded}) =>
+                            MonitorMirrorEditor(path: path, property: property),
+                      ),
                 ),
               },
             ),

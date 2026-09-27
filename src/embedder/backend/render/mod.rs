@@ -169,11 +169,12 @@ where
             flutter_texture_buffer,
             Point::from((0.0, 0.0)),
             1.,
-            Some(Rectangle {
-                loc: (0., 0.).into(),
-                size: output_geometry.size,
-            }),
+            // Draw the whole texture and let the destination size scale it.
+            // A mirroring output presents a source frame whose texture size
+            // differs from its own geometry, so fixing `src` to the local
+            // geometry would sample only its top-left region at native size.
             None,
+            Some(output_geometry.size),
             Kind::Unspecified,
         );
         elements.push(VeshellRenderElements::Flutter(flutter_texture_element));

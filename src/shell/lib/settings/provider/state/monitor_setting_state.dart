@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/settings/model/types/monitor_setting.serializable.dart';
+import 'package:shell/settings/provider/state/monitor_setting_change_confirmation.dart';
 import 'package:shell/settings/provider/util/config_directory.dart';
 import 'package:shell/settings/provider/util/monitor_setting_json.dart';
 import 'package:shell/shared/util/file.dart';
@@ -17,6 +18,10 @@ part 'monitor_setting_state.g.dart';
 /// and location that Rust's `SettingsManager` applies at connect time. This is
 /// the Flutter side of the ownership model in
 /// `docs/specifications/monitor.md` (section "State ownership").
+///
+/// Settings that can leave a monitor unusable (mode, scale, transform) go
+/// through [MonitorSettingChangeConfirmation]: the change is applied at once
+/// and only kept if the user confirms it before the countdown expires.
 @riverpod
 class MonitorSettingState extends _$MonitorSettingState {
   @override
@@ -29,11 +34,19 @@ class MonitorSettingState extends _$MonitorSettingState {
   }
 
   void setMode(Mode mode) {
-    updateFile(state.copyWith(mode: mode).toJson());
+    _propose(state.copyWith(mode: mode), 'Resolution');
   }
 
   void setLocation(Offset location) {
     updateFile(state.copyWith(location: location).toJson());
+  }
+
+  void setTransform(MonitorTransform transform) {
+    _propose(state.copyWith(transform: transform), 'Transform');
+  }
+
+  void setMirrorOf(String? monitorId) {
+    updateFile(state.copyWith(mirrorOf: monitorId).toJson());
   }
 
   void updateByPath(String path, dynamic newValue) {
@@ -49,7 +62,22 @@ class MonitorSettingState extends _$MonitorSettingState {
     }
 
     current[parts.last] = newValue;
-    updateFile(json);
+    _propose(MonitorSetting.fromJson(json), parts.last);
+  }
+
+  /// Applies [next] through the confirmation guard, unless it is a no-op.
+  void _propose(MonitorSetting next, String description) {
+    if (next == state) {
+      return;
+    }
+    ref
+        .read(monitorSettingChangeConfirmationProvider.notifier)
+        .propose(
+          monitorId: monitorId,
+          description: '$description of $monitorId',
+          previous: state.toJson(),
+          next: next.toJson(),
+        );
   }
 
   Future<void> updateFile(Map<String, dynamic> json) async {
