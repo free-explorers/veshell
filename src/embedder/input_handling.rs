@@ -6,7 +6,7 @@ use smithay::backend::input::{
 };
 use smithay::input::pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent};
 use smithay::reexports::wayland_server::protocol::wl_pointer;
-use smithay::utils::{Logical, Point, SERIAL_COUNTER};
+use smithay::utils::{Logical, Point, Rectangle, SERIAL_COUNTER};
 use tracing::{debug, info};
 
 use crate::backend::Backend;
@@ -23,6 +23,30 @@ use crate::flutter_engine::view::view_id_for_output;
 use crate::flutter_engine::{view, FlutterEngine};
 use crate::settings::MouseAndTouchpadSettings;
 use crate::state::State;
+
+/// Bounding box of a set of output geometries, in global logical coordinates.
+///
+/// The pointer is confined to this box. It is derived from the actual output
+/// geometry instead of assuming a layout anchored at `(0, 0)` in a single
+/// horizontal row, so arbitrary arrangements (vertical stacks, gaps, negative
+/// origins) keep every monitor reachable.
+fn output_bounds_from(
+    geometries: impl Iterator<Item = Rectangle<i32, Logical>>,
+) -> Option<Rectangle<i32, Logical>> {
+    geometries.reduce(|bounds, geometry| bounds.merge(geometry))
+}
+
+/// Confines `pos` to `bounds`.
+fn clamp_to_bounds(
+    pos: Point<f64, Logical>,
+    bounds: Rectangle<i32, Logical>,
+) -> Point<f64, Logical> {
+    let min_x = bounds.loc.x as f64;
+    let min_y = bounds.loc.y as f64;
+    let max_x = (bounds.loc.x + bounds.size.w) as f64;
+    let max_y = (bounds.loc.y + bounds.size.h) as f64;
+    (pos.x.clamp(min_x, max_x), pos.y.clamp(min_y, max_y)).into()
+}
 
 impl<BackendData: Backend> State<BackendData> {
     pub fn on_pointer_motion<B: InputBackend>(
@@ -105,21 +129,20 @@ impl<BackendData: Backend> State<BackendData> {
         BackendData: Backend + 'static,
     {
         let serial = SERIAL_COUNTER.next_serial();
-        let outputs: Vec<smithay::output::Output> =
-            self.space.outputs().cloned().collect::<Vec<_>>();
-        let max_x = outputs.into_iter().fold(0, |acc, o| {
-            acc + self.space.output_geometry(&o).unwrap().size.w
-        });
+        let Some(bounds) = self.output_bounds() else {
+            debug!("dropping absolute pointer motion: no mapped output");
+            return;
+        };
 
-        let max_h_output = self
-            .space
-            .outputs()
-            .max_by_key(|o| self.space.output_geometry(o).unwrap().size.h)
-            .unwrap();
-
-        let max_y = self.space.output_geometry(max_h_output).unwrap().size.h;
-
-        let mut pointer_location = (event.x_transformed(max_x), event.y_transformed(max_y)).into();
+        // Map the normalised absolute position onto the outputs' bounding box,
+        // which is not necessarily anchored at (0, 0).
+        let max_x = bounds.size.w;
+        let max_y = bounds.size.h;
+        let mut pointer_location = (
+            bounds.loc.x as f64 + event.x_transformed(max_x),
+            bounds.loc.y as f64 + event.y_transformed(max_y),
+        )
+            .into();
 
         // clamp to screen limits
         pointer_location = self.clamp_coords(pointer_location);
@@ -532,33 +555,27 @@ impl<BackendData: Backend> State<BackendData> {
         self.pointer_frame_pending = true;
     }
 
+    /// Bounding box of every mapped output, in global logical coordinates.
+    ///
+    /// The pointer is confined to this box. It is derived from the actual
+    /// output geometry instead of assuming a layout anchored at `(0, 0)` in a
+    /// single horizontal row, so arbitrary arrangements (vertical stacks,
+    /// gaps, negative origins) keep every monitor reachable.
+    fn output_bounds(&self) -> Option<Rectangle<i32, Logical>> {
+        output_bounds_from(
+            self.space
+                .outputs()
+                .filter_map(|output| self.space.output_geometry(output)),
+        )
+    }
+
     fn clamp_coords(&mut self, pos: Point<f64, Logical>) -> Point<f64, Logical>
     where
         BackendData: Backend + 'static,
     {
-        if self.space.outputs().next().is_none() {
-            return pos;
-        }
-
-        let (pos_x, pos_y) = pos.into();
-        let max_x = self.space.outputs().fold(0, |acc, o| {
-            acc + self.space.output_geometry(o).unwrap().size.w
-        });
-        let clamped_x = pos_x.clamp(0.0, max_x as f64);
-        let max_y = self
-            .space
-            .outputs()
-            .find(|o| {
-                let geo = self.space.output_geometry(o).unwrap();
-                geo.contains((clamped_x as i32, 0))
-            })
-            .map(|o| self.space.output_geometry(o).unwrap().size.h);
-
-        if let Some(max_y) = max_y {
-            let clamped_y = pos_y.clamp(0.0, max_y as f64);
-            (clamped_x, clamped_y).into()
-        } else {
-            (clamped_x, pos_y).into()
+        match self.output_bounds() {
+            Some(bounds) => clamp_to_bounds(pos, bounds),
+            None => pos,
         }
     }
 
@@ -709,5 +726,67 @@ impl<BackendData: Backend> State<BackendData> {
                 pressure_max: 0.0,
             })
             .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rect(x: i32, y: i32, w: i32, h: i32) -> Rectangle<i32, Logical> {
+        Rectangle::new((x, y).into(), (w, h).into())
+    }
+
+    #[test]
+    fn bounds_span_a_horizontal_row() {
+        let bounds =
+            output_bounds_from([rect(0, 0, 1920, 1080), rect(1920, 0, 2560, 1440)].into_iter());
+
+        assert_eq!(bounds, Some(rect(0, 0, 4480, 1440)));
+    }
+
+    #[test]
+    fn bounds_span_a_vertical_stack() {
+        let bounds =
+            output_bounds_from([rect(0, 0, 1920, 1080), rect(0, 1080, 1920, 1080)].into_iter());
+
+        assert_eq!(bounds, Some(rect(0, 0, 1920, 2160)));
+    }
+
+    #[test]
+    fn bounds_include_a_negative_origin() {
+        let bounds =
+            output_bounds_from([rect(-1920, 0, 1920, 1080), rect(0, 0, 1920, 1080)].into_iter());
+
+        assert_eq!(bounds, Some(rect(-1920, 0, 3840, 1080)));
+    }
+
+    #[test]
+    fn bounds_are_none_without_outputs() {
+        assert_eq!(output_bounds_from([].into_iter()), None);
+    }
+
+    #[test]
+    fn clamp_keeps_a_vertical_stack_reachable() {
+        let bounds = rect(0, 0, 1920, 2160);
+
+        assert_eq!(
+            clamp_to_bounds((500.0, 2000.0).into(), bounds),
+            (500.0, 2000.0).into()
+        );
+        assert_eq!(
+            clamp_to_bounds((500.0, 5000.0).into(), bounds),
+            (500.0, 2160.0).into()
+        );
+    }
+
+    #[test]
+    fn clamp_respects_a_negative_origin() {
+        let bounds = rect(-1920, 0, 3840, 1080);
+
+        assert_eq!(
+            clamp_to_bounds((-5000.0, 100.0).into(), bounds),
+            (-1920.0, 100.0).into()
+        );
     }
 }
