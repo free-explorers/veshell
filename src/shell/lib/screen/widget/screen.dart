@@ -71,65 +71,71 @@ class ScreenWidget extends HookConsumerWidget {
             },
             child: Stack(
               children: [
-                Actions(
-                  actions: {
-                    FocusWorkspaceAboveIntent:
-                        CallbackAction<FocusWorkspaceAboveIntent>(
-                      onInvoke: (_) {
-                        final nextIndex = screenState.selectedIndex - 1;
-                        if (nextIndex >= 0) {
-                          ref
-                              .read(screenStateProvider(screenId).notifier)
-                              .selectWorkspace(nextIndex);
-                        }
-                        return null;
-                      },
-                    ),
-                    FocusWorkspaceBelowIntent:
-                        CallbackAction<FocusWorkspaceBelowIntent>(
-                      onInvoke: (_) {
-                        final nextIndex = screenState.selectedIndex + 1;
-                        if (nextIndex < screenState.workspaceList.length) {
-                          ref
-                              .read(screenStateProvider(screenId).notifier)
-                              .selectWorkspace(nextIndex);
-                        }
-                        return null;
-                      },
-                    ),
-                  },
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    textDirection: TextDirection.rtl,
-                    children: [
-                      Expanded(
-                        child: SlidingContainer(
-                          direction: Axis.vertical,
-                          index: screenState.selectedIndex,
-                          onIndexChanged: (newIndex) {
+                // Screen-level notification popups (workspace buttons, screen
+                // panel) are hosted in an Overlay below the overview. An
+                // OverlayPortal would otherwise land in the root overlay and
+                // float above the overview.
+                Overlay.wrap(
+                  child: Actions(
+                    actions: {
+                      FocusWorkspaceAboveIntent:
+                          CallbackAction<FocusWorkspaceAboveIntent>(
+                        onInvoke: (_) {
+                          final nextIndex = screenState.selectedIndex - 1;
+                          if (nextIndex >= 0) {
                             ref
                                 .read(screenStateProvider(screenId).notifier)
-                                .selectWorkspace(newIndex);
-                          },
-                          isSwipeEnabled:
-                              screenId == ref.watch(focusedScreenProvider),
-                          children: screenState.workspaceList
-                              .mapIndexed(
-                                (index, workspaceId) => WorkspaceWidget(
-                                  workspaceId: workspaceId,
-                                  isSelected:
-                                      screenState.selectedIndex == index,
-                                ),
-                              )
-                              .toList(),
+                                .selectWorkspace(nextIndex);
+                          }
+                          return null;
+                        },
+                      ),
+                      FocusWorkspaceBelowIntent:
+                          CallbackAction<FocusWorkspaceBelowIntent>(
+                        onInvoke: (_) {
+                          final nextIndex = screenState.selectedIndex + 1;
+                          if (nextIndex < screenState.workspaceList.length) {
+                            ref
+                                .read(screenStateProvider(screenId).notifier)
+                                .selectWorkspace(nextIndex);
+                          }
+                          return null;
+                        },
+                      ),
+                    },
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      textDirection: TextDirection.rtl,
+                      children: [
+                        Expanded(
+                          child: SlidingContainer(
+                            direction: Axis.vertical,
+                            index: screenState.selectedIndex,
+                            onIndexChanged: (newIndex) {
+                              ref
+                                  .read(screenStateProvider(screenId).notifier)
+                                  .selectWorkspace(newIndex);
+                            },
+                            isSwipeEnabled:
+                                screenId == ref.watch(focusedScreenProvider),
+                            children: screenState.workspaceList
+                                .mapIndexed(
+                                  (index, workspaceId) => WorkspaceWidget(
+                                    workspaceId: workspaceId,
+                                    isSelected:
+                                        screenState.selectedIndex == index,
+                                  ),
+                                )
+                                .toList(),
+                          ),
                         ),
-                      ),
-                      const Material(
-                        elevation: 4,
-                        child: ScreenPanel(),
-                      ),
-                    ],
+                        const Material(
+                          elevation: 4,
+                          child: ScreenPanel(),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const OverviewWidget(),
