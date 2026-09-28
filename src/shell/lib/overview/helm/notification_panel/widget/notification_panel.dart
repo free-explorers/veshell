@@ -33,10 +33,15 @@ class NotificationPanel extends HookConsumerWidget {
                         color: Theme.of(context).colorScheme.surfaceContainer,
                         child: NotificationWidget(
                           notification: notification,
+                          onAction: (actionKey) {
+                            ref
+                                .read(notificationManagerProvider.notifier)
+                                .invokeAction(notification.id, actionKey);
+                          },
                           onClose: () {
                             ref
                                 .read(notificationManagerProvider.notifier)
-                                .removeNotification(notification.id);
+                                .dismissAndRemoveNotification(notification.id);
                           },
                         ),
                       );

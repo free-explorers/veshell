@@ -1,9 +1,8 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/notification/model/notification_close_reason.dart';
 import 'package:shell/notification/model/notification_target.dart';
-import 'package:shell/notification/provider/notification_channel.dart';
 import 'package:shell/notification/provider/notification_manager.dart';
 import 'package:shell/notification/provider/notification_routing.dart';
-import 'package:shell/screen/provider/focused_screen.dart';
 
 part 'notification_read_tracker.g.dart';
 
@@ -12,12 +11,13 @@ part 'notification_read_tracker.g.dart';
 /// Popups are one-shot: they are pushed once by [NotificationManager] when the
 /// notification is received and are never re-added here. A tile popup lives
 /// inside its workspace overlay, so leaving the workspace clips it away instead
-/// of tearing it down. This provider only marks notifications read (clearing
-/// their popups) once their workspace or tile becomes displayed.
+/// of tearing it down. Once a notification's workspace or tile becomes
+/// displayed it has been seen: its dot is cleared and its live popup is closed
+/// (emitting `NotificationClosed`).
 ///
 /// Keeping this in a dedicated provider avoids a cycle between the manager and
-/// the routing provider (the manager persists the read flag, routing only
-/// observes it).
+/// the routing provider (the manager persists the state, routing only observes
+/// it).
 @Riverpod(keepAlive: true)
 bool notificationReadTracker(Ref ref) {
   ref.listen(notificationRoutesProvider, (previous, next) {
@@ -30,59 +30,30 @@ bool notificationReadTracker(Ref ref) {
       final route = entry.value;
       final previousRoute = previous?[entry.key];
 
-      final (markRead, workspaceId, windowId) = switch (route) {
-        DisplayedNotificationTarget(
-          :final workspaceId,
-          :final windowId,
-        ) =>
-          (true, workspaceId, windowId),
-        EphemeralDisplayedNotificationTarget() => (true, null, null),
-        TileNotificationTarget(:final workspaceId, :final windowId) => (
-            // The workspace just became displayed while its tile stays hidden:
-            // the workspace button dot has been seen, clear it.
-            previousRoute is WorkspaceNotificationTarget &&
-                previousRoute.workspaceId == workspaceId,
-            workspaceId,
-            windowId,
-          ),
+      final seen = switch (route) {
+        DisplayedNotificationTarget() => true,
+        EphemeralDisplayedNotificationTarget() => true,
+        TileNotificationTarget(:final workspaceId) =>
+          // The workspace just became displayed while its tile stays hidden:
+          // the workspace button dot has been seen, clear it.
+          previousRoute is WorkspaceNotificationTarget &&
+              previousRoute.workspaceId == workspaceId,
         WorkspaceNotificationTarget() ||
-        UnresolvedNotificationTarget() =>
-          (false, null, null),
+        UnresolvedNotificationTarget() => false,
       };
-      if (!markRead) {
+      if (!seen) {
         continue;
       }
-      if (workspaceId != null) {
-        _removeFromChannel(
-          ref,
-          workspaceNotificationChannel(workspaceId),
-          notification.id,
-        );
-      }
-      if (windowId != null) {
-        _removeFromChannel(
-          ref,
-          windowNotificationChannel(windowId),
-          notification.id,
-        );
-      }
-      if (route is EphemeralDisplayedNotificationTarget) {
-        // The ephemeral window is visible in the overview: hide its default
-        // popup if it is still on screen.
-        final focusedScreenId = ref.read(focusedScreenProvider);
-        if (focusedScreenId != null) {
-          _removeFromChannel(ref, focusedScreenId, notification.id);
-        }
-      }
-      ref.read(notificationManagerProvider.notifier).markRead(notification.id);
+      // Close (idempotently) and mark read. A notification already closed by
+      // expiry still needs its dot cleared here.
+      ref
+          .read(notificationManagerProvider.notifier)
+          .closeNotification(
+            notification.id,
+            reason: NotificationCloseReason.dismissed,
+            markRead: true,
+          );
     }
   });
   return true;
-}
-
-void _removeFromChannel(Ref ref, String channel, int id) {
-  final current = ref.read(notificationChannelProvider(channel));
-  if (current.any((element) => element.id == id)) {
-    ref.read(notificationChannelProvider(channel).notifier).remove(id);
-  }
 }

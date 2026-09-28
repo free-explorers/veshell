@@ -100,17 +100,15 @@ class NotificationArea extends HookConsumerWidget {
                           ),
                           child: NotificationWidget(
                             notification: notification,
+                            onAction: (actionKey) {
+                              ref
+                                  .read(notificationManagerProvider.notifier)
+                                  .invokeAction(notification.id, actionKey);
+                            },
                             onClose: () {
                               ref
                                   .read(notificationManagerProvider.notifier)
-                                  .markRead(notification.id);
-                              ref
-                                  .read(
-                                    notificationChannelProvider(
-                                      channel,
-                                    ).notifier,
-                                  )
-                                  .remove(notification.id);
+                                  .dismissNotification(notification.id);
                             },
                           ),
                         ),

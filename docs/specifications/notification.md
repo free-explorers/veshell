@@ -8,6 +8,10 @@ Notifications are received in Dart (`DbusNotificationServer`), stored in a
 persisted list, and surfaced contextually depending on where the application
 that triggered them currently lives.
 
+`GetCapabilities` advertises `body`, `actions` and `persistence`: bodies and
+action buttons are rendered, the `resident` hint is honored, and
+`CloseNotification` is implemented.
+
 ## Persisted list
 
 Every accepted notification is stored in `NotificationManager` (persisted key
@@ -23,6 +27,9 @@ Every accepted notification is stored in `NotificationManager` (persisted key
   stored so the route stays stable without rescanning.
 - `isRead`: whether the user has already seen it. Unread notifications drive the
   workspace dot indicator.
+- `isClosed`: whether the D-Bus `NotificationClosed` signal has already been
+  emitted. A closed notification only lives in history (keeping its dot until
+  seen); it has no popup and is never signaled closed twice.
 
 The list is rendered by the Helm `NotificationPanel` in the overview. Read
 notifications stay in the list (history); only an explicit close removes them.
@@ -83,22 +90,54 @@ the workspace dot keep track of it. Their duration follows the D-Bus
 - `-1`: `defaultNotificationPopupDuration`,
 - `0`: no automatic expiry (dismissed or read only).
 
+Removing a popup cancels its expiry timer, so an explicit close never emits a
+spurious expiry.
+
+## Actions and closing
+
+The spec's `actions` argument is a flat `[key, label, key, label, …]` array.
+Each pair becomes a button; the reserved `default` key is instead invoked by
+clicking the notification body. Actions are hidden once the notification is
+closed.
+
+Invoking an action emits `ActionInvoked(id, key)` and marks the notification
+read. Unless the `resident` hint is set, the notification is then closed
+(reason 2); a resident notification stays on screen until dismissed or closed.
+
+Every live notification is closed exactly once, emitting `NotificationClosed`
+with the spec reason:
+
+- `1` — the popup expired,
+- `2` — the user dismissed it or invoked a closing action,
+- `3` — a client called `CloseNotification`; the entry is also removed from
+  history.
+
+Closing is idempotent: a notification that already expired (and stays in
+history unread) is not signaled again when the user later deletes it. Expiry
+and dismissal keep the entry in history; deleting it from the overview panel
+removes it.
+
+A `Notify` with a `replacesId` pointing at a live notification updates that
+entry in place, reusing its id, dropping the old popup and re-routing the new
+one. A `replacesId` for an unknown or already closed id creates a new
+notification as usual.
+
 ## Read state
 
 `NotificationReadTracker` reacts to route changes only:
 
 - a notification is marked read once its tile is displayed, once its workspace
   becomes the displayed one (clearing the workspace dot), or once its ephemeral
-  window is shown in the open overview; the read notification's popups are
-  removed from their channels;
+  window is shown in the open overview; its live popup is then closed
+  (reason 2);
 - because tile popups live in the workspace overlay, leaving the workspace
   scrolls/clips them away rather than tearing them down;
 - closing a popup marks the notification read.
+- invoking an action marks the notification read.
 
 Notifications are never re-surfaced after being dismissed.
 
 ## Out of scope (future milestone)
 
-Actions (`ActionInvoked`), activation tokens, click-to-open of the related
-window, hint-driven surfacing (urgency/transient/category), `replacesId`
-handling and `CloseNotification`.
+Activation tokens, click-to-open of the related window, action icons
+(`action-icons`), and hint-driven surfacing (urgency/transient/category).

@@ -4,17 +4,25 @@ import 'package:shell/notification/model/notification_hints.serializable.dart';
 import 'package:shell/notification/model/org.freedesktop.Notifications.dart';
 
 class DbusNotificationServer extends OrgFreedesktopNotifications {
-  DbusNotificationServer({required this.onNewNotification})
-      : super(path: DBusObjectPath('/org/freedesktop/Notifications'));
+  DbusNotificationServer({
+    required this.onNewNotification,
+    required this.onCloseNotification,
+  }) : super(path: DBusObjectPath('/org/freedesktop/Notifications'));
 
   final int Function(DbusNotification newNotification) onNewNotification;
 
+  /// Called when a client invokes `CloseNotification` for a live notification.
+  final void Function(int id) onCloseNotification;
+
   /// Implementation of org.freedesktop.Notifications.GetCapabilities()
+  ///
+  /// `body` and `actions` are honored on screen; `persistence` advertises the
+  /// `resident` hint and `CloseNotification` support.
   @override
   Future<DBusMethodResponse> doGetCapabilities() async {
     print('NotificationServer - doGetCapabilities');
     return DBusMethodSuccessResponse([
-      DBusArray.string(['body', 'actions']),
+      DBusArray.string(['body', 'actions', 'persistence']),
     ]);
   }
 
@@ -62,13 +70,14 @@ class DbusNotificationServer extends OrgFreedesktopNotifications {
   }
 
   /// Implementation of org.freedesktop.Notifications.CloseNotification()
+  ///
+  /// Closing an unknown or already closed id is a no-op; the spec allows the
+  /// server to silently ignore it.
   @override
   Future<DBusMethodResponse> doCloseNotification(int id) async {
     print('NotificationServer - doCloseNotification');
-
-    return DBusMethodErrorResponse.failed(
-      'org.freedesktop.Notifications.CloseNotification() not implemented',
-    );
+    onCloseNotification(id);
+    return DBusMethodSuccessResponse();
   }
 
   /// Implementation of org.freedesktop.Notifications.GetServerInformation()

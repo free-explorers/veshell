@@ -19,6 +19,12 @@ abstract class Notification with _$Notification {
     /// visibility can be checked.
     WindowId? targetWindowId,
     @Default(false) bool isRead,
+
+    /// Whether the D-Bus `NotificationClosed` signal has already been emitted.
+    /// A closed notification only lives in the persisted history (and keeps its
+    /// unread dot until it is seen); it has no live popup and must not be
+    /// signaled closed again.
+    @Default(false) bool isClosed,
   }) = _Notification;
 
   factory Notification.fromJson(Map<String, dynamic> json) =>
