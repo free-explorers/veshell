@@ -7,13 +7,12 @@ import 'package:shell/overview/helm/monitoring_panel/power_management/provider/a
 import 'package:shell/overview/helm/monitoring_panel/power_management/widget/battery_indicator.dart';
 
 class MonitoringPanel extends HookConsumerWidget {
-  const MonitoringPanel({
-    super.key,
-  });
+  const MonitoringPanel({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         // Battery level
         // Disk usages
@@ -21,12 +20,8 @@ class MonitoringPanel extends HookConsumerWidget {
         // Memory loading
         // Network usage
         if (ref.watch(anyUpowerDeviceProvider)) const PowerIndicator(),
-        const Flexible(
-          child: CpuMonitoringWidget(),
-        ),
-        const Flexible(
-          child: MemoryMonitoringWidget(),
-        ),
+        const CpuMonitoringWidget(),
+        const MemoryMonitoringWidget(),
         const DiskUsageMonitoring(),
       ],
     );
