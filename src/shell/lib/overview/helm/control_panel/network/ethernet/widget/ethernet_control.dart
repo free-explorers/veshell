@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shell/overview/helm/control_panel/network/widget/device_status.dart';
 import 'package:shell/shared/nm/provider/nm_client.dart';
 import 'package:shell/shared/nm/provider/nm_device.dart';

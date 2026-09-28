@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shell/overview/helm/control_panel/widget/control_panel.dart';
 import 'package:shell/overview/helm/monitoring_panel/widget/monitoring_panel.dart';
 import 'package:shell/overview/helm/notification_panel/widget/notification_panel.dart';

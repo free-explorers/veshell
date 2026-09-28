@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shell/notification/provider/notification_list.dart';
 import 'package:shell/notification/provider/notification_manager.dart';
 import 'package:shell/notification/widget/notification.dart';

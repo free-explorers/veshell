@@ -1,4 +1,9 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:shell/capture/model/screen_cast_active/screen_cast_active.serializable.dart';
+import 'package:shell/capture/model/screen_cast_consent/screen_cast_consent.serializable.dart';
+import 'package:shell/capture/model/screen_cast_consent_dismissed/screen_cast_consent_dismissed.serializable.dart';
+import 'package:shell/capture/model/screen_cast_stopped/screen_cast_stopped.serializable.dart';
+import 'package:shell/capture/model/screenshot_prompt/screenshot_prompt.serializable.dart';
 import 'package:shell/platform/model/event/commit_surface/commit_surface.serializable.dart';
 import 'package:shell/platform/model/event/destroy_subsurface/destroy_subsurface.serializable.dart';
 import 'package:shell/platform/model/event/destroy_surface/destroy_surface.serializable.dart';
@@ -17,11 +22,6 @@ import 'package:shell/platform/model/event/monitor_layout_changed/monitor_layout
 import 'package:shell/platform/model/event/new_subsurface/new_subsurface.serializable.dart';
 import 'package:shell/platform/model/event/new_surface/new_surface.serializable.dart';
 import 'package:shell/platform/model/event/process_info/process_info.serializable.dart';
-import 'package:shell/capture/model/screen_cast_active/screen_cast_active.serializable.dart';
-import 'package:shell/capture/model/screen_cast_consent/screen_cast_consent.serializable.dart';
-import 'package:shell/capture/model/screenshot_prompt/screenshot_prompt.serializable.dart';
-import 'package:shell/capture/model/screen_cast_consent_dismissed/screen_cast_consent_dismissed.serializable.dart';
-import 'package:shell/capture/model/screen_cast_stopped/screen_cast_stopped.serializable.dart';
 import 'package:shell/platform/model/event/set_environment_variables/set_environment_variables.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 

@@ -1,8 +1,8 @@
 import 'dart:ui' show ViewFocusEvent, ViewFocusState;
 
-import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shell/capture/provider/screen_cast_consent.dart';
 import 'package:shell/capture/provider/screen_cast_indicator.dart';
 import 'package:shell/capture/provider/screenshot_prompt.dart';

@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:json_annotation/json_annotation.dart';
+import 'package:material_ui/material_ui.dart';
 
 class ColorConverter implements JsonConverter<Color, String> {
   const ColorConverter();

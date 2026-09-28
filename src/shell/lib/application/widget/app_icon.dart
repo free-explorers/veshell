@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/image_from_icon_query.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 

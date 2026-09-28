@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shell/settings/provider/state/monitor_setting_change_confirmation.dart';
 
 /// Full-view confirmation for a pending display change.

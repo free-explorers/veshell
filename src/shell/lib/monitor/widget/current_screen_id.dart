@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// InheritedWidget to provide a monitor Name throughout the widget tree
 class CurrentMonitorName extends InheritedWidget {

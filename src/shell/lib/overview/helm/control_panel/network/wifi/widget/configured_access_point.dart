@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:nm/src/network_manager_client.dart';
 import 'package:shell/overview/helm/control_panel/network/wifi/model/wifi_access_point.dart';
 import 'package:shell/overview/helm/control_panel/network/wifi/provider/wifi_access_point_list.dart';

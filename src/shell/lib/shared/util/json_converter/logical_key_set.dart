@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:json_annotation/json_annotation.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shell/shortcut_manager/model/string_to_key.dart';
 
 class LogicalKeySetConverter implements JsonConverter<LogicalKeySet, String> {

@@ -1,7 +1,5 @@
-import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/capture/model/screen_cast_active/screen_cast_active.serializable.dart';
-import 'package:shell/capture/model/screen_cast_stopped/screen_cast_stopped.serializable.dart';
 import 'package:shell/capture/model/screen_cast_stop/screen_cast_stop.serializable.dart';
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/model/request/platform_request.dart';

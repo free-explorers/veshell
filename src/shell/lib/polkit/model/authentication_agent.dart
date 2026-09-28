@@ -1,7 +1,7 @@
 import 'package:collection/collection.dart';
 import 'package:dbus/dbus.dart';
-import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shell/monitor/provider/focused_monitor.dart';
 import 'package:shell/monitor/provider/navigator_key_for_view.dart';
 import 'package:shell/polkit/model/org.freedesktop.PolicyKit1.AuthenticationAgent.dart';

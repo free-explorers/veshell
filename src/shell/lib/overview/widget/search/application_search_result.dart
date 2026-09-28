@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/app_drawer.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/overview/provider/overview_state.dart';

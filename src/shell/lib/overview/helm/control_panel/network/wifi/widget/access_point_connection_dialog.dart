@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shell/overview/helm/control_panel/network/wifi/model/wifi_access_point.dart';
 
 class AccessPointConnectionDialog extends HookConsumerWidget {
