@@ -44,7 +44,8 @@ void main() {
     expect(opened, isTrue);
   });
 
-  testWidgets('opening wins over the default action', (tester) async {
+  testWidgets('body tap opens; the default action is left to the caller',
+      (tester) async {
     var opened = false;
     String? invoked;
     await tester.pumpWidget(

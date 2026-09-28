@@ -238,24 +238,28 @@ class NotificationManager extends _$NotificationManager {
     final target = notification.targetWindowId ??
         resolveNotificationTargetWindow(ref, notification.dbusNotification) ??
         (appId == null ? null : persistentWindowForAppId(ref, appId));
-    if (target == null) {
-      // Nothing to reveal: fall back to the notification's default action.
-      final defaultAction = defaultNotificationAction(
-        parseNotificationActions(notification.dbusNotification.actions),
-      );
-      final fallback = defaultAction == null
-          ? 'ignoring click'
-          : 'invoking default action';
-      navigationLog.info(
-        'Notification $id has no target window; $fallback',
-      );
-      if (defaultAction != null) {
-        await _invokeAction(id, defaultAction.key);
-      }
+
+    // Keep the spec's default action: alongside revealing the window, the
+    // sender is told the notification was activated.
+    final defaultAction = defaultNotificationAction(
+      parseNotificationActions(notification.dbusNotification.actions),
+    );
+    if (defaultAction != null && !notification.isClosed) {
+      await _emitActionInvoked(id, defaultAction.key);
+    }
+
+    if (target != null) {
+      navigationLog.info('Opening notification $id -> $target');
+      bringWindowIntoView(ref, target);
+    } else {
+      navigationLog.info('Notification $id has no target window to open');
+    }
+
+    if (notification.dbusNotification.hints.resident ?? false) {
+      // A resident notification stays on screen until explicitly closed.
+      _setRead(id);
       return;
     }
-    navigationLog.info('Opening notification $id -> $target');
-    bringWindowIntoView(ref, target);
     await _closeNotification(
       id,
       reason: NotificationCloseReason.dismissed,
