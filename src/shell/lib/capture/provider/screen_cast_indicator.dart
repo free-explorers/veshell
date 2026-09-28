@@ -4,6 +4,7 @@ import 'package:shell/capture/model/screen_cast_stop/screen_cast_stop.serializab
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/model/request/platform_request.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
+import 'package:shell/shared/util/logger.dart';
 
 part 'screen_cast_indicator.g.dart';
 
@@ -27,6 +28,10 @@ class ScreenCastIndicator extends _$ScreenCastIndicator {
   Map<String, ScreenCastActiveMessage> build() {
     final subscription = ref.watch(platformManagerProvider).listen((next) {
       if (next case final ScreenCastActiveEvent event) {
+        captureLog.info(
+          'Screen cast active: app="${event.message.appId}" '
+          'source="${event.message.sourceLabel}"',
+        );
         final next_value = {
           ...state,
           event.message.sessionHandle: event.message,
@@ -52,5 +57,32 @@ class ScreenCastIndicator extends _$ScreenCastIndicator {
             message: ScreenCastStopMessage(sessionHandle: sessionHandle),
           ),
         );
+  }
+}
+
+/// The process consuming each live screen cast, keyed by session handle.
+///
+/// Resolved by the compositor from the PipeWire graph (link -> consumer node
+/// -> client process id), so it identifies the recording app without trusting
+/// the portal `app_id`.
+@Riverpod(keepAlive: true)
+class ScreenCastConsumerPids extends _$ScreenCastConsumerPids {
+  @override
+  Map<String, int> build() {
+    final subscription = ref.watch(platformManagerProvider).listen((next) {
+      if (next case final ScreenCastConsumerEvent event) {
+        captureLog.info(
+          'Screen cast consumer: session=${event.message.sessionHandle} '
+          'pid=${event.message.pid}',
+        );
+        state = {...state, event.message.sessionHandle: event.message.pid};
+      }
+      if (next case final ScreenCastStoppedEvent event) {
+        state = {...state}..remove(event.message.sessionHandle);
+      }
+    });
+    ref.onDispose(subscription.cancel);
+
+    return const {};
   }
 }

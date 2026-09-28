@@ -893,6 +893,9 @@ pub fn handle_consent_decision<BackendData: crate::backend::Backend + 'static>(
             close_shared_session(state, &session_handle);
             return;
         };
+        // The requesting app id drives the shell's recording indicator.
+        // Capture it before the runtime consumes the pending consent.
+        let app_id = consent_app_id(state, &session_handle, consent_token).unwrap_or_default();
         // The ledger now holds the reply link pending; the producer
         // publishes a node and NodeReady completes the flow. Approval on a
         // session that died resolves cancelled without delivery: no node
@@ -923,10 +926,39 @@ pub fn handle_consent_decision<BackendData: crate::backend::Backend + 'static>(
         } else {
             None
         };
-        begin_shared_stream(state, &session_handle, source, restore_token);
+        begin_shared_stream(state, &session_handle, source, restore_token, app_id);
     } else {
         handle_consent_through_runtime(state, &session_handle, consent_token, outcome);
     }
+}
+
+/// The requesting app id stamped on the pending consent matching `token`.
+///
+/// The portal `Start` named it, and the picker kept it in the ledger until
+/// this decision. An unmatched token (already consumed, stale) yields `None`;
+/// the caller falls back to an empty id, which never matches a workspace.
+fn consent_app_id<BackendData: crate::backend::Backend + 'static>(
+    state: &crate::state::State<BackendData>,
+    session_handle: &OwnedObjectPath,
+    consent_token: u64,
+) -> Option<String> {
+    state
+        .portal_state
+        .runtime
+        .as_ref()?
+        .ledger
+        .requests
+        .values()
+        .find(|request| {
+            !request.cancelled
+                && request.session_handle == *session_handle
+                && request
+                    .consent
+                    .as_ref()
+                    .is_some_and(|consent| consent.consent_token == consent_token)
+        })
+        .and_then(|request| request.consent.as_ref())
+        .map(|consent| consent.app_name.clone())
 }
 
 /// Every shareable target currently live, across kinds: the revalidation
@@ -1336,6 +1368,7 @@ fn begin_shared_stream<BackendData: crate::backend::Backend + 'static>(
     session_handle: &OwnedObjectPath,
     source: CaptureSource,
     restore_token: Option<String>,
+    app_id: String,
 ) {
     let target = match source.kind {
         SourceKind::Monitor => resolve_monitor_target(state, &source.id),
@@ -1380,6 +1413,8 @@ fn begin_shared_stream<BackendData: crate::backend::Backend + 'static>(
             position: target.position,
             size: (target.stream_size.w, target.stream_size.h),
             label: source.label.clone(),
+            app_id,
+            consumer_pid: None,
             active: false,
             last_frame: None,
             restore_token,
@@ -1577,7 +1612,42 @@ pub fn handle_producer_event<BackendData: crate::backend::Backend + 'static>(
                 .portal_state
                 .active_streams
                 .insert(session_handle.clone(), stream.clone());
+            // From now on the graph can identify which process consumes this
+            // node; the producer reports it as ConsumerPid.
+            if let Some(producer) = state.portal_state.pipewire_producer.as_ref() {
+                producer.register_stream_node(node_id);
+            }
             show_shared_indicator(state, session_handle.clone(), stream);
+        }
+        crate::capture::pipewire::ProducerEvent::ConsumerPid { node_id, pid } => {
+            let session_handle = state
+                .portal_state
+                .active_streams
+                .iter()
+                .find(|(_, stream)| stream.node_id == node_id)
+                .map(|(handle, _)| handle.clone());
+            let Some(session_handle) = session_handle else {
+                tracing::debug!(node_id, "consumer pid for an unknown stream node");
+                return;
+            };
+            if let Some(stream) = state.portal_state.active_streams.get_mut(&session_handle) {
+                if stream.consumer_pid == Some(pid) {
+                    return;
+                }
+                stream.consumer_pid = Some(pid);
+            }
+            tracing::info!(%session_handle, pid, "screen cast consumer identified");
+            state
+                .flutter_engine_mut()
+                .platform_method_channel
+                .invoke_method(
+                    "screen_cast_consumer",
+                    Some(Box::new(json!({
+                        "sessionHandle": session_handle.as_str(),
+                        "pid": pid,
+                    }))),
+                    None,
+                );
         }
         crate::capture::pipewire::ProducerEvent::Fatal {
             session_handle,
@@ -1856,6 +1926,7 @@ fn show_shared_indicator<BackendData: crate::backend::Backend + 'static>(
             Some(Box::new(json!({
                 "sessionHandle": session_handle.as_str(),
                 "sourceLabel": stream.label,
+                "appId": stream.app_id,
             }))),
             None,
         );
@@ -3343,6 +3414,8 @@ mod tests {
                 position: (0, 0),
                 size: (100, 100),
                 label: "window-1".into(),
+                app_id: "org.example.App".into(),
+                consumer_pid: None,
                 active: false,
                 last_frame: None,
                 restore_token: None,
@@ -3357,6 +3430,8 @@ mod tests {
                 position: (0, 0),
                 size: (100, 100),
                 label: "window-2".into(),
+                app_id: "org.example.App".into(),
+                consumer_pid: None,
                 active: false,
                 last_frame: None,
                 restore_token: None,
@@ -3372,6 +3447,8 @@ mod tests {
                 position: (0, 0),
                 size: (1920, 1080),
                 label: "DP-1".into(),
+                app_id: "org.example.App".into(),
+                consumer_pid: None,
                 active: false,
                 last_frame: None,
                 restore_token: None,
@@ -4053,6 +4130,8 @@ mod tests {
             position: (0, 1080),
             size: (2560, 1440),
             label: "DP-2".into(),
+            app_id: "org.example.App".into(),
+            consumer_pid: None,
             active: false,
             last_frame: None,
             restore_token: None,
@@ -4085,6 +4164,8 @@ mod tests {
             position: (0, 0),
             size: (1920, 1080),
             label: "DP-2".into(),
+            app_id: "org.example.App".into(),
+            consumer_pid: None,
             active: false,
             last_frame: None,
             restore_token: None,

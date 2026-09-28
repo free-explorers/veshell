@@ -13,6 +13,7 @@ sealed class ScreenCastActiveMessage
   factory ScreenCastActiveMessage({
     required String sessionHandle,
     required String sourceLabel,
+    @Default('') String appId,
   }) = _ScreenCastActiveMessage;
 
   factory ScreenCastActiveMessage.fromJson(Map<String, dynamic> json) =>

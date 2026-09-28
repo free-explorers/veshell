@@ -193,6 +193,7 @@ class _EagerInitialization extends ConsumerWidget {
       // portal flow is never dropped while a view is being rebuilt.
       ..watch(screenCastConsentProvider)
       ..watch(screenCastIndicatorProvider)
+      ..watch(screenCastConsumerPidsProvider)
       ..watch(screenshotPromptProvider);
 
     return InitializationStatus(

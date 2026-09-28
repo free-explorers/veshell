@@ -14,12 +14,16 @@
 //! real-time callback touches the renderer.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Cursor;
 use std::os::fd::{AsFd, BorrowedFd};
 use std::ptr::NonNull;
 
 use pipewire as pipewire_crate;
+use pipewire::keys;
+use pipewire::registry::GlobalObject;
+use pipewire::spa::utils::dict::DictRef;
+use pipewire::types::ObjectType;
 use pipewire_crate::sys as pipewire_sys;
 use std::rc::Rc;
 
@@ -72,11 +76,115 @@ pub enum ProducerEvent {
         session_handle: OwnedObjectPath,
         active: bool,
     },
+    /// The process consuming a stream was identified from the PipeWire graph:
+    /// `node_id` is the producer node and `pid` the recording app.
+    ConsumerPid { node_id: u32, pid: i32 },
     /// A stream or the core failed; the loop closes the affected session.
     Fatal {
         session_handle: OwnedObjectPath,
         message: String,
     },
+}
+
+/// Resolves which process consumes a producer stream, using the PipeWire
+/// registry.
+///
+/// The portal `app_id` is client-supplied and can be empty, so the recording
+/// app is identified from the link the server creates between our producer
+/// node and the app's node: link -> input node -> owning client -> client
+/// process id. Every fact is read from the global's properties, so no extra
+/// proxy has to be bound and kept alive.
+#[derive(Default)]
+struct ConsumerResolver {
+    /// Producer node ids we own; only links from these are resolved.
+    producer_nodes: HashSet<u32>,
+    /// Node id -> owning client id (`client.id`).
+    node_clients: HashMap<u32, u32>,
+    /// Node id -> process id when the node itself reports it.
+    node_pids: HashMap<u32, i32>,
+    /// Client id -> process id (`application.process.id`).
+    client_pids: HashMap<u32, i32>,
+    /// Link id -> (output node id, input node id).
+    links: HashMap<u32, (u32, u32)>,
+}
+
+impl ConsumerResolver {
+    /// Applies one registry global. Returns `true` when a table changed.
+    fn apply_global(&mut self, global: &GlobalObject<&DictRef>) -> bool {
+        match &global.type_ {
+            ObjectType::Node => {
+                let Some(props) = global.props else {
+                    return false;
+                };
+                let mut changed = false;
+                if let Some(client) = props
+                    .get(*keys::CLIENT_ID)
+                    .and_then(|value| value.parse().ok())
+                {
+                    changed |= self.node_clients.insert(global.id, client) != Some(client);
+                }
+                if let Some(pid) = props
+                    .get(*keys::APP_PROCESS_ID)
+                    .and_then(|value| value.parse().ok())
+                {
+                    changed |= self.node_pids.insert(global.id, pid) != Some(pid);
+                }
+                changed
+            }
+            ObjectType::Client => {
+                let Some(props) = global.props else {
+                    return false;
+                };
+                let Some(pid) = props
+                    .get(*keys::APP_PROCESS_ID)
+                    .and_then(|value| value.parse().ok())
+                else {
+                    return false;
+                };
+                self.client_pids.insert(global.id, pid) != Some(pid)
+            }
+            ObjectType::Link => {
+                let Some(props) = global.props else {
+                    return false;
+                };
+                let (Some(output), Some(input)) = (
+                    props
+                        .get(*keys::LINK_OUTPUT_NODE)
+                        .and_then(|value| value.parse().ok()),
+                    props
+                        .get(*keys::LINK_INPUT_NODE)
+                        .and_then(|value| value.parse().ok()),
+                ) else {
+                    return false;
+                };
+                self.links.insert(global.id, (output, input)) != Some((output, input))
+            }
+            _ => false,
+        }
+    }
+
+    fn remove(&mut self, id: u32) {
+        self.node_clients.remove(&id);
+        self.node_pids.remove(&id);
+        self.client_pids.remove(&id);
+        self.links.remove(&id);
+    }
+
+    /// Every `(producer node, consumer pid)` currently derivable from a link
+    /// that feeds one of our nodes.
+    fn resolved(&self) -> Vec<(u32, i32)> {
+        self.links
+            .values()
+            .filter(|(output, _)| self.producer_nodes.contains(output))
+            .filter_map(|(output, input)| {
+                let pid = self.node_pids.get(input).copied().or_else(|| {
+                    let client = self.node_clients.get(input)?;
+                    self.client_pids.get(client).copied()
+                })?;
+                Some((*output, pid))
+            })
+            .collect()
+    }
 }
 
 /// What publishing a stream needs, resolved on the compositor loop at
@@ -110,6 +218,13 @@ pub struct ActiveStream {
     pub position: (i32, i32),
     pub size: (i32, i32),
     pub label: String,
+    /// The requesting application's id (portal `app_id`), used by the shell to
+    /// put the recording indicator on the workspace that holds the app.
+    pub app_id: String,
+    /// The process consuming the stream, resolved from the PipeWire graph.
+    /// Unlike `app_id` this is compositor-observed and drives the recording
+    /// indicator.
+    pub consumer_pid: Option<i32>,
     /// Whether a consumer is pulling frames right now.
     pub active: bool,
     /// Last frame copy for this stream: the 30 FPS budget is enforced
@@ -128,6 +243,12 @@ pub struct Producer {
     _integration: RegistrationToken,
     /// Keeps the pw main loop identity alive.
     _main_loop: MainLoopRc,
+    /// Resolves a stream's consuming process from the PipeWire graph.
+    resolver: Rc<RefCell<ConsumerResolver>>,
+    /// Registry listener; must drop before `_registry` so it unregisters
+    /// while the proxy is still alive.
+    _registry_listener: pipewire::registry::Listener,
+    _registry: pipewire::registry::RegistryRc,
     /// The compositor loop answers one [ProducerEvent] per pw call back.
     to_loop: smithay::reexports::calloop::channel::Sender<ProducerEvent>,
     streams: HashMap<OwnedObjectPath, StreamEntry>,
@@ -268,14 +389,56 @@ impl Producer {
             })
             .map_err(|error| format!("calloop integration: {error}"))?;
 
+        // The registry maps the graph so the recording process can be named
+        // from the link that feeds our stream (see [ConsumerResolver]).
+        let registry = core
+            .get_registry_rc()
+            .map_err(|error| format!("Registry: {error:?}"))?;
+        let resolver = Rc::new(RefCell::new(ConsumerResolver::default()));
+        let resolver_global = resolver.clone();
+        let resolver_remove = resolver.clone();
+        let to_loop_registry = to_loop.clone();
+        let registry_listener = registry
+            .add_listener_local()
+            .global(move |global| {
+                let mut resolver = resolver_global.borrow_mut();
+                if !resolver.apply_global(global) {
+                    return;
+                }
+                for (node_id, pid) in resolver.resolved() {
+                    let _ = to_loop_registry.send(ProducerEvent::ConsumerPid { node_id, pid });
+                }
+            })
+            .global_remove(move |id| resolver_remove.borrow_mut().remove(id))
+            .register();
+
         Ok(Self {
             _context: context,
             _main_loop: main_loop,
             core,
             _integration: integration,
+            resolver,
+            _registry_listener: registry_listener,
+            _registry: registry,
             to_loop,
             streams: HashMap::new(),
         })
+    }
+
+    /// Registers a producer stream node so links feeding it resolve to the
+    /// consuming process. Also flushes any link that already exists.
+    pub fn register_stream_node(&self, node_id: u32) {
+        let resolved = {
+            let mut resolver = self.resolver.borrow_mut();
+            resolver.producer_nodes.insert(node_id);
+            resolver.resolved()
+        };
+        for (producer_node, pid) in resolved {
+            let _ = self.to_loop.send(ProducerEvent::ConsumerPid {
+                node_id: producer_node,
+                pid,
+            });
+        }
     }
 
     /// Publishes the video stream for a consented session. No node exists
