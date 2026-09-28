@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:nm/nm.dart';
 import 'package:shell/overview/helm/control_panel/network/wifi/widget/access_point_icon.dart';
 import 'package:shell/shared/nm/provider/nm_device.dart';

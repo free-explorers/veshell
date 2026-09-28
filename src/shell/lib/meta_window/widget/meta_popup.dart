@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shell/meta_window/model/meta_popup.serializable.dart';
 import 'package:shell/meta_window/provider/meta_popup_state.dart';
 import 'package:shell/wayland/widget/surface.dart';

@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// a Tileable is an element that is displayed inside a Workspace considered
 /// by the layout typically an application window or the application launcher

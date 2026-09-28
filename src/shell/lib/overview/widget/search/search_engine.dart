@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shell/overview/widget/search/application_search_result.dart';
 import 'package:shell/overview/widget/search/file_search_result.dart';
 import 'package:shell/overview/widget/search/search_input.dart';

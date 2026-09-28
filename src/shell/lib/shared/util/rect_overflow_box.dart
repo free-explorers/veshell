@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 // Crops the child to a rectangle inside it.
 // The size of this widget will be the size of the rectangle.

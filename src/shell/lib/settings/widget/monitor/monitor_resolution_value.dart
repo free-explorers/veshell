@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shell/monitor/provider/monitor_by_name.dart';
 
 class MonitorResolutionValue extends HookConsumerWidget {

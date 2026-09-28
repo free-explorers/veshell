@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// An intent to focus the left tileable in workspace.
 class FocusLeftTileableIntent extends Intent {

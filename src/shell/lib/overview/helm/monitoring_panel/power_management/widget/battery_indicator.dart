@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shell/overview/helm/monitoring_panel/disk_monitoring/widget/disk_usage_monitoring.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_battery_device.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_client.dart';

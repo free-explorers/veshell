@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shell/settings/model/setting_definition.dart';
 
 part 'setting_group.freezed.dart';

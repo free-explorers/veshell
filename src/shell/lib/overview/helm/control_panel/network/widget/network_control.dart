@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:nm/nm.dart';
 import 'package:shell/overview/helm/control_panel/network/ethernet/widget/ethernet_control.dart';
 import 'package:shell/overview/helm/control_panel/network/wifi/widget/wifi_control.dart';

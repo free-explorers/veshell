@@ -1,7 +1,7 @@
 import 'package:defer_pointer/defer_pointer.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_popup_for_id.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';

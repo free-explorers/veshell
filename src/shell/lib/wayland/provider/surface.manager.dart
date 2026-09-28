@@ -11,11 +11,11 @@ import 'package:shell/platform/model/event/new_surface/new_surface.serializable.
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/model/request/unregister_view_texture/unregister_view_texture.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:shell/wayland/model/surface_manager_state.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/subsurface_state.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
-import 'package:shell/shared/util/logger.dart';
 
 part 'surface.manager.g.dart';
 

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// InheritedWidget to provide a screen ID throughout the widget tree
 class CurrentScreenId extends InheritedWidget {

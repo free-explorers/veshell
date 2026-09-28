@@ -1,6 +1,5 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shell/capture/provider/screen_cast_indicator.dart';
 
 /// The persistent trusted indicator (capture specification section 8.3):
