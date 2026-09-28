@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shell/monitor/provider/monitor_arrangement.dart';
@@ -78,5 +79,88 @@ void main() {
 
     expect(moved, isNotEmpty);
     expect(moved.last.dx, lessThan(-1));
+  });
+
+  testWidgets('the mouse wheel zooms around the pointer', (tester) async {
+    await tester.pumpWidget(_canvas(onChanged: (_, _) {}));
+
+    final tileA = find.ancestor(
+      of: find.text('A'),
+      matching: find.byType(MonitorArrangementTile),
+    );
+    final before = tester.getSize(tileA);
+
+    final center = tester.getCenter(find.byType(MonitorArrangementCanvas));
+    final pointer = TestPointer(1, PointerDeviceKind.mouse);
+    await tester.sendEventToBinding(pointer.hover(center));
+    await tester.sendEventToBinding(pointer.scroll(const Offset(0, -100)));
+    await tester.pumpAndSettle();
+
+    expect(tester.getSize(tileA).width, greaterThan(before.width));
+  });
+
+  testWidgets('dragging empty space pans the view without moving a monitor', (
+    tester,
+  ) async {
+    final moved = <Offset>[];
+    await tester.pumpWidget(
+      _canvas(
+        onChanged: (id, location) {
+          if (id == 'A') moved.add(location);
+        },
+      ),
+    );
+
+    final tileA = find.ancestor(
+      of: find.text('A'),
+      matching: find.byType(MonitorArrangementTile),
+    );
+    final canvas = tester.getRect(find.byType(MonitorArrangementCanvas));
+    final beforeA = tester.getTopLeft(tileA);
+
+    await tester.dragFrom(
+      canvas.topLeft + const Offset(5, 5),
+      const Offset(30, 20),
+    );
+    await tester.pumpAndSettle();
+
+    expect(moved, isEmpty);
+    expect(
+      tester.getTopLeft(tileA) - beforeA,
+      offsetMoreOrLessEquals(const Offset(30, 20), epsilon: 0.5),
+    );
+  });
+
+  testWidgets('middle-dragging a monitor pans the view', (tester) async {
+    final moved = <Offset>[];
+    await tester.pumpWidget(
+      _canvas(
+        onChanged: (id, location) {
+          if (id == 'A') moved.add(location);
+        },
+      ),
+    );
+
+    final tileA = find.ancestor(
+      of: find.text('A'),
+      matching: find.byType(MonitorArrangementTile),
+    );
+    final beforeA = tester.getTopLeft(tileA);
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(tileA),
+      kind: PointerDeviceKind.mouse,
+      buttons: kMiddleMouseButton,
+    );
+    await gesture.moveBy(const Offset(25, 15));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(moved, isEmpty);
+    expect(
+      tester.getTopLeft(tileA) - beforeA,
+      offsetMoreOrLessEquals(const Offset(25, 15), epsilon: 0.5),
+    );
   });
 }

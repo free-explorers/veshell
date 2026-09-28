@@ -74,6 +74,12 @@ rectangles plus `Reset to default` / `Apply` actions.
 - Dragging stages positions locally; nothing is written while dragging. A
   drag is tracked by the canvas itself (one gesture recognizer), so it survives
   the page rebuilding while the overlap warning appears.
+- The canvas auto-fits the arrangement and lets the user zoom and pan on top of
+  that fit, so large (10+ monitor) layouts stay navigable: the mouse wheel and
+  trackpad scale zoom gently around the pointer, while dragging empty space or
+  middle-dragging pans the view. Zoom/pan are view-only and are reset when the
+  used monitors or canvas size change; they never affect the staged or written
+  `location` values.
 - `Reset to default` stages only the **locations** in the compositor's default
   left-to-right layout (from the origin, using each monitor's current logical
   size). Mode and scale overrides are preserved.
