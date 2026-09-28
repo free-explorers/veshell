@@ -17,6 +17,7 @@ import 'package:shell/notification/provider/notification_channel.dart';
 import 'package:shell/notification/provider/notification_routing.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/shared/provider/persistent_storage_state.dart';
+import 'package:shell/window/provider/window_navigation.dart';
 import 'package:shell/workspace/provider/window_workspace_map.dart';
 
 part 'notification_manager.g.dart';
@@ -180,6 +181,11 @@ class NotificationManager extends _$NotificationManager {
     unawaited(_invokeAction(id, actionKey));
   }
 
+  /// Brings the window that sent notification [id] into view and marks it read.
+  void openNotification(int id) {
+    unawaited(_openNotification(id));
+  }
+
   /// Emits `NotificationClosed` (once) and tears down the live popup.
   ///
   /// [reason] is the spec reason. Set [removeFromHistory] to also drop the
@@ -217,6 +223,22 @@ class NotificationManager extends _$NotificationManager {
       markRead: true,
       removeFromHistory: true,
     );
+  }
+
+  Future<void> _openNotification(int id) async {
+    final notification = state.notificationMap[id];
+    if (notification == null) {
+      return;
+    }
+    final target = notification.targetWindowId;
+    await _closeNotification(
+      id,
+      reason: NotificationCloseReason.dismissed,
+      markRead: true,
+    );
+    if (target != null) {
+      bringWindowIntoView(ref, target);
+    }
   }
 
   Future<void> _invokeAction(int id, String actionKey) async {

@@ -38,6 +38,11 @@ class NotificationPanel extends HookConsumerWidget {
                                 .read(notificationManagerProvider.notifier)
                                 .invokeAction(notification.id, actionKey);
                           },
+                          onOpen: () {
+                            ref
+                                .read(notificationManagerProvider.notifier)
+                                .openNotification(notification.id);
+                          },
                           onClose: () {
                             ref
                                 .read(notificationManagerProvider.notifier)

@@ -13,6 +13,7 @@ class NotificationWidget extends StatelessWidget {
     required this.notification,
     this.onClose,
     this.onAction,
+    this.onOpen,
     super.key,
   });
 
@@ -26,6 +27,10 @@ class NotificationWidget extends StatelessWidget {
   /// longer waiting for them.
   final void Function(String actionKey)? onAction;
 
+  /// Called when the body is tapped and there is no `default` action: brings
+  /// the window that sent the notification into view.
+  final VoidCallback? onOpen;
+
   @override
   Widget build(BuildContext context) {
     final actions = parseNotificationActions(
@@ -36,6 +41,10 @@ class NotificationWidget extends StatelessWidget {
     final buttons = canAct
         ? actions.where((action) => !action.isDefault).toList()
         : const <NotificationAction>[];
+    // A `default` action takes precedence over bringing the window into view.
+    final onBodyTap = defaultAction != null
+        ? () => onAction!(defaultAction.key)
+        : onOpen;
 
     final content = Padding(
       padding: const EdgeInsets.all(16),
@@ -120,8 +129,8 @@ class NotificationWidget extends StatelessWidget {
 
     return Stack(
       children: [
-        if (defaultAction != null)
-          InkWell(onTap: () => onAction!(defaultAction.key), child: content)
+        if (onBodyTap != null)
+          InkWell(onTap: onBodyTap, child: content)
         else
           content,
         Positioned(

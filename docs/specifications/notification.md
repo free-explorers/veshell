@@ -117,6 +117,21 @@ history unread) is not signaled again when the user later deletes it. Expiry
 and dismissal keep the entry in history; deleting it from the overview panel
 removes it.
 
+## Opening the source window
+
+Clicking the body of a notification—when it has no `default` action—brings the
+window that sent it into view (`window_navigation.dart`). The notification is
+closed (reason 2) and marked read as part of the navigation.
+
+- A **persistent tile** focuses its screen, hides the overview (which would
+  otherwise cover the workspace), then selects its workspace and tile.
+- An **ephemeral window** focuses its screen and opens the overview to that
+  specific window (`Overview.focusedWindowId`).
+- A **dialog** resolves to its parent tile.
+
+The owning meta window is also activated on the compositor, so it receives
+keyboard focus (and is raised for X11).
+
 A `Notify` with a `replacesId` pointing at a live notification updates that
 entry in place, reusing its id, dropping the old popup and re-routing the new
 one. A `replacesId` for an unknown or already closed id creates a new

@@ -16,8 +16,12 @@ class OverviewContent extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final screenId = CurrentScreenId.of(context);
-    final windowList = ref.watch(
-      overviewStateProvider(screenId).select((state) => state.windowList),
+    final focusedWindowId = ref.watch(
+      overviewStateProvider(screenId).select(
+        (state) =>
+            state.focusedWindowId ??
+            (state.windowList.isEmpty ? null : state.windowList.first),
+      ),
     );
 
     final node = useFocusNode();
@@ -31,14 +35,15 @@ class OverviewContent extends HookConsumerWidget {
             const _OverviewContentPanel(),
             const SizedBox(height: 16),
             Expanded(
-              child: windowList.isEmpty
+              child: focusedWindowId == null
                   ? const Helm()
                   : ClipRRect(
                       borderRadius: const BorderRadius.all(
                         Radius.circular(surfaceRadius),
                       ),
                       child: EphemeralWindowWidget(
-                        windowId: windowList.first,
+                        key: ValueKey(focusedWindowId),
+                        windowId: focusedWindowId,
                         focusNode: node,
                       ),
                     ),
@@ -56,6 +61,13 @@ class _OverviewContentPanel extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final screenId = CurrentScreenId.of(context);
 
+    final focusedWindowId = ref.watch(
+      overviewStateProvider(screenId).select(
+        (state) =>
+            state.focusedWindowId ??
+            (state.windowList.isEmpty ? null : state.windowList.first),
+      ),
+    );
     final windowList = ref.watch(
       overviewStateProvider(screenId).select((state) => state.windowList),
     );
@@ -80,7 +92,10 @@ class _OverviewContentPanel extends HookConsumerWidget {
           ),
           _EphemeralWindowPanelButton(
             windowId: windowId,
-            isFocused: true,
+            isFocused: windowId == focusedWindowId,
+            onTap: () => ref
+                .read(overviewStateProvider(screenId).notifier)
+                .focusWindow(windowId),
           ),
         ],
       ],
@@ -92,9 +107,11 @@ class _EphemeralWindowPanelButton extends HookConsumerWidget {
   const _EphemeralWindowPanelButton({
     required this.windowId,
     this.isFocused = false,
+    this.onTap,
   });
   final EphemeralWindowId windowId;
   final bool isFocused;
+  final VoidCallback? onTap;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final window = ref.watch(ephemeralWindowStateProvider(windowId));
@@ -105,6 +122,7 @@ class _EphemeralWindowPanelButton extends HookConsumerWidget {
           ? Theme.of(context).colorScheme.primary
           : Theme.of(context).colorScheme.surface,
       child: InkWell(
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(8),
           child: Row(

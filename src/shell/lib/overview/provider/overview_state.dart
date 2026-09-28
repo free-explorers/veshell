@@ -22,14 +22,41 @@ class OverviewState extends _$OverviewState {
 
   /// Toggle visibility of the overview
   void toggle() {
-    state = state.copyWith(isDisplayed: !state.isDisplayed);
+    final isDisplayed = !state.isDisplayed;
+    state = state.copyWith(
+      isDisplayed: isDisplayed,
+      focusedWindowId: isDisplayed
+          ? resolveOverviewFocusedWindow(
+              state.windowList,
+              state.focusedWindowId,
+            )
+          : state.focusedWindowId,
+    );
+  }
 
-    /// If the overview is hidden, close all ephemeral applications
-/*     if (!state.isDisplayed) {
-      for (final windowId in state.windowList) {
-        ref.read(windowManagerProvider.notifier).closeWindow(windowId);
-      }
-    } */
+  /// Shows the overview focused on [windowId], bringing it into view.
+  void show(EphemeralWindowId windowId) {
+    if (!state.windowList.contains(windowId)) {
+      return;
+    }
+    state = state.copyWith(isDisplayed: true, focusedWindowId: windowId);
+  }
+
+  /// Hides the overview.
+  void hide() {
+    if (!state.isDisplayed) {
+      return;
+    }
+    state = state.copyWith(isDisplayed: false);
+  }
+
+  /// Selects [windowId] as the overview's displayed window.
+  void focusWindow(EphemeralWindowId windowId) {
+    if (!state.windowList.contains(windowId) ||
+        state.focusedWindowId == windowId) {
+      return;
+    }
+    state = state.copyWith(focusedWindowId: windowId);
   }
 
   /// Start an new Ephemeral Application
@@ -42,14 +69,32 @@ class OverviewState extends _$OverviewState {
 
     state = state.copyWith(
       windowList: state.windowList.add(windowId),
+      focusedWindowId: windowId,
     );
 
     ref.read(ephemeralWindowStateProvider(windowId).notifier).launchSelf();
   }
 
   void removeWindow(EphemeralWindowId windowId) {
+    final windowList = state.windowList.remove(windowId);
     state = state.copyWith(
-      windowList: state.windowList.remove(windowId),
+      windowList: windowList,
+      focusedWindowId: resolveOverviewFocusedWindow(
+        windowList,
+        state.focusedWindowId,
+      ),
     );
   }
+}
+
+/// The window the overview should display for [windowList]: [focused] while it
+/// is still present, otherwise the first remaining window (or `null`).
+EphemeralWindowId? resolveOverviewFocusedWindow(
+  IList<EphemeralWindowId> windowList,
+  EphemeralWindowId? focused,
+) {
+  if (focused != null && windowList.contains(focused)) {
+    return focused;
+  }
+  return windowList.isEmpty ? null : windowList.first;
 }
