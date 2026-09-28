@@ -11,6 +11,7 @@ import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/screen/provider/screen_state.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:shell/window/model/dialog_window.dart';
 import 'package:shell/window/model/ephemeral_window.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
@@ -58,16 +59,24 @@ void _revealDialog(Ref ref, DialogWindowId windowId) {
 }
 
 void _revealPersistent(Ref ref, PersistentWindowId windowId) {
-  final workspaceId = ref.read(windowWorkspaceMapProvider)[windowId];
+  final workspaceId = _workspaceForWindow(ref, windowId);
   final screenId =
       workspaceId == null ? null : _screenForWorkspace(ref, workspaceId);
   if (workspaceId == null || screenId == null) {
     // The tile is not placed on any screen: nothing to navigate, but a live
     // meta window can still be activated.
+    navigationLog.warning(
+      'No screen/workspace found for persistent window $windowId '
+      '(workspace=$workspaceId); activating only',
+    );
     _activate(ref, windowId);
     return;
   }
 
+  navigationLog.info(
+    'Revealing persistent window $windowId: screen $screenId, '
+    'workspace $workspaceId',
+  );
   ref.read(focusedScreenProvider.notifier).setFocusedScreen(screenId);
   // The overview would keep covering the workspace we are navigating to.
   ref.read(overviewStateProvider(screenId).notifier).hide();
@@ -85,9 +94,32 @@ void _revealPersistent(Ref ref, PersistentWindowId windowId) {
     ref
         .read(workspaceStateProvider(workspaceId).notifier)
         .selectWindow(windowId);
+  } else {
+    navigationLog.warning(
+      'Window $windowId is not in workspace $workspaceId tile list',
+    );
   }
 
   _activate(ref, windowId);
+}
+
+/// The workspace holding [windowId]: from the map when present, otherwise by
+/// scanning the layout (the map can lag behind a restored or just-placed tile).
+WorkspaceId? _workspaceForWindow(Ref ref, PersistentWindowId windowId) {
+  final mapped = ref.read(windowWorkspaceMapProvider)[windowId];
+  if (mapped != null) {
+    return mapped;
+  }
+  for (final screenId in ref.read(screenManagerProvider).screenIds) {
+    final screen = ref.read(screenStateProvider(screenId));
+    for (final workspaceId in screen.workspaceList) {
+      final workspace = ref.read(workspaceStateProvider(workspaceId));
+      if (workspace.tileableWindowList.contains(windowId)) {
+        return workspaceId;
+      }
+    }
+  }
+  return null;
 }
 
 void _revealEphemeral(Ref ref, EphemeralWindowId windowId) {
@@ -95,8 +127,12 @@ void _revealEphemeral(Ref ref, EphemeralWindowId windowId) {
     () => ref.read(ephemeralWindowStateProvider(windowId)),
   );
   if (window == null) {
+    navigationLog.warning('No state for ephemeral window $windowId');
     return;
   }
+  navigationLog.info(
+    'Revealing ephemeral window $windowId on screen ${window.screenId}',
+  );
   ref.read(focusedScreenProvider.notifier).setFocusedScreen(window.screenId);
   ref.read(overviewStateProvider(window.screenId).notifier).show(windowId);
   _activate(ref, windowId);
@@ -133,6 +169,7 @@ void _activate(Ref ref, WindowId windowId) {
       )?.metaWindowId,
   };
   if (metaWindowId == null) {
+    navigationLog.info('No live meta window for $windowId; not activating');
     return;
   }
   final metaWindow = _readOrNull<MetaWindow>(
@@ -141,6 +178,9 @@ void _activate(Ref ref, WindowId windowId) {
   if (metaWindow == null) {
     return;
   }
+  navigationLog.info(
+    'Activating meta window $metaWindowId (surface ${metaWindow.surfaceId})',
+  );
   unawaited(
     ref.read(platformManagerProvider.notifier).request(
           ActivateWindowRequest(

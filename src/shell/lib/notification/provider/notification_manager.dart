@@ -10,6 +10,7 @@ import 'package:shell/meta_window/provider/pid_to_meta_window_id.dart';
 import 'package:shell/notification/model/dbus_notification.serializable.dart';
 import 'package:shell/notification/model/dbus_notification_server.dart';
 import 'package:shell/notification/model/notification.serializable.dart';
+import 'package:shell/notification/model/notification_action.dart';
 import 'package:shell/notification/model/notification_close_reason.dart';
 import 'package:shell/notification/model/notification_manager_state.serializable.dart';
 import 'package:shell/notification/model/notification_target.dart';
@@ -17,6 +18,7 @@ import 'package:shell/notification/provider/notification_channel.dart';
 import 'package:shell/notification/provider/notification_routing.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/shared/provider/persistent_storage_state.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:shell/window/provider/window_navigation.dart';
 import 'package:shell/workspace/provider/window_workspace_map.dart';
 
@@ -230,15 +232,35 @@ class NotificationManager extends _$NotificationManager {
     if (notification == null) {
       return;
     }
-    final target = notification.targetWindowId;
+    // The target is resolved at reception; re-resolve in case it could not be
+    // mapped yet when the notification arrived, then fall back to the app id.
+    final appId = notification.appId;
+    final target = notification.targetWindowId ??
+        resolveNotificationTargetWindow(ref, notification.dbusNotification) ??
+        (appId == null ? null : persistentWindowForAppId(ref, appId));
+    if (target == null) {
+      // Nothing to reveal: fall back to the notification's default action.
+      final defaultAction = defaultNotificationAction(
+        parseNotificationActions(notification.dbusNotification.actions),
+      );
+      final fallback = defaultAction == null
+          ? 'ignoring click'
+          : 'invoking default action';
+      navigationLog.info(
+        'Notification $id has no target window; $fallback',
+      );
+      if (defaultAction != null) {
+        await _invokeAction(id, defaultAction.key);
+      }
+      return;
+    }
+    navigationLog.info('Opening notification $id -> $target');
+    bringWindowIntoView(ref, target);
     await _closeNotification(
       id,
       reason: NotificationCloseReason.dismissed,
       markRead: true,
     );
-    if (target != null) {
-      bringWindowIntoView(ref, target);
-    }
   }
 
   Future<void> _invokeAction(int id, String actionKey) async {
@@ -315,7 +337,11 @@ class NotificationManager extends _$NotificationManager {
     if (server == null) {
       return;
     }
-    await server.emitActionInvoked(id, actionKey);
+    try {
+      await server.emitActionInvoked(id, actionKey);
+    } on Object catch (error) {
+      print('Failed to emit ActionInvoked($id, $actionKey): $error');
+    }
   }
 
   Future<void> _emitNotificationClosed(int id, int reason) async {
@@ -323,6 +349,10 @@ class NotificationManager extends _$NotificationManager {
     if (server == null) {
       return;
     }
-    await server.emitNotificationClosed(id, reason);
+    try {
+      await server.emitNotificationClosed(id, reason);
+    } on Object catch (error) {
+      print('Failed to emit NotificationClosed($id, $reason): $error');
+    }
   }
 }

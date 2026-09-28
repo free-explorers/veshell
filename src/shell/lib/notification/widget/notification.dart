@@ -27,8 +27,9 @@ class NotificationWidget extends StatelessWidget {
   /// longer waiting for them.
   final void Function(String actionKey)? onAction;
 
-  /// Called when the body is tapped and there is no `default` action: brings
-  /// the window that sent the notification into view.
+  /// Called when the body is tapped: brings the window that sent the
+  /// notification into view. When set, it takes precedence over the `default`
+  /// action, which is only invoked when no [onOpen] handler is provided.
   final VoidCallback? onOpen;
 
   @override
@@ -41,10 +42,10 @@ class NotificationWidget extends StatelessWidget {
     final buttons = canAct
         ? actions.where((action) => !action.isDefault).toList()
         : const <NotificationAction>[];
-    // A `default` action takes precedence over bringing the window into view.
-    final onBodyTap = defaultAction != null
-        ? () => onAction!(defaultAction.key)
-        : onOpen;
+    // Bringing the window into view is the primary body action; the `default`
+    // action is only a fallback when the caller does not open windows.
+    final onBodyTap = onOpen ??
+        (defaultAction != null ? () => onAction!(defaultAction.key) : null);
 
     final content = Padding(
       padding: const EdgeInsets.all(16),

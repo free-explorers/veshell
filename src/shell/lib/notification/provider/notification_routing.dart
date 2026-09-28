@@ -182,6 +182,14 @@ WindowId? resolveNotificationTargetWindow(
   return _bestPersistentWindowForAppId(ref, appId);
 }
 
+/// The best persistent tile for [appId], or `null`.
+///
+/// Exposed as a click-time fallback: a notification whose target could not be
+/// resolved at reception (for example, its window map was not ready yet) can
+/// still be matched by the app id stored on the notification.
+PersistentWindowId? persistentWindowForAppId(Ref ref, String appId) =>
+    _bestPersistentWindowForAppId(ref, appId);
+
 /// Walks up the meta-window parent chain until it reaches a persistent tile or
 /// an ephemeral window. Returns `null` when the chain has no shell window.
 WindowId? _resolveFromMetaWindow(Ref ref, MetaWindowId metaWindowId) {
