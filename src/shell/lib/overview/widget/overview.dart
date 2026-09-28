@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:ui';
 
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -11,6 +12,16 @@ import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/shared/widget/clock.dart';
 import 'package:shell/theme//provider/theme.dart';
 
+/// Minimum width the search engine is allowed to shrink to.
+const _minSearchEngineWidth = 548.0;
+
+/// Gap between the search engine and the overview content.
+const _overviewGap = 16.0;
+
+/// Flex weights keeping the search engine / overview content split at 2:5.
+const _searchEngineFlex = 2;
+const _overviewContentFlex = 5;
+
 class OverviewWidget extends HookConsumerWidget {
   const OverviewWidget({super.key});
   @override
@@ -22,14 +33,15 @@ class OverviewWidget extends HookConsumerWidget {
     );
 
     ref.listen(
-        overviewStateProvider(screenId).select((state) => state.isDisplayed),
-        (previous, next) {
-      if (next) {
-        overviewAnimationController.forward();
-      } else {
-        overviewAnimationController.reverse();
-      }
-    });
+      overviewStateProvider(screenId).select((state) => state.isDisplayed),
+      (previous, next) {
+        if (next) {
+          overviewAnimationController.forward();
+        } else {
+          overviewAnimationController.reverse();
+        }
+      },
+    );
 
     return AnimatedBuilder(
       animation: overviewAnimationController,
@@ -45,8 +57,9 @@ class OverviewWidget extends HookConsumerWidget {
       },
       child: HookConsumer(
         builder: (context, ref, child) {
-          final focusScopeNode =
-              useFocusScopeNode(debugLabel: 'OverviewFocusNode');
+          final focusScopeNode = useFocusScopeNode(
+            debugLabel: 'OverviewFocusNode',
+          );
           return FocusScope(
             node: focusScopeNode,
             autofocus: true,
@@ -57,9 +70,7 @@ class OverviewWidget extends HookConsumerWidget {
                   children: [
                     IconButton(
                       onPressed: () => ref
-                          .read(
-                            overviewStateProvider(screenId).notifier,
-                          )
+                          .read(overviewStateProvider(screenId).notifier)
                           .toggle(),
                       icon: const Icon(MdiIcons.close),
                       style: IconButton.styleFrom(
@@ -69,23 +80,40 @@ class OverviewWidget extends HookConsumerWidget {
                     ),
                   ],
                 ),
-                const Positioned(
-                  top: 12,
-                  child: ClockWidget(),
-                ),
-                const Padding(
-                  padding: EdgeInsets.only(
+                const Positioned(top: 12, child: ClockWidget()),
+                Padding(
+                  padding: const EdgeInsets.only(
                     left: 64,
                     right: 64,
                     bottom: 64,
                     top: 96,
                   ),
-                  child: Row(
-                    children: [
-                      Flexible(flex: 2, child: SearchEngine()),
-                      SizedBox(width: 16),
-                      Flexible(flex: 5, child: OverviewContent()),
-                    ],
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final availableWidth = max<double>(
+                        0,
+                        constraints.maxWidth - _overviewGap,
+                      );
+                      final searchWidth = min(
+                        max(
+                          _minSearchEngineWidth,
+                          availableWidth *
+                              _searchEngineFlex /
+                              (_searchEngineFlex + _overviewContentFlex),
+                        ),
+                        availableWidth,
+                      );
+                      return Row(
+                        children: [
+                          SizedBox(
+                            width: searchWidth,
+                            child: const SearchEngine(),
+                          ),
+                          const SizedBox(width: _overviewGap),
+                          const Expanded(child: OverviewContent()),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ],
@@ -139,12 +167,10 @@ class AnimatedBlurBackground extends HookWidget {
           sigmaY: blurAnimation.value,
         ),
         child: ColoredBox(
-          color:
-              Colors.white.withAlpha((255 * blurAnimation.value / 100).round()),
-          child: Opacity(
-            opacity: opacityAnimation.value,
-            child: child,
+          color: Colors.white.withAlpha(
+            (255 * blurAnimation.value / 100).round(),
           ),
+          child: Opacity(opacity: opacityAnimation.value, child: child),
         ),
       ),
     );
