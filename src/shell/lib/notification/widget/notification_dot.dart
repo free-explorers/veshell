@@ -32,7 +32,7 @@ class NotificationDot extends HookWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final controller = useAnimationController(
-      duration: const Duration(milliseconds: 500),
+      duration: const Duration(milliseconds: 2000),
     );
     useEffect(() {
       if (blinking) {
@@ -60,7 +60,6 @@ class NotificationDot extends HookWidget {
     return FadeTransition(
       opacity: controller.drive(
         TweenSequence<double>([
-          TweenSequenceItem(tween: ConstantTween<double>(1), weight: 1),
           TweenSequenceItem(tween: ConstantTween<double>(1), weight: 1),
           TweenSequenceItem(tween: ConstantTween<double>(0), weight: 1),
         ]),
