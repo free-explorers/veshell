@@ -61,10 +61,12 @@ class NotificationManager extends _$NotificationManager {
     }
     final server = DbusNotificationServer(
       onNewNotification: _onNewNotification,
+      // Closing a notification only tears down its live popup: the entry stays
+      // in the persisted history so the Helm notification center keeps the
+      // full log. Only its explicit delete removes it.
       onCloseNotification: (id) => closeNotification(
         id,
         reason: NotificationCloseReason.closedByCall,
-        removeFromHistory: true,
       ),
     );
     _server = server;

@@ -109,13 +109,14 @@ with the spec reason:
 
 - `1` — the popup expired,
 - `2` — the user dismissed it or invoked a closing action,
-- `3` — a client called `CloseNotification`; the entry is also removed from
-  history.
+- `3` — a client called `CloseNotification`.
 
 Closing is idempotent: a notification that already expired (and stays in
-history unread) is not signaled again when the user later deletes it. Expiry
-and dismissal keep the entry in history; deleting it from the overview panel
-removes it.
+history unread) is not signaled again when the user later deletes it. Closing
+a popup—by expiry, dismissal, activation or a client's `CloseNotification`—only
+tears down the live popup: the entry stays in the persisted list so the Helm
+notification center keeps the **full history**. Only deleting an entry from
+that center removes it.
 
 ## Opening the source window
 
