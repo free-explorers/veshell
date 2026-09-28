@@ -15,4 +15,5 @@ This is Veshell technical specifications for high level components
         - [EphemeralApplicationLauncher](/specifications/ephemeral_application_launcher.md)
         - [EphemeralWindow](/specifications/ephemeral_window.md)
 - [WindowManager](/specifications/window_manager.md)
+- [Notification](/specifications/notification.md)
 - [StateManager](/specifications/state_manager.md)

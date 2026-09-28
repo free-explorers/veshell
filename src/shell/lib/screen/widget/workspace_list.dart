@@ -5,6 +5,10 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/widget/app_icon.dart';
+import 'package:shell/notification/provider/notification_channel.dart';
+import 'package:shell/notification/provider/notification_routing.dart';
+import 'package:shell/notification/widget/notification_area.dart';
+import 'package:shell/notification/widget/notification_dot.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/screen/provider/workspace_display_mode.dart';
@@ -220,46 +224,68 @@ class WorkspaceListButton extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final screenState = ref.watch(screenStateProvider(screenId));
+    final unreadNotifications = ref.watch(
+      unreadNotificationsForWorkspaceProvider(workspaceId),
+    );
 
-    return DragTarget<PersistentWindowTileable>(
-      onWillAcceptWithDetails: (data) => data is PersistentWindowTileable,
-      onAcceptWithDetails: (details) {
-        ref
-            .read(workspaceStateProvider(workspaceId).notifier)
-            .addWindow(details.data.windowId);
-      },
-      builder: (
-        context,
-        candidateData,
-        rejectedData,
-      ) {
-        return AspectRatio(
-          aspectRatio: 1,
-          child: IconButton(
-            style: ButtonStyle(
-              backgroundColor: WidgetStatePropertyAll(
-                candidateData.isNotEmpty
-                    ? Theme.of(context).colorScheme.primary
-                    : null,
-              ),
-              foregroundColor: WidgetStatePropertyAll(
-                candidateData.isNotEmpty
-                    ? Theme.of(context).colorScheme.onPrimary
-                    : null,
-              ),
-              shape: WidgetStateProperty.all(
-                const RoundedRectangleBorder(),
-              ),
+    return NotificationArea(
+      channel: workspaceNotificationChannel(workspaceId),
+      anchor: NotificationAnchor.right,
+      child: DragTarget<PersistentWindowTileable>(
+        onWillAcceptWithDetails: (data) => data is PersistentWindowTileable,
+        onAcceptWithDetails: (details) {
+          ref
+              .read(workspaceStateProvider(workspaceId).notifier)
+              .addWindow(details.data.windowId);
+        },
+        builder: (
+          context,
+          candidateData,
+          rejectedData,
+        ) {
+          return AspectRatio(
+            aspectRatio: 1,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(
+                  child: IconButton(
+                    style: ButtonStyle(
+                      backgroundColor: WidgetStatePropertyAll(
+                        candidateData.isNotEmpty
+                            ? Theme.of(context).colorScheme.primary
+                            : null,
+                      ),
+                      foregroundColor: WidgetStatePropertyAll(
+                        candidateData.isNotEmpty
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : null,
+                      ),
+                      shape: WidgetStateProperty.all(
+                        const RoundedRectangleBorder(),
+                      ),
+                    ),
+                    onPressed: () {
+                      ref
+                          .read(screenStateProvider(screenId).notifier)
+                          .selectWorkspace(
+                            screenState.workspaceList.indexOf(workspaceId),
+                          );
+                    },
+                    icon: WorkspaceIcon(workspaceId: workspaceId),
+                  ),
+                ),
+                if (unreadNotifications.isNotEmpty)
+                  const Positioned(
+                    top: 6,
+                    right: 6,
+                    child: NotificationDot(),
+                  ),
+              ],
             ),
-            onPressed: () {
-              ref.read(screenStateProvider(screenId).notifier).selectWorkspace(
-                    screenState.workspaceList.indexOf(workspaceId),
-                  );
-            },
-            icon: WorkspaceIcon(workspaceId: workspaceId),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

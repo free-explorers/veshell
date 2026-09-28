@@ -26,7 +26,6 @@ class ScreenPanel extends HookConsumerWidget implements PreferredSizeWidget {
           children: [
             NotificationArea(
               channel: screenId,
-              offset: const Offset(panelSize, panelSize),
               child: IconButton.filled(
                 constraints: const BoxConstraints(
                   minWidth: panelSize,

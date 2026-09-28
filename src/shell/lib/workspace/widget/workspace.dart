@@ -107,42 +107,47 @@ class WorkspaceWidget extends HookConsumerWidget {
           },
           autofocus: isSelected,
           canRequestFocus: isSelected,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              FocusScope(
-                canRequestFocus: false,
-                descendantsAreFocusable: false,
-                child: WorkspacePanel(
-                  tileableList: tileableList,
-                  visibleLength: workspaceState.visibleLength,
-                  onVisibleLengthChange: (value) {
-                    ref
-                        .read(
-                          workspaceStateProvider(workspaceId).notifier,
-                        )
-                        .setVisibleLength(value);
-                  },
+          // A workspace-local overlay hosts the tileable notification popups so
+          // they are clipped and scrolled by the workspace instead of floating
+          // above the whole shell from the root overlay.
+          child: Overlay.wrap(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FocusScope(
+                  canRequestFocus: false,
+                  descendantsAreFocusable: false,
+                  child: WorkspacePanel(
+                    tileableList: tileableList,
+                    visibleLength: workspaceState.visibleLength,
+                    onVisibleLengthChange: (value) {
+                      ref
+                          .read(
+                            workspaceStateProvider(workspaceId).notifier,
+                          )
+                          .setVisibleLength(value);
+                    },
+                  ),
                 ),
-              ),
-              Expanded(
-                child: SlidingContainer(
-                  index: workspaceState.selectedIndex,
-                  visible: workspaceState.visibleLength,
-                  onIndexChanged: (nextIndex) {
-                    ref
-                        .read(
-                          workspaceStateProvider(workspaceId).notifier,
-                        )
-                        .setSelectedIndex(nextIndex);
-                  },
-                  isSwipeEnabled: CurrentScreenId.of(context) ==
-                          ref.watch(focusedScreenProvider) &&
-                      isSelected,
-                  children: tileableList,
+                Expanded(
+                  child: SlidingContainer(
+                    index: workspaceState.selectedIndex,
+                    visible: workspaceState.visibleLength,
+                    onIndexChanged: (nextIndex) {
+                      ref
+                          .read(
+                            workspaceStateProvider(workspaceId).notifier,
+                          )
+                          .setSelectedIndex(nextIndex);
+                    },
+                    isSwipeEnabled: CurrentScreenId.of(context) ==
+                            ref.watch(focusedScreenProvider) &&
+                        isSelected,
+                    children: tileableList,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

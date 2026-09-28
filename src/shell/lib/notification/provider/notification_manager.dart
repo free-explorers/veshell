@@ -8,9 +8,13 @@ import 'package:shell/meta_window/provider/pid_to_meta_window_id.dart';
 import 'package:shell/notification/model/dbus_notification_server.dart';
 import 'package:shell/notification/model/notification.serializable.dart';
 import 'package:shell/notification/model/notification_manager_state.serializable.dart';
+import 'package:shell/notification/model/notification_target.dart';
 import 'package:shell/notification/provider/notification_channel.dart';
+import 'package:shell/notification/provider/notification_routing.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/shared/provider/persistent_storage_state.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
+import 'package:shell/workspace/provider/window_workspace_map.dart';
 
 part 'notification_manager.g.dart';
 
@@ -64,11 +68,16 @@ class NotificationManager extends _$NotificationManager {
                 )
                 .appId;
           }
+          final targetWindowId = resolveNotificationTargetWindow(
+            ref,
+            newNotification,
+          );
           final notification = Notification(
             id: newId,
             appId: appId,
             dbusNotification: newNotification,
             createdAt: DateTime.now(),
+            targetWindowId: targetWindowId,
           );
           state = state.copyWith(
             notificationMap: state.notificationMap.add(
@@ -77,17 +86,70 @@ class NotificationManager extends _$NotificationManager {
             ),
             lastIndex: newId,
           );
-          final focusedScreenId = ref.read(focusedScreenProvider);
-          if (focusedScreenId != null) {
-            ref
-                .read(notificationChannelProvider(focusedScreenId).notifier)
-                .add(notification);
-          }
+          _routePopup(notification, targetWindowId);
           return newId;
         }
       },
     );
     await dbusClient.registerObject(_server);
+  }
+
+  /// Pushes the transient popup to the channel matching the notification's
+  /// target. Displayed notifications only live in the persisted list.
+  void _routePopup(Notification notification, WindowId? windowId) {
+    final target = routeForWindow(
+      windowId,
+      windowWorkspaceMap: ref.read(windowWorkspaceMapProvider),
+      focusedWorkspaceId: ref.read(focusedWorkspaceIdProvider),
+      displayedWindowIds: ref.read(displayedWindowIdsProvider),
+      displayedEphemeralWindowIds: ref.read(
+        displayedEphemeralWindowIdsProvider,
+      ),
+    );
+    final timeout = notificationPopupTimeout(
+      notification.dbusNotification.expireTimeout,
+    );
+    switch (target) {
+      case DisplayedNotificationTarget():
+      case EphemeralDisplayedNotificationTarget():
+        break;
+      case WorkspaceNotificationTarget(:final workspaceId):
+        ref
+            .read(
+              notificationChannelProvider(
+                workspaceNotificationChannel(workspaceId),
+              ).notifier,
+            )
+            .add(notification, timeout: timeout);
+      case TileNotificationTarget(:final windowId):
+        ref
+            .read(
+              notificationChannelProvider(
+                windowNotificationChannel(windowId),
+              ).notifier,
+            )
+            .add(notification, timeout: timeout);
+      case UnresolvedNotificationTarget():
+        final focusedScreenId = ref.read(focusedScreenProvider);
+        if (focusedScreenId != null) {
+          ref
+              .read(notificationChannelProvider(focusedScreenId).notifier)
+              .add(notification, timeout: timeout);
+        }
+    }
+  }
+
+  void markRead(int id) {
+    final notification = state.notificationMap[id];
+    if (notification == null || notification.isRead) {
+      return;
+    }
+    state = state.copyWith(
+      notificationMap: state.notificationMap.add(
+        id,
+        notification.copyWith(isRead: true),
+      ),
+    );
   }
 
   void removeNotification(int id) {
