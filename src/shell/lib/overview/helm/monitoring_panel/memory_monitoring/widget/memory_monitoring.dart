@@ -10,9 +10,7 @@ import 'package:shell/overview/helm/monitoring_panel/provider/process_name.dart'
 import 'package:shell/shared/widget/expandable_card.dart';
 
 class MemoryMonitoringWidget extends HookConsumerWidget {
-  const MemoryMonitoringWidget({
-    super.key,
-  });
+  const MemoryMonitoringWidget({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -37,31 +35,22 @@ class MemoryMonitoringWidget extends HookConsumerWidget {
                         maxX: memoryChartData.lastOrNull?.x ?? 0,
                         maxY: 100,
                         minY: 0,
-                        gridData: const FlGridData(
-                          show: false,
-                        ),
+                        gridData: const FlGridData(show: false),
                         borderData: FlBorderData(show: false),
-                        titlesData: const FlTitlesData(
-                          show: false,
-                        ),
-                        lineTouchData: const LineTouchData(
-                          enabled: false,
-                        ),
+                        titlesData: const FlTitlesData(show: false),
+                        lineTouchData: const LineTouchData(enabled: false),
                         lineBarsData: [
                           LineChartBarData(
                             spots: memoryChartData,
-                            dotData: const FlDotData(
-                              show: false,
-                            ),
+                            dotData: const FlDotData(show: false),
                             barWidth: 0,
                             isCurved: true,
                             curveSmoothness: 0.1,
                             color: Theme.of(context).colorScheme.primary,
                             belowBarData: BarAreaData(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .primary
-                                  .withAlpha(100),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primary.withAlpha(100),
                               show: true,
                             ),
                           ),
@@ -74,12 +63,11 @@ class MemoryMonitoringWidget extends HookConsumerWidget {
                     padding: const EdgeInsets.all(16),
                     child: Row(
                       children: [
-                        const Icon(
+                        Icon(
                           MdiIcons.memory,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
-                        const SizedBox(
-                          width: 16,
-                        ),
+                        const SizedBox(width: 16),
                         Expanded(
                           child: Text(
                             'Memory',
@@ -94,22 +82,18 @@ class MemoryMonitoringWidget extends HookConsumerWidget {
                             child: Center(
                               child: Text(
                                 '${stats.memoryUsage}%',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium!
+                                style: Theme.of(context).textTheme.titleMedium!
                                     .copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onPrimary,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onPrimary,
                                       fontWeight: FontWeight.bold,
                                     ),
                               ),
                             ),
                           ),
                         ),
-                        const SizedBox(
-                          width: 8,
-                        ),
+                        const SizedBox(width: 8),
                         IconButton.filledTonal(
                           onPressed: () {
                             ExpandableCard.of(context).toggle();
@@ -129,21 +113,20 @@ class MemoryMonitoringWidget extends HookConsumerWidget {
                   ),
                 ],
               ),
-              if (isExpanded)
-                const Divider(
-                  height: 2,
-                ),
+              if (isExpanded) const Divider(height: 2),
               if (isExpanded)
                 Consumer(
                   builder: (context, ref, child) {
-                    final processesStats =
-                        ref.watch(processesMemoryStatsProvider);
-                    final sortedProcessList =
-                        processesStats.toEntryIList().sort(
-                              (a, b) => b.value == a.value
-                                  ? b.key.compareTo(a.key)
-                                  : b.value.compareTo(a.value),
-                            );
+                    final processesStats = ref.watch(
+                      processesMemoryStatsProvider,
+                    );
+                    final sortedProcessList = processesStats
+                        .toEntryIList()
+                        .sort(
+                          (a, b) => b.value == a.value
+                              ? b.key.compareTo(a.key)
+                              : b.value.compareTo(a.value),
+                        );
                     return Expanded(
                       child: ColoredBox(
                         color: Colors.black12,
@@ -159,13 +142,9 @@ class MemoryMonitoringWidget extends HookConsumerWidget {
                                 leading: SizedBox(
                                   width: 24,
                                   height: 24,
-                                  child: AppIconById(
-                                    id: processName,
-                                  ),
+                                  child: AppIconById(id: processName),
                                 ),
-                                title: Text(
-                                  processName,
-                                ),
+                                title: Text(processName),
                                 trailing: Text(
                                   '${processStat.value.toStringAsFixed(2)}%',
                                 ),

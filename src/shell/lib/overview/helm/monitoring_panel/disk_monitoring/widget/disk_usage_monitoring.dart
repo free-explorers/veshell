@@ -7,7 +7,9 @@ class DiskUsageMonitoring extends HookConsumerWidget {
   const DiskUsageMonitoring({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final diskSpaceState = ref.watch(diskSpaceStateProvider).where(
+    final diskSpaceState = ref
+        .watch(diskSpaceStateProvider)
+        .where(
           (disk) =>
               disk.devicePath.startsWith('/dev') &&
               !disk.mountPath.startsWith('/boot'),
@@ -21,12 +23,11 @@ class DiskUsageMonitoring extends HookConsumerWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     MdiIcons.harddisk,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
-                  const SizedBox(
-                    width: 16,
-                  ),
+                  const SizedBox(width: 16),
                   Expanded(
                     child: Text(
                       'Disks',
@@ -50,29 +51,28 @@ class DiskUsageMonitoring extends HookConsumerWidget {
                         ),
                         const Spacer(),
                         // bytes to smallest integere unit
-                        Text(
-                          switch (disk.availableSpace) {
-                            > 1024 * 1024 * 1024 * 1024 =>
-                              '${(disk.availableSpace / 1024 / 1024 / 1024 / 1024).round()} TB',
-                            > 1024 * 1024 * 1024 =>
-                              '${(disk.availableSpace / 1024 / 1024 / 1024).round()} GB',
-                            > 1024 * 1024 =>
-                              '${(disk.availableSpace / 1024 / 1024).round()} MB',
-                            > 1024 =>
-                              '${(disk.availableSpace / 1024).round()} KB',
-                            _ => '${disk.availableSpace} B',
-                          },
-                        ),
+                        Text(switch (disk.availableSpace) {
+                          > 1024 * 1024 * 1024 * 1024 =>
+                            '${(disk.availableSpace / 1024 / 1024 / 1024 / 1024).round()} TB',
+                          > 1024 * 1024 * 1024 =>
+                            '${(disk.availableSpace / 1024 / 1024 / 1024).round()} GB',
+                          > 1024 * 1024 =>
+                            '${(disk.availableSpace / 1024 / 1024).round()} MB',
+                          > 1024 =>
+                            '${(disk.availableSpace / 1024).round()} KB',
+                          _ => '${disk.availableSpace} B',
+                        }),
                       ],
                     ),
                     SliderTheme(
                       data: Theme.of(context).sliderTheme.copyWith(
-                            thumbShape: SliderComponentShape.noThumb,
-                            disabledActiveTrackColor:
-                                Theme.of(context).colorScheme.primary,
-                            trackShape: CustomSliderTrackShape(),
-                            trackHeight: 8,
-                          ),
+                        thumbShape: SliderComponentShape.noThumb,
+                        disabledActiveTrackColor: Theme.of(
+                          context,
+                        ).colorScheme.primary,
+                        trackShape: CustomSliderTrackShape(),
+                        trackHeight: 8,
+                      ),
                       child: SizedBox(
                         height: 24,
                         child: Slider(
