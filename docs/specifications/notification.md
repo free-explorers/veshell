@@ -158,6 +158,15 @@ Invoking an action emits `ActionInvoked(id, key)` and marks the notification
 read. Unless the `resident` hint is set, the notification is then closed
 (reason 2); a resident notification stays on screen until dismissed or closed.
 
+Before `ActionInvoked`, the shell asks the compositor to mint an **activation
+token** for the notification's target window and emits the spec's
+`ActivationToken(id, token)` signal. An app whose action opens its own window
+hands that token to `xdg_activation_v1`; the compositor honors a token it
+minted for an invoked action by focusing the window (see *Window attention*).
+Inline actions that do not want the window forward simply ignore the token, so
+clicking "Mark as read" never steals focus. A notification with no target
+MetaWindow (a system sender) gets no token.
+
 Every live notification is closed exactly once, emitting `NotificationClosed`
 with the spec reason:
 
@@ -206,6 +215,9 @@ on its own. Two sources feed the same event:
   window emits `window_attention_requested { metaWindowId }`. A request for a
   surface with no meta window yet keeps its existing "opened from" meaning and
   is **not** an attention request (it is a launch, not a background demand).
+  A request carrying a token the notification server minted for an invoked
+  action is not a demand either: it focuses that window, because the user asked
+  for it (see *Actions and closing*).
 
 `NotificationManager` synthesizes a `Notification` (summary `"<App> requests
 attention"`, no body) and routes it with the ordinary rules, so a window in
@@ -269,7 +281,9 @@ owns the state; the two sides talk over the platform channel:
 - Dart → Rust: `notification_notify_result { callToken, id }` (completes the
   pending `Notify` with the shell-assigned id), `notification_action_invoked
   { id, actionKey }` and `notification_closed { id, reason }` (emit the
-  signals), and `notification_ready` (the shell has subscribed).
+  signals), `notification_activation_token { id, metaWindowId }` (mint an
+  activation token for the target window and emit `ActivationToken`), and
+  `notification_ready` (the shell has subscribed).
 
 `GetCapabilities` and `GetServerInformation` are static protocol metadata
 answered by Rust without a shell round trip. A call accepted before
@@ -278,5 +292,5 @@ dropped during startup and never pushed to a shell that cannot receive it.
 
 ## Out of scope (future milestone)
 
-Activation tokens, action icons (`action-icons`), and hint-driven surfacing
+Action icons (`action-icons`) and hint-driven surfacing
 (urgency/transient/category).

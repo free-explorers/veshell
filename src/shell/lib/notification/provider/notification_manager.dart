@@ -14,6 +14,7 @@ import 'package:shell/notification/model/dbus_notification.serializable.dart';
 import 'package:shell/notification/model/notification.serializable.dart';
 import 'package:shell/notification/model/notification_action.dart';
 import 'package:shell/notification/model/notification_action_invoked/notification_action_invoked.serializable.dart';
+import 'package:shell/notification/model/notification_activation_token/notification_activation_token.serializable.dart';
 import 'package:shell/notification/model/notification_close_reason.dart';
 import 'package:shell/notification/model/notification_closed/notification_closed.serializable.dart';
 import 'package:shell/notification/model/notification_hints.serializable.dart';
@@ -453,6 +454,9 @@ class NotificationManager extends _$NotificationManager {
       parseNotificationActions(notification.dbusNotification.actions),
     );
     if (defaultAction != null && !notification.isClosed) {
+      // Give the sender a token to activate its own window before telling it
+      // the action was invoked (the spec allows ActivationToken first).
+      await _emitActivationToken(id, notification.targetMetaWindowId);
       await _emitActionInvoked(id, defaultAction.key);
     }
 
@@ -481,6 +485,7 @@ class NotificationManager extends _$NotificationManager {
       return;
     }
     _setRead(id);
+    await _emitActivationToken(id, notification.targetMetaWindowId);
     await _emitActionInvoked(id, actionKey);
     final resident = notification.dbusNotification.hints.resident ?? false;
     if (!resident) {
@@ -581,6 +586,34 @@ class NotificationManager extends _$NotificationManager {
     } on Object catch (error) {
       notificationLog.warning(
         'Failed to answer Notify($callToken) with id $id',
+        error,
+      );
+    }
+  }
+
+  /// Asks the compositor to mint an activation token for [id]'s window and
+  /// emit `ActivationToken` before the `ActionInvoked` that follows.
+  ///
+  /// A notification with no target MetaWindow (a system sender) has nothing to
+  /// activate, so no token is minted.
+  Future<void> _emitActivationToken(int id, String? metaWindowId) async {
+    if (metaWindowId == null) {
+      return;
+    }
+    try {
+      await ref
+          .read(platformManagerProvider.notifier)
+          .request(
+            NotificationActivationTokenRequest(
+              message: NotificationActivationTokenMessage(
+                id: id,
+                metaWindowId: metaWindowId,
+              ),
+            ),
+          );
+    } on Object catch (error) {
+      notificationLog.warning(
+        'Failed to mint an activation token for notification $id',
         error,
       );
     }

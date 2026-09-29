@@ -545,10 +545,35 @@ pub mod xdg {
 
         fn request_activation(
             &mut self,
-            _token: XdgActivationToken,
+            token: XdgActivationToken,
             token_data: XdgActivationTokenData,
             surface: WlSurface,
         ) {
+            // A token minted by the notification server for an invoked action
+            // is trusted: the user asked for the window, so honor the
+            // activation by focusing it instead of reading it as a demand for
+            // attention.
+            if let Some(meta_window_id) = self.take_notification_activation_token(token.as_str()) {
+                self.xdg_activation_state.remove_token(&token);
+                match crate::flutter_engine::platform_channel_callbacks::activate_window::focus_surface(
+                    self,
+                    &surface,
+                ) {
+                    Ok(()) => info!(
+                        target: "veshell::geometry",
+                        meta_window_id,
+                        "xdg_activation: notification token focused its window"
+                    ),
+                    Err((code, message)) => warn!(
+                        target: "veshell::geometry",
+                        error = code,
+                        message,
+                        "xdg_activation: notification token could not focus its window"
+                    ),
+                }
+                return;
+            }
+
             let activated_surface_id = get_surface_id(&surface);
 
             let focused_surface = match self.keyboard.current_focus() {

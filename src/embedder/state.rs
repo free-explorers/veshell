@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::os::fd::OwnedFd;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::backend::input::KeyState;
@@ -57,7 +58,7 @@ use smithay::wayland::shell::xdg::{
 };
 use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::wayland::socket::ListeningSocketSource;
-use smithay::wayland::xdg_activation::XdgActivationState;
+use smithay::wayland::xdg_activation::{XdgActivationState, XdgActivationToken};
 use smithay::wayland::xwayland_shell::{self, XWAYLAND_SHELL_ROLE};
 use smithay::xwayland::{X11Surface, X11Wm};
 use tracing::{info, warn};
@@ -124,6 +125,12 @@ pub struct State<BackendData: Backend + 'static> {
     pub x11_surface_per_wl_surface: HashMap<WlSurface, X11Surface>,
     pub x11_surface_per_x11_window: HashMap<X11Window, X11Surface>,
     pub xdg_activation_state: XdgActivationState,
+    /// Activation tokens minted for invoked notification actions, mapping the
+    /// token to the meta window the action belongs to. When a client turns one
+    /// of these into an `xdg_activation_v1` request, the window is focused —
+    /// the user invoked the action — instead of being read as a demand for
+    /// attention. Single-use, pruned by age.
+    pub notification_activation_tokens: HashMap<String, (String, Instant)>,
     pub xdg_dialog_state: XdgDialogState,
     pub xdg_popups: HashMap<u64, PopupSurface>,
     pub xdg_shell_state: XdgShellState,
@@ -372,6 +379,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             xdg_popups: HashMap::new(),
             xdg_dialog_state,
             xdg_activation_state,
+            notification_activation_tokens: HashMap::new(),
             meta_window_state: MetaWindowState::new(),
             x11_surfaces: HashMap::new(),
             x11_surface_per_x11_window: HashMap::new(),
@@ -402,6 +410,50 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         // Start watching for idleness right away.
         state.idle.arm_activity_timers();
         state
+    }
+
+    /// Mints an activation token for a notification action and records the
+    /// meta window it may activate. The returned string is what the D-Bus
+    /// `ActivationToken` signal carries; the client hands it back through
+    /// `xdg_activation_v1`.
+    pub fn mint_notification_activation_token(&mut self, meta_window_id: &str) -> String {
+        self.prune_notification_activation_tokens();
+        let token = self
+            .xdg_activation_state
+            .create_external_token(None)
+            .0
+            .as_str()
+            .to_owned();
+        self.notification_activation_tokens
+            .insert(token.clone(), (meta_window_id.to_owned(), Instant::now()));
+        token
+    }
+
+    /// Consumes the notification activation token `token`, returning the meta
+    /// window it was minted for. `None` when the token is not one of ours (a
+    /// client-created activation), which keeps the ordinary activation path.
+    pub fn take_notification_activation_token(&mut self, token: &str) -> Option<String> {
+        self.notification_activation_tokens
+            .remove(token)
+            .map(|(meta_window_id, _)| meta_window_id)
+    }
+
+    /// Drops notification activation tokens that were minted but never used,
+    /// so a client that ignores the signal cannot leak tokens forever.
+    fn prune_notification_activation_tokens(&mut self) {
+        // A client normally activates within milliseconds of the signal.
+        const TOKEN_TTL: Duration = Duration::from_secs(30);
+        let stale: Vec<String> = self
+            .notification_activation_tokens
+            .iter()
+            .filter(|(_, (_, minted))| minted.elapsed() > TOKEN_TTL)
+            .map(|(token, _)| token.clone())
+            .collect();
+        for token in stale {
+            self.xdg_activation_state
+                .remove_token(&XdgActivationToken::from(token.clone()));
+            self.notification_activation_tokens.remove(&token);
+        }
     }
 
     pub fn change_keyboard_repeat_info(&mut self, repeat_delay: u64, repeat_rate: u64) {

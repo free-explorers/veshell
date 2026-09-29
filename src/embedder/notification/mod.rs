@@ -53,6 +53,9 @@ pub enum NotificationCall {
     Notify {
         call_token: u64,
         pid: Option<i32>,
+        /// The sender's unique bus name, so signals meant only for it (the
+        /// activation token) can be unicast.
+        sender: Option<String>,
         app_name: String,
         replaces_id: u32,
         app_icon: String,
@@ -150,12 +153,14 @@ impl NotificationsBackend {
     ) -> zbus::fdo::Result<u32> {
         let pid =
             resolve_sender_pid(connection, header.sender().map(|sender| sender.to_string())).await;
+        let sender = header.sender().map(|sender| sender.to_string());
         let (reply, pending) = make_notify_reply();
         let call_token = self.next_token.fetch_add(1, Ordering::SeqCst);
         self.calls
             .send(NotificationCall::Notify {
                 call_token,
                 pid,
+                sender,
                 app_name,
                 replaces_id,
                 app_icon,
@@ -308,6 +313,28 @@ impl NotificationRuntime {
             NOTIFICATION_INTERFACE,
             "NotificationClosed",
             &(id, reason),
+        ))
+    }
+
+    /// Emits `ActivationToken(id, token)` on the shell's behalf.
+    ///
+    /// Carries a compositor-minted token the sender can hand to
+    /// `xdg_activation_v1` to activate its own toplevel. The spec allows it
+    /// before `ActionInvoked`, which is how a client opened from a notification
+    /// action gets a focus grant. Unicast to `destination` (the sender's unique
+    /// name): the token is a focus grant and must not leak to other clients.
+    pub fn emit_activation_token(
+        &self,
+        id: u32,
+        token: &str,
+        destination: Option<&str>,
+    ) -> zbus::Result<()> {
+        zbus::block_on(self._connection.emit_signal(
+            destination,
+            NOTIFICATION_PATH,
+            NOTIFICATION_INTERFACE,
+            "ActivationToken",
+            &(id, token),
         ))
     }
 }

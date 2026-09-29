@@ -25,9 +25,13 @@ pub struct NotificationState {
     /// Set once the shell has sent `shell_ready`. Until then accepted calls are
     /// queued instead of being pushed to a shell that cannot receive them.
     pub shell_ready: bool,
-    /// Reply links of forwarded `Notify` calls, keyed by call token.
+    /// Reply links of forwarded `Notify` calls, keyed by call token, with the
+    /// sender's unique bus name so the activation token can be unicast to it.
     /// Runtime-only: a shell reload drops them and the caller's reply fails.
-    pub pending_notify: HashMap<u64, NotifyReplyLink>,
+    pub pending_notify: HashMap<u64, (NotifyReplyLink, Option<String>)>,
+    /// The sender's unique bus name per shell-assigned notification id, so
+    /// per-sender signals can be addressed. Runtime-only.
+    pub notification_senders: HashMap<u32, String>,
     /// Calls accepted before the shell was ready, flushed on `shell_ready`.
     pub queued_outgoing: Vec<QueuedOutgoing>,
 }
@@ -66,6 +70,7 @@ impl NotificationState {
             runtime,
             shell_ready: false,
             pending_notify: HashMap::new(),
+            notification_senders: HashMap::new(),
             queued_outgoing: Vec::new(),
         }
     }
@@ -74,7 +79,10 @@ impl NotificationState {
     /// shell assigned. Unknown tokens (already answered, or from a previous
     /// shell) are ignored.
     pub fn complete_notify(&mut self, call_token: u64, id: u32) {
-        if let Some(reply) = self.pending_notify.remove(&call_token) {
+        if let Some((reply, sender)) = self.pending_notify.remove(&call_token) {
+            if let Some(sender) = sender {
+                self.notification_senders.insert(id, sender);
+            }
             reply.send(id);
         }
     }
@@ -97,5 +105,22 @@ impl NotificationState {
         if let Err(error) = runtime.emit_notification_closed(id, reason) {
             warn!(?error, id, reason, "Failed to emit NotificationClosed");
         }
+    }
+
+    /// Emits `ActivationToken(id, token)` on the shell's behalf, unicast to the
+    /// notification's sender (the token is a focus grant).
+    pub fn emit_activation_token(&self, id: u32, token: &str) {
+        let Some(runtime) = &self.runtime else {
+            return;
+        };
+        let destination = self.notification_senders.get(&id).map(String::as_str);
+        if let Err(error) = runtime.emit_activation_token(id, token, destination) {
+            warn!(?error, id, "Failed to emit ActivationToken");
+        }
+    }
+
+    /// Drops the sender association of a closed notification.
+    pub fn forget_notification(&mut self, id: u32) {
+        self.notification_senders.remove(&id);
     }
 }

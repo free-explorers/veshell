@@ -21,6 +21,7 @@ pub fn handle_notification_call<BackendData: Backend + 'static>(
         NotificationCall::Notify {
             call_token,
             pid,
+            sender,
             app_name,
             replaces_id,
             app_icon,
@@ -33,7 +34,7 @@ pub fn handle_notification_call<BackendData: Backend + 'static>(
         } => {
             data.notification_state
                 .pending_notify
-                .insert(call_token, reply);
+                .insert(call_token, (reply, sender));
             deliver(
                 data,
                 "notification_received",

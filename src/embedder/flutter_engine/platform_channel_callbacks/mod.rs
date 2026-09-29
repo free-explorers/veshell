@@ -7,7 +7,7 @@ use crate::flutter_engine::platform_channels::method_result::MethodResult;
 
 use crate::state::State;
 
-mod activate_window;
+pub(crate) mod activate_window;
 mod close_window;
 mod get_environment_variables;
 mod get_monitor_layout;
@@ -15,6 +15,7 @@ mod meta_popup_patches;
 mod meta_window_patches;
 mod mouse_buttons_event;
 mod notification_action_invoked;
+mod notification_activation_token;
 mod notification_closed;
 mod notification_notify_result;
 mod notification_ready;
@@ -85,6 +86,13 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             }
             "notification_action_invoked" => {
                 self::notification_action_invoked::notification_action_invoked(
+                    method_call,
+                    result,
+                    data,
+                )
+            }
+            "notification_activation_token" => {
+                self::notification_activation_token::notification_activation_token(
                     method_call,
                     result,
                     data,

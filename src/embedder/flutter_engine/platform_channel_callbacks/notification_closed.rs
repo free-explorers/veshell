@@ -35,5 +35,6 @@ pub fn notification_closed<BackendData: Backend + 'static>(
         };
     data.notification_state
         .emit_notification_closed(payload.id, payload.reason);
+    data.notification_state.forget_notification(payload.id);
     result.success(None);
 }
