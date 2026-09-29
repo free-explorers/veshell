@@ -16,6 +16,18 @@
         "system.muteVolume": {
             "type": "string"
         },
+        "media.playPause": {
+            "type": "string"
+        },
+        "media.next": {
+            "type": "string"
+        },
+        "media.previous": {
+            "type": "string"
+        },
+        "media.stop": {
+            "type": "string"
+        },
         "screen.focusWorkspaceAbove": {
             "type": "string"
         },
@@ -36,6 +48,10 @@
         "system.increaseVolume",
         "system.decreaseVolume",
         "system.muteVolume",
+        "media.playPause",
+        "media.next",
+        "media.previous",
+        "media.stop",
         "screen.focusWorkspaceAbove",
         "screen.focusWorkspaceBelow",
         "workspace.focusLeftTileable",

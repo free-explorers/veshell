@@ -8,6 +8,12 @@
                 "decreaseVolume": "volumeDown",
                 "muteVolume": "ctrl+alt+m"
             },
+            "media": {
+                "playPause": "mediaPlayPause",
+                "next": "mediaTrackNext",
+                "previous": "mediaTrackPrevious",
+                "stop": "mediaStop"
+            },
             "screen": {
                 "focusWorkspaceAbove": "super+w",
                 "focusWorkspaceBelow": "super+s"
