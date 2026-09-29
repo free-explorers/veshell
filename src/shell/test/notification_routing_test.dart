@@ -91,6 +91,49 @@ void main() {
     });
   });
 
+  group('visibleWindowIds', () {
+    ISet<PersistentWindowId> visible(
+      List<PersistentWindowId> windows,
+      int selectedIndex, {
+      int visibleLength = 1,
+    }) => visibleWindowIds(
+      windows: windows.lock,
+      selectedIndex: selectedIndex,
+      visibleLength: visibleLength,
+    );
+
+    test('no windows is empty', () {
+      expect(visible([], 0), isEmpty);
+    });
+
+    test('the selected window is displayed', () {
+      expect(visible([windowA], 0), {windowA});
+    });
+
+    test('the application launcher hides the last window', () {
+      // The launcher is appended after the windows, so index 1 selects it.
+      // The only window is off screen even though it is still the last one.
+      expect(visible([windowA], 1), isEmpty);
+    });
+
+    test('a window after the selector scrolls the previous one away', () {
+      expect(visible([windowA, windowB], 1), {windowB});
+    });
+
+    test('two visible windows are both displayed', () {
+      expect(visible([windowA, windowB], 0, visibleLength: 2), {
+        windowA,
+        windowB,
+      });
+    });
+
+    test('the launcher stays out of a two-window viewport', () {
+      // Selecting the launcher shows the previous window plus the launcher:
+      // only the window is reported as displayed.
+      expect(visible([windowA, windowB], 2, visibleLength: 2), {windowB});
+    });
+  });
+
   group('notificationPopupTimeout', () {
     test('zero means the popup never expires on its own', () {
       expect(notificationPopupTimeout(0), isNull);

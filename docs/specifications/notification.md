@@ -113,8 +113,11 @@ Given a target window, the route is:
 
 "Focused workspace" is the selected workspace of `focusedScreenProvider`. A tile
 is *displayed* when it belongs to the focused workspace and its index falls in
-the visible range of the workspace's sliding container. An ephemeral window is
-displayed while its screen's overview is open.
+the visible range of the workspace's sliding container. That container also
+holds the persistent application launcher appended after the windows, so
+selecting the launcher scrolls the last window out of view and the notification
+pops below its panel button instead of counting as displayed. An ephemeral window
+is displayed while its screen's overview is open.
 
 When the pid can only be resolved to an app id, the best tile is picked among
 the app's tiles: a displayed one wins (so the notification counts as displayed),

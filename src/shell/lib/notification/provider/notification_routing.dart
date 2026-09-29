@@ -46,17 +46,43 @@ ISet<PersistentWindowId> displayedWindowIds(Ref ref) {
     return <PersistentWindowId>{}.lock;
   }
   final workspace = ref.watch(workspaceStateProvider(workspaceId));
-  final windows = workspace.tileableWindowList;
+  return visibleWindowIds(
+    windows: workspace.tileableWindowList,
+    selectedIndex: workspace.selectedIndex,
+    visibleLength: workspace.visibleLength,
+  );
+}
+
+/// The persistent windows inside a workspace's sliding container that fall in
+/// the visible range for [selectedIndex] and [visibleLength].
+///
+/// The container holds the windows **plus the application launcher** appended
+/// after them, so [selectedIndex] can point one past the last window while the
+/// launcher is on screen. Clamping against the window count alone would keep
+/// the last window "displayed" in that case, hiding notifications the user
+/// cannot actually see. The launcher slot has no window, so the visible range
+/// is intersected with the windows.
+ISet<PersistentWindowId> visibleWindowIds({
+  required IList<PersistentWindowId> windows,
+  required int selectedIndex,
+  required int visibleLength,
+}) {
   if (windows.isEmpty) {
     return <PersistentWindowId>{}.lock;
   }
-  final visibleLength =
-      workspace.visibleLength < 1 ? 1 : workspace.visibleLength;
-  final maxStart =
-      (windows.length - visibleLength).clamp(0, windows.length - 1);
-  final start = workspace.selectedIndex.clamp(0, maxStart);
-  final end = (start + visibleLength).clamp(start + 1, windows.length);
-  return windows.sublist(start, end).toISet();
+  final visible = visibleLength < 1 ? 1 : visibleLength;
+  // The application launcher is one extra tileable after the windows.
+  final tileableCount = windows.length + 1;
+  final maxStart = (tileableCount - visible).clamp(0, tileableCount - 1);
+  final start = selectedIndex.clamp(0, maxStart);
+  final end = (start + visible).clamp(start + 1, tileableCount);
+  // The launcher occupies the last slot and has no window: stop at the window
+  // count so the range stays inside `windows`.
+  final lastWindow = end < windows.length ? end : windows.length;
+  if (start >= lastWindow) {
+    return <PersistentWindowId>{}.lock;
+  }
+  return windows.sublist(start, lastWindow).toISet();
 }
 
 /// Ephemeral windows currently displayed in an open overview.
