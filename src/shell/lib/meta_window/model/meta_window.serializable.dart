@@ -34,6 +34,10 @@ abstract class MetaWindow with _$MetaWindow {
     String? startupId,
     @Default(false) bool isFixedSized,
     @Default(false) bool isModal,
+    /// Whether a live screen cast is recording this window. Resolved by the
+    /// compositor (consumer pid, then app id) and rendered on the tile and its
+    /// workspace; the shell never re-derives the mapping.
+    @Default(false) bool isRecording,
     String? currentOutput,
     @RectConverter() Rect? geometry,
   }) = _MetaWindow;

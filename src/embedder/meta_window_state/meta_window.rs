@@ -94,6 +94,13 @@ pub enum MetaWindowPatch {
         id: String,
         value: bool,
     },
+    /// Marks the MetaWindow a live screen cast is recording (see
+    /// [`crate::portal::service::sync_recording_meta_windows`]). Patched by the
+    /// compositor, so the shell renders the indicator from window state.
+    UpdateIsRecording {
+        id: String,
+        value: bool,
+    },
     UpdateCurrentOutput {
         id: String,
         value: Option<String>,
@@ -109,6 +116,11 @@ pub enum MetaWindowPatch {
 pub struct MetaWindow {
     pub id: String,
     pub app_id: Option<String>,
+    /// The owning process's binary name (`/proc/<pid>/comm`), captured at
+    /// creation. It is a second identity for casts whose PipeWire consumer node
+    /// names the binary rather than a desktop id (Chromium sets
+    /// `node.name=brave` while the window's app id is `brave-browser`).
+    pub binary_name: Option<String>,
     pub pid: i32,
     pub surface_id: u64,
     /// Client-declared parent (`xdg_toplevel.set_parent`, X11 transient).
@@ -129,6 +141,12 @@ pub struct MetaWindow {
     pub current_output: Option<String>,
     pub scale_ratio: f64,
     pub game_mode_activated: bool,
+    /// Whether a live screen-cast session is recording this window. Owned by
+    /// the portal: it resolves the cast's consumer process (or app id) to a
+    /// MetaWindow and patches this flag, so the shell can render the
+    /// recording indicator on the tile and its workspace without re-deriving
+    /// the mapping.
+    pub is_recording: bool,
 }
 
 impl MetaWindow {
@@ -161,6 +179,9 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             Some(Box::new(json!(meta_window))),
             None,
         );
+        // A window created while a cast is live may be the recording app's
+        // window (app-id fallback): recompute so its tile gets the indicator.
+        crate::portal::service::sync_recording_meta_windows(self);
         meta_window
     }
 
@@ -169,6 +190,9 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .meta_windows
             .remove(meta_window_id)
             .unwrap();
+        // Drop it from the focus order too: a removed window can no longer be
+        // the recording app's most recently focused window.
+        self.meta_window_state.forget_meta_window(meta_window_id);
 
         // A window-share session cannot survive its window: closing the
         // MetaWindow tears the share down through the ordinary close path
@@ -189,6 +213,9 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             }))),
             None,
         );
+        // The removed window may have carried the recording flag for a live
+        // cast (a monitor share survives its app's window): re-resolve.
+        crate::portal::service::sync_recording_meta_windows(self);
     }
 
     pub fn patch_meta_window(&mut self, mut patch: MetaWindowPatch, propagate: bool) {
@@ -491,6 +518,14 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                             self.meta_window_state.meta_window_in_gaming_mode = None;
                         }
                     }
+                }
+            }
+            MetaWindowPatch::UpdateIsRecording { id, value } => {
+                if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
+                    if meta_window.is_recording == value {
+                        return;
+                    }
+                    meta_window.is_recording = value;
                 }
             }
             MetaWindowPatch::UpdateScaleRatio { id, value } => {

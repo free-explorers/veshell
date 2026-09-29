@@ -98,6 +98,10 @@ pub fn activate_window<BackendData: Backend + 'static>(
                     Some(KeyboardFocusTarget::WlSurface(wl_surface.clone())),
                     serial,
                 );
+                if let Some(meta_window) = data.get_meta_window(payload.surface_id) {
+                    data.meta_window_state
+                        .record_meta_window_focus(&meta_window.id);
+                }
             }
             if keyboard.current_focus() == Some(KeyboardFocusTarget::WlSurface(wl_surface))
                 && !payload.activate
@@ -134,6 +138,10 @@ pub fn activate_window<BackendData: Backend + 'static>(
                     Some(KeyboardFocusTarget::X11Surface(x11_surface.clone())),
                     serial,
                 );
+                if let Some(meta_window) = data.get_meta_window(payload.surface_id) {
+                    data.meta_window_state
+                        .record_meta_window_focus(&meta_window.id);
+                }
             }
             if keyboard.current_focus() == Some(KeyboardFocusTarget::X11Surface(x11_surface))
                 && !payload.activate

@@ -21,6 +21,11 @@ pub struct PortalState {
     pub pipewire_producer: Option<Producer>,
     pub producer_delivery_sender: channel::Sender<ProducerEvent>,
     pub active_streams: HashMap<OwnedObjectPath, ActiveStream>,
+    /// Per-session recording resolution: `Some(meta window)` when the cast
+    /// landed on a window (so the shell can show the workspace/tile
+    /// indicator), `None` for an orphan cast no window can display. Diffed on
+    /// every sync to tell the shell when to fall back to the persistent bar.
+    pub recording_targets: HashMap<OwnedObjectPath, Option<String>>,
 }
 
 impl PortalState {
@@ -77,6 +82,7 @@ impl PortalState {
             pipewire_producer: None,
             producer_delivery_sender,
             active_streams: HashMap::new(),
+            recording_targets: HashMap::new(),
         }
     }
 }

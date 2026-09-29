@@ -20,10 +20,12 @@ pub use super::FrontendOwner;
 use smithay::output::Output;
 use smithay::reexports::calloop::channel;
 use smithay::utils::{Physical, Size};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use zbus::zvariant::OwnedValue;
 
 use crate::capture::pipewire::{ActiveStream, StreamDescriptor};
+use crate::meta_window_state::meta_window::MetaWindowPatch;
 
 /// Portal session lifecycle (capture specification section 8.3).
 ///
@@ -437,6 +439,107 @@ fn reconcile_portal_pending_pixels<BackendData: crate::backend::Backend + 'stati
         .retain(|token, _| live.contains(&token));
 }
 
+/// Reconciles every MetaWindow's `is_recording` flag with the live screen cast
+/// sessions, and tells the shell where each cast landed.
+///
+/// Each session resolves through [`MetaWindowState::recording_meta_window_for`]:
+/// the compositor-observed consumer pid first, then the portal app id (that
+/// app's most recently focused window). The whole mapping is recomputed and
+/// diffed, so a stop clears exactly the windows no session claims anymore and a
+/// window shared by two sessions stays marked until the last one stops.
+///
+/// A session that resolves to no window is an orphan: nothing in the shell can
+/// display it, so `screen_cast_recording` reports `metaWindowId: null` and the
+/// persistent indicator bar keeps it visible (with Stop) as the last resort.
+pub fn sync_recording_meta_windows<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+) {
+    // Per-session resolution: `Some(window)` when the cast lives on a tile or
+    // workspace, `None` when it is orphan.
+    let targets: HashMap<OwnedObjectPath, Option<String>> = state
+        .portal_state
+        .active_streams
+        .iter()
+        .map(|(handle, stream)| {
+            let target = state.meta_window_state.recording_meta_window_for(
+                &stream.app_id,
+                stream.consumer_app_id.as_deref(),
+                stream.consumer_pid,
+            );
+            (handle.clone(), target)
+        })
+        .collect();
+
+    if tracing::enabled!(tracing::Level::DEBUG) {
+        let inputs: Vec<(String, String, Option<i32>)> = state
+            .portal_state
+            .active_streams
+            .iter()
+            .map(|(handle, stream)| {
+                (
+                    handle.as_str().to_string(),
+                    stream.app_id.clone(),
+                    stream.consumer_pid,
+                )
+            })
+            .collect();
+        tracing::debug!(?inputs, ?targets, "screen cast recording sync");
+    }
+
+    let wanted: HashSet<String> = targets.values().flatten().cloned().collect();
+    let recording_now: Vec<String> = state
+        .meta_window_state
+        .meta_windows
+        .iter()
+        .filter(|(_, window)| window.is_recording)
+        .map(|(id, _)| id.clone())
+        .collect();
+
+    for id in recording_now {
+        if !wanted.contains(&id) {
+            state.patch_meta_window(
+                MetaWindowPatch::UpdateIsRecording { id, value: false },
+                true,
+            );
+        }
+    }
+    for id in &wanted {
+        let already_recording = state
+            .meta_window_state
+            .meta_windows
+            .get(id)
+            .is_some_and(|window| window.is_recording);
+        if !already_recording {
+            state.patch_meta_window(
+                MetaWindowPatch::UpdateIsRecording {
+                    id: id.clone(),
+                    value: true,
+                },
+                true,
+            );
+        }
+    }
+
+    // Notify the shell only for sessions whose target changed, so a resolved
+    // cast disappears from the bar and an orphan one appears there.
+    let previous = std::mem::replace(&mut state.portal_state.recording_targets, targets.clone());
+    for (handle, target) in &targets {
+        if previous.get(handle) != Some(target) {
+            state
+                .flutter_engine_mut()
+                .platform_method_channel
+                .invoke_method(
+                    "screen_cast_recording",
+                    Some(Box::new(json!({
+                        "sessionHandle": handle.as_str(),
+                        "metaWindowId": target,
+                    }))),
+                    None,
+                );
+        }
+    }
+}
+
 /// Capture-side revocation for one session: producer teardown and the
 /// indicator. Idempotent — the second call for a closed session is a no-op
 /// (no repeated `screen_cast_stopped` event, no producer work). The
@@ -478,6 +581,7 @@ fn stop_capture_side<BackendData: crate::backend::Backend + 'static>(
             hide_shared_indicator(state, session_handle);
         }
         state.portal_state.active_streams.clear();
+        sync_recording_meta_windows(state);
         return;
     }
     if state
@@ -490,6 +594,7 @@ fn stop_capture_side<BackendData: crate::backend::Backend + 'static>(
             producer.stop_stream(session_handle);
         }
         hide_shared_indicator(state, session_handle);
+        sync_recording_meta_windows(state);
     }
 }
 
@@ -1415,6 +1520,7 @@ fn begin_shared_stream<BackendData: crate::backend::Backend + 'static>(
             label: source.label.clone(),
             app_id,
             consumer_pid: None,
+            consumer_app_id: None,
             active: false,
             last_frame: None,
             restore_token,
@@ -1612,14 +1718,22 @@ pub fn handle_producer_event<BackendData: crate::backend::Backend + 'static>(
                 .portal_state
                 .active_streams
                 .insert(session_handle.clone(), stream.clone());
-            // From now on the graph can identify which process consumes this
-            // node; the producer reports it as ConsumerPid.
+            // From now on the graph can identify who consumes this node; the
+            // producer reports it as ConsumerIdentified.
             if let Some(producer) = state.portal_state.pipewire_producer.as_ref() {
                 producer.register_stream_node(node_id);
             }
+            // Resolve before the session becomes visible so the shell knows the
+            // recording target up front (a resolved cast never flashes in the
+            // orphan bar).
+            sync_recording_meta_windows(state);
             show_shared_indicator(state, session_handle.clone(), stream);
         }
-        crate::capture::pipewire::ProducerEvent::ConsumerPid { node_id, pid } => {
+        crate::capture::pipewire::ProducerEvent::ConsumerIdentified {
+            node_id,
+            pid,
+            app_id,
+        } => {
             let session_handle = state
                 .portal_state
                 .active_streams
@@ -1627,27 +1741,28 @@ pub fn handle_producer_event<BackendData: crate::backend::Backend + 'static>(
                 .find(|(_, stream)| stream.node_id == node_id)
                 .map(|(handle, _)| handle.clone());
             let Some(session_handle) = session_handle else {
-                tracing::debug!(node_id, "consumer pid for an unknown stream node");
+                tracing::debug!(node_id, "consumer for an unknown stream node");
                 return;
             };
-            if let Some(stream) = state.portal_state.active_streams.get_mut(&session_handle) {
-                if stream.consumer_pid == Some(pid) {
-                    return;
+            let changed = match state.portal_state.active_streams.get_mut(&session_handle) {
+                Some(stream) => {
+                    if stream.consumer_pid == pid && stream.consumer_app_id == app_id {
+                        false
+                    } else {
+                        stream.consumer_pid = pid;
+                        stream.consumer_app_id = app_id.clone();
+                        true
+                    }
                 }
-                stream.consumer_pid = Some(pid);
+                None => false,
+            };
+            if !changed {
+                return;
             }
-            tracing::info!(%session_handle, pid, "screen cast consumer identified");
-            state
-                .flutter_engine_mut()
-                .platform_method_channel
-                .invoke_method(
-                    "screen_cast_consumer",
-                    Some(Box::new(json!({
-                        "sessionHandle": session_handle.as_str(),
-                        "pid": pid,
-                    }))),
-                    None,
-                );
+            tracing::info!(%session_handle, ?pid, ?app_id, "screen cast consumer identified");
+            // Re-resolve the session's MetaWindow from the freshest identity:
+            // the consumer pid first, then the node's self-reported app.
+            sync_recording_meta_windows(state);
         }
         crate::capture::pipewire::ProducerEvent::Fatal {
             session_handle,
@@ -3416,6 +3531,7 @@ mod tests {
                 label: "window-1".into(),
                 app_id: "org.example.App".into(),
                 consumer_pid: None,
+                consumer_app_id: None,
                 active: false,
                 last_frame: None,
                 restore_token: None,
@@ -3432,6 +3548,7 @@ mod tests {
                 label: "window-2".into(),
                 app_id: "org.example.App".into(),
                 consumer_pid: None,
+                consumer_app_id: None,
                 active: false,
                 last_frame: None,
                 restore_token: None,
@@ -3449,6 +3566,7 @@ mod tests {
                 label: "DP-1".into(),
                 app_id: "org.example.App".into(),
                 consumer_pid: None,
+                consumer_app_id: None,
                 active: false,
                 last_frame: None,
                 restore_token: None,
@@ -4132,6 +4250,7 @@ mod tests {
             label: "DP-2".into(),
             app_id: "org.example.App".into(),
             consumer_pid: None,
+            consumer_app_id: None,
             active: false,
             last_frame: None,
             restore_token: None,
@@ -4166,6 +4285,7 @@ mod tests {
             label: "DP-2".into(),
             app_id: "org.example.App".into(),
             consumer_pid: None,
+            consumer_app_id: None,
             active: false,
             last_frame: None,
             restore_token: None,

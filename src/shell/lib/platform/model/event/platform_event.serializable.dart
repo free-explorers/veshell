@@ -2,7 +2,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/capture/model/screen_cast_active/screen_cast_active.serializable.dart';
 import 'package:shell/capture/model/screen_cast_consent/screen_cast_consent.serializable.dart';
 import 'package:shell/capture/model/screen_cast_consent_dismissed/screen_cast_consent_dismissed.serializable.dart';
-import 'package:shell/capture/model/screen_cast_consumer/screen_cast_consumer.serializable.dart';
+import 'package:shell/capture/model/screen_cast_recording/screen_cast_recording.serializable.dart';
 import 'package:shell/capture/model/screen_cast_stopped/screen_cast_stopped.serializable.dart';
 import 'package:shell/capture/model/screenshot_prompt/screenshot_prompt.serializable.dart';
 import 'package:shell/platform/model/event/commit_surface/commit_surface.serializable.dart';
@@ -176,12 +176,13 @@ sealed class PlatformEvent with _$PlatformEvent implements PlatformInteraction {
     required ScreenCastActiveMessage message,
   }) = ScreenCastActiveEvent;
 
-  /// The process consuming a screen cast was identified: the recording
-  /// indicator uses it to name the app without trusting the portal app id.
-  const factory PlatformEvent.screenCastConsumer({
+  /// Where a live screen cast landed: the MetaWindow it resolved to, or `null`
+  /// for an orphan cast the workspace/tile indicators cannot display. Only the
+  /// orphan case keeps the persistent indicator bar.
+  const factory PlatformEvent.screenCastRecording({
     required String method,
-    required ScreenCastConsumerMessage message,
-  }) = ScreenCastConsumerEvent;
+    required ScreenCastRecordingMessage message,
+  }) = ScreenCastRecordingEvent;
 
   /// Screen cast delivery stopped: the persistent indicator hides.
   const factory PlatformEvent.screenCastStopped({

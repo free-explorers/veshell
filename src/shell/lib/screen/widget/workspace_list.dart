@@ -224,9 +224,9 @@ class WorkspaceListButton extends HookConsumerWidget {
     final unreadNotifications = ref.watch(
       unreadNotificationsForWorkspaceProvider(workspaceId),
     );
-    final isRecording =
-        ref.watch(recordingWorkspacesProvider).value?.contains(workspaceId) ??
-        false;
+    final isRecording = ref
+        .watch(recordingWorkspacesProvider)
+        .contains(workspaceId);
 
     return NotificationArea(
       channel: workspaceNotificationChannel(workspaceId),

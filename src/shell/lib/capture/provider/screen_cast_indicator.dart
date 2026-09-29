@@ -60,22 +60,20 @@ class ScreenCastIndicator extends _$ScreenCastIndicator {
   }
 }
 
-/// The process consuming each live screen cast, keyed by session handle.
+/// Where each live screen cast landed, keyed by session handle.
 ///
-/// Resolved by the compositor from the PipeWire graph (link -> consumer node
-/// -> client process id), so it identifies the recording app without trusting
-/// the portal `app_id`.
+/// `null` marks an orphan cast: the compositor found no MetaWindow to carry the
+/// indicator, so the persistent bar stays as the fallback.
 @Riverpod(keepAlive: true)
-class ScreenCastConsumerPids extends _$ScreenCastConsumerPids {
+class ScreenCastRecordingTargets extends _$ScreenCastRecordingTargets {
   @override
-  Map<String, int> build() {
+  Map<String, String?> build() {
     final subscription = ref.watch(platformManagerProvider).listen((next) {
-      if (next case final ScreenCastConsumerEvent event) {
-        captureLog.info(
-          'Screen cast consumer: session=${event.message.sessionHandle} '
-          'pid=${event.message.pid}',
-        );
-        state = {...state, event.message.sessionHandle: event.message.pid};
+      if (next case final ScreenCastRecordingEvent event) {
+        state = {
+          ...state,
+          event.message.sessionHandle: event.message.metaWindowId,
+        };
       }
       if (next case final ScreenCastStoppedEvent event) {
         state = {...state}..remove(event.message.sessionHandle);
