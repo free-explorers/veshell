@@ -78,11 +78,13 @@ Every accepted notification is stored in `NotificationManager` (persisted key
   attention request instead of a D-Bus `Notify`. Synthetic entries are
   transient and never persisted (see *Window attention*).
 
-The list is rendered by the Helm `NotificationPanel` in the overview. Read
-notifications stay in the list (history); only an explicit close removes them.
-An entry that is no longer tied to an open `MetaWindow` (`targetMetaWindowId`
-set but gone) is **dimmed**, so it reads as history next to the
-still-actionable notifications.
+The list is rendered by the Helm `NotificationPanel` in the overview, under a
+"Notifications" title. The panel's clear-all action wipes the whole list: every
+entry is closed (reason 2) and removed from the history, live popups included.
+Read notifications stay in the list (history); otherwise only an explicit close
+removes them. An entry that is no longer tied to an open `MetaWindow`
+(`targetMetaWindowId` set but gone) is **dimmed**, so it reads as history next
+to the still-actionable notifications.
 
 A new session keeps only the history: every restored notification is loaded as
 read and closed (its window belonged to a previous session anyway) and

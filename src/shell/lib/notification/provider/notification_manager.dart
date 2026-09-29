@@ -440,6 +440,27 @@ class NotificationManager extends _$NotificationManager {
     );
   }
 
+  /// Clears every notification: live popups are torn down and the persisted
+  /// history is emptied.
+  ///
+  /// Already-closed history entries are removed without a second
+  /// `NotificationClosed` signal.
+  void dismissAllNotifications() {
+    unawaited(_dismissAllNotifications());
+  }
+
+  Future<void> _dismissAllNotifications() async {
+    // Snapshot the ids: each close mutates the map.
+    for (final id in state.notificationMap.keys.toList()) {
+      await _closeNotification(
+        id,
+        reason: NotificationCloseReason.dismissed,
+        markRead: true,
+        removeFromHistory: true,
+      );
+    }
+  }
+
   Future<void> _openNotification(int id) async {
     final notification = state.notificationMap[id];
     if (notification == null) {
