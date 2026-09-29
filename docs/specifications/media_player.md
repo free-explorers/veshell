@@ -125,6 +125,13 @@ system (see `shortcut_manager`), with defaults in
 | `media.stop` | `mediaStop` | `Stop` |
 
 They are regular configurable hotkeys, so a user can rebind them like any other.
+
+The play/pause button is not reported consistently: some compositors emit
+`XF86AudioPlayPause` (Flutter `mediaPlayPause`), others `XF86AudioPlay` or
+`XF86AudioPause` (`mediaPlay`/`mediaPause`). When `media.playPause` is bound to
+any of those three keys, the shell accepts the whole family so the physical
+button keeps working whichever name the compositor reports.
+
 Because the compositor forwards every key to Flutter before the focused client
 (and does not forward a shortcut Flutter handled), the media keys are global:
 they drive the player even while an application window has keyboard focus.

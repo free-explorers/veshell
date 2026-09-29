@@ -24,7 +24,13 @@ Map<String, LogicalKeySet> hotkeysSetting(Ref ref) {
       continue;
     }
     final jsonValue = ref.watch(jsonValueByPathProvider('$path.$actionId'));
-    hotkeys[actionId] = property.castValue(jsonValue ?? '');
+    final hotkey = property.tryCastValue(jsonValue);
+    // A missing, malformed or empty value must never become an activator:
+    // `LogicalKeySet.fromSet({})` accepts every key event.
+    if (hotkey == null || hotkey.keys.isEmpty) {
+      continue;
+    }
+    hotkeys[actionId] = hotkey;
   }
   return hotkeys;
 }

@@ -6,7 +6,7 @@
             "system": {
                 "increaseVolume": "volumeUp",
                 "decreaseVolume": "volumeDown",
-                "muteVolume": "ctrl+alt+m"
+                "muteVolume": "volumeMute"
             },
             "media": {
                 "playPause": "mediaPlayPause",

@@ -21,9 +21,10 @@ class LogicalKeySetConverter implements JsonConverter<LogicalKeySet, String> {
 
   @override
   String toJson(LogicalKeySet object) {
+    // Keys without a known name are dropped instead of serialized as `null`.
     final keys = object.keys.map(
       (e) => keyToStringMap[e],
-    );
+    ).whereType<String>();
     return keys.join('+');
   }
 }

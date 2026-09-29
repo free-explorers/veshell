@@ -50,7 +50,14 @@ class SettingPropertyHotkeyEditor extends HookConsumerWidget
           return KeyEventResult.handled;
         }
         if (event.logicalKey == LogicalKeyboardKey.enter) {
-          updateValue(LogicalKeySet.fromSet(keysPressed.value));
+          if (keysPressed.value.isNotEmpty) {
+            final value = LogicalKeySet.fromSet(keysPressed.value);
+            // Never persist a binding without a recognized key: it could not
+            // be parsed back and would only leave a broken override.
+            if ((property.serializeValue(value) as String).isNotEmpty) {
+              updateValue(value);
+            }
+          }
           focusNode.unfocus();
           ExpandableContainer.of(context).toggle();
           return KeyEventResult.handled;

@@ -92,6 +92,8 @@ Map<String, LogicalKeyboardKey> stringToKeyMap = {
   'mediaTrackPrevious': LogicalKeyboardKey.mediaTrackPrevious,
   'mediaTrackNext': LogicalKeyboardKey.mediaTrackNext,
   'mediaPlayPause': LogicalKeyboardKey.mediaPlayPause,
+  'mediaPlay': LogicalKeyboardKey.mediaPlay,
+  'mediaPause': LogicalKeyboardKey.mediaPause,
   'mediaStop': LogicalKeyboardKey.mediaStop,
   'eject': LogicalKeyboardKey.eject,
   'mediaRecord': LogicalKeyboardKey.mediaRecord,
