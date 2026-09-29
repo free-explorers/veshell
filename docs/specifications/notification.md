@@ -93,10 +93,10 @@ synthesized entries are dropped.
 A notification is routed to the workspace/window of the application that sent
 it. Resolution order:
 
-1. **Sender pid** — the generated D-Bus server replaces the untrusted `pid`
-   argument with the real session-bus sender pid (`GetConnectionUnixProcessID`),
-   mapping to a meta window and then to a `WindowId`. A **dialog** resolves to
-   its parent persistent tile by walking the meta-window parent chain.
+1. **Sender pid** — the Rust server replaces the untrusted `pid` argument with
+   the real session-bus sender pid (`GetConnectionUnixProcessID`), mapping to a
+   meta window and then to a `WindowId`. A **dialog** resolves to its parent
+   persistent tile by walking the meta-window parent chain.
 2. **`desktop-entry` hint** — best persistent tile whose `properties.appId`
    matches.
 3. Otherwise the notification is **unresolved**.
@@ -242,7 +242,8 @@ still open.
   (reason 2);
 - because tile popups live in the workspace overlay, leaving the workspace
   scrolls/clips them away rather than tearing them down;
-- closing a popup marks the notification read.
+- dismissing or activating a popup marks the notification read; an expiry does
+  not, so its unread dot survives.
 - invoking an action marks the notification read.
 
 Notifications are never re-surfaced after being dismissed.
@@ -277,5 +278,5 @@ dropped during startup and never pushed to a shell that cannot receive it.
 
 ## Out of scope (future milestone)
 
-Activation tokens, click-to-open of the related window, action icons
-(`action-icons`), and hint-driven surfacing (urgency/transient/category).
+Activation tokens, action icons (`action-icons`), and hint-driven surfacing
+(urgency/transient/category).
