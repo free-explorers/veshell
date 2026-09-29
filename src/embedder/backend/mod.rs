@@ -30,6 +30,13 @@ pub trait Backend {
     /// nested or non-session run must not answer portal requests on a
     /// foreign bus.
     const RUNS_PORTAL_BACKEND: bool = false;
+    /// Whether this run owns `org.freedesktop.Notifications`.
+    ///
+    /// The compositor serves the freedesktop notifications interface and
+    /// forwards accepted calls to the shell; the Dart server is gone. Like the
+    /// portal backend, only the real seat session owns the name, so a nested or
+    /// non-session run does not contend for it on a foreign bus.
+    const RUNS_NOTIFICATION_SERVER: bool = false;
     /// Whether the backend applies the user-facing monitor transform as an
     /// output transform. The nested backend pins a `Flipped180` correction, so
     /// it must not have it overwritten by the (normal by default) setting.

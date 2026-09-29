@@ -4,6 +4,7 @@ import 'package:shell/capture/model/screen_cast_stop/screen_cast_stop.serializab
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/model/request/platform_request.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
+import 'package:shell/shared/util/logger.dart';
 
 part 'screen_cast_indicator.g.dart';
 
@@ -27,6 +28,10 @@ class ScreenCastIndicator extends _$ScreenCastIndicator {
   Map<String, ScreenCastActiveMessage> build() {
     final subscription = ref.watch(platformManagerProvider).listen((next) {
       if (next case final ScreenCastActiveEvent event) {
+        captureLog.info(
+          'Screen cast active: app="${event.message.appId}" '
+          'source="${event.message.sourceLabel}"',
+        );
         final next_value = {
           ...state,
           event.message.sessionHandle: event.message,
@@ -52,5 +57,30 @@ class ScreenCastIndicator extends _$ScreenCastIndicator {
             message: ScreenCastStopMessage(sessionHandle: sessionHandle),
           ),
         );
+  }
+}
+
+/// Where each live screen cast landed, keyed by session handle.
+///
+/// `null` marks an orphan cast: the compositor found no MetaWindow to carry the
+/// indicator, so the persistent bar stays as the fallback.
+@Riverpod(keepAlive: true)
+class ScreenCastRecordingTargets extends _$ScreenCastRecordingTargets {
+  @override
+  Map<String, String?> build() {
+    final subscription = ref.watch(platformManagerProvider).listen((next) {
+      if (next case final ScreenCastRecordingEvent event) {
+        state = {
+          ...state,
+          event.message.sessionHandle: event.message.metaWindowId,
+        };
+      }
+      if (next case final ScreenCastStoppedEvent event) {
+        state = {...state}..remove(event.message.sessionHandle);
+      }
+    });
+    ref.onDispose(subscription.cancel);
+
+    return const {};
   }
 }

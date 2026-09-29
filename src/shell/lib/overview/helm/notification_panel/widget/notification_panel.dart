@@ -1,54 +1,95 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/meta_window/provider/meta_window_manager.dart';
 import 'package:shell/notification/provider/notification_list.dart';
 import 'package:shell/notification/provider/notification_manager.dart';
+import 'package:shell/notification/provider/notification_routing.dart';
 import 'package:shell/notification/widget/notification.dart';
 
 class NotificationPanel extends HookConsumerWidget {
-  const NotificationPanel({
-    super.key,
-  });
+  const NotificationPanel({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notificationList = ref.watch(notificationListProvider);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(
+    final openMetaWindows = ref.watch(metaWindowManagerProvider);
+    return Card(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
               children: [
+                Icon(
+                  MdiIcons.bell,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 16),
                 Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(8),
-                    separatorBuilder: (context, index) => const SizedBox(
-                      height: 8,
-                    ),
-                    itemBuilder: (context, index) {
-                      final notification = notificationList[index];
-                      return Card(
-                        margin: EdgeInsets.zero,
-                        color: Theme.of(context).colorScheme.surfaceContainer,
-                        child: NotificationWidget(
-                          notification: notification,
-                          onClose: () {
-                            ref
-                                .read(notificationManagerProvider.notifier)
-                                .removeNotification(notification.id);
-                          },
-                        ),
-                      );
-                    },
-                    itemCount: notificationList.length,
+                  child: Text(
+                    'Notifications',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
+                ),
+                IconButton.filledTonal(
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 20,
+                  tooltip: 'Clear all',
+                  onPressed: notificationList.isEmpty
+                      ? null
+                      : () => ref
+                            .read(notificationManagerProvider.notifier)
+                            .dismissAllNotifications(),
+                  icon: const Icon(MdiIcons.notificationClearAll),
+                  style: IconButton.styleFrom(padding: const EdgeInsets.all(4)),
                 ),
               ],
             ),
           ),
-        ),
-      ],
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.all(8),
+              separatorBuilder: (context, index) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final notification = notificationList[index];
+                // An entry whose window is gone is kept for history:
+                // dim it so it reads differently from a live one.
+                final dimmed = !isNotificationLive(
+                  notification,
+                  openMetaWindows,
+                );
+                return Card(
+                  margin: EdgeInsets.zero,
+                  color: Theme.of(context).colorScheme.surfaceContainer,
+                  child: NotificationWidget(
+                    notification: notification,
+                    dimmed: dimmed,
+                    onAction: (actionKey) {
+                      ref
+                          .read(notificationManagerProvider.notifier)
+                          .invokeAction(notification.id, actionKey);
+                    },
+                    onOpen: () {
+                      ref
+                          .read(notificationManagerProvider.notifier)
+                          .openNotification(notification.id);
+                    },
+                    onClose: () {
+                      ref
+                          .read(notificationManagerProvider.notifier)
+                          .dismissAndRemoveNotification(notification.id);
+                    },
+                  ),
+                );
+              },
+              itemCount: notificationList.length,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

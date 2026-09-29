@@ -12,10 +12,13 @@ abstract class DbusNotification with _$DbusNotification {
     required int replacesId,
     required String appIcon,
     required String summary,
-    required String body,
     required List<String> actions,
     required NotificationHints hints,
     required int expireTimeout,
+    /// The notification's secondary text. The freedesktop `Notify` signature
+    /// makes the argument mandatory on the wire, but its value may be empty:
+    /// the shell synthesizes attention notifications with a summary only.
+    @Default('') String body,
   }) = _DbusNotification;
 
   factory DbusNotification.fromJson(Map<String, dynamic> json) =>

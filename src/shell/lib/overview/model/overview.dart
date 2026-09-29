@@ -11,5 +11,9 @@ abstract class Overview with _$Overview {
     required ScreenId screenId,
     required IList<EphemeralWindowId> windowList,
     required bool isDisplayed,
+
+    /// The ephemeral window currently shown by the overview, or `null` when
+    /// the list is empty. Kept so a specific window can be brought into view.
+    EphemeralWindowId? focusedWindowId,
   }) = _Overview;
 }

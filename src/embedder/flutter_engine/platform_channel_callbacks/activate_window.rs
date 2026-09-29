@@ -1,4 +1,5 @@
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
+use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::SERIAL_COUNTER;
 use smithay::wayland::compositor::with_states;
 use smithay::wayland::shell::xdg;
@@ -29,9 +30,6 @@ pub fn activate_window<BackendData: Backend + 'static>(
     let payload: ActivateWindowPayload = serde_json::from_value(args).unwrap();
 
     let pointer = data.seat.get_pointer().unwrap();
-    let keyboard = data.seat.get_keyboard().unwrap();
-
-    let serial = SERIAL_COUNTER.next_serial();
 
     if pointer.is_grabbed() {
         result.success(None);
@@ -59,12 +57,20 @@ pub fn activate_window<BackendData: Backend + 'static>(
         return;
     };
 
+    if payload.activate {
+        return match focus_surface(data, &wl_surface) {
+            Ok(()) => result.success(None),
+            Err((code, message)) => result.error(code.to_string(), message, None),
+        };
+    }
+
+    let keyboard = data.seat.get_keyboard().unwrap();
+    let serial = SERIAL_COUNTER.next_serial();
+
     let role = with_states(&wl_surface, |states| states.role);
     match role {
         Some(xdg::XDG_TOPLEVEL_ROLE) => {
-            let toplevel = data.xdg_toplevels.get(&payload.surface_id).cloned();
-
-            let Some(toplevel) = toplevel else {
+            let Some(toplevel) = data.xdg_toplevels.get(&payload.surface_id).cloned() else {
                 result.error(
                     "toplevel_doesnt_exist".to_string(),
                     format!("Toplevel {} doesn't exist", payload.surface_id),
@@ -74,34 +80,21 @@ pub fn activate_window<BackendData: Backend + 'static>(
             };
 
             // Keep the maximized size in the configure: a state-only
-            // activation configure with no size lets the client fall back to
+            // deactivation configure with no size lets the client fall back to
             // its minimum size instead of staying tiled.
             let maximized_size = data
                 .get_meta_window(payload.surface_id)
                 .and_then(|meta_window| meta_window.maximized_size());
 
             toplevel.with_pending_state(|state| {
-                if payload.activate {
-                    state.states.set(xdg_toplevel::State::Activated);
-                } else {
-                    state.states.unset(xdg_toplevel::State::Activated);
-                }
+                state.states.unset(xdg_toplevel::State::Activated);
                 if let Some(size) = maximized_size {
                     state.size = Some(size);
                 }
             });
             toplevel.send_pending_configure();
 
-            if payload.activate {
-                keyboard.set_focus(
-                    data,
-                    Some(KeyboardFocusTarget::WlSurface(wl_surface.clone())),
-                    serial,
-                );
-            }
-            if keyboard.current_focus() == Some(KeyboardFocusTarget::WlSurface(wl_surface))
-                && !payload.activate
-            {
+            if keyboard.current_focus() == Some(KeyboardFocusTarget::WlSurface(wl_surface)) {
                 keyboard.set_focus(data, None, serial);
             }
 
@@ -117,9 +110,86 @@ pub fn activate_window<BackendData: Backend + 'static>(
                 );
                 return;
             };
-            x11_surface.set_activated(payload.activate).unwrap();
+            x11_surface.set_activated(false).unwrap();
 
-            if payload.activate && !x11_surface.is_override_redirect() {
+            if keyboard.current_focus() == Some(KeyboardFocusTarget::X11Surface(x11_surface)) {
+                keyboard.set_focus(data, None, serial);
+            }
+
+            result.success(None);
+        }
+        _ => {
+            result.error(
+                "invalid_surface_role".to_string(),
+                format!("Surface {} has an invalid role", payload.surface_id),
+                None,
+            );
+        }
+    }
+}
+
+/// Focuses and raises the toplevel displayed by `wl_surface`, and records it as
+/// the most recently focused window.
+///
+/// Shared by the shell's `activate_window` request and the notification
+/// `ActivationToken` path: both stand for an explicit user action, so the
+/// window is brought forward. Returns `(error code, message)` when the surface
+/// is not a focusable toplevel.
+pub(crate) fn focus_surface<BackendData: Backend + 'static>(
+    data: &mut State<BackendData>,
+    wl_surface: &WlSurface,
+) -> Result<(), (&'static str, String)> {
+    let surface_id = get_surface_id(wl_surface);
+    let serial = SERIAL_COUNTER.next_serial();
+    let keyboard = data.keyboard.clone();
+
+    let role = with_states(wl_surface, |states| states.role);
+    match role {
+        Some(xdg::XDG_TOPLEVEL_ROLE) => {
+            let Some(toplevel) = data.xdg_toplevels.get(&surface_id).cloned() else {
+                return Err((
+                    "toplevel_doesnt_exist",
+                    format!("Toplevel {surface_id} doesn't exist"),
+                ));
+            };
+
+            // Keep the maximized size in the configure: a state-only
+            // activation configure with no size lets the client fall back to
+            // its minimum size instead of staying tiled.
+            let maximized_size = data
+                .get_meta_window(surface_id)
+                .and_then(|meta_window| meta_window.maximized_size());
+
+            toplevel.with_pending_state(|state| {
+                state.states.set(xdg_toplevel::State::Activated);
+                if let Some(size) = maximized_size {
+                    state.size = Some(size);
+                }
+            });
+            toplevel.send_pending_configure();
+
+            keyboard.set_focus(
+                data,
+                Some(KeyboardFocusTarget::WlSurface(wl_surface.clone())),
+                serial,
+            );
+            if let Some(meta_window) = data.get_meta_window(surface_id) {
+                data.meta_window_state
+                    .record_meta_window_focus(&meta_window.id);
+            }
+
+            Ok(())
+        }
+        Some(XWAYLAND_SHELL_ROLE) => {
+            let Some(x11_surface) = data.x11_surface_per_wl_surface.get(wl_surface).cloned() else {
+                return Err((
+                    "x11_surface_doesnt_exist",
+                    format!("X11 Surface {surface_id} doesn't exist"),
+                ));
+            };
+            x11_surface.set_activated(true).unwrap();
+
+            if !x11_surface.is_override_redirect() {
                 let _ = data
                     .xwayland_state
                     .as_mut()
@@ -134,23 +204,18 @@ pub fn activate_window<BackendData: Backend + 'static>(
                     Some(KeyboardFocusTarget::X11Surface(x11_surface.clone())),
                     serial,
                 );
-            }
-            if keyboard.current_focus() == Some(KeyboardFocusTarget::X11Surface(x11_surface))
-                && !payload.activate
-            {
-                keyboard.set_focus(data, None, serial);
+                if let Some(meta_window) = data.get_meta_window(surface_id) {
+                    data.meta_window_state
+                        .record_meta_window_focus(&meta_window.id);
+                }
             }
 
-            result.success(None);
+            Ok(())
         }
-        _ => {
-            result.error(
-                "invalid_surface_role".to_string(),
-                format!("Surface {} has an invalid role", payload.surface_id),
-                None,
-            );
-            return;
-        }
+        _ => Err((
+            "invalid_surface_role",
+            format!("Surface {surface_id} has an invalid role"),
+        )),
     }
 }
 

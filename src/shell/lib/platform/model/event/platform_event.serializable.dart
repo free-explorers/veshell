@@ -2,8 +2,11 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/capture/model/screen_cast_active/screen_cast_active.serializable.dart';
 import 'package:shell/capture/model/screen_cast_consent/screen_cast_consent.serializable.dart';
 import 'package:shell/capture/model/screen_cast_consent_dismissed/screen_cast_consent_dismissed.serializable.dart';
+import 'package:shell/capture/model/screen_cast_recording/screen_cast_recording.serializable.dart';
 import 'package:shell/capture/model/screen_cast_stopped/screen_cast_stopped.serializable.dart';
 import 'package:shell/capture/model/screenshot_prompt/screenshot_prompt.serializable.dart';
+import 'package:shell/notification/model/notification_close_requested/notification_close_requested.serializable.dart';
+import 'package:shell/notification/model/notification_received/notification_received.serializable.dart';
 import 'package:shell/platform/model/event/commit_surface/commit_surface.serializable.dart';
 import 'package:shell/platform/model/event/destroy_subsurface/destroy_subsurface.serializable.dart';
 import 'package:shell/platform/model/event/destroy_surface/destroy_surface.serializable.dart';
@@ -23,16 +26,16 @@ import 'package:shell/platform/model/event/new_subsurface/new_subsurface.seriali
 import 'package:shell/platform/model/event/new_surface/new_surface.serializable.dart';
 import 'package:shell/platform/model/event/process_info/process_info.serializable.dart';
 import 'package:shell/platform/model/event/set_environment_variables/set_environment_variables.serializable.dart';
+import 'package:shell/platform/model/event/window_activation_requested/window_activation_requested.serializable.dart';
+import 'package:shell/platform/model/event/window_attention_released/window_attention_released.serializable.dart';
+import 'package:shell/platform/model/event/window_attention_requested/window_attention_requested.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 
 part 'platform_event.serializable.freezed.dart';
 part 'platform_event.serializable.g.dart';
 
 /// Model for PlatformEvent
-@Freezed(
-  unionKey: 'method',
-  unionValueCase: FreezedUnionCase.snake,
-)
+@Freezed(unionKey: 'method', unionValueCase: FreezedUnionCase.snake)
 sealed class PlatformEvent with _$PlatformEvent implements PlatformInteraction {
   /// New Surface Event
   /// This event is sent when the a client creates a new surface.
@@ -175,11 +178,56 @@ sealed class PlatformEvent with _$PlatformEvent implements PlatformInteraction {
     required ScreenCastActiveMessage message,
   }) = ScreenCastActiveEvent;
 
+  /// Where a live screen cast landed: the MetaWindow it resolved to, or `null`
+  /// for an orphan cast the workspace/tile indicators cannot display. Only the
+  /// orphan case keeps the persistent indicator bar.
+  const factory PlatformEvent.screenCastRecording({
+    required String method,
+    required ScreenCastRecordingMessage message,
+  }) = ScreenCastRecordingEvent;
+
   /// Screen cast delivery stopped: the persistent indicator hides.
   const factory PlatformEvent.screenCastStopped({
     required String method,
     required ScreenCastStoppedMessage message,
   }) = ScreenCastStoppedEvent;
+
+  /// Notification received: the compositor accepted a `Notify` D-Bus call and
+  /// forwards it with the trusted sender pid. The shell assigns the id and
+  /// answers with `notification_notify_result`.
+  const factory PlatformEvent.notificationReceived({
+    required String method,
+    required NotificationReceivedMessage message,
+  }) = NotificationReceivedEvent;
+
+  /// A client called `CloseNotification`; the shell tears down the live popup.
+  const factory PlatformEvent.notificationCloseRequested({
+    required String method,
+    required NotificationCloseRequestedMessage message,
+  }) = NotificationCloseRequestedEvent;
+
+  /// The compositor honored an activation token minted for an invoked
+  /// notification action and focused the window: the shell brings it into view
+  /// (selecting its workspace and tile), which the compositor cannot do.
+  const factory PlatformEvent.windowActivationRequested({
+    required String method,
+    required WindowActivationRequestedMessage message,
+  }) = WindowActivationRequestedEvent;
+
+  /// A window asks for the user's attention (X11 demands-attention or a
+  /// Wayland `xdg_activation_v1` request for an existing window). The shell
+  /// synthesizes a notification instead of focusing the window.
+  const factory PlatformEvent.windowAttentionRequested({
+    required String method,
+    required WindowAttentionRequestedMessage message,
+  }) = WindowAttentionRequestedEvent;
+
+  /// A window no longer asks for the user's attention: the shell drops the
+  /// live notification it synthesized.
+  const factory PlatformEvent.windowAttentionReleased({
+    required String method,
+    required WindowAttentionReleasedMessage message,
+  }) = WindowAttentionReleasedEvent;
 
   /// Gesture Swipe Begin Event
   /// This event is sent when the user performs a swipe gesture.

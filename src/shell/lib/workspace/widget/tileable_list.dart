@@ -2,6 +2,8 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/notification/provider/notification_channel.dart';
+import 'package:shell/notification/widget/notification_area.dart';
 import 'package:shell/shared/widget/cross_reorderable_list.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/current_workspace_id.dart';
@@ -50,7 +52,14 @@ class TileableListView extends HookConsumerWidget {
       return HookBuilder(
         builder: (context) {
           final menuController = useMemoized(MenuController.new);
-          final tileableWidget = tileable.buildPanelWidget(context, ref);
+          final panelWidget = tileable.buildPanelWidget(context, ref);
+          final tileableWidget = tileable is PersistentWindowTileable
+              ? NotificationArea(
+                  channel: windowNotificationChannel(tileable.windowId),
+                  anchor: NotificationAnchor.below,
+                  child: panelWidget,
+                )
+              : panelWidget;
           final tileableMenuChildren = tileable.buildMenuChildren(context, ref);
           return SizedBox(
             height: double.infinity,
@@ -64,6 +73,10 @@ class TileableListView extends HookConsumerWidget {
               onSecondaryTap: menuController.open,
               child: MenuAnchor(
                 controller: menuController,
+                // The workspace hosts a local Overlay for notification popups;
+                // keep the tile context menu on the root overlay so it is not
+                // clipped by the workspace.
+                useRootOverlay: true,
                 menuChildren: tileableMenuChildren,
                 child: tileableWidget,
               ),

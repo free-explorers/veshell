@@ -12,13 +12,15 @@ class PowerIndicator extends HookConsumerWidget {
   const PowerIndicator({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final devices = ref.watch(upowerDevicesProvider).value?.where(
+    final devices =
+        ref
+            .watch(upowerDevicesProvider)
+            .value
+            ?.where(
               (device) => ![
                 UPowerDeviceType.battery,
                 UPowerDeviceType.linePower,
-              ].contains(
-                UpowerClient.getDeviceType(device),
-              ),
+              ].contains(UpowerClient.getDeviceType(device)),
             ) ??
         [];
     final batteryDevice = ref.watch(upowerBatteryDeviceProvider).value;
@@ -32,12 +34,11 @@ class PowerIndicator extends HookConsumerWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     MdiIcons.lightningBolt,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
-                  const SizedBox(
-                    width: 16,
-                  ),
+                  const SizedBox(width: 16),
                   Expanded(
                     child: Text(
                       'Power',
@@ -176,29 +177,17 @@ class DeviceIndicator extends StatelessWidget {
       case UPowerDeviceType.linePower:
       case UPowerDeviceType.battery:
       case UPowerDeviceType.ups:
-        return const Icon(
-          MdiIcons.battery,
-        );
+        return const Icon(MdiIcons.battery);
       case UPowerDeviceType.monitor:
-        return const Icon(
-          MdiIcons.monitor,
-        );
+        return const Icon(MdiIcons.monitor);
       case UPowerDeviceType.mouse:
-        return const Icon(
-          MdiIcons.mouse,
-        );
+        return const Icon(MdiIcons.mouse);
       case UPowerDeviceType.keyboard:
-        return const Icon(
-          MdiIcons.keyboard,
-        );
+        return const Icon(MdiIcons.keyboard);
       case UPowerDeviceType.pda:
-        return const Icon(
-          MdiIcons.tablet,
-        );
+        return const Icon(MdiIcons.tablet);
       case UPowerDeviceType.phone:
-        return const Icon(
-          MdiIcons.cellphone,
-        );
+        return const Icon(MdiIcons.cellphone);
     }
   }
 }
@@ -235,19 +224,18 @@ class BatteryIndicator extends StatelessWidget {
                       ),
                     ),
                     // bytes to smallest integere unit
-                    Text(
-                      '$percentage%',
-                    ),
+                    Text('$percentage%'),
                   ],
                 ),
                 SliderTheme(
                   data: Theme.of(context).sliderTheme.copyWith(
-                        thumbShape: SliderComponentShape.noThumb,
-                        disabledActiveTrackColor:
-                            Theme.of(context).colorScheme.primary,
-                        trackShape: CustomSliderTrackShape(),
-                        trackHeight: 8,
-                      ),
+                    thumbShape: SliderComponentShape.noThumb,
+                    disabledActiveTrackColor: Theme.of(
+                      context,
+                    ).colorScheme.primary,
+                    trackShape: CustomSliderTrackShape(),
+                    trackHeight: 8,
+                  ),
                   child: SizedBox(
                     height: 24,
                     child: Slider(

@@ -14,12 +14,16 @@
 //! real-time callback touches the renderer.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Cursor;
 use std::os::fd::{AsFd, BorrowedFd};
 use std::ptr::NonNull;
 
 use pipewire as pipewire_crate;
+use pipewire::keys;
+use pipewire::registry::GlobalObject;
+use pipewire::spa::utils::dict::DictRef;
+use pipewire::types::ObjectType;
 use pipewire_crate::sys as pipewire_sys;
 use std::rc::Rc;
 
@@ -72,11 +76,200 @@ pub enum ProducerEvent {
         session_handle: OwnedObjectPath,
         active: bool,
     },
+    /// The consumer of a stream was identified from the PipeWire graph:
+    /// `node_id` is the producer node, `pid` the consuming process, and
+    /// `app_id` the identity the consumer node reported about itself. Either
+    /// of the two may be absent; the portal proxy reports the portal's pid but
+    /// names the real app on the node (`node.name=brave`).
+    ConsumerIdentified {
+        node_id: u32,
+        pid: Option<i32>,
+        app_id: Option<String>,
+    },
     /// A stream or the core failed; the loop closes the affected session.
     Fatal {
         session_handle: OwnedObjectPath,
         message: String,
     },
+}
+
+/// Resolves which process (and, when it names itself, which app) consumes a
+/// producer stream, using the PipeWire registry.
+///
+/// The portal `app_id` is client-supplied and can be empty, so the recording
+/// app is identified from the link the server creates between our producer
+/// node and the consumer's node: link -> input node -> owning client -> client
+/// process id. When the portal frontend proxies the stream, that pid is the
+/// portal's, so the node's self-reported identity (`node.name`, application
+/// name, portal app id) is captured too and used as a second hint. Every fact
+/// is read from the global's properties, so no extra proxy has to be bound and
+/// kept alive.
+#[derive(Default)]
+struct ConsumerResolver {
+    /// Producer node ids we own; only links from these are resolved.
+    producer_nodes: HashSet<u32>,
+    /// Node id -> owning client id (`client.id`).
+    node_clients: HashMap<u32, u32>,
+    /// Node id -> process id when the node itself reports it.
+    node_pids: HashMap<u32, i32>,
+    /// Node id -> the app identity the node reports about itself
+    /// (`pipewire.access.portal.app_id` / `application.name` / `node.name`).
+    /// Chromium names its capture node after the browser (`node.name=brave`),
+    /// so this survives the portal proxying the pid.
+    node_app_hints: HashMap<u32, String>,
+    /// Client id -> process id (`application.process.id`).
+    client_pids: HashMap<u32, i32>,
+    /// Link id -> (output node id, input node id).
+    links: HashMap<u32, (u32, u32)>,
+    /// Identity properties seen on each Node global, keyed by global id.
+    /// Diagnostic only: shows whether a proxy carries an app id at all.
+    node_identity: HashMap<u32, String>,
+    /// Identity properties seen on each Client global, keyed by global id.
+    client_identity: HashMap<u32, String>,
+}
+
+/// The app identity a Node global reports about itself, if any.
+///
+/// Ordered most specific first: the portal's app id, then the client's
+/// application name, then the node name the client chose (Chromium uses the
+/// browser name here), then the binary.
+fn node_app_hint(props: &DictRef) -> Option<String> {
+    for key in [
+        "pipewire.access.portal.app_id",
+        "application.name",
+        "node.name",
+        "application.process.binary",
+    ] {
+        if let Some(value) = props.get(key) {
+            let value = value.trim();
+            if !value.is_empty() {
+                return Some(value.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// The identity-bearing properties of a Node/Client global, formatted for logs.
+fn identity_props(props: &DictRef) -> String {
+    const KEYS: &[&str] = &[
+        "application.name",
+        "application.id",
+        "application.process.binary",
+        "application.process.id",
+        "node.name",
+        "node.description",
+        "media.class",
+        "pipewire.access.portal.app_id",
+        "pipewire.access.portal.is_portal",
+        "pipewire.access.portal.media_roles",
+        "pipewire.sec.pid",
+    ];
+    let mut parts = Vec::new();
+    for &key in KEYS {
+        if let Some(value) = props.get(key) {
+            parts.push(format!("{key}={value}"));
+        }
+    }
+    parts.join(" ")
+}
+
+impl ConsumerResolver {
+    /// Applies one registry global. Returns `true` when a table changed.
+    fn apply_global(&mut self, global: &GlobalObject<&DictRef>) -> bool {
+        match &global.type_ {
+            ObjectType::Node => {
+                let Some(props) = global.props else {
+                    return false;
+                };
+                self.node_identity.insert(global.id, identity_props(props));
+                if let Some(hint) = node_app_hint(props) {
+                    self.node_app_hints.insert(global.id, hint);
+                }
+                let mut changed = false;
+                if let Some(client) = props
+                    .get(*keys::CLIENT_ID)
+                    .and_then(|value| value.parse().ok())
+                {
+                    changed |= self.node_clients.insert(global.id, client) != Some(client);
+                }
+                if let Some(pid) = props
+                    .get(*keys::APP_PROCESS_ID)
+                    .and_then(|value| value.parse().ok())
+                {
+                    changed |= self.node_pids.insert(global.id, pid) != Some(pid);
+                }
+                changed
+            }
+            ObjectType::Client => {
+                let Some(props) = global.props else {
+                    return false;
+                };
+                self.client_identity
+                    .insert(global.id, identity_props(props));
+                // `application.process.id` is client-supplied; `pipewire.sec.pid`
+                // is set by the protocol from the connecting socket. Prefer the
+                // former and fall back to the latter, so a minimal client that
+                // never sets the application key is still identified.
+                let Some(pid) = props
+                    .get(*keys::APP_PROCESS_ID)
+                    .or_else(|| props.get(*keys::SEC_PID))
+                    .and_then(|value| value.parse().ok())
+                else {
+                    return false;
+                };
+                self.client_pids.insert(global.id, pid) != Some(pid)
+            }
+            ObjectType::Link => {
+                let Some(props) = global.props else {
+                    return false;
+                };
+                let (Some(output), Some(input)) = (
+                    props
+                        .get(*keys::LINK_OUTPUT_NODE)
+                        .and_then(|value| value.parse().ok()),
+                    props
+                        .get(*keys::LINK_INPUT_NODE)
+                        .and_then(|value| value.parse().ok()),
+                ) else {
+                    return false;
+                };
+                self.links.insert(global.id, (output, input)) != Some((output, input))
+            }
+            _ => false,
+        }
+    }
+
+    fn remove(&mut self, id: u32) {
+        self.node_clients.remove(&id);
+        self.node_pids.remove(&id);
+        self.node_app_hints.remove(&id);
+        self.client_pids.remove(&id);
+        self.links.remove(&id);
+        self.node_identity.remove(&id);
+        self.client_identity.remove(&id);
+    }
+
+    /// Every consumer currently derivable from a link that feeds one of our
+    /// nodes: `(producer node, pid, app hint)`. Either identity may be absent;
+    /// a link with neither is dropped.
+    fn resolved(&self) -> Vec<(u32, Option<i32>, Option<String>)> {
+        self.links
+            .values()
+            .filter(|(output, _)| self.producer_nodes.contains(output))
+            .filter_map(|(output, input)| {
+                let pid = self.node_pids.get(input).copied().or_else(|| {
+                    let client = self.node_clients.get(input)?;
+                    self.client_pids.get(client).copied()
+                });
+                let app_id = self.node_app_hints.get(input).cloned();
+                if pid.is_none() && app_id.is_none() {
+                    return None;
+                }
+                Some((*output, pid, app_id))
+            })
+            .collect()
+    }
 }
 
 /// What publishing a stream needs, resolved on the compositor loop at
@@ -110,6 +303,17 @@ pub struct ActiveStream {
     pub position: (i32, i32),
     pub size: (i32, i32),
     pub label: String,
+    /// The requesting application's id (portal `app_id`), used by the shell to
+    /// put the recording indicator on the workspace that holds the app.
+    pub app_id: String,
+    /// The process consuming the stream, resolved from the PipeWire graph.
+    /// Unlike `app_id` this is compositor-observed and drives the recording
+    /// indicator.
+    pub consumer_pid: Option<i32>,
+    /// The app identity the consumer's PipeWire node reported about itself.
+    /// The portal proxies the stream, so the consumer pid is the portal's; this
+    /// is what still names the real app (Chromium sets `node.name=brave`).
+    pub consumer_app_id: Option<String>,
     /// Whether a consumer is pulling frames right now.
     pub active: bool,
     /// Last frame copy for this stream: the 30 FPS budget is enforced
@@ -128,6 +332,12 @@ pub struct Producer {
     _integration: RegistrationToken,
     /// Keeps the pw main loop identity alive.
     _main_loop: MainLoopRc,
+    /// Resolves a stream's consuming process from the PipeWire graph.
+    resolver: Rc<RefCell<ConsumerResolver>>,
+    /// Registry listener; must drop before `_registry` so it unregisters
+    /// while the proxy is still alive.
+    _registry_listener: pipewire::registry::Listener,
+    _registry: pipewire::registry::RegistryRc,
     /// The compositor loop answers one [ProducerEvent] per pw call back.
     to_loop: smithay::reexports::calloop::channel::Sender<ProducerEvent>,
     streams: HashMap<OwnedObjectPath, StreamEntry>,
@@ -268,14 +478,96 @@ impl Producer {
             })
             .map_err(|error| format!("calloop integration: {error}"))?;
 
+        // The registry maps the graph so the recording process can be named
+        // from the link that feeds our stream (see [ConsumerResolver]).
+        let registry = core
+            .get_registry_rc()
+            .map_err(|error| format!("Registry: {error:?}"))?;
+        let resolver = Rc::new(RefCell::new(ConsumerResolver::default()));
+        let resolver_global = resolver.clone();
+        let resolver_remove = resolver.clone();
+        let to_loop_registry = to_loop.clone();
+        let registry_listener = registry
+            .add_listener_local()
+            .global(move |global| {
+                let mut resolver = resolver_global.borrow_mut();
+                let changed = resolver.apply_global(global);
+                // Diagnostic for the screen-cast attribution: a link is the
+                // only place the consuming process is named, so dump the graph
+                // tables whenever one is seen.
+                if matches!(global.type_, ObjectType::Link) {
+                    if let Some((output, input)) = resolver.links.get(&global.id).copied() {
+                        let input_client = resolver.node_clients.get(&input).copied();
+                        tracing::debug!(
+                            link_id = global.id,
+                            producer = output,
+                            input,
+                            from_producer = resolver.producer_nodes.contains(&output),
+                            node_identity = %resolver
+                                .node_identity
+                                .get(&input)
+                                .map(String::as_str)
+                                .unwrap_or(""),
+                            client_identity = %input_client
+                                .and_then(|client| resolver.client_identity.get(&client))
+                                .map(String::as_str)
+                                .unwrap_or(""),
+                            client_pid = ?input_client
+                                .and_then(|client| resolver.client_pids.get(&client)),
+                            "pipewire link consumer identity"
+                        );
+                    }
+                }
+                if !changed {
+                    return;
+                }
+                let resolved = resolver.resolved();
+                if !resolved.is_empty() {
+                    tracing::debug!(?resolved, "pipewire consumers resolved");
+                }
+                for (node_id, pid, app_id) in resolved {
+                    let _ = to_loop_registry.send(ProducerEvent::ConsumerIdentified {
+                        node_id,
+                        pid,
+                        app_id,
+                    });
+                }
+            })
+            .global_remove(move |id| resolver_remove.borrow_mut().remove(id))
+            .register();
+
         Ok(Self {
             _context: context,
             _main_loop: main_loop,
             core,
             _integration: integration,
+            resolver,
+            _registry_listener: registry_listener,
+            _registry: registry,
             to_loop,
             streams: HashMap::new(),
         })
+    }
+
+    /// Registers a producer stream node so links feeding it resolve to the
+    /// consuming process. Also flushes any link that already exists.
+    pub fn register_stream_node(&self, node_id: u32) {
+        tracing::debug!(
+            node_id,
+            "producer stream node registered for consumer resolution"
+        );
+        let resolved = {
+            let mut resolver = self.resolver.borrow_mut();
+            resolver.producer_nodes.insert(node_id);
+            resolver.resolved()
+        };
+        for (producer_node, pid, app_id) in resolved {
+            let _ = self.to_loop.send(ProducerEvent::ConsumerIdentified {
+                node_id: producer_node,
+                pid,
+                app_id,
+            });
+        }
     }
 
     /// Publishes the video stream for a consented session. No node exists

@@ -17,7 +17,7 @@ use super::{
     RESPONSE_FAILED, RESPONSE_OK, SCREENCAST_INTERFACE, SESSION_INTERFACE,
 };
 
-struct BusGuard {
+pub(crate) struct BusGuard {
     daemon: Child,
 }
 
@@ -28,7 +28,7 @@ impl Drop for BusGuard {
     }
 }
 
-fn start_private_session_bus() -> (BusGuard, String) {
+pub(crate) fn start_private_session_bus() -> (BusGuard, String) {
     // Tests run in parallel inside one process: every bus gets its own
     // directory and socket.
     let unique = super::HARNESS_TEST_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);

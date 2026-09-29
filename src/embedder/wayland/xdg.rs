@@ -545,10 +545,41 @@ pub mod xdg {
 
         fn request_activation(
             &mut self,
-            _token: XdgActivationToken,
+            token: XdgActivationToken,
             token_data: XdgActivationTokenData,
             surface: WlSurface,
         ) {
+            // A token minted by the notification server for an invoked action
+            // is trusted: the user asked for the window, so honor the
+            // activation by focusing it instead of reading it as a demand for
+            // attention.
+            if let Some(meta_window_id) = self.take_notification_activation_token(token.as_str()) {
+                self.xdg_activation_state.remove_token(&token);
+                match crate::flutter_engine::platform_channel_callbacks::activate_window::focus_surface(
+                    self,
+                    &surface,
+                ) {
+                    Ok(()) => {
+                        info!(
+                            target: "veshell::geometry",
+                            meta_window_id,
+                            "xdg_activation: notification token focused its window"
+                        );
+                        // The compositor focused the surface, but only the
+                        // shell can select the workspace/tile that makes the
+                        // window visible.
+                        self.notify_window_activation_requested(&meta_window_id);
+                    }
+                    Err((code, message)) => warn!(
+                        target: "veshell::geometry",
+                        error = code,
+                        message,
+                        "xdg_activation: notification token could not focus its window"
+                    ),
+                }
+                return;
+            }
+
             let activated_surface_id = get_surface_id(&surface);
 
             let focused_surface = match self.keyboard.current_focus() {
@@ -602,11 +633,15 @@ pub mod xdg {
                 );
                 self.patch_meta_window(
                     MetaWindowPatch::UpdateActivatedBy {
-                        id: activated_meta_window_id,
+                        id: activated_meta_window_id.clone(),
                         value: Some(requesting_meta_window_id),
                     },
                     true,
                 );
+                // Activating a window that already exists is an attention
+                // request: surface it as a notification instead of focusing
+                // the window behind the user's back.
+                self.notify_window_attention_requested(&activated_meta_window_id);
             } else {
                 // The activated surface has no meta window yet; remember the
                 // relation so `new_meta_window_for_toplevel` applies it at

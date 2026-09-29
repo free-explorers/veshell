@@ -12,6 +12,7 @@ import 'package:shell/monitor/provider/monitor_manager.dart';
 import 'package:shell/monitor/provider/platform_focused_view.dart';
 import 'package:shell/monitor/widget/monitor.dart';
 import 'package:shell/notification/provider/notification_manager.dart';
+import 'package:shell/notification/provider/notification_read_tracker.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_client.dart';
 import 'package:shell/platform/model/request/get_environment_variables/get_environment_variables.serializable.dart';
 import 'package:shell/platform/model/request/get_monitor_layout/get_monitor_layout.serializable.dart';
@@ -187,10 +188,12 @@ class _EagerInitialization extends ConsumerWidget {
       ..watch(polkitAuthenticationAgentStateProvider)
       ..watch(matchingEngineProvider)
       ..watch(notificationManagerProvider)
+      ..watch(notificationReadTrackerProvider)
       // Capture consent/prompt/indicator subscribe at shell start so a
       // portal flow is never dropped while a view is being rebuilt.
       ..watch(screenCastConsentProvider)
       ..watch(screenCastIndicatorProvider)
+      ..watch(screenCastRecordingTargetsProvider)
       ..watch(screenshotPromptProvider);
 
     return InitializationStatus(

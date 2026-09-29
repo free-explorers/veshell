@@ -120,6 +120,8 @@ class MetaWindowState extends _$MetaWindowState {
         state = state.copyWith(needDecoration: patch.value);
       case UpdateGameModeActivated():
         state = state.copyWith(gameModeActivated: patch.value);
+      case UpdateIsRecording():
+        state = state.copyWith(isRecording: patch.value);
       case UpdateCurrentOutput():
         state = state.copyWith(currentOutput: patch.value);
       case UpdateScaleRatio():

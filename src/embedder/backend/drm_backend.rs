@@ -159,6 +159,7 @@ impl Backend for DrmBackend {
     const HAS_RELATIVE_MOTION: bool = true;
     const FLIP_FLUTTER_TEXTURE: bool = true;
     const RUNS_PORTAL_BACKEND: bool = true;
+    const RUNS_NOTIFICATION_SERVER: bool = true;
     const CAN_BLANK: bool = true;
     const SUPPORTS_OUTPUT_TRANSFORM: bool = true;
 

@@ -5,6 +5,8 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/logs_for_pid.dart';
 import 'package:shell/application/widget/app_icon.dart';
+import 'package:shell/capture/provider/recording_workspaces.dart';
+import 'package:shell/capture/provider/screen_cast_indicator.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
@@ -91,32 +93,29 @@ class PersistentWindowTileable extends Tileable {
                     dialogMetaWindowList: dialogMetaWindowIds,
                   )
                 : dialogMetaWindowIds.isNotEmpty
-                    // A tile whose only windows are popups still renders them,
-                    // over an empty background, instead of hiding them behind
-                    // its placeholder.
-                    ? WindowDialogs(
-                        metaWindowIds: dialogMetaWindowIds,
-                        maxSizeFactor: switch (window.displayMode) {
-                          DisplayMode.maximized ||
-                          DisplayMode.fullscreen => 0.9,
-                          _ => 1,
-                        },
-                      )
-                    : WindowPlaceholder(
-                        isSelected: isSelected,
-                        focusNode: primaryFocusNode,
-                        window: window,
-                        onLaunch: () {
-                          primaryFocusNode.requestFocus();
-                          return ref
-                              .read(
-                                persistentWindowStateProvider(
-                                  windowId,
-                                ).notifier,
-                              )
-                              .launchSelf();
-                        },
-                      ),
+                // A tile whose only windows are popups still renders them,
+                // over an empty background, instead of hiding them behind
+                // its placeholder.
+                ? WindowDialogs(
+                    metaWindowIds: dialogMetaWindowIds,
+                    maxSizeFactor: switch (window.displayMode) {
+                      DisplayMode.maximized || DisplayMode.fullscreen => 0.9,
+                      _ => 1,
+                    },
+                  )
+                : WindowPlaceholder(
+                    isSelected: isSelected,
+                    focusNode: primaryFocusNode,
+                    window: window,
+                    onLaunch: () {
+                      primaryFocusNode.requestFocus();
+                      return ref
+                          .read(
+                            persistentWindowStateProvider(windowId).notifier,
+                          )
+                          .launchSelf();
+                    },
+                  ),
           ),
         ),
       ),
@@ -128,6 +127,11 @@ class PersistentWindowTileable extends Tileable {
     final window = ref.watch(persistentWindowStateProvider(windowId));
     final isRunning = window.metaWindowId != null;
     final title = window.properties.title;
+    final metaWindowId = window.metaWindowId;
+    final recordingSessions = metaWindowId == null
+        ? const <String>{}
+        : ref.watch(recordingSessionsForMetaWindowProvider(metaWindowId));
+    final isRecording = recordingSessions.isNotEmpty;
     return HookBuilder(
       builder: (context) {
         final isHoverState = useState(false);
@@ -173,6 +177,23 @@ class PersistentWindowTileable extends Tileable {
                         ),
                       ),
                       const SizedBox(width: 8),
+                      if (isRecording)
+                        SizedBox(
+                          width: 32,
+                          child: IconButton(
+                            visualDensity: VisualDensity.compact,
+                            color: Colors.red,
+                            tooltip: 'Stop recording',
+                            onPressed: () {
+                              for (final session in recordingSessions) {
+                                ref
+                                    .read(screenCastIndicatorProvider.notifier)
+                                    .stop(session);
+                              }
+                            },
+                            icon: const Icon(MdiIcons.stopCircleOutline),
+                          ),
+                        ),
                       SizedBox(
                         width: 32,
                         child: isSelected || isHoverState.value

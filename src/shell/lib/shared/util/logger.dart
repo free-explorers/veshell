@@ -4,10 +4,13 @@ import 'package:logging/logging.dart' as logging;
 bool hierarchicalLoggingEnabled = true;
 
 final focusLog = logging.Logger('Focus');
+final navigationLog = logging.Logger('Navigation');
 final persistenceLog = logging.Logger('Persistence');
 final geometryLog = logging.Logger('Geometry');
 final matchingLog = logging.Logger('Matching');
+final notificationLog = logging.Logger('Notification');
 final polkitLog = logging.Logger('Polkit');
+final captureLog = logging.Logger('Capture');
 
 final _simpleLogger = Logger(
   printer: HybridPrinter(

@@ -86,6 +86,13 @@ sealed class MetaWindowPatchMessage
     required bool value,
   }) = UpdateGameModeActivated;
 
+  /// Marks the MetaWindow a live screen cast is recording, so the tile and its
+  /// workspace can render the recording indicator.
+  const factory MetaWindowPatchMessage.updateIsRecording({
+    required String id,
+    required bool value,
+  }) = UpdateIsRecording;
+
   const factory MetaWindowPatchMessage.updateCurrentOutput({
     required String id,
     String? value,

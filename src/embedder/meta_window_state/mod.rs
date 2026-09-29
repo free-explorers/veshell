@@ -41,6 +41,11 @@ pub struct MetaWindowState {
     pub meta_popups: HashMap<String, MetaPopup>,
     pub meta_popup_id_per_surface_id: HashMap<u64, String>,
     pub meta_window_in_gaming_mode: Option<String>,
+    /// MetaWindow ids ordered by focus recency, least recent first. Updated
+    /// whenever the shell activates a window (`activate_window`), so the
+    /// recording indicator's app-id fallback can pick an app's most recently
+    /// focused window instead of guessing from the layout.
+    pub focus_order: Vec<String>,
     /// `xdg_activation_v1` requesters (see `State::request_activation`) for
     /// surfaces whose meta window does not exist yet. Consumed in
     /// [`Self::new_meta_window_for_toplevel`] so the relation is available as
@@ -56,8 +61,84 @@ impl MetaWindowState {
             meta_popups: HashMap::new(),
             meta_popup_id_per_surface_id: HashMap::new(),
             meta_window_in_gaming_mode: None,
+            focus_order: Vec::new(),
             pending_activation_parent: HashMap::new(),
         }
+    }
+
+    /// Records `id` as the most recently focused MetaWindow.
+    ///
+    /// Called from `activate_window`: the shell is the compositor's focus
+    /// source, so this is the trusted focus order. Re-focusing a window moves
+    /// it to the front rather than duplicating it.
+    pub fn record_meta_window_focus(&mut self, id: &str) {
+        self.focus_order.retain(|existing| existing != id);
+        self.focus_order.push(id.to_string());
+    }
+
+    /// Forgets a removed MetaWindow so it can no longer be resolved as the
+    /// focus target of a live cast.
+    pub fn forget_meta_window(&mut self, id: &str) {
+        self.focus_order.retain(|existing| existing != id);
+    }
+
+    /// The most recently focused MetaWindow satisfying `predicate`, falling
+    /// back to any match when no focused window qualifies (for example a cast
+    /// that started before the app was ever focused).
+    fn most_recent_meta_window_where(
+        &self,
+        predicate: impl Fn(&MetaWindow) -> bool,
+    ) -> Option<String> {
+        self.focus_order
+            .iter()
+            .rev()
+            .find(|id| {
+                self.meta_windows
+                    .get(*id)
+                    .is_some_and(|window| predicate(window))
+            })
+            .cloned()
+            .or_else(|| {
+                self.meta_windows
+                    .values()
+                    .find(|window| predicate(window))
+                    .map(|window| window.id.clone())
+            })
+    }
+
+    /// The MetaWindow a live screen cast should mark as recording.
+    ///
+    /// Resolution is layered, least heuristic first (capture review):
+    /// 1. the compositor-observed consumer pid, matched against
+    ///    [`MetaWindow::pid`];
+    /// 2. the portal `app_id`, then the consumer node's self-reported identity
+    ///    ([`MetaWindow::app_id`] or [`MetaWindow::binary_name`]), resolved to
+    ///    the app's most recently focused window.
+    ///
+    /// Returns `None` when neither identity maps to a window: the indicator
+    /// then has no tile to live on rather than guessing one.
+    pub fn recording_meta_window_for(
+        &self,
+        app_id: &str,
+        consumer_app_id: Option<&str>,
+        consumer_pid: Option<i32>,
+    ) -> Option<String> {
+        if let Some(pid) = consumer_pid {
+            if let Some(id) = self.most_recent_meta_window_where(|window| window.pid == pid) {
+                return Some(id);
+            }
+        }
+        for hint in [app_id, consumer_app_id.unwrap_or("")] {
+            if hint.is_empty() {
+                continue;
+            }
+            if let Some(id) = self
+                .most_recent_meta_window_where(|window| meta_window_matches_app_hint(window, hint))
+            {
+                return Some(id);
+            }
+        }
+        None
     }
 
     /// Windows whose `current_output` is the given output.
@@ -77,6 +158,37 @@ impl MetaWindowState {
         }
         meta_windows
     }
+}
+
+/// Whether two app ids name the same application.
+///
+/// The portal `app_id` is client-supplied while [`MetaWindow::app_id`] may be
+/// a desktop-file id, a Flatpak/Snap id or a binary name, so compare with a
+/// `.desktop` suffix stripped and case-insensitively. This normalizes spelling
+/// only; it never guesses across different names.
+fn app_ids_match(left: &str, right: &str) -> bool {
+    fn normalize(id: &str) -> &str {
+        id.strip_suffix(".desktop").unwrap_or(id)
+    }
+    normalize(left).eq_ignore_ascii_case(normalize(right))
+}
+
+/// Whether a window's identity matches an app id / PipeWire node hint.
+///
+/// Matches the window's app id (spelling-normalized) or its process binary
+/// name: the portal frontend proxies the stream, so the consumer pid is the
+/// portal's and the cast is often named only by the node the client created
+/// (`node.name=brave`), which is the binary name while the window's app id is
+/// `brave-browser`.
+fn meta_window_matches_app_hint(window: &MetaWindow, hint: &str) -> bool {
+    window
+        .app_id
+        .as_deref()
+        .is_some_and(|id| app_ids_match(id, hint))
+        || window
+            .binary_name
+            .as_deref()
+            .is_some_and(|name| name.eq_ignore_ascii_case(hint))
 }
 
 impl<BackendData: Backend + 'static> State<BackendData> {
@@ -165,9 +277,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             credentials.pid
         };
 
+        let binary_name = get_binary_name_from_pid(pid);
         let app_id = determine_desktop_file_app_id_from_pid(pid)
             .or(surface_app_id)
-            .or_else(|| get_binary_name_from_pid(pid));
+            .or_else(|| binary_name.clone());
 
         let surface_id = get_surface_id(surface.wl_surface());
 
@@ -215,6 +328,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             id: Uuid::new_v4().hyphenated().to_string(),
             surface_id: surface_id,
             app_id: app_id.clone(),
+            binary_name: binary_name.clone(),
             pid,
             parent: meta_window_parent,
             activated_by,
@@ -230,6 +344,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             need_decoration: !is_decorated,
             scale_ratio: fallback_scale_ratio,
             game_mode_activated: false,
+            is_recording: false,
         });
         info!(
             target: "veshell::geometry",
@@ -269,11 +384,12 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .unwrap_or_else(|_| x11_surface.pid().unwrap_or(0))
             .try_into()
             .unwrap();
+        let binary_name = get_binary_name_from_pid(pid);
         let app_id =
             determine_desktop_file_app_id_from_pid(pid).or(if !x11_surface.instance().is_empty() {
                 Some(x11_surface.instance())
             } else {
-                get_binary_name_from_pid(pid)
+                binary_name.clone()
             });
 
         self.emit_process_info(pid);
@@ -282,6 +398,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             id: uuid::Uuid::new_v4().to_string(),
             surface_id: surface_id,
             app_id: app_id.clone(),
+            binary_name: binary_name.clone(),
             pid,
             parent: meta_window_parent,
             activated_by: None,
@@ -301,6 +418,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             need_decoration: !x11_surface.is_decorated(),
             scale_ratio: scale_ratio,
             game_mode_activated: false,
+            is_recording: false,
         });
         info!("new meta window from x11: {:?}", meta_window);
         meta_window
@@ -411,4 +529,133 @@ pub(crate) fn get_binary_name_from_pid(pid: i32) -> Option<String> {
     let comm_contents = comm_contents.trim_end_matches('\n');
     //let comm_contents = comm_contents.split('.').next().unwrap();
     Some(comm_contents.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn window(id: &str, pid: i32, app_id: Option<&str>) -> MetaWindow {
+        MetaWindow {
+            id: id.to_string(),
+            app_id: app_id.map(str::to_string),
+            binary_name: None,
+            pid,
+            surface_id: 0,
+            parent: None,
+            activated_by: None,
+            mapped: true,
+            display_mode: None,
+            title: None,
+            window_class: None,
+            startup_id: None,
+            is_fixed_sized: false,
+            is_modal: false,
+            geometry: None,
+            need_decoration: false,
+            current_output: None,
+            scale_ratio: 1.0,
+            game_mode_activated: false,
+            is_recording: false,
+        }
+    }
+
+    fn state_with(windows: Vec<MetaWindow>, focus: &[&str]) -> MetaWindowState {
+        let mut state = MetaWindowState::new();
+        for window in windows {
+            state.meta_windows.insert(window.id.clone(), window);
+        }
+        for id in focus {
+            state.record_meta_window_focus(id);
+        }
+        state
+    }
+
+    #[test]
+    fn consumer_pid_wins_over_app_id() {
+        let state = state_with(
+            vec![
+                window("by-pid", 42, Some("org.example.Other")),
+                window("by-app", 7, Some("org.example.App")),
+            ],
+            &["by-app"],
+        );
+        assert_eq!(
+            state.recording_meta_window_for("org.example.App", None, Some(42)),
+            Some("by-pid".to_string())
+        );
+    }
+
+    #[test]
+    fn app_id_fallback_picks_most_recently_focused() {
+        let state = state_with(
+            vec![
+                window("older", 7, Some("org.example.App")),
+                window("recent", 8, Some("org.example.App")),
+            ],
+            &["older", "recent"],
+        );
+        assert_eq!(
+            state.recording_meta_window_for("org.example.App", None, None),
+            Some("recent".to_string())
+        );
+    }
+
+    #[test]
+    fn app_id_fallback_falls_back_to_any_match_without_focus_history() {
+        let state = state_with(vec![window("only", 7, Some("org.example.App"))], &[]);
+        assert_eq!(
+            state.recording_meta_window_for("org.example.App", None, None),
+            Some("only".to_string())
+        );
+    }
+
+    #[test]
+    fn app_id_matching_ignores_case_and_desktop_suffix() {
+        let state = state_with(vec![window("w", 7, Some("org.example.App.desktop"))], &[]);
+        assert_eq!(
+            state.recording_meta_window_for("org.example.app", None, None),
+            Some("w".to_string())
+        );
+    }
+
+    #[test]
+    fn unknown_identity_resolves_to_nothing() {
+        let state = state_with(vec![window("w", 7, Some("org.example.App"))], &["w"]);
+        assert_eq!(state.recording_meta_window_for("", None, None), None);
+        assert_eq!(
+            state.recording_meta_window_for("org.example.Other", None, None),
+            None
+        );
+    }
+
+    #[test]
+    fn unknown_pid_still_falls_back_to_the_app_id() {
+        let state = state_with(vec![window("w", 7, Some("org.example.App"))], &["w"]);
+        assert_eq!(
+            state.recording_meta_window_for("org.example.App", None, Some(999)),
+            Some("w".to_string())
+        );
+    }
+
+    #[test]
+    fn consumer_node_hint_matches_the_binary_name() {
+        // The portal proxies the stream, so the pid is the portal's; the
+        // consumer node is named after the browser binary (`node.name=brave`)
+        // while the window app id is `brave-browser`.
+        let mut browser = window("browser", 42, Some("brave-browser"));
+        browser.binary_name = Some("brave".to_string());
+        let state = state_with(vec![browser], &[]);
+        assert_eq!(
+            state.recording_meta_window_for("", Some("brave"), Some(4097)),
+            Some("browser".to_string())
+        );
+    }
+
+    #[test]
+    fn removed_window_leaves_the_focus_order() {
+        let mut state = state_with(vec![window("w", 7, Some("org.example.App"))], &["w"]);
+        state.forget_meta_window("w");
+        assert!(state.focus_order.is_empty());
+    }
 }

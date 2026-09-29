@@ -60,7 +60,6 @@ dependencies:
   logging: ^1.2.0
   fl_chart: ^1.2.0
   universal_disk_space: ^0.2.3
-  duration: ^4.0.3
   ubuntu_session: 
     git:
       url: https://github.com/free-explorers/ubuntu_session.dart

@@ -5,6 +5,11 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/widget/app_icon.dart';
+import 'package:shell/capture/provider/recording_workspaces.dart';
+import 'package:shell/notification/provider/notification_channel.dart';
+import 'package:shell/notification/provider/notification_routing.dart';
+import 'package:shell/notification/widget/notification_area.dart';
+import 'package:shell/notification/widget/notification_dot.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/screen/provider/workspace_display_mode.dart';
@@ -28,17 +33,14 @@ class WorkspaceListView extends HookConsumerWidget {
       keys: [screenState.workspaceList.length],
     );
     final dropInProgressState = useState(false);
-    useEffect(
-      () {
-        animationController.animateTo(
-          screenState.selectedIndex.toDouble(),
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
-        );
-        return null;
-      },
-      [screenState.selectedIndex],
-    );
+    useEffect(() {
+      animationController.animateTo(
+        screenState.selectedIndex.toDouble(),
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+      );
+      return null;
+    }, [screenState.selectedIndex]);
     return CustomPaint(
       painter: WorkspaceIndicatorPainter(
         controller: animationController,
@@ -76,7 +78,9 @@ class WorkspaceListView extends HookConsumerWidget {
                 )
                 .toList();
             for (final workspaceId in addedWorkspaceList) {
-              ref.read(screenStateProvider(screenId).notifier).insertWorkspace(
+              ref
+                  .read(screenStateProvider(screenId).notifier)
+                  .insertWorkspace(
                     workspaceId,
                     workspaceList.indexOf(workspaceId),
                   );
@@ -84,9 +88,7 @@ class WorkspaceListView extends HookConsumerWidget {
           } else {
             ref
                 .read(screenStateProvider(screenId).notifier)
-                .updateWorkspaceList(
-                  workspaceList.toIList(),
-                );
+                .updateWorkspaceList(workspaceList.toIList());
           }
         },
       ),
@@ -122,10 +124,7 @@ class WorkspaceIndicator extends Decoration {
 }
 
 class _WorkspaceIndicatorPainter extends BoxPainter {
-  _WorkspaceIndicatorPainter(
-    this.decoration,
-    super.onChanged,
-  );
+  _WorkspaceIndicatorPainter(this.decoration, super.onChanged);
 
   final WorkspaceIndicator decoration;
 
@@ -181,19 +180,21 @@ class WorkspaceIndicatorPainter extends CustomPainter {
 
     final value = controller.view.value;
     final ltr = index > value;
-    final from = (ltr ? value.floor() : value.ceil())
-        .clamp(0, length); // ignore_clamp_double_lint
-    final to = (ltr ? from + 1 : from - 1)
-        .clamp(0, length); // ignore_clamp_double_lint
+    final from = (ltr ? value.floor() : value.ceil()).clamp(
+      0,
+      length,
+    ); // ignore_clamp_double_lint
+    final to = (ltr ? from + 1 : from - 1).clamp(
+      0,
+      length,
+    ); // ignore_clamp_double_lint
 
     final fromRect = Rect.fromLTWH(0, panelSize * from, panelSize, panelSize);
     final toRect = Rect.fromLTWH(0, panelSize * to, panelSize, panelSize);
     _currentRect = Rect.lerp(fromRect, toRect, (value - from).abs());
     assert(_currentRect != null);
 
-    final configuration = ImageConfiguration(
-      size: _currentRect!.size,
-    );
+    final configuration = ImageConfiguration(size: _currentRect!.size);
 
     _painter!.paint(canvas, _currentRect!.topLeft, configuration);
   }
@@ -220,46 +221,72 @@ class WorkspaceListButton extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final screenState = ref.watch(screenStateProvider(screenId));
+    final unreadNotifications = ref.watch(
+      unreadNotificationsForWorkspaceProvider(workspaceId),
+    );
+    final isRecording = ref
+        .watch(recordingWorkspacesProvider)
+        .contains(workspaceId);
 
-    return DragTarget<PersistentWindowTileable>(
-      onWillAcceptWithDetails: (data) => data is PersistentWindowTileable,
-      onAcceptWithDetails: (details) {
-        ref
-            .read(workspaceStateProvider(workspaceId).notifier)
-            .addWindow(details.data.windowId);
-      },
-      builder: (
-        context,
-        candidateData,
-        rejectedData,
-      ) {
-        return AspectRatio(
-          aspectRatio: 1,
-          child: IconButton(
-            style: ButtonStyle(
-              backgroundColor: WidgetStatePropertyAll(
-                candidateData.isNotEmpty
-                    ? Theme.of(context).colorScheme.primary
-                    : null,
-              ),
-              foregroundColor: WidgetStatePropertyAll(
-                candidateData.isNotEmpty
-                    ? Theme.of(context).colorScheme.onPrimary
-                    : null,
-              ),
-              shape: WidgetStateProperty.all(
-                const RoundedRectangleBorder(),
-              ),
+    return NotificationArea(
+      channel: workspaceNotificationChannel(workspaceId),
+      child: DragTarget<PersistentWindowTileable>(
+        onWillAcceptWithDetails: (data) => data is PersistentWindowTileable,
+        onAcceptWithDetails: (details) {
+          ref
+              .read(workspaceStateProvider(workspaceId).notifier)
+              .addWindow(details.data.windowId);
+        },
+        builder: (context, candidateData, rejectedData) {
+          return AspectRatio(
+            aspectRatio: 1,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(
+                  child: IconButton(
+                    style: ButtonStyle(
+                      backgroundColor: WidgetStatePropertyAll(
+                        candidateData.isNotEmpty
+                            ? Theme.of(context).colorScheme.primary
+                            : null,
+                      ),
+                      foregroundColor: WidgetStatePropertyAll(
+                        candidateData.isNotEmpty
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : null,
+                      ),
+                      shape: WidgetStateProperty.all(
+                        const RoundedRectangleBorder(),
+                      ),
+                    ),
+                    onPressed: () {
+                      ref
+                          .read(screenStateProvider(screenId).notifier)
+                          .selectWorkspace(
+                            screenState.workspaceList.indexOf(workspaceId),
+                          );
+                    },
+                    icon: WorkspaceIcon(workspaceId: workspaceId),
+                  ),
+                ),
+                if (isRecording || unreadNotifications.isNotEmpty)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: NotificationDot(
+                          color: isRecording ? Colors.red : null,
+                          blinking: isRecording,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-            onPressed: () {
-              ref.read(screenStateProvider(screenId).notifier).selectWorkspace(
-                    screenState.workspaceList.indexOf(workspaceId),
-                  );
-            },
-            icon: WorkspaceIcon(workspaceId: workspaceId),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
@@ -271,16 +298,15 @@ class WorkspaceIcon extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final workspaceDisplayMode = ref.watch(currentWorkspaceDisplayModeProvider);
-    final workspaceState = ref.watch(
-      workspaceStateProvider(workspaceId),
-    );
+    final workspaceState = ref.watch(workspaceStateProvider(workspaceId));
 
     final appIdList = useMemoized(
       () => workspaceState.tileableWindowList
           .map(
             (windowId) => ref.read(
-              persistentWindowStateProvider(windowId)
-                  .select((value) => value.properties.appId),
+              persistentWindowStateProvider(
+                windowId,
+              ).select((value) => value.properties.appId),
             ),
           )
           .toList(),
@@ -299,16 +325,12 @@ class WorkspaceIcon extends HookConsumerWidget {
               child: AppIconById(id: appIdList.first),
             );
           } else {
-            return CategoryIcon(
-              category: workspaceState.category,
-            );
+            return CategoryIcon(category: workspaceState.category);
           }
         }
       case WorkspaceDisplayMode.category:
         {
-          return CategoryIcon(
-            category: workspaceState.category,
-          );
+          return CategoryIcon(category: workspaceState.category);
         }
       case WorkspaceDisplayMode.application:
         {
@@ -320,18 +342,15 @@ class WorkspaceIcon extends HookConsumerWidget {
               numberOfEachAppMap[appId] = 1;
             }
           }
-          final sortedByInstanceAppList =
-              numberOfEachAppMap.entries.sorted((a, b) {
-            return b.value - a.value;
-          }).map((entry) => entry.key);
+          final sortedByInstanceAppList = numberOfEachAppMap.entries
+              .sorted((a, b) {
+                return b.value - a.value;
+              })
+              .map((entry) => entry.key);
           return Stack(
             children: [
               for (final appId in sortedByInstanceAppList)
-                SizedBox(
-                  height: 24,
-                  width: 24,
-                  child: AppIconById(id: appId),
-                ),
+                SizedBox(height: 24, width: 24, child: AppIconById(id: appId)),
             ],
           );
         }

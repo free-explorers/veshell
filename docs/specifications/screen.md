@@ -26,5 +26,5 @@ set:
 - The value never points at a deleted screen and never throws.
 
 Readers treat `null` as "nothing focused": a new window is left unplaced rather
-than routed into a missing screen, notifications are not surfaced, and
-`focusedMonitor` falls back to the first connected monitor.
+than routed into a missing screen, unresolved notifications are not surfaced,
+and `focusedMonitor` falls back to the first connected monitor.
