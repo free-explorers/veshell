@@ -55,8 +55,31 @@ class HotkeysActivator extends _$HotkeysActivator {
     for (final action in HotkeysAction.values) {
       final intent = getActionIntent(action);
       final activator = hotkeysSettings[action.actionId];
-      if (activator == null) continue;
+      // `LogicalKeySet.fromSet({})` matches every key event, so guard against
+      // empty bindings as well as missing ones.
+      if (activator == null || activator.keys.isEmpty) continue;
       map[activator] = intent;
+    }
+
+    // Some keyboards report the play/pause button as `XF86AudioPlay` (or
+    // `XF86AudioPause`) instead of `XF86AudioPlayPause`; Flutter then yields
+    // `mediaPlay`/`mediaPause` rather than `mediaPlayPause`. When
+    // `media.playPause` is bound to any of those keys, accept the whole family
+    // so the hardware button works whichever name the compositor reports.
+    final playPauseKeys = <LogicalKeyboardKey>{
+      LogicalKeyboardKey.mediaPlayPause,
+      LogicalKeyboardKey.mediaPlay,
+      LogicalKeyboardKey.mediaPause,
+    };
+    final playPauseActivator =
+        hotkeysSettings[HotkeysAction.mediaPlayPause.actionId];
+    if (playPauseActivator != null &&
+        playPauseActivator.keys.length == 1 &&
+        playPauseKeys.contains(playPauseActivator.keys.single)) {
+      final playPauseIntent = getActionIntent(HotkeysAction.mediaPlayPause);
+      for (final key in playPauseKeys) {
+        map[LogicalKeySet.fromSet({key})] = playPauseIntent;
+      }
     }
 
     // add the dev tools shortcuts

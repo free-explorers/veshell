@@ -3,11 +3,13 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/settings/model/setting_definition.dart';
 import 'package:shell/settings/widget/expandable_search_result.dart';
+import 'package:shell/settings/widget/keyboard/setting_property_hotkey_editor.dart';
 import 'package:shell/settings/widget/primitive/setting_property_bool_editor.dart';
 import 'package:shell/settings/widget/primitive/setting_property_color_editor.dart';
 import 'package:shell/settings/widget/primitive/setting_property_double_editor.dart';
 import 'package:shell/settings/widget/primitive/setting_property_int_editor.dart';
 import 'package:shell/settings/widget/primitive/setting_property_string_editor.dart';
+import 'package:shell/shared/widget/hotkey_viewer.dart';
 
 part 'setting_property.freezed.dart';
 
@@ -30,6 +32,16 @@ abstract class SettingProperty<T>
 
   T castValue(dynamic val) =>
       converter != null ? converter!.fromJson(val) : val as T;
+
+  /// Like [castValue], but returns `null` when [val] cannot be converted,
+  /// for example when a stored setting is malformed.
+  T? tryCastValue(dynamic val) {
+    try {
+      return castValue(val);
+    } on Object catch (_) {
+      return null;
+    }
+  }
 
   dynamic serializeValue(T val) =>
       converter != null ? converter!.toJson(val) : val;
@@ -87,6 +99,33 @@ Widget defaultBuildSearchResult<T>(
           property: property as SettingProperty<Color>,
         ),
       ),
+    SettingProperty<LogicalKeySet>() => buildHotkeySearchResult(
+        path,
+        property as SettingProperty<LogicalKeySet>,
+      ),
     SettingProperty<T>() => throw UnimplementedError(),
   };
+}
+
+Widget buildHotkeySearchResult(
+  String path,
+  SettingProperty<LogicalKeySet> property,
+) {
+  return ExpandableSearchResult<LogicalKeySet>(
+    path: path,
+    property: property,
+    buildValue: (context, value, {required isExpanded}) {
+      final hotkey = property.tryCastValue(value);
+      if (hotkey == null) {
+        return const Text('Not set');
+      }
+      return HotkeyViewer(hotkey: hotkey);
+    },
+    buildEditor: (context, {required isExpanded}) =>
+        SettingPropertyHotkeyEditor(
+      path: path,
+      property: property,
+      onChanged: (_) {},
+    ),
+  );
 }
