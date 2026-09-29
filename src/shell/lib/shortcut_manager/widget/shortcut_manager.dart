@@ -4,9 +4,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/shared/mpris/provider/mpris_manager.dart';
 import 'package:shell/shared/pulseaudio/provider/default_sink.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_audio.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_sink_by_name.dart';
+import 'package:shell/shortcut_manager/model/media_intents.dart';
 import 'package:shell/shortcut_manager/model/screen_shortcuts.dart';
 import 'package:shell/shortcut_manager/model/system_intents.dart';
 import 'package:shell/shortcut_manager/provider/hotkeys_activator.dart';
@@ -66,6 +68,34 @@ class VeshellShortcutManager extends HookConsumerWidget {
                   .requireValue
                   .setSinkMute(defaultSink.name, !sink.mute);
               return;
+            },
+          ),
+          // Hardware media keys drive the active MPRIS player. The compositor
+          // sends every key to Flutter first, so handling them here keeps them
+          // global: a handled shortcut is never forwarded to the focused
+          // client.
+          MediaPlayPauseIntent: CallbackAction<MediaPlayPauseIntent>(
+            onInvoke: (_) {
+              ref.read(mprisManagerProvider.notifier).playPause();
+              return null;
+            },
+          ),
+          MediaNextIntent: CallbackAction<MediaNextIntent>(
+            onInvoke: (_) {
+              ref.read(mprisManagerProvider.notifier).next();
+              return null;
+            },
+          ),
+          MediaPreviousIntent: CallbackAction<MediaPreviousIntent>(
+            onInvoke: (_) {
+              ref.read(mprisManagerProvider.notifier).previous();
+              return null;
+            },
+          ),
+          MediaStopIntent: CallbackAction<MediaStopIntent>(
+            onInvoke: (_) {
+              ref.read(mprisManagerProvider.notifier).stop();
+              return null;
             },
           ),
         },

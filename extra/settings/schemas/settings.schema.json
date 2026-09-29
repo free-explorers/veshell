@@ -33,6 +33,23 @@
                                 }
                             }
                         },
+                        "media": {
+                            "type": "object",
+                            "properties": {
+                                "playPause": {
+                                    "type": "string"
+                                },
+                                "next": {
+                                    "type": "string"
+                                },
+                                "previous": {
+                                    "type": "string"
+                                },
+                                "stop": {
+                                    "type": "string"
+                                }
+                            }
+                        },
                         "screen": {
                             "type": "object",
                             "properties": {

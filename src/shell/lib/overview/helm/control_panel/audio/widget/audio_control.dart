@@ -4,6 +4,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/overview/helm/control_panel/media_player/widget/media_player_volume_control.dart';
 import 'package:shell/shared/pulseaudio/provider/default_sink.dart';
 import 'package:shell/shared/pulseaudio/provider/default_source.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_audio.dart';
@@ -14,9 +15,7 @@ import 'package:shell/shared/widget/expandable_card.dart';
 enum OpenMode { output, input }
 
 class AudioControl extends HookConsumerWidget {
-  const AudioControl({
-    super.key,
-  });
+  const AudioControl({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -37,9 +36,7 @@ class AudioControl extends HookConsumerWidget {
                     MdiIcons.tuneVertical,
                     color: Theme.of(context).colorScheme.primary,
                   ),
-                  const SizedBox(
-                    width: 16,
-                  ),
+                  const SizedBox(width: 16),
                   Expanded(
                     child: Text(
                       'Volume',
@@ -75,6 +72,7 @@ class AudioControl extends HookConsumerWidget {
             ),
             if (isExpanded && openMode.value == OpenMode.input)
               const AudioInputList(),
+            const MediaPlayerVolumeControl(),
           ],
         );
       },
@@ -83,9 +81,7 @@ class AudioControl extends HookConsumerWidget {
 }
 
 class AudioOutputList extends HookConsumerWidget {
-  const AudioOutputList({
-    super.key,
-  });
+  const AudioOutputList({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -116,9 +112,7 @@ class AudioOutputList extends HookConsumerWidget {
 }
 
 class AudioInputList extends HookConsumerWidget {
-  const AudioInputList({
-    super.key,
-  });
+  const AudioInputList({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -132,8 +126,9 @@ class AudioInputList extends HookConsumerWidget {
           itemBuilder: (context, index) {
             final source = sourceList[index];
             return ListTile(
-              leading:
-                  source == defaultSource ? const Icon(MdiIcons.check) : null,
+              leading: source == defaultSource
+                  ? const Icon(MdiIcons.check)
+                  : null,
               title: Text(source.description),
               onTap: () {
                 ref
@@ -159,9 +154,7 @@ class AudioOutputControl extends HookConsumerWidget {
   final void Function() onTap;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final defaultSink = ref.watch(
-      defaultPulseSinkProvider,
-    );
+    final defaultSink = ref.watch(defaultPulseSinkProvider);
 
     return ListTile(
       leading: IconButton(
@@ -191,12 +184,8 @@ class AudioOutputControl extends HookConsumerWidget {
       ),
       trailing: IconButton.filledTonal(
         onPressed: onTap,
-        icon: Icon(
-          isExpanded ? MdiIcons.chevronUp : MdiIcons.chevronDown,
-        ),
-        style: IconButton.styleFrom(
-          padding: EdgeInsets.zero,
-        ),
+        icon: Icon(isExpanded ? MdiIcons.chevronUp : MdiIcons.chevronDown),
+        style: IconButton.styleFrom(padding: EdgeInsets.zero),
         visualDensity: VisualDensity.compact,
       ),
     );
@@ -213,9 +202,7 @@ class AudioInputControl extends HookConsumerWidget {
   final void Function() onTap;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final defaultSource = ref.watch(
-      defaultPulseSourceProvider,
-    );
+    final defaultSource = ref.watch(defaultPulseSourceProvider);
 
     return ListTile(
       leading: IconButton(
@@ -249,12 +236,8 @@ class AudioInputControl extends HookConsumerWidget {
       ),
       trailing: IconButton.filledTonal(
         onPressed: onTap,
-        icon: Icon(
-          isExpanded ? MdiIcons.chevronUp : MdiIcons.chevronDown,
-        ),
-        style: IconButton.styleFrom(
-          padding: EdgeInsets.zero,
-        ),
+        icon: Icon(isExpanded ? MdiIcons.chevronUp : MdiIcons.chevronDown),
+        style: IconButton.styleFrom(padding: EdgeInsets.zero),
         visualDensity: VisualDensity.compact,
       ),
     );

@@ -9,6 +9,7 @@ final persistenceLog = logging.Logger('Persistence');
 final geometryLog = logging.Logger('Geometry');
 final matchingLog = logging.Logger('Matching');
 final notificationLog = logging.Logger('Notification');
+final mprisLog = logging.Logger('Mpris');
 final polkitLog = logging.Logger('Polkit');
 final captureLog = logging.Logger('Capture');
 

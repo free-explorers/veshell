@@ -162,6 +162,26 @@ class SettingsProperties extends _$SettingsProperties {
                 description: 'Toggle Mute volume',
                 converter: LogicalKeySetConverter(),
               ),
+              'media.playPause': SettingProperty<LogicalKeySet>(
+                name: 'Play/Pause Media',
+                description: 'Toggle playback of the active media player',
+                converter: LogicalKeySetConverter(),
+              ),
+              'media.next': SettingProperty<LogicalKeySet>(
+                name: 'Next Track',
+                description: 'Skip to the next track',
+                converter: LogicalKeySetConverter(),
+              ),
+              'media.previous': SettingProperty<LogicalKeySet>(
+                name: 'Previous Track',
+                description: 'Go back to the previous track',
+                converter: LogicalKeySetConverter(),
+              ),
+              'media.stop': SettingProperty<LogicalKeySet>(
+                name: 'Stop Media',
+                description: 'Stop the active media player',
+                converter: LogicalKeySetConverter(),
+              ),
               'screen.focusWorkspaceAbove': SettingProperty<LogicalKeySet>(
                 name: 'Focus Workspace Above',
                 description: 'Focus workspace above',

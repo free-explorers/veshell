@@ -6,11 +6,7 @@ import 'package:shell/application/provider/image_from_icon_query.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 
 class AppIconByPath extends StatelessWidget {
-  const AppIconByPath({
-    required this.path,
-    super.key,
-    this.constrainedSize,
-  });
+  const AppIconByPath({required this.path, super.key, this.constrainedSize});
 
   final String? path;
   final int? constrainedSize;
@@ -43,9 +39,7 @@ class AppIconByPath extends StatelessWidget {
         return const SizedBox();
       }
       final rawImage = asyncValue.value;
-      return RawImage(
-        image: rawImage,
-      );
+      return RawImage(image: rawImage);
     } else {
       return LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
@@ -63,9 +57,7 @@ class AppIconByPath extends StatelessWidget {
             return const SizedBox();
           }
           final rawImage = asyncValue.value;
-          return RawImage(
-            image: rawImage,
-          );
+          return RawImage(image: rawImage);
         },
       );
     }
@@ -77,33 +69,39 @@ class AppIconById extends ConsumerWidget {
     required this.id,
     super.key,
     this.constrainedSize,
+    this.fallback = const Icon(MdiIcons.helpCircle),
   });
 
   final String? id;
 
   final int? constrainedSize;
 
+  /// Shown while the desktop entry is unknown, or when it names no icon.
+  final Widget fallback;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (id == null) {
-      return const Icon(MdiIcons.helpCircle);
+      return fallback;
     }
 
-    return ref.watch(localizedDesktopEntryForIdProvider(id!)).maybeWhen(
+    return ref
+        .watch(localizedDesktopEntryForIdProvider(id!))
+        .maybeWhen(
           data: (entry) {
             if (entry == null) {
-              return const Icon(MdiIcons.helpCircle);
+              return fallback;
             }
             final iconPath = entry.entries[DesktopEntryKey.icon.string];
             if (iconPath == null) {
-              return const Icon(MdiIcons.helpCircle);
+              return fallback;
             }
             return AppIconByPath(
               path: iconPath,
               constrainedSize: constrainedSize,
             );
           },
-          orElse: () => const Icon(MdiIcons.helpCircle),
+          orElse: () => fallback,
         );
   }
 }

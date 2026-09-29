@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/settings/provider/state/hotkeys_setting.dart';
+import 'package:shell/shortcut_manager/model/media_intents.dart';
 import 'package:shell/shortcut_manager/model/screen_shortcuts.dart';
 import 'package:shell/shortcut_manager/model/system_intents.dart';
 import 'package:shell/workspace/model/workspace_shortcuts.dart';
@@ -12,6 +13,10 @@ enum HotkeysAction {
   increaseVolume('system.increaseVolume'),
   decreaseVolume('system.decreaseVolume'),
   toggleMute('system.muteVolume'),
+  mediaPlayPause('media.playPause'),
+  mediaNext('media.next'),
+  mediaPrevious('media.previous'),
+  mediaStop('media.stop'),
   focusWorkspaceAbove('screen.focusWorkspaceAbove'),
   focusWorkspaceBelow('screen.focusWorkspaceBelow'),
   focusLeftTileable('workspace.focusLeftTileable'),
@@ -26,6 +31,10 @@ Intent getActionIntent(HotkeysAction action) => switch (action) {
   HotkeysAction.increaseVolume => const IncreaseVolume(),
   HotkeysAction.decreaseVolume => const DecreaseVolume(),
   HotkeysAction.toggleMute => const ToggleMute(),
+  HotkeysAction.mediaPlayPause => const MediaPlayPauseIntent(),
+  HotkeysAction.mediaNext => const MediaNextIntent(),
+  HotkeysAction.mediaPrevious => const MediaPreviousIntent(),
+  HotkeysAction.mediaStop => const MediaStopIntent(),
   HotkeysAction.focusWorkspaceAbove => const FocusWorkspaceAboveIntent(),
   HotkeysAction.focusWorkspaceBelow => const FocusWorkspaceBelowIntent(),
   HotkeysAction.focusLeftTileable => const FocusLeftTileableIntent(),
