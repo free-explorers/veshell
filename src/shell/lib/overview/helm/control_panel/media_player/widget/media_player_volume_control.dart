@@ -47,6 +47,8 @@ class _PlayerVolumeRow extends ConsumerWidget {
       title: Row(
         children: [
           _PlayerIcon(iconId: player.iconId),
+          const SizedBox(width: 16),
+
           IconButton(
             tooltip: muted ? 'Unmute player' : 'Mute player',
             onPressed: enabled
@@ -62,6 +64,7 @@ class _PlayerVolumeRow extends ConsumerWidget {
                   : null,
             ),
           ),
+          const SizedBox(width: 48),
         ],
       ),
     );
