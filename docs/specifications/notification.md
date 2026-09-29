@@ -4,13 +4,51 @@
 
 Veshell owns the session-bus name `org.freedesktop.Notifications` and serves the
 [Desktop Notifications specification](https://specifications.freedesktop.org/notification-spec/latest/).
-Notifications are received in Dart (`DbusNotificationServer`), stored in a
-persisted list, and surfaced contextually depending on where the application
-that triggered them currently lives.
+Notifications are accepted on the bus, stored in a persisted list, and surfaced
+contextually depending on where the application that triggered them currently
+lives.
 
 `GetCapabilities` advertises `body`, `actions` and `persistence`: bodies and
 action buttons are rendered, the `resident` hint is honored, and
 `CloseNotification` is implemented.
+
+## Responsibilities
+
+Notification handling is split across the process boundary the same way the
+xdg-desktop-portal backend is (see `src/embedder/portal/`): **Rust owns the
+freedesktop D-Bus contract, the Dart shell owns state and interaction.**
+
+| Concern | Rust (`src/embedder/notification/`) | Dart (`NotificationManager`) |
+|---|---|---|
+| Own the `org.freedesktop.Notifications` name | yes | no |
+| Serve `GetCapabilities`, `GetServerInformation`, `Notify`, `CloseNotification` | yes | no |
+| Validate signatures and marshal the `a{sv}` hints | yes | no |
+| Resolve the trusted sender identity (unique name → pid) | yes | no |
+| Emit `NotificationClosed` / `ActionInvoked` | on Dart's request | decides when |
+| Assign ids and apply `replacesId` | no | yes |
+| Persisted list, read/closed state, history | no | yes |
+| Routing (pid/appId → workspace/tile/screen) | no | yes |
+| Popups, expiry timers, actions, navigation | no | yes |
+
+Rust never decides policy. An accepted `Notify` is forwarded to Dart together
+with the trusted sender pid; Dart assigns the id (applying `replacesId`) and
+answers, and Rust completes the D-Bus reply with that id. Signals are emitted
+only when Dart asks for them, because "emit exactly once" depends on persisted
+read/closed state that lives in the shell.
+
+The Rust side mirrors the portal call bridge: the zbus interface hands every
+call to the compositor loop over a calloop channel and the loop completes it —
+`Notify` through a token/reply link (the D-Bus reply waits for the shell's id),
+`CloseNotification` fire-and-forget. `GetCapabilities` and
+`GetServerInformation` are static protocol metadata and are answered by Rust
+without a shell round trip.
+
+> **Migration status:** landed. Rust owns the name and interface
+> (`src/embedder/notification/`), forwards `Notify`/`CloseNotification` to the
+> shell over the platform channel, and emits the signals on the shell's behalf.
+> The Dart `DbusNotificationServer` is gone; `NotificationManager` consumes the
+> events and answers `Notify` with the assigned id. Calls accepted before the
+> shell subscribes are queued until its `notification_ready` request.
 
 ## Persisted list
 
@@ -152,6 +190,25 @@ notification as usual.
 - invoking an action marks the notification read.
 
 Notifications are never re-surfaced after being dismissed.
+
+## Transport
+
+`src/embedder/notification/` owns the freedesktop D-Bus surface and the shell
+owns the state; the two sides talk over the platform channel:
+
+- Rust → Dart: `notification_received { callToken, notification }` (the
+  payload is the raw `Notify` arguments plus the trusted sender pid, with the
+  `a{sv}` hints already marshalled to the `NotificationHints` field names) and
+  `notification_close_requested { id }`.
+- Dart → Rust: `notification_notify_result { callToken, id }` (completes the
+  pending `Notify` with the shell-assigned id), `notification_action_invoked
+  { id, actionKey }` and `notification_closed { id, reason }` (emit the
+  signals), and `notification_ready` (the shell has subscribed).
+
+`GetCapabilities` and `GetServerInformation` are static protocol metadata
+answered by Rust without a shell round trip. A call accepted before
+`notification_ready` is queued and flushed on that request, so `Notify` is never
+dropped during startup and never pushed to a shell that cannot receive it.
 
 ## Out of scope (future milestone)
 

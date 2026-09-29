@@ -152,6 +152,9 @@ pub struct State<BackendData: Backend + 'static> {
     /// encode bridge, and the PipeWire producer with its live screen-cast
     /// streams.
     pub portal_state: crate::portal::PortalState,
+    /// Notification-owned state: the freedesktop notifications transport
+    /// server and the loop-side reply table for accepted calls.
+    pub notification_state: crate::notification::NotificationState,
     /// View (monitor) that received the start of the current pointer gesture
     /// (button-held drag, trackpad pan/zoom scroll, or pinch). Every later
     /// event of that gesture is pinned to this view so Flutter sees one
@@ -323,6 +326,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             FractionalScaleManagerState::new::<Self>(&display_handle);
         let capture_state = crate::capture::CaptureState::new::<BackendData>(&loop_handle);
         let portal_state = crate::portal::PortalState::new::<BackendData>(&loop_handle);
+        let notification_state =
+            crate::notification::NotificationState::new::<BackendData>(&loop_handle);
         let idle_notifier_state =
             IdleNotifierState::<Self>::new(&display_handle, loop_handle.clone());
         let idle_inhibit_manager_state = IdleInhibitManagerState::new::<Self>(&display_handle);
@@ -387,6 +392,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             output_layout_revision: 0,
             capture_state,
             portal_state,
+            notification_state,
             pointer_gesture_view_id: None,
             mirror_of: HashMap::new(),
             idle,

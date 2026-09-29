@@ -14,6 +14,10 @@ mod get_monitor_layout;
 mod meta_popup_patches;
 mod meta_window_patches;
 mod mouse_buttons_event;
+mod notification_action_invoked;
+mod notification_closed;
+mod notification_notify_result;
+mod notification_ready;
 mod on_shell_ready;
 mod pointer_exit;
 mod pointer_focus;
@@ -71,6 +75,26 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             }
             "screen_cast_stop" => {
                 self::screen_cast_stop::screen_cast_stop(method_call, result, data)
+            }
+            "notification_notify_result" => {
+                self::notification_notify_result::notification_notify_result(
+                    method_call,
+                    result,
+                    data,
+                )
+            }
+            "notification_action_invoked" => {
+                self::notification_action_invoked::notification_action_invoked(
+                    method_call,
+                    result,
+                    data,
+                )
+            }
+            "notification_closed" => {
+                self::notification_closed::notification_closed(method_call, result, data)
+            }
+            "notification_ready" => {
+                self::notification_ready::notification_ready(method_call, result, data)
             }
             _ => result.error(
                 "method_not_found".to_string(),

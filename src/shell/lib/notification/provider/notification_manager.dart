@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:dbus/dbus.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:hooks_riverpod/experimental/persist.dart';
 import 'package:riverpod_annotation/experimental/json_persist.dart';
@@ -8,14 +7,19 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/pid_to_meta_window_id.dart';
 import 'package:shell/notification/model/dbus_notification.serializable.dart';
-import 'package:shell/notification/model/dbus_notification_server.dart';
 import 'package:shell/notification/model/notification.serializable.dart';
 import 'package:shell/notification/model/notification_action.dart';
+import 'package:shell/notification/model/notification_action_invoked/notification_action_invoked.serializable.dart';
 import 'package:shell/notification/model/notification_close_reason.dart';
+import 'package:shell/notification/model/notification_closed/notification_closed.serializable.dart';
 import 'package:shell/notification/model/notification_manager_state.serializable.dart';
+import 'package:shell/notification/model/notification_notify_result/notification_notify_result.serializable.dart';
+import 'package:shell/notification/model/notification_ready/notification_ready.dart';
 import 'package:shell/notification/model/notification_target.dart';
 import 'package:shell/notification/provider/notification_channel.dart';
 import 'package:shell/notification/provider/notification_routing.dart';
+import 'package:shell/platform/model/event/platform_event.serializable.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/shared/provider/persistent_storage_state.dart';
 import 'package:shell/shared/util/logger.dart';
@@ -27,8 +31,6 @@ part 'notification_manager.g.dart';
 @riverpod
 @JsonPersist()
 class NotificationManager extends _$NotificationManager {
-  DbusNotificationServer? _server;
-
   /// The popup channel each live notification was pushed to, so its popup can
   /// be torn down even after the notification's route has changed.
   ///
@@ -41,7 +43,19 @@ class NotificationManager extends _$NotificationManager {
       ref.watch(persistentStorageStateProvider).requireValue,
       options: const StorageOptions(cacheTime: StorageCacheTime.unsafe_forever),
     );
-    unawaited(initServer());
+    // The compositor owns the D-Bus surface and forwards accepted calls here;
+    // the shell owns the state and answers with the assigned id.
+    final subscription = ref
+        .watch(platformManagerProvider)
+        .listen(_onPlatformEvent);
+    ref.onDispose(subscription.cancel);
+    // Now that the subscription exists, let the compositor flush the calls it
+    // held back while the shell was starting.
+    unawaited(
+      ref
+          .read(platformManagerProvider.notifier)
+          .request(const NotificationReadyRequest()),
+    );
     return stateOrNull ??
         NotificationManagerState(
           notificationMap: <int, Notification>{}.lock,
@@ -49,40 +63,39 @@ class NotificationManager extends _$NotificationManager {
         );
   }
 
-  Future<void> initServer() async {
-    final dbusClient = DBusClient.session();
-    final requestNameReply = await dbusClient.requestName(
-      'org.freedesktop.Notifications',
-    );
-    if (requestNameReply == DBusRequestNameReply.primaryOwner) {
-      print('Successfully registered as org.freedesktop.Notifications');
-    } else {
-      print('Failed to register name: $requestNameReply');
+  void _onPlatformEvent(PlatformEvent event) {
+    switch (event) {
+      case NotificationReceivedEvent(:final message):
+        _onNewNotification(message.callToken, message.notification);
+      case NotificationCloseRequestedEvent(:final message):
+        // A client closed a live notification: tear down its popup. The entry
+        // stays in the persisted history, and `NotificationClosed(reason 3)`
+        // is only emitted if it had not already expired.
+        closeNotification(
+          message.id,
+          reason: NotificationCloseReason.closedByCall,
+        );
+      default:
+        break;
     }
-    final server = DbusNotificationServer(
-      onNewNotification: _onNewNotification,
-      // Closing a notification only tears down its live popup: the entry stays
-      // in the persisted history so the Helm notification center keeps the
-      // full log. Only its explicit delete removes it.
-      onCloseNotification: (id) => closeNotification(
-        id,
-        reason: NotificationCloseReason.closedByCall,
-      ),
-    );
-    _server = server;
-    await dbusClient.registerObject(server);
   }
 
-  int _onNewNotification(DbusNotification newNotification) {
+  void _onNewNotification(int callToken, DbusNotification newNotification) {
     final replacesId = newNotification.replacesId;
+    final int id;
     if (replacesId != 0) {
       final existing = state.notificationMap[replacesId];
       // A closed id is no longer known to the sender: treat it as new.
       if (existing != null && !existing.isClosed) {
-        return _replaceNotification(replacesId, newNotification);
+        id = _replaceNotification(replacesId, newNotification);
+      } else {
+        id = _addNotification(newNotification);
       }
+    } else {
+      id = _addNotification(newNotification);
     }
-    return _addNotification(newNotification);
+    // The compositor's `Notify` reply waits for this id.
+    unawaited(_sendNotifyResult(callToken, id));
   }
 
   int _addNotification(DbusNotification newNotification) {
@@ -237,7 +250,8 @@ class NotificationManager extends _$NotificationManager {
     // The target is resolved at reception; re-resolve in case it could not be
     // mapped yet when the notification arrived, then fall back to the app id.
     final appId = notification.appId;
-    final target = notification.targetWindowId ??
+    final target =
+        notification.targetWindowId ??
         resolveNotificationTargetWindow(ref, notification.dbusNotification) ??
         (appId == null ? null : persistentWindowForAppId(ref, appId));
 
@@ -338,27 +352,60 @@ class NotificationManager extends _$NotificationManager {
     ref.read(notificationChannelProvider(channel).notifier).remove(id);
   }
 
-  Future<void> _emitActionInvoked(int id, String actionKey) async {
-    final server = _server;
-    if (server == null) {
-      return;
-    }
+  Future<void> _sendNotifyResult(int callToken, int id) async {
     try {
-      await server.emitActionInvoked(id, actionKey);
+      await ref
+          .read(platformManagerProvider.notifier)
+          .request(
+            NotificationNotifyResultRequest(
+              message: NotificationNotifyResultMessage(
+                callToken: callToken,
+                id: id,
+              ),
+            ),
+          );
     } on Object catch (error) {
-      print('Failed to emit ActionInvoked($id, $actionKey): $error');
+      notificationLog.warning(
+        'Failed to answer Notify($callToken) with id $id',
+        error,
+      );
+    }
+  }
+
+  Future<void> _emitActionInvoked(int id, String actionKey) async {
+    try {
+      await ref
+          .read(platformManagerProvider.notifier)
+          .request(
+            NotificationActionInvokedRequest(
+              message: NotificationActionInvokedMessage(
+                id: id,
+                actionKey: actionKey,
+              ),
+            ),
+          );
+    } on Object catch (error) {
+      notificationLog.warning(
+        'Failed to emit ActionInvoked($id, $actionKey)',
+        error,
+      );
     }
   }
 
   Future<void> _emitNotificationClosed(int id, int reason) async {
-    final server = _server;
-    if (server == null) {
-      return;
-    }
     try {
-      await server.emitNotificationClosed(id, reason);
+      await ref
+          .read(platformManagerProvider.notifier)
+          .request(
+            NotificationClosedRequest(
+              message: NotificationClosedMessage(id: id, reason: reason),
+            ),
+          );
     } on Object catch (error) {
-      print('Failed to emit NotificationClosed($id, $reason): $error');
+      notificationLog.warning(
+        'Failed to emit NotificationClosed($id, $reason)',
+        error,
+      );
     }
   }
 }

@@ -2,6 +2,15 @@
 
 This is Veshell technical specifications for high level components
 
+## Service boundary
+
+Freedesktop D-Bus services (the xdg-desktop-portal backend, the notifications
+server, screensaver inhibition) are owned by the Rust compositor: it claims the
+well-known names, serves the interfaces and emits the signals. The Dart shell
+owns state and interaction — routing, persistence and UI. Rust forwards accepted
+calls over the platform channel and completes the D-Bus reply from the shell's
+answer. Each service specification records its exact split.
+
 ## Components
 
 - [Display](/specifications/display.md)

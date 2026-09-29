@@ -27,7 +27,7 @@ pub static HARNESS_TEST_COUNTER: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0);
 
 #[cfg(test)]
-mod harness;
+pub(crate) mod harness;
 use futures_util::StreamExt;
 use zbus::message::Header;
 use zbus::zvariant::{ObjectPath, OwnedObjectPath, OwnedValue};

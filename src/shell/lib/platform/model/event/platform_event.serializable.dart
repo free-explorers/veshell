@@ -5,6 +5,8 @@ import 'package:shell/capture/model/screen_cast_consent_dismissed/screen_cast_co
 import 'package:shell/capture/model/screen_cast_recording/screen_cast_recording.serializable.dart';
 import 'package:shell/capture/model/screen_cast_stopped/screen_cast_stopped.serializable.dart';
 import 'package:shell/capture/model/screenshot_prompt/screenshot_prompt.serializable.dart';
+import 'package:shell/notification/model/notification_close_requested/notification_close_requested.serializable.dart';
+import 'package:shell/notification/model/notification_received/notification_received.serializable.dart';
 import 'package:shell/platform/model/event/commit_surface/commit_surface.serializable.dart';
 import 'package:shell/platform/model/event/destroy_subsurface/destroy_subsurface.serializable.dart';
 import 'package:shell/platform/model/event/destroy_surface/destroy_surface.serializable.dart';
@@ -30,10 +32,7 @@ part 'platform_event.serializable.freezed.dart';
 part 'platform_event.serializable.g.dart';
 
 /// Model for PlatformEvent
-@Freezed(
-  unionKey: 'method',
-  unionValueCase: FreezedUnionCase.snake,
-)
+@Freezed(unionKey: 'method', unionValueCase: FreezedUnionCase.snake)
 sealed class PlatformEvent with _$PlatformEvent implements PlatformInteraction {
   /// New Surface Event
   /// This event is sent when the a client creates a new surface.
@@ -189,6 +188,20 @@ sealed class PlatformEvent with _$PlatformEvent implements PlatformInteraction {
     required String method,
     required ScreenCastStoppedMessage message,
   }) = ScreenCastStoppedEvent;
+
+  /// Notification received: the compositor accepted a `Notify` D-Bus call and
+  /// forwards it with the trusted sender pid. The shell assigns the id and
+  /// answers with `notification_notify_result`.
+  const factory PlatformEvent.notificationReceived({
+    required String method,
+    required NotificationReceivedMessage message,
+  }) = NotificationReceivedEvent;
+
+  /// A client called `CloseNotification`; the shell tears down the live popup.
+  const factory PlatformEvent.notificationCloseRequested({
+    required String method,
+    required NotificationCloseRequestedMessage message,
+  }) = NotificationCloseRequestedEvent;
 
   /// Gesture Swipe Begin Event
   /// This event is sent when the user performs a swipe gesture.
