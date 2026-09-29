@@ -127,6 +127,11 @@ class NotificationManager extends _$NotificationManager {
           message.id,
           reason: NotificationCloseReason.closedByCall,
         );
+      case WindowActivationRequestedEvent(:final message):
+        // The compositor honored an activation token minted for an invoked
+        // action and focused the window; the shell must select the workspace
+        // and tile that make it visible.
+        bringMetaWindowIntoView(ref, message.metaWindowId);
       case WindowAttentionRequestedEvent(:final message):
         // A window asks for attention: synthesize a notification instead of
         // focusing it. Errors are swallowed because a request that arrives

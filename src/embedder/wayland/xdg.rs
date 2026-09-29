@@ -559,11 +559,17 @@ pub mod xdg {
                     self,
                     &surface,
                 ) {
-                    Ok(()) => info!(
-                        target: "veshell::geometry",
-                        meta_window_id,
-                        "xdg_activation: notification token focused its window"
-                    ),
+                    Ok(()) => {
+                        info!(
+                            target: "veshell::geometry",
+                            meta_window_id,
+                            "xdg_activation: notification token focused its window"
+                        );
+                        // The compositor focused the surface, but only the
+                        // shell can select the workspace/tile that makes the
+                        // window visible.
+                        self.notify_window_activation_requested(&meta_window_id);
+                    }
                     Err((code, message)) => warn!(
                         target: "veshell::geometry",
                         error = code,

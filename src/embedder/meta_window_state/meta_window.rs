@@ -248,6 +248,22 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         );
     }
 
+    /// Tells the shell to bring a window into view after the compositor honored
+    /// an activation token minted for an invoked notification action.
+    ///
+    /// The compositor has already focused the surface, but the shell owns the
+    /// workspace and tile the window lives in: without selecting them the
+    /// window stays off-screen even though it holds the keyboard focus.
+    pub fn notify_window_activation_requested(&mut self, meta_window_id: &str) {
+        info!(meta_window_id, "window activation requested");
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method(
+            "window_activation_requested",
+            Some(Box::new(json!({ "metaWindowId": meta_window_id }))),
+            None,
+        );
+    }
+
     pub fn patch_meta_window(&mut self, mut patch: MetaWindowPatch, propagate: bool) {
         match patch.clone() {
             MetaWindowPatch::UpdateAppId { id, value } => {

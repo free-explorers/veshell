@@ -35,6 +35,19 @@ Notification _notification(
 
 void main() {
   group('window attention platform events', () {
+    test('decodes an activation request with its meta window id', () {
+      final event = PlatformEvent.fromJson(const {
+        'method': 'window_activation_requested',
+        'message': {'metaWindowId': 'meta-1'},
+      });
+
+      expect(event, isA<WindowActivationRequestedEvent>());
+      expect(
+        (event as WindowActivationRequestedEvent).message.metaWindowId,
+        'meta-1',
+      );
+    });
+
     test('decodes a request with its meta window id', () {
       final event = PlatformEvent.fromJson(const {
         'method': 'window_attention_requested',
@@ -111,10 +124,7 @@ void main() {
 
   group('isNotificationLive', () {
     test('a notification with no MetaWindow stays live', () {
-      expect(
-        isNotificationLive(_notification(1), <String>{}.lock),
-        isTrue,
-      );
+      expect(isNotificationLive(_notification(1), <String>{}.lock), isTrue);
     });
 
     test('a notification is live while its exact MetaWindow is open', () {

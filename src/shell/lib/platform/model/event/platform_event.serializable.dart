@@ -26,6 +26,7 @@ import 'package:shell/platform/model/event/new_subsurface/new_subsurface.seriali
 import 'package:shell/platform/model/event/new_surface/new_surface.serializable.dart';
 import 'package:shell/platform/model/event/process_info/process_info.serializable.dart';
 import 'package:shell/platform/model/event/set_environment_variables/set_environment_variables.serializable.dart';
+import 'package:shell/platform/model/event/window_activation_requested/window_activation_requested.serializable.dart';
 import 'package:shell/platform/model/event/window_attention_released/window_attention_released.serializable.dart';
 import 'package:shell/platform/model/event/window_attention_requested/window_attention_requested.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
@@ -204,6 +205,14 @@ sealed class PlatformEvent with _$PlatformEvent implements PlatformInteraction {
     required String method,
     required NotificationCloseRequestedMessage message,
   }) = NotificationCloseRequestedEvent;
+
+  /// The compositor honored an activation token minted for an invoked
+  /// notification action and focused the window: the shell brings it into view
+  /// (selecting its workspace and tile), which the compositor cannot do.
+  const factory PlatformEvent.windowActivationRequested({
+    required String method,
+    required WindowActivationRequestedMessage message,
+  }) = WindowActivationRequestedEvent;
 
   /// A window asks for the user's attention (X11 demands-attention or a
   /// Wayland `xdg_activation_v1` request for an existing window). The shell

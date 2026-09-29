@@ -162,10 +162,12 @@ Before `ActionInvoked`, the shell asks the compositor to mint an **activation
 token** for the notification's target window and emits the spec's
 `ActivationToken(id, token)` signal. An app whose action opens its own window
 hands that token to `xdg_activation_v1`; the compositor honors a token it
-minted for an invoked action by focusing the window (see *Window attention*).
-Inline actions that do not want the window forward simply ignore the token, so
-clicking "Mark as read" never steals focus. A notification with no target
-MetaWindow (a system sender) gets no token.
+minted for an invoked action by focusing the window (see *Window attention*)
+and then asks the shell (`window_activation_requested`) to bring it into view:
+the shell owns the workspace and tile, so the compositor's focus alone would
+leave the window off-screen. Inline actions that do not want the window forward
+simply ignore the token, so clicking "Mark as read" never steals focus. A
+notification with no target MetaWindow (a system sender) gets no token.
 
 Every live notification is closed exactly once, emitting `NotificationClosed`
 with the spec reason:
@@ -277,7 +279,9 @@ owns the state; the two sides talk over the platform channel:
   `notification_close_requested { id }`, and the window-attention events
   `window_attention_requested { metaWindowId }` /
   `window_attention_released { metaWindowId }` (the shell synthesizes the
-  notification, so there is no D-Bus call to answer).
+  notification, so there is no D-Bus call to answer), plus
+  `window_activation_requested { metaWindowId }` (a trusted activation token
+  focused a window, so the shell brings it into view).
 - Dart → Rust: `notification_notify_result { callToken, id }` (completes the
   pending `Notify` with the shell-assigned id), `notification_action_invoked
   { id, actionKey }` and `notification_closed { id, reason }` (emit the
