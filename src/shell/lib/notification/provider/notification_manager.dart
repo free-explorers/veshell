@@ -1,9 +1,13 @@
 import 'dart:async';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/experimental/persist.dart';
 import 'package:riverpod_annotation/experimental/json_persist.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/application/provider/localized_desktop_entries.dart';
+import 'package:shell/meta_window/model/meta_window.serializable.dart';
+import 'package:shell/meta_window/provider/meta_window_manager.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/pid_to_meta_window_id.dart';
 import 'package:shell/notification/model/dbus_notification.serializable.dart';
@@ -12,6 +16,7 @@ import 'package:shell/notification/model/notification_action.dart';
 import 'package:shell/notification/model/notification_action_invoked/notification_action_invoked.serializable.dart';
 import 'package:shell/notification/model/notification_close_reason.dart';
 import 'package:shell/notification/model/notification_closed/notification_closed.serializable.dart';
+import 'package:shell/notification/model/notification_hints.serializable.dart';
 import 'package:shell/notification/model/notification_manager_state.serializable.dart';
 import 'package:shell/notification/model/notification_notify_result/notification_notify_result.serializable.dart';
 import 'package:shell/notification/model/notification_ready/notification_ready.dart';
@@ -37,6 +42,13 @@ class NotificationManager extends _$NotificationManager {
   /// Runtime-only: never persisted, since channels are rebuilt from scratch.
   final _popupChannels = <int, String>{};
 
+  /// The live synthesized attention notification for each window that asked
+  /// for attention, keyed by meta window id.
+  ///
+  /// Runtime-only: lets a repeated request replace nothing (no stacking) and
+  /// lets an X11 `undemands_attention` drop the matching live notification.
+  final _attentionNotificationByWindow = <MetaWindowId, int>{};
+
   @override
   NotificationManagerState build() {
     persist(
@@ -56,11 +68,50 @@ class NotificationManager extends _$NotificationManager {
           .read(platformManagerProvider.notifier)
           .request(const NotificationReadyRequest()),
     );
-    return stateOrNull ??
-        NotificationManagerState(
-          notificationMap: <int, Notification>{}.lock,
-          lastIndex: 0,
-        );
+    // A new session only keeps the notification history. Synthesized attention
+    // entries cannot survive it, and every restored notification belongs to a
+    // previous window instance: it starts read and closed so it never drives a
+    // dot, and is shown as history only.
+    ref.listen(metaWindowManagerProvider, (previous, next) {
+      if (previous == null) {
+        return;
+      }
+      // A synthesized attention request is moot once its window is gone.
+      previous
+          .where((id) => !next.contains(id))
+          .forEach(_pruneAttentionNotification);
+    });
+    final restored = stateOrNull;
+    if (restored == null) {
+      return NotificationManagerState(
+        notificationMap: <int, Notification>{}.lock,
+        lastIndex: 0,
+      );
+    }
+    final history = <int, Notification>{};
+    restored.notificationMap.forEach((id, notification) {
+      if (notification.isSynthetic) {
+        return;
+      }
+      history[id] = notification.copyWith(isRead: true, isClosed: true);
+    });
+    return restored.copyWith(notificationMap: history.lock);
+  }
+
+  /// Drops the live notice synthesized for [metaWindowId] when its window
+  /// closes; the request can no longer be acted on.
+  void _pruneAttentionNotification(String metaWindowId) {
+    final id = _attentionNotificationByWindow[metaWindowId];
+    if (id == null) {
+      return;
+    }
+    unawaited(
+      _closeNotification(
+        id,
+        reason: NotificationCloseReason.dismissed,
+        markRead: true,
+      ),
+    );
   }
 
   void _onPlatformEvent(PlatformEvent event) {
@@ -75,6 +126,13 @@ class NotificationManager extends _$NotificationManager {
           message.id,
           reason: NotificationCloseReason.closedByCall,
         );
+      case WindowAttentionRequestedEvent(:final message):
+        // A window asks for attention: synthesize a notification instead of
+        // focusing it. Errors are swallowed because a request that arrives
+        // before the window is known can simply be dropped.
+        unawaited(_onWindowAttentionRequested(message.metaWindowId));
+      case WindowAttentionReleasedEvent(:final message):
+        _onWindowAttentionReleased(message.metaWindowId);
       default:
         break;
     }
@@ -127,7 +185,18 @@ class NotificationManager extends _$NotificationManager {
       dbusNotification: dbusNotification,
       createdAt: DateTime.now(),
       targetWindowId: resolveNotificationTargetWindow(ref, dbusNotification),
+      targetMetaWindowId: _resolveTargetMetaWindowId(dbusNotification),
     );
+  }
+
+  /// The exact MetaWindow instance that sent a D-Bus notification, or `null`
+  /// when the sender has no live window (e.g. `notify-send`).
+  String? _resolveTargetMetaWindowId(DbusNotification notification) {
+    final pid = notification.pid;
+    if (pid == null) {
+      return null;
+    }
+    return ref.read(pidToMetaWindowIdProvider(pid));
   }
 
   String? _resolveAppId(DbusNotification notification) {
@@ -144,6 +213,129 @@ class NotificationManager extends _$NotificationManager {
       return null;
     }
     return ref.read(metaWindowStateProvider(metaWindowId)).appId;
+  }
+
+  /// Turns a window attention request into a synthesized notification.
+  ///
+  /// There is no D-Bus sender here: the notification is created by the shell,
+  /// routed to the requesting window and, when activated, brings that window
+  /// into view through the ordinary click-to-open path. A window that is
+  /// already displayed is skipped, so a freshly launched window that activates
+  /// itself does not produce a spurious entry.
+  Future<void> _onWindowAttentionRequested(String metaWindowId) async {
+    final metaWindow = _readMetaWindow(metaWindowId);
+    if (metaWindow == null) {
+      return;
+    }
+
+    // A request already pending for the same window (its popup may have
+    // expired) must not stack another notification: its dot already covers it.
+    final existingId = _attentionNotificationByWindow[metaWindowId];
+    if (existingId != null && state.notificationMap.containsKey(existingId)) {
+      return;
+    }
+    _attentionNotificationByWindow.remove(metaWindowId);
+
+    final targetWindowId = resolveShellWindowForMetaWindow(ref, metaWindowId);
+    final route = routeForWindow(
+      targetWindowId,
+      windowWorkspaceMap: ref.read(windowWorkspaceMapProvider),
+      focusedWorkspaceId: ref.read(focusedWorkspaceIdProvider),
+      displayedWindowIds: ref.read(displayedWindowIdsProvider),
+      displayedEphemeralWindowIds: ref.read(
+        displayedEphemeralWindowIdsProvider,
+      ),
+    );
+    if (route is DisplayedNotificationTarget ||
+        route is EphemeralDisplayedNotificationTarget) {
+      return;
+    }
+
+    final appName = await _attentionAppName(metaWindow);
+    // The window may have gone away while the name resolved.
+    if (!ref.mounted || _readMetaWindow(metaWindowId) == null) {
+      return;
+    }
+
+    final id = state.lastIndex + 1;
+    final notification = Notification(
+      id: id,
+      appId: metaWindow.appId,
+      dbusNotification: DbusNotification(
+        pid: metaWindow.pid,
+        appName: appName,
+        replacesId: 0,
+        appIcon: '',
+        summary: '$appName requests attention',
+        actions: const [],
+        hints: const NotificationHints(),
+        expireTimeout: -1,
+      ),
+      createdAt: DateTime.now(),
+      targetWindowId: targetWindowId,
+      targetMetaWindowId: metaWindowId,
+      isSynthetic: true,
+    );
+    _attentionNotificationByWindow[metaWindowId] = id;
+    state = state.copyWith(
+      notificationMap: state.notificationMap.add(id, notification),
+      lastIndex: id,
+    );
+    notificationLog.info(
+      'Synthesized attention notification $id for window $metaWindowId '
+      '("$appName")',
+    );
+    _showPopup(notification);
+  }
+
+  /// Drops the live notification synthesized for [metaWindowId] when the
+  /// window no longer asks for attention. Like every synthesized entry it is
+  /// transient, so it is forgotten rather than kept in history.
+  void _onWindowAttentionReleased(String metaWindowId) {
+    final id = _attentionNotificationByWindow[metaWindowId];
+    if (id == null) {
+      return;
+    }
+    if (!state.notificationMap.containsKey(id)) {
+      _attentionNotificationByWindow.remove(metaWindowId);
+      return;
+    }
+    notificationLog.info('Window attention withdrawn for $metaWindowId');
+    closeNotification(
+      id,
+      reason: NotificationCloseReason.dismissed,
+      markRead: true,
+    );
+  }
+
+  /// The display name shown in the synthesized notification: the localized
+  /// desktop-entry name when the app id resolves, otherwise the best window
+  /// identity available.
+  Future<String> _attentionAppName(MetaWindow metaWindow) async {
+    final appId = metaWindow.appId;
+    if (appId != null) {
+      try {
+        final entry = await ref.read(
+          localizedDesktopEntryForIdProvider(appId).future,
+        );
+        final name = entry?.entries[DesktopEntryKey.name.string];
+        if (name != null && name.isNotEmpty) {
+          return name;
+        }
+      } on Object catch (_) {
+        // Fall through to the window identity.
+      }
+    }
+    return metaWindow.title ?? metaWindow.windowClass ?? appId ?? 'Application';
+  }
+
+  /// Reads a meta window state, returning `null` while it is not initialized.
+  MetaWindow? _readMetaWindow(String metaWindowId) {
+    try {
+      return ref.read(metaWindowStateProvider(metaWindowId));
+    } on Object catch (_) {
+      return null;
+    }
   }
 
   /// Pushes the transient popup to the channel matching the notification's
@@ -310,6 +502,28 @@ class NotificationManager extends _$NotificationManager {
     if (notification == null) {
       return;
     }
+
+    if (notification.isSynthetic) {
+      _clearPopup(id);
+      if (reason == NotificationCloseReason.expired) {
+        // The popup is gone but the request still stands: keep the entry
+        // unread so its workspace dot survives while the window is open. It is
+        // forgotten once seen, withdrawn, or when the window closes.
+        state = state.copyWith(
+          notificationMap: state.notificationMap.add(
+            id,
+            notification.copyWith(isClosed: true),
+          ),
+        );
+        return;
+      }
+      // Seen (click, dismiss, window displayed) or withdrawn: synthesized
+      // attention entries are transient and never enter the history.
+      state = state.copyWith(notificationMap: state.notificationMap.remove(id));
+      _attentionNotificationByWindow.removeWhere((_, value) => value == id);
+      return;
+    }
+
     final shouldSignal = !notification.isClosed;
     // Update state synchronously, before awaiting the signal, so re-entrant
     // route listeners observe the new read/closed flags and converge instead

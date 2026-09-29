@@ -1,12 +1,12 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:duration/duration.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/notification/model/notification.serializable.dart' as Me;
 import 'package:shell/notification/model/notification_action.dart';
+import 'package:shell/shared/util/relative_time.dart';
 
 class NotificationWidget extends StatelessWidget {
   const NotificationWidget({
@@ -14,6 +14,7 @@ class NotificationWidget extends StatelessWidget {
     this.onClose,
     this.onAction,
     this.onOpen,
+    this.dimmed = false,
     super.key,
   });
 
@@ -32,6 +33,10 @@ class NotificationWidget extends StatelessWidget {
   /// action, which is only invoked when no [onOpen] handler is provided.
   final VoidCallback? onOpen;
 
+  /// Whether to render the notification as history: its window is gone, so it
+  /// is kept only for the record. History entries are dimmed.
+  final bool dimmed;
+
   @override
   Widget build(BuildContext context) {
     final actions = parseNotificationActions(
@@ -44,14 +49,21 @@ class NotificationWidget extends StatelessWidget {
         : const <NotificationAction>[];
     // Bringing the window into view is the primary body action; the `default`
     // action is only a fallback when the caller does not open windows.
-    final onBodyTap = onOpen ??
+    final onBodyTap =
+        onOpen ??
         (defaultAction != null ? () => onAction!(defaultAction.key) : null);
+    // Localized so the relative age can be translated with the rest of the app.
+    final age = formatRelativeTime(
+      notification.createdAt,
+      localeName: Localizations.localeOf(context).toString(),
+    );
 
     final content = Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 4,
         children: [
           Row(
             children: [
@@ -82,8 +94,7 @@ class NotificationWidget extends StatelessWidget {
                     text: notification.dbusNotification.appName,
                     children: [
                       TextSpan(
-                        text:
-                            ' • ${DateTime.now().difference(notification.createdAt).pretty(abbreviated: true, maxUnits: 1)}',
+                        text: ' • $age',
                         style: Theme.of(
                           context,
                         ).textTheme.labelSmall?.copyWith(color: Colors.white70),
@@ -98,7 +109,8 @@ class NotificationWidget extends StatelessWidget {
             notification.dbusNotification.summary,
             style: Theme.of(context).textTheme.titleMedium,
           ),
-          Text(notification.dbusNotification.body),
+          if (notification.dbusNotification.body.isNotEmpty)
+            Text(notification.dbusNotification.body),
           if (notification.dbusNotification.hints.imageData != null)
             SizedBox(
               width: 100,
@@ -110,7 +122,7 @@ class NotificationWidget extends StatelessWidget {
               ),
             ),
           if (buttons.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Wrap(
               spacing: 8,
               runSpacing: 4,
@@ -128,7 +140,7 @@ class NotificationWidget extends StatelessWidget {
       ),
     );
 
-    return Stack(
+    final card = Stack(
       children: [
         if (onBodyTap != null)
           InkWell(onTap: onBodyTap, child: content)
@@ -147,5 +159,8 @@ class NotificationWidget extends StatelessWidget {
         ),
       ],
     );
+    // History entries are dimmed so a still-open window's notification reads
+    // as the actionable one.
+    return dimmed ? Opacity(opacity: 0.5, child: card) : card;
   }
 }

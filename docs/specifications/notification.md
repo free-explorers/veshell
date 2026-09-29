@@ -63,14 +63,30 @@ Every accepted notification is stored in `NotificationManager` (persisted key
 - `createdAt`.
 - `targetWindowId`: the `WindowId` resolved from the sender pid (see *Routing*),
   stored so the route stays stable without rescanning.
+- `targetMetaWindowId`: the exact `MetaWindow` instance the notification was
+  about when it was received (sender pid, or the requesting window for a
+  synthesized attention notification). It is runtime identity: a relaunched app
+  gets a new id, so the old notification is history. `null` when the sender has
+  no window (a system sender).
 - `isRead`: whether the user has already seen it. Unread notifications drive the
-  workspace dot indicator.
+  workspace dot indicator, but only while `targetMetaWindowId` is still open (or
+  is `null`).
 - `isClosed`: whether the D-Bus `NotificationClosed` signal has already been
-  emitted. A closed notification only lives in history (keeping its dot until
-  seen); it has no popup and is never signaled closed twice.
+  emitted. A closed notification only lives in history; it has no popup and is
+  never signaled closed twice.
+- `isSynthetic`: whether the shell synthesized the entry from a window
+  attention request instead of a D-Bus `Notify`. Synthetic entries are
+  transient and never persisted (see *Window attention*).
 
 The list is rendered by the Helm `NotificationPanel` in the overview. Read
 notifications stay in the list (history); only an explicit close removes them.
+An entry that is no longer tied to an open `MetaWindow` (`targetMetaWindowId`
+set but gone) is **dimmed**, so it reads as history next to the
+still-actionable notifications.
+
+A new session keeps only the history: every restored notification is loaded as
+read and closed (its window belonged to a previous session anyway) and
+synthesized entries are dropped.
 
 ## Routing
 
@@ -176,6 +192,46 @@ entry in place, reusing its id, dropping the old popup and re-routing the new
 one. A `replacesId` for an unknown or already closed id creates a new
 notification as usual.
 
+## Window attention
+
+A window can ask for the user's attention instead of being brought forward
+directly. The compositor forwards the request and the shell synthesizes a
+notification from it; the compositor never focuses or navigates to the window
+on its own. Two sources feed the same event:
+
+- X11 `_NET_WM_STATE_DEMANDS_ATTENTION` (Smithay's `demands_attention_request`)
+  emits `window_attention_requested { metaWindowId }`; clearing it emits
+  `window_attention_released { metaWindowId }`.
+- Wayland `xdg_activation_v1` when the activated surface already has a meta
+  window emits `window_attention_requested { metaWindowId }`. A request for a
+  surface with no meta window yet keeps its existing "opened from" meaning and
+  is **not** an attention request (it is a launch, not a background demand).
+
+`NotificationManager` synthesizes a `Notification` (summary `"<App> requests
+attention"`, no body) and routes it with the ordinary rules, so a window in
+another workspace pops next to its workspace button and one hidden in the
+focused workspace pops below its panel button. The request is remembered per
+meta window: a repeated demand does not stack, and `window_attention_released`
+drops the live popup.
+
+A synthesized notification has no D-Bus sender. Its `isSynthetic` flag
+suppresses `NotificationClosed`/`ActionInvoked`, and it is created with
+`expireTimeout = -1` (server default). Clicking the body reuses click-to-open:
+the window is brought into view and the entry is closed (reason 2). A window
+that is already displayed (or shown in an open overview) is skipped entirely,
+which also keeps a freshly launched window that activates itself from
+producing a spurious entry.
+
+Synthesized attention notifications are **transient**: they never enter the
+persisted history or the overview notification center (`NotificationList`
+excludes them), and any entry restored from storage on startup is dropped.
+Unlike a history entry, when the popup **expires** the notification is kept
+unread in memory, so its workspace dot survives while the window is open. The
+entry is forgotten once it is seen (clicked, dismissed, or its window becomes
+displayed), once `window_attention_released` arrives, or once its window
+closes. Its unread dot is therefore only ever shown while the exact window is
+still open.
+
 ## Read state
 
 `NotificationReadTracker` reacts to route changes only:
@@ -191,6 +247,12 @@ notification as usual.
 
 Notifications are never re-surfaced after being dismissed.
 
+The workspace dot additionally requires the notification's `targetMetaWindowId`
+to still be open (`unreadNotificationsForWorkspace`). A notification whose
+window closed becomes history: its dot clears even if it was never seen, and it
+is dimmed in the center. A notification with no MetaWindow (`null`) is not tied
+to a closed window and stays live.
+
 ## Transport
 
 `src/embedder/notification/` owns the freedesktop D-Bus surface and the shell
@@ -198,8 +260,11 @@ owns the state; the two sides talk over the platform channel:
 
 - Rust → Dart: `notification_received { callToken, notification }` (the
   payload is the raw `Notify` arguments plus the trusted sender pid, with the
-  `a{sv}` hints already marshalled to the `NotificationHints` field names) and
-  `notification_close_requested { id }`.
+  `a{sv}` hints already marshalled to the `NotificationHints` field names),
+  `notification_close_requested { id }`, and the window-attention events
+  `window_attention_requested { metaWindowId }` /
+  `window_attention_released { metaWindowId }` (the shell synthesizes the
+  notification, so there is no D-Bus call to answer).
 - Dart → Rust: `notification_notify_result { callToken, id }` (completes the
   pending `Notify` with the shell-assigned id), `notification_action_invoked
   { id, actionKey }` and `notification_closed { id, reason }` (emit the

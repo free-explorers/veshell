@@ -14,7 +14,7 @@ use smithay::{
     },
     xwayland::XWaylandClientData,
 };
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::{
     backend::Backend, flutter_engine::wayland_messages::MyRectangle, focus::PointerFocusTarget,
@@ -216,6 +216,36 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         // The removed window may have carried the recording flag for a live
         // cast (a monitor share survives its app's window): re-resolve.
         crate::portal::service::sync_recording_meta_windows(self);
+    }
+
+    /// Tells the shell that a window is asking for the user's attention (X11
+    /// `_NET_WM_STATE_DEMANDS_ATTENTION`, or a Wayland `xdg_activation_v1`
+    /// request targeting an already existing window).
+    ///
+    /// The compositor does not focus or navigate to the window itself: the
+    /// shell turns the request into a notification whose activation brings the
+    /// window into view.
+    pub fn notify_window_attention_requested(&mut self, meta_window_id: &str) {
+        info!(meta_window_id, "window attention requested");
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method(
+            "window_attention_requested",
+            Some(Box::new(json!({ "metaWindowId": meta_window_id }))),
+            None,
+        );
+    }
+
+    /// Tells the shell a window no longer needs attention (X11
+    /// `_NET_WM_STATE_DEMANDS_ATTENTION` cleared), so it can drop the live
+    /// notification it synthesized for the request.
+    pub fn notify_window_attention_released(&mut self, meta_window_id: &str) {
+        info!(meta_window_id, "window attention released");
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method(
+            "window_attention_released",
+            Some(Box::new(json!({ "metaWindowId": meta_window_id }))),
+            None,
+        );
     }
 
     pub fn patch_meta_window(&mut self, mut patch: MetaWindowPatch, propagate: bool) {

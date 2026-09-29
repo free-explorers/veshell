@@ -9,7 +9,14 @@ part 'notification_list.g.dart';
 class NotificationList extends _$NotificationList {
   @override
   IList<Notification> build() {
-    return ref.watch(notificationManagerProvider).notificationMap.toValueIList(
+    // Synthesized attention notifications are transient popups: they must not
+    // appear in the notification center (nor in the Helm badge count), which
+    // is the persisted history of real D-Bus notifications.
+    return ref
+        .watch(notificationManagerProvider)
+        .notificationMap
+        .where((_, notification) => !notification.isSynthetic)
+        .toValueIList(
           sort: true,
           compare: (a, b) => b.id.compareTo(a.id),
         );

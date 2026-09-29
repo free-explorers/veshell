@@ -26,6 +26,8 @@ import 'package:shell/platform/model/event/new_subsurface/new_subsurface.seriali
 import 'package:shell/platform/model/event/new_surface/new_surface.serializable.dart';
 import 'package:shell/platform/model/event/process_info/process_info.serializable.dart';
 import 'package:shell/platform/model/event/set_environment_variables/set_environment_variables.serializable.dart';
+import 'package:shell/platform/model/event/window_attention_released/window_attention_released.serializable.dart';
+import 'package:shell/platform/model/event/window_attention_requested/window_attention_requested.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 
 part 'platform_event.serializable.freezed.dart';
@@ -202,6 +204,21 @@ sealed class PlatformEvent with _$PlatformEvent implements PlatformInteraction {
     required String method,
     required NotificationCloseRequestedMessage message,
   }) = NotificationCloseRequestedEvent;
+
+  /// A window asks for the user's attention (X11 demands-attention or a
+  /// Wayland `xdg_activation_v1` request for an existing window). The shell
+  /// synthesizes a notification instead of focusing the window.
+  const factory PlatformEvent.windowAttentionRequested({
+    required String method,
+    required WindowAttentionRequestedMessage message,
+  }) = WindowAttentionRequestedEvent;
+
+  /// A window no longer asks for the user's attention: the shell drops the
+  /// live notification it synthesized.
+  const factory PlatformEvent.windowAttentionReleased({
+    required String method,
+    required WindowAttentionReleasedMessage message,
+  }) = WindowAttentionReleasedEvent;
 
   /// Gesture Swipe Begin Event
   /// This event is sent when the user performs a swipe gesture.

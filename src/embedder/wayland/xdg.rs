@@ -602,11 +602,15 @@ pub mod xdg {
                 );
                 self.patch_meta_window(
                     MetaWindowPatch::UpdateActivatedBy {
-                        id: activated_meta_window_id,
+                        id: activated_meta_window_id.clone(),
                         value: Some(requesting_meta_window_id),
                     },
                     true,
                 );
+                // Activating a window that already exists is an attention
+                // request: surface it as a notification instead of focusing
+                // the window behind the user's back.
+                self.notify_window_attention_requested(&activated_meta_window_id);
             } else {
                 // The activated surface has no meta window yet; remember the
                 // relation so `new_meta_window_for_toplevel` applies it at

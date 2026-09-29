@@ -1,6 +1,7 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
+import 'package:shell/meta_window/provider/meta_window_manager.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/meta_window/provider/pid_to_meta_window_id.dart';
@@ -100,6 +101,10 @@ IMap<int, NotificationTarget> notificationRoutes(Ref ref) {
 
 /// Unread notifications whose originating app lives in a workspace that is not
 /// currently displayed. Drives the workspace button dot indicator.
+///
+/// A notification only counts while the exact MetaWindow it came from is still
+/// open: a closed window (or a previous session's instance) leaves only
+/// history, so its dot is cleared even if the notification was never seen.
 @riverpod
 IList<Notification> unreadNotificationsForWorkspace(
   Ref ref,
@@ -107,8 +112,12 @@ IList<Notification> unreadNotificationsForWorkspace(
 ) {
   final notifications = ref.watch(notificationManagerProvider).notificationMap;
   final routes = ref.watch(notificationRoutesProvider);
+  final openMetaWindows = ref.watch(metaWindowManagerProvider);
   final unread = notifications.values
       .where((notification) => !notification.isRead)
+      .where(
+        (notification) => isNotificationLive(notification, openMetaWindows),
+      )
       .where((notification) {
         final route = routes[notification.id];
         return route is WorkspaceNotificationTarget &&
@@ -117,6 +126,20 @@ IList<Notification> unreadNotificationsForWorkspace(
       .toList()
     ..sort((a, b) => b.id.compareTo(a.id));
   return unread.lock;
+}
+
+/// Whether [notification] is still tied to an open MetaWindow.
+///
+/// `targetMetaWindowId` identifies the exact instance the notification came
+/// from, so a relaunched app (new instance) leaves the old notification
+/// historical. A notification with no MetaWindow at all (a system sender) is
+/// not tied to a closed window and stays live.
+bool isNotificationLive(
+  Notification notification,
+  ISet<MetaWindowId> openMetaWindows,
+) {
+  final metaWindowId = notification.targetMetaWindowId;
+  return metaWindowId == null || openMetaWindows.contains(metaWindowId);
 }
 
 /// Pure routing decision, shared by the reactive provider above and the
@@ -189,6 +212,14 @@ WindowId? resolveNotificationTargetWindow(
 /// still be matched by the app id stored on the notification.
 PersistentWindowId? persistentWindowForAppId(Ref ref, String appId) =>
     _bestPersistentWindowForAppId(ref, appId);
+
+/// The shell window owning [metaWindowId], or `null` when it is not matched
+/// (yet).
+///
+/// Used to route a synthesized attention notification to the exact window that
+/// requested it, rather than the app's best tile.
+WindowId? resolveShellWindowForMetaWindow(Ref ref, MetaWindowId metaWindowId) =>
+    _resolveFromMetaWindow(ref, metaWindowId);
 
 /// Walks up the meta-window parent chain until it reaches a persistent tile or
 /// an ephemeral window. Returns `null` when the chain has no shell window.

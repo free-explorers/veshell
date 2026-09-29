@@ -638,6 +638,30 @@ pub mod xwayland {
             );
         }
 
+        fn demands_attention_request(&mut self, _xwm: XwmId, x11_surface: X11Surface) {
+            let Some(wl_surface) = x11_surface.wl_surface() else {
+                return;
+            };
+            let surface_id = get_surface_id(&wl_surface);
+            let Some(meta_window) = self.get_meta_window(surface_id) else {
+                return;
+            };
+            let meta_window_id = meta_window.id;
+            self.notify_window_attention_requested(&meta_window_id);
+        }
+
+        fn undemands_attention_request(&mut self, _xwm: XwmId, x11_surface: X11Surface) {
+            let Some(wl_surface) = x11_surface.wl_surface() else {
+                return;
+            };
+            let surface_id = get_surface_id(&wl_surface);
+            let Some(meta_window) = self.get_meta_window(surface_id) else {
+                return;
+            };
+            let meta_window_id = meta_window.id;
+            self.notify_window_attention_released(&meta_window_id);
+        }
+
         fn allow_selection_access(&mut self, xwm: XwmId, _selection: SelectionTarget) -> bool {
             if let Some(keyboard) = self.seat.get_keyboard() {
                 // check that an X11 window is focused

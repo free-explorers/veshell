@@ -18,6 +18,14 @@ abstract class Notification with _$Notification {
     /// parent persistent tile; ephemeral windows are kept as-is so overview
     /// visibility can be checked.
     WindowId? targetWindowId,
+
+    /// The exact MetaWindow instance the notification was about when it was
+    /// received (from the sender pid, or the requesting window for a
+    /// synthesized attention notification). It is runtime-only identity: a
+    /// relaunched app gets a new MetaWindow id, so an old notification stays
+    /// historical. `null` for notifications not tied to a live window (system
+    /// senders).
+    String? targetMetaWindowId,
     @Default(false) bool isRead,
 
     /// Whether the D-Bus `NotificationClosed` signal has already been emitted.
@@ -25,6 +33,12 @@ abstract class Notification with _$Notification {
     /// unread dot until it is seen); it has no live popup and must not be
     /// signaled closed again.
     @Default(false) bool isClosed,
+
+    /// Whether the shell synthesized this notification instead of receiving it
+    /// from a D-Bus `Notify` call (e.g. a window attention request). Synthetic
+    /// notifications have no external sender, so no `NotificationClosed` /
+    /// `ActionInvoked` signal is ever emitted for them.
+    @Default(false) bool isSynthetic,
   }) = _Notification;
 
   factory Notification.fromJson(Map<String, dynamic> json) =>
