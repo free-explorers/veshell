@@ -31,6 +31,11 @@ act on the current result list. The selection clamps at the first and last entry
 (no wrap). While the overview is open these shadow the global
 `super+w/s/a/d` workspace/tileable hotkeys.
 
+The navigation applies to all three modes: `Super+W`/`Super+S` move through the
+mode's results and `Super+D` activates them — a file opens with its handler, an
+application is launched as an ephemeral window, while settings are edited inline
+and have nothing to activate. `Super+A` (parent directory) is files-only.
+
 ## Properties
 
 Layout currentLayout;  

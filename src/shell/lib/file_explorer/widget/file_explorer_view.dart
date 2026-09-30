@@ -23,7 +23,7 @@ const fileEntryRowHeight = 48.0;
 class FileExplorerView extends HookConsumerWidget {
   const FileExplorerView({
     required this.searchText,
-    this.selectedPath,
+    this.selectedIndex,
     this.onSelect,
     this.onActivate,
     this.onOpenDirectory,
@@ -34,11 +34,11 @@ class FileExplorerView extends HookConsumerWidget {
   /// Text typed in the overview search box, used as a live name filter.
   final String searchText;
 
-  /// The entry to highlight, or `null`.
-  final DirectoryPath? selectedPath;
+  /// Index of the entry to highlight in the filtered list, or `null`.
+  final int? selectedIndex;
 
-  final ValueChanged<FileEntry>? onSelect;
-  final ValueChanged<FileEntry>? onActivate;
+  final ValueChanged<int>? onSelect;
+  final ValueChanged<int>? onActivate;
   final ValueChanged<DirectoryPath>? onOpenDirectory;
   final VoidCallback? onOpenParent;
 
@@ -72,7 +72,7 @@ class FileExplorerView extends HookConsumerWidget {
                   )
                 : _FileEntryList(
                     entryList: entryList,
-                    selectedPath: selectedPath,
+                    selectedIndex: selectedIndex,
                     onSelect: onSelect,
                     onActivate: onActivate,
                   ),
@@ -138,30 +138,28 @@ class _BreadcrumbBar extends StatelessWidget {
 class _FileEntryList extends HookConsumerWidget {
   const _FileEntryList({
     required this.entryList,
-    this.selectedPath,
+    this.selectedIndex,
     this.onSelect,
     this.onActivate,
   });
 
   final List<FileEntry> entryList;
-  final DirectoryPath? selectedPath;
-  final ValueChanged<FileEntry>? onSelect;
-  final ValueChanged<FileEntry>? onActivate;
+  final int? selectedIndex;
+  final ValueChanged<int>? onSelect;
+  final ValueChanged<int>? onActivate;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scrollController = useScrollController();
-    final selectedIndex = entryList.indexWhere(
-      (entry) => entry.path == selectedPath,
-    );
 
     useEffect(() {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!scrollController.hasClients || selectedIndex < 0) {
+        final index = selectedIndex;
+        if (!scrollController.hasClients || index == null || index < 0) {
           return;
         }
         final position = scrollController.position;
-        final itemStart = selectedIndex * fileEntryRowHeight;
+        final itemStart = index * fileEntryRowHeight;
         final itemEnd = itemStart + fileEntryRowHeight;
         if (itemStart < position.pixels) {
           scrollController.jumpTo(itemStart);
@@ -180,9 +178,9 @@ class _FileEntryList extends HookConsumerWidget {
         final entry = entryList[index];
         return _FileEntryRow(
           entry: entry,
-          isSelected: entry.path == selectedPath,
-          onTap: onSelect == null ? null : () => onSelect!(entry),
-          onDoubleTap: onActivate == null ? null : () => onActivate!(entry),
+          isSelected: index == selectedIndex,
+          onTap: onSelect == null ? null : () => onSelect!(index),
+          onDoubleTap: onActivate == null ? null : () => onActivate!(index),
         );
       },
     );

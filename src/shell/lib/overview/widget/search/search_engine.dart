@@ -5,6 +5,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/application/provider/app_drawer.dart';
 import 'package:shell/file_explorer/model/directory_path.dart';
 import 'package:shell/file_explorer/model/file_entry.dart';
 import 'package:shell/file_explorer/provider/file_explorer_state.dart';
@@ -17,6 +18,8 @@ import 'package:shell/overview/widget/search/application_search_result.dart';
 import 'package:shell/overview/widget/search/search_input.dart';
 import 'package:shell/overview/widget/search/settings/settings_search_result.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
+import 'package:shell/settings/model/setting_search.dart';
+import 'package:shell/settings/provider/settings_properties.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/util/selection.dart';
 import 'package:shell/theme/provider/theme.dart';
@@ -39,13 +42,15 @@ class SearchEngine extends HookConsumerWidget {
     final searchMode = ref.watch(
       overviewStateProvider(screenId).select((state) => state.searchMode),
     );
-    final selectedPath = ref.watch(
-      overviewStateProvider(screenId).select((state) => state.selectedPath),
+    final selectedIndex = ref.watch(
+      overviewStateProvider(screenId).select((state) => state.selectedIndex),
     );
 
     useEffect(() {
       searchController.addListener(() {
         searchTextState.value = searchController.text;
+        // The result list changes with the filter; drop the stale selection.
+        ref.read(overviewStateProvider(screenId).notifier).selectIndex(null);
       });
       searchFocusNode.requestFocus();
       focusLog.info('Search request at first build');
@@ -54,49 +59,73 @@ class SearchEngine extends HookConsumerWidget {
 
     final overviewNotifier = ref.read(overviewStateProvider(screenId).notifier);
 
-    List<FileEntry> currentEntryList() =>
-        ref.read(filteredEntryListProvider(screenId)).value ??
-        const <FileEntry>[];
-
-    void selectEntry(FileEntry entry) =>
-        overviewNotifier.selectPath(entry.path);
+    /// The number of results the active mode offers.
+    int currentResultCount() {
+      switch (searchMode) {
+        case SearchMode.application:
+          return ref
+                  .read(
+                    appDrawerFilteredDesktopEntriesProvider(
+                      searchTextState.value,
+                    ),
+                  )
+                  .value
+                  ?.length ??
+              0;
+        case SearchMode.file:
+          return ref.read(filteredEntryListProvider(screenId)).value?.length ??
+              0;
+        case SearchMode.settings:
+          return collectSettingLeafPathList(
+            ref.read(settingsPropertiesProvider),
+            searchTextState.value,
+          ).length;
+      }
+    }
 
     void moveSelection(int delta) {
-      if (searchMode != SearchMode.file) {
+      final count = currentResultCount();
+      if (count == 0) {
         return;
       }
-      final entryList = currentEntryList();
-      if (entryList.isEmpty) {
-        return;
-      }
-      final currentIndex = entryList.indexWhere(
-        (entry) => entry.path == selectedPath,
+      overviewNotifier.selectIndex(
+        nextSelectionIndex(
+          currentIndex: selectedIndex ?? -1,
+          delta: delta,
+          length: count,
+        ),
       );
-      final nextIndex = nextSelectionIndex(
-        currentIndex: currentIndex,
-        delta: delta,
-        length: entryList.length,
-      );
-      overviewNotifier.selectPath(entryList[nextIndex].path);
     }
 
     void activateSelected() {
-      if (searchMode != SearchMode.file) {
+      final index = selectedIndex;
+      if (index == null) {
         return;
       }
-      final entryList = currentEntryList();
-      final index = entryList.indexWhere((entry) => entry.path == selectedPath);
-      if (index < 0) {
-        return;
+      switch (searchMode) {
+        case SearchMode.application:
+          final entryList = ref
+              .read(
+                appDrawerFilteredDesktopEntriesProvider(searchTextState.value),
+              )
+              .value;
+          if (entryList == null || index >= entryList.length) {
+            return;
+          }
+          overviewNotifier.startEphemeralApplication(entryList[index]);
+        case SearchMode.file:
+          unawaited(activateFileIndex(ref, screenId, index));
+        case SearchMode.settings:
+          // Settings are edited inline; there is nothing to activate.
+          break;
       }
-      unawaited(activateFileEntry(ref, screenId, entryList[index]));
     }
 
     void goToParent() {
       if (searchMode != SearchMode.file) {
         return;
       }
-      overviewNotifier.selectPath(null);
+      overviewNotifier.selectIndex(null);
       ref
           .read(fileExplorerStateProvider(screenId).notifier)
           .openParentDirectory();
@@ -106,7 +135,7 @@ class SearchEngine extends HookConsumerWidget {
       if (searchMode != SearchMode.file) {
         return;
       }
-      overviewNotifier.selectPath(null);
+      overviewNotifier.selectIndex(null);
       ref
           .read(fileExplorerStateProvider(screenId).notifier)
           .openDirectory(path);
@@ -203,19 +232,23 @@ class SearchEngine extends HookConsumerWidget {
                       child: switch (searchMode) {
                         SearchMode.application => ApplicationSearchResult(
                           searchText: searchTextState.value,
+                          selectedIndex: selectedIndex,
+                          onSelect: overviewNotifier.selectIndex,
+                          onActivate: (_) => activateSelected(),
                         ),
                         SearchMode.file => FileExplorerView(
                           searchText: searchTextState.value,
-                          selectedPath: selectedPath,
-                          onSelect: selectEntry,
-                          onActivate: (entry) => unawaited(
-                            activateFileEntry(ref, screenId, entry),
+                          selectedIndex: selectedIndex,
+                          onSelect: overviewNotifier.selectIndex,
+                          onActivate: (index) => unawaited(
+                            activateFileIndex(ref, screenId, index),
                           ),
                           onOpenDirectory: openDirectory,
                           onOpenParent: goToParent,
                         ),
                         SearchMode.settings => SettingsSearchResult(
                           searchText: searchTextState.value,
+                          selectedIndex: selectedIndex,
                         ),
                       },
                     ),
@@ -230,6 +263,20 @@ class SearchEngine extends HookConsumerWidget {
   }
 }
 
+/// Activates the file explorer entry at [index]: enters a directory, or opens
+/// a file with its default handler and dismisses the overview.
+Future<void> activateFileIndex(
+  WidgetRef ref,
+  String screenId,
+  int index,
+) async {
+  final entryList = ref.read(filteredEntryListProvider(screenId)).value;
+  if (entryList == null || index < 0 || index >= entryList.length) {
+    return;
+  }
+  await activateFileEntry(ref, screenId, entryList[index]);
+}
+
 /// Activates a file explorer entry: enters a directory, or opens a file with
 /// its default handler and dismisses the overview so the window is visible.
 Future<void> activateFileEntry(
@@ -239,7 +286,7 @@ Future<void> activateFileEntry(
 ) async {
   final overviewNotifier = ref.read(overviewStateProvider(screenId).notifier);
   if (entry.isDirectory) {
-    overviewNotifier.selectPath(null);
+    overviewNotifier.selectIndex(null);
     ref
         .read(fileExplorerStateProvider(screenId).notifier)
         .openDirectory(entry.path);

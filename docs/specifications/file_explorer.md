@@ -64,10 +64,11 @@ providers can be keyed by it and equality works.
   directory; `autoDispose`, cancelled on navigation.
 - `filteredEntryListProvider` — derived list applying `filterText` and
   `isShowingHidden`, with directories first.
-- **Selection** is not held by the pane: it lives on the screen's `Overview`
-  (`selectedPath`), so `OverviewContent` can read it to render the preview. The
-  pane writes it on click and on keyboard navigation, and clears it when it is
-  left.
+- **Selection** is not held by the pane: it lives on the screen's `Overview` as
+  `selectedIndex`, an index into the active mode's result list. The pane is
+  presentational — it receives `selectedIndex` and click/keyboard callbacks —
+  and `OverviewContent` maps the index back to the file path for the preview.
+  A change to the filter or the search mode clears the selection.
 
 ## Navigation and selection
 
@@ -144,9 +145,10 @@ glyph. No MIME database, no themed-icon lookup.
    ([`design/file_preview.md`](../design/file_preview.md)) for the phase-1 types
    (text, raster image, SVG, binary hex, metadata fallback). *(landed)*
 
-> **Status:** M1–M3 landed. Still to build: the preview's external backends
-> (PDF via poppler, video poster / audio metadata via ffmpeg, office, archives,
-> playback) and result-list navigation for the application/settings modes.
+> **Status:** M1–M3 landed, and the selection/keyboard layer now covers the
+> application, file and settings modes. Still to build: the preview's external
+> backends (PDF via poppler, video poster / audio metadata via ffmpeg, office,
+> archives, playback).
 
 Each milestone must pass `cargo check` (Rust + full Dart build),
 `../.flutter_sdk/bin/flutter test` for new tests, and `cargo fmt`.

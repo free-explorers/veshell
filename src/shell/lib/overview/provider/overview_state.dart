@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/file_explorer/model/directory_path.dart';
 import 'package:shell/overview/model/overview.dart';
 import 'package:shell/overview/model/search_mode.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
@@ -36,7 +35,7 @@ class OverviewState extends _$OverviewState {
             )
           : state.focusedWindowId,
       // A hidden overview shows no preview slot, so drop the stale selection.
-      selectedPath: isDisplayed ? state.selectedPath : null,
+      selectedIndex: isDisplayed ? state.selectedIndex : null,
     );
   }
 
@@ -53,23 +52,24 @@ class OverviewState extends _$OverviewState {
     if (!state.isDisplayed) {
       return;
     }
-    state = state.copyWith(isDisplayed: false, selectedPath: null);
+    state = state.copyWith(isDisplayed: false, selectedIndex: null);
   }
 
-  /// Switches the search engine to [searchMode].
+  /// Switches the search engine to [searchMode], clearing the selection (the
+  /// new mode has a different result list).
   void setSearchMode(SearchMode searchMode) {
     if (state.searchMode == searchMode) {
       return;
     }
-    state = state.copyWith(searchMode: searchMode);
+    state = state.copyWith(searchMode: searchMode, selectedIndex: null);
   }
 
-  /// Selects [path] as the preview target, or clears it when `null`.
-  void selectPath(DirectoryPath? path) {
-    if (state.selectedPath == path) {
+  /// Selects the result at [index], or clears the selection when `null`.
+  void selectIndex(int? index) {
+    if (state.selectedIndex == index) {
       return;
     }
-    state = state.copyWith(selectedPath: path);
+    state = state.copyWith(selectedIndex: index);
   }
 
   /// Selects [windowId] as the overview's displayed window.

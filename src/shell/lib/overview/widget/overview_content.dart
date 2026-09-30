@@ -3,6 +3,8 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/widget/app_icon.dart';
+import 'package:shell/file_explorer/model/directory_path.dart';
+import 'package:shell/file_explorer/provider/filtered_entry_list.dart';
 import 'package:shell/file_preview/widget/file_preview_view.dart';
 import 'package:shell/overview/helm/widget/helm.dart';
 import 'package:shell/overview/model/search_mode.dart';
@@ -29,14 +31,25 @@ class OverviewContent extends HookConsumerWidget {
     final searchMode = ref.watch(
       overviewStateProvider(screenId).select((state) => state.searchMode),
     );
-    final selectedPath = ref.watch(
-      overviewStateProvider(screenId).select((state) => state.selectedPath),
+    final selectedIndex = ref.watch(
+      overviewStateProvider(screenId).select((state) => state.selectedIndex),
     );
+
+    // Resolve the selected file to its path for the preview. The selected index
+    // refers to the Files mode's filtered list; other modes have no preview.
+    DirectoryPath? previewPath;
+    final index = selectedIndex;
+    if (searchMode == SearchMode.file && index != null) {
+      final entryList = ref.watch(filteredEntryListProvider(screenId)).value;
+      if (entryList != null && index >= 0 && index < entryList.length) {
+        previewPath = entryList[index].path;
+      }
+    }
 
     final node = useFocusNode();
     final Widget content;
-    if (searchMode == SearchMode.file && selectedPath != null) {
-      content = FilePreviewView(path: selectedPath);
+    if (previewPath != null) {
+      content = FilePreviewView(path: previewPath);
     } else if (focusedWindowId == null) {
       content = const Helm();
     } else {

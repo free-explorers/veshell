@@ -2,19 +2,44 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:shell/settings/model/setting_definition.dart';
 import 'package:shell/settings/model/setting_group.dart';
 import 'package:shell/settings/model/setting_property.dart';
+import 'package:shell/settings/model/setting_search.dart';
 import 'package:shell/settings/provider/settings_properties.dart';
 
-/// List of applications for the given searchText
+/// The settings tree for the given searchText, navigable by selection index.
 class SettingsSearchResult extends HookConsumerWidget {
   ///
-  const SettingsSearchResult({required this.searchText, super.key});
+  const SettingsSearchResult({
+    required this.searchText,
+    this.selectedIndex,
+    super.key,
+  });
   final String searchText;
+  final int? selectedIndex;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settingMap = ref.watch(settingsPropertiesProvider);
+    final leafPathList = collectSettingLeafPathList(settingMap, searchText);
+    final index = selectedIndex;
+    final selectedLeafPath =
+        index != null && index >= 0 && index < leafPathList.length
+        ? leafPathList[index]
+        : null;
+    final selectedLeafKey = useMemoized(GlobalKey.new);
+
+    useEffect(() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final leafContext = selectedLeafKey.currentContext;
+        if (leafContext == null) return;
+        Scrollable.ensureVisible(
+          leafContext,
+          alignment: 0.3,
+          duration: const Duration(milliseconds: 120),
+        );
+      });
+      return null;
+    }, [selectedIndex]);
 
     return CustomScrollView(
       slivers: settingMap.entries.map((entry) {
@@ -22,6 +47,8 @@ class SettingsSearchResult extends HookConsumerWidget {
           searchText: searchText,
           settingGroup: entry.value,
           path: entry.key,
+          selectedLeafPath: selectedLeafPath,
+          selectedLeafKey: selectedLeafKey,
         );
       }).toList(),
     );
@@ -33,25 +60,33 @@ class SettingGroupListSliver extends HookWidget {
     required this.searchText,
     required this.settingGroup,
     required this.path,
+    this.selectedLeafPath,
+    this.selectedLeafKey,
     super.key,
   });
 
   final String searchText;
   final String path;
   final SettingGroup settingGroup;
+  final String? selectedLeafPath;
+  final Key? selectedLeafKey;
 
   @override
   Widget build(BuildContext context) {
     final expanded = useState(searchText != '');
-    useEffect(
-      () {
-        if (searchText != '') {
-          expanded.value = true;
-        }
-        return null;
-      },
-      [searchText],
-    );
+    useEffect(() {
+      if (searchText != '') {
+        expanded.value = true;
+      }
+      return null;
+    }, [searchText]);
+    // Force a group open while it contains the keyboard selection, so a leaf
+    // reached with Super+W/S is always visible.
+    final selectedPath = selectedLeafPath;
+    final isOnSelectedPath =
+        selectedPath != null &&
+        (selectedPath == path || selectedPath.startsWith('$path.'));
+    final isExpanded = expanded.value || isOnSelectedPath;
     if (!searchSetting(searchText, settingGroup, path)) {
       return const SliverToBoxAdapter();
     } else {
@@ -69,8 +104,9 @@ class SettingGroupListSliver extends HookWidget {
               onTap: () {
                 expanded.value = !expanded.value;
               },
-              leading:
-                  settingGroup.icon != null ? Icon(settingGroup.icon) : null,
+              leading: settingGroup.icon != null
+                  ? Icon(settingGroup.icon)
+                  : null,
               title: Text(
                 settingGroup.name,
                 style: settingGroup.description == null
@@ -78,11 +114,9 @@ class SettingGroupListSliver extends HookWidget {
                     : null,
               ),
               subtitle: settingGroup.description != null
-                  ? Text(
-                      settingGroup.description!,
-                    )
+                  ? Text(settingGroup.description!)
                   : null,
-              trailing: expanded.value
+              trailing: isExpanded
                   ? const Icon(MdiIcons.chevronUp)
                   : const Icon(MdiIcons.chevronDown),
             ),
@@ -90,7 +124,7 @@ class SettingGroupListSliver extends HookWidget {
             floating: true,
             surfaceTintColor: Colors.transparent,
           ),
-          if (expanded.value)
+          if (isExpanded)
             DecoratedSliver(
               decoration: BoxDecoration(
                 color: Color.lerp(
@@ -107,6 +141,8 @@ class SettingGroupListSliver extends HookWidget {
                         searchText: searchText,
                         settingGroup: entry.value as SettingGroup,
                         path: '$path.${entry.key}',
+                        selectedLeafPath: selectedLeafPath,
+                        selectedLeafKey: selectedLeafKey,
                       );
                     } else {
                       if (!searchSetting(
@@ -119,6 +155,8 @@ class SettingGroupListSliver extends HookWidget {
                       return SettingPropertySliver(
                         property: entry.value as SettingProperty,
                         path: '$path.${entry.key}',
+                        isSelected: '$path.${entry.key}' == selectedLeafPath,
+                        selectedKey: selectedLeafKey,
                       );
                     }
                   }),
@@ -135,16 +173,29 @@ class SettingPropertySliver<T> extends StatelessWidget {
   const SettingPropertySliver({
     required this.property,
     required this.path,
+    this.isSelected = false,
+    this.selectedKey,
     super.key,
   });
 
   final String path;
   final SettingProperty<T> property;
+  final bool isSelected;
+  final Key? selectedKey;
 
   @override
   Widget build(BuildContext context) {
+    final content = property.build(context, path);
     return SliverToBoxAdapter(
-      child: property.build(context, path),
+      child: isSelected
+          ? DecoratedBox(
+              key: selectedKey,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+              ),
+              child: content,
+            )
+          : content,
     );
   }
 }
@@ -222,22 +273,3 @@ class SettingPropertyEditor<T> extends HookConsumerWidget {
     };
   }
 } */
-
-bool searchSetting(
-  String searchText,
-  SettingDefinition definition,
-  String path,
-) {
-  if (searchText == '') return true;
-  if (definition is SettingGroup) {
-    return definition.children.entries.any(
-      (entry) => searchSetting(searchText, entry.value, '$path.${entry.key}'),
-    );
-  }
-  if (definition is SettingProperty) {
-    return '${definition.name}.${definition.description}'
-        .toLowerCase()
-        .contains(searchText.toLowerCase());
-  }
-  return false;
-}

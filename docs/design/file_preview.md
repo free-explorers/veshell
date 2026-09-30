@@ -29,11 +29,12 @@ Precedence in that slot:
 2. else a focused **ephemeral window** → its surface;
 3. else the **Helm** dashboard.
 
-Selection state belongs to the screen's `Overview` (a `DirectoryPath?`
-selection, mirroring `focusedWindowId`), set by the Files pane and read by
-`OverviewContent`, so other producers (search results, notifications) can drive
-the same preview later. Selecting a directory keeps navigating; leaving Files
-mode or clearing the selection restores the previous occupant.
+Selection state belongs to the screen's `Overview` (an `int? selectedIndex`
+into the active mode's result list, cleared when the mode or filter changes),
+so `OverviewContent` can derive the selected file's path for the preview and
+other producers (search results, notifications) can drive the same slot later.
+Selecting a directory keeps navigating; leaving Files mode or clearing the
+selection restores the previous occupant.
 
 Interaction (decided): a single click **selects and previews** any entry — a
 file previews, a directory highlights (with a folder summary in the slot); a
