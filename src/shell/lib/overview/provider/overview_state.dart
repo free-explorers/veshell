@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/file_explorer/model/directory_path.dart';
 import 'package:shell/overview/model/overview.dart';
+import 'package:shell/overview/model/search_mode.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
@@ -31,6 +35,8 @@ class OverviewState extends _$OverviewState {
               state.focusedWindowId,
             )
           : state.focusedWindowId,
+      // A hidden overview shows no preview slot, so drop the stale selection.
+      selectedPath: isDisplayed ? state.selectedPath : null,
     );
   }
 
@@ -47,7 +53,23 @@ class OverviewState extends _$OverviewState {
     if (!state.isDisplayed) {
       return;
     }
-    state = state.copyWith(isDisplayed: false);
+    state = state.copyWith(isDisplayed: false, selectedPath: null);
+  }
+
+  /// Switches the search engine to [searchMode].
+  void setSearchMode(SearchMode searchMode) {
+    if (state.searchMode == searchMode) {
+      return;
+    }
+    state = state.copyWith(searchMode: searchMode);
+  }
+
+  /// Selects [path] as the preview target, or clears it when `null`.
+  void selectPath(DirectoryPath? path) {
+    if (state.selectedPath == path) {
+      return;
+    }
+    state = state.copyWith(selectedPath: path);
   }
 
   /// Selects [windowId] as the overview's displayed window.
@@ -60,9 +82,7 @@ class OverviewState extends _$OverviewState {
   }
 
   /// Start an new Ephemeral Application
-  void startEphemeralApplication(
-    LocalizedDesktopEntry entry,
-  ) {
+  void startEphemeralApplication(LocalizedDesktopEntry entry) {
     final windowId = ref
         .read(windowManagerProvider.notifier)
         .createEphemeralWindowForDesktopEntry(entry, state.screenId);
@@ -72,7 +92,9 @@ class OverviewState extends _$OverviewState {
       focusedWindowId: windowId,
     );
 
-    ref.read(ephemeralWindowStateProvider(windowId).notifier).launchSelf();
+    unawaited(
+      ref.read(ephemeralWindowStateProvider(windowId).notifier).launchSelf(),
+    );
   }
 
   void removeWindow(EphemeralWindowId windowId) {

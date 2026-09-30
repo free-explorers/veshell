@@ -1,6 +1,9 @@
 # Universal file preview from the overview — design notes
 
-Status: **investigation, not implemented.** Branch `feat/file-explorer`.
+Status: **phase 1 implemented; external backends not built.** Branch
+`feat/file-explorer`. The preview slot renders text, raster images, SVG, binary
+hex and a metadata fallback, with the selection/keyboard layer in the overview;
+PDF, video, audio, office, archives and playback are still to come.
 Companion to
 [`file_explorer_ephemeral_launch.md`](file_explorer_ephemeral_launch.md); the
 explorer contract lives in

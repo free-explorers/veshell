@@ -135,16 +135,18 @@ glyph. No MIME database, no themed-icon lookup.
 1. **M1 — list and navigate.** Module skeleton; `DirectoryPath` and
    `FileEntry`; `directoryListingProvider`; `FileExplorerState`; list rows with
    icons; breadcrumb + up; filter; error state. `FileSearchResult` is removed
-   and `SearchEngine` renders the explorer.
-2. **M2 — select and open.** Selection model (single click selects/previews,
-   double click or `Enter` opens); default-handler launch via
-   `xdg-open`/`gio open`; keyboard navigation; loading, empty and error polish;
-   tests.
+   and `SearchEngine` renders the explorer. *(landed)*
+2. **M2 — open.** Default-handler launch via `xdg-open`/`gio open`. *(landed)*
+3. **M3 — selection, keyboard and preview.** Single click selects and previews,
+   double click or `Super+D` activates, `Super+W`/`Super+S` move the selection
+   (clamped), `Super+A` goes to the parent directory, `Super+Tab` switches the
+   search mode; the `OverviewContent` slot renders the preview
+   ([`design/file_preview.md`](../design/file_preview.md)) for the phase-1 types
+   (text, raster image, SVG, binary hex, metadata fallback). *(landed)*
 
-> **Status:** M1 and M2 landed with click-to-open (a click navigated or opened).
-> The selection model above supersedes that and is not yet implemented; the
-> preview slot itself is still to be built
-> ([`design/file_preview.md`](../design/file_preview.md)).
+> **Status:** M1–M3 landed. Still to build: the preview's external backends
+> (PDF via poppler, video poster / audio metadata via ffmpeg, office, archives,
+> playback) and result-list navigation for the application/settings modes.
 
 Each milestone must pass `cargo check` (Rust + full Dart build),
 `../.flutter_sdk/bin/flutter test` for new tests, and `cargo fmt`.

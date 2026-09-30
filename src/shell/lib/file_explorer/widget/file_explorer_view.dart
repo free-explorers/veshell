@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
@@ -8,25 +6,41 @@ import 'package:shell/file_explorer/model/directory_path.dart';
 import 'package:shell/file_explorer/model/file_entry.dart';
 import 'package:shell/file_explorer/provider/directory_listing.dart';
 import 'package:shell/file_explorer/provider/file_explorer_state.dart';
-import 'package:shell/file_explorer/provider/file_opener.dart';
 import 'package:shell/file_explorer/provider/filtered_entry_list.dart';
 import 'package:shell/file_explorer/widget/file_entry_icon.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 
+/// Height of one file explorer row; fixed so the selection can be scrolled into
+/// view by index.
+const fileEntryRowHeight = 48.0;
+
 /// The overview's Files pane: a single list of the current directory, with a
 /// breadcrumb and an up action to move around.
+///
+/// The pane is presentational: selection and activation are handled by the
+/// overview through the callbacks, so the preview slot and the keyboard
+/// shortcuts share one source of truth.
 class FileExplorerView extends HookConsumerWidget {
   const FileExplorerView({
     required this.searchText,
-    this.onFileOpened,
+    this.selectedPath,
+    this.onSelect,
+    this.onActivate,
+    this.onOpenDirectory,
+    this.onOpenParent,
     super.key,
   });
 
   /// Text typed in the overview search box, used as a live name filter.
   final String searchText;
 
-  /// Called after a file was handed to its default handler.
-  final VoidCallback? onFileOpened;
+  /// The entry to highlight, or `null`.
+  final DirectoryPath? selectedPath;
+
+  final ValueChanged<FileEntry>? onSelect;
+  final ValueChanged<FileEntry>? onActivate;
+  final ValueChanged<DirectoryPath>? onOpenDirectory;
+  final VoidCallback? onOpenParent;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -44,7 +58,11 @@ class FileExplorerView extends HookConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _BreadcrumbBar(path: fileExplorer.path),
+        _BreadcrumbBar(
+          path: fileExplorer.path,
+          onOpenDirectory: onOpenDirectory,
+          onOpenParent: onOpenParent,
+        ),
         const Divider(height: 1),
         Expanded(
           child: entryListAsync.when(
@@ -54,7 +72,9 @@ class FileExplorerView extends HookConsumerWidget {
                   )
                 : _FileEntryList(
                     entryList: entryList,
-                    onFileOpened: onFileOpened,
+                    selectedPath: selectedPath,
+                    onSelect: onSelect,
+                    onActivate: onActivate,
                   ),
             error: (error, stackTrace) =>
                 _DirectoryError(path: fileExplorer.path, error: error),
@@ -67,26 +87,27 @@ class FileExplorerView extends HookConsumerWidget {
 }
 
 /// Up action and the cumulative path segments, each a shortcut to an ancestor.
-class _BreadcrumbBar extends HookConsumerWidget {
-  const _BreadcrumbBar({required this.path});
+class _BreadcrumbBar extends StatelessWidget {
+  const _BreadcrumbBar({
+    required this.path,
+    this.onOpenDirectory,
+    this.onOpenParent,
+  });
 
   final DirectoryPath path;
+  final ValueChanged<DirectoryPath>? onOpenDirectory;
+  final VoidCallback? onOpenParent;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final screenId = CurrentScreenId.of(context);
+  Widget build(BuildContext context) {
     final breadcrumbOnlyList = path.breadcrumb;
     return SizedBox(
-      height: 48,
+      height: fileEntryRowHeight,
       child: Row(
         children: [
           IconButton(
             tooltip: 'Up',
-            onPressed: path.parent == null
-                ? null
-                : () => ref
-                      .read(fileExplorerStateProvider(screenId).notifier)
-                      .openParentDirectory(),
+            onPressed: path.parent == null ? null : onOpenParent,
             icon: const Icon(MdiIcons.arrowUp),
           ),
           const SizedBox(width: 8),
@@ -98,9 +119,9 @@ class _BreadcrumbBar extends HookConsumerWidget {
                 children: [
                   for (final segment in breadcrumbOnlyList)
                     TextButton(
-                      onPressed: () => ref
-                          .read(fileExplorerStateProvider(screenId).notifier)
-                          .openDirectory(segment.path),
+                      onPressed: onOpenDirectory == null
+                          ? null
+                          : () => onOpenDirectory!(segment.path),
                       child: Text(segment.name),
                     ),
                 ],
@@ -113,55 +134,101 @@ class _BreadcrumbBar extends HookConsumerWidget {
   }
 }
 
-/// The current directory's entries. Directories navigate; files open with the
-/// default handler.
+/// The current directory's entries. One click selects, two activate.
 class _FileEntryList extends HookConsumerWidget {
-  const _FileEntryList({required this.entryList, this.onFileOpened});
+  const _FileEntryList({
+    required this.entryList,
+    this.selectedPath,
+    this.onSelect,
+    this.onActivate,
+  });
 
   final List<FileEntry> entryList;
-  final VoidCallback? onFileOpened;
+  final DirectoryPath? selectedPath;
+  final ValueChanged<FileEntry>? onSelect;
+  final ValueChanged<FileEntry>? onActivate;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final screenId = CurrentScreenId.of(context);
+    final scrollController = useScrollController();
+    final selectedIndex = entryList.indexWhere(
+      (entry) => entry.path == selectedPath,
+    );
+
+    useEffect(() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!scrollController.hasClients || selectedIndex < 0) {
+          return;
+        }
+        final position = scrollController.position;
+        final itemStart = selectedIndex * fileEntryRowHeight;
+        final itemEnd = itemStart + fileEntryRowHeight;
+        if (itemStart < position.pixels) {
+          scrollController.jumpTo(itemStart);
+        } else if (itemEnd > position.pixels + position.viewportDimension) {
+          scrollController.jumpTo(itemEnd - position.viewportDimension);
+        }
+      });
+      return null;
+    }, [selectedIndex]);
+
     return ListView.builder(
+      controller: scrollController,
+      itemExtent: fileEntryRowHeight,
       itemCount: entryList.length,
       itemBuilder: (context, index) {
         final entry = entryList[index];
-        return ListTile(
-          leading: Icon(iconForFileEntry(entry)),
-          title: Text(entry.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-          trailing: entry.isDirectory
-              ? const Icon(MdiIcons.chevronRight)
-              : null,
-          onTap: () => unawaited(
-            _openEntry(ref, screenId, entry, onFileOpened: onFileOpened),
-          ),
+        return _FileEntryRow(
+          entry: entry,
+          isSelected: entry.path == selectedPath,
+          onTap: onSelect == null ? null : () => onSelect!(entry),
+          onDoubleTap: onActivate == null ? null : () => onActivate!(entry),
         );
       },
     );
   }
 }
 
-/// Opens [entry]: a directory navigates, a file goes to the default handler and
-/// then notifies the caller so it can dismiss the overview.
-Future<void> _openEntry(
-  WidgetRef ref,
-  String screenId,
-  FileEntry entry, {
-  required VoidCallback? onFileOpened,
-}) async {
-  if (entry.isDirectory) {
-    ref
-        .read(fileExplorerStateProvider(screenId).notifier)
-        .openDirectory(entry.path);
-    return;
-  }
-  final didOpen = await ref
-      .read(fileOpenerProvider.notifier)
-      .openFile(entry.path);
-  if (didOpen) {
-    onFileOpened?.call();
+class _FileEntryRow extends StatelessWidget {
+  const _FileEntryRow({
+    required this.entry,
+    required this.isSelected,
+    this.onTap,
+    this.onDoubleTap,
+  });
+
+  final FileEntry entry;
+  final bool isSelected;
+  final VoidCallback? onTap;
+  final VoidCallback? onDoubleTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: isSelected ? colorScheme.primaryContainer : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        onDoubleTap: onDoubleTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: [
+              Icon(iconForFileEntry(entry)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  entry.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (entry.isDirectory) const Icon(MdiIcons.chevronRight),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
