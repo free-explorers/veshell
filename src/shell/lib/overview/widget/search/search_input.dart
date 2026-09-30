@@ -17,14 +17,16 @@ class SearchInput extends StatelessWidget {
       controller: searchController,
       focusNode: searchFocusNode,
       autofocus: true,
+      // Keep the keyboard focus on the search field when the user clicks
+      // anywhere else in the overview (a file row, the preview, a mode
+      // button). The default would unfocus it, and the Super-based shortcuts
+      // only fire while focus is inside their subtree.
+      onTapOutside: (_) {},
       style: Theme.of(context).textTheme.titleLarge,
       decoration: InputDecoration(
         prefixIcon: const Padding(
           padding: EdgeInsets.fromLTRB(12, 12, 32, 12),
-          child: Icon(
-            Icons.search,
-            size: 28,
-          ),
+          child: Icon(Icons.search, size: 28),
         ),
         hintText: 'Search',
         fillColor: Theme.of(context).colorScheme.surface,

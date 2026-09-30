@@ -25,6 +25,19 @@ class VeshellShortcutManager extends HookConsumerWidget {
       () => _ShortcutManager(shortcuts: hotkeysActivator),
       [hotkeysActivator],
     );
+    // A chord consumed by a local `Shortcuts` widget (for example Super+W in
+    // the overview) never reaches the shortcut manager, which would then still
+    // toggle the overview when Super is released. Track the Super-sole-press
+    // state from the global hardware keyboard instead.
+    useEffect(() {
+      bool handleHardwareKey(KeyEvent event) {
+        manager.trackHardwareKey(event);
+        return false;
+      }
+
+      HardwareKeyboard.instance.addHandler(handleHardwareKey);
+      return () => HardwareKeyboard.instance.removeHandler(handleHardwareKey);
+    }, [manager]);
     return Shortcuts.manager(
       manager: manager,
       child: Actions(
@@ -110,43 +123,51 @@ class _ShortcutManager extends ShortcutManager {
   bool _isOverviewKeySolePressed = false;
   ToggleOverviewIntent overviewIntent = const ToggleOverviewIntent();
   final LogicalKeyboardKey overviewKey = LogicalKeyboardKey.superKey;
+
+  /// Mirrors the Super-sole-press state from the global hardware keyboard.
+  ///
+  /// [handleKeypress] only sees events that no local `Shortcuts` consumed, so a
+  /// chord like Super+W handled inside the overview would otherwise leave this
+  /// flag set and toggle the overview when Super is released.
+  void trackHardwareKey(KeyEvent event) {
+    if (event.synthesized) {
+      return;
+    }
+    if (event is KeyDownEvent && event.logicalKey == overviewKey) {
+      _isOverviewKeySolePressed = true;
+    } else if (event.logicalKey != overviewKey &&
+        (event is KeyDownEvent || event is KeyRepeatEvent)) {
+      _isOverviewKeySolePressed = false;
+    }
+  }
+
   @override
   KeyEventResult handleKeypress(BuildContext context, KeyEvent event) {
-    print(event);
-    print('is overview ${event.logicalKey == overviewKey}');
-    if (event is KeyUpEvent &&
-        event.logicalKey == overviewKey &&
-        event.synthesized) {
+    if (event is KeyUpEvent && event.logicalKey == overviewKey) {
+      final wasSolePressed = _isOverviewKeySolePressed;
       _isOverviewKeySolePressed = false;
-      return KeyEventResult.handled;
-    }
-    if (event is KeyUpEvent &&
-        event.logicalKey == overviewKey &&
-        _isOverviewKeySolePressed) {
-      print('inside overview');
-
-      _isOverviewKeySolePressed = false;
-      final primaryContext = primaryFocus?.context;
-      if (primaryContext != null) {
-        final action = Actions.maybeFind<Intent>(
-          primaryContext,
-          intent: overviewIntent,
-        );
-        if (action != null) {
-          final (bool enabled, Object? invokeResult) = Actions.of(
+      // A synthesized release (focus change, etc.) must not toggle.
+      if (event.synthesized) {
+        return KeyEventResult.handled;
+      }
+      if (wasSolePressed) {
+        final primaryContext = primaryFocus?.context;
+        if (primaryContext != null) {
+          final action = Actions.maybeFind<Intent>(
             primaryContext,
-          ).invokeActionIfEnabled(action, overviewIntent, primaryContext);
-          if (enabled) {
-            return action.toKeyEventResult(overviewIntent, invokeResult);
+            intent: overviewIntent,
+          );
+          if (action != null) {
+            final (bool enabled, Object? invokeResult) = Actions.of(
+              primaryContext,
+            ).invokeActionIfEnabled(action, overviewIntent, primaryContext);
+            if (enabled) {
+              return action.toKeyEventResult(overviewIntent, invokeResult);
+            }
           }
         }
       }
     }
-
-    _isOverviewKeySolePressed =
-        event is KeyDownEvent && event.logicalKey == overviewKey;
-
-    print('_isOverviewKeySolePressed $_isOverviewKeySolePressed');
 
     return super.handleKeypress(context, event);
   }
