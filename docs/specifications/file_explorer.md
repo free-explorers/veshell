@@ -107,7 +107,8 @@ glyph. No MIME database, no themed-icon lookup.
 - Locations column, grid view, sort menu, size/modified columns.
 - `open with` chooser, running `.desktop` files, a *Properties* dialog.
 - Multi-selection, drag & drop, clipboard, share/export.
-- Thumbnails and content previews, archives, tags/ratings.
+- Thumbnails and content previews, archives, tags/ratings (previews are
+  explored in [`design/file_preview.md`](../design/file_preview.md)).
 - Trash, removable volumes/device browsing, network shares, *Recent* — all the
   places where GIO (gvfs/`gio`) would be worth adding.
 - Persisting the last path, view mode and sort order across shell restarts.
