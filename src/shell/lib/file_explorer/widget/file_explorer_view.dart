@@ -153,6 +153,7 @@ class _BreadcrumbBar extends StatelessWidget {
       height: fileEntryRowHeight,
       child: Row(
         children: [
+          const SizedBox(width: 4),
           IconButton(
             tooltip: 'Up',
             onPressed: path.parent == null ? null : onOpenParent,
@@ -162,7 +163,6 @@ class _BreadcrumbBar extends StatelessWidget {
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              reverse: true,
               child: Row(
                 children: [
                   if (crumbList.isEmpty)
