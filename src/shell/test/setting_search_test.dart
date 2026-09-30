@@ -31,25 +31,19 @@ void main() {
     ),
   };
 
-  test('lists every leaf in tree order for an empty search', () {
-    expect(collectSettingLeafPathList(settingMap, ''), [
-      'display.brightness',
-      'display.nightLight',
-      'power.dim',
+  test('lists matching categories in display order', () {
+    expect(collectSettingCategoryPathList(settingMap, ''), [
+      'display',
+      'power',
     ]);
   });
 
-  test('keeps only matching leaves', () {
-    expect(collectSettingLeafPathList(settingMap, 'night'), [
-      'display.nightLight',
-    ]);
+  test('keeps a category only when a descendant matches', () {
+    expect(collectSettingCategoryPathList(settingMap, 'night'), ['display']);
+    expect(collectSettingCategoryPathList(settingMap, 'idle dim'), ['power']);
   });
 
-  test('matches on the description too', () {
-    expect(collectSettingLeafPathList(settingMap, 'idle dim'), ['power.dim']);
-  });
-
-  test('returns nothing when no leaf matches', () {
-    expect(collectSettingLeafPathList(settingMap, 'zzz'), isEmpty);
+  test('returns nothing when no category matches', () {
+    expect(collectSettingCategoryPathList(settingMap, 'zzz'), isEmpty);
   });
 }

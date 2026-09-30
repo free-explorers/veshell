@@ -25,33 +25,14 @@ bool searchSetting(
   return false;
 }
 
-/// The paths of the leaf properties under [settingMap] that match [searchText],
-/// in the order the settings tree renders them.
-List<String> collectSettingLeafPathList(
+/// The paths of the top-level setting categories that match [searchText], in
+/// display order. Keyboard navigation walks these categories.
+List<String> collectSettingCategoryPathList(
   Map<String, SettingGroup> settingMap,
   String searchText,
 ) {
-  final pathList = <String>[];
-  for (final entry in settingMap.entries) {
-    _collectLeaves(entry.value, entry.key, searchText, pathList);
-  }
-  return pathList;
-}
-
-void _collectLeaves(
-  SettingDefinition definition,
-  String path,
-  String searchText,
-  List<String> pathList,
-) {
-  if (!searchSetting(searchText, definition, path)) {
-    return;
-  }
-  if (definition is SettingGroup) {
-    for (final entry in definition.children.entries) {
-      _collectLeaves(entry.value, '$path.${entry.key}', searchText, pathList);
-    }
-  } else if (definition is SettingProperty) {
-    pathList.add(path);
-  }
+  return [
+    for (final entry in settingMap.entries)
+      if (searchSetting(searchText, entry.value, entry.key)) entry.key,
+  ];
 }

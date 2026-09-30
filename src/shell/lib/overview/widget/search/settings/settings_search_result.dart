@@ -5,9 +5,10 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/settings/model/setting_group.dart';
 import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/model/setting_search.dart';
+import 'package:shell/settings/provider/setting_group_expanded.dart';
 import 'package:shell/settings/provider/settings_properties.dart';
 
-/// The settings tree for the given searchText, navigable by selection index.
+/// The settings tree for the given searchText, navigable by category index.
 class SettingsSearchResult extends HookConsumerWidget {
   ///
   const SettingsSearchResult({
@@ -20,21 +21,24 @@ class SettingsSearchResult extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settingMap = ref.watch(settingsPropertiesProvider);
-    final leafPathList = collectSettingLeafPathList(settingMap, searchText);
+    final categoryPathList = collectSettingCategoryPathList(
+      settingMap,
+      searchText,
+    );
     final index = selectedIndex;
-    final selectedLeafPath =
-        index != null && index >= 0 && index < leafPathList.length
-        ? leafPathList[index]
+    final selectedCategoryPath =
+        index != null && index >= 0 && index < categoryPathList.length
+        ? categoryPathList[index]
         : null;
-    final selectedLeafKey = useMemoized(GlobalKey.new);
+    final selectedCategoryKey = useMemoized(GlobalKey.new);
 
     useEffect(() {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        final leafContext = selectedLeafKey.currentContext;
-        if (leafContext == null) return;
+        final categoryContext = selectedCategoryKey.currentContext;
+        if (categoryContext == null) return;
         Scrollable.ensureVisible(
-          leafContext,
-          alignment: 0.3,
+          categoryContext,
+          alignment: 0.2,
           duration: const Duration(milliseconds: 120),
         );
       });
@@ -47,125 +51,114 @@ class SettingsSearchResult extends HookConsumerWidget {
           searchText: searchText,
           settingGroup: entry.value,
           path: entry.key,
-          selectedLeafPath: selectedLeafPath,
-          selectedLeafKey: selectedLeafKey,
+          selectedCategoryPath: selectedCategoryPath,
+          selectedCategoryKey: selectedCategoryKey,
         );
       }).toList(),
     );
   }
 }
 
-class SettingGroupListSliver extends HookWidget {
+class SettingGroupListSliver extends HookConsumerWidget {
   const SettingGroupListSliver({
     required this.searchText,
     required this.settingGroup,
     required this.path,
-    this.selectedLeafPath,
-    this.selectedLeafKey,
+    this.selectedCategoryPath,
+    this.selectedCategoryKey,
     super.key,
   });
 
   final String searchText;
   final String path;
   final SettingGroup settingGroup;
-  final String? selectedLeafPath;
-  final Key? selectedLeafKey;
+  final String? selectedCategoryPath;
+  final Key? selectedCategoryKey;
 
   @override
-  Widget build(BuildContext context) {
-    final expanded = useState(searchText != '');
-    useEffect(() {
-      if (searchText != '') {
-        expanded.value = true;
-      }
-      return null;
-    }, [searchText]);
-    // Force a group open while it contains the keyboard selection, so a leaf
-    // reached with Super+W/S is always visible.
-    final selectedPath = selectedLeafPath;
-    final isOnSelectedPath =
-        selectedPath != null &&
-        (selectedPath == path || selectedPath.startsWith('$path.'));
-    final isExpanded = expanded.value || isOnSelectedPath;
+  Widget build(BuildContext context, WidgetRef ref) {
     if (!searchSetting(searchText, settingGroup, path)) {
       return const SliverToBoxAdapter();
-    } else {
-      return SliverMainAxisGroup(
-        slivers: [
-          SliverAppBar(
-            backgroundColor: Color.lerp(
-              Theme.of(context).colorScheme.surface,
-              Colors.black,
-              0.2 * (path.split('.').length - 1),
-            ),
-            toolbarHeight: 72,
-            flexibleSpace: ListTile(
-              minTileHeight: 72,
-              onTap: () {
-                expanded.value = !expanded.value;
-              },
-              leading: settingGroup.icon != null
-                  ? Icon(settingGroup.icon)
-                  : null,
-              title: Text(
-                settingGroup.name,
-                style: settingGroup.description == null
-                    ? Theme.of(context).textTheme.titleLarge
-                    : null,
-              ),
-              subtitle: settingGroup.description != null
-                  ? Text(settingGroup.description!)
-                  : null,
-              trailing: isExpanded
-                  ? const Icon(MdiIcons.chevronUp)
-                  : const Icon(MdiIcons.chevronDown),
-            ),
-            pinned: true,
-            floating: true,
-            surfaceTintColor: Colors.transparent,
-          ),
-          if (isExpanded)
-            DecoratedSliver(
-              decoration: BoxDecoration(
-                color: Color.lerp(
-                  Theme.of(context).colorScheme.surface,
-                  Colors.black,
-                  0.2 * path.split('.').length,
-                ),
-              ),
-              sliver: SliverMainAxisGroup(
-                slivers: [
-                  ...settingGroup.children.entries.map((entry) {
-                    if (entry.value is SettingGroup) {
-                      return SettingGroupListSliver(
-                        searchText: searchText,
-                        settingGroup: entry.value as SettingGroup,
-                        path: '$path.${entry.key}',
-                        selectedLeafPath: selectedLeafPath,
-                        selectedLeafKey: selectedLeafKey,
-                      );
-                    } else {
-                      if (!searchSetting(
-                        searchText,
-                        entry.value,
-                        '$path.${entry.key}',
-                      )) {
-                        return const SliverToBoxAdapter();
-                      }
-                      return SettingPropertySliver(
-                        property: entry.value as SettingProperty,
-                        path: '$path.${entry.key}',
-                        isSelected: '$path.${entry.key}' == selectedLeafPath,
-                        selectedKey: selectedLeafKey,
-                      );
-                    }
-                  }),
-                ],
-              ),
-            ),
-        ],
-      );
     }
+    // A search query force-opens every group so the matches are visible;
+    // otherwise Super+D (or a click) controls the expansion.
+    final isExpanded =
+        searchText != '' || ref.watch(settingGroupExpandedProvider(path));
+    final isSelected = path == selectedCategoryPath;
+    final colorScheme = Theme.of(context).colorScheme;
+    return SliverMainAxisGroup(
+      slivers: [
+        SliverAppBar(
+          backgroundColor: isSelected
+              ? colorScheme.primaryContainer
+              : Color.lerp(
+                  colorScheme.surface,
+                  Colors.black,
+                  0.2 * (path.split('.').length - 1),
+                ),
+          toolbarHeight: 72,
+          flexibleSpace: ListTile(
+            key: isSelected ? selectedCategoryKey : null,
+            minTileHeight: 72,
+            onTap: () =>
+                ref.read(settingGroupExpandedProvider(path).notifier).toggle(),
+            leading: settingGroup.icon != null ? Icon(settingGroup.icon) : null,
+            title: Text(
+              settingGroup.name,
+              style: settingGroup.description == null
+                  ? Theme.of(context).textTheme.titleLarge
+                  : null,
+            ),
+            subtitle: settingGroup.description != null
+                ? Text(settingGroup.description!)
+                : null,
+            trailing: isExpanded
+                ? const Icon(MdiIcons.chevronUp)
+                : const Icon(MdiIcons.chevronDown),
+          ),
+          pinned: true,
+          floating: true,
+          surfaceTintColor: Colors.transparent,
+        ),
+        if (isExpanded)
+          DecoratedSliver(
+            decoration: BoxDecoration(
+              color: Color.lerp(
+                colorScheme.surface,
+                Colors.black,
+                0.2 * path.split('.').length,
+              ),
+            ),
+            sliver: SliverMainAxisGroup(
+              slivers: [
+                ...settingGroup.children.entries.map((entry) {
+                  if (entry.value is SettingGroup) {
+                    return SettingGroupListSliver(
+                      searchText: searchText,
+                      settingGroup: entry.value as SettingGroup,
+                      path: '$path.${entry.key}',
+                      selectedCategoryPath: selectedCategoryPath,
+                      selectedCategoryKey: selectedCategoryKey,
+                    );
+                  } else {
+                    if (!searchSetting(
+                      searchText,
+                      entry.value,
+                      '$path.${entry.key}',
+                    )) {
+                      return const SliverToBoxAdapter();
+                    }
+                    return SettingPropertySliver(
+                      property: entry.value as SettingProperty,
+                      path: '$path.${entry.key}',
+                    );
+                  }
+                }),
+              ],
+            ),
+          ),
+      ],
+    );
   }
 }
 
@@ -173,30 +166,15 @@ class SettingPropertySliver<T> extends StatelessWidget {
   const SettingPropertySliver({
     required this.property,
     required this.path,
-    this.isSelected = false,
-    this.selectedKey,
     super.key,
   });
 
   final String path;
   final SettingProperty<T> property;
-  final bool isSelected;
-  final Key? selectedKey;
 
   @override
   Widget build(BuildContext context) {
-    final content = property.build(context, path);
-    return SliverToBoxAdapter(
-      child: isSelected
-          ? DecoratedBox(
-              key: selectedKey,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-              ),
-              child: content,
-            )
-          : content,
-    );
+    return SliverToBoxAdapter(child: property.build(context, path));
   }
 }
 /* 

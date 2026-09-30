@@ -27,7 +27,9 @@ shares, accurate MIME) is all out of scope for a plain local listing.
 
 A single scrollable list inside the same card as the other search modes.
 
-- A header row with the **breadcrumb** of the current path and an **up** button.
+- A header row with an **up** button (left arrow) and the **breadcrumb**: the
+  path segments as clickable labels separated by chevrons, the current segment
+  emphasised, scrolling horizontally from the current directory.
 - The **listing**: one row per entry with an icon and the name. Directories
   sort before files, then alphabetically. Directories show a folder glyph; files
   show a glyph picked from a small extension→icon table, with a generic file
@@ -80,6 +82,10 @@ providers can be keyed by it and equality works.
   [keyboard contract](overview.md#keyboard)).
 - `Super+A` goes up to the parent directory, the same action as the breadcrumb
   and the up button (a no-op at `/`).
+- Going up, or jumping to an ancestor from the breadcrumb, **pre-selects the
+  directory you came from** once the parent listing loads.
+- Activating an entry with `Super+D`/`Enter` also clears the filter, so the new
+  directory is shown unfiltered.
 - The initial directory is `$HOME`.
 - Symlinked directories are listed as directories and followed.
 - A path that is missing, not a directory or unreadable puts the pane in an

@@ -19,6 +19,7 @@ import 'package:shell/overview/widget/search/search_input.dart';
 import 'package:shell/overview/widget/search/settings/settings_search_result.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/settings/model/setting_search.dart';
+import 'package:shell/settings/provider/setting_group_expanded.dart';
 import 'package:shell/settings/provider/settings_properties.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/util/selection.dart';
@@ -76,7 +77,7 @@ class SearchEngine extends HookConsumerWidget {
           return ref.read(filteredEntryListProvider(screenId)).value?.length ??
               0;
         case SearchMode.settings:
-          return collectSettingLeafPathList(
+          return collectSettingCategoryPathList(
             ref.read(settingsPropertiesProvider),
             searchTextState.value,
           ).length;
@@ -97,6 +98,33 @@ class SearchEngine extends HookConsumerWidget {
       );
     }
 
+    /// Launches the application at [index] as an ephemeral window and resets
+    /// the search.
+    void activateApplicationAt(int index) {
+      final entryList = ref
+          .read(appDrawerFilteredDesktopEntriesProvider(searchTextState.value))
+          .value;
+      if (entryList == null || index < 0 || index >= entryList.length) {
+        return;
+      }
+      overviewNotifier.startEphemeralApplication(entryList[index]);
+      searchController.clear();
+    }
+
+    /// Opens or closes the settings category at [index].
+    void openSelectedSettingCategory(int index) {
+      final categoryPathList = collectSettingCategoryPathList(
+        ref.read(settingsPropertiesProvider),
+        searchTextState.value,
+      );
+      if (index < 0 || index >= categoryPathList.length) {
+        return;
+      }
+      ref
+          .read(settingGroupExpandedProvider(categoryPathList[index]).notifier)
+          .toggle();
+    }
+
     void activateSelected() {
       final index = selectedIndex;
       if (index == null) {
@@ -104,20 +132,12 @@ class SearchEngine extends HookConsumerWidget {
       }
       switch (searchMode) {
         case SearchMode.application:
-          final entryList = ref
-              .read(
-                appDrawerFilteredDesktopEntriesProvider(searchTextState.value),
-              )
-              .value;
-          if (entryList == null || index >= entryList.length) {
-            return;
-          }
-          overviewNotifier.startEphemeralApplication(entryList[index]);
+          activateApplicationAt(index);
         case SearchMode.file:
           unawaited(activateFileIndex(ref, screenId, index));
+          searchController.clear();
         case SearchMode.settings:
-          // Settings are edited inline; there is nothing to activate.
-          break;
+          openSelectedSettingCategory(index);
       }
     }
 
@@ -131,14 +151,14 @@ class SearchEngine extends HookConsumerWidget {
           .openParentDirectory();
     }
 
-    void openDirectory(DirectoryPath path) {
+    void openBreadcrumb(DirectoryPath path) {
       if (searchMode != SearchMode.file) {
         return;
       }
       overviewNotifier.selectIndex(null);
       ref
           .read(fileExplorerStateProvider(screenId).notifier)
-          .openDirectory(path);
+          .openBreadcrumb(path);
     }
 
     void cycleSearchMode(int delta) {
@@ -234,7 +254,7 @@ class SearchEngine extends HookConsumerWidget {
                           searchText: searchTextState.value,
                           selectedIndex: selectedIndex,
                           onSelect: overviewNotifier.selectIndex,
-                          onActivate: (_) => activateSelected(),
+                          onActivate: activateApplicationAt,
                         ),
                         SearchMode.file => FileExplorerView(
                           searchText: searchTextState.value,
@@ -243,7 +263,7 @@ class SearchEngine extends HookConsumerWidget {
                           onActivate: (index) => unawaited(
                             activateFileIndex(ref, screenId, index),
                           ),
-                          onOpenDirectory: openDirectory,
+                          onOpenDirectory: openBreadcrumb,
                           onOpenParent: goToParent,
                         ),
                         SearchMode.settings => SettingsSearchResult(

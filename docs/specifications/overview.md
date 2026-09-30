@@ -32,9 +32,11 @@ act on the current result list. The selection clamps at the first and last entry
 `super+w/s/a/d` workspace/tileable hotkeys.
 
 The navigation applies to all three modes: `Super+W`/`Super+S` move through the
-mode's results and `Super+D` activates them — a file opens with its handler, an
-application is launched as an ephemeral window, while settings are edited inline
-and have nothing to activate. `Super+A` (parent directory) is files-only.
+mode's results and `Super+D` (or `Enter`) activates them — a file opens with its
+handler, an application is launched as an ephemeral window, and a settings
+category is opened or closed. Activating a file or application also resets the
+search; `Super+A` (parent directory) is files-only. Clicking an application
+selects and launches it immediately.
 
 ## Properties
 

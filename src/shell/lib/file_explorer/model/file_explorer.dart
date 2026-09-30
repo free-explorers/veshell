@@ -12,5 +12,9 @@ abstract class FileExplorer with _$FileExplorer {
     required DirectoryPath path,
     @Default('') String filterText,
     @Default(true) bool isShowingHidden,
+
+    /// An entry to select once the listing of [path] loads — for example the
+    /// directory we came from when navigating up. Cleared once applied.
+    DirectoryPath? pendingSelectedPath,
   }) = _FileExplorer;
 }

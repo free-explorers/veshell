@@ -1,4 +1,3 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -31,22 +30,11 @@ class ApplicationSearchResult extends HookConsumerWidget {
       appDrawerFilteredDesktopEntriesProvider(searchText),
     );
     final scrollController = useScrollController();
-    // Select on the first tap, activate on a second tap within the double-tap
-    // window; see the file explorer for why `onTap`/`onDoubleTap` is avoided.
-    final lastTap = useRef<(int, DateTime)?>(null);
 
+    // A single click selects and launches the application right away.
     void handleTap(int index) {
-      final now = DateTime.now();
-      final previous = lastTap.value;
-      if (previous != null &&
-          previous.$1 == index &&
-          now.difference(previous.$2) < kDoubleTapTimeout) {
-        lastTap.value = null;
-        onActivate?.call(index);
-        return;
-      }
-      lastTap.value = (index, now);
       onSelect?.call(index);
+      onActivate?.call(index);
     }
 
     useEffect(() {

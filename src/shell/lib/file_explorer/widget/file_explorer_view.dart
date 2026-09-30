@@ -56,6 +56,25 @@ class FileExplorerView extends HookConsumerWidget {
       return null;
     }, [searchText, screenId]);
 
+    // Apply a pending selection left by navigating up once the listing is in.
+    final pendingSelection = fileExplorer.pendingSelectedPath;
+    final entryListValue = entryListAsync.value;
+    useEffect(() {
+      if (pendingSelection == null || entryListValue == null) {
+        return null;
+      }
+      final index = entryListValue.indexWhere(
+        (entry) => entry.path == pendingSelection,
+      );
+      ref
+          .read(fileExplorerStateProvider(screenId).notifier)
+          .clearPendingSelection();
+      if (index >= 0) {
+        onSelect?.call(index);
+      }
+      return null;
+    }, [pendingSelection, entryListValue]);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -87,7 +106,7 @@ class FileExplorerView extends HookConsumerWidget {
   }
 }
 
-/// Up action and the cumulative path segments, each a shortcut to an ancestor.
+/// Up action and the path as a clickable breadcrumb.
 class _BreadcrumbBar extends StatelessWidget {
   const _BreadcrumbBar({
     required this.path,
@@ -101,7 +120,7 @@ class _BreadcrumbBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final breadcrumbOnlyList = path.breadcrumb;
+    final crumbList = path.breadcrumb;
     return SizedBox(
       height: fileEntryRowHeight,
       child: Row(
@@ -109,27 +128,66 @@ class _BreadcrumbBar extends StatelessWidget {
           IconButton(
             tooltip: 'Up',
             onPressed: path.parent == null ? null : onOpenParent,
-            icon: const Icon(MdiIcons.arrowUp),
+            icon: const Icon(MdiIcons.arrowLeft),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               reverse: true,
               child: Row(
                 children: [
-                  for (final segment in breadcrumbOnlyList)
-                    TextButton(
-                      onPressed: onOpenDirectory == null
-                          ? null
-                          : () => onOpenDirectory!(segment.path),
-                      child: Text(segment.name),
-                    ),
+                  if (crumbList.isEmpty)
+                    const _BreadcrumbSegment(label: '/', isCurrent: true)
+                  else
+                    for (var i = 0; i < crumbList.length; i++) ...[
+                      if (i > 0) const Icon(MdiIcons.chevronRight, size: 18),
+                      _BreadcrumbSegment(
+                        label: crumbList[i].name,
+                        isCurrent: i == crumbList.length - 1,
+                        onTap: onOpenDirectory == null
+                            ? null
+                            : () => onOpenDirectory!(crumbList[i].path),
+                      ),
+                    ],
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _BreadcrumbSegment extends StatelessWidget {
+  const _BreadcrumbSegment({
+    required this.label,
+    required this.isCurrent,
+    this.onTap,
+  });
+
+  final String label;
+  final bool isCurrent;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return TextButton(
+      onPressed: isCurrent ? null : onTap,
+      style: TextButton.styleFrom(
+        minimumSize: Size.zero,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        foregroundColor: theme.colorScheme.primary,
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          fontWeight: isCurrent ? FontWeight.w600 : null,
+          color: isCurrent ? theme.colorScheme.onSurface : null,
+        ),
       ),
     );
   }
