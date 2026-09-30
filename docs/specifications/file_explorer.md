@@ -68,8 +68,6 @@ providers can be keyed by it and equality works.
   (`selectedPath`), so `OverviewContent` can read it to render the preview. The
   pane writes it on click and on keyboard navigation, and clears it when it is
   left.
-- The pane keeps a **navigation history** of visited directories so `Super+A`
-  can walk back. Forward history is not bound yet.
 
 ## Navigation and selection
 
@@ -78,9 +76,9 @@ providers can be keyed by it and equality works.
 - `Super+W`/`Super+S` move the selection over the current filtered, sorted list
   and scroll it into view; `Super+D` opens the selected entry (see the
   overview's [keyboard contract](overview.md#keyboard)).
-- `Super+A` walks back through the pane's directory history.
-- The breadcrumb and up button move to ancestors (up is a no-op at `/`); the
-  initial directory is `$HOME`.
+- `Super+A` goes up to the parent directory, the same action as the breadcrumb
+  and the up button (a no-op at `/`).
+- The initial directory is `$HOME`.
 - Symlinked directories are listed as directories and followed.
 - A path that is missing, not a directory or unreadable puts the pane in an
   **error state** with the failing path and a retry, never a crash.

@@ -23,7 +23,7 @@ overview is driven without leaving the home row:
 |---|---|
 | `Super+W` / `Super+S` | move the selection up / down in the current result list |
 | `Super+D` | open the selected entry — a folder is entered, a file/application is activated |
-| `Super+A` | go back in the navigation history |
+| `Super+A` | go up to the parent directory (breadcrumb up) |
 | `Super+Tab` / `Super+Shift+Tab` | switch search mode: applications → files → settings |
 
 The search input keeps filtering while it has focus; the `Super`-modified keys

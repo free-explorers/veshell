@@ -150,9 +150,9 @@ no layout work — only content. Rules:
 ## Keyboard and focus (mechanics)
 
 The overview's [keyboard contract](../specifications/overview.md#keyboard) is
-`Super+W`/`Super+S` to move the selection, `Super+D` to open, `Super+A` for
-history, and `Super+Tab`/`Super+Shift+Tab` to switch search modes.
-Implementation notes:
+`Super+W`/`Super+S` to move the selection, `Super+D` to open, `Super+A` to go up
+to the parent directory, and `Super+Tab`/`Super+Shift+Tab` to switch search
+modes. Implementation notes:
 
 - The shortcuts are declared **locally in the overview subtree** with a
   `Shortcuts` widget, so they win over the global `VeshellShortcutManager`
@@ -185,6 +185,5 @@ Implementation notes:
   pane (search results, notifications)?
 - Does `Super+D` activate a file/application, or only enter a folder? Is `Enter`
   retained as a secondary activation?
-- Bind `Super+Shift+A` for forward history?
 - Is `Super+Tab` search-mode switching still wanted alongside the WASD scheme?
 - Do `Super+W`/`Super+S` wrap at the list ends, or clamp?
