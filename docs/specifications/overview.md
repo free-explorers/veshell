@@ -15,19 +15,20 @@ browser replacing the former placeholder.
 
 ## Keyboard
 
-Veshell favours left-hand shortcuts; the overview is driven without leaving the
-home row.
+Veshell favours left-hand shortcuts. While the overview is open, navigation
+reuses the `Super`+WASD family already used for workspaces and tiles, so the
+overview is driven without leaving the home row:
 
 | Key | Action |
 |---|---|
-| `Tab` / `Shift+Tab` | move the selection down / up in the current result list |
-| `Space` / `Enter` | open (activate) the selected result |
+| `Super+W` / `Super+S` | move the selection up / down in the current result list |
+| `Super+D` | open the selected entry — a folder is entered, a file/application is activated |
+| `Super+A` | go back in the navigation history |
 | `Super+Tab` / `Super+Shift+Tab` | switch search mode: applications → files → settings |
 
-The search input filters while it has focus. The first `Tab` moves from the input
-into the result list; typing a printable character returns to the input so
-filtering stays continuous. Because `Space` activates, it only does so while the
-result list is focused — in the input it still types a space.
+The search input keeps filtering while it has focus; the `Super`-modified keys
+act on the current result list. While the overview is open these shadow the
+global `super+w/s/a/d` workspace/tileable hotkeys.
 
 ## Properties
 

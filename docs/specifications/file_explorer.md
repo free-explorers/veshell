@@ -68,14 +68,17 @@ providers can be keyed by it and equality works.
   (`selectedPath`), so `OverviewContent` can read it to render the preview. The
   pane writes it on click and on keyboard navigation, and clears it when it is
   left.
+- The pane keeps a **navigation history** of visited directories so `Super+A`
+  can walk back. Forward history is not bound yet.
 
 ## Navigation and selection
 
 - A single click **selects** any entry; a double click **opens** it — a
   directory is entered, a file goes to its handler.
-- `Tab`/`Shift+Tab` move the selection over the current filtered, sorted list
-  and scroll it into view; `Space` opens the selected entry exactly like
-  `Enter` (see the overview's [keyboard contract](overview.md#keyboard)).
+- `Super+W`/`Super+S` move the selection over the current filtered, sorted list
+  and scroll it into view; `Super+D` opens the selected entry (see the
+  overview's [keyboard contract](overview.md#keyboard)).
+- `Super+A` walks back through the pane's directory history.
 - The breadcrumb and up button move to ancestors (up is a no-op at `/`); the
   initial directory is `$HOME`.
 - Symlinked directories are listed as directories and followed.
@@ -90,8 +93,8 @@ glyph. No MIME database, no themed-icon lookup.
 
 ## Opening entries
 
-- Opening is triggered by a **double click** or `Enter` on the selected row; a
-  single click only selects and previews.
+- Opening is triggered by a **double click**, `Enter`, or `Super+D` on the
+  selected row; a single click only selects and previews.
 - A file entry is opened with the user's **default handler** by shelling out to
   `xdg-open <path>`, falling back to `gio open <path>` when `xdg-open` is not
   installed. Both resolve the handler through the desktop MIME database, so the

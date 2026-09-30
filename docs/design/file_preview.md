@@ -127,8 +127,8 @@ no layout work — only content. Rules:
 - **Derived artifacts** (posters, PDF pages, converted office PDFs) cached on
   disk under `$XDG_CACHE_HOME/veshell/preview/<hash(path, mtime, size, recipe)>`,
   generated asynchronously with a spinner and reused instantly afterwards.
-- **Cancel and debounce** on rapid selection changes (arrow keys): compare a
-  path token, drop stale results, kill in-flight external tools.
+- **Cancel and debounce** on rapid selection changes (`Super+W`/`Super+S`):
+  compare a path token, drop stale results, kill in-flight external tools.
 - **LRU eviction** and cleanup at shell start.
 
 ## Security and robustness
@@ -150,27 +150,30 @@ no layout work — only content. Rules:
 ## Keyboard and focus (mechanics)
 
 The overview's [keyboard contract](../specifications/overview.md#keyboard) is
-`Tab`/`Shift+Tab` to move the selection, `Space`/`Enter` to open, and
-`Super+Tab`/`Super+Shift+Tab` to switch search modes. Implementation notes:
+`Super+W`/`Super+S` to move the selection, `Super+D` to open, `Super+A` for
+history, and `Super+Tab`/`Super+Shift+Tab` to switch search modes.
+Implementation notes:
 
 - The shortcuts are declared **locally in the overview subtree** with a
   `Shortcuts` widget, so they win over the global `VeshellShortcutManager`
   (`lib/shortcut_manager/widget/shortcut_manager.dart`) and are not forwarded to
-  clients.
-- `Super+Tab` must not toggle the overview. `_ShortcutManager` clears its
-  "Super pressed alone" flag when it sees another key go down — but a locally
-  consumed chord stops propagation, so the manager may never see the `Tab` and
-  would still toggle when Super is released. Its sole-Super detection must be
-  made robust (listen through `HardwareKeyboard`, or handle the chord in the
-  manager) rather than rely on `handleKeypress` seeing every key.
+  clients. While the overview is open they intentionally shadow the global
+  `super+w/s/a/d` workspace/tileable hotkeys
+  (`extra/settings/default/settings.json`).
 - Client surfaces deliberately do **not** consume `Tab`/`Space`/`Enter`/arrows:
   `SurfaceFocus` maps them to an action with `consumesKey => false`
   (`lib/wayland/widget/surface/surface_focus.dart`) so the Wayland client
-  receives them. The overview's own bindings must consume them
+  receives them. The overview's own `Super` chords must consume the key
   (default `consumesKey => true`) while the overview has focus.
-- `Space` versus typing a space: bind `Space` only while the result list is
-  focused, so the input still types spaces. The first `Tab` hands focus to the
-  list, and a printable key hands it back to the input (type-to-search).
+- `Super+<key>` chords must not toggle the overview. `_ShortcutManager` toggles
+  when `Super` is pressed and released alone, clearing its flag only when it
+  *sees* another key go down — but a locally consumed chord stops propagation,
+  so the manager may never see the other key and would still toggle on release.
+  Its sole-`Super` detection must be made robust (listen through
+  `HardwareKeyboard`, or handle the chords in the manager) rather than rely on
+  `handleKeypress` seeing every key.
+- Because navigation is `Super`-modified, the search input keeps focus for
+  typing and there is no `Space`-versus-space conflict.
 
 ## Open questions
 
@@ -180,5 +183,8 @@ The overview's [keyboard contract](../specifications/overview.md#keyboard) is
 - Prefetch aggressiveness: how much to warm without wasting I/O?
 - Does the preview slot also get used when a file is selected outside the Files
   pane (search results, notifications)?
-- Do arrow keys stay as a secondary navigation, or are `Tab`/`Shift+Tab` the
-  only bindings?
+- Does `Super+D` activate a file/application, or only enter a folder? Is `Enter`
+  retained as a secondary activation?
+- Bind `Super+Shift+A` for forward history?
+- Is `Super+Tab` search-mode switching still wanted alongside the WASD scheme?
+- Do `Super+W`/`Super+S` wrap at the list ends, or clamp?
