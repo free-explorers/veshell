@@ -5,7 +5,8 @@
 The FileExplorer is the in-shell file browser shown by the overview's **Files**
 search mode. It replaces the `FileSearchResult` placeholder with a deliberately
 minimal browser: a **single list** of the current directory, with breadcrumbs
-and an up action to move around, and a click to open.
+and an up action to move around. A single click **selects** an entry (driving
+the in-overview preview) and a double click or `Enter` **opens** it.
 
 It lives entirely in the Dart shell and uses only `dart:io` for directory
 enumeration. No Rust, no platform-channel work, and **no GIO dependency**: the
@@ -31,6 +32,9 @@ A single scrollable list inside the same card as the other search modes.
   sort before files, then alphabetically. Directories show a folder glyph; files
   show a glyph picked from a small extension→icon table, with a generic file
   glyph as fallback.
+- The **selected** row is highlighted; the selection is the preview target shown
+  in the `OverviewContent` slot (see
+  [`design/file_preview.md`](../design/file_preview.md)).
 
 There is no locations column, no grid, no sort menu and no properties pane.
 
@@ -60,12 +64,19 @@ providers can be keyed by it and equality works.
   directory; `autoDispose`, cancelled on navigation.
 - `filteredEntryListProvider` — derived list applying `filterText` and
   `isShowingHidden`, with directories first.
+- **Selection** is not held by the pane: it lives on the screen's `Overview`
+  (`selectedPath`), so `OverviewContent` can read it to render the preview. The
+  pane writes it on click and on keyboard navigation, and clears it when it is
+  left.
 
-## Navigation
+## Navigation and selection
 
-- Clicking a directory enters it; the breadcrumb and up button move to
-  ancestors (up is a no-op at `/`).
-- The initial directory is `$HOME`.
+- A single click **selects** any entry; a double click **opens** it — a
+  directory is entered, a file goes to its handler.
+- `Enter` opens the selected entry. `ArrowUp`/`ArrowDown` move the selection over
+  the current filtered, sorted list and scroll it into view.
+- The breadcrumb and up button move to ancestors (up is a no-op at `/`); the
+  initial directory is `$HOME`.
 - Symlinked directories are listed as directories and followed.
 - A path that is missing, not a directory or unreadable puts the pane in an
   **error state** with the failing path and a retry, never a crash.
@@ -78,10 +89,13 @@ glyph. No MIME database, no themed-icon lookup.
 
 ## Opening entries
 
+- Opening is triggered by a **double click** or `Enter` on the selected row; a
+  single click only selects and previews.
 - A file entry is opened with the user's **default handler** by shelling out to
   `xdg-open <path>`, falling back to `gio open <path>` when `xdg-open` is not
   installed. Both resolve the handler through the desktop MIME database, so the
   choice matches the rest of the session.
+- A directory entry is opened by entering it.
 - Once a launcher starts, the overview is dismissed so the launched window is
   visible, the same way navigating to a persistent tile dismisses it.
 - The launched application is **not** attributed to a tile: it surfaces as an
@@ -119,8 +133,15 @@ glyph. No MIME database, no themed-icon lookup.
    `FileEntry`; `directoryListingProvider`; `FileExplorerState`; list rows with
    icons; breadcrumb + up; filter; error state. `FileSearchResult` is removed
    and `SearchEngine` renders the explorer.
-2. **M2 — open.** Default-handler launch via `xdg-open`/`gio open`; loading,
-   empty and error polish; keyboard navigation; tests.
+2. **M2 — select and open.** Selection model (single click selects/previews,
+   double click or `Enter` opens); default-handler launch via
+   `xdg-open`/`gio open`; keyboard navigation; loading, empty and error polish;
+   tests.
+
+> **Status:** M1 and M2 landed with click-to-open (a click navigated or opened).
+> The selection model above supersedes that and is not yet implemented; the
+> preview slot itself is still to be built
+> ([`design/file_preview.md`](../design/file_preview.md)).
 
 Each milestone must pass `cargo check` (Rust + full Dart build),
 `../.flutter_sdk/bin/flutter test` for new tests, and `cargo fmt`.

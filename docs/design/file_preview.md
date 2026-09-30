@@ -32,9 +32,12 @@ selection, mirroring `focusedWindowId`), set by the Files pane and read by
 the same preview later. Selecting a directory keeps navigating; leaving Files
 mode or clearing the selection restores the previous occupant.
 
-Interaction: a single click **selects and previews**; opening the handler is a
-separate action (double-click / Enter / an "Open" button), which is the
-[ephemeral-launch](file_explorer_ephemeral_launch.md) path.
+Interaction (decided): a single click **selects and previews** any entry — a
+file previews, a directory highlights (with a folder summary in the slot); a
+double click **opens** — a file through its handler (the
+[ephemeral-launch](file_explorer_ephemeral_launch.md) path), a directory by
+entering it. `ArrowUp`/`ArrowDown` move the selection and `Enter` opens, so the
+keyboard matches the double click.
 
 ## What "universal" means — the fallback chain
 
@@ -146,11 +149,11 @@ no layout work — only content. Rules:
 
 ## Open questions
 
-- Selection semantics: does a single click select (preview) and a double click
-  open, or the reverse?
 - Syntax highlighting / line numbers for text — worth a dependency?
 - Playback engine: Rust GStreamer versus a Flutter plugin?
 - Is a full LibreOffice conversion acceptable for office previews?
 - Prefetch aggressiveness: how much to warm without wasting I/O?
 - Does the preview slot also get used when a file is selected outside the Files
   pane (search results, notifications)?
+- How does focus move between the shared search box and the list (typing filters,
+  arrows navigate)?
