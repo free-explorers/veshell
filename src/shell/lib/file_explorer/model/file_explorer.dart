@@ -16,5 +16,9 @@ abstract class FileExplorer with _$FileExplorer {
     /// An entry to select once the listing of [path] loads — for example the
     /// directory we came from when navigating up. Cleared once applied.
     DirectoryPath? pendingSelectedPath,
+
+    /// Whether to select the first entry once the listing of [path] loads — set
+    /// when descending into a directory. Cleared once applied.
+    @Default(false) bool pendingSelectFirst,
   }) = _FileExplorer;
 }

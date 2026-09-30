@@ -57,23 +57,51 @@ class FileExplorerView extends HookConsumerWidget {
     }, [searchText, screenId]);
 
     // Apply a pending selection left by navigating up once the listing is in.
+    // The mutation is deferred: hooks effects run during build, and providers
+    // must not be modified there.
     final pendingSelection = fileExplorer.pendingSelectedPath;
     final entryListValue = entryListAsync.value;
     useEffect(() {
       if (pendingSelection == null || entryListValue == null) {
         return null;
       }
-      final index = entryListValue.indexWhere(
-        (entry) => entry.path == pendingSelection,
-      );
-      ref
-          .read(fileExplorerStateProvider(screenId).notifier)
-          .clearPendingSelection();
-      if (index >= 0) {
-        onSelect?.call(index);
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) {
+          return;
+        }
+        final index = entryListValue.indexWhere(
+          (entry) => entry.path == pendingSelection,
+        );
+        ref
+            .read(fileExplorerStateProvider(screenId).notifier)
+            .clearPendingSelection();
+        if (index >= 0) {
+          onSelect?.call(index);
+        }
+      });
       return null;
     }, [pendingSelection, entryListValue]);
+
+    // Apply a pending "select first entry" left by descending into a directory
+    // once its listing is in.
+    final pendingSelectFirst = fileExplorer.pendingSelectFirst;
+    useEffect(() {
+      if (!pendingSelectFirst || entryListValue == null) {
+        return null;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) {
+          return;
+        }
+        ref
+            .read(fileExplorerStateProvider(screenId).notifier)
+            .clearPendingSelectFirst();
+        if (entryListValue.isNotEmpty) {
+          onSelect?.call(0);
+        }
+      });
+      return null;
+    }, [pendingSelectFirst, entryListValue]);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

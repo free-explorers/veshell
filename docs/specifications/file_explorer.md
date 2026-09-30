@@ -84,6 +84,9 @@ providers can be keyed by it and equality works.
   and the up button (a no-op at `/`).
 - Going up, or jumping to an ancestor from the breadcrumb, **pre-selects the
   directory you came from** once the parent listing loads.
+- Entering a directory (double click, `Super+D`/`Enter`) **selects its first
+  entry** once the new listing loads, so the preview and the keyboard are ready
+  to move on immediately (an empty directory selects nothing).
 - Activating an entry with `Super+D`/`Enter` also clears the filter, so the new
   directory is shown unfiltered.
 - The initial directory is `$HOME`.

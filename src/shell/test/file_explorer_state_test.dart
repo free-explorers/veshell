@@ -15,20 +15,42 @@ void main() {
     final child = DirectoryPath('${home.path}/workspace');
 
     notifier.openDirectory(child);
-    expect(
-      container.read(fileExplorerStateProvider('test')).pendingSelectedPath,
-      isNull,
-    );
+    var state = container.read(fileExplorerStateProvider('test'));
+    expect(state.pendingSelectedPath, isNull);
+    // Descending asks the view to select the first entry of the new directory.
+    expect(state.pendingSelectFirst, isTrue);
 
     notifier.openParentDirectory();
-    final state = container.read(fileExplorerStateProvider('test'));
+    state = container.read(fileExplorerStateProvider('test'));
     expect(state.path, home);
     expect(state.pendingSelectedPath, child);
+    expect(state.pendingSelectFirst, isFalse);
 
     notifier.clearPendingSelection();
     expect(
       container.read(fileExplorerStateProvider('test')).pendingSelectedPath,
       isNull,
+    );
+  });
+
+  test('clears the pending "select first" once the view applies it', () {
+    final home = DirectoryPath(Platform.environment['HOME'] ?? '/');
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final notifier = container.read(fileExplorerStateProvider('test').notifier);
+    final target = DirectoryPath('${home.path}/workspace');
+
+    notifier.openDirectory(target);
+    expect(
+      container.read(fileExplorerStateProvider('test')).pendingSelectFirst,
+      isTrue,
+    );
+
+    notifier.clearPendingSelectFirst();
+    expect(
+      container.read(fileExplorerStateProvider('test')).pendingSelectFirst,
+      isFalse,
     );
   });
 

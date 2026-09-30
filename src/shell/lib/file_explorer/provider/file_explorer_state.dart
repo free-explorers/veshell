@@ -19,12 +19,16 @@ class FileExplorerState extends _$FileExplorerState {
     );
   }
 
-  /// Opens [path] from the listing. No entry is pre-selected.
+  /// Opens [path] from the listing, selecting its first entry once it loads.
   void openDirectory(DirectoryPath path) {
     if (state.path == path) {
       return;
     }
-    state = state.copyWith(path: path, pendingSelectedPath: null);
+    state = state.copyWith(
+      path: path,
+      pendingSelectedPath: null,
+      pendingSelectFirst: true,
+    );
   }
 
   /// Moves to the parent of the current directory, pre-selecting the directory
@@ -54,10 +58,19 @@ class FileExplorerState extends _$FileExplorerState {
     state = state.copyWith(pendingSelectedPath: null);
   }
 
+  /// Clears the pending "select first entry" flag once the view has applied it.
+  void clearPendingSelectFirst() {
+    if (!state.pendingSelectFirst) {
+      return;
+    }
+    state = state.copyWith(pendingSelectFirst: false);
+  }
+
   void _navigateTo(DirectoryPath target) {
     state = state.copyWith(
       path: target,
       pendingSelectedPath: _childOnPath(from: state.path, target: target),
+      pendingSelectFirst: false,
     );
   }
 
