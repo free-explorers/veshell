@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:shell/file_explorer/model/directory_path.dart';
 import 'package:shell/file_explorer/model/file_entry.dart';
+import 'package:shell/file_explorer/provider/file_opener.dart';
 import 'package:shell/file_explorer/provider/filtered_entry_list.dart';
 import 'package:shell/file_explorer/widget/file_entry_icon.dart';
 
@@ -111,6 +112,50 @@ void main() {
       expect(iconForFileEntry(_file('archive.zip')), MdiIcons.folderZip);
       expect(iconForFileEntry(_file('mystery')), MdiIcons.file);
       expect(iconForFileEntry(_file('.gitignore')), MdiIcons.file);
+    });
+  });
+
+  group('openFileWithDefaultHandler', () {
+    test('uses xdg-open when it is available', () async {
+      final callList = <(String, String)>[];
+      final didOpen = await openFileWithDefaultHandler(
+        const DirectoryPath('/tmp/file.txt'),
+        startProcess: (executable, arguments) async {
+          callList.add((executable, arguments.join(' ')));
+          return executable == 'xdg-open';
+        },
+      );
+      expect(didOpen, isTrue);
+      expect(callList, [('xdg-open', '/tmp/file.txt')]);
+    });
+
+    test('falls back to gio open when xdg-open is missing', () async {
+      final callList = <(String, String)>[];
+      final didOpen = await openFileWithDefaultHandler(
+        const DirectoryPath('/tmp/file.txt'),
+        startProcess: (executable, arguments) async {
+          callList.add((executable, arguments.join(' ')));
+          return executable == 'gio';
+        },
+      );
+      expect(didOpen, isTrue);
+      expect(callList, [
+        ('xdg-open', '/tmp/file.txt'),
+        ('gio', 'open /tmp/file.txt'),
+      ]);
+    });
+
+    test('reports failure when no launcher can be started', () async {
+      final callList = <(String, String)>[];
+      final didOpen = await openFileWithDefaultHandler(
+        const DirectoryPath('/tmp/file.txt'),
+        startProcess: (executable, arguments) async {
+          callList.add((executable, arguments.join(' ')));
+          return false;
+        },
+      );
+      expect(didOpen, isFalse);
+      expect(callList.length, 2);
     });
   });
 }

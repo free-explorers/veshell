@@ -82,6 +82,8 @@ glyph. No MIME database, no themed-icon lookup.
   `xdg-open <path>`, falling back to `gio open <path>` when `xdg-open` is not
   installed. Both resolve the handler through the desktop MIME database, so the
   choice matches the rest of the session.
+- Once a launcher starts, the overview is dismissed so the launched window is
+  visible, the same way navigating to a persistent tile dismisses it.
 - The launched application is **not** attributed to a tile: it surfaces as an
   ordinary new window and the matching engine handles it like any other launch.
 - No `open with` chooser.

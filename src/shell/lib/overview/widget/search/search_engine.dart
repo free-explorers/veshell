@@ -3,9 +3,11 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/file_explorer/widget/file_explorer_view.dart';
+import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/overview/widget/search/application_search_result.dart';
 import 'package:shell/overview/widget/search/search_input.dart';
 import 'package:shell/overview/widget/search/settings/settings_search_result.dart';
+import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/theme/provider/theme.dart';
 
@@ -15,6 +17,7 @@ class SearchEngine extends HookConsumerWidget {
   const SearchEngine({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final screenId = CurrentScreenId.of(context);
     final searchController = useTextEditingController();
     final searchFocusNode = useFocusNode();
     final searchTextState = useState('');
@@ -85,6 +88,9 @@ class SearchEngine extends HookConsumerWidget {
                         ),
                       SearchMode.file => FileExplorerView(
                           searchText: searchTextState.value,
+                          onFileOpened: () => ref
+                              .read(overviewStateProvider(screenId).notifier)
+                              .hide(),
                         ),
                       SearchMode.settings => SettingsSearchResult(
                           searchText: searchTextState.value,

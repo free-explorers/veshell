@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
@@ -6,6 +8,7 @@ import 'package:shell/file_explorer/model/directory_path.dart';
 import 'package:shell/file_explorer/model/file_entry.dart';
 import 'package:shell/file_explorer/provider/directory_listing.dart';
 import 'package:shell/file_explorer/provider/file_explorer_state.dart';
+import 'package:shell/file_explorer/provider/file_opener.dart';
 import 'package:shell/file_explorer/provider/filtered_entry_list.dart';
 import 'package:shell/file_explorer/widget/file_entry_icon.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
@@ -13,10 +16,17 @@ import 'package:shell/screen/widget/current_screen_id.dart';
 /// The overview's Files pane: a single list of the current directory, with a
 /// breadcrumb and an up action to move around.
 class FileExplorerView extends HookConsumerWidget {
-  const FileExplorerView({required this.searchText, super.key});
+  const FileExplorerView({
+    required this.searchText,
+    this.onFileOpened,
+    super.key,
+  });
 
   /// Text typed in the overview search box, used as a live name filter.
   final String searchText;
+
+  /// Called after a file was handed to its default handler.
+  final VoidCallback? onFileOpened;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -39,8 +49,13 @@ class FileExplorerView extends HookConsumerWidget {
         Expanded(
           child: entryListAsync.when(
             data: (entryList) => entryList.isEmpty
-                ? const _EmptyDirectory()
-                : _FileEntryList(entryList: entryList),
+                ? _EmptyDirectory(
+                    isFiltered: fileExplorer.filterText.isNotEmpty,
+                  )
+                : _FileEntryList(
+                    entryList: entryList,
+                    onFileOpened: onFileOpened,
+                  ),
             error: (error, stackTrace) =>
                 _DirectoryError(path: fileExplorer.path, error: error),
             loading: () => const Center(child: CircularProgressIndicator()),
@@ -98,12 +113,13 @@ class _BreadcrumbBar extends HookConsumerWidget {
   }
 }
 
-/// The current directory's entries. Directories navigate; files are inert until
-/// opening is added.
+/// The current directory's entries. Directories navigate; files open with the
+/// default handler.
 class _FileEntryList extends HookConsumerWidget {
-  const _FileEntryList({required this.entryList});
+  const _FileEntryList({required this.entryList, this.onFileOpened});
 
   final List<FileEntry> entryList;
+  final VoidCallback? onFileOpened;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -118,25 +134,50 @@ class _FileEntryList extends HookConsumerWidget {
           trailing: entry.isDirectory
               ? const Icon(MdiIcons.chevronRight)
               : null,
-          onTap: entry.isDirectory
-              ? () => ref
-                    .read(fileExplorerStateProvider(screenId).notifier)
-                    .openDirectory(entry.path)
-              : null,
+          onTap: () => unawaited(
+            _openEntry(ref, screenId, entry, onFileOpened: onFileOpened),
+          ),
         );
       },
     );
   }
 }
 
+/// Opens [entry]: a directory navigates, a file goes to the default handler and
+/// then notifies the caller so it can dismiss the overview.
+Future<void> _openEntry(
+  WidgetRef ref,
+  String screenId,
+  FileEntry entry, {
+  required VoidCallback? onFileOpened,
+}) async {
+  if (entry.isDirectory) {
+    ref
+        .read(fileExplorerStateProvider(screenId).notifier)
+        .openDirectory(entry.path);
+    return;
+  }
+  final didOpen = await ref
+      .read(fileOpenerProvider.notifier)
+      .openFile(entry.path);
+  if (didOpen) {
+    onFileOpened?.call();
+  }
+}
+
 /// Shown when the directory is empty or the filter matches nothing.
 class _EmptyDirectory extends StatelessWidget {
-  const _EmptyDirectory();
+  const _EmptyDirectory({required this.isFiltered});
+
+  final bool isFiltered;
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Text('No items', style: Theme.of(context).textTheme.bodyLarge),
+      child: Text(
+        isFiltered ? 'No matching items' : 'This folder is empty',
+        style: Theme.of(context).textTheme.bodyLarge,
+      ),
     );
   }
 }
