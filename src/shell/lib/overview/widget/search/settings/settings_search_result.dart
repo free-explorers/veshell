@@ -5,10 +5,10 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/settings/model/setting_group.dart';
 import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/model/setting_search.dart';
-import 'package:shell/settings/provider/setting_group_expanded.dart';
+import 'package:shell/settings/provider/settings_expanded_groups.dart';
 import 'package:shell/settings/provider/settings_properties.dart';
 
-/// The settings tree for the given searchText, navigable by category index.
+/// The settings tree for the given searchText, navigable by visible-row index.
 class SettingsSearchResult extends HookConsumerWidget {
   ///
   const SettingsSearchResult({
@@ -21,23 +21,24 @@ class SettingsSearchResult extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settingMap = ref.watch(settingsPropertiesProvider);
-    final categoryPathList = collectSettingCategoryPathList(
+    final expandedPathSet = ref.watch(settingsExpandedGroupsProvider).toSet();
+    final rowList = collectSettingVisibleRowList(
       settingMap,
       searchText,
+      expandedPathSet,
     );
     final index = selectedIndex;
-    final selectedCategoryPath =
-        index != null && index >= 0 && index < categoryPathList.length
-        ? categoryPathList[index]
+    final selectedPath = index != null && index >= 0 && index < rowList.length
+        ? rowList[index].path
         : null;
-    final selectedCategoryKey = useMemoized(GlobalKey.new);
+    final selectedKey = useMemoized(GlobalKey.new);
 
     useEffect(() {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        final categoryContext = selectedCategoryKey.currentContext;
-        if (categoryContext == null) return;
+        final selectedContext = selectedKey.currentContext;
+        if (selectedContext == null) return;
         Scrollable.ensureVisible(
-          categoryContext,
+          selectedContext,
           alignment: 0.2,
           duration: const Duration(milliseconds: 120),
         );
@@ -51,8 +52,8 @@ class SettingsSearchResult extends HookConsumerWidget {
           searchText: searchText,
           settingGroup: entry.value,
           path: entry.key,
-          selectedCategoryPath: selectedCategoryPath,
-          selectedCategoryKey: selectedCategoryKey,
+          selectedPath: selectedPath,
+          selectedKey: selectedKey,
         );
       }).toList(),
     );
@@ -64,16 +65,16 @@ class SettingGroupListSliver extends HookConsumerWidget {
     required this.searchText,
     required this.settingGroup,
     required this.path,
-    this.selectedCategoryPath,
-    this.selectedCategoryKey,
+    this.selectedPath,
+    this.selectedKey,
     super.key,
   });
 
   final String searchText;
   final String path;
   final SettingGroup settingGroup;
-  final String? selectedCategoryPath;
-  final Key? selectedCategoryKey;
+  final String? selectedPath;
+  final Key? selectedKey;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -82,9 +83,9 @@ class SettingGroupListSliver extends HookConsumerWidget {
     }
     // A search query force-opens every group so the matches are visible;
     // otherwise Super+D (or a click) controls the expansion.
-    final isExpanded =
-        searchText != '' || ref.watch(settingGroupExpandedProvider(path));
-    final isSelected = path == selectedCategoryPath;
+    final expandedPathSet = ref.watch(settingsExpandedGroupsProvider);
+    final isExpanded = searchText != '' || expandedPathSet.contains(path);
+    final isSelected = path == selectedPath;
     final colorScheme = Theme.of(context).colorScheme;
     return SliverMainAxisGroup(
       slivers: [
@@ -98,10 +99,10 @@ class SettingGroupListSliver extends HookConsumerWidget {
                 ),
           toolbarHeight: 72,
           flexibleSpace: ListTile(
-            key: isSelected ? selectedCategoryKey : null,
+            key: isSelected ? selectedKey : null,
             minTileHeight: 72,
             onTap: () =>
-                ref.read(settingGroupExpandedProvider(path).notifier).toggle(),
+                ref.read(settingsExpandedGroupsProvider.notifier).toggle(path),
             leading: settingGroup.icon != null ? Icon(settingGroup.icon) : null,
             title: Text(
               settingGroup.name,
@@ -137,8 +138,8 @@ class SettingGroupListSliver extends HookConsumerWidget {
                       searchText: searchText,
                       settingGroup: entry.value as SettingGroup,
                       path: '$path.${entry.key}',
-                      selectedCategoryPath: selectedCategoryPath,
-                      selectedCategoryKey: selectedCategoryKey,
+                      selectedPath: selectedPath,
+                      selectedKey: selectedKey,
                     );
                   } else {
                     if (!searchSetting(
@@ -151,6 +152,8 @@ class SettingGroupListSliver extends HookConsumerWidget {
                     return SettingPropertySliver(
                       property: entry.value as SettingProperty,
                       path: '$path.${entry.key}',
+                      isSelected: '$path.${entry.key}' == selectedPath,
+                      selectedKey: selectedKey,
                     );
                   }
                 }),
@@ -166,15 +169,30 @@ class SettingPropertySliver<T> extends StatelessWidget {
   const SettingPropertySliver({
     required this.property,
     required this.path,
+    this.isSelected = false,
+    this.selectedKey,
     super.key,
   });
 
   final String path;
   final SettingProperty<T> property;
+  final bool isSelected;
+  final Key? selectedKey;
 
   @override
   Widget build(BuildContext context) {
-    return SliverToBoxAdapter(child: property.build(context, path));
+    final content = property.build(context, path);
+    return SliverToBoxAdapter(
+      child: isSelected
+          ? DecoratedBox(
+              key: selectedKey,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primaryContainer,
+              ),
+              child: content,
+            )
+          : content,
+    );
   }
 }
 /* 

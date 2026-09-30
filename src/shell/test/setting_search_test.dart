@@ -31,19 +31,29 @@ void main() {
     ),
   };
 
-  test('lists matching categories in display order', () {
-    expect(collectSettingCategoryPathList(settingMap, ''), [
+  test('lists only the top-level categories while nothing is expanded', () {
+    final rows = collectSettingVisibleRowList(settingMap, '', {});
+    expect(rows.map((row) => row.path), ['display', 'power']);
+    expect(rows.every((row) => row.isGroup), isTrue);
+  });
+
+  test('an expanded category contributes its children after its header', () {
+    final rows = collectSettingVisibleRowList(settingMap, '', {'display'});
+    expect(rows.map((row) => row.path), [
       'display',
+      'display.brightness',
+      'display.nightLight',
       'power',
     ]);
+    expect(rows[1].isGroup, isFalse);
   });
 
-  test('keeps a category only when a descendant matches', () {
-    expect(collectSettingCategoryPathList(settingMap, 'night'), ['display']);
-    expect(collectSettingCategoryPathList(settingMap, 'idle dim'), ['power']);
+  test('filtering force-opens the matching groups', () {
+    final rows = collectSettingVisibleRowList(settingMap, 'night', {});
+    expect(rows.map((row) => row.path), ['display', 'display.nightLight']);
   });
 
-  test('returns nothing when no category matches', () {
-    expect(collectSettingCategoryPathList(settingMap, 'zzz'), isEmpty);
+  test('returns nothing when no row matches', () {
+    expect(collectSettingVisibleRowList(settingMap, 'zzz', {}), isEmpty);
   });
 }

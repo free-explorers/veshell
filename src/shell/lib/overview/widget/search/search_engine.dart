@@ -19,7 +19,7 @@ import 'package:shell/overview/widget/search/search_input.dart';
 import 'package:shell/overview/widget/search/settings/settings_search_result.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/settings/model/setting_search.dart';
-import 'package:shell/settings/provider/setting_group_expanded.dart';
+import 'package:shell/settings/provider/settings_expanded_groups.dart';
 import 'package:shell/settings/provider/settings_properties.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/util/selection.dart';
@@ -77,9 +77,10 @@ class SearchEngine extends HookConsumerWidget {
           return ref.read(filteredEntryListProvider(screenId)).value?.length ??
               0;
         case SearchMode.settings:
-          return collectSettingCategoryPathList(
+          return collectSettingVisibleRowList(
             ref.read(settingsPropertiesProvider),
             searchTextState.value,
+            ref.read(settingsExpandedGroupsProvider).toSet(),
           ).length;
       }
     }
@@ -111,18 +112,20 @@ class SearchEngine extends HookConsumerWidget {
       searchController.clear();
     }
 
-    /// Opens or closes the settings category at [index].
-    void openSelectedSettingCategory(int index) {
-      final categoryPathList = collectSettingCategoryPathList(
+    /// Opens or closes the settings group at the selected row, if it is one.
+    void openSelectedSettingRow(int index) {
+      final rowList = collectSettingVisibleRowList(
         ref.read(settingsPropertiesProvider),
         searchTextState.value,
+        ref.read(settingsExpandedGroupsProvider).toSet(),
       );
-      if (index < 0 || index >= categoryPathList.length) {
+      if (index < 0 || index >= rowList.length) {
         return;
       }
-      ref
-          .read(settingGroupExpandedProvider(categoryPathList[index]).notifier)
-          .toggle();
+      final row = rowList[index];
+      if (row.isGroup) {
+        ref.read(settingsExpandedGroupsProvider.notifier).toggle(row.path);
+      }
     }
 
     void activateSelected() {
@@ -137,7 +140,7 @@ class SearchEngine extends HookConsumerWidget {
           unawaited(activateFileIndex(ref, screenId, index));
           searchController.clear();
         case SearchMode.settings:
-          openSelectedSettingCategory(index);
+          openSelectedSettingRow(index);
       }
     }
 

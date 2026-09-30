@@ -33,10 +33,14 @@ act on the current result list. The selection clamps at the first and last entry
 
 The navigation applies to all three modes: `Super+W`/`Super+S` move through the
 mode's results and `Super+D` (or `Enter`) activates them — a file opens with its
-handler, an application is launched as an ephemeral window, and a settings
-category is opened or closed. Activating a file or application also resets the
-search; `Super+A` (parent directory) is files-only. Clicking an application
-selects and launches it immediately.
+handler, an application is launched as an ephemeral window, and a settings row
+is activated. Activating a file or application also resets the search;
+`Super+A` (parent directory) is files-only. Clicking an application selects and
+launches it immediately.
+
+In settings, the rows are walked as one visible list: an opened category's
+children come next, before the following category. `Super+D` opens or closes the
+selected category; leaf settings have nothing to activate.
 
 ## Properties
 
