@@ -19,8 +19,12 @@ enum HotkeysAction {
   mediaStop('media.stop'),
   focusWorkspaceAbove('screen.focusWorkspaceAbove'),
   focusWorkspaceBelow('screen.focusWorkspaceBelow'),
+  reorderWorkspaceAbove('screen.reorderWorkspaceAbove'),
+  reorderWorkspaceBelow('screen.reorderWorkspaceBelow'),
   focusLeftTileable('workspace.focusLeftTileable'),
   focusRightTileable('workspace.focusRightTileable'),
+  reorderLeftTileable('workspace.reorderLeftTileable'),
+  reorderRightTileable('workspace.reorderRightTileable'),
   closeTileable('workspace.closeTileable');
 
   const HotkeysAction(this.actionId);
@@ -37,8 +41,12 @@ Intent getActionIntent(HotkeysAction action) => switch (action) {
   HotkeysAction.mediaStop => const MediaStopIntent(),
   HotkeysAction.focusWorkspaceAbove => const FocusWorkspaceAboveIntent(),
   HotkeysAction.focusWorkspaceBelow => const FocusWorkspaceBelowIntent(),
+  HotkeysAction.reorderWorkspaceAbove => const ReorderWorkspaceAboveIntent(),
+  HotkeysAction.reorderWorkspaceBelow => const ReorderWorkspaceBelowIntent(),
   HotkeysAction.focusLeftTileable => const FocusLeftTileableIntent(),
   HotkeysAction.focusRightTileable => const FocusRightTileableIntent(),
+  HotkeysAction.reorderLeftTileable => const ReorderLeftTileableIntent(),
+  HotkeysAction.reorderRightTileable => const ReorderRightTileableIntent(),
   HotkeysAction.closeTileable => const CloseTileableIntent(),
 };
 

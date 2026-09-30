@@ -16,11 +16,15 @@
             },
             "screen": {
                 "focusWorkspaceAbove": "super+w",
-                "focusWorkspaceBelow": "super+s"
+                "focusWorkspaceBelow": "super+s",
+                "reorderWorkspaceAbove": "super+shift+w",
+                "reorderWorkspaceBelow": "super+shift+s"
             },
             "workspace": {
                 "focusLeftTileable": "super+a",
                 "focusRightTileable": "super+d",
+                "reorderLeftTileable": "super+shift+a",
+                "reorderRightTileable": "super+shift+d",
                 "closeTileable": "super+q"
             }
         }

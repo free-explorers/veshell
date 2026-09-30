@@ -109,6 +109,34 @@ class WorkspaceState extends _$WorkspaceState {
     }
   }
 
+  /// Moves the selected window one slot to the left.
+  ///
+  /// Does nothing when the application launcher is selected, since the
+  /// launcher is not a window and cannot be reordered.
+  void moveSelectedWindowLeft() => _moveSelectedWindow(-1);
+
+  /// Moves the selected window one slot to the right.
+  ///
+  /// Does nothing when the application launcher is selected, since the
+  /// launcher is not a window and cannot be reordered.
+  void moveSelectedWindowRight() => _moveSelectedWindow(1);
+
+  void _moveSelectedWindow(int direction) {
+    final index = state.selectedIndex;
+    // The application launcher is the extra slot right after the windows, so
+    // an index at (or past) the window count is not a reorderable window.
+    if (index < 0 || index >= state.tileableWindowList.length) return;
+    final target = index + direction;
+    if (target < 0 || target >= state.tileableWindowList.length) return;
+    final windowList = state.tileableWindowList;
+    state = state.copyWith(
+      tileableWindowList: windowList
+          .removeAt(index)
+          .insert(target, windowList[index]),
+      selectedIndex: target,
+    );
+  }
+
   Future<void> addWindow(
     PersistentWindowId windowId, {
     bool selectWindow = false,

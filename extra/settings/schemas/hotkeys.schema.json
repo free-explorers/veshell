@@ -34,10 +34,22 @@
         "screen.focusWorkspaceBelow": {
             "type": "string"
         },
+        "screen.reorderWorkspaceAbove": {
+            "type": "string"
+        },
+        "screen.reorderWorkspaceBelow": {
+            "type": "string"
+        },
         "workspace.focusLeftTileable": {
             "type": "string"
         },
         "workspace.focusRightTileable": {
+            "type": "string"
+        },
+        "workspace.reorderLeftTileable": {
+            "type": "string"
+        },
+        "workspace.reorderRightTileable": {
             "type": "string"
         },
         "workspace.closeTileable": {
@@ -54,8 +66,12 @@
         "media.stop",
         "screen.focusWorkspaceAbove",
         "screen.focusWorkspaceBelow",
+        "screen.reorderWorkspaceAbove",
+        "screen.reorderWorkspaceBelow",
         "workspace.focusLeftTileable",
         "workspace.focusRightTileable",
+        "workspace.reorderLeftTileable",
+        "workspace.reorderRightTileable",
         "workspace.closeTileable"
     ],
     "additionalProperties": false

@@ -12,6 +12,18 @@ class FocusWorkspaceBelowIntent extends Intent {
   const FocusWorkspaceBelowIntent();
 }
 
+/// An intent to move the current workspace one slot above.
+class ReorderWorkspaceAboveIntent extends Intent {
+  ///
+  const ReorderWorkspaceAboveIntent();
+}
+
+/// An intent to move the current workspace one slot below.
+class ReorderWorkspaceBelowIntent extends Intent {
+  ///
+  const ReorderWorkspaceBelowIntent();
+}
+
 /// An intent to toggle the overview.
 class ToggleOverviewIntent extends Intent {
   ///
