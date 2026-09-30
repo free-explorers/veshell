@@ -12,21 +12,29 @@ Preview **any** file inline in the overview, without launching an external
 application: text, images, video, audio, PDF, office documents, archives,
 fonts, binary blobs and directories.
 
-## Where the preview lives
+## Where the preview lives (decided)
 
-The Files pane is the entry point; the preview is driven by the current
-selection. Three placements, mirroring Helm's responsive approach
-(`lib/overview/helm/widget/helm.dart`):
+The preview takes over the **`OverviewContent` region** — the exact slot that
+holds the Helm dashboard and the focused ephemeral window
+(`lib/overview/widget/overview_content.dart`). The Files list stays in the left
+`SearchEngine` column, so the overview becomes list-on-the-left,
+preview-on-the-right without any new layout.
 
-1. **Split pane** — list on the left, preview on the right. Best on the wide
-   overview surface.
-2. **Full-pane** — preview replaces the list with a back action (Android Files
-   style). Best when narrow.
-3. **Overlay card** — a floating preview over the list.
+Precedence in that slot:
 
-Recommendation: split when wide, full-pane when narrow. A single click selects
-and previews; a second action (double-click / Enter) hands the file to its
-handler (the [ephemeral-launch](file_explorer_ephemeral_launch.md) path).
+1. a **selected file** → preview;
+2. else a focused **ephemeral window** → its surface;
+3. else the **Helm** dashboard.
+
+Selection state belongs to the screen's `Overview` (a `DirectoryPath?`
+selection, mirroring `focusedWindowId`), set by the Files pane and read by
+`OverviewContent`, so other producers (search results, notifications) can drive
+the same preview later. Selecting a directory keeps navigating; leaving Files
+mode or clearing the selection restores the previous occupant.
+
+Interaction: a single click **selects and previews**; opening the handler is a
+separate action (double-click / Enter / an "Open" button), which is the
+[ephemeral-launch](file_explorer_ephemeral_launch.md) path.
 
 ## What "universal" means — the fallback chain
 
@@ -97,13 +105,28 @@ embedder; needs a spike to validate.
 Recommendation: ship the **poster frame + metadata** first and treat in-shell
 playback as its own milestone (spike B, fall back to A).
 
-## Caching and performance
+## Making it instant (performance)
 
-- Derived artifacts (posters, PDF pages, converted office PDFs) cached under
-  `$XDG_CACHE_HOME/veshell/preview/<hash(path, mtime, size, recipe)>`.
-- Read caps and tool timeouts; kill external tools when the selection changes.
-- Debounce selection; hash/decode text off the UI isolate.
-- LRU eviction and cleanup at shell start.
+Selection must feel instantaneous. The preview slot already exists, so there is
+no layout work — only content. Rules:
+
+- **Classify by extension first**, never spawn a process on the hot path.
+  `xdg-mime` is a fallback only for unknown extensions (a spawn is 10–30 ms).
+- **Two-phase render**: keep the previous preview visible (or show a lightweight
+  skeleton) and swap content in when ready, so selection never blocks.
+- **Cache decoded images**: a stable `FileImage` keyed by `path + mtime`, decoded
+  at display size (`cacheWidth`/`cacheHeight`), plus `precacheImage` for the
+  selected file and its neighbours.
+- **Warm on listing**: prefetch bounded, idle-time metadata/thumbnails for
+  visible rows (debounced) so the first selection is already hot.
+- **Text**: read a capped prefix (~256 KB) for the instant view and continue in
+  the background; decode off the UI isolate.
+- **Derived artifacts** (posters, PDF pages, converted office PDFs) cached on
+  disk under `$XDG_CACHE_HOME/veshell/preview/<hash(path, mtime, size, recipe)>`,
+  generated asynchronously with a spinner and reused instantly afterwards.
+- **Cancel and debounce** on rapid selection changes (arrow keys): compare a
+  path token, drop stale results, kill in-flight external tools.
+- **LRU eviction** and cleanup at shell start.
 
 ## Security and robustness
 
@@ -123,9 +146,11 @@ playback as its own milestone (spike B, fall back to A).
 
 ## Open questions
 
-- Placement: split pane vs full-pane vs overlay (or responsive all three)?
-- Preview on selection, or only on an explicit action?
+- Selection semantics: does a single click select (preview) and a double click
+  open, or the reverse?
 - Syntax highlighting / line numbers for text — worth a dependency?
 - Playback engine: Rust GStreamer versus a Flutter plugin?
 - Is a full LibreOffice conversion acceptable for office previews?
-- Should previews also be what an ephemeral window shows, or stay inline?
+- Prefetch aggressiveness: how much to warm without wasting I/O?
+- Does the preview slot also get used when a file is selected outside the Files
+  pane (search results, notifications)?
