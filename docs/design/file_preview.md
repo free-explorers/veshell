@@ -147,6 +147,31 @@ no layout work — only content. Rules:
 3. **Playback + documents** — in-shell video/audio (spike), office via
    LibreOffice, archive listing, font sample.
 
+## Keyboard and focus (mechanics)
+
+The overview's [keyboard contract](../specifications/overview.md#keyboard) is
+`Tab`/`Shift+Tab` to move the selection, `Space`/`Enter` to open, and
+`Super+Tab`/`Super+Shift+Tab` to switch search modes. Implementation notes:
+
+- The shortcuts are declared **locally in the overview subtree** with a
+  `Shortcuts` widget, so they win over the global `VeshellShortcutManager`
+  (`lib/shortcut_manager/widget/shortcut_manager.dart`) and are not forwarded to
+  clients.
+- `Super+Tab` must not toggle the overview. `_ShortcutManager` clears its
+  "Super pressed alone" flag when it sees another key go down — but a locally
+  consumed chord stops propagation, so the manager may never see the `Tab` and
+  would still toggle when Super is released. Its sole-Super detection must be
+  made robust (listen through `HardwareKeyboard`, or handle the chord in the
+  manager) rather than rely on `handleKeypress` seeing every key.
+- Client surfaces deliberately do **not** consume `Tab`/`Space`/`Enter`/arrows:
+  `SurfaceFocus` maps them to an action with `consumesKey => false`
+  (`lib/wayland/widget/surface/surface_focus.dart`) so the Wayland client
+  receives them. The overview's own bindings must consume them
+  (default `consumesKey => true`) while the overview has focus.
+- `Space` versus typing a space: bind `Space` only while the result list is
+  focused, so the input still types spaces. The first `Tab` hands focus to the
+  list, and a printable key hands it back to the input (type-to-search).
+
 ## Open questions
 
 - Syntax highlighting / line numbers for text — worth a dependency?
@@ -155,5 +180,5 @@ no layout work — only content. Rules:
 - Prefetch aggressiveness: how much to warm without wasting I/O?
 - Does the preview slot also get used when a file is selected outside the Files
   pane (search results, notifications)?
-- How does focus move between the shared search box and the list (typing filters,
-  arrows navigate)?
+- Do arrow keys stay as a secondary navigation, or are `Tab`/`Shift+Tab` the
+  only bindings?

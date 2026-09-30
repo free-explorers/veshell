@@ -73,8 +73,9 @@ providers can be keyed by it and equality works.
 
 - A single click **selects** any entry; a double click **opens** it — a
   directory is entered, a file goes to its handler.
-- `Enter` opens the selected entry. `ArrowUp`/`ArrowDown` move the selection over
-  the current filtered, sorted list and scroll it into view.
+- `Tab`/`Shift+Tab` move the selection over the current filtered, sorted list
+  and scroll it into view; `Space` opens the selected entry exactly like
+  `Enter` (see the overview's [keyboard contract](overview.md#keyboard)).
 - The breadcrumb and up button move to ancestors (up is a no-op at `/`); the
   initial directory is `$HOME`.
 - Symlinked directories are listed as directories and followed.
