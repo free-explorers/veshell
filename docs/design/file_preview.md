@@ -117,6 +117,10 @@ playback as its own milestone (spike B, fall back to A).
 Selection must feel instantaneous. The preview slot already exists, so there is
 no layout work — only content. Rules:
 
+- **Select on the first tap.** The lists avoid Flutter's `onTap` +
+  `onDoubleTap` pair, which delays `onTap` by the whole 300 ms double-tap
+  window; they select on tap and detect the double click themselves, so the
+  highlight never lags behind the click.
 - **Classify by extension first**, never spawn a process on the hot path.
   `xdg-mime` is a fallback only for unknown extensions (a spawn is 10–30 ms).
 - **Two-phase render**: keep the previous preview visible (or show a lightweight

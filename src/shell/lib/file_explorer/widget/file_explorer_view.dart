@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
@@ -151,6 +152,24 @@ class _FileEntryList extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scrollController = useScrollController();
+    // Select on the first tap and activate on a second tap within the
+    // double-tap window. Flutter delays `onTap` by that whole window when an
+    // `onDoubleTap` handler is present, which makes selection feel laggy.
+    final lastTap = useRef<(int, DateTime)?>(null);
+
+    void handleTap(int index) {
+      final now = DateTime.now();
+      final previous = lastTap.value;
+      if (previous != null &&
+          previous.$1 == index &&
+          now.difference(previous.$2) < kDoubleTapTimeout) {
+        lastTap.value = null;
+        onActivate?.call(index);
+        return;
+      }
+      lastTap.value = (index, now);
+      onSelect?.call(index);
+    }
 
     useEffect(() {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -179,8 +198,9 @@ class _FileEntryList extends HookConsumerWidget {
         return _FileEntryRow(
           entry: entry,
           isSelected: index == selectedIndex,
-          onTap: onSelect == null ? null : () => onSelect!(index),
-          onDoubleTap: onActivate == null ? null : () => onActivate!(index),
+          onTap: (onSelect == null && onActivate == null)
+              ? null
+              : () => handleTap(index),
         );
       },
     );
@@ -192,13 +212,11 @@ class _FileEntryRow extends StatelessWidget {
     required this.entry,
     required this.isSelected,
     this.onTap,
-    this.onDoubleTap,
   });
 
   final FileEntry entry;
   final bool isSelected;
   final VoidCallback? onTap;
-  final VoidCallback? onDoubleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -207,7 +225,6 @@ class _FileEntryRow extends StatelessWidget {
       color: isSelected ? colorScheme.primaryContainer : Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        onDoubleTap: onDoubleTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
