@@ -88,6 +88,10 @@ glyph. No MIME database, no themed-icon lookup.
   ordinary new window and the matching engine handles it like any other launch.
 - No `open with` chooser.
 
+> Launching the handler **as an ephemeral window** instead of a workspace tile
+> is explored in
+> [`design/file_explorer_ephemeral_launch.md`](../design/file_explorer_ephemeral_launch.md).
+
 ## Performance and refresh
 
 - Enumeration consumes `Directory.list` asynchronously and fills the list
