@@ -184,6 +184,9 @@ class ScreenState extends _$ScreenState {
     state = state.copyWith(selectedIndex: newIndex);
   }
 
+  /// Moves the workspace at [oldIndex] to [newIndex].
+  ///
+  /// The moved workspace stays selected.
   void reorderWorkspace(int oldIndex, int newIndex) {
     final workspaceList = state.workspaceList;
     final workspaceId = workspaceList[oldIndex];
@@ -191,7 +194,26 @@ class ScreenState extends _$ScreenState {
       workspaceList: workspaceList
           .removeAt(oldIndex)
           .insert(newIndex, workspaceId),
+      selectedIndex: newIndex,
     );
+  }
+
+  /// Moves the selected workspace one slot towards the start of the list.
+  ///
+  /// The last workspace is the always-present empty slot used to create a new
+  /// workspace; it is pinned last and is never reordered.
+  void moveSelectedWorkspaceAbove() {
+    final index = state.selectedIndex;
+    if (index <= 0 || index >= state.workspaceList.length - 1) return;
+    reorderWorkspace(index, index - 1);
+  }
+
+  /// Moves the selected workspace one slot towards the end of the list,
+  /// stopping before the pinned empty "new workspace" slot.
+  void moveSelectedWorkspaceBelow() {
+    final index = state.selectedIndex;
+    if (index < 0 || index >= state.workspaceList.length - 2) return;
+    reorderWorkspace(index, index + 1);
   }
 
   void setCustomLabel(String? label) {

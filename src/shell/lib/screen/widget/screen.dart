@@ -102,6 +102,24 @@ class ScreenWidget extends HookConsumerWidget {
                           return null;
                         },
                       ),
+                      ReorderWorkspaceAboveIntent:
+                          CallbackAction<ReorderWorkspaceAboveIntent>(
+                        onInvoke: (_) {
+                          ref
+                              .read(screenStateProvider(screenId).notifier)
+                              .moveSelectedWorkspaceAbove();
+                          return null;
+                        },
+                      ),
+                      ReorderWorkspaceBelowIntent:
+                          CallbackAction<ReorderWorkspaceBelowIntent>(
+                        onInvoke: (_) {
+                          ref
+                              .read(screenStateProvider(screenId).notifier)
+                              .moveSelectedWorkspaceBelow();
+                          return null;
+                        },
+                      ),
                     },
                     child: Row(
                       mainAxisSize: MainAxisSize.min,

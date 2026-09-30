@@ -85,6 +85,24 @@ class WorkspaceWidget extends HookConsumerWidget {
               return null;
             },
           ),
+          ReorderLeftTileableIntent:
+              CallbackAction<ReorderLeftTileableIntent>(
+            onInvoke: (_) {
+              ref
+                  .read(workspaceStateProvider(workspaceId).notifier)
+                  .moveSelectedWindowLeft();
+              return null;
+            },
+          ),
+          ReorderRightTileableIntent:
+              CallbackAction<ReorderRightTileableIntent>(
+            onInvoke: (_) {
+              ref
+                  .read(workspaceStateProvider(workspaceId).notifier)
+                  .moveSelectedWindowRight();
+              return null;
+            },
+          ),
           CloseTileableIntent: CallbackAction<CloseTileableIntent>(
             onInvoke: (_) {
               final tileable = tileableList[workspaceState.selectedIndex];

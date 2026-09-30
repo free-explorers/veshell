@@ -58,6 +58,12 @@
                                 },
                                 "focusWorkspaceBelow": {
                                     "type": "string"
+                                },
+                                "reorderWorkspaceAbove": {
+                                    "type": "string"
+                                },
+                                "reorderWorkspaceBelow": {
+                                    "type": "string"
                                 }
                             }
                         },
@@ -68,6 +74,12 @@
                                     "type": "string"
                                 },
                                 "focusRightTileable": {
+                                    "type": "string"
+                                },
+                                "reorderLeftTileable": {
+                                    "type": "string"
+                                },
+                                "reorderRightTileable": {
                                     "type": "string"
                                 },
                                 "closeTileable": {

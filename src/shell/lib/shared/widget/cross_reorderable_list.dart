@@ -1,5 +1,100 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart'
+    show
+        GestureDisposition,
+        GestureMultiDragStartCallback,
+        ImmediateMultiDragGestureRecognizer,
+        MultiDragGestureRecognizer,
+        MultiDragPointerState,
+        PointerDownEvent,
+        kPrecisePointerHitSlop;
 import 'package:material_ui/material_ui.dart';
+
+/// A [Draggable] that only starts a drag once the pointer has moved by at
+/// least [_ThresholdDraggable.threshold] logical pixels.
+///
+/// Flutter's immediate draggable starts as soon as a mouse moves a single
+/// pixel ([kPrecisePointerHitSlop]), which makes it too easy to start a
+/// reorder while aiming for a control inside the item (for example its close
+/// button).
+class _ThresholdDraggable<T extends Object> extends Draggable<T> {
+  const _ThresholdDraggable({
+    required super.child,
+    required super.feedback,
+    super.data,
+    super.axis,
+    super.onDragStarted,
+    super.onDraggableCanceled,
+    super.onDragCompleted,
+    super.onDragEnd,
+    super.maxSimultaneousDrags,
+    super.hitTestBehavior,
+    super.rootOverlay,
+    super.allowedButtonsFilter,
+  });
+
+  /// Minimum pointer travel, in logical pixels, before a drag starts.
+  static const double threshold = 8;
+
+  @override
+  MultiDragGestureRecognizer createRecognizer(
+    GestureMultiDragStartCallback onStart,
+  ) {
+    return _ThresholdMultiDragGestureRecognizer(
+      threshold: threshold,
+      allowedButtonsFilter: allowedButtonsFilter,
+    )..onStart = onStart;
+  }
+}
+
+/// Recognizes a drag once the pointer has travelled a fixed distance, instead
+/// of the per-device hit slop that [ImmediateMultiDragGestureRecognizer] uses.
+class _ThresholdMultiDragGestureRecognizer extends MultiDragGestureRecognizer {
+  _ThresholdMultiDragGestureRecognizer({
+    required this.threshold,
+    super.debugOwner,
+    super.allowedButtonsFilter,
+  });
+
+  final double threshold;
+
+  @override
+  MultiDragPointerState createNewPointerState(PointerDownEvent event) {
+    return _ThresholdPointerState(
+      event.position,
+      event.kind,
+      gestureSettings,
+      threshold,
+    );
+  }
+
+  @override
+  String get debugDescription => 'threshold multidrag';
+}
+
+class _ThresholdPointerState extends MultiDragPointerState {
+  _ThresholdPointerState(
+    super.initialPosition,
+    super.kind,
+    super.gestureSettings,
+    this.threshold,
+  );
+
+  final double threshold;
+
+  @override
+  void checkForResolutionAfterMove() {
+    assert(pendingDelta != null, 'A pending delta is expected here');
+    if (pendingDelta!.distance > threshold) {
+      resolve(GestureDisposition.accepted);
+    }
+  }
+
+  @override
+  void accepted(GestureMultiDragStartCallback starter) {
+    starter(initialPosition);
+  }
+}
 
 /// A list that allows reordering items among
 /// lists sharing the same datatype using drag and drop.
@@ -102,7 +197,12 @@ class _CrossReorderableListState<T extends Object>
                           if (index == localDataList.length - 1)
                             item
                           else
-                            LongPressDraggable<T>(
+                            _ThresholdDraggable<T>(
+                              // Drags start once the pointer moves past the
+                              // threshold, so dragging an item no longer
+                              // scrolls the list. That is the trade-off for
+                              // making reordering feel like a desktop drag
+                              // (long press stays on items for their menus).
                               onDragCompleted: _notifyListChanged,
                               onDragStarted: () {
                                 setState(() {

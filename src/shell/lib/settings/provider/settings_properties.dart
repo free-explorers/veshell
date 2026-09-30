@@ -192,6 +192,16 @@ class SettingsProperties extends _$SettingsProperties {
                 description: 'Focus workspace below',
                 converter: LogicalKeySetConverter(),
               ),
+              'screen.reorderWorkspaceAbove': SettingProperty<LogicalKeySet>(
+                name: 'Move Workspace Up',
+                description: 'Move the current workspace up',
+                converter: LogicalKeySetConverter(),
+              ),
+              'screen.reorderWorkspaceBelow': SettingProperty<LogicalKeySet>(
+                name: 'Move Workspace Down',
+                description: 'Move the current workspace down',
+                converter: LogicalKeySetConverter(),
+              ),
               'workspace.focusLeftTileable': SettingProperty<LogicalKeySet>(
                 name: 'Focus Left Tileable',
                 description: 'Focus the next tileable on the left',
@@ -200,6 +210,16 @@ class SettingsProperties extends _$SettingsProperties {
               'workspace.focusRightTileable': SettingProperty<LogicalKeySet>(
                 name: 'Focus Right Tileable',
                 description: 'Focus the next tileable on the right',
+                converter: LogicalKeySetConverter(),
+              ),
+              'workspace.reorderLeftTileable': SettingProperty<LogicalKeySet>(
+                name: 'Move Tileable Left',
+                description: 'Move the current tileable to the left',
+                converter: LogicalKeySetConverter(),
+              ),
+              'workspace.reorderRightTileable': SettingProperty<LogicalKeySet>(
+                name: 'Move Tileable Right',
+                description: 'Move the current tileable to the right',
                 converter: LogicalKeySetConverter(),
               ),
               'workspace.closeTileable': SettingProperty<LogicalKeySet>(
