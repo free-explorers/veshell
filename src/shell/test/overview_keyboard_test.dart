@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -15,24 +16,29 @@ import 'package:shell/screen/widget/current_screen_id.dart';
 void main() {
   const screenId = 'test';
 
-  testWidgets('Super+S moves the selection and clamps at the end', (
-    tester,
+  DirectoryPath homePath() =>
+      DirectoryPath(Platform.environment['HOME'] ?? '/');
+
+  List<FileEntry> twoFiles(DirectoryPath home) => [
+    FileEntry(
+      name: 'a.txt',
+      path: DirectoryPath('${home.path}/a.txt'),
+      isDirectory: false,
+      size: 1,
+    ),
+    FileEntry(
+      name: 'b.txt',
+      path: DirectoryPath('${home.path}/b.txt'),
+      isDirectory: false,
+      size: 1,
+    ),
+  ];
+
+  Future<ProviderContainer> pumpFileMode(
+    WidgetTester tester,
+    DirectoryPath home,
+    List<FileEntry> entryList,
   ) async {
-    final home = DirectoryPath(Platform.environment['HOME'] ?? '/');
-    final entryList = [
-      FileEntry(
-        name: 'a.txt',
-        path: DirectoryPath('${home.path}/a.txt'),
-        isDirectory: false,
-        size: 1,
-      ),
-      FileEntry(
-        name: 'b.txt',
-        path: DirectoryPath('${home.path}/b.txt'),
-        isDirectory: false,
-        size: 1,
-      ),
-    ];
     final container = ProviderContainer(
       overrides: [
         directoryListingProvider(home).overrideWith((ref) async => entryList),
@@ -55,27 +61,54 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    return container;
+  }
+
+  Future<void> pressSuperS(WidgetTester tester) async {
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pump();
+  }
+
+  testWidgets('Super+S moves the selection and clamps at the end', (
+    tester,
+  ) async {
+    final home = homePath();
+    final container = await pumpFileMode(tester, home, twoFiles(home));
 
     int? selected() =>
         container.read(overviewStateProvider(screenId)).selectedIndex;
 
-    Future<void> pressSuperS() async {
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
-      await tester.pump();
-    }
-
     expect(selected(), isNull);
 
-    await pressSuperS();
+    await pressSuperS(tester);
     expect(selected(), 0);
 
-    await pressSuperS();
+    await pressSuperS(tester);
     expect(selected(), 1);
 
     // Clamps at the last entry instead of wrapping.
-    await pressSuperS();
+    await pressSuperS(tester);
+    expect(selected(), 1);
+  });
+
+  testWidgets('a mouse selection keeps the Super shortcuts working', (
+    tester,
+  ) async {
+    final home = homePath();
+    final container = await pumpFileMode(tester, home, twoFiles(home));
+
+    int? selected() =>
+        container.read(overviewStateProvider(screenId)).selectedIndex;
+
+    // Clicking a row selects it and must not pull keyboard focus out of the
+    // search engine, or the Super shortcuts stop firing.
+    await tester.tap(find.text('a.txt'), kind: PointerDeviceKind.mouse);
+    await tester.pump();
+    expect(selected(), 0);
+
+    await pressSuperS(tester);
     expect(selected(), 1);
   });
 }

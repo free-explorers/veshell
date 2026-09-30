@@ -27,9 +27,11 @@ overview is driven without leaving the home row:
 | `Super+Tab` / `Super+Shift+Tab` | switch search mode: applications → files → settings |
 
 The search input keeps filtering while it has focus; the `Super`-modified keys
-act on the current result list. The selection clamps at the first and last entry
-(no wrap). While the overview is open these shadow the global
-`super+w/s/a/d` workspace/tileable hotkeys.
+act on the current result list. Clicking elsewhere in the overview (a result
+row, the preview) keeps the search focused, so the shortcuts keep working after
+a mouse selection. The selection clamps at the first and last entry (no wrap).
+While the overview is open these shadow the global `super+w/s/a/d`
+workspace/tileable hotkeys.
 
 The navigation applies to all three modes: `Super+W`/`Super+S` move through the
 mode's results and `Super+D` (or `Enter`) activates them — a file opens with its
