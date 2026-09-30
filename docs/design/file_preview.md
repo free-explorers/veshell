@@ -183,7 +183,3 @@ modes. Implementation notes:
 - Prefetch aggressiveness: how much to warm without wasting I/O?
 - Does the preview slot also get used when a file is selected outside the Files
   pane (search results, notifications)?
-- Does `Super+D` activate a file/application, or only enter a folder? Is `Enter`
-  retained as a secondary activation?
-- Is `Super+Tab` search-mode switching still wanted alongside the WASD scheme?
-- Do `Super+W`/`Super+S` wrap at the list ends, or clamp?

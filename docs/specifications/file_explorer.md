@@ -74,8 +74,9 @@ providers can be keyed by it and equality works.
 - A single click **selects** any entry; a double click **opens** it — a
   directory is entered, a file goes to its handler.
 - `Super+W`/`Super+S` move the selection over the current filtered, sorted list
-  and scroll it into view; `Super+D` opens the selected entry (see the
-  overview's [keyboard contract](overview.md#keyboard)).
+  and scroll it into view, clamping at the first and last entry (no wrap);
+  `Super+D` activates the selected entry (see the overview's
+  [keyboard contract](overview.md#keyboard)).
 - `Super+A` goes up to the parent directory, the same action as the breadcrumb
   and the up button (a no-op at `/`).
 - The initial directory is `$HOME`.
