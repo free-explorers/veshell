@@ -135,7 +135,11 @@ class FileExplorerView extends HookConsumerWidget {
 }
 
 /// Up action and the path as a clickable breadcrumb.
-class _BreadcrumbBar extends StatelessWidget {
+///
+/// The crumbs are laid out from the left, next to the up button, and the view
+/// scrolls to the end so the current directory stays visible when the path is
+/// too long to fit.
+class _BreadcrumbBar extends HookWidget {
   const _BreadcrumbBar({
     required this.path,
     this.onOpenDirectory,
@@ -149,6 +153,18 @@ class _BreadcrumbBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final crumbList = path.breadcrumb;
+    final scrollController = useScrollController();
+
+    useEffect(() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!scrollController.hasClients) {
+          return;
+        }
+        scrollController.jumpTo(scrollController.position.maxScrollExtent);
+      });
+      return null;
+    }, [path]);
+
     return SizedBox(
       height: fileEntryRowHeight,
       child: Row(
@@ -162,6 +178,8 @@ class _BreadcrumbBar extends StatelessWidget {
           const SizedBox(width: 4),
           Expanded(
             child: SingleChildScrollView(
+              key: const ValueKey('file-explorer-breadcrumb'),
+              controller: scrollController,
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [

@@ -82,6 +82,9 @@ providers can be keyed by it and equality works.
   [keyboard contract](overview.md#keyboard)).
 - `Super+A` goes up to the parent directory, the same action as the breadcrumb
   and the up button (a no-op at `/`).
+- The breadcrumb is laid out from the left, right after the up button, and
+  scrolls so the current directory stays visible when the path is too long to
+  fit.
 - Going up, or jumping to an ancestor from the breadcrumb, **pre-selects the
   directory you came from** once the parent listing loads.
 - Entering a directory (double click, `Super+D`/`Enter`) **selects its first

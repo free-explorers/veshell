@@ -113,4 +113,51 @@ void main() {
 
     expect(selectCalls, [0]);
   });
+
+  testWidgets('a long path scrolls the breadcrumb to the current directory', (
+    tester,
+  ) async {
+    final home = DirectoryPath(Platform.environment['HOME'] ?? '/');
+    final deep = DirectoryPath(
+      '${home.path}/a/very/long/chain/of/directories/that/overflows',
+    );
+    final container = ProviderContainer(
+      overrides: [
+        directoryListingProvider(
+          deep,
+        ).overrideWith((ref) async => <FileEntry>[]),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container
+        .read(fileExplorerStateProvider('test').notifier)
+        .openDirectory(deep);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: CurrentScreenId(
+            screenId: 'test',
+            child: Scaffold(
+              body: SizedBox(
+                width: 300,
+                child: FileExplorerView(searchText: ''),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.descendant(
+      of: find.byKey(const ValueKey('file-explorer-breadcrumb')),
+      matching: find.byType(Scrollable),
+    );
+    final position = tester.state<ScrollableState>(scrollable).position;
+    expect(position.maxScrollExtent, greaterThan(0));
+    expect(position.pixels, position.maxScrollExtent);
+  });
 }
