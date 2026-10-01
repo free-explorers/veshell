@@ -1,8 +1,9 @@
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:shell/application/provider/image_from_icon_query.dart';
+import 'package:shell/application/provider/icon_file_from_query.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 
 class AppIconByPath extends StatelessWidget {
@@ -13,54 +14,41 @@ class AppIconByPath extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer(
-      builder: (_, WidgetRef ref, __) {
-        if (path == null) {
-          return const SizedBox();
-        }
-        return _buildIcon(ref, path!);
-      },
+    if (path == null) return const SizedBox();
+
+    if (constrainedSize != null) {
+      return Consumer(
+        builder: (context, ref, _) => _buildIcon(ref, path!, constrainedSize!),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) => Consumer(
+        builder: (context, ref, _) =>
+            _buildIcon(ref, path!, constraints.biggest.shortestSide.floor()),
+      ),
     );
   }
 
-  Widget _buildIcon(WidgetRef ref, String path) {
-    if (constrainedSize != null) {
-      final asyncValue = ref.watch(
-        imageFromIconQueryProvider(
-          IconQuery(
-            name: path,
-            size: constrainedSize!,
-            extensions: const ['svg', 'png'],
+  Widget _buildIcon(WidgetRef ref, String path, int size) {
+    if (size <= 0) return const SizedBox();
+
+    final iconFile = ref
+        .watch(
+          iconFileFromQueryProvider(
+            IconQuery(name: path, size: size, extensions: const ['svg', 'png']),
           ),
-          Size.square(constrainedSize!.toDouble()),
-        ),
-      );
-      if (!asyncValue.hasValue) {
-        return const SizedBox();
-      }
-      final rawImage = asyncValue.value;
-      return RawImage(image: rawImage);
-    } else {
-      return LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          final asyncValue = ref.watch(
-            imageFromIconQueryProvider(
-              IconQuery(
-                name: path,
-                size: constraints.biggest.shortestSide.floor(),
-                extensions: const ['svg', 'png'],
-              ),
-              constraints.biggest,
-            ),
-          );
-          if (!asyncValue.hasValue) {
-            return const SizedBox();
-          }
-          final rawImage = asyncValue.value;
-          return RawImage(image: rawImage);
-        },
-      );
+        )
+        .value;
+    if (iconFile == null) return const SizedBox();
+
+    // Let the image widgets own their decoded frames. In particular, a
+    // RawImage using a provider-owned ui.Image can lose its handle when the
+    // provider is rebuilt during icon-theme initialization at session start.
+    if (iconFile.path.endsWith('.svg')) {
+      return SvgPicture.file(iconFile);
     }
+    return Image.file(iconFile, cacheWidth: size);
   }
 }
 
