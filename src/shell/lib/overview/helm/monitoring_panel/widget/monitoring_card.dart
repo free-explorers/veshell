@@ -160,10 +160,17 @@ class MonitoringChart extends StatelessWidget {
 /// Sorted per-process percentage list shared by the monitoring cards.
 class ProcessMetricList extends ConsumerWidget {
   /// Creates the list for [percentages], keyed by pid.
-  const ProcessMetricList({required this.percentages, super.key});
+  const ProcessMetricList({
+    required this.percentages,
+    this.header,
+    super.key,
+  });
 
   /// Percentage per pid.
   final IMap<int, double> percentages;
+
+  /// Optional widget shown above the rows, scrollable together with them.
+  final Widget? header;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -172,12 +179,16 @@ class ProcessMetricList extends ConsumerWidget {
           ? b.key.compareTo(a.key)
           : b.value.compareTo(a.value),
     );
+    final header = this.header;
+    final offset = header == null ? 0 : 1;
     return ColoredBox(
       color: Colors.black12,
       child: ListView.builder(
-        itemCount: sorted.length,
-        itemBuilder: (context, index) =>
-            _ProcessMetricRow(process: sorted[index]),
+        itemCount: sorted.length + offset,
+        itemBuilder: (context, index) {
+          if (header != null && index == 0) return header;
+          return _ProcessMetricRow(process: sorted[index - offset]);
+        },
       ),
     );
   }

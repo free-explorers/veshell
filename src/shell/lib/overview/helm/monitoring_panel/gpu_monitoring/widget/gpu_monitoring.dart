@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/model/gpu_stats.dart';
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/provider/gpu_chart.dart';
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/provider/gpu_stats.dart';
+import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/provider/processes_gpu_stats.dart';
 import 'package:shell/overview/helm/monitoring_panel/widget/monitoring_card.dart';
 
 /// GPU load card.
@@ -20,14 +21,19 @@ class GpuMonitoringWidget extends ConsumerWidget {
       title: 'GPU',
       badge: '${stats.load}%',
       spots: spots,
-      expandedBody: GpuDetails(stats: stats),
+      expandedBody: Consumer(
+        builder: (context, ref, child) => ProcessMetricList(
+          percentages: ref.watch(processesGpuStatsProvider),
+          header: GpuDetails(stats: stats),
+        ),
+      ),
     );
   }
 }
 
 /// Memory, temperature, power and clock details of the GPU.
 class GpuDetails extends StatelessWidget {
-  /// Creates the details body for [stats].
+  /// Creates the details block for [stats].
   const GpuDetails({required this.stats, super.key});
 
   /// The reading to display.
@@ -41,37 +47,35 @@ class GpuDetails extends StatelessWidget {
     final power = stats.powerWatts;
     final coreClock = stats.coreClockMhz;
     final memoryClock = stats.memoryClockMhz;
-    return ColoredBox(
-      color: Colors.black12,
-      child: ListView(
-        children: [
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _GpuDetailRow(
+          label: 'VRAM',
+          value:
+              '${_formatMemory(stats.vramUsedMb)} / '
+              '${_formatMemory(stats.vramTotalMb)}',
+        ),
+        if (gttUsed != null && gttTotal != null)
           _GpuDetailRow(
-            label: 'VRAM',
-            value:
-                '${_formatMemory(stats.vramUsedMb)} / '
-                '${_formatMemory(stats.vramTotalMb)}',
+            label: 'GTT',
+            value: '${_formatMemory(gttUsed)} / ${_formatMemory(gttTotal)}',
           ),
-          if (gttUsed != null && gttTotal != null)
-            _GpuDetailRow(
-              label: 'GTT',
-              value: '${_formatMemory(gttUsed)} / ${_formatMemory(gttTotal)}',
-            ),
-          if (temperature != null)
-            _GpuDetailRow(
-              label: 'Temperature',
-              value: '${temperature.toStringAsFixed(1)} °C',
-            ),
-          if (power != null)
-            _GpuDetailRow(
-              label: 'Power',
-              value: '${power.toStringAsFixed(1)} W',
-            ),
-          if (coreClock != null)
-            _GpuDetailRow(label: 'Core clock', value: '$coreClock MHz'),
-          if (memoryClock != null)
-            _GpuDetailRow(label: 'Memory clock', value: '$memoryClock MHz'),
-        ],
-      ),
+        if (temperature != null)
+          _GpuDetailRow(
+            label: 'Temperature',
+            value: '${temperature.toStringAsFixed(1)} °C',
+          ),
+        if (power != null)
+          _GpuDetailRow(
+            label: 'Power',
+            value: '${power.toStringAsFixed(1)} W',
+          ),
+        if (coreClock != null)
+          _GpuDetailRow(label: 'Core clock', value: '$coreClock MHz'),
+        if (memoryClock != null)
+          _GpuDetailRow(label: 'Memory clock', value: '$memoryClock MHz'),
+      ],
     );
   }
 }

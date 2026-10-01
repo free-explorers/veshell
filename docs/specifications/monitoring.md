@@ -109,15 +109,26 @@ sample:
 The card is omitted when no supported GPU is found, like the battery card.
 `reader/amdgpu_parsing.dart` holds the unit conversion and is unit tested.
 
+The choice of card mirrors the compositor's own in `drm_backend.rs`: an explicit
+`DRM_DEVICE` override wins (a `cardN` or `renderDN` path), otherwise the boot
+VGA (`device/boot_vga`), otherwise the lowest-numbered card. The selected
+card's PCI address then filters per-process clients, so another GPU's clients
+are never attributed to it.
+
+Expanding the card lists the processes using the GPU (`reader/process_gpu.dart`):
+`/proc/<pid>/fd` is scanned for descriptors pointing at `/dev/dri/` before
+their `fdinfo` is read, and fds sharing a `drm-client-id` are counted once. The
+per-process figure is the change in total `drm-engine-*` nanoseconds over the
+interval, so a process using several engines at once can exceed 100%. The
+`drm-memory-*` regions are parsed but only the device totals are displayed.
+
 Not yet covered:
 
 - **Intel** (i915/xe) exposes frequency and temperature but no
-  `gpu_busy_percent`; busyness would come from `fdinfo`.
+  `gpu_busy_percent`; busyness would come from the same `fdinfo` interface.
 - **NVIDIA** has no sysfs busy counter and would need NVML.
-- **Per-process** GPU memory and engine time from `/proc/<pid>/fdinfo/<fd>`
-  (`drm-engine-*` nanoseconds, `drm-memory-*` KiB). Cumulative engine counters
-  give a per-process busy share by differencing two samples, and the interface
-  is vendor-neutral across the DRM drivers that implement it.
+- **Per-process GPU memory** is parsed from `fdinfo` but not yet shown; the
+  card lists engine usage only.
 
 ## Testing
 
