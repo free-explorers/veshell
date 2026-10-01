@@ -94,6 +94,11 @@ class OverviewWidget extends HookConsumerWidget {
                         0,
                         constraints.maxWidth - _overviewGap,
                       );
+                      // Snap the split to whole logical pixels. The content
+                      // pane hosts live Wayland surfaces, and a fractional
+                      // origin makes Flutter sample their external textures
+                      // bilinearly (an "always blurry" window), while the
+                      // workspace tiles land on whole pixels.
                       final searchWidth = min(
                         max(
                           _minSearchEngineWidth,
@@ -102,7 +107,7 @@ class OverviewWidget extends HookConsumerWidget {
                               (_searchEngineFlex + _overviewContentFlex),
                         ),
                         availableWidth,
-                      );
+                      ).roundToDouble();
                       return Row(
                         children: [
                           SizedBox(
