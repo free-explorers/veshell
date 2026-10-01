@@ -53,6 +53,19 @@ Future<String?> readTextFile(String path) async {
   }
 }
 
+/// Whether [pid] is a kernel thread.
+///
+/// Kernel threads have no executable behind `/proc/<pid>/exe`, unlike user
+/// processes. The per-process lists drop them so they stay focused on
+/// applications.
+bool isKernelThread(int pid) {
+  try {
+    return !Link('/proc/$pid/exe').existsSync();
+  } on FileSystemException {
+    return true;
+  }
+}
+
 /// Runs [sample] every [interval] until the returned callback is invoked.
 ///
 /// The next tick is scheduled only after the current sample completes, so a

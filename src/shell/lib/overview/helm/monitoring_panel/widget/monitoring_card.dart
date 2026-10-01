@@ -6,6 +6,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/widget/app_icon.dart';
+import 'package:shell/overview/helm/monitoring_panel/model/process_ranking.dart';
 import 'package:shell/overview/helm/monitoring_panel/provider/process_name.dart';
 import 'package:shell/shared/widget/expandable_card.dart';
 
@@ -206,11 +207,7 @@ class ProcessMetricList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sorted = percentages.toEntryIList().sort(
-      (a, b) => b.value == a.value
-          ? b.key.compareTo(a.key)
-          : b.value.compareTo(a.value),
-    );
+    final sorted = rankProcesses(percentages);
     final header = this.header;
     final offset = header == null ? 0 : 1;
     return ColoredBox(
@@ -238,7 +235,9 @@ class _ProcessMetricRow extends ConsumerWidget {
       leading: SizedBox(
         width: 24,
         height: 24,
-        child: AppIconById(id: processName),
+        // Most processes have no desktop entry; a help-circle on every row is
+        // noise, so show nothing when there is no matching icon.
+        child: AppIconById(id: processName, fallback: const SizedBox.shrink()),
       ),
       title: Text(processName),
       trailing: Text('${process.value.toStringAsFixed(2)}%'),

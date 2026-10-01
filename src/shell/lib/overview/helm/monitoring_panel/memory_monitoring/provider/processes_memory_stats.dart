@@ -30,6 +30,7 @@ class ProcessesMemoryStats extends _$ProcessesMemoryStats {
     if (!ref.mounted) return;
     final percentages = <int, double>{};
     for (final pid in pids) {
+      if (isKernelThread(pid)) continue;
       final statm = await readTextFile('/proc/$pid/statm');
       if (statm == null) continue;
       final pages = parseProcPidStatmResidentPages(statm);

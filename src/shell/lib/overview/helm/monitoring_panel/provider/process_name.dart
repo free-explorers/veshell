@@ -8,11 +8,12 @@ part 'process_name.g.dart';
 class ProcessName extends _$ProcessName {
   @override
   String build(int pid) {
-    final file = File('/proc/$pid/comm');
-    if (file.existsSync()) {
-      return file.readAsStringSync().trim();
-    } else {
-      return 'Unknown';
+    try {
+      final name = File('/proc/$pid/comm').readAsStringSync().trim();
+      if (name.isNotEmpty) return name;
+    } on FileSystemException {
+      // The process may have exited between the listing and this read.
     }
+    return 'pid $pid';
   }
 }

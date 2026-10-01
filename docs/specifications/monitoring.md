@@ -35,7 +35,7 @@ privileged helper is involved.
 | CPU | `/proc/stat` | Aggregate `cpu` line for the badge; per-process `utime + stime` from `/proc/<pid>/stat` |
 | Memory | `/proc/meminfo` | Used prefers `MemAvailable`; fallback is the `htop` formula |
 | Per-process RSS | `/proc/<pid>/statm` | Resident pages × system page size |
-| Disk | `universal_disk_space` | Physical filesystems only, `/boot` hidden |
+| Disk | `universal_disk_space` (shells out to `df`) | Physical filesystems only, `/boot` hidden; rescanned every 5 s while the panel is open |
 | GPU | `/sys/class/drm/card*/device/*` | Vendor-dependent, see below |
 
 ## Sampling lifecycle
@@ -52,10 +52,12 @@ for the whole session.
 - **Per-process samplers are bounded by the card.** The `/proc/<pid>` walk is
   the expensive part (hundreds of files); those providers are auto-disposed and
   run only while their card is expanded.
-- **Graphs are ring buffers.** `CpuChart` and `MemoryChart` keep the newest 120
-  samples — about a minute at 500 ms. A sampler appends through `add()`, so the
-  chart always ends at *now* and a recent spike or a rising curve is visible the
-  moment the overview opens.
+- **Graphs are ring buffers.** The CPU, memory and GPU charts keep the newest
+  120 samples — about a minute at 500 ms. A sampler appends through `add()`, so
+  the chart always ends at *now* and a recent spike or a rising curve is visible
+  the moment the overview opens.
+- **Disk is polled slower.** `DiskSpaceState` rescans every 5 s while the panel
+  is open; a `df` subprocess is far more expensive than the `/proc` reads.
 
 The poller (`sampling/proc_files.dart`) schedules the next tick only after the
 current sample completes, so a slow scan never overlaps the following one, and
@@ -79,8 +81,10 @@ badge and chart keep refreshing while collapsed.
 parenthesised command name, which may itself contain spaces and parentheses;
 splitting the whole line by whitespace would shift `utime`/`stime`.
 
-Kernel threads are included in the listing, as they are real scheduling
-entities; they normally contribute nothing.
+The lists drop kernel threads (no executable behind `/proc/<pid>/exe`) and rows
+below 0.01 %, which keeps them focused on applications. Kernel threads can
+still consume CPU, so a softirq or workqueue bottleneck is not visible in the
+list; the aggregate trend is.
 
 ## Adding a metric
 

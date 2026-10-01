@@ -28,6 +28,7 @@ class ProcessesCpuStats extends _$ProcessesCpuStats {
     if (!ref.mounted) return;
     final usage = <int, int>{};
     for (final pid in pids) {
+      if (isKernelThread(pid)) continue;
       final contents = await readTextFile('/proc/$pid/stat');
       if (contents == null) continue;
       final times = parseProcPidStat(contents);
