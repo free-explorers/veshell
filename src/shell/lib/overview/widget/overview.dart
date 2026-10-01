@@ -1,5 +1,4 @@
 import 'dart:math';
-import 'dart:ui';
 
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -22,13 +21,25 @@ const _overviewGap = 16.0;
 const _searchEngineFlex = 2;
 const _overviewContentFlex = 5;
 
+/// Blur applied to the rest of the screen while the overview is open.
+///
+/// Applied to the rest of the screen by `OverviewBlurTarget`; the scrim below
+/// reuses it so the white wash follows the same curve it always did.
+const overviewBlurSigma = 16.0;
+
+/// The overview overlay: search, clock and content panes.
+///
+/// The rest of the screen behind it is blurred by `OverviewBlurTarget`; this
+/// widget only fades the overlay in and lays the translucent white wash over
+/// the blurred layer.
 class OverviewWidget extends HookConsumerWidget {
   const OverviewWidget({super.key});
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final screenId = CurrentScreenId.of(context);
 
-    final overviewAnimationController = useAnimationController(
+    final animationController = useAnimationController(
       duration: const Duration(milliseconds: 200),
     );
 
@@ -36,24 +47,23 @@ class OverviewWidget extends HookConsumerWidget {
       overviewStateProvider(screenId).select((state) => state.isDisplayed),
       (previous, next) {
         if (next) {
-          overviewAnimationController.forward();
+          animationController.forward();
         } else {
-          overviewAnimationController.reverse();
+          animationController.reverse();
         }
       },
     );
 
     return AnimatedBuilder(
-      animation: overviewAnimationController,
+      animation: animationController,
       builder: (context, child) {
-        if (overviewAnimationController.value > 0.0) {
-          return AnimatedBlurBackground(
-            animationController: overviewAnimationController,
+        if (animationController.value > 0.0) {
+          return _OverviewScrim(
+            animationController: animationController,
             child: child,
           );
-        } else {
-          return Container();
         }
+        return const SizedBox.shrink();
       },
       child: HookConsumer(
         builder: (context, ref, child) {
@@ -130,22 +140,28 @@ class OverviewWidget extends HookConsumerWidget {
   }
 }
 
-class AnimatedBlurBackground extends HookWidget {
-  const AnimatedBlurBackground({
+/// The translucent wash drawn over the blurred layer while the overview is
+/// open, plus the fade of the overview content itself.
+///
+/// This used to be an `AnimatedBlurBackground` wrapping the whole overview in a
+/// `BackdropFilter`; the blur now lives on the rest of the screen
+/// (`OverviewBlurTarget`), so this only tints and fades.
+class _OverviewScrim extends HookWidget {
+  const _OverviewScrim({
     required this.animationController,
     this.child,
-    this.sigma = 16,
     super.key,
   });
 
   final Widget? child;
   final AnimationController animationController;
-  final double sigma;
 
   @override
   Widget build(BuildContext context) {
-    final blurAnimation = useMemoized(
-      () => Tween<double>(begin: 0, end: sigma).animate(
+    // Mirror the old tint curve: it derived the white-wash alpha from the
+    // animated blur sigma (0..16), so keep the same 0..16*255/100 ramp.
+    final tintAnimation = useMemoized(
+      () => Tween<double>(begin: 0, end: 1).animate(
         CurvedAnimation(
           parent: animationController,
           curve: const Interval(0, 0.6, curve: Curves.easeInOut),
@@ -164,20 +180,11 @@ class AnimatedBlurBackground extends HookWidget {
       [animationController],
     );
 
-    return ClipRRect(
-      // Clip it cleanly.
-      child: BackdropFilter(
-        filter: ImageFilter.blur(
-          sigmaX: blurAnimation.value,
-          sigmaY: blurAnimation.value,
-        ),
-        child: ColoredBox(
-          color: Colors.white.withAlpha(
-            (255 * blurAnimation.value / 100).round(),
-          ),
-          child: Opacity(opacity: opacityAnimation.value, child: child),
-        ),
+    return ColoredBox(
+      color: Colors.white.withAlpha(
+        (255 * (overviewBlurSigma * tintAnimation.value) / 100).round(),
       ),
+      child: Opacity(opacity: opacityAnimation.value, child: child),
     );
   }
 }
