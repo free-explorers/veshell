@@ -20,7 +20,7 @@ cpu_monitoring/
   widget/      the card
 memory_monitoring/  ...
 disk_monitoring/    ...
-gpu_monitoring/     ... (planned; see "Adding a metric")
+gpu_monitoring/     ... (AMD/amdgpu; see "GPU")
 sampling/      shared /proc parsers, file helpers and the poller
 widget/        MonitoringCard, MonitoringChart, ProcessMetricList
 ```
@@ -44,11 +44,11 @@ The cards answer "was there a spike just now, or is this climbing?", so the
 history has to be recent and continuous. The aggregate samplers therefore run
 for the whole session.
 
-- **Aggregate samplers are keep-alive and primed.** `CpuStatsState` and
-  `MemoryStatsState` sample `/proc/stat` and `/proc/meminfo` every 500 ms from
-  startup (`main.dart` primes them), so the
+- **Aggregate samplers are keep-alive and primed.** `CpuStatsState`,
+  `MemoryStatsState` and `GpuStatsState` sample `/proc/stat`, `/proc/meminfo`
+  and the GPU sysfs every 500 ms from startup (`main.dart` primes them), so the
   graph is already populated the first time the overview opens. Each tick reads
-  a single small file.
+  a handful of small files.
 - **Per-process samplers are bounded by the card.** The `/proc/<pid>` walk is
   the expensive part (hundreds of files); those providers are auto-disposed and
   run only while their card is expanded.
@@ -94,13 +94,26 @@ the battery card is gated on `anyUpowerDeviceProvider`.
 
 ### GPU
 
-The GPU card is planned but not yet implemented. Intended sources, in order of
-preference:
+The GPU card is implemented for AMD (amdgpu). `reader/amdgpu.dart` detects the
+first `/sys/class/drm/cardN` exposing `device/gpu_busy_percent` and reads, each
+sample:
 
-- **Device telemetry** under `/sys/class/drm/card*/device/`: `gpu_busy_percent`,
-  `mem_info_vram_used`/`_total`, `mem_info_gtt_used`/`_total` and the `hwmon`
-  temperature/power/frequency on AMD (amdgpu); frequency and temperature on
-  Intel (i915/xe). NVIDIA has no sysfs busy counter and would need NVML.
+| Value | sysfs |
+|---|---|
+| Busy | `device/gpu_busy_percent` |
+| VRAM used/total | `device/mem_info_vram_used` / `_total` (bytes) |
+| GTT used/total | `device/mem_info_gtt_used` / `_total` (bytes) |
+| Temperature, power | `device/hwmon/hwmonX/temp1_input` (m°C), `power1_input` (µW) |
+| Core, memory clock | `hwmonX/freq1_input` (sclk), `freq2_input` (mclk), Hz |
+
+The card is omitted when no supported GPU is found, like the battery card.
+`reader/amdgpu_parsing.dart` holds the unit conversion and is unit tested.
+
+Not yet covered:
+
+- **Intel** (i915/xe) exposes frequency and temperature but no
+  `gpu_busy_percent`; busyness would come from `fdinfo`.
+- **NVIDIA** has no sysfs busy counter and would need NVML.
 - **Per-process** GPU memory and engine time from `/proc/<pid>/fdinfo/<fd>`
   (`drm-engine-*` nanoseconds, `drm-memory-*` KiB). Cumulative engine counters
   give a per-process busy share by differencing two samples, and the interface

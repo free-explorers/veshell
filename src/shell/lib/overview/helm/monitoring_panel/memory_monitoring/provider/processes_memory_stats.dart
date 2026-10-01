@@ -20,7 +20,7 @@ class ProcessesMemoryStats extends _$ProcessesMemoryStats {
   }
 
   Future<void> _sample() async {
-    final memInfo = await readProcFile('/proc/meminfo');
+    final memInfo = await readTextFile('/proc/meminfo');
     if (!ref.mounted || memInfo == null) return;
     final totalKb = parseMemInfo(memInfo)['MemTotal'] ?? 0;
     if (totalKb <= 0) return;
@@ -30,7 +30,7 @@ class ProcessesMemoryStats extends _$ProcessesMemoryStats {
     if (!ref.mounted) return;
     final percentages = <int, double>{};
     for (final pid in pids) {
-      final statm = await readProcFile('/proc/$pid/statm');
+      final statm = await readTextFile('/proc/$pid/statm');
       if (statm == null) continue;
       final pages = parseProcPidStatmResidentPages(statm);
       if (pages == null) continue;

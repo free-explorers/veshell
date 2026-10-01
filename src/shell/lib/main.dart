@@ -14,6 +14,7 @@ import 'package:shell/monitor/widget/monitor.dart';
 import 'package:shell/notification/provider/notification_manager.dart';
 import 'package:shell/notification/provider/notification_read_tracker.dart';
 import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/provider/cpu_stats.dart';
+import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/provider/gpu_stats.dart';
 import 'package:shell/overview/helm/monitoring_panel/memory_monitoring/provider/memory_stats.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_client.dart';
 import 'package:shell/platform/model/request/get_environment_variables/get_environment_variables.serializable.dart';
@@ -163,7 +164,8 @@ class _EagerInitialization extends ConsumerWidget {
       ..watch(connectedMonitorListProvider)
       ..watch(monitorManagerProvider)
       ..listen(cpuStatsStateProvider, (_, _) {})
-      ..listen(memoryStatsStateProvider, (_, _) {});
+      ..listen(memoryStatsStateProvider, (_, _) {})
+      ..listen(gpuStatsStateProvider, (_, _) {});
 
     // Handle error states and loading states
     if (results.any(

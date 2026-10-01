@@ -40,11 +40,12 @@ Future<List<int>> listProcessIds() async {
   return ids;
 }
 
-/// Reads a `/proc` file, or returns `null` when it disappeared.
+/// Reads a `/proc` or `/sys` file, or returns `null` when it is unreadable.
 ///
-/// Processes routinely exit between the directory listing and the read, so a
-/// missing file is an expected race, not an error.
-Future<String?> readProcFile(String path) async {
+/// Processes routinely exit between the directory listing and the read, and
+/// sysfs attributes come and go with the hardware, so a missing file is an
+/// expected race, not an error.
+Future<String?> readTextFile(String path) async {
   try {
     return await File(path).readAsString();
   } on Exception {

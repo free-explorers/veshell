@@ -19,7 +19,7 @@ class ProcessesCpuStats extends _$ProcessesCpuStats {
   }
 
   Future<void> _sample() async {
-    final stat = await readProcFile('/proc/stat');
+    final stat = await readTextFile('/proc/stat');
     if (!ref.mounted || stat == null) return;
     final cpus = parseProcStat(stat);
     if (cpus.isEmpty) return;
@@ -28,7 +28,7 @@ class ProcessesCpuStats extends _$ProcessesCpuStats {
     if (!ref.mounted) return;
     final usage = <int, int>{};
     for (final pid in pids) {
-      final contents = await readProcFile('/proc/$pid/stat');
+      final contents = await readTextFile('/proc/$pid/stat');
       if (contents == null) continue;
       final times = parseProcPidStat(contents);
       if (times == null) continue;
