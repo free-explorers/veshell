@@ -1,22 +1,26 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/provider/cpu_stats.dart';
 
 part 'cpu_chart.g.dart';
 
+/// Rolling window of CPU load samples, oldest first.
+///
+/// Kept alive and fed continuously, so the chart always shows the last
+/// [_maxPoints] samples (about a minute) — enough to spot a recent spike or a
+/// climbing curve when the overview is opened.
 @Riverpod(keepAlive: true)
 class CpuChart extends _$CpuChart {
+  static const _maxPoints = 120;
+
   @override
-  List<FlSpot> build() {
-    ref.listen(cpuStatsStateProvider, (previous, next) {
-      state = [
-        ...state,
-        FlSpot(
-          state.lastOrNull != null ? state.last.x + 1 : 0,
-          next.cpuLoad.toDouble(),
-        ),
-      ].sublist(state.length > 49 ? state.length - 49 : 0);
-    });
-    return [];
+  List<FlSpot> build() => const [];
+
+  /// Appends [value], dropping the oldest point past [_maxPoints].
+  void add(double value) {
+    final lastX = state.isEmpty ? -1 : state.last.x;
+    final next = [...state, FlSpot(lastX + 1, value)];
+    state = next.length > _maxPoints
+        ? next.sublist(next.length - _maxPoints)
+        : next;
   }
 }

@@ -1,57 +1,33 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/overview/helm/monitoring_panel/memory_monitoring/model/memory.dart';
+import 'package:shell/overview/helm/monitoring_panel/memory_monitoring/provider/memory_chart.dart';
+import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
+import 'package:shell/overview/helm/monitoring_panel/sampling/proc_parsing.dart';
 
 part 'memory_stats.g.dart';
 
+/// Whole-machine memory usage, sampled from `/proc/meminfo` every
+/// [monitoringSampleInterval].
+///
+/// Kept alive and primed at startup, like the CPU sampler, so the graph always
+/// describes the recent past. The per-process breakdown stays gated on the
+/// expanded card.
 @Riverpod(keepAlive: true)
 class MemoryStatsState extends _$MemoryStatsState {
-  final _memInfoFile = File('/proc/meminfo');
-  Map<String, int>? _prevSnapshot;
   @override
   MemoryStats build() {
-    final timer =
-        Timer.periodic(const Duration(milliseconds: 500), (Timer t) async {
-      final snapshot = await takeSnapshot();
-      if (_prevSnapshot != null) {
-        state = calculateMemoryStats(_prevSnapshot!, snapshot);
-      }
-      _prevSnapshot = snapshot;
-    });
-    ref.onDispose(timer.cancel);
-
-    return MemoryStats(
-      memoryUsage: 0,
-    );
+    final cancel = startPolling(monitoringSampleInterval, _sample);
+    ref.onDispose(cancel);
+    return MemoryStats(memoryUsage: 0);
   }
 
-  Future<Map<String, int>> takeSnapshot() async {
-    final lines = await _memInfoFile.readAsLines();
-
-    return Map.fromEntries(
-      lines.map(
-        (line) {
-          final parts = line.split(':');
-          return MapEntry(parts[0], int.parse(parts[1].trim().split(' ')[0]));
-        },
-      ),
-    );
-  }
-
-  MemoryStats calculateMemoryStats(
-    Map<String, int> prevSnapshot,
-    Map<String, int> snapshot,
-  ) {
-    final totalMemory = snapshot['MemTotal']!;
-    final freeMemory =
-        snapshot['MemFree']! + snapshot['Buffers']! + snapshot['Cached']!;
-    final usedMemory = totalMemory - freeMemory;
-    final usage = (usedMemory / totalMemory) * 100;
-
-    return MemoryStats(
-      memoryUsage: usage.round(),
-    );
+  Future<void> _sample() async {
+    final contents = await File('/proc/meminfo').readAsString();
+    if (!ref.mounted) return;
+    final usage = memoryUsedPercent(parseMemInfo(contents));
+    state = MemoryStats(memoryUsage: usage);
+    ref.read(memoryChartProvider.notifier).add(usage.toDouble());
   }
 }

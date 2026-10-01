@@ -13,6 +13,7 @@ final mprisLog = logging.Logger('Mpris');
 final polkitLog = logging.Logger('Polkit');
 final captureLog = logging.Logger('Capture');
 final fileExplorerLog = logging.Logger('FileExplorer');
+final monitoringLog = logging.Logger('Monitoring');
 
 final _simpleLogger = Logger(
   printer: HybridPrinter(
