@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:math';
-import 'dart:ui';
 
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_svg/svg.dart';
@@ -8,6 +7,7 @@ import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/application/provider/icon_background_image.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/application/widget/logs_viewer.dart';
@@ -36,6 +36,7 @@ class WindowPlaceholder extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final appId = window.properties.appId;
     final entry = ref.watch(localizedDesktopEntryForIdProvider(appId)).value;
+    final iconPath = entry?.entries[DesktopEntryKey.icon.string];
 
     useListenable(focusNode ?? Listenable.merge([]));
     final isFocused = focusNode?.hasFocus ?? false;
@@ -221,17 +222,7 @@ class WindowPlaceholder extends HookConsumerWidget {
         return Stack(
           children: [
             Positioned.fill(
-              left: -constraints.biggest.width * 0.3,
-              right: -constraints.biggest.width * 0.3,
-              top: -constraints.biggest.height * 0.3,
-              bottom: -constraints.biggest.height * 0.3,
-              child: ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: 300, sigmaY: 300),
-                child: FittedBox(
-                  fit: BoxFit.fill,
-                  child: AppIconById(id: appId, constrainedSize: 4),
-                ),
-              ),
+              child: _PlaceholderBackground(iconPath: iconPath),
             ),
             Positioned.fill(
               child: InkWell(
@@ -469,6 +460,36 @@ class DisplayModeRow extends StatelessWidget {
           })
           .expand((widget) => widget)
           .toList(),
+    );
+  }
+}
+
+/// The ambient app-icon wash behind a placeholder.
+///
+/// The blur is baked once into a small image by [iconBackgroundImageProvider]
+/// rather than applied live: a live sigma-300 `ImageFiltered` expands its paint
+/// bounds by roughly 900 logical pixels on every side, so each desktop
+/// re-rasterisation, which the overview forces, allocated a huge offscreen
+/// surface and blurred it every frame.
+class _PlaceholderBackground extends ConsumerWidget {
+  const _PlaceholderBackground({required this.iconPath});
+
+  final String? iconPath;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final path = iconPath;
+    if (path == null) {
+      return const SizedBox.shrink();
+    }
+    final image = ref.watch(iconBackgroundImageProvider(path)).value;
+    if (image == null) {
+      return const SizedBox.shrink();
+    }
+    return RawImage(
+      image: image,
+      fit: BoxFit.fill,
+      filterQuality: FilterQuality.high,
     );
   }
 }
