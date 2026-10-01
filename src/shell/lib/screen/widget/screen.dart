@@ -6,6 +6,7 @@ import 'package:shell/dev_tools/provider/dev_tools_enabled.dart';
 import 'package:shell/dev_tools/widget/dev_tools_overview.dart';
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/overview/widget/overview.dart';
+import 'package:shell/overview/widget/overview_blur_target.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/screen/provider/screen_state.dart';
@@ -75,84 +76,89 @@ class ScreenWidget extends HookConsumerWidget {
                 // panel) are hosted in an Overlay below the overview. An
                 // OverlayPortal would otherwise land in the root overlay and
                 // float above the overview.
-                Overlay.wrap(
-                  child: Actions(
-                    actions: {
-                      FocusWorkspaceAboveIntent:
-                          CallbackAction<FocusWorkspaceAboveIntent>(
-                        onInvoke: (_) {
-                          final nextIndex = screenState.selectedIndex - 1;
-                          if (nextIndex >= 0) {
-                            ref
-                                .read(screenStateProvider(screenId).notifier)
-                                .selectWorkspace(nextIndex);
-                          }
-                          return null;
-                        },
-                      ),
-                      FocusWorkspaceBelowIntent:
-                          CallbackAction<FocusWorkspaceBelowIntent>(
-                        onInvoke: (_) {
-                          final nextIndex = screenState.selectedIndex + 1;
-                          if (nextIndex < screenState.workspaceList.length) {
-                            ref
-                                .read(screenStateProvider(screenId).notifier)
-                                .selectWorkspace(nextIndex);
-                          }
-                          return null;
-                        },
-                      ),
-                      ReorderWorkspaceAboveIntent:
-                          CallbackAction<ReorderWorkspaceAboveIntent>(
-                        onInvoke: (_) {
-                          ref
-                              .read(screenStateProvider(screenId).notifier)
-                              .moveSelectedWorkspaceAbove();
-                          return null;
-                        },
-                      ),
-                      ReorderWorkspaceBelowIntent:
-                          CallbackAction<ReorderWorkspaceBelowIntent>(
-                        onInvoke: (_) {
-                          ref
-                              .read(screenStateProvider(screenId).notifier)
-                              .moveSelectedWorkspaceBelow();
-                          return null;
-                        },
-                      ),
-                    },
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      textDirection: TextDirection.rtl,
-                      children: [
-                        Expanded(
-                          child: SlidingContainer(
-                            direction: Axis.vertical,
-                            index: screenState.selectedIndex,
-                            onIndexChanged: (newIndex) {
+                // Composed through `OverviewBlurTarget` so the overview owns
+                // the blur it applies to the rest of the screen while open.
+                OverviewBlurTarget(
+                  screenId: screenId,
+                  child: Overlay.wrap(
+                    child: Actions(
+                      actions: {
+                        FocusWorkspaceAboveIntent:
+                            CallbackAction<FocusWorkspaceAboveIntent>(
+                          onInvoke: (_) {
+                            final nextIndex = screenState.selectedIndex - 1;
+                            if (nextIndex >= 0) {
                               ref
                                   .read(screenStateProvider(screenId).notifier)
-                                  .selectWorkspace(newIndex);
-                            },
-                            isSwipeEnabled:
-                                screenId == ref.watch(focusedScreenProvider),
-                            children: screenState.workspaceList
-                                .mapIndexed(
-                                  (index, workspaceId) => WorkspaceWidget(
-                                    workspaceId: workspaceId,
-                                    isSelected:
-                                        screenState.selectedIndex == index,
-                                  ),
-                                )
-                                .toList(),
+                                  .selectWorkspace(nextIndex);
+                            }
+                            return null;
+                          },
+                        ),
+                        FocusWorkspaceBelowIntent:
+                            CallbackAction<FocusWorkspaceBelowIntent>(
+                          onInvoke: (_) {
+                            final nextIndex = screenState.selectedIndex + 1;
+                            if (nextIndex < screenState.workspaceList.length) {
+                              ref
+                                  .read(screenStateProvider(screenId).notifier)
+                                  .selectWorkspace(nextIndex);
+                            }
+                            return null;
+                          },
+                        ),
+                        ReorderWorkspaceAboveIntent:
+                            CallbackAction<ReorderWorkspaceAboveIntent>(
+                          onInvoke: (_) {
+                            ref
+                                .read(screenStateProvider(screenId).notifier)
+                                .moveSelectedWorkspaceAbove();
+                            return null;
+                          },
+                        ),
+                        ReorderWorkspaceBelowIntent:
+                            CallbackAction<ReorderWorkspaceBelowIntent>(
+                          onInvoke: (_) {
+                            ref
+                                .read(screenStateProvider(screenId).notifier)
+                                .moveSelectedWorkspaceBelow();
+                            return null;
+                          },
+                        ),
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        textDirection: TextDirection.rtl,
+                        children: [
+                          Expanded(
+                            child: SlidingContainer(
+                              direction: Axis.vertical,
+                              index: screenState.selectedIndex,
+                              onIndexChanged: (newIndex) {
+                                ref
+                                    .read(screenStateProvider(screenId).notifier)
+                                    .selectWorkspace(newIndex);
+                              },
+                              isSwipeEnabled:
+                                  screenId == ref.watch(focusedScreenProvider),
+                              children: screenState.workspaceList
+                                  .mapIndexed(
+                                    (index, workspaceId) => WorkspaceWidget(
+                                      workspaceId: workspaceId,
+                                      isSelected:
+                                          screenState.selectedIndex == index,
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
                           ),
-                        ),
-                        const Material(
-                          elevation: 4,
-                          child: ScreenPanel(),
-                        ),
-                      ],
+                          const Material(
+                            elevation: 4,
+                            child: ScreenPanel(),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
