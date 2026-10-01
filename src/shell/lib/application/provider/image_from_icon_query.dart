@@ -15,18 +15,52 @@ part 'image_from_icon_query.g.dart';
 /// cache bounded by what is on screen.
 @riverpod
 class ImageFromIconQuery extends _$ImageFromIconQuery {
+  /// The image currently handed to the widget tree.
+  ///
+  /// The notifier outlives its rebuilds, so this lets a rebuild keep painting
+  /// the previous image while the new one decodes instead of disposing it out
+  /// from under the widget (which briefly blanked every icon when the icon
+  /// theme resolved at session start).
+  Image? _image;
+
+  /// Incremented on every build so a superseded decode can detect that a newer
+  /// one has taken over and drop its result instead of clobbering it.
+  int _buildGeneration = 0;
+
   @override
   Future<Image?> build(IconQuery query, Size size) async {
+    final generation = ++_buildGeneration;
+
+    // `onDispose` also runs before every rebuild, where [_image] is still the
+    // provider's value and may be on screen. Only free the native image when
+    // the provider is really going away.
+    ref.onDispose(() {
+      if (ref.mounted) return;
+      _image?.dispose();
+      _image = null;
+    });
+
+    final previous = _image;
     final image = await _decode(query, size);
+
+    // Disposed, or a newer build already started: this result is stale.
+    // Freeing it keeps the cache bounded to what is actually on screen.
+    if (!ref.mounted || generation != _buildGeneration) {
+      image?.dispose();
+      return null;
+    }
     if (image == null) {
+      // Keep [previous] around: the widget may still be painting it, and the
+      // disposal callback registered above will free it.
       return null;
     }
-    // Disposed while decoding: nothing can display this image, so free it.
-    if (!ref.mounted) {
-      image.dispose();
-      return null;
+
+    _image = image;
+    // The widget painted [previous] for as long as this decode was in flight;
+    // the new image replaces it now, so the old handle can be released.
+    if (previous != null && !identical(previous, image)) {
+      previous.dispose();
     }
-    ref.onDispose(image.dispose);
     return image;
   }
 
