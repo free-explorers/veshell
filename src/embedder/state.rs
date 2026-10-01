@@ -196,6 +196,31 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         texture_id
     }
 
+    /// Releases the shell's external texture `texture_id`: forgets its
+    /// swapchain and unregisters it from Flutter so the engine stops asking for
+    /// frames and can free its GPU resources.
+    pub fn release_texture_id(&mut self, texture_id: i64) {
+        self.texture_swapchains.remove(&texture_id);
+        self.surface_id_per_texture_id.remove(&texture_id);
+        if let Err(err) = self
+            .flutter_engine()
+            .unregister_external_texture(texture_id)
+        {
+            warn!(texture_id, error = %err, "Failed to unregister external texture");
+        }
+    }
+
+    /// Releases every external texture owned by `surface_id`, used when the
+    /// surface is destroyed. The bookkeeping for the surface is forgotten so a
+    /// long-lived session cannot accumulate one entry per closed surface.
+    pub fn release_surface_textures(&mut self, surface_id: u64) {
+        if let Some(texture_ids) = self.texture_ids_per_surface_id.remove(&surface_id) {
+            for (texture_id, _) in texture_ids {
+                self.release_texture_id(texture_id);
+            }
+        }
+    }
+
     pub fn release_all_keys(&mut self) {
         let keyboard = self.keyboard.clone();
         for mut key_code in keyboard.pressed_keys() {

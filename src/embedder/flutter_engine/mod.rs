@@ -60,7 +60,8 @@ use crate::flutter_engine::embedder::{
     FlutterEngineNotifyDisplayUpdate, FlutterEngineRegisterExternalTexture,
     FlutterEngineRemoveView, FlutterEngineRunInitialized, FlutterEngineRunTask,
     FlutterEngineSendKeyEvent, FlutterEngineSendPointerEvent, FlutterEngineSendViewFocusEvent,
-    FlutterOpenGLBackingStore, FlutterOpenGLBackingStore__bindgen_ty_1, FlutterOpenGLFramebuffer,
+    FlutterEngineUnregisterExternalTexture, FlutterOpenGLBackingStore,
+    FlutterOpenGLBackingStore__bindgen_ty_1, FlutterOpenGLFramebuffer,
     FlutterOpenGLTargetType_kFlutterOpenGLTargetTypeFramebuffer, FlutterPointerEvent,
     FlutterRendererType_kOpenGL, FlutterTaskRunnerDescription,
     FlutterViewFocusDirection_kUndefined, FlutterViewFocusEvent, FlutterViewFocusState,
@@ -694,6 +695,20 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         let result = unsafe { FlutterEngineRegisterExternalTexture(self.handle, texture_id) };
         if result != 0 {
             return Err(format!("Could not register external texture, error {result}").into());
+        }
+        Ok(())
+    }
+
+    /// Releases an external texture registration. After this call the engine
+    /// stops requesting frames for `texture_id`, so the shell can drop the
+    /// texture's swapchain and GPU resources.
+    pub fn unregister_external_texture(
+        &self,
+        texture_id: i64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let result = unsafe { FlutterEngineUnregisterExternalTexture(self.handle, texture_id) };
+        if result != 0 {
+            return Err(format!("Could not unregister external texture, error {result}").into());
         }
         Ok(())
     }

@@ -7,10 +7,30 @@ import 'package:shell/application/provider/icon_themes.dart';
 
 part 'image_from_icon_query.g.dart';
 
-@Riverpod(keepAlive: true)
+/// Decodes an icon into a native [Image] for one `(query, size)`.
+///
+/// This provider is auto-dispose: the family key includes the layout size, so
+/// a `keepAlive` cache retained one native image per size ever requested while
+/// the shell ran. Releasing the image when no icon widget watches it keeps the
+/// cache bounded by what is on screen.
+@riverpod
 class ImageFromIconQuery extends _$ImageFromIconQuery {
   @override
   Future<Image?> build(IconQuery query, Size size) async {
+    final image = await _decode(query, size);
+    if (image == null) {
+      return null;
+    }
+    // Disposed while decoding: nothing can display this image, so free it.
+    if (!ref.mounted) {
+      image.dispose();
+      return null;
+    }
+    ref.onDispose(image.dispose);
+    return image;
+  }
+
+  Future<Image?> _decode(IconQuery query, Size size) async {
     final themes = await ref.watch(iconThemesProvider.future);
     final file = await themes.findIcon(query);
     if (file == null) return null;
@@ -37,8 +57,10 @@ class ImageFromIconQuery extends _$ImageFromIconQuery {
       final bytes = await file.readAsBytes();
 
       // Decode the image
-      final codec =
-          await instantiateImageCodec(bytes, targetWidth: size.width.toInt());
+      final codec = await instantiateImageCodec(
+        bytes,
+        targetWidth: size.width.toInt(),
+      );
       final frameInfo = await codec.getNextFrame();
       return frameInfo.image;
     }

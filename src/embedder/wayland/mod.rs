@@ -320,17 +320,22 @@ pub mod wayland {
 
                         let texture_id = texture_id.unwrap_or_else(|| {
                             let texture_id = self.get_new_texture_id();
-                            while self
-                                .texture_ids_per_surface_id
-                                .entry(surface_id)
-                                .or_default()
-                                .len()
-                                >= 2
-                            {
-                                self.texture_ids_per_surface_id
-                                    .entry(surface_id)
-                                    .or_default()
-                                    .remove(0);
+                            // Keep at most one previous texture alive for the
+                            // frame in flight; release the older ones so their
+                            // Flutter registrations and swapchains do not pile
+                            // up when a client changes size repeatedly.
+                            loop {
+                                let evicted = {
+                                    let texture_ids = self
+                                        .texture_ids_per_surface_id
+                                        .entry(surface_id)
+                                        .or_default();
+                                    (texture_ids.len() >= 2).then(|| texture_ids.remove(0).0)
+                                };
+                                match evicted {
+                                    Some(evicted_id) => self.release_texture_id(evicted_id),
+                                    None => break,
+                                }
                             }
 
                             self.texture_ids_per_surface_id
@@ -447,6 +452,10 @@ pub mod wayland {
                     .surface_id
             });
             self.surfaces.remove(&surface_id);
+            self.subsurfaces.remove(&surface_id);
+            // Drop the surface's external textures so their Flutter
+            // registrations, swapchains and bookkeeping do not outlive it.
+            self.release_surface_textures(surface_id);
 
             let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
             platform_method_channel.invoke_method(
