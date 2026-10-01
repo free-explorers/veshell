@@ -18,23 +18,26 @@ fonts, binary blobs and directories.
 ## Where the preview lives (decided)
 
 The preview takes over the **`OverviewContent` region** — the exact slot that
-holds the Helm dashboard and the focused ephemeral window
+holds the Helm dashboard and the selected ephemeral window
 (`lib/overview/widget/overview_content.dart`). The Files list stays in the left
 `SearchEngine` column, so the overview becomes list-on-the-left,
 preview-on-the-right without any new layout.
 
-Precedence in that slot:
+The displayed content is the overview's selected `OverviewContent`. The panel is
+the Helm followed by `Overview.contentList`, which holds ephemeral windows and
+file previews as peers, so several previews can be open at once:
 
-1. a **selected file** → preview;
-2. else a focused **ephemeral window** → its surface;
-3. else the **Helm** dashboard.
+1. a **preview tab** → the preview of its file;
+2. an **ephemeral window tab** → its surface;
+3. the **Helm** dashboard.
 
-Selection state belongs to the screen's `Overview` (an `int? selectedIndex`
-into the active mode's result list, cleared when the mode or filter changes),
-so `OverviewContent` can derive the selected file's path for the preview and
-other producers (search results, notifications) can drive the same slot later.
-Selecting a directory keeps navigating; leaving Files mode or clearing the
-selection restores the previous occupant.
+Selecting a file in Files mode opens or reuses a preview tab and displays it:
+while a preview is selected the tab's `FileEntry` is replaced in place;
+otherwise an existing tab for the path is selected, or a new preview tab is
+appended. Previews persist until closed: clearing the row selection, changing
+the filter or mode, or switching to another tab leaves them open. The row
+selection (`int? selectedIndex`) is separate and only drives the list highlight;
+other producers (search results, notifications) can open tabs later.
 
 Interaction (decided): a single click **selects and previews** any entry — a
 file previews, a directory highlights (with a folder summary in the slot); a

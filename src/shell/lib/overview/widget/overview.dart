@@ -110,7 +110,7 @@ class OverviewWidget extends HookConsumerWidget {
                             child: const SearchEngine(),
                           ),
                           const SizedBox(width: _overviewGap),
-                          const Expanded(child: OverviewContent()),
+                          const Expanded(child: OverviewContentPane()),
                         ],
                       );
                     },

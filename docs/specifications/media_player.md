@@ -8,7 +8,7 @@ drive it, in the spirit of Android's media controls. It speaks
 `org.mpris.MediaPlayer2` D-Bus interface), the de-facto standard every Linux
 player implements (Spotify, Firefox, mpv, VLC, Rhythmbox, …).
 
-The control renders as a Helm card at the top of the [ControlPanel] column in
+The control renders as a Helm card at the top of the control `PanelColumn` in
 the [Overview](overview.md). Its header leads with the player's application
 icon and identity, falling back to a music glyph and "Media" when the player
 cannot be resolved. The card then shows the current title, artist/album and
@@ -105,7 +105,7 @@ seek bar is read-only unless `CanSeek`.
 
 ## UI
 
-`MediaPlayerControl` renders nothing when no player is present, so the card
+`mediaPlayerSection` returns `null` when no player is present, so the card
 never appears empty. Album art resolves `file://` and `http(s)://` URLs, with a
 neutral music glyph as fallback for missing or broken art. The card is a plain
 `Card` (not an `ExpandableCard`), so its controls stay directly reachable in the

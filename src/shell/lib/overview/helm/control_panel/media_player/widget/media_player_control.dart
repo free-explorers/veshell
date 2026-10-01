@@ -8,57 +8,51 @@ import 'package:shell/shared/mpris/model/mpris_loop_status.dart';
 import 'package:shell/shared/mpris/model/mpris_player.dart';
 import 'package:shell/shared/mpris/provider/mpris_manager.dart';
 
-/// The overview media control: what the session is playing and the transport
-/// buttons to drive it.
+/// The media control card, or `null` when no player is on the session bus.
 ///
-/// It renders nothing when no `org.mpris.MediaPlayer2` player is on the session
-/// bus, so it never leaves an empty card behind. The header leads with the
-/// player's application icon and identity (falling back to a music glyph and
-/// "Media"); with several players running it also offers a switcher, and until
-/// one is picked the control follows whichever player is actually playing.
-class MediaPlayerControl extends ConsumerWidget {
-  const MediaPlayerControl({super.key});
+/// Returned as a section so the hosting `PanelColumn` can omit it entirely
+/// when there is nothing to play. The header leads with the player's
+/// application icon and identity (falling back to a music glyph and "Media");
+/// with several players running it also offers a switcher, and until one is
+/// picked the control follows whichever player is actually playing.
+Widget? mediaPlayerSection(WidgetRef ref) {
+  final state = ref.watch(mprisManagerProvider).value;
+  final player = state?.activePlayer;
+  if (player == null || state == null) {
+    return null;
+  }
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(mprisManagerProvider).value;
-    final player = state?.activePlayer;
-    if (player == null || state == null) {
-      return const SizedBox.shrink();
-    }
-
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _MediaHeader(
-              player: player,
-              players: state.playerList,
-              canRaise: player.canRaise,
-            ),
-            const SizedBox(height: 12),
+  return Card(
+    clipBehavior: Clip.antiAlias,
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _MediaHeader(
+            player: player,
+            players: state.playerList,
+            canRaise: player.canRaise,
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: _NowPlaying(player: player),
+          ),
+          if (player.canSeek && player.track.length != null) ...[
+            const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: _NowPlaying(player: player),
+              child: MprisSeekBar(player: player),
             ),
-            if (player.canSeek && player.track.length != null) ...[
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: MprisSeekBar(player: player),
-              ),
-            ],
-            const SizedBox(height: 8),
-            _TransportControls(player: player),
           ],
-        ),
+          const SizedBox(height: 8),
+          _TransportControls(player: player),
+        ],
       ),
-    );
-  }
+    ),
+  );
 }
 
 class _MediaHeader extends ConsumerWidget {

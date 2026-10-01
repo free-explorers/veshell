@@ -4,10 +4,30 @@
 
 The overview provide the quick app launcher to launch and display ephemeral window
 
-The overview shows one ephemeral window at a time: `focusedWindowId` when it is
-set, otherwise the first of `windowList`. Opening the overview keeps the current
-selection; `show(windowId)` opens it to a specific window (used when bringing a
-window into view), and the panel buttons switch the displayed window.
+The overview's content panel behaves like a tab bar selecting what is shown in
+the content region. The panel is the **Helm** dashboard followed by
+`Overview.contentList` — ephemeral windows and file previews, as peers in
+creation order. The sealed `OverviewContent` union defines the kinds
+(`helm`, `window`, `preview`); adding a kind is a compile error until the
+content body and the tab builders handle it. `selectedContentId` names the
+displayed content and `Overview.selectedContent` resolves it (falling back to
+the Helm when stale). Opening the overview keeps the current selection and
+`show(windowId)` opens it to a specific window (used when bringing a window into
+view). Each tab shows its icon and a label — `Helm`, the window's application
+name, or the file name. The content cross-fades when the selection changes, and
+only the selected button is tinted — unselected buttons use a low surface.
+
+Selecting a file in the Files mode opens or reuses a **preview tab** and
+displays it:
+
+- while a preview is selected, selecting another file replaces that tab's
+  content in place (the tab keeps its identity);
+- otherwise an existing tab for the file's path is selected, or a new preview
+  tab is appended to the list.
+
+Previews persist until their close button is used — clearing the row selection,
+changing the filter or the mode, or switching to another tab leaves them open.
+Closing a content selects its neighbour, or the Helm when the list is empty.
 
 Its search engine offers three modes: applications, files and settings. The
 **files** mode is the [FileExplorer](file_explorer.md), an in-shell file
