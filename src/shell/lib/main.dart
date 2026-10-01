@@ -13,6 +13,9 @@ import 'package:shell/monitor/provider/platform_focused_view.dart';
 import 'package:shell/monitor/widget/monitor.dart';
 import 'package:shell/notification/provider/notification_manager.dart';
 import 'package:shell/notification/provider/notification_read_tracker.dart';
+import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/provider/cpu_stats.dart';
+import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/provider/gpu_stats.dart';
+import 'package:shell/overview/helm/monitoring_panel/memory_monitoring/provider/memory_stats.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_client.dart';
 import 'package:shell/platform/model/request/get_environment_variables/get_environment_variables.serializable.dart';
 import 'package:shell/platform/model/request/get_monitor_layout/get_monitor_layout.serializable.dart';
@@ -153,10 +156,16 @@ class _EagerInitialization extends ConsumerWidget {
     ];
 
     // Keep the monitor registry (and its hotplug reconcile listener) alive from
-    // startup, even before any screen UI mounts.
+    // startup, even before any screen UI mounts. Prime the system monitors too,
+    // so their graphs describe the recent past before the overview is first
+    // opened; `listen` rather than `watch` so a sample does not rebuild the app
+    // root (the providers are keep-alive).
     ref
       ..watch(connectedMonitorListProvider)
-      ..watch(monitorManagerProvider);
+      ..watch(monitorManagerProvider)
+      ..listen(cpuStatsStateProvider, (_, _) {})
+      ..listen(memoryStatsStateProvider, (_, _) {})
+      ..listen(gpuStatsStateProvider, (_, _) {});
 
     // Handle error states and loading states
     if (results.any(

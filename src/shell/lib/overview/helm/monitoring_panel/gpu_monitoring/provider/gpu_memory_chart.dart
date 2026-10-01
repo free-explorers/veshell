@@ -1,15 +1,14 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-part 'cpu_chart.g.dart';
+part 'gpu_memory_chart.g.dart';
 
-/// Rolling window of CPU load samples, oldest first.
+/// Rolling window of GPU VRAM usage samples, oldest first.
 ///
-/// Kept alive and fed continuously, so the chart always shows the last
-/// [_maxPoints] samples (about a minute) — enough to spot a recent spike or a
-/// climbing curve when the overview is opened.
+/// Kept alive and fed continuously alongside the load chart, so the GPU card
+/// can overlay load and VRAM over the same recent window.
 @Riverpod(keepAlive: true)
-class CpuChart extends _$CpuChart {
+class GpuMemoryChart extends _$GpuMemoryChart {
   static const _maxPoints = 120;
 
   @override

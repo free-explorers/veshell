@@ -92,5 +92,9 @@
       <td>dbus</td>
       <td>dbus</td>
     </tr>
+    <tr>
+      <td>libnvidia-ml (optional: NVIDIA GPU monitoring, shipped with the NVIDIA driver; the GPU card is omitted when absent)</td>
+      <td colspan=3></td>
+    </tr>
    </tbody>
 </table>

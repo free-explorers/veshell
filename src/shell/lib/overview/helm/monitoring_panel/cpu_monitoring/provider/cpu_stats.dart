@@ -1,103 +1,42 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/model/cpu.dart';
-import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/model/cpu_line.dart';
+import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/provider/cpu_chart.dart';
+import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
+import 'package:shell/overview/helm/monitoring_panel/sampling/proc_parsing.dart';
 
 part 'cpu_stats.g.dart';
 
+/// Whole-machine CPU load, sampled from `/proc/stat` every
+/// [monitoringSampleInterval].
+///
+/// Kept alive and primed at startup so the graph always describes the recent
+/// past: opening the overview must show what happened just before, not an empty
+/// or stale chart. It reads a single small file per tick, unlike the
+/// per-process sampler, which stays gated on the expanded card.
 @Riverpod(keepAlive: true)
 class CpuStatsState extends _$CpuStatsState {
-  final _file = File('/proc/stat');
-  List<CpuLine>? _prevSnapshot;
+  CpuLine? _previous;
+
   @override
   CpuStats build() {
-    final timer =
-        Timer.periodic(const Duration(milliseconds: 500), (Timer t) async {
-      final snapshot = await takeSnapshot();
-      if (_prevSnapshot != null) {
-        state = calculateCpuStats(_prevSnapshot!, snapshot);
-      }
-      _prevSnapshot = snapshot;
-    });
-    ref.onDispose(timer.cancel);
-
-    return CpuStats(
-      cpuLoad: 0,
-      loadOnMostUsedCore: 0,
-    );
+    final cancel = startPolling(monitoringSampleInterval, _sample);
+    ref.onDispose(cancel);
+    return CpuStats(cpuLoad: 0);
   }
 
-  Future<List<CpuLine>> takeSnapshot() async {
-    final lines = await _file.readAsLines();
-
-    return lines.where((line) => line.startsWith('cpu')).map((line) {
-      final strings =
-          line.split(' ').where((string) => string.trim().isNotEmpty).toList();
-      return CpuLine(
-        label: strings[0],
-        user: int.parse(strings[1]),
-        nice: int.parse(strings[2]),
-        system: int.parse(strings[3]),
-        idle: int.parse(strings[4]),
-        iowait: int.parse(strings[5]),
-        irq: int.parse(strings[6]),
-        softirq: int.parse(strings[7]),
-        steal: int.parse(strings[8]),
-        guest: int.parse(strings[9]),
-        guestNice: int.parse(strings[10]),
-      );
-    }).toList();
-  }
-
-  CpuStats calculateCpuStats(
-    List<CpuLine> prevSnapshot,
-    List<CpuLine> snapshot,
-  ) {
-    final globalUsage =
-        _getUsagePercentForLine(snapshot.first, prevSnapshot.first);
-    final cores = snapshot
-        .skip(1)
-        .map(
-          (line) => _getUsagePercentForLine(
-            line,
-            prevSnapshot[snapshot.indexOf(line)],
-          ),
-        )
-        .toList();
-    final mostUsages =
-        cores.reduce((value, element) => value > element ? value : element);
-
-    return CpuStats(
-      cpuLoad: globalUsage.round(),
-      loadOnMostUsedCore: mostUsages.round(),
-    );
-  }
-
-  double _getUsagePercentForLine(CpuLine line, CpuLine prevLine) {
-    final prevIdle = prevLine.idle + prevLine.iowait;
-    final idle = line.idle + line.iowait;
-    final prevNonIdle = prevLine.user +
-        prevLine.nice +
-        prevLine.system +
-        prevLine.irq +
-        prevLine.softirq +
-        prevLine.steal;
-    final nonIdle = line.user +
-        line.nice +
-        line.system +
-        line.irq +
-        line.softirq +
-        line.steal;
-    final prevTotal = prevIdle + prevNonIdle;
-    final total = idle + nonIdle;
-    final totalD = total - prevTotal;
-    final idleD = idle - prevIdle;
-    if (totalD == 0) {
-      return 0; // or another appropriate value
-    }
-    final usage = (totalD - idleD) / totalD;
-    return usage * 100;
+  Future<void> _sample() async {
+    final contents = await File('/proc/stat').readAsString();
+    if (!ref.mounted) return;
+    final lines = parseProcStat(contents);
+    if (lines.isEmpty) return;
+    final now = lines.first;
+    final previous = _previous;
+    _previous = now;
+    if (previous == null) return;
+    final usage = cpuUsagePercent(previous, now);
+    state = CpuStats(cpuLoad: usage.round());
+    ref.read(cpuChartProvider.notifier).add(usage);
   }
 }

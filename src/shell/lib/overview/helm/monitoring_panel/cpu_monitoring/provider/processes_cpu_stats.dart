@@ -1,95 +1,59 @@
-import 'dart:async';
-import 'dart:io';
-
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/model/cpu_line.dart';
 import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/model/processes_cpu_stats_snapshot.dart';
-import 'package:shell/overview/helm/monitoring_panel/provider/process_list.dart';
+import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
+import 'package:shell/overview/helm/monitoring_panel/sampling/proc_parsing.dart';
 
 part 'processes_cpu_stats.g.dart';
 
+/// Per-process share of total CPU, sampled only while the CPU card is expanded.
 @riverpod
 class ProcessesCpuStats extends _$ProcessesCpuStats {
-  ProcessesCpuStatsSnapshot? _prevSnapshot;
+  ProcessesCpuStatsSnapshot? _previous;
+
   @override
   IMap<int, double> build() {
-    final timer =
-        Timer.periodic(const Duration(milliseconds: 500), (Timer t) async {
-      if (!ref.mounted) return;
-      final snapshot = await takeSnapshot();
-      if (_prevSnapshot != null) {
-        state = calculateCpuStatsForEachProcesses(_prevSnapshot!, snapshot);
-      }
-      _prevSnapshot = snapshot;
-    });
-    ref.onDispose(timer.cancel);
+    final cancel = startPolling(monitoringSampleInterval, _sample);
+    ref.onDispose(cancel);
     return <int, double>{}.lock;
   }
 
-  Future<ProcessesCpuStatsSnapshot> takeSnapshot() async {
-    final cpuStat = await File('/proc/stat').readAsLines();
-    final cpu = cpuStat.first
-        .split(' ')
-        .where((string) => string.trim().isNotEmpty)
-        .toList();
-    final line = CpuLine(
-      label: cpu[0],
-      user: int.parse(cpu[1]),
-      nice: int.parse(cpu[2]),
-      system: int.parse(cpu[3]),
-      idle: int.parse(cpu[4]),
-      iowait: int.parse(cpu[5]),
-      irq: int.parse(cpu[6]),
-      softirq: int.parse(cpu[7]),
-      steal: int.parse(cpu[8]),
-      guest: int.parse(cpu[9]),
-      guestNice: int.parse(cpu[10]),
-    );
+  Future<void> _sample() async {
+    final stat = await readTextFile('/proc/stat');
+    if (!ref.mounted || stat == null) return;
+    final cpus = parseProcStat(stat);
+    if (cpus.isEmpty) return;
 
-    final totalCpu = line.user +
-        line.nice +
-        line.system +
-        line.irq +
-        line.softirq +
-        line.steal +
-        line.idle +
-        line.iowait;
-
-    final processList = await ref.read(processListProvider.future);
-    final usageMap = <int, int>{};
-    for (final process in processList) {
-      if (!File('/proc/$process/stat').existsSync()) continue;
-      final stat = await File('/proc/$process/stat').readAsLines();
-      final statLine = stat.first
-          .split(' ')
-          .where((string) => string.trim().isNotEmpty)
-          .toList();
-      final utime = int.parse(statLine[13]);
-      final stime = int.parse(statLine[14]);
-      final totalTime = utime + stime;
-      usageMap[process] = totalTime;
+    final pids = await listProcessIds();
+    if (!ref.mounted) return;
+    final usage = <int, int>{};
+    for (final pid in pids) {
+      if (isKernelThread(pid)) continue;
+      final contents = await readTextFile('/proc/$pid/stat');
+      if (contents == null) continue;
+      final times = parseProcPidStat(contents);
+      if (times == null) continue;
+      usage[pid] = times.utime + times.stime;
     }
 
-    return ProcessesCpuStatsSnapshot(
-      totalCpu: totalCpu,
-      cpuUsagePerProcess: usageMap.lock,
+    final snapshot = ProcessesCpuStatsSnapshot(
+      totalCpu: cpus.first.total,
+      cpuUsagePerProcess: usage.lock,
     );
-  }
+    final previous = _previous;
+    _previous = snapshot;
+    if (previous == null || !ref.mounted) return;
 
-  IMap<int, double> calculateCpuStatsForEachProcesses(
-    ProcessesCpuStatsSnapshot prevSnapshot,
-    ProcessesCpuStatsSnapshot snapshot,
-  ) {
-    final cpuUsagePerProcess = <int, double>{};
-    final totalCpuDiff = snapshot.totalCpu - prevSnapshot.totalCpu;
-    for (final process in snapshot.cpuUsagePerProcess.keys) {
-      final prevUsage = prevSnapshot.cpuUsagePerProcess[process] ?? 0;
-      final usage = snapshot.cpuUsagePerProcess[process] ?? 0;
-      final diff = usage - prevUsage;
-      final percentage = (diff / totalCpuDiff) * 100;
-      cpuUsagePerProcess[process] = percentage;
+    final totalDiff = snapshot.totalCpu - previous.totalCpu;
+    if (totalDiff <= 0) return;
+
+    final percentages = <int, double>{};
+    for (final entry in snapshot.cpuUsagePerProcess.entries) {
+      final before = previous.cpuUsagePerProcess[entry.key] ?? 0;
+      final delta = entry.value - before;
+      if (delta <= 0) continue;
+      percentages[entry.key] = delta / totalDiff * 100;
     }
-    return cpuUsagePerProcess.lock;
+    state = percentages.lock;
   }
 }

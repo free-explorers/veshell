@@ -48,6 +48,7 @@ dependencies:
 
   arena_listener: ^0.0.2
   fast_immutable_collections: ^9.2.0
+  ffi: ^2.1.0
   material_design_icons_flutter:
     git:
       url: https://github.com/free-explorers/material_design_icons_flutter
