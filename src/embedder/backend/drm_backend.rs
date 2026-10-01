@@ -391,6 +391,9 @@ pub fn run_drm_backend() {
             SessionEvent::PauseSession => {
                 libinput_context.suspend();
                 info!("pausing session");
+                // Input now goes to another VT we cannot observe, so freeze
+                // the screensaver: no dim, blank or automatic power action.
+                crate::idle::on_session_paused(data);
 
                 for backend in data.backend_data.gpus.values_mut() {
                     backend.drm_device.pause();
@@ -402,6 +405,9 @@ pub fn run_drm_backend() {
             }
             SessionEvent::ActivateSession => {
                 info!("resuming session");
+                // Switching back counts as activity; clear any dim/blank and
+                // restart the idle countdown.
+                crate::idle::on_session_activated(data);
 
                 if let Err(err) = libinput_context.resume() {
                     error!("Failed to resume libinput context: {:?}", err);

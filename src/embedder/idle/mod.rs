@@ -45,6 +45,10 @@ pub struct IdleState<BackendData: Backend + 'static> {
     automatic_power_triggered: bool,
     pub(crate) inhibiting_surfaces: Vec<WlSurface>,
     dbus_inhibited: bool,
+    /// Whether the compositor's seat session is currently active. False while
+    /// the VT is switched away: input goes to another TTY where we cannot see
+    /// it, so no idle timer may run and no idle action may fire.
+    session_active: bool,
     power_sender: Option<std::sync::mpsc::Sender<AutomaticPowerAction>>,
     /// Backend hook that re-drives rendering after waking/blanking.
     request_render: fn(&mut State<BackendData>),
@@ -95,6 +99,7 @@ impl<BackendData: Backend + 'static> IdleState<BackendData> {
             automatic_power_triggered: false,
             inhibiting_surfaces: Vec::new(),
             dbus_inhibited: false,
+            session_active: true,
             power_sender,
             request_render: no_op,
             apply_blank: no_op,
@@ -134,10 +139,14 @@ impl<BackendData: Backend + 'static> IdleState<BackendData> {
     }
 
     /// (Re-)arm the dim and blank timers with the whole timeouts measured
-    /// from "now". A no-op while idle inhibition is active.
+    /// from "now". A no-op while idle inhibition is active or while the seat
+    /// session is paused, because activity in another VT is invisible here.
     pub(crate) fn arm_activity_timers(&mut self) {
         self.cancel_all();
         self.automatic_power_triggered = false;
+        if !self.session_active {
+            return;
+        }
         if !self.dim_timeout.is_zero() {
             let dim_timeout = self.dim_timeout;
             self.dim_token = self
@@ -196,10 +205,36 @@ impl<BackendData: Backend + 'static> IdleState<BackendData> {
 
 fn no_op<BackendData: Backend + 'static>(_: &mut State<BackendData>) {}
 
+/// The seat session was paused (the VT was switched away). Stop every idle
+/// timer so the screensaver cannot dim/blank and the automatic power action
+/// cannot suspend the machine while the user is active in another TTY, where
+/// their input never reaches this compositor. The stage is reset so switching
+/// back wakes a screen that was blanked before the switch.
+pub fn on_session_paused<D: Backend + 'static>(state: &mut State<D>) {
+    state.idle.session_active = false;
+    state.idle.cancel_all();
+    state.idle.dim_alpha = 0.0;
+    state.idle.stage = IdleStage::Active;
+}
+
+/// The seat session was activated again (the VT was switched back). Treat the
+/// switch as fresh activity and restart the idle countdown.
+pub fn on_session_activated<D: Backend + 'static>(state: &mut State<D>) {
+    state.idle.session_active = true;
+    on_activity(state);
+}
+
 /// Every input event funnels through here: it resets the stage machine and
 /// re-arms its timers, and forwards the activity to ext-idle-notify clients.
 pub fn on_activity<D: Backend + 'static>(state: &mut State<D>) {
     state.idle_notifier_state.notify_activity(&state.seat);
+
+    if !state.idle.session_active {
+        // A paused session must neither wake nor re-render, even if activity
+        // arrives from a source we cannot attribute to the seat (e.g. a D-Bus
+        // SimulateActivity call).
+        return;
+    }
 
     if state.idle.stage != IdleStage::Active {
         state.idle.dim_alpha = 0.0;
@@ -326,7 +361,7 @@ fn blank_fired<D: Backend + 'static>(state: &mut State<D>) {
 
 fn automatic_power_fired<D: Backend + 'static>(state: &mut State<D>) {
     state.idle.automatic_power_token = None;
-    if state.idle.automatic_power_triggered || is_inhibited(state) {
+    if !state.idle.session_active || state.idle.automatic_power_triggered || is_inhibited(state) {
         return;
     }
 
