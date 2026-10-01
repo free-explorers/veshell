@@ -1,4 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/overview/helm/monitoring_panel/disk_monitoring/provider/disk_space_cache.dart';
 import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
 import 'package:universal_disk_space/universal_disk_space.dart';
 
@@ -17,7 +18,9 @@ class DiskSpaceState extends _$DiskSpaceState {
   List<Disk> build() {
     final cancel = startPolling(diskSampleInterval, _sample);
     ref.onDispose(cancel);
-    return const [];
+    // Start from the last reading so the card is populated immediately; the
+    // first sample then refreshes it.
+    return ref.read(diskSpaceCacheProvider);
   }
 
   Future<void> _sample() async {
@@ -25,5 +28,6 @@ class DiskSpaceState extends _$DiskSpaceState {
     await diskSpace.scan();
     if (!ref.mounted) return;
     state = diskSpace.disks;
+    ref.read(diskSpaceCacheProvider.notifier).disks = diskSpace.disks;
   }
 }

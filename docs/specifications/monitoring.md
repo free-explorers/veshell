@@ -57,7 +57,9 @@ for the whole session.
   the chart always ends at *now* and a recent spike or a rising curve is visible
   the moment the overview opens.
 - **Disk is polled slower.** `DiskSpaceState` rescans every 5 s while the panel
-  is open; a `df` subprocess is far more expensive than the `/proc` reads.
+  is open; a `df` subprocess is far more expensive than the `/proc` reads. Its
+  last reading lives in the keep-alive `DiskSpaceCache`, so a reopened card
+  shows it on the first frame while the next scan runs.
 
 The poller (`sampling/proc_files.dart`) samples once immediately, so a freshly
 opened card is populated before the first interval elapses, then schedules the
