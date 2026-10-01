@@ -16,7 +16,6 @@ class MonitoringSeries {
     required this.spots,
     required this.color,
     this.filled = false,
-    this.label,
   });
 
   /// Samples to draw, oldest first.
@@ -28,9 +27,6 @@ class MonitoringSeries {
   /// Whether to fill the area under the line. Filled series are meant to be
   /// the background, with the others drawn over them.
   final bool filled;
-
-  /// Legend label; more than one labelled series shows a legend.
-  final String? label;
 }
 
 /// Shared chrome for the monitoring cards.
@@ -147,7 +143,7 @@ class MonitoringCard extends StatelessWidget {
 /// The line chart shared by every monitoring card.
 ///
 /// Every series is drawn on the same `0..100` axis; a filled series sits under
-/// the stroked ones. A legend appears when more than one series is labelled.
+/// the stroked ones.
 class MonitoringChart extends StatelessWidget {
   /// Creates a chart for [series].
   const MonitoringChart({required this.series, super.key});
@@ -158,74 +154,37 @@ class MonitoringChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spots = [for (final line in series) ...line.spots];
-    final labelled = series
-        .where((line) => line.label != null)
-        .toList(growable: false);
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: LineChart(
-            LineChartData(
-              minX: spots.isEmpty
-                  ? 0
-                  : spots.map((spot) => spot.x).reduce(math.min),
-              maxX: spots.isEmpty
-                  ? 0
-                  : spots.map((spot) => spot.x).reduce(math.max),
-              maxY: 100,
-              minY: 0,
-              gridData: const FlGridData(show: false),
-              borderData: FlBorderData(show: false),
-              titlesData: const FlTitlesData(show: false),
-              lineTouchData: const LineTouchData(enabled: false),
-              lineBarsData: [
-                for (final line in series)
-                  LineChartBarData(
-                    spots: line.spots,
-                    dotData: const FlDotData(show: false),
-                    barWidth: line.filled ? 0 : 2,
-                    isCurved: true,
-                    curveSmoothness: 0.1,
-                    color: line.color,
-                    belowBarData: BarAreaData(
-                      show: line.filled,
-                      color: line.color.withAlpha(100),
-                    ),
-                  ),
-              ],
+    return LineChart(
+      LineChartData(
+        minX: spots.isEmpty
+            ? 0
+            : spots.map((spot) => spot.x).reduce(math.min),
+        maxX: spots.isEmpty
+            ? 0
+            : spots.map((spot) => spot.x).reduce(math.max),
+        maxY: 100,
+        minY: 0,
+        gridData: const FlGridData(show: false),
+        borderData: FlBorderData(show: false),
+        titlesData: const FlTitlesData(show: false),
+        lineTouchData: const LineTouchData(enabled: false),
+        lineBarsData: [
+          for (final line in series)
+            LineChartBarData(
+              spots: line.spots,
+              dotData: const FlDotData(show: false),
+              barWidth: line.filled ? 0 : 2,
+              isCurved: true,
+              curveSmoothness: 0.1,
+              color: line.color,
+              belowBarData: BarAreaData(
+                show: line.filled,
+                color: line.color.withAlpha(100),
+              ),
             ),
-            duration: Duration.zero,
-          ),
-        ),
-        if (labelled.length > 1)
-          Positioned(
-            left: 12,
-            bottom: 8,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final line in labelled) ...[
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: line.color,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    line.label!,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                  const SizedBox(width: 12),
-                ],
-              ],
-            ),
-          ),
-      ],
+        ],
+      ),
+      duration: Duration.zero,
     );
   }
 }

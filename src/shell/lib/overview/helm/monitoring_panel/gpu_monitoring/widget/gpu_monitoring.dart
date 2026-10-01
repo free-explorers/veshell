@@ -28,18 +28,13 @@ class GpuMonitoringWidget extends ConsumerWidget {
           spots: loadSpots,
           color: scheme.primary,
           filled: true,
-          label: 'Load',
         ),
-        MonitoringSeries(
-          spots: vramSpots,
-          color: scheme.tertiary,
-          label: 'VRAM',
-        ),
+        MonitoringSeries(spots: vramSpots, color: scheme.tertiary),
       ],
       expandedBody: Consumer(
         builder: (context, ref, child) => ProcessMetricList(
           percentages: ref.watch(processesGpuStatsProvider),
-          header: GpuDetails(stats: stats),
+          header: GpuDetails(stats: stats, vramColor: scheme.tertiary),
         ),
       ),
     );
@@ -49,10 +44,18 @@ class GpuMonitoringWidget extends ConsumerWidget {
 /// Memory, temperature, power and clock details of the GPU.
 class GpuDetails extends StatelessWidget {
   /// Creates the details block for [stats].
-  const GpuDetails({required this.stats, super.key});
+  const GpuDetails({
+    required this.stats,
+    required this.vramColor,
+    super.key,
+  });
 
   /// The reading to display.
   final GpuStats stats;
+
+  /// Color of the VRAM line in the chart, reused for the VRAM value so the
+  /// two are visually linked.
+  final Color vramColor;
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +73,7 @@ class GpuDetails extends StatelessWidget {
           value:
               '${_formatMemory(stats.vramUsedMb)} / '
               '${_formatMemory(stats.vramTotalMb)}',
+          valueColor: vramColor,
         ),
         if (gttUsed != null && gttTotal != null)
           _GpuDetailRow(
@@ -96,17 +100,25 @@ class GpuDetails extends StatelessWidget {
 }
 
 class _GpuDetailRow extends StatelessWidget {
-  const _GpuDetailRow({required this.label, required this.value});
+  const _GpuDetailRow({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
 
   final String label;
   final String value;
+  final Color? valueColor;
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
       dense: true,
       title: Text(label),
-      trailing: Text(value),
+      trailing: Text(
+        value,
+        style: valueColor == null ? null : TextStyle(color: valueColor),
+      ),
     );
   }
 }

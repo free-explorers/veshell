@@ -111,7 +111,8 @@ The card is omitted when no supported GPU is found, like the battery card.
 
 The GPU chart overlays device load and VRAM usage, both on the same `0..100`
 axis and over the same window (load as the filled area, VRAM as the stroked
-line), with a legend to tell them apart. `MonitoringChart` takes a list of
+line). There is no legend; instead the VRAM value in the expanded details is
+drawn in the line's color. `MonitoringChart` takes a list of
 `MonitoringSeries`, so the CPU and memory cards keep their single filled line
 and only the GPU card draws a second.
 
