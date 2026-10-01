@@ -19,7 +19,13 @@ class MemoryMonitoringWidget extends ConsumerWidget {
       icon: MdiIcons.memory,
       title: 'Memory',
       badge: '${stats.memoryUsage}%',
-      spots: spots,
+      series: [
+        MonitoringSeries(
+          spots: spots,
+          color: Theme.of(context).colorScheme.primary,
+          filled: true,
+        ),
+      ],
       expandedBody: Consumer(
         builder: (context, ref, child) => ProcessMetricList(
           percentages: ref.watch(processesMemoryStatsProvider),

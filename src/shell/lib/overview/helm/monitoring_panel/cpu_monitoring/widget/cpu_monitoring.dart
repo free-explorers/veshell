@@ -19,7 +19,13 @@ class CpuMonitoringWidget extends ConsumerWidget {
       icon: MdiIcons.chip,
       title: 'CPU',
       badge: '${stats.cpuLoad}%',
-      spots: spots,
+      series: [
+        MonitoringSeries(
+          spots: spots,
+          color: Theme.of(context).colorScheme.primary,
+          filled: true,
+        ),
+      ],
       expandedBody: Consumer(
         builder: (context, ref, child) => ProcessMetricList(
           percentages: ref.watch(processesCpuStatsProvider),

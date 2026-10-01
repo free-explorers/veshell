@@ -3,6 +3,7 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/model/gpu_stats.dart';
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/provider/gpu_chart.dart';
+import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/provider/gpu_memory_chart.dart';
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/provider/gpu_stats.dart';
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/provider/processes_gpu_stats.dart';
 import 'package:shell/overview/helm/monitoring_panel/widget/monitoring_card.dart';
@@ -15,12 +16,26 @@ class GpuMonitoringWidget extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final stats = ref.watch(gpuStatsStateProvider);
-    final spots = ref.watch(gpuChartProvider);
+    final loadSpots = ref.watch(gpuChartProvider);
+    final vramSpots = ref.watch(gpuMemoryChartProvider);
+    final scheme = Theme.of(context).colorScheme;
     return MonitoringCard(
       icon: MdiIcons.expansionCard,
       title: 'GPU',
       badge: '${stats.load}%',
-      spots: spots,
+      series: [
+        MonitoringSeries(
+          spots: loadSpots,
+          color: scheme.primary,
+          filled: true,
+          label: 'Load',
+        ),
+        MonitoringSeries(
+          spots: vramSpots,
+          color: scheme.tertiary,
+          label: 'VRAM',
+        ),
+      ],
       expandedBody: Consumer(
         builder: (context, ref, child) => ProcessMetricList(
           percentages: ref.watch(processesGpuStatsProvider),

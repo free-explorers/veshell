@@ -75,6 +75,24 @@ void main() {
     });
   });
 
+  group('vramUsedPercent', () {
+    test('computes the share of VRAM in use', () {
+      expect(
+        vramUsedPercent(
+          const GpuStats(vramUsedMb: 512, vramTotalMb: 1024),
+        ),
+        closeTo(50, 0.001),
+      );
+    });
+
+    test('returns zero without a VRAM total', () {
+      expect(
+        vramUsedPercent(const GpuStats(vramUsedMb: 512)),
+        0,
+      );
+    });
+  });
+
   group('selectGpuDevice', () {
     const card0 = GpuDevice(cardPath: '/sys/class/drm/card0', driver: 'amdgpu');
     const card1 = GpuDevice(

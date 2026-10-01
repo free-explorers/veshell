@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -7,17 +9,42 @@ import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/overview/helm/monitoring_panel/provider/process_name.dart';
 import 'package:shell/shared/widget/expandable_card.dart';
 
+/// One line drawn by [MonitoringChart].
+class MonitoringSeries {
+  /// Creates a series.
+  const MonitoringSeries({
+    required this.spots,
+    required this.color,
+    this.filled = false,
+    this.label,
+  });
+
+  /// Samples to draw, oldest first.
+  final List<FlSpot> spots;
+
+  /// Line (and area) color.
+  final Color color;
+
+  /// Whether to fill the area under the line. Filled series are meant to be
+  /// the background, with the others drawn over them.
+  final bool filled;
+
+  /// Legend label; more than one labelled series shows a legend.
+  final String? label;
+}
+
 /// Shared chrome for the monitoring cards.
 ///
-/// Draws the value chart behind the header (icon, title, badge, expand toggle)
-/// and, when expanded, a per-process breakdown via [expandedBody].
+/// Draws one or more value charts behind the header (icon, title, badge,
+/// expand toggle) and, when expanded, a per-process breakdown via
+/// [expandedBody].
 class MonitoringCard extends StatelessWidget {
   /// Creates a monitoring card.
   const MonitoringCard({
     required this.icon,
     required this.title,
     required this.badge,
-    required this.spots,
+    required this.series,
     this.expandedBody,
     super.key,
   });
@@ -31,8 +58,8 @@ class MonitoringCard extends StatelessWidget {
   /// Short value shown in the header badge, e.g. `42%`.
   final String badge;
 
-  /// Chart samples, oldest first.
-  final List<FlSpot> spots;
+  /// Chart lines, oldest first.
+  final List<MonitoringSeries> series;
 
   /// Body shown while expanded, typically a [ProcessMetricList].
   final Widget? expandedBody;
@@ -51,7 +78,7 @@ class MonitoringCard extends StatelessWidget {
             children: [
               Stack(
                 children: [
-                  Positioned.fill(child: MonitoringChart(spots: spots)),
+                  Positioned.fill(child: MonitoringChart(series: series)),
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Row(
@@ -117,42 +144,88 @@ class MonitoringCard extends StatelessWidget {
   }
 }
 
-/// The filled line chart shared by every monitoring card.
+/// The line chart shared by every monitoring card.
+///
+/// Every series is drawn on the same `0..100` axis; a filled series sits under
+/// the stroked ones. A legend appears when more than one series is labelled.
 class MonitoringChart extends StatelessWidget {
-  /// Creates a chart for [spots].
-  const MonitoringChart({required this.spots, super.key});
+  /// Creates a chart for [series].
+  const MonitoringChart({required this.series, super.key});
 
-  /// Samples to draw, oldest first; an x of `-1` means "no data yet".
-  final List<FlSpot> spots;
+  /// Lines to draw, oldest first.
+  final List<MonitoringSeries> series;
 
   @override
   Widget build(BuildContext context) {
-    return LineChart(
-      LineChartData(
-        minX: spots.isEmpty ? 0 : spots.first.x,
-        maxX: spots.isEmpty ? 0 : spots.last.x,
-        maxY: 100,
-        minY: 0,
-        gridData: const FlGridData(show: false),
-        borderData: FlBorderData(show: false),
-        titlesData: const FlTitlesData(show: false),
-        lineTouchData: const LineTouchData(enabled: false),
-        lineBarsData: [
-          LineChartBarData(
-            spots: spots,
-            dotData: const FlDotData(show: false),
-            barWidth: 0,
-            isCurved: true,
-            curveSmoothness: 0.1,
-            color: Theme.of(context).colorScheme.primary,
-            belowBarData: BarAreaData(
-              color: Theme.of(context).colorScheme.primary.withAlpha(100),
-              show: true,
+    final spots = [for (final line in series) ...line.spots];
+    final labelled = series
+        .where((line) => line.label != null)
+        .toList(growable: false);
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: LineChart(
+            LineChartData(
+              minX: spots.isEmpty
+                  ? 0
+                  : spots.map((spot) => spot.x).reduce(math.min),
+              maxX: spots.isEmpty
+                  ? 0
+                  : spots.map((spot) => spot.x).reduce(math.max),
+              maxY: 100,
+              minY: 0,
+              gridData: const FlGridData(show: false),
+              borderData: FlBorderData(show: false),
+              titlesData: const FlTitlesData(show: false),
+              lineTouchData: const LineTouchData(enabled: false),
+              lineBarsData: [
+                for (final line in series)
+                  LineChartBarData(
+                    spots: line.spots,
+                    dotData: const FlDotData(show: false),
+                    barWidth: line.filled ? 0 : 2,
+                    isCurved: true,
+                    curveSmoothness: 0.1,
+                    color: line.color,
+                    belowBarData: BarAreaData(
+                      show: line.filled,
+                      color: line.color.withAlpha(100),
+                    ),
+                  ),
+              ],
+            ),
+            duration: Duration.zero,
+          ),
+        ),
+        if (labelled.length > 1)
+          Positioned(
+            left: 12,
+            bottom: 8,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final line in labelled) ...[
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: line.color,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    line.label!,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+              ],
             ),
           ),
-        ],
-      ),
-      duration: Duration.zero,
+      ],
     );
   }
 }

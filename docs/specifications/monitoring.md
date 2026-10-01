@@ -109,6 +109,12 @@ sample:
 The card is omitted when no supported GPU is found, like the battery card.
 `reader/amdgpu_parsing.dart` holds the unit conversion and is unit tested.
 
+The GPU chart overlays device load and VRAM usage, both on the same `0..100`
+axis and over the same window (load as the filled area, VRAM as the stroked
+line), with a legend to tell them apart. `MonitoringChart` takes a list of
+`MonitoringSeries`, so the CPU and memory cards keep their single filled line
+and only the GPU card draws a second.
+
 The choice of card mirrors the compositor's own in `drm_backend.rs`: an explicit
 `DRM_DEVICE` override wins (a `cardN` or `renderDN` path), otherwise the boot
 VGA (`device/boot_vga`), otherwise the lowest-numbered card. The selected

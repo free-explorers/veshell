@@ -70,6 +70,12 @@ GpuStats? buildGpuStats(GpuRawValues raw) {
   );
 }
 
+/// VRAM usage as a whole percentage, clamped to `0..100`.
+double vramUsedPercent(GpuStats stats) {
+  if (stats.vramTotalMb <= 0) return 0;
+  return (stats.vramUsedMb / stats.vramTotalMb * 100).clamp(0, 100);
+}
+
 int? _megabytes(int? bytes) =>
     bytes == null ? null : bytes ~/ _bytesPerMegabyte;
 
