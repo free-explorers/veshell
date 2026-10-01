@@ -29,7 +29,8 @@ class GpuMonitoringWidget extends ConsumerWidget {
           color: scheme.primary,
           filled: true,
         ),
-        MonitoringSeries(spots: vramSpots, color: scheme.tertiary),
+        if (stats.vramTotalMb > 0)
+          MonitoringSeries(spots: vramSpots, color: scheme.tertiary),
       ],
       expandedBody: Consumer(
         builder: (context, ref, child) => ProcessMetricList(
@@ -68,13 +69,14 @@ class GpuDetails extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _GpuDetailRow(
-          label: 'VRAM',
-          value:
-              '${_formatMemory(stats.vramUsedMb)} / '
-              '${_formatMemory(stats.vramTotalMb)}',
-          valueColor: vramColor,
-        ),
+        if (stats.vramTotalMb > 0)
+          _GpuDetailRow(
+            label: 'VRAM',
+            value:
+                '${_formatMemory(stats.vramUsedMb)} / '
+                '${_formatMemory(stats.vramTotalMb)}',
+            valueColor: vramColor,
+          ),
         if (gttUsed != null && gttTotal != null)
           _GpuDetailRow(
             label: 'GTT',

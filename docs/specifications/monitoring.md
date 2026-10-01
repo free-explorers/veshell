@@ -98,33 +98,34 @@ the battery card is gated on `anyUpowerDeviceProvider`.
 
 ### GPU
 
-The GPU card is implemented for AMD (amdgpu). `reader/amdgpu.dart` detects the
-first `/sys/class/drm/cardN` exposing `device/gpu_busy_percent` and reads, each
-sample:
+`reader/gpu_device.dart` detects the card and picks a vendor reader; the card
+is omitted when no supported GPU is found, like the battery card. Each sample
+reads what the vendor exposes:
 
-| Value | sysfs |
-|---|---|
-| Busy | `device/gpu_busy_percent` |
-| VRAM used/total | `device/mem_info_vram_used` / `_total` (bytes) |
-| GTT used/total | `device/mem_info_gtt_used` / `_total` (bytes) |
-| Temperature, power | `device/hwmon/hwmonX/temp1_input` (m°C), `power1_input` (µW) |
-| Core, memory clock | `hwmonX/freq1_input` (sclk), `freq2_input` (mclk), Hz |
+| Vendor | Source | Notes |
+|---|---|---|
+| AMD (amdgpu) | `device/gpu_busy_percent`, `mem_info_vram_*`, `mem_info_gtt_*`, hwmon | True utilisation, VRAM and GTT |
+| Intel (i915/xe) | `gt*_freq_mhz` / `device/tile0/gt0/freq0/*`, hwmon | No root-free busy counter: the load is the RPS frequency relative to min/max, a **proxy**, not engine utilisation. No dedicated VRAM |
+| NVIDIA | NVML (`libnvidia-ml`) | Utilisation, VRAM, temperature, power and clocks; a missing library or symbol means no card |
 
-The card is omitted when no supported GPU is found, like the battery card.
-`reader/amdgpu_parsing.dart` holds the unit conversion and is unit tested.
-
-The GPU chart overlays device load and VRAM usage, both on the same `0..100`
-axis and over the same window (load as the filled area, VRAM as the stroked
-line). There is no legend; instead the VRAM value in the expanded details is
-drawn in the line's color. `MonitoringChart` takes a list of
-`MonitoringSeries`, so the CPU and memory cards keep their single filled line
-and only the GPU card draws a second.
+`reader/gpu_parsing.dart` holds the vendor-neutral unit conversions and
+`reader/intel.dart` the frequency proxy; both are unit-tested. `reader/nvidia.dart`
+binds the NVML subset through `dart:ffi` and is the only native binding.
 
 The choice of card mirrors the compositor's own in `drm_backend.rs`: an explicit
 `DRM_DEVICE` override wins (a `cardN` or `renderDN` path), otherwise the boot
-VGA (`device/boot_vga`), otherwise the lowest-numbered card. The selected
+VGA (`device/boot_vga`), otherwise the lowest-numbered card. For NVIDIA, NVML
+device `0` is used (multi-NVIDIA selection is not yet wired). The selected
 card's PCI address then filters per-process clients, so another GPU's clients
 are never attributed to it.
+
+The GPU chart overlays device load and VRAM usage on the same `0..100` axis and
+over the same window (load as the filled area, VRAM as the stroked line). There
+is no legend; instead the VRAM value in the expanded details is drawn in the
+line's color. The VRAM series and row are omitted for cards without dedicated
+memory (Intel), so only the load line remains. `MonitoringChart` takes a list of
+`MonitoringSeries`, so the CPU and memory cards keep their single filled line
+and only the GPU card can draw a second.
 
 Expanding the card lists the processes using the GPU (`reader/process_gpu.dart`):
 `/proc/<pid>/fd` is scanned for descriptors pointing at `/dev/dri/` before
@@ -135,11 +136,11 @@ interval, so a process using several engines at once can exceed 100%. The
 
 Not yet covered:
 
-- **Intel** (i915/xe) exposes frequency and temperature but no
-  `gpu_busy_percent`; busyness would come from the same `fdinfo` interface.
-- **NVIDIA** has no sysfs busy counter and would need NVML.
 - **Per-process GPU memory** is parsed from `fdinfo` but not yet shown; the
   card lists engine usage only.
+- Intel load is a frequency proxy — a softirq or blitter-only workload may not
+  move it.
+- Multi-NVIDIA selection; NVML device `0` is hard-coded.
 
 ## Testing
 

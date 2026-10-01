@@ -1,5 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/amdgpu.dart';
+import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/gpu_device.dart';
 
 part 'gpu_device.g.dart';
 

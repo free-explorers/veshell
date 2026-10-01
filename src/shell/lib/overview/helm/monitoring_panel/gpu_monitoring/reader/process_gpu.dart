@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/amdgpu.dart';
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/drm_fdinfo.dart';
+import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/gpu_device.dart';
 import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
 
 /// Per-pid total GPU engine time, in nanoseconds, for clients of [device].

@@ -3,8 +3,10 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/model/gpu_stats.dart';
-import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/amdgpu.dart';
-import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/amdgpu_parsing.dart';
+import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/gpu_device.dart';
+import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/gpu_parsing.dart';
+import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/gpu_stats_reader.dart';
+import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/intel.dart';
 
 void main() {
   group('buildGpuStats', () {
@@ -93,14 +95,51 @@ void main() {
     });
   });
 
+  group('intelLoadFromFrequency', () {
+    test('scales between the min and max frequency', () {
+      expect(
+        intelLoadFromFrequency(current: 800, min: 300, max: 1300),
+        50,
+      );
+    });
+
+    test('clamps to 0..100', () {
+      expect(
+        intelLoadFromFrequency(current: 2000, min: 300, max: 1300),
+        100,
+      );
+      expect(
+        intelLoadFromFrequency(current: 0, min: 300, max: 1300),
+        0,
+      );
+    });
+
+    test('returns null without a usable range', () {
+      expect(intelLoadFromFrequency(current: 800), isNull);
+      expect(
+        intelLoadFromFrequency(current: 800, min: 800, max: 800),
+        isNull,
+      );
+    });
+  });
+
   group('selectGpuDevice', () {
-    const card0 = GpuDevice(cardPath: '/sys/class/drm/card0', driver: 'amdgpu');
+    const card0 = GpuDevice(
+      cardPath: '/sys/class/drm/card0',
+      driver: 'amdgpu',
+      vendor: GpuVendor.amd,
+    );
     const card1 = GpuDevice(
       cardPath: '/sys/class/drm/card1',
       driver: 'amdgpu',
+      vendor: GpuVendor.amd,
       isBootVga: true,
     );
-    const card2 = GpuDevice(cardPath: '/sys/class/drm/card2', driver: 'amdgpu');
+    const card2 = GpuDevice(
+      cardPath: '/sys/class/drm/card2',
+      driver: 'amdgpu',
+      vendor: GpuVendor.amd,
+    );
 
     test('returns null without candidates', () {
       expect(selectGpuDevice(const []), isNull);

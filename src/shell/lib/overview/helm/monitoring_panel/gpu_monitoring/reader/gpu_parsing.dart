@@ -1,9 +1,9 @@
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/model/gpu_stats.dart';
 
-/// Raw amdgpu sysfs values, in the kernel's own units.
+/// Raw GPU sysfs values, in the kernel's own units.
 ///
-/// Kept separate from the reader so [buildGpuStats] can be unit tested without
-/// touching `/sys`.
+/// Kept separate from the vendor readers so [buildGpuStats] can be unit tested
+/// without touching `/sys`.
 class GpuRawValues {
   /// Creates a raw sample; any field the card does not expose stays `null`.
   const GpuRawValues({

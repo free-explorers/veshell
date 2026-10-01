@@ -1,31 +1,47 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/model/gpu_stats.dart';
-import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/amdgpu_parsing.dart';
-import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
 
-/// A DRM card exposing telemetry the shell knows how to read.
+/// Vendor of a detected GPU, which selects the reader.
+enum GpuVendor {
+  /// AMD, read from the amdgpu sysfs.
+  amd,
+
+  /// Intel i915 / xe, read from sysfs.
+  intel,
+
+  /// NVIDIA, read through NVML.
+  nvidia,
+
+  /// Recognized as a DRM card but with no reader.
+  unknown,
+}
+
+/// A GPU the shell can report on.
 class GpuDevice {
   /// Creates a device handle.
   const GpuDevice({
     required this.cardPath,
     required this.driver,
+    required this.vendor,
     this.pciAddress,
     this.vendorId,
     this.hwmonPath,
     this.isBootVga = false,
+    this.nvidiaIndex,
   });
 
-  /// `/sys/class/drm/cardN`.
+  /// `/sys/class/drm/cardN`, or empty for a device with no DRM node.
   final String cardPath;
 
   /// Driver name decoded from `device/driver`, e.g. `amdgpu`.
   final String driver;
 
-  /// PCI address from `device`, e.g. `0000:03:00.0`. Matches the
-  /// `drm-pci-id` of a client's `fdinfo`, so per-process data can be filtered
-  /// to this card.
+  /// Which reader to use.
+  final GpuVendor vendor;
+
+  /// PCI address from `device`, e.g. `0000:03:00.0`, also used to filter
+  /// `fdinfo` clients to this card.
   final String? pciAddress;
 
   /// PCI vendor id from `device/vendor`, e.g. `0x1002`.
@@ -36,6 +52,9 @@ class GpuDevice {
 
   /// Whether the firmware marked this card as the boot VGA device.
   final bool isBootVga;
+
+  /// NVML device index, for NVIDIA. `null` selects the first device.
+  final int? nvidiaIndex;
 }
 
 final _cardPattern = RegExp(r'^card(\d+)$');
@@ -48,8 +67,8 @@ final _cardPattern = RegExp(r'^card(\d+)$');
 /// must be passed lowest-numbered first.
 ///
 /// [renderNodeToCard] maps a `renderDN` name to the card that owns it, for the
-/// `DRM_DEVICE=/dev/dri/renderDXXX` form. It is a parameter so the selection can
-/// be unit tested without sysfs.
+/// `DRM_DEVICE=/dev/dri/renderDXXX` form. It is a parameter so the selection
+/// can be unit tested without sysfs.
 GpuDevice? selectGpuDevice(
   List<GpuDevice> candidates, {
   String? devicePathOverride,
@@ -72,7 +91,7 @@ GpuDevice? selectGpuDevice(
   return candidates.first;
 }
 
-/// Detects the GPU to report, or `null` when none exposes amdgpu telemetry.
+/// Detects the GPU to report, or `null` when no supported one is present.
 GpuDevice? detectGpuDevice() {
   final candidates = _detectCandidates();
   if (candidates.isEmpty) return null;
@@ -106,13 +125,23 @@ List<GpuDevice> _detectCandidates() {
   final candidates = <GpuDevice>[];
   for (final card in cards) {
     final devicePath = '${card.path}/device';
-    if (!File('$devicePath/gpu_busy_percent').existsSync()) continue;
+    final driver = _driverName(devicePath);
+    final vendorId = _readHexSync('$devicePath/vendor');
+    final vendor = _vendorFor(vendorId, driver);
+    if (vendor == GpuVendor.unknown) continue;
+    // AMD is only usable when the kernel exposes the busy counter; Intel and
+    // NVIDIA have no such file.
+    if (vendor == GpuVendor.amd &&
+        !File('$devicePath/gpu_busy_percent').existsSync()) {
+      continue;
+    }
     candidates.add(
       GpuDevice(
         cardPath: card.path,
-        driver: _driverName(devicePath),
+        driver: driver,
+        vendor: vendor,
         pciAddress: _pciAddress(devicePath),
-        vendorId: _readHexSync('$devicePath/vendor'),
+        vendorId: vendorId,
         hwmonPath: _findHwmon(devicePath),
         isBootVga: _readTextSync('$devicePath/boot_vga')?.trim() == '1',
       ),
@@ -121,9 +150,21 @@ List<GpuDevice> _detectCandidates() {
   return candidates;
 }
 
+GpuVendor _vendorFor(int? vendorId, String driver) {
+  if (vendorId == 0x1002 || driver == 'amdgpu') return GpuVendor.amd;
+  if (vendorId == 0x8086 || driver == 'i915' || driver == 'xe') {
+    return GpuVendor.intel;
+  }
+  if (vendorId == 0x10de || driver.startsWith('nvidia')) {
+    return GpuVendor.nvidia;
+  }
+  return GpuVendor.unknown;
+}
+
 Map<String, GpuDevice> _renderNodeToCard(List<GpuDevice> candidates) {
   final map = <String, GpuDevice>{};
   for (final candidate in candidates) {
+    if (candidate.cardPath.isEmpty) continue;
     try {
       final drmDir = p.dirname(
         Directory(candidate.cardPath).resolveSymbolicLinksSync(),
@@ -139,41 +180,6 @@ Map<String, GpuDevice> _renderNodeToCard(List<GpuDevice> candidates) {
   return map;
 }
 
-/// Reads the current telemetry of [device], or `null` when it became unusable.
-Future<GpuStats?> readGpuStats(GpuDevice device) async {
-  final devicePath = '${device.cardPath}/device';
-  final hwmon = device.hwmonPath;
-  final raw = GpuRawValues(
-    busyPercent: await _readInt('$devicePath/gpu_busy_percent'),
-    vramUsedBytes: await _readInt('$devicePath/mem_info_vram_used'),
-    vramTotalBytes: await _readInt('$devicePath/mem_info_vram_total'),
-    gttUsedBytes: await _readInt('$devicePath/mem_info_gtt_used'),
-    gttTotalBytes: await _readInt('$devicePath/mem_info_gtt_total'),
-    temperatureMilliCelsius: hwmon == null
-        ? null
-        : await _readInt('$hwmon/temp1_input'),
-    powerMicrowatts: hwmon == null ? null : await _readInt('$hwmon/power1_input'),
-    coreClockHertz: hwmon == null ? null : await _readInt('$hwmon/freq1_input'),
-    memoryClockHertz: hwmon == null
-        ? null
-        : await _readInt('$hwmon/freq2_input'),
-  );
-  return buildGpuStats(raw);
-}
-
-Future<int?> _readInt(String path) async {
-  final text = await readTextFile(path);
-  return text == null ? null : int.tryParse(text.trim());
-}
-
-String? _readTextSync(String path) {
-  try {
-    return File(path).readAsStringSync();
-  } on FileSystemException {
-    return null;
-  }
-}
-
 String _driverName(String devicePath) {
   try {
     return p.basename(Link('$devicePath/driver').targetSync());
@@ -185,6 +191,14 @@ String _driverName(String devicePath) {
 String? _pciAddress(String devicePath) {
   try {
     return p.basename(Directory(devicePath).resolveSymbolicLinksSync());
+  } on FileSystemException {
+    return null;
+  }
+}
+
+String? _readTextSync(String path) {
+  try {
+    return File(path).readAsStringSync();
   } on FileSystemException {
     return null;
   }

@@ -1,8 +1,8 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/provider/gpu_device.dart';
-import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/amdgpu.dart';
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/drm_fdinfo.dart';
+import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/gpu_device.dart';
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/process_gpu.dart';
 import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
 

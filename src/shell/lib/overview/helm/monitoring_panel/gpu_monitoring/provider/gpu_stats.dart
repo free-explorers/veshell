@@ -3,8 +3,9 @@ import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/model/gpu_st
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/provider/gpu_chart.dart';
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/provider/gpu_device.dart';
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/provider/gpu_memory_chart.dart';
-import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/amdgpu.dart';
-import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/amdgpu_parsing.dart';
+import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/gpu_device.dart';
+import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/gpu_parsing.dart';
+import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/gpu_stats_reader.dart';
 import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
 
 part 'gpu_stats.g.dart';
@@ -34,6 +35,9 @@ class GpuStatsState extends _$GpuStatsState {
     if (!ref.mounted || stats == null) return;
     state = stats;
     ref.read(gpuChartProvider.notifier).add(stats.load.toDouble());
-    ref.read(gpuMemoryChartProvider.notifier).add(vramUsedPercent(stats));
+    // Integrated GPUs (Intel) have no dedicated VRAM; skip the series there.
+    if (stats.vramTotalMb > 0) {
+      ref.read(gpuMemoryChartProvider.notifier).add(vramUsedPercent(stats));
+    }
   }
 }
