@@ -249,12 +249,12 @@ class WorkspaceListButton extends HookConsumerWidget {
                     style: ButtonStyle(
                       backgroundColor: WidgetStatePropertyAll(
                         candidateData.isNotEmpty
-                            ? Theme.of(context).colorScheme.primary
+                            ? Theme.of(context).colorScheme.primaryContainer
                             : null,
                       ),
                       foregroundColor: WidgetStatePropertyAll(
                         candidateData.isNotEmpty
-                            ? Theme.of(context).colorScheme.onPrimary
+                            ? Theme.of(context).colorScheme.onPrimaryContainer
                             : null,
                       ),
                       shape: WidgetStateProperty.all(

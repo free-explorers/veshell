@@ -23,6 +23,10 @@ class VeshellTheme extends _$VeshellTheme {
     final colorScheme = ColorScheme.fromSeed(
       seedColor: themeColor,
       brightness: defaultTheme.brightness,
+      // Keep the seed's own chroma: the default `tonalSpot` pastelises the
+      // primary, while `fidelity` derives the palettes from the seed color
+      // itself so the theme reads as the chosen color.
+      dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
     );
 
     final lighterSurface = Color.lerp(colorScheme.surface, Colors.white, 0.4)!;
@@ -49,6 +53,7 @@ class VeshellTheme extends _$VeshellTheme {
   ThemeData _applyCardTheme(ThemeData theme) {
     return theme.copyWith(
       cardTheme: theme.cardTheme.copyWith(
+        margin: EdgeInsets.zero,
         color: theme.colorScheme.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(

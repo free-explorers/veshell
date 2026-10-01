@@ -348,10 +348,10 @@ class SearchModeButton extends StatelessWidget {
       buttonType = IconButton.filled;
       style = style.copyWith(
         backgroundColor: WidgetStateProperty.all(
-          Theme.of(context).colorScheme.primary,
+          Theme.of(context).colorScheme.primaryContainer,
         ),
         foregroundColor: WidgetStateProperty.all(
-          Theme.of(context).colorScheme.onPrimary,
+          Theme.of(context).colorScheme.onPrimaryContainer,
         ),
       );
     }

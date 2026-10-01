@@ -197,7 +197,7 @@ closed (reason 2) and marked read as part of the navigation.
 - A **persistent tile** focuses its screen, hides the overview (which would
   otherwise cover the workspace), then selects its workspace and tile.
 - An **ephemeral window** focuses its screen and opens the overview to that
-  specific window (`Overview.focusedWindowId`).
+  specific window (`Overview.show(windowId)`).
 - A **dialog** resolves to its parent tile.
 
 The owning meta window is also activated on the compositor, so it receives

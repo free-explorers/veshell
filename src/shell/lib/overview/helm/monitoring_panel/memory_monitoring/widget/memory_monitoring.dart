@@ -75,7 +75,7 @@ class MemoryMonitoringWidget extends HookConsumerWidget {
                           ),
                         ),
                         Card(
-                          color: Theme.of(context).colorScheme.primary,
+                          color: Theme.of(context).colorScheme.primaryContainer,
                           child: SizedBox(
                             height: 32,
                             width: 56,
@@ -86,7 +86,7 @@ class MemoryMonitoringWidget extends HookConsumerWidget {
                                     .copyWith(
                                       color: Theme.of(
                                         context,
-                                      ).colorScheme.onPrimary,
+                                      ).colorScheme.onPrimaryContainer,
                                       fontWeight: FontWeight.bold,
                                     ),
                               ),

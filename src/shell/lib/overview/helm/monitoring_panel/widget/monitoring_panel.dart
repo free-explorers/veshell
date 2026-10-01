@@ -5,25 +5,21 @@ import 'package:shell/overview/helm/monitoring_panel/disk_monitoring/widget/disk
 import 'package:shell/overview/helm/monitoring_panel/memory_monitoring/widget/memory_monitoring.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/any_upower_device.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/widget/battery_indicator.dart';
+import 'package:shell/overview/helm/widget/panel_column.dart';
 
-class MonitoringPanel extends HookConsumerWidget {
-  const MonitoringPanel({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Battery level
-        // Disk usages
-        // CPU loading
-        // Memory loading
-        // Network usage
-        if (ref.watch(anyUpowerDeviceProvider)) const PowerIndicator(),
-        const CpuMonitoringWidget(),
-        const MemoryMonitoringWidget(),
-        const DiskUsageMonitoring(),
-      ],
-    );
-  }
+/// The monitoring cards: battery (when present), CPU, memory and disk.
+///
+/// The cards are grouped in a [Column] with the shared [panelGap] so they keep
+/// the same spacing as any other card in the panel.
+Widget monitoringSection(WidgetRef ref) {
+  return Column(
+    mainAxisSize: MainAxisSize.min,
+    spacing: panelGap,
+    children: [
+      if (ref.watch(anyUpowerDeviceProvider)) const PowerIndicator(),
+      const CpuMonitoringWidget(),
+      const MemoryMonitoringWidget(),
+      const DiskUsageMonitoring(),
+    ],
+  );
 }

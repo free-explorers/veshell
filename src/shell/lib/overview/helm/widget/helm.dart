@@ -2,7 +2,10 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/notification/provider/notification_list.dart';
-import 'package:shell/overview/helm/control_panel/widget/control_panel.dart';
+import 'package:shell/overview/helm/control_panel/audio/widget/audio_control.dart';
+import 'package:shell/overview/helm/control_panel/bluetooth/widget/bluetooth_control.dart';
+import 'package:shell/overview/helm/control_panel/media_player/widget/media_player_control.dart';
+import 'package:shell/overview/helm/control_panel/network/widget/network_control.dart';
 import 'package:shell/overview/helm/control_panel/widget/session_controls.dart';
 import 'package:shell/overview/helm/monitoring_panel/widget/monitoring_panel.dart';
 import 'package:shell/overview/helm/notification_panel/widget/notification_panel.dart';
@@ -10,9 +13,6 @@ import 'package:shell/overview/helm/widget/panel_column.dart';
 
 /// Minimum width a single Helm column needs to lay out its cards comfortably.
 const _minPanelWidth = 420.0;
-
-/// Gap between two Helm columns.
-const _panelGap = 8.0;
 
 /// The dashboard shown when the overview has no ephemeral window.
 ///
@@ -31,7 +31,7 @@ class Helm extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableColumns =
-            ((constraints.maxWidth + _panelGap) / (_minPanelWidth + _panelGap))
+            ((constraints.maxWidth + panelGap) / (_minPanelWidth + panelGap))
                 .floor();
         if (availableColumns >= 3) {
           return const _ThreeColumnLayout();
@@ -50,18 +50,23 @@ class _ThreeColumnLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Row(
       children: [
         Expanded(
           child: PanelColumn(
-            footer: SessionControls(),
-            children: [ControlPanel()],
+            footer: const SessionControls(),
+            sections: [
+              mediaPlayerSection,
+              _card(const AudioControl()),
+              networkSection,
+              _card(const BluetoothControl()),
+            ],
           ),
         ),
-        SizedBox(width: _panelGap),
-        Expanded(child: PanelColumn(children: [MonitoringPanel()])),
-        SizedBox(width: _panelGap),
-        Expanded(child: NotificationPanel()),
+        const SizedBox(width: panelGap),
+        const Expanded(child: PanelColumn(sections: [monitoringSection])),
+        const SizedBox(width: panelGap),
+        const Expanded(child: NotificationPanel()),
       ],
     );
   }
@@ -72,20 +77,30 @@ class _MergedLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Row(
       children: [
         Expanded(
           child: PanelColumn(
-            footer: SessionControls(),
-            children: [ControlPanel(), MonitoringPanel()],
+            footer: const SessionControls(),
+            sections: [
+              mediaPlayerSection,
+              _card(const AudioControl()),
+              networkSection,
+              _card(const BluetoothControl()),
+              monitoringSection,
+            ],
           ),
         ),
-        SizedBox(width: _panelGap),
-        Expanded(child: NotificationPanel()),
+        const SizedBox(width: panelGap),
+        const Expanded(child: NotificationPanel()),
       ],
     );
   }
 }
+
+/// Wraps a single card as a [PanelSection].
+PanelSection _card(Widget card) =>
+    (_) => card;
 
 class _TabbedLayout extends ConsumerWidget {
   const _TabbedLayout();
@@ -125,12 +140,20 @@ class _TabbedLayout extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: _panelGap),
-          const Expanded(
+          const SizedBox(height: panelGap),
+          Expanded(
             child: TabBarView(
               children: [
-                PanelColumn(children: [ControlPanel(), MonitoringPanel()]),
-                NotificationPanel(),
+                PanelColumn(
+                  sections: [
+                    mediaPlayerSection,
+                    _card(const AudioControl()),
+                    networkSection,
+                    _card(const BluetoothControl()),
+                    monitoringSection,
+                  ],
+                ),
+                const NotificationPanel(),
               ],
             ),
           ),

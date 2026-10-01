@@ -34,8 +34,8 @@ A single scrollable list inside the same card as the other search modes.
   sort before files, then alphabetically. Directories show a folder glyph; files
   show a glyph picked from a small extension→icon table, with a generic file
   glyph as fallback.
-- The **selected** row is highlighted; the selection is the preview target shown
-  in the `OverviewContent` slot (see
+- The **selected** row is highlighted; selecting an entry opens it in the
+  overview's preview tab (see
   [`design/file_preview.md`](../design/file_preview.md)).
 
 There is no locations column, no grid, no sort menu and no properties pane.
