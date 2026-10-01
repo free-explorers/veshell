@@ -66,11 +66,15 @@ bool isKernelThread(int pid) {
   }
 }
 
-/// Runs [sample] every [interval] until the returned callback is invoked.
+/// Samples once immediately, then every [interval], until the returned callback
+/// is invoked.
 ///
-/// The next tick is scheduled only after the current sample completes, so a
-/// slow scan cannot overlap the following one; a thrown error is logged and
-/// swallowed rather than killing the loop.
+/// Sampling before the first interval matters for a freshly opened panel: an
+/// auto-disposed provider rebuilds empty, so waiting a full interval would show
+/// a blank card (seconds, for the disk scan). The next tick is scheduled only
+/// after the current sample completes, so a slow scan cannot overlap the
+/// following one; a thrown error is logged and swallowed rather than killing
+/// the loop.
 void Function() startPolling(
   Duration interval,
   Future<void> Function() sample,
@@ -78,19 +82,19 @@ void Function() startPolling(
   var cancelled = false;
   Timer? timer;
 
-  void schedule() {
-    timer = Timer(interval, () async {
+  void schedule(Duration delay) {
+    timer = Timer(delay, () async {
       if (cancelled) return;
       try {
         await sample();
       } on Object catch (error, stackTrace) {
         monitoringLog.warning('monitoring sample failed', error, stackTrace);
       }
-      if (!cancelled) schedule();
+      if (!cancelled) schedule(interval);
     });
   }
 
-  schedule();
+  schedule(Duration.zero);
   return () {
     cancelled = true;
     timer?.cancel();

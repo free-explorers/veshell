@@ -59,11 +59,12 @@ for the whole session.
 - **Disk is polled slower.** `DiskSpaceState` rescans every 5 s while the panel
   is open; a `df` subprocess is far more expensive than the `/proc` reads.
 
-The poller (`sampling/proc_files.dart`) schedules the next tick only after the
-current sample completes, so a slow scan never overlaps the following one, and
-a transient `/proc` read failure is logged and skipped instead of killing the
-loop. Sampling stops for good once the returned cancel callback runs, which the
-providers wire to `ref.onDispose`.
+The poller (`sampling/proc_files.dart`) samples once immediately, so a freshly
+opened card is populated before the first interval elapses, then schedules the
+next tick only after the current sample completes — a slow scan never overlaps
+the following one, and a transient read failure is logged and skipped instead
+of killing the loop. Sampling stops for good once the returned cancel callback
+runs, which the providers wire to `ref.onDispose`.
 
 Per-process lists are sampled only while their card is expanded; the aggregate
 badge and chart keep refreshing while collapsed.

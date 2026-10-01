@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
 
 void main() {
-  test('startPolling never overlaps samples and stops on cancel', () {
+  test('startPolling samples immediately, never overlaps, and stops', () {
     fakeAsync((async) {
       var started = 0;
       var completed = 0;
@@ -13,21 +13,20 @@ void main() {
         completed++;
       });
 
-      async.elapse(const Duration(milliseconds: 500));
+      // The first sample does not wait for a full interval.
+      async.elapse(const Duration(milliseconds: 1));
       expect(started, 1);
 
-      // A slow sample must not let a second tick start underneath it.
-      async.elapse(const Duration(milliseconds: 500));
-      expect(started, 1);
-
-      async.elapse(const Duration(milliseconds: 300));
+      // It finishes at t=800; the next tick waits a full interval after that.
+      async.elapse(const Duration(milliseconds: 799));
       expect(completed, 1);
+      expect(started, 1);
 
-      async.elapse(const Duration(milliseconds: 500));
+      async.elapse(const Duration(milliseconds: 500)); // t=1300
       expect(started, 2);
 
       cancel();
-      async.elapse(const Duration(seconds: 5));
+      async.elapse(const Duration(seconds: 10));
       expect(started, 2);
     });
   });
