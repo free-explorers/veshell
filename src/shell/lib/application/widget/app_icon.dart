@@ -5,11 +5,14 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/icon_file_from_query.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
+import 'package:shell/application/util/icon_size.dart';
 
 class AppIconByPath extends StatelessWidget {
   const AppIconByPath({required this.path, super.key, this.constrainedSize});
 
   final String? path;
+
+  /// Logical size override. When null the size is taken from the layout.
   final int? constrainedSize;
 
   @override
@@ -18,25 +21,43 @@ class AppIconByPath extends StatelessWidget {
 
     if (constrainedSize != null) {
       return Consumer(
-        builder: (context, ref, _) => _buildIcon(ref, path!, constrainedSize!),
+        builder: (context, ref, _) =>
+            _buildIcon(context, ref, path!, constrainedSize!.toDouble()),
       );
     }
 
     return LayoutBuilder(
       builder: (context, constraints) => Consumer(
         builder: (context, ref, _) =>
-            _buildIcon(ref, path!, constraints.biggest.shortestSide.floor()),
+            _buildIcon(context, ref, path!, constraints.biggest.shortestSide),
       ),
     );
   }
 
-  Widget _buildIcon(WidgetRef ref, String path, int size) {
-    if (size <= 0) return const SizedBox();
+  Widget _buildIcon(
+    BuildContext context,
+    WidgetRef ref,
+    String path,
+    double logicalSize,
+  ) {
+    if (logicalSize <= 0) return const SizedBox();
+
+    // Snap to a physical-pixel bucket so the resolution and pixel caches stay
+    // bounded, and decode at the device pixel ratio so icons are crisp on
+    // HiDPI displays.
+    final bucket = iconPhysicalBucket(
+      logicalSize,
+      MediaQuery.devicePixelRatioOf(context),
+    );
 
     final iconFile = ref
         .watch(
           iconFileFromQueryProvider(
-            IconQuery(name: path, size: size, extensions: const ['svg', 'png']),
+            IconQuery(
+              name: path,
+              size: bucket,
+              extensions: const ['svg', 'png'],
+            ),
           ),
         )
         .value;
@@ -48,7 +69,9 @@ class AppIconByPath extends StatelessWidget {
     if (iconFile.path.endsWith('.svg')) {
       return SvgPicture.file(iconFile);
     }
-    return Image.file(iconFile, cacheWidth: size);
+    // `cacheWidth` is in physical pixels; the decoded frame lives in Flutter's
+    // global `ImageCache`, which outlives this widget and the provider.
+    return Image.file(iconFile, cacheWidth: bucket);
   }
 }
 

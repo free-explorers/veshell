@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/icon_file_from_query.dart';
@@ -14,6 +13,10 @@ void main() {
   testWidgets('panel-sized SVG icon is displayed after a cold lookup', (
     tester,
   ) async {
+    // A 1:1 device pixel ratio keeps the computed decode bucket predictable.
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     final directory = Directory.systemTemp.createTempSync('app-icon-test');
     addTearDown(() => directory.deleteSync(recursive: true));
     final svg = File('${directory.path}/icon.svg')
@@ -23,15 +26,12 @@ void main() {
 </svg>
 ''');
     final lookup = Completer<File?>();
-    final query = IconQuery(
-      name: 'com.obsproject.Studio',
-      size: 24,
-      extensions: const ['svg', 'png'],
-    );
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          iconFileFromQueryProvider(query).overrideWith((ref) => lookup.future),
+          // Override the whole family: the widget asks for a physical-pixel
+          // bucket, not a raw logical size.
+          iconFileFromQueryProvider.overrideWith((ref, query) => lookup.future),
         ],
         child: const MaterialApp(
           home: Center(
@@ -53,6 +53,9 @@ void main() {
   });
 
   testWidgets('raster icons use a bounded decode size', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     final directory = Directory.systemTemp.createTempSync('app-icon-test');
     addTearDown(() => directory.deleteSync(recursive: true));
     final png = File('${directory.path}/icon.png')
@@ -62,15 +65,10 @@ void main() {
           'AAFzUkdCAK7OHOkAAAANSURBVAiZY/jPwPAfAAUAAf+rzjaJAAAAAElFTkSuQmCC',
         ),
       );
-    final query = IconQuery(
-      name: 'brave-desktop',
-      size: 24,
-      extensions: const ['svg', 'png'],
-    );
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          iconFileFromQueryProvider(query).overrideWith((ref) async => png),
+          iconFileFromQueryProvider.overrideWith((ref, query) async => png),
         ],
         child: const MaterialApp(
           home: Center(

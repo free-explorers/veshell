@@ -30,7 +30,8 @@ version-free; every versionable fact is anchored in a project file.
 
 ## Diagnosing Dart-side problems directly
 
-Run from `src/shell/`, using `.flutter_sdk/bin/dart`:
+Run from `src/shell/`, using `../../.flutter_sdk/bin/dart` (the SDK lives at
+`.flutter_sdk/` in the repo root):
 
 - `dart run build_runner build --delete-conflicting-outputs`
 - If the incremental cache looks stale or generated files have grudges:
@@ -43,8 +44,8 @@ Run from `src/shell/`, using `.flutter_sdk/bin/dart`:
 The root `cargo test` gate does not run Flutter tests. Run them with the
 project SDK from `src/shell/`:
 
-- `../.flutter_sdk/bin/flutter test` (all tests), or
-- `../.flutter_sdk/bin/flutter test test/<file>_test.dart` (one file).
+- `../../.flutter_sdk/bin/flutter test` (all tests), or
+- `../../.flutter_sdk/bin/flutter test test/<file>_test.dart` (one file).
 
 ## Where things live
 
