@@ -49,10 +49,47 @@ pub fn install_flutter_sdk() -> Result<(), Box<dyn std::error::Error>> {
         flutter_version
     );
 
-    // Checkout the correct version
-    std::process::Command::new("git")
-        .args(&["-C", FLUTTER_REPO_DIR, "checkout", flutter_version])
-        .status()?;
+    // Checkout the correct version. The local clone may predate the pinned
+    // tag, so fetch it on demand instead of silently falling back to whatever
+    // revision happens to be checked out.
+    let checkout = |version: &str| -> std::io::Result<std::process::ExitStatus> {
+        std::process::Command::new("git")
+            .args(["-C", FLUTTER_REPO_DIR, "checkout", version])
+            .status()
+    };
+
+    let mut checked_out = checkout(flutter_version)?;
+    if !checked_out.success() {
+        println!(
+            "Flutter SDK tag {} missing locally, fetching it...",
+            flutter_version
+        );
+        let fetched = std::process::Command::new("git")
+            .args([
+                "-C",
+                FLUTTER_REPO_DIR,
+                "fetch",
+                "origin",
+                "tag",
+                flutter_version,
+            ])
+            .status()?;
+        if !fetched.success() {
+            return Err(format!(
+                "Failed to fetch Flutter SDK tag {} from {}",
+                flutter_version, FLUTTER_REPO_URL
+            )
+            .into());
+        }
+        checked_out = checkout(flutter_version)?;
+    }
+    if !checked_out.success() {
+        return Err(format!(
+            "Failed to check out Flutter SDK tag {} in {}",
+            flutter_version, FLUTTER_REPO_DIR
+        )
+        .into());
+    }
 
     Ok(())
 }

@@ -14,15 +14,22 @@ fn main() {
     println!("cargo:rerun-if-changed=Cargo.toml");
     println!("cargo:rerun-if-changed=extra/build/mod.rs");
 
-    // print env vars
-    let flutter_engine_build = match env::var("OUT_DIR") {
-        Ok(out_dir) => {
-            let profile_folder = out_dir.split('/').nth_back(3).unwrap_or("debug");
+    // Determine the active cargo profile. Cargo exports it directly as
+    // `PROFILE`; fall back to deriving it from `OUT_DIR` for older cargo
+    // versions (the trailing components are .../<profile>/build/<pkg>/<hash>/out).
+    let profile_folder = env::var("PROFILE").ok().or_else(|| {
+        env::var("OUT_DIR")
+            .ok()
+            .and_then(|out_dir| out_dir.split('/').nth_back(3).map(str::to_owned))
+    });
+
+    let flutter_engine_build = match profile_folder {
+        Some(profile_folder) => {
             println!("cargo:rustc-env=CARGO_PROFILE={}", profile_folder);
-            FlutterEngineBuild::from_str(profile_folder)
+            FlutterEngineBuild::from_str(&profile_folder)
                 .expect("The profile folder name must be one of debug, profile, release")
         }
-        Err(_) => FlutterEngineBuild::Debug,
+        None => FlutterEngineBuild::Debug,
     };
 
     // Install flutter and download Engine shared libs
