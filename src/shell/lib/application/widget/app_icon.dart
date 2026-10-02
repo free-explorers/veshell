@@ -8,23 +8,13 @@ import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/application/util/icon_size.dart';
 
 class AppIconByPath extends StatelessWidget {
-  const AppIconByPath({required this.path, super.key, this.constrainedSize});
+  const AppIconByPath({required this.path, super.key});
 
   final String? path;
-
-  /// Logical size override. When null the size is taken from the layout.
-  final int? constrainedSize;
 
   @override
   Widget build(BuildContext context) {
     if (path == null) return const SizedBox();
-
-    if (constrainedSize != null) {
-      return Consumer(
-        builder: (context, ref, _) =>
-            _buildIcon(context, ref, path!, constrainedSize!.toDouble()),
-      );
-    }
 
     return LayoutBuilder(
       builder: (context, constraints) => Consumer(
@@ -79,13 +69,10 @@ class AppIconById extends ConsumerWidget {
   const AppIconById({
     required this.id,
     super.key,
-    this.constrainedSize,
     this.fallback = const Icon(MdiIcons.helpCircle),
   });
 
   final String? id;
-
-  final int? constrainedSize;
 
   /// Shown while the desktop entry is unknown, or when it names no icon.
   final Widget fallback;
@@ -107,10 +94,7 @@ class AppIconById extends ConsumerWidget {
             if (iconPath == null) {
               return fallback;
             }
-            return AppIconByPath(
-              path: iconPath,
-              constrainedSize: constrainedSize,
-            );
+            return AppIconByPath(path: iconPath);
           },
           orElse: () => fallback,
         );

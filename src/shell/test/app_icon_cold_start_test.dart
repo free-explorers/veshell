@@ -72,7 +72,11 @@ void main() {
         ],
         child: const MaterialApp(
           home: Center(
-            child: AppIconByPath(path: 'brave-desktop', constrainedSize: 24),
+            child: SizedBox(
+              width: 24,
+              height: 24,
+              child: AppIconByPath(path: 'brave-desktop'),
+            ),
           ),
         ),
       ),
