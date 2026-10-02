@@ -131,7 +131,7 @@ class _TabbedLayout extends ConsumerWidget {
                     Badge(
                       isLabelVisible: notificationCount > 0,
                       label: Text('$notificationCount'),
-                      child: const Icon(MdiIcons.bell),
+                      child: const Icon(MdiIcons.bullhornVariant),
                     ),
                     const SizedBox(width: 8),
                     const Text('Notifications'),
