@@ -19,23 +19,20 @@ class DiskUsageMonitoring extends HookConsumerWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                children: [
-                  Icon(
-                    MdiIcons.harddisk,
-                    color: Theme.of(context).colorScheme.primary,
+            Row(
+              children: [
+                Icon(
+                  MdiIcons.harddisk,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    'Disks',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      'Disks',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
             for (final disk in diskSpaceState)
               Padding(

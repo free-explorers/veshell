@@ -158,7 +158,7 @@ class _TabbedLayout extends ConsumerWidget {
             ),
           ),
           const Divider(height: 2),
-          const SizedBox(height: 8),
+          const SizedBox(height: panelGap),
           const SessionControls(),
         ],
       ),

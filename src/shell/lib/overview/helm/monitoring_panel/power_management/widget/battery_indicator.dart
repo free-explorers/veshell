@@ -30,23 +30,20 @@ class PowerIndicator extends HookConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                children: [
-                  Icon(
-                    MdiIcons.lightningBolt,
-                    color: Theme.of(context).colorScheme.primary,
+            Row(
+              children: [
+                Icon(
+                  MdiIcons.lightningBolt,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    'Power',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      'Power',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
             if (batteryDevice != null)
               SystemBatteryIndicator(device: batteryDevice),
