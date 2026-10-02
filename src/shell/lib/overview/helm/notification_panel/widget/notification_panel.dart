@@ -24,7 +24,7 @@ class NotificationPanel extends HookConsumerWidget {
             child: Row(
               children: [
                 Icon(
-                  MdiIcons.bell,
+                  MdiIcons.bullhornVariant,
                   color: Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(width: 16),
@@ -105,22 +105,23 @@ class _EmptyNotifications extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Center(
+    return Align(
+      alignment: Alignment.topCenter,
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              MdiIcons.bellOutline,
+              MdiIcons.bullhornVariantOutline,
               size: 48,
               color: theme.colorScheme.onSurfaceVariant,
             ),
             const SizedBox(height: 12),
-            Text('No notifications', style: theme.textTheme.titleMedium),
+            Text('No activity yet', style: theme.textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
-              'You are all caught up',
+              'Notifications will be listed here as a history of activities.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
