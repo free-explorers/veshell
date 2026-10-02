@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/icon_file_from_query.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/application/util/icon_size.dart';
+import 'package:shell/application/util/normalizing_svg_file_loader.dart';
 
 class AppIconByPath extends StatelessWidget {
   const AppIconByPath({required this.path, super.key});
@@ -57,7 +58,10 @@ class AppIconByPath extends StatelessWidget {
     // RawImage using a provider-owned ui.Image can lose its handle when the
     // provider is rebuilt during icon-theme initialization at session start.
     if (iconFile.path.endsWith('.svg')) {
-      return SvgPicture.file(iconFile);
+      // The normalizing loader inlines `<style>`/`class` selectors, which
+      // flutter_svg ignores; without it themed icons that rely on them render
+      // as a solid black square.
+      return SvgPicture(NormalizingSvgFileLoader(iconFile));
     }
     // `cacheWidth` is in physical pixels; the decoded frame lives in Flutter's
     // global `ImageCache`, which outlives this widget and the provider.

@@ -5,6 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
+import 'package:shell/application/util/normalizing_svg_file_loader.dart';
 import 'package:shell/file_explorer/model/directory_path.dart';
 import 'package:shell/file_preview/model/file_preview.dart';
 import 'package:shell/file_preview/provider/file_preview.dart';
@@ -113,7 +114,7 @@ class _SvgPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Center(child: SvgPicture.file(File(path))),
+      child: Center(child: SvgPicture(NormalizingSvgFileLoader(File(path)))),
     );
   }
 }
