@@ -50,45 +50,84 @@ class NotificationPanel extends HookConsumerWidget {
             ),
           ),
           Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.all(8),
-              separatorBuilder: (context, index) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final notification = notificationList[index];
-                // An entry whose window is gone is kept for history:
-                // dim it so it reads differently from a live one.
-                final dimmed = !isNotificationLive(
-                  notification,
-                  openMetaWindows,
-                );
-                return Card(
-                  margin: EdgeInsets.zero,
-                  color: Theme.of(context).colorScheme.surfaceContainer,
-                  child: NotificationWidget(
-                    notification: notification,
-                    dimmed: dimmed,
-                    onAction: (actionKey) {
-                      ref
-                          .read(notificationManagerProvider.notifier)
-                          .invokeAction(notification.id, actionKey);
+            child: notificationList.isEmpty
+                ? const _EmptyNotifications()
+                : ListView.separated(
+                    padding: const EdgeInsets.all(8),
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final notification = notificationList[index];
+                      // An entry whose window is gone is kept for history:
+                      // dim it so it reads differently from a live one.
+                      final dimmed = !isNotificationLive(
+                        notification,
+                        openMetaWindows,
+                      );
+                      return Card(
+                        margin: EdgeInsets.zero,
+                        color: Theme.of(context).colorScheme.surfaceContainer,
+                        child: NotificationWidget(
+                          notification: notification,
+                          dimmed: dimmed,
+                          onAction: (actionKey) {
+                            ref
+                                .read(notificationManagerProvider.notifier)
+                                .invokeAction(notification.id, actionKey);
+                          },
+                          onOpen: () {
+                            ref
+                                .read(notificationManagerProvider.notifier)
+                                .openNotification(notification.id);
+                          },
+                          onClose: () {
+                            ref
+                                .read(notificationManagerProvider.notifier)
+                                .dismissAndRemoveNotification(notification.id);
+                          },
+                        ),
+                      );
                     },
-                    onOpen: () {
-                      ref
-                          .read(notificationManagerProvider.notifier)
-                          .openNotification(notification.id);
-                    },
-                    onClose: () {
-                      ref
-                          .read(notificationManagerProvider.notifier)
-                          .dismissAndRemoveNotification(notification.id);
-                    },
+                    itemCount: notificationList.length,
                   ),
-                );
-              },
-              itemCount: notificationList.length,
-            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Placeholder shown while there is nothing to list, so the panel reads as
+/// intentionally empty instead of looking like content failed to load.
+class _EmptyNotifications extends StatelessWidget {
+  const _EmptyNotifications();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              MdiIcons.bellOutline,
+              size: 48,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 12),
+            Text('No notifications', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              'You are all caught up',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
