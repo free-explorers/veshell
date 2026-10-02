@@ -5,6 +5,7 @@ import 'package:flutter_svg/svg.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/provider/icon_file_from_query.dart';
+import 'package:shell/application/util/normalizing_svg_file_loader.dart';
 
 part 'icon_background_image.g.dart';
 
@@ -103,7 +104,10 @@ Future<Image?> iconBackgroundImage(Ref ref, String path) async {
 /// which are painted by `Image`/`SvgPicture` and cached by Flutter.
 Future<Image?> _decode(File file, int size) async {
   if (file.path.endsWith('.svg')) {
-    final pictureInfo = await vg.loadPicture(SvgFileLoader(file), null);
+    final pictureInfo = await vg.loadPicture(
+      NormalizingSvgFileLoader(file),
+      null,
+    );
     final pictureRecorder = PictureRecorder();
     final canvas = Canvas(pictureRecorder);
     // Scale the vector to the target size before rasterising.
