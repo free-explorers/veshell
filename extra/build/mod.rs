@@ -32,15 +32,26 @@ fn main() {
         None => FlutterEngineBuild::Debug,
     };
 
-    // Install flutter and download Engine shared libs
-    match install_flutter_sdk() {
-        Ok(_) => println!("Flutter SDK installed successfully"),
-        Err(e) => panic!("Failed to install Flutter SDK: {}", e),
-    }
+    println!("cargo:rerun-if-env-changed=VESHELL_PREBUILT_SHELL");
+    if let Some(bundle) = env::var_os("VESHELL_PREBUILT_SHELL") {
+        let bundle = std::path::PathBuf::from(bundle);
+        for path in ["lib/libapp.so", "data/icudtl.dat", "data/flutter_assets"] {
+            assert!(
+                bundle.join(path).exists(),
+                "Missing prebuilt shell input: {path}"
+            );
+        }
+        println!("cargo:rerun-if-changed={}", bundle.display());
+    } else {
+        match install_flutter_sdk() {
+            Ok(_) => println!("Flutter SDK installed successfully"),
+            Err(e) => panic!("Failed to install Flutter SDK: {}", e),
+        }
 
-    match build_shell(flutter_engine_build) {
-        Ok(_) => println!("Shell built successfully"),
-        Err(e) => panic!("Failed to build shell: {}", e),
+        match build_shell(flutter_engine_build) {
+            Ok(_) => println!("Shell built successfully"),
+            Err(e) => panic!("Failed to build shell: {}", e),
+        }
     }
 
     match link_flutter_engine_shared_library(flutter_engine_build) {

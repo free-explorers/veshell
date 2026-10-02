@@ -188,12 +188,19 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         let src_bundle_root = format!("src/shell/build/linux/{arch}/{flutter_engine_build}/bundle");
 
         // check if the src_bundle_root exists
-        if Path::new(&src_bundle_root).exists() {
+        if option_env!("VESHELL_DATA_DIR").is_none() && Path::new(&src_bundle_root).exists() {
             debug!("override bundle_root to src/shell/build/linux/{arch}/{flutter_engine_build}/bundle");
             // override bundle_root to source
             bundle_root = src_bundle_root.clone();
             lib_path = format!("{src_bundle_root}/lib");
         }
+
+        if let Some(installed_lib_path) = option_env!("VESHELL_LIB_DIR") {
+            lib_path = installed_lib_path.to_owned();
+        }
+        let data_path = option_env!("VESHELL_DATA_DIR")
+            .map(str::to_owned)
+            .unwrap_or_else(|| format!("{bundle_root}/data"));
 
         let host = "127.0.0.1";
         let socket_number: i32 = server_state
@@ -205,8 +212,8 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         debug!("ECHO SOCKET NAME {:?}", socket_number);
         let port = 12345 + socket_number;
         propagate_vm_service(&host, port)?;
-        let assets_path = CString::new(format!("{bundle_root}/data/flutter_assets"))?;
-        let icu_data_path = CString::new(format!("{bundle_root}/data/icudtl.dat"))?;
+        let assets_path = CString::new(format!("{data_path}/flutter_assets"))?;
+        let icu_data_path = CString::new(format!("{data_path}/icudtl.dat"))?;
         let executable_path = CString::new(executable_path.as_os_str().as_bytes())?;
         let observatory_host = CString::new(format!("--vm-service-host={}", host))?;
         let observatory_port = CString::new(format!("--vm-service-port={}", port))?;
