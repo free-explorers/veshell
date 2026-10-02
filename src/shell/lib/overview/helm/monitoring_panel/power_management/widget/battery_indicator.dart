@@ -17,10 +17,10 @@ class PowerIndicator extends HookConsumerWidget {
             .watch(upowerDevicesProvider)
             .value
             ?.where(
-              (device) => ![
-                UPowerDeviceType.battery,
-                UPowerDeviceType.linePower,
-              ].contains(UpowerClient.getDeviceType(device)),
+              (device) =>
+                  UpowerClient.getDeviceType(device) !=
+                      UPowerDeviceType.linePower &&
+                  !UpowerClient.isSystemBattery(device),
             ) ??
         [];
     final batteryDevice = ref.watch(upowerBatteryDeviceProvider).value;

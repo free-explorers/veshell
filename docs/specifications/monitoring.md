@@ -38,6 +38,26 @@ privileged helper is involved.
 | Disk | `universal_disk_space` (shells out to `df`) | Physical filesystems only, `/boot` hidden; rescanned every 5 s while the panel is open |
 | GPU | `/sys/class/drm/card*/device/*` | Vendor-dependent, see below |
 
+## Power
+
+The power card is the exception to the `/proc` rule: it reads the system UPower
+daemon over D-Bus (`upower` package, `power_management/`). It shows the system
+battery, when there is one, plus every peripheral power device — wireless
+keyboards, mice, headsets.
+
+UPower reports the same `Type` (`battery`) for the system battery and for a
+peripheral whose driver it cannot classify, so the discriminator is the
+`PowerSupply` flag: only the device powering the machine has it set. The system
+battery row comes from a `battery`-typed device with `PowerSupply`; every other
+device that is not `linePower` is listed as a peripheral. UPower's
+`DisplayDevice` is not part of `EnumerateDevices` and is not a row.
+
+The card can only list what UPower exposes, which in turn is what the kernel
+exposes as a power supply. A peripheral whose kernel driver reports no battery
+(some wireless receivers do not implement the Logitech DJ/HID++ interface) has
+nothing to read and therefore cannot be shown; this is a kernel limitation, not
+a card one.
+
 ## Sampling lifecycle
 
 The cards answer "was there a spike just now, or is this climbing?", so the
