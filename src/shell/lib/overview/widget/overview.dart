@@ -12,7 +12,7 @@ import 'package:shell/shared/widget/clock.dart';
 import 'package:shell/theme//provider/theme.dart';
 
 /// Minimum width the search engine is allowed to shrink to.
-const _minSearchEngineWidth = 548.0;
+const _minSearchEngineWidth = 524.0;
 
 /// Gap between the search engine and the overview content.
 const _overviewGap = 16.0;

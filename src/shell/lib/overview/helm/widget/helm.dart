@@ -12,7 +12,7 @@ import 'package:shell/overview/helm/notification_panel/widget/notification_panel
 import 'package:shell/overview/helm/widget/panel_column.dart';
 
 /// Minimum width a single Helm column needs to lay out its cards comfortably.
-const _minPanelWidth = 420.0;
+const _minPanelWidth = 380.0;
 
 /// The dashboard shown when the overview has no ephemeral window.
 ///
