@@ -1,66 +1,67 @@
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:shell/application/provider/image_from_icon_query.dart';
+import 'package:shell/application/provider/icon_file_from_query.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
+import 'package:shell/application/util/icon_size.dart';
 
 class AppIconByPath extends StatelessWidget {
-  const AppIconByPath({required this.path, super.key, this.constrainedSize});
+  const AppIconByPath({required this.path, super.key});
 
   final String? path;
-  final int? constrainedSize;
 
   @override
   Widget build(BuildContext context) {
-    return Consumer(
-      builder: (_, WidgetRef ref, __) {
-        if (path == null) {
-          return const SizedBox();
-        }
-        return _buildIcon(ref, path!);
-      },
+    if (path == null) return const SizedBox();
+
+    return LayoutBuilder(
+      builder: (context, constraints) => Consumer(
+        builder: (context, ref, _) =>
+            _buildIcon(context, ref, path!, constraints.biggest.shortestSide),
+      ),
     );
   }
 
-  Widget _buildIcon(WidgetRef ref, String path) {
-    if (constrainedSize != null) {
-      final asyncValue = ref.watch(
-        imageFromIconQueryProvider(
-          IconQuery(
-            name: path,
-            size: constrainedSize!,
-            extensions: const ['svg', 'png'],
-          ),
-          Size.square(constrainedSize!.toDouble()),
-        ),
-      );
-      if (!asyncValue.hasValue) {
-        return const SizedBox();
-      }
-      final rawImage = asyncValue.value;
-      return RawImage(image: rawImage);
-    } else {
-      return LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          final asyncValue = ref.watch(
-            imageFromIconQueryProvider(
-              IconQuery(
-                name: path,
-                size: constraints.biggest.shortestSide.floor(),
-                extensions: const ['svg', 'png'],
-              ),
-              constraints.biggest,
+  Widget _buildIcon(
+    BuildContext context,
+    WidgetRef ref,
+    String path,
+    double logicalSize,
+  ) {
+    if (logicalSize <= 0) return const SizedBox();
+
+    // Snap to a physical-pixel bucket so the resolution and pixel caches stay
+    // bounded, and decode at the device pixel ratio so icons are crisp on
+    // HiDPI displays.
+    final bucket = iconPhysicalBucket(
+      logicalSize,
+      MediaQuery.devicePixelRatioOf(context),
+    );
+
+    final iconFile = ref
+        .watch(
+          iconFileFromQueryProvider(
+            IconQuery(
+              name: path,
+              size: bucket,
+              extensions: const ['svg', 'png'],
             ),
-          );
-          if (!asyncValue.hasValue) {
-            return const SizedBox();
-          }
-          final rawImage = asyncValue.value;
-          return RawImage(image: rawImage);
-        },
-      );
+          ),
+        )
+        .value;
+    if (iconFile == null) return const SizedBox();
+
+    // Let the image widgets own their decoded frames. In particular, a
+    // RawImage using a provider-owned ui.Image can lose its handle when the
+    // provider is rebuilt during icon-theme initialization at session start.
+    if (iconFile.path.endsWith('.svg')) {
+      return SvgPicture.file(iconFile);
     }
+    // `cacheWidth` is in physical pixels; the decoded frame lives in Flutter's
+    // global `ImageCache`, which outlives this widget and the provider.
+    return Image.file(iconFile, cacheWidth: bucket);
   }
 }
 
@@ -68,13 +69,10 @@ class AppIconById extends ConsumerWidget {
   const AppIconById({
     required this.id,
     super.key,
-    this.constrainedSize,
     this.fallback = const Icon(MdiIcons.helpCircle),
   });
 
   final String? id;
-
-  final int? constrainedSize;
 
   /// Shown while the desktop entry is unknown, or when it names no icon.
   final Widget fallback;
@@ -96,10 +94,7 @@ class AppIconById extends ConsumerWidget {
             if (iconPath == null) {
               return fallback;
             }
-            return AppIconByPath(
-              path: iconPath,
-              constrainedSize: constrainedSize,
-            );
+            return AppIconByPath(path: iconPath);
           },
           orElse: () => fallback,
         );

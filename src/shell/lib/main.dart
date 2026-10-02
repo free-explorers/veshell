@@ -1,6 +1,7 @@
 import 'dart:ui' show ViewFocusEvent, ViewFocusState;
 
 import 'package:flutter/rendering.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/capture/provider/screen_cast_consent.dart';
@@ -40,6 +41,19 @@ void main() async {
   // debugRepaintRainbowEnabled = true;
   // debugPrintGestureArenaDiagnostics = true;
   WidgetsFlutterBinding.ensureInitialized();
+
+  // App-icon availability is bounded by these two caches, and both outlive any
+  // widget or provider, so an icon that scrolled out of view is re-shown from
+  // the cache instead of being decoded again:
+  //  - Flutter's global `ImageCache` holds decoded raster frames, keyed by
+  //    `ResizeImage(FileImage, width: bucket)`.
+  //  - flutter_svg's cache holds the compiled form of each SVG.
+  // A launcher can show a few hundred icons, which churns the default
+  // 100-entry SVG cache, so raise it to cover a full grid.
+  PaintingBinding.instance.imageCache
+    ..maximumSize = 1000
+    ..maximumSizeBytes = 100 << 20; // 100 MiB
+  svg.cache.maximumSize = 512;
 
   FocusManager.instance.addListener(() {
     focusLog.info(

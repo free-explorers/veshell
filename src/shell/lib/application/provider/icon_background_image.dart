@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'dart:ui';
 
+import 'package:flutter_svg/svg.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/application/provider/image_from_icon_query.dart';
+import 'package:shell/application/provider/icon_file_from_query.dart';
 
 part 'icon_background_image.g.dart';
 
@@ -45,16 +47,20 @@ const _sigma = 10.0;
 /// cost into a plain texture draw.
 @riverpod
 Future<Image?> iconBackgroundImage(Ref ref, String path) async {
-  final icon = await ref.watch(
-    imageFromIconQueryProvider(
+  final file = await ref.watch(
+    iconFileFromQueryProvider(
       IconQuery(
         name: path,
         size: _sourceSize,
         extensions: const ['svg', 'png'],
       ),
-      Size.square(_sourceSize.toDouble()),
     ).future,
   );
+  if (file == null) {
+    return null;
+  }
+
+  final icon = await _decode(file, _sourceSize);
   if (icon == null) {
     return null;
   }
@@ -66,12 +72,12 @@ Future<Image?> iconBackgroundImage(Ref ref, String path) async {
   // margins. `TileMode.clamp` then extends the edge pixels instead of fading
   // to transparent, so stretching the texture over the placeholder has no soft
   // border.
-  final inset = _textureSize * _overscan;
-  final side = _textureSize + 2 * inset;
+  const inset = _textureSize * _overscan;
+  const side = _textureSize + 2 * inset;
   canvas.drawImageRect(
     icon,
     Rect.fromLTWH(0, 0, icon.width.toDouble(), icon.height.toDouble()),
-    Rect.fromLTWH(-inset, -inset, side, side),
+    const Rect.fromLTWH(-inset, -inset, side, side),
     Paint()
       ..filterQuality = FilterQuality.high
       ..imageFilter = ImageFilter.blur(
@@ -83,6 +89,37 @@ Future<Image?> iconBackgroundImage(Ref ref, String path) async {
   final picture = recorder.endRecording();
   final image = await picture.toImage(_textureSize, _textureSize);
   picture.dispose();
+  // The decoded icon only existed to be baked into [image]; release it now
+  // rather than retaining a native image per placeholder.
+  icon.dispose();
   ref.onDispose(image.dispose);
   return image;
+}
+
+/// Decode [file] into a native image [size] pixels on each side.
+///
+/// This is the small amount of decoding the icon pipeline still needs: the
+/// placeholder bake genuinely consumes a `ui.Image`, unlike the app icons,
+/// which are painted by `Image`/`SvgPicture` and cached by Flutter.
+Future<Image?> _decode(File file, int size) async {
+  if (file.path.endsWith('.svg')) {
+    final pictureInfo = await vg.loadPicture(SvgFileLoader(file), null);
+    final pictureRecorder = PictureRecorder();
+    final canvas = Canvas(pictureRecorder);
+    // Scale the vector to the target size before rasterising.
+    final scaleFactor = size / pictureInfo.size.width;
+    if (scaleFactor != 0) {
+      canvas.scale(scaleFactor);
+    }
+    canvas.drawPicture(pictureInfo.picture);
+    final picture = pictureRecorder.endRecording();
+    final image = await picture.toImage(size, size);
+    pictureInfo.picture.dispose();
+    return image;
+  }
+
+  final bytes = await file.readAsBytes();
+  final codec = await instantiateImageCodec(bytes, targetWidth: size);
+  final frameInfo = await codec.getNextFrame();
+  return frameInfo.image;
 }
