@@ -106,7 +106,7 @@ class _EmptyNotifications extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Align(
-      alignment: Alignment.topCenter,
+      alignment: const Alignment(0, -0.5),
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
