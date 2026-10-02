@@ -29,9 +29,7 @@ void main() {
 
     expect(find.text('No activity yet'), findsOneWidget);
     expect(
-      find.text(
-        'Notifications will be listed here as a history of activities.',
-      ),
+      find.text('Your notification history is currently empty'),
       findsOneWidget,
     );
     expect(find.byIcon(MdiIcons.bullhornVariantOutline), findsOneWidget);

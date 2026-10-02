@@ -121,7 +121,7 @@ class _EmptyNotifications extends StatelessWidget {
             Text('No activity yet', style: theme.textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
-              'Notifications will be listed here as a history of activities.',
+              'Your notification history is currently empty',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
