@@ -1,0 +1,26 @@
+{
+  "3.47.2": {
+    "dartVersion": "3.13.2",
+    "toolsLockHash": "sha256-x8t6mPsaSTUrpMjDJuhFVjI4KozpyGehp9YgXThWv8k=",
+    "dartHash": {
+      "x86_64-linux": "sha256-KJUcn2vMoAWnOqJM1eEUeN1lVfU+jpajPvTYaLbvqes=",
+      "aarch64-linux": "sha256-5LLdk7s+faKixeEhXZTF2i4Ozg7UG58mw9fpi6plnHw="
+    },
+    "flutterHash": "sha256-jjZRdIAOwPkcdceeld4Py6XmtfIfWpGr/2lDMW/0q34=",
+    "engineVersion": "a804b261645ef8c13eb3d5c44a5c2fb0340c5539",
+    "artifactHashes": {
+      "universal": {
+        "x86_64-linux": "sha256-KnzFcYqRowXcaKG5x+SoYcqQQ0KH9JUGtlDDgwETgRQ=",
+        "aarch64-linux": "sha256-kwCTe2UK4cJG+qhAZnOgpx/yFB1RuNpVc3cQn4WJ3PI="
+      },
+      "linux": {
+        "x86_64-linux": "sha256-vk/hDNeaY50EkmR0TLZ4dzY9BQVn/42RzCKMVW/BcKY=",
+        "aarch64-linux": "sha256-LwGCcsvKqmuZwM3Wh3pzGtZN6Ff33eyguhN1bqC4ouw="
+      }
+    },
+    "releaseEngineHashes": {
+      "x86_64-linux": "sha256-dk4FumEqr5Q1I8dqh92JlS9EmEo+wbSMA6qLIn2vtWw=",
+      "aarch64-linux": "sha256-BuF/yTics7qjI7Dupp98F8TVeZMaRGguA9E7ddbHLJs="
+    }
+  }
+}

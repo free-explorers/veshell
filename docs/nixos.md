@@ -1,92 +1,115 @@
-# NixOS packaging status
+# NixOS packaging
 
-This checkout contains **preparatory, unbuilt Nix support**, not an official
-nixpkgs package or a ready-to-install release. The running system has not been
-changed. Official availability requires review and acceptance by the Veshell
-and nixpkgs maintainers.
+The release package builds in the Nix sandbox on x86_64 NixOS. This is local
+packaging support, not an official nixpkgs package. A complete graphical login
+session has not yet been verified, and the running VM's desktop configuration
+has not been changed.
 
-## What is implemented
+## Build
 
-- `nix/shell.nix` builds a release Flutter shell separately, including code
-  generation and a NixOS polkit-helper path substitution before AOT compilation.
-- `nix/package.nix` builds the Rust compositor with explicit prebuilt shell and
-  engine inputs. It installs assets, user units, portals and a Wayland session,
-  patches ELF paths, and wraps runtime tools and GStreamer plugins.
-- `nix/module.nix` exposes `programs.veshell.enable` and a required
-  `programs.veshell.package`, registers the login session and user units, and
-  configures graphics, D-Bus, polkit, PipeWire and portals. It does not select a
-  display manager, enable automatic login, or change networking.
-- The existing development build remains the default. Setting
-  `VESHELL_PREBUILT_SHELL` skips SDK installation and shell compilation;
-  `VESHELL_ENGINE_DIR` supplies `flutter_embedder.h` and the profile-specific
-  engine library without a download. The caller must ensure that the AOT shell
-  and engine have matching revisions and architectures.
-- Compile-time `VESHELL_DATA_DIR` and `VESHELL_LIB_DIR` allow installation in
-  the Nix store without relying on `/usr` paths or checkout assets.
+From the repository root:
 
-## Inputs still required
+```sh
+nix-build --max-jobs 1 --cores 2
+```
 
-The authoritative SDK pin remains `Cargo.toml`. Supply a Nix-compatible SDK
-matching that pin with offline Linux artifacts, rather than an ordinary
-unpatched Flutter Git checkout. The package rejects the older SDK available
-in this VM's nixpkgs.
+The result contains `bin/veshell`, session scripts, systemd user units, portal
+descriptors, the matching release engine, AOT shell, and settings/assets.
+Builds were verified using nixpkgs `774debe7a0d1` (NixOS 26.05). The default
+entry point uses `<nixpkgs>`; callers can supply their own pinned `pkgs`:
 
-The following are not supplied yet:
+```nix
+import /path/to/veshell/default.nix { inherit pkgs; }
+```
 
-- A derivation and verified hashes for that matching SDK and embedder engine.
-- `pubspec.lock` converted to a Nix attribute set for `pubspecLock`, and real
-  `gitHashes` for its Git dependencies, as required by nixpkgs' Flutter builder.
-- The real `cargoHash` for Cargo's vendored dependencies, including Smithay.
+Allow substantial persistent disk space for the SDK, vendored dependencies,
+and Rust build. On the small VM, the optimized Rust build took about 15 minutes.
 
-There are deliberately no placeholder hashes or impure network builds. The
-expressions are not turnkey until these inputs are added and verified.
+## Inputs And Fixes
 
-The shell bundle must contain `lib/libapp.so`, `data/icudtl.dat`, and
-`data/flutter_assets`. The embedder-engine input must contain
-`flutter_embedder.h` and `release/libflutter_engine.so`. Use the engine revision
-from the pinned SDK's `bin/internal/engine.version`, not the unused Rust
-engine-revision constant.
+- `Cargo.toml` remains the authoritative Flutter version pin.
+- `nix/flutter.nix` assembles a Nix-compatible SDK using nixpkgs' Flutter
+  builder. `nix/flutter-sdk.json` records verified framework, Dart, artifact,
+  and embedder-engine hashes. `nix/flutter-tools-lock.json` records the tools'
+  resolved dependencies. No older SDK or source engine compilation is used.
+- The release embedder engine comes from meta-flutter at the SDK's exact engine
+  revision. x64 was built; arm64 input archives were hash-verified and evaluated,
+  but a native arm64 application build has not been tested.
+- `nix/dependencies.nix` supplies the verified Cargo vendor hash and Dart Git
+  dependency hashes. `nix/pubspec-lock.json` is generated from the shell lockfile.
+- `nix/shell.nix` provides the Flutter directory layout that `build_resolvers`
+  requires to include `dart:ui`, and creates the offline PulseAudio plugin link.
+- `nix/freezed-dart-3.13.patch` backports the removal of `final` formal
+  parameters from the locked generator. Freezed 4 contains the published fix,
+  but its analyzer requirements conflict with the current lint dependencies.
+- The polkit helper path is compiled as `/run/wrappers/bin/polkit-agent-helper-1`.
+- The compositor builds with prebuilt shell/engine inputs. Its assets and
+  settings use store paths; wrappers supply runtime tools and libraries,
+  including dynamically loaded Wayland, PulseAudio, and GStreamer dependencies.
 
-## Integration Once Built
+Regenerate the shell lock JSON after dependency changes:
 
-Once `veshellPackage` is a successfully built package from `nix/package.nix`,
-the consuming NixOS configuration can use:
+```sh
+nix-shell -p yq jq --run 'yq -s . src/shell/pubspec.lock | jq -S ".[0]" > nix/pubspec-lock.json'
+```
+
+`nix/flutter-sdk-update.nix` exposes hash probes for tools and artifact caches
+when updating the SDK pin. Probe hashes are not used by production builds.
+Refresh SDK metadata, engine hashes, and dependency hashes together when pins
+change. The analyzer currently warns that its supported language version is
+older than the SDK; code generation, AOT compilation, and Flutter tests pass.
+
+## NixOS Integration
+
+Import the module in the consuming configuration:
 
 ```nix
 {
   imports = [ /home/nixos/veshell/nix/module.nix ];
-  programs.veshell = {
-    enable = true;
-    package = veshellPackage;
-  };
+  programs.veshell.enable = true;
 }
 ```
 
-`veshellPackage` above is a caller-provided binding, not an existing nixpkgs
-attribute. Retain or configure a Wayland-capable display manager separately.
-Build the system before switching it, and retain a working session for recovery.
+`programs.veshell.package` defaults to the local package and can be overridden.
+The module registers the Wayland session and user units and enables graphics,
+D-Bus, polkit, PipeWire with its PulseAudio compatibility server, and portals.
+It does not select a display manager, enable automatic login, or change
+networking. NetworkManager, BlueZ, and UPower must be configured separately if
+their corresponding shell controls are needed.
 
-## Verification And Upstreaming
+Build the system before switching it and retain a working recovery session.
+Graphics drivers must be available through NixOS' `/run/opengl-driver` setup.
+For nested testing in an existing graphical session:
 
-Run evaluation-only module checks with:
+```sh
+VESHELL_BACKEND=winit RUST_LOG=info ./result/bin/veshell
+```
+
+## Verification
+
+Completed on the x86_64 VM:
+
+- Pinned SDK and release engine builds; SDK version and offline Linux artifacts.
+- Sandboxed release Flutter shell and Rust compositor/package builds.
+- All 275 Flutter tests passed in the sandbox.
+- ELF dependency checks: no unresolved linked dependencies in the compositor
+  or installed shared libraries. Xwayland's version command also succeeds.
+- Evaluation-only module checks, including PulseAudio server configuration.
+
+Commands for module checks and sandboxed Flutter tests:
 
 ```sh
 nix-instantiate --eval --strict nix/tests.nix --arg pkgs 'import <nixpkgs> {}'
+nix-build --no-out-link --max-jobs 1 --cores 2 -E '(import ./default.nix {}).shellBundle.overrideAttrs (_: { doCheck = true; checkPhase = "runHook preCheck; flutter test --no-pub --concurrency 2; runHook postCheck"; })'
 ```
 
-These checks use a mock package; they do not test binaries, ELF fixups, polkit
-authentication, or a graphical session. A source build, `cargo check`,
-`cargo test`, Flutter tests, and graphical runtime tests are still required.
-The initial VM has less than 1 GB free in a tmpfs-backed live environment,
-which is insufficient for the SDK and full Rust/Flutter build. Provision a
-persistent build disk with substantial free space (tens of GB recommended).
+The Xvfb/llvmpipe smoke test reaches EGL/GLES initialization when Mesa's vendor
+configuration is supplied, but stops because the winit backend requires
+`EGL_EXT_device_drm` and a render node. It does not establish Flutter AOT startup
+or frame presentation. A software-only Xvfb session is not a substitute for a
+GPU-capable VM or machine.
 
-Before requesting official nixpkgs inclusion:
-
-1. Finish all pinned SDK/engine and dependency inputs and build in the sandbox.
-2. Test from outside the checkout, then test login/logout, polkit authentication,
-   XWayland, portals and screen capture in a GPU-capable NixOS VM or machine.
-3. Add a NixOS runtime test and a maintainer, choose a pinned source revision,
-   and adapt the package/module to current nixpkgs contribution conventions.
-4. Submit the offline-build changes to Veshell and the package/module to
-   nixpkgs for review. Neither submission nor acceptance has occurred here.
+Still required: Rust tests, native arm64 builds, GPU-backed frame presentation,
+login/logout, audio, polkit authentication, XWayland integration, and portal
+screen capture. Add a NixOS runtime test before claiming full session support
+or requesting official nixpkgs inclusion.

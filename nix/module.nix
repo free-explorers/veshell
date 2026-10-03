@@ -7,6 +7,8 @@ in
     enable = lib.mkEnableOption "the Veshell Wayland session";
     package = lib.mkOption {
       type = lib.types.package;
+      default = import ../default.nix { inherit pkgs; };
+      defaultText = lib.literalExpression "import ../default.nix { inherit pkgs; }";
       description = "Veshell package built with its matching Flutter shell and engine.";
     };
   };
@@ -26,6 +28,7 @@ in
     };
     services.pipewire = {
       enable = lib.mkDefault true;
+      pulse.enable = lib.mkDefault true;
       wireplumber.enable = lib.mkDefault true;
     };
     xdg.portal = {

@@ -17,6 +17,7 @@
   autoPatchelfHook,
   wayland,
   libinput,
+  libdisplay-info,
   seatd,
   libgbm,
   libGL,
@@ -40,6 +41,7 @@
   gnugrep,
   gawk,
   procps,
+  glibc,
   flutterSdk,
   shellBundle,
   flutterEngine,
@@ -48,6 +50,7 @@
 let
   manifest = builtins.fromTOML (builtins.readFile ../Cargo.toml);
   runtimeLibraries = [
+    wayland
     libGL
     vulkan-loader
     libpulseaudio
@@ -67,6 +70,7 @@ let
     gnugrep
     gawk
     procps
+    glibc.bin
   ];
 in
 assert lib.assertMsg (flutterSdk.version == manifest.package.metadata.flutter_version)
@@ -80,8 +84,10 @@ rustPlatform.buildRustPackage {
     src = ../.;
     filter = path: type:
       lib.cleanSourceFilter path type
+      && path != "${toString ../.}/build"
+      && path != "${toString ../.}/src/shell/build"
       && !(type == "directory" && builtins.elem (builtins.baseNameOf path) [
-        ".flutter_sdk" "build" "target" ".dart_tool"
+        ".flutter_sdk" "target" ".dart_tool"
       ]);
   };
   inherit cargoHash;
@@ -95,6 +101,7 @@ rustPlatform.buildRustPackage {
   buildInputs = [
     wayland
     libinput
+    libdisplay-info
     seatd
     libgbm
     libxkbcommon

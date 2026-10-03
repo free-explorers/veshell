@@ -9,6 +9,8 @@
 # Pass this derivation's output directly as package.nix's shellBundle.
 {
   lib,
+  runCommand,
+  patch,
   gtk3,
   libpulseaudio,
   flutterSdk,
@@ -18,6 +20,17 @@
 }:
 let
   manifest = builtins.fromTOML (builtins.readFile ../Cargo.toml);
+  # build_resolvers locates sky_engine relative to the resolved Dart executable.
+  # A symlink to nixpkgs' standalone Dart silently drops dart:ui from sdk.sum.
+  codegenDart = runCommand "veshell-flutter-codegen-dart" { } ''
+    mkdir -p "$out/bin/cache/dart-sdk" "$out/bin/cache/pkg"
+    cp -rs ${flutterSdk.dart}/. "$out/bin/cache/dart-sdk/"
+    chmod u+w "$out/bin/cache/dart-sdk/bin"
+    rm "$out/bin/cache/dart-sdk/bin/dart"
+    cp ${flutterSdk.dart}/bin/dart "$out/bin/cache/dart-sdk/bin/dart"
+    ln -s ${flutterSdk}/bin/cache/pkg/sky_engine "$out/bin/cache/pkg/sky_engine"
+    ln -s "$out/bin/cache/dart-sdk/bin/dart" "$out/bin/dart"
+  '';
 in
 assert lib.assertMsg (flutterSdk.version == manifest.package.metadata.flutter_version)
   "Veshell requires the Flutter SDK pinned in Cargo.toml; supply a matching flutterSdk.";
@@ -26,6 +39,17 @@ assert lib.assertMsg (flutterSdk.version == manifest.package.metadata.flutter_ve
   version = manifest.package.version;
   src = lib.cleanSource ../src/shell;
   inherit pubspecLock gitHashes;
+  # Backport Freezed 4's Dart 3.13 parameter fix without upgrading analyzer
+  # beyond the versions supported by the locked custom_lint dependencies.
+  customSourceBuilders.freezed = { src, version, ... }:
+    runCommand "pub-freezed-${version}-dart-3.13" {
+      nativeBuildInputs = [ patch ];
+      passthru = src.passthru;
+    } ''
+      cp -r ${src} "$out"
+      chmod -R u+w "$out"
+      patch -d "$out" -p1 < ${./freezed-dart-3.13.patch}
+    '';
   flutterMode = "release";
   flutterBuildFlags = [ "--no-pub" ];
   buildInputs = [ gtk3 libpulseaudio ];
@@ -37,6 +61,10 @@ assert lib.assertMsg (flutterSdk.version == manifest.package.metadata.flutter_ve
       --replace-fail '/usr/lib/polkit-1/polkit-agent-helper-1' ${lib.escapeShellArg polkitHelperPath}
   '';
   preBuild = ''
+    export PATH="${codegenDart}/bin:$PATH"
+    # The offline package-config hook does not run pub's plugin-link setup.
+    mkdir -p linux/flutter/ephemeral/.plugin_symlinks
+    ln -s "$(packagePath pulseaudio)" linux/flutter/ephemeral/.plugin_symlinks/pulseaudio
     packageRun build_runner build --delete-conflicting-outputs
   '';
   installPhase = ''
