@@ -46,14 +46,25 @@ fi
 
 engine=$(nix-build nix/engine-experiment.nix --no-out-link --max-jobs 1 --cores 4)
 output="$engine/out/host_release"
-test -s "$output/libflutter_engine.so"
-test -s "$output/flutter_embedder.h"
-test -x "$output/gen_snapshot"
-test -x "$output/dart-sdk/bin/dart"
-test -s "$output/dart-sdk/bin/snapshots/frontend_server_aot.dart.snapshot"
-test -s "$output/flutter_patched_sdk_product/platform_strong.dill"
-test -s "$output/icudtl.dat"
-test -s "$output/libflutter_linux_gtk.so"
+trap 'result=$?; echo "::error::Engine verification failed at line $LINENO: $BASH_COMMAND"; exit "$result"' ERR
+for artifact in \
+  libflutter_engine.so flutter_embedder.h gen_snapshot dart-sdk/bin/dart \
+  dart-sdk/bin/snapshots/frontend_server_aot.dart.snapshot \
+  flutter_patched_sdk/platform_strong.dill \
+  flutter_patched_sdk_product/platform_strong.dill icudtl.dat \
+  libflutter_linux_gtk.so gen/const_finder.dart.snapshot; do
+  echo "Checking artifact: $output/$artifact"
+  if [[ ! -s "$output/$artifact" ]]; then
+    echo "::error::Missing or empty engine artifact: $output/$artifact"
+    ls -la "$output"
+    exit 1
+  fi
+done
+for executable in gen_snapshot dart-sdk/bin/dart; do
+  echo "Checking executable: $output/$executable"
+  test -x "$output/$executable"
+done
+echo "Checking Linux headers: $output/flutter_linux"
 test -d "$output/flutter_linux"
 "$output/gen_snapshot" --version
 "$output/dart-sdk/bin/dart" --version

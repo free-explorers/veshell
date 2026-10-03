@@ -94,11 +94,16 @@ engine.overrideAttrs (old: {
       "flutter/impeller/compiler:impellerc"
       "flutter/impeller/tessellator:tessellator_shared"
       "flutter/tools/font_subset:_font-subset"
+      "flutter/tools/const_finder:const_finder"
     ]) ]
     old.buildPhase;
   postInstall = (old.postInstall or "") + ''
     install -Dm644 src/flutter/shell/platform/embedder/embedder.h \
       "$out/out/host_release/flutter_embedder.h"
+    # GN writes the release kernel into flutter_patched_sdk; Flutter's local
+    # release platformKernelDill lookup also expects the product directory name.
+    test -s "$out/out/host_release/flutter_patched_sdk/platform_strong.dill"
+    ln -s flutter_patched_sdk "$out/out/host_release/flutter_patched_sdk_product"
     test -s "$out/out/host_release/libflutter_engine.so"
     test -x "$out/out/host_release/gen_snapshot"
     "$out/out/host_release/gen_snapshot" --version 2>&1 \

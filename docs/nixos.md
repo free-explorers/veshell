@@ -62,6 +62,22 @@ Success verifies engine and local compiler artifacts plus linked dependencies,
 not Veshell frame presentation. Rebuild and test the shell against that engine
 before migrating the default package or publishing cached release outputs.
 
+The first hosted run (`37130708096`) completed all 8,232 engine build actions
+and returned a successful Nix output in 2 hours 1 minute 39 seconds. The job
+then failed a silent artifact check. The failing command was not logged; an
+identified layout mismatch is that GN emits the release kernel under
+`flutter_patched_sdk`, while verification expected `flutter_patched_sdk_product`.
+The source engine now supplies that product-path alias for Flutter's local
+release lookup, and artifact checks report missing paths explicitly. The first
+run also exposed the need to build the local `const_finder` tooling target.
+These fixes still require a second hosted verification run.
+
+That runner reported a 145 GiB root filesystem, with about 108 GiB available
+after cleanup and a lowest sampled availability of 90 GiB during the build.
+It reported 15 GiB RAM, with at least 11 GiB available in the minute-spaced
+samples. These are observations from one runner, not guaranteed capacities or
+exact compiler memory peaks. Neither disk nor memory guards caused the failure.
+
 ## Build
 
 From the repository root:
