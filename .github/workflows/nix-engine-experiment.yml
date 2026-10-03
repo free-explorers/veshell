@@ -1,0 +1,68 @@
+name: Nix Engine Experiment
+
+on:
+  workflow_dispatch:
+  # Bootstrap the experiment without adding an unverified workflow to main.
+  push:
+    branches: [ci/nix-engine-experiment]
+    paths:
+      - .github/workflows/nix-engine-experiment.yml
+      - nix/engine.nix
+      - nix/engine-source.json
+      - nix/engine-experiment.nix
+      - nix/engine-experiment.sh
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nix-engine-experiment
+  cancel-in-progress: false
+
+jobs:
+  release-engine:
+    if: github.repository == 'free-explorers/veshell'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    steps:
+      - name: Checkout experiment
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Measure runner and reclaim disk
+        shell: bash
+        run: |
+          set -euo pipefail
+          nproc
+          free -h
+          df -h / /mnt
+          # Only disposable hosted-runner tooling, never the repository or Nix.
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h / /mnt
+          available=$(df --output=avail -B1 / | tr -dc '0-9')
+          if (( available < 30 * 1024 * 1024 * 1024 )); then
+            echo "Insufficient disk after cleanup: need 30 GiB free for this experiment."
+            exit 1
+          fi
+
+      - name: Install Nix
+        # This installs Nix; it does not use Cachix storage or credentials.
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+        with:
+          extra_nix_config: |
+            max-jobs = 1
+            cores = 4
+            experimental-features = nix-command flakes
+
+      - name: Build and measure source engine
+        shell: bash
+        run: bash nix/engine-experiment.sh
+
+      - name: Final resource sample
+        if: always()
+        shell: bash
+        run: |
+          free -h
+          df -h / /mnt

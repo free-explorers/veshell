@@ -42,6 +42,26 @@ complete. The verified package described below still uses meta-flutter's engine.
 Source-engine compilation, matching shell rebuilds, runtime verification, and
 cache publishing remain implementation work.
 
+### Hosted Runner Experiment
+
+`Nix Engine Experiment` builds only the source release engine, independently of
+the currently verified meta-flutter-based package. Its entry point is
+`nix/engine-experiment.nix`, with a hash-pinned nixpkgs revision. The first run
+is triggered by publishing changes on `ci/nix-engine-experiment`; manual dispatch
+is available once the workflow exists on the repository's default branch.
+
+The experiment uses a free standard `ubuntu-24.04` runner, read-only repository
+permissions, one Nix build, and four compilation jobs. It reclaims disposable
+runner tooling, requires 30 GiB free before installation, and stops if free
+space falls below 2 GiB during the build. Compilation has a 300-minute limit;
+the whole job has a 330-minute limit. Resource samples and results remain in
+Actions logs and the job summary. There are no paid runners, external cache
+credentials, release uploads, or artifact uploads.
+
+Success verifies engine and local compiler artifacts plus linked dependencies,
+not Veshell frame presentation. Rebuild and test the shell against that engine
+before migrating the default package or publishing cached release outputs.
+
 ## Build
 
 From the repository root:
