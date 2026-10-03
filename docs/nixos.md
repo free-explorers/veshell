@@ -5,6 +5,43 @@ packaging support, not an official nixpkgs package. A complete graphical login
 session has not yet been verified, and the running VM's desktop configuration
 has not been changed.
 
+## Engine And Distribution Decision
+
+Decision recorded on 2026-10-03: the canonical Nix package will build Flutter's
+engine from pinned upstream sources, rather than depend on meta-flutter's
+precompiled engine archives. Veshell implements the embedder in Rust; Flutter's
+engine is a separate runtime library. Official prebuilt SDK/bootstrap tools
+are not excluded by this decision.
+
+The source engine and its AOT compiler must be built together. Compile the
+shell with that local engine's Dart/frontend and `gen_snapshot` artifacts, then
+install the runtime library from the same derivation. Matching version strings
+alone is not sufficient to establish snapshot compatibility.
+
+Keep the SDK, engine, shell bundle, and compositor as separate derivations with
+narrow source inputs. Veshell-only updates must not invalidate the engine build;
+documentation changes should not invalidate application builds. Engine inputs
+include its source revision, patches, dependencies, and toolchain.
+
+For fast installation, build these derivations in project CI and publish their
+outputs to a project-owned Nix binary cache, such as Cachix or a self-hosted
+cache. Pin CI's nixpkgs revision and build each supported architecture. Start
+with x86_64 Linux and add aarch64 once verified. Document the cache URL and
+public signing key; enabling that cache must be an explicit user trust decision.
+Keep signing secrets outside the repository.
+
+The cache distributes outputs of the source-build derivations; do not replace
+the source build with a hardcoded download of a project-hosted `.so`. When a
+matching cached output is unavailable, Nix must retain the source-build path.
+After nixpkgs inclusion, use the official NixOS binary cache where builds are
+available; the project cache serves development and releases not yet cached
+there. Cache availability is not guaranteed for every revision or platform.
+
+This is the agreed target, not a claim that migration or CI/cache setup is
+complete. The verified package described below still uses meta-flutter's engine.
+Source-engine compilation, matching shell rebuilds, runtime verification, and
+cache publishing remain implementation work.
+
 ## Build
 
 From the repository root:
