@@ -28,7 +28,6 @@
   openssl,
   pipewire,
   gst_all_1,
-  gtk3,
   fontconfig,
   libpulseaudio,
   vulkan-loader,
@@ -55,7 +54,6 @@ let
     vulkan-loader
     libpulseaudio
     fontconfig
-    gtk3
     libepoxy
     stdenv.cc.cc.lib
   ];
@@ -80,16 +78,7 @@ rustPlatform.buildRustPackage {
   pname = "veshell";
   version = manifest.package.version;
 
-  src = lib.cleanSourceWith {
-    src = ../.;
-    filter = path: type:
-      lib.cleanSourceFilter path type
-      && path != "${toString ../.}/build"
-      && path != "${toString ../.}/src/shell/build"
-      && !(type == "directory" && builtins.elem (builtins.baseNameOf path) [
-        ".flutter_sdk" "target" ".dart_tool"
-      ]);
-  };
+  src = (import ./sources.nix { inherit lib; }).compositor;
   inherit cargoHash;
 
   nativeBuildInputs = [
@@ -141,6 +130,9 @@ rustPlatform.buildRustPackage {
     # Preserve native plugin libraries, not just the AOT app library.
     cp -a ${shellBundle}/lib/. "$out/lib/veshell/"
     chmod -R u+w "$out/lib/veshell"
+    # Keep engine bytes in the independently published runtime closure.
+    rm "$out/lib/veshell/libflutter_engine.so"
+    ln -s ${flutterEngine}/release/libflutter_engine.so "$out/lib/veshell/libflutter_engine.so"
     substituteInPlace "$out/share/wayland-sessions/veshell.desktop" \
       --replace-fail 'Exec=veshell-session' "Exec=$out/bin/veshell-session"
     substituteInPlace "$out/bin/veshell-session" \
@@ -169,7 +161,7 @@ rustPlatform.buildRustPackage {
     description = manifest.package.description;
     homepage = manifest.package.repository;
     license = lib.licenses.gpl3Plus;
-    platforms = [ "x86_64-linux" "aarch64-linux" ];
+    platforms = [ "x86_64-linux" ];
     mainProgram = "veshell";
   };
 }

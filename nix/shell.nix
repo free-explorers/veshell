@@ -14,6 +14,7 @@
   gtk3,
   libpulseaudio,
   flutterSdk,
+  flutterEngine,
   pubspecLock,
   gitHashes,
   polkitHelperPath ? "/run/wrappers/bin/polkit-agent-helper-1",
@@ -34,10 +35,15 @@ let
 in
 assert lib.assertMsg (flutterSdk.version == manifest.package.metadata.flutter_version)
   "Veshell requires the Flutter SDK pinned in Cargo.toml; supply a matching flutterSdk.";
+assert lib.assertMsg (
+  flutterEngine.engineVersion == flutterSdk.engineVersion
+  && flutterEngine.runtimeMode == "release"
+  && flutterEngine.outName == "host_release"
+) "Veshell's shell requires the matching source-built host_release engine.";
 (flutterSdk.buildFlutterApplication.override { flutter = flutterSdk; }) {
   pname = "veshell-shell";
   version = manifest.package.version;
-  src = lib.cleanSource ../src/shell;
+  src = (import ./sources.nix { inherit lib; }).shell;
   inherit pubspecLock gitHashes;
   # Backport Freezed 4's Dart 3.13 parameter fix without upgrading analyzer
   # beyond the versions supported by the locked custom_lint dependencies.
@@ -51,7 +57,14 @@ assert lib.assertMsg (flutterSdk.version == manifest.package.metadata.flutter_ve
       patch -d "$out" -p1 < ${./freezed-dart-3.13.patch}
     '';
   flutterMode = "release";
-  flutterBuildFlags = [ "--no-pub" ];
+  # Select the source-built frontend, patched SDK and gen_snapshot together;
+  # official SDK artifacts must never compile the production AOT snapshot.
+  flutterBuildFlags = [
+    "--no-pub"
+    "--local-engine-src-path=${flutterEngine.sourceBuild}"
+    "--local-engine=host_release"
+    "--local-engine-host=host_release"
+  ];
   buildInputs = [ gtk3 libpulseaudio ];
 
   # This constant is compiled into libapp.so, so it cannot be patched when
@@ -74,12 +87,14 @@ assert lib.assertMsg (flutterSdk.version == manifest.package.metadata.flutter_ve
     test -f "''${bundles[0]}/lib/libapp.so"
     mkdir -p "$out"
     cp -r "''${bundles[0]}/lib" "''${bundles[0]}/data" "$out/"
+    # The GTK runner is discarded; Veshell uses the independent embedder engine.
+    rm "$out/lib/libflutter_linux_gtk.so"
     runHook postInstall
   '';
   doCheck = false;
   meta = {
     description = "Veshell release shell assets and AOT libraries";
     license = lib.licenses.gpl3Plus;
-    platforms = [ "x86_64-linux" "aarch64-linux" ];
+    platforms = [ "x86_64-linux" ];
   };
 }

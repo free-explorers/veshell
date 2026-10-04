@@ -7,11 +7,7 @@
   lib,
   callPackage,
   path,
-  stdenv,
-  stdenvNoCC,
-  fetchurl,
-  autoPatchelfHook,
-  libGL,
+  runCommand,
   sdkData ? null,
 }:
 let
@@ -19,11 +15,8 @@ let
   pins = lib.importJSON ./flutter-sdk.json;
   pin = pins.${version} or (throw "No verified Flutter SDK/engine metadata for Cargo.toml pin ${version}.");
   inherit (pin) engineVersion;
-  system = stdenv.hostPlatform.system;
-  arch = {
-    x86_64-linux = "x86_64";
-    aarch64-linux = "arm64";
-  }.${system} or (throw "Veshell's prebuilt Flutter engine does not support ${system}.");
+  enginePackages = callPackage ./engine.nix { };
+  sourceBuild = enginePackages.engine;
   flutterPath = path + "/pkgs/development/compilers/flutter";
   flutterPackages = callPackage (flutterPath + "/default.nix") {
     useNixpkgsEngine = false;
@@ -77,39 +70,31 @@ in
 {
   inherit version engineVersion;
 
-  # Keep engine separate: setting sdk.engine selects nixpkgs' local-engine API.
+  # Official artifacts are tooling caches only. Keep sdk.engine absent so
+  # nixpkgs can populate those caches without invoking its local-engine API.
   flutterSdk = (flutterPackages.wrapFlutter (flutterPackages.mkFlutter sdkArgs)).override {
     supportedTargetFlutterPlatforms = [ "universal" "linux" ];
   };
 
-  flutterEngine = stdenvNoCC.mkDerivation {
-    pname = "veshell-flutter-engine";
+  flutterEngine = assert lib.assertMsg (sourceBuild.engineVersion == engineVersion)
+    "The independent source engine must match the project Flutter SDK pin.";
+    runCommand "veshell-flutter-engine-${version}" {
     inherit version;
-    src = fetchurl {
-      url = "https://github.com/meta-flutter/flutter-engine/releases/download/linux-engine-sdk-release-${arch}-${engineVersion}/linux-engine-sdk-release-${arch}-${engineVersion}.tar.gz";
-      hash = pin.releaseEngineHashes.${system};
-    };
-    sourceRoot = "flutter/engine/src/out/linux_release_${if arch == "x86_64" then "x64" else arch}/engine-sdk";
-    nativeBuildInputs = [ autoPatchelfHook ];
-    buildInputs = [ libGL stdenv.cc.cc.lib ];
-    dontConfigure = true;
-    dontBuild = true;
-    dontStrip = true;
-    installPhase = ''
-      runHook preInstall
-      install -Dm644 include/flutter_embedder.h "$out/flutter_embedder.h"
-      install -Dm755 lib/libflutter_engine.so "$out/release/libflutter_engine.so"
-      runHook postInstall
-    '';
     passthru = {
-      inherit engineVersion;
-      runtimeMode = "release";
+      inherit engineVersion sourceBuild;
+      runtime = enginePackages.runtime;
+      inherit (sourceBuild) outName runtimeMode;
+      tests.aot = enginePackages.aot;
     };
     meta = {
-      description = "Prebuilt release Flutter embedder engine matching Veshell's SDK pin";
+      description = "Source-built release Flutter embedder engine matching Veshell's SDK pin";
       license = lib.licenses.bsd3;
-      sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];
-      platforms = [ "x86_64-linux" "aarch64-linux" ];
+      sourceProvenance = [ lib.sourceTypes.fromSource ];
+      platforms = [ "x86_64-linux" ];
     };
-  };
+  } ''
+    mkdir -p "$out/release"
+    ln -s ${enginePackages.runtime}/include/flutter_embedder.h "$out/flutter_embedder.h"
+    ln -s ${enginePackages.runtime}/lib/libflutter_engine.so "$out/release/libflutter_engine.so"
+  '';
 }

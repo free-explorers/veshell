@@ -17,10 +17,6 @@
         "x86_64-linux": "sha256-vk/hDNeaY50EkmR0TLZ4dzY9BQVn/42RzCKMVW/BcKY=",
         "aarch64-linux": "sha256-LwGCcsvKqmuZwM3Wh3pzGtZN6Ff33eyguhN1bqC4ouw="
       }
-    },
-    "releaseEngineHashes": {
-      "x86_64-linux": "sha256-dk4FumEqr5Q1I8dqh92JlS9EmEo+wbSMA6qLIn2vtWw=",
-      "aarch64-linux": "sha256-BuF/yTics7qjI7Dupp98F8TVeZMaRGguA9E7ddbHLJs="
     }
   }
 }

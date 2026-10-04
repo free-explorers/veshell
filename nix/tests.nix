@@ -20,6 +20,8 @@ let
   };
   enabled = (evaluate true).config;
   disabled = (evaluate false).config;
+  sources = import ./sources.nix { inherit lib; };
+  compositorPaths = map toString (lib.fileset.toList sources.compositorFiles);
 in
 assert lib.all (item: item.assertion) enabled.assertions;
 assert builtins.elem mockPackage enabled.environment.systemPackages;
@@ -34,4 +36,15 @@ assert enabled.xdg.portal.config.veshell."org.freedesktop.impl.portal.ScreenCast
 assert enabled.xdg.portal.config.veshell.default == "gtk";
 assert !(builtins.elem mockPackage disabled.environment.systemPackages);
 assert !(builtins.elem mockPackage disabled.services.displayManager.sessionPackages);
-{ moduleChecks = "passed"; }
+assert builtins.elem (toString ../extra/build/mod.rs) compositorPaths;
+assert builtins.elem (toString ../src/embedder/resources/cursor.rgba) compositorPaths;
+assert builtins.elem (toString ../Makefile) compositorPaths;
+assert lib.all (file: !(lib.any (directory: lib.hasPrefix directory file) [
+  "${toString ../.}/src/shell/" "${toString ../.}/docs/"
+  "${toString ../.}/nix/" "${toString ../.}/.github/"
+])) compositorPaths;
+assert !(sources.shellFilter "${toString ../.}/src/shell/build" "directory");
+assert !(sources.shellFilter "${toString ../.}/src/shell/.dart_tool" "directory");
+assert !(sources.shellFilter "${toString ../.}/src/shell/linux/flutter/ephemeral" "directory");
+assert !(sources.shellFilter "${toString ../.}/src/shell/lib/generated.g.dart" "regular");
+{ moduleChecks = "passed"; sourceChecks = "passed"; }

@@ -3,7 +3,7 @@ let
   flutter = pkgs.callPackage ./nix/flutter.nix { };
   dependencies = pkgs.callPackage ./nix/dependencies.nix { };
   shellBundle = pkgs.callPackage ./nix/shell.nix {
-    inherit (flutter) flutterSdk;
+    inherit (flutter) flutterSdk flutterEngine;
     inherit (dependencies) pubspecLock gitHashes;
   };
 in
