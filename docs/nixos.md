@@ -87,7 +87,12 @@ a new engine output. The approved standalone build at engine repository commit
 post-build check used Ubuntu's `ldd` and failed against the newer Nix glibc.
 The retry at `c61d2b5f85a6f1ef84ff890982496a4aca11d4e0` uses Nix's loader,
 adds the runtime's fontconfig dependency, and excludes the unused GLFW targets.
-It is running; no complete release success is claimed here.
+That retry passed engine compilation, dependency checks, runtime packaging, and
+Dart/AOT generation, but failed compiling the C loader: the API name is
+`FlutterEngineRunsAOTCompiledDartCode`, not `FlutterEngineRunsAOTCompiledDart`.
+Both loader tests are corrected and compile-checked against the pinned header.
+The retry at `1566f7a7e174ebd9204d8bb1010545d62aff2e22` is running; no complete
+release success is claimed here.
 
 That runner reported a 145 GiB root filesystem, with about 108 GiB available
 after cleanup and a lowest sampled availability of 90 GiB during the build.

@@ -17,7 +17,7 @@ let
     #include "flutter_embedder.h"
 
     int main(int argc, char **argv) {
-      if (argc != 2 || !FlutterEngineRunsAOTCompiledDart()) {
+      if (argc != 2 || !FlutterEngineRunsAOTCompiledDartCode()) {
         return 1;
       }
       FlutterEngineAOTDataSource source = {
