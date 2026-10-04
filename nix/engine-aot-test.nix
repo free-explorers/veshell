@@ -1,5 +1,6 @@
 # Optional headless compiler/loader smoke test; no Flutter rendering session.
-{ lib, runCommand, writeText, stdenv, engine, runtime ? null, shellBundle ? null }:
+{ lib, runCommand, writeText, stdenv, engine, runtime ? null, shellBundle ? null,
+  appLibrary ? if shellBundle == null then null else "${shellBundle}/lib/libapp.so" }:
 let
   localEngine = "${engine}/out/${engine.outName}";
   includePath = if runtime == null then localEngine else "${runtime}/include";
@@ -36,7 +37,7 @@ let
 in
 runCommand "flutter-engine-aot-test-${engine.version}" {
   nativeBuildInputs = [ stdenv.cc ];
-} (lib.optionalString (shellBundle == null) ''
+} (lib.optionalString (appLibrary == null) ''
   ${engine.dart}/bin/dartaotruntime \
     ${engine.dart}/bin/snapshots/frontend_server_aot.dart.snapshot \
     --sdk-root=${localEngine}/flutter_patched_sdk_product \
@@ -47,7 +48,7 @@ runCommand "flutter-engine-aot-test-${engine.version}" {
 '' + ''
   $CC -std=c11 -I${includePath} ${loader} \
     -L${libraryPath} -Wl,-rpath,${libraryPath} -lflutter_engine -o aot-loader
-  elf=${if shellBundle == null then ''"$PWD/libapp.so"'' else "${shellBundle}/lib/libapp.so"}
+  elf=${if appLibrary == null then ''"$PWD/libapp.so"'' else lib.escapeShellArg appLibrary}
   ./aot-loader "$elf"
   mkdir -p "$out"
   cp "$elf" "$out/libapp.so"

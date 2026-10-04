@@ -1,12 +1,11 @@
 # NixOS packaging
 
 The package now selects a source-built Flutter engine on native x86_64 NixOS.
-The historical source-engine experiment passed on GitHub's free hosted runner
-for its previous target set. The new standalone `flutter-engine-nix` release
-build is running, not yet verified as passed; the integrated shell/compositor
-build is also awaiting verification.
-Earlier full-package verification used the former prebuilt engine input. This
-is local packaging support, not an official nixpkgs package. A complete
+The standalone `flutter-engine-nix` release passed on GitHub's free hosted runner.
+Its attested engine closure was imported into the x86_64 NixOS VM, where the
+integrated shell/compositor package built and was installed in the user profile.
+Veshell's actual AOT library passed the headless runtime loader test. This is
+local packaging support, not an official nixpkgs package. A complete
 graphical login session has not yet been verified, and the running VM's desktop
 configuration has not been changed.
 
@@ -49,8 +48,9 @@ of Veshell. `nix/engine-repository.json` pins its repository, full commit, and
 checks, and engine release import/export helpers. Veshell provides an adapter
 for its build layout, but does not publish the production engine itself.
 Source-engine ELF interpreters are patched for NixOS before compiler launch
-checks. Integrated builds, release export/import, and graphical runtime
-verification still require a successful hosted integration run.
+checks. Engine release import and the integrated local build are verified.
+Application release export/import and graphical runtime verification remain
+unverified; no hosted Veshell integration workflow has been launched.
 
 ### Hosted Runner Experiment
 
@@ -91,8 +91,10 @@ That retry passed engine compilation, dependency checks, runtime packaging, and
 Dart/AOT generation, but failed compiling the C loader: the API name is
 `FlutterEngineRunsAOTCompiledDartCode`, not `FlutterEngineRunsAOTCompiledDart`.
 Both loader tests are corrected and compile-checked against the pinned header.
-The retry at `1566f7a7e174ebd9204d8bb1010545d62aff2e22` is running; no complete
-release success is claimed here.
+The retry at `1566f7a7e174ebd9204d8bb1010545d62aff2e22` succeeded in run
+`37194244435`, including runtime packaging, synthetic AOT compile/load, export,
+attestation, and publication. The immutable engine prerelease is
+`nix-engine-akx4yg4k5w61yc3fhgmqfz8jjxq2f4kp`.
 
 That runner reported a 145 GiB root filesystem, with about 108 GiB available
 after cleanup and a lowest sampled availability of 90 GiB during the build.
@@ -102,7 +104,8 @@ exact compiler memory peaks. Neither disk nor memory guards caused the failure.
 
 ## Release Exports
 
-`Nix Source Release` runs on a standard free `ubuntu-24.04` runner, by manual
+The optional, prepared `Nix Source Release` workflow has not been launched.
+It uses a standard free `ubuntu-24.04` runner, by manual
 dispatch only. It has no push or pull-request trigger. Dispatch on the explicitly
 trusted `ci/nix-source-release` branch or `main` is available
 once GitHub registers the workflow on the default branch. Authorized writers
@@ -207,7 +210,24 @@ import /path/to/veshell/default.nix { inherit pkgs; }
 ```
 
 Allow substantial persistent disk space for the SDK, vendored dependencies,
-and Rust build. On the small VM, the optimized Rust build took about 15 minutes.
+and Rust build. The verified source-engine Rust package took about 33 minutes
+with four compilation jobs on the VM. Keep long builds independent of short
+terminal-command timeouts.
+
+After importing the attested engine with the helper above, build and install
+without activating a desktop session:
+
+```sh
+nix-build nix/release.nix -A package --out-link result --max-jobs 1 --cores 4
+nix-build nix/release.nix -A aot --no-out-link --max-jobs 1 --cores 2
+nix profile add "$(readlink -f result)"
+```
+
+This makes `veshell` available through `~/.nix-profile/bin` and protects the
+package's runtime closure from garbage collection. It does not enable the NixOS
+module, configure a display manager, start services, or install the setuid polkit
+helper required by a complete session. A user-profile install alone is not full
+NixOS session integration.
 
 ## Inputs And Fixes
 
@@ -240,12 +260,12 @@ and Rust build. On the small VM, the optimized Rust build took about 15 minutes.
 The locked PulseAudio 0.0.8 source declares an FFI plugin, has no native GTK
 plugin target, and opens `libpulse.so.0` directly from Dart. Its Linux CMake file
 only declares the project. GTK is needed to build Flutter's stock Linux runner,
-but Veshell uses the Rust embedder instead. The existing shell install copies
-the stock runner's `libflutter_linux_gtk.so` with the bundle libraries, and the
-package preserves that copy. Those unused libraries and the explicit GTK runtime
-reference can potentially be removed without removing PulseAudio support.
-Confirm ELF references and actual runtime behavior after that packaging change;
-the release exporter refuses those copied GTK engine libraries in the meantime.
+but Veshell uses the Rust embedder instead. Shell installation removes the stock
+runner's `libflutter_linux_gtk.so`; the package also omits the direct GTK runtime
+input. The production embedder engine is a symlink to the independent runtime,
+not a copied library. ELF resolution and actual AOT data loading passed with
+this layout. Other runtime dependencies can still bring GTK transitively; audio
+and graphical behavior have not yet been tested.
 
 Regenerate the shell lock JSON after dependency changes:
 
@@ -296,14 +316,28 @@ Completed for the former prebuilt-engine package on the x86_64 VM:
   or installed shared libraries. Xwayland's version command also succeeds.
 - Evaluation-only module checks, including PulseAudio server configuration.
 
-The historical source-engine experiment passed its previous target set; the
-new standalone release build is still running. The standalone engine's AOT test
-adds a headless compilation and `FlutterEngineCreateAOTData`/collection check;
-it does not initialize a running Dart application or verify rendered frames.
-The release workflow applies that loader check to Veshell's actual shell
-`libapp.so` through `nix/release.nix -A aot`.
-The new source-built package, patched ELF tools, AOT test, and release import
-must pass hosted verification before distribution is claimed to work.
+Completed for the source-built engine integration on 2026-10-04:
+
+- Successful standalone hosted engine release, including synthetic AOT checks.
+- Engine download/import using exact repository/workflow/ref/commit attestation,
+  checksum, metadata, and expected Nix-output verification before root import.
+- Sandboxed shell build using the source frontend, platform kernel,
+  `gen_snapshot`, `impellerc`, const finder, and font-subset tooling.
+- Sandboxed Rust release build and package installation in the VM user profile.
+- Both the shell bundle and final installed, debug-stripped `libapp.so` load
+  through `FlutterEngineCreateAOTData` and are collected successfully by the
+  independent runtime engine. The release AOT check targets the installed file.
+- Native Nix loader resolves all linked dependencies of the compositor.
+- Production shell has no Nix store references, the runtime excludes the full
+  source engine/toolchain, and the package symlinks the separate engine library.
+- Evaluation-only module and source-isolation checks passed.
+
+The installed package output is
+`/nix/store/slk1msfmxjf559gc4glb1k2xcy4nm4d0-veshell-0.1.0`.
+The headless loader check does not initialize a running Dart application or
+verify rendered frames. Flutter tests were not rerun for this integration;
+the 275-test result above belongs to the previous prebuilt-engine package.
+No application release has been published or imported.
 
 Commands for module checks and sandboxed Flutter tests:
 

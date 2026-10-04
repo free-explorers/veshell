@@ -27,5 +27,9 @@ assert pkgs.lib.assertMsg (engine.sourceBuild.drvPath == rawEngine.drvPath)
   engineSourceRevision = repository.revision;
   sdk = package.flutterSdk;
   inherit shell;
-  aot = pkgs.callPackage ./engine-aot-test.nix { engine = rawEngine; inherit runtime; shellBundle = shell; };
+  aot = pkgs.callPackage ./engine-aot-test.nix {
+    engine = rawEngine;
+    inherit runtime;
+    appLibrary = "${package}/lib/veshell/libapp.so";
+  };
 }
