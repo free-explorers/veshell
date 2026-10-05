@@ -19,6 +19,7 @@ in
     systemd.packages = [ cfg.package ];
     hardware.graphics.enable = true;
     services.dbus.enable = true;
+    services.upower.enable = true;
     security.polkit.enable = true;
     security.wrappers.polkit-agent-helper-1 = {
       source = "${config.security.polkit.package.out}/lib/polkit-1/polkit-agent-helper-1";

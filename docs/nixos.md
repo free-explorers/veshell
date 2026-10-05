@@ -5,9 +5,9 @@ The standalone `flutter-engine-nix` release passed on GitHub's free hosted runne
 Its attested engine closure was imported into the x86_64 NixOS VM, where the
 integrated shell/compositor package built and was installed in the user profile.
 Veshell's actual AOT library passed the headless runtime loader test. This is
-local packaging support, not an official nixpkgs package. A complete
-graphical login session has not yet been verified, and the running VM's desktop
-configuration has not been changed.
+local packaging support, not an official nixpkgs package. The NixOS integration
+is activated, and first graphical startup was confirmed in GNOME Boxes using
+Virtio/virgl. Full login/logout and desktop feature verification remain pending.
 
 ## Engine And Distribution Decision
 
@@ -49,8 +49,8 @@ checks, and engine release import/export helpers. Veshell provides an adapter
 for its build layout, but does not publish the production engine itself.
 Source-engine ELF interpreters are patched for NixOS before compiler launch
 checks. Engine release import and the integrated local build are verified.
-Application release export/import and graphical runtime verification remain
-unverified; no hosted Veshell integration workflow has been launched.
+Application release export/import and complete graphical-session verification
+remain unverified; no hosted Veshell integration workflow has been launched.
 
 ### Hosted Runner Experiment
 
@@ -294,7 +294,8 @@ Import the module in the consuming configuration:
 The module registers the Wayland session and user units and enables graphics,
 D-Bus, polkit, PipeWire with its PulseAudio compatibility server, and portals.
 It does not select a display manager, enable automatic login, or change
-networking. NetworkManager, BlueZ, and UPower must be configured separately if
+networking. UPower is enabled because the shell awaits it during startup.
+NetworkManager and BlueZ must be configured separately if
 their corresponding shell controls are needed.
 
 Build the system before switching it and retain a working recovery session.
@@ -339,6 +340,14 @@ verify rendered frames. Flutter tests were not rerun for this integration;
 the 275-test result above belongs to the previous prebuilt-engine package.
 No application release has been published or imported.
 
+On 2026-10-05 the NixOS integration was activated and the first desktop startup
+was confirmed in GNOME Boxes with Virtio/virgl and a DRM render node. The initial
+startup stalled on the loading screen while UPower was absent. The module now
+enables UPower, and its D-Bus interface and the PipeWire PulseAudio-compatible
+server were verified before the successful retry. No Veshell/engine rebuild was
+needed for that service dependency fix. Audio playback, authentication prompts,
+portal capture, and clean session shutdown have not yet been verified.
+
 Commands for module checks and sandboxed Flutter tests:
 
 ```sh
@@ -352,7 +361,7 @@ configuration is supplied, but stops because the winit backend requires
 or frame presentation. A software-only Xvfb session is not a substitute for a
 GPU-capable VM or machine.
 
-Still required: Rust tests, native arm64 builds, GPU-backed frame presentation,
-login/logout, audio, polkit authentication, XWayland integration, and portal
+Still required: Rust tests, native arm64 builds, full login/logout, audio,
+polkit authentication, XWayland integration, and portal
 screen capture. Add a NixOS runtime test before claiming full session support
 or requesting official nixpkgs inclusion.
