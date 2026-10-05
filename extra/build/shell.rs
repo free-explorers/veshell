@@ -18,8 +18,6 @@ pub fn build_shell(
     println!("cargo:rerun-if-changed=src/shell/pubspec.lock");
     println!("cargo:rerun-if-changed=src/shell/assets");
     println!("cargo:rerun-if-changed=src/shell/lib");
-    println!("cargo:rerun-if-changed=extra/build/codegen.dart");
-    println!("cargo:rerun-if-changed=extra/build/freezed-dart-3.13.patch");
     println!("cargo:rerun-if-env-changed=VESHELL_POLKIT_HELPER_PATH");
 
     let absolute_flutter_bin = Path::new(&*flutter_bin_path).canonicalize()?;
@@ -38,11 +36,10 @@ pub fn build_shell(
 
     // run build_runner
     println!("Running build_runner...");
-    let codegen = Path::new("extra/build/codegen.dart").canonicalize()?;
     let output = std::process::Command::new(absolute_dart_bin)
-        .arg(codegen)
+        .arg("run")
+        .arg("build_runner")
         .arg("build")
-        .arg("--delete-conflicting-outputs")
         .current_dir(absolute_shell_directory.clone())
         .status()?;
     if !output.success() {

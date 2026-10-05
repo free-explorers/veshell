@@ -1,7 +1,7 @@
 # Dependencies
 
 The table below lists build libraries and tools. The development SDK/bootstrap
-also needs Git, `patch`, and working network access. Offline packaging supplies
+also needs Git and working network access. Offline packaging supplies
 the prepared shell and engine instead; see [building and packaging](building.md).
 
 <table>
@@ -28,7 +28,7 @@ the prepared shell and engine instead; see [building and packaging](building.md)
       <td colspan=4>clang</td>
     </tr>
     <tr>
-      <td colspan=4>pkg-config and patch</td>
+      <td colspan=4>pkg-config</td>
     </tr>
     <tr>
       <td>ninja-build</td>

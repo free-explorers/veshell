@@ -10,7 +10,6 @@
 {
   lib,
   runCommand,
-  patch,
   gtk3,
   libpulseaudio,
   flutterSdk,
@@ -21,8 +20,9 @@
 }:
 let
   manifest = builtins.fromTOML (builtins.readFile ../Cargo.toml);
-  # build_resolvers locates sky_engine relative to the resolved Dart executable.
-  # A symlink to nixpkgs' standalone Dart silently drops dart:ui from sdk.sum.
+  # Flutter's Dart resolves `dart:ui` through sky_engine, which must be found
+  # relative to the resolved Dart executable. A symlink to nixpkgs' standalone
+  # Dart silently drops dart:ui from sdk.sum.
   codegenDart = runCommand "veshell-flutter-codegen-dart" { } ''
     mkdir -p "$out/bin/cache/dart-sdk" "$out/bin/cache/pkg"
     cp -rs ${flutterSdk.dart}/. "$out/bin/cache/dart-sdk/"
@@ -45,17 +45,6 @@ assert lib.assertMsg (
   version = manifest.package.version;
   src = (import ./sources.nix { inherit lib; }).shell;
   inherit pubspecLock gitHashes;
-  # Backport Freezed 4's Dart 3.13 parameter fix without upgrading analyzer
-  # beyond the versions supported by the locked custom_lint dependencies.
-  customSourceBuilders.freezed = { src, version, ... }:
-    runCommand "pub-freezed-${version}-dart-3.13" {
-      nativeBuildInputs = [ patch ];
-      passthru = src.passthru;
-    } ''
-      cp -r ${src} "$out"
-      chmod -R u+w "$out"
-      patch -d "$out" -p1 < ${../extra/build/freezed-dart-3.13.patch}
-    '';
   flutterMode = "release";
   # Select the source-built frontend, patched SDK and gen_snapshot together;
   # official SDK artifacts must never compile the production AOT snapshot.
@@ -73,7 +62,7 @@ assert lib.assertMsg (
     # The offline package-config hook does not run pub's plugin-link setup.
     mkdir -p linux/flutter/ephemeral/.plugin_symlinks
     ln -s "$(packagePath pulseaudio)" linux/flutter/ephemeral/.plugin_symlinks/pulseaudio
-    packageRun build_runner build --delete-conflicting-outputs
+    packageRun build_runner build
   '';
   installPhase = ''
     runHook preInstall

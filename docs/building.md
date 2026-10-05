@@ -21,14 +21,13 @@ For direct code generation, after resolving dependencies:
 ```sh
 cd src/shell
 ../../.flutter_sdk/bin/flutter pub get
-../../.flutter_sdk/bin/dart ../../extra/build/codegen.dart build --delete-conflicting-outputs
+../../.flutter_sdk/bin/dart run build_runner build
 ```
 
-The wrapper stages only Freezed in `build/codegen`, applies the shared patch, and
-restores the package configuration after the generator exits. It never patches
-the global pub cache. Do not run pub-get/codegen concurrently in the same shell
-directory. After forcibly terminating code generation, rerun `flutter pub get`
-before the next invocation.
+With the pinned generator set, codegen needs no source patching. Do not run
+pub-get/codegen concurrently in the same shell directory. After forcibly
+terminating code generation, rerun `flutter pub get` before the next
+invocation.
 
 Rust optimization profiles and Flutter runtime modes are distinct. Standard
 `debug`, `profile`, and `release` output directories select the corresponding
@@ -147,7 +146,6 @@ Do not use Nix-linked binaries as portable Debian/RPM release artifacts.
 
 ```sh
 bash extra/tests/packaging_install.sh
-.flutter_sdk/bin/dart extra/tests/codegen_compat.dart
 rustc --edition 2021 --test extra/build/config.rs -o /tmp/veshell-build-config-tests
 /tmp/veshell-build-config-tests
 ```

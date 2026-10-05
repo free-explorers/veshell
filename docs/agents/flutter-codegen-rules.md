@@ -24,7 +24,7 @@ breaks the build, not just style.
   runs: a missing part file surfaces as "Type `_$X` not found" together with
   "no `part of` declaration", and build_runner will not emit it again while
   the source does not parse. Delete the stale generated files and re-run
-  `dart run build_runner build --delete-conflicting-outputs`.
+  `dart run build_runner build`.
 
 ## Platform-channel naming contract
 
