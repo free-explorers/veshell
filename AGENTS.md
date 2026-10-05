@@ -33,7 +33,7 @@ version-free; every versionable fact is anchored in a project file.
 Run from `src/shell/`, using `../../.flutter_sdk/bin/dart` (the SDK lives at
 `.flutter_sdk/` in the repo root):
 
-- `dart run build_runner build --delete-conflicting-outputs`
+- `dart run build_runner build`
 - If the incremental cache looks stale or generated files have grudges:
   `dart run build_runner clean` first, then rebuild.
 - `flutter build linux --debug` reproduces the Dart compile errors on their

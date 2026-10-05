@@ -7,7 +7,7 @@
 
   # Verified fetchgit hashes for the lockfile's resolved-ref, keyed by package.
   gitHashes = {
-    freedesktop_desktop_entry = "sha256-gkQ0c6qvJIQVg4zv7guviE4fGJl+mXOeKV2cWHSWDXM=";
+    freedesktop_desktop_entry = "sha256-d9cjrgyRnmsOFED/v1namsGyXApDUZCTPga8Jjs6e2s=";
     material_design_icons_flutter = "sha256-T3edt6Lo0HmliE3H0OA2VRR9tmnYjJv4In8yO7zV54k=";
     ubuntu_session = "sha256-SGXw+Ym1tFC2jTFxJwh+K2Ep50pRN479oAs9fTDeWnI=";
   };

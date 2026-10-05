@@ -169,11 +169,13 @@ source-engine integration; these builds disable the normal test phases.
 - GTK is needed for Flutter's Linux bundle build, but its unused runner library
   is removed from the installed shell. Veshell references the small embedder
   runtime rather than the full engine toolchain.
-- `nix/freezed-dart-3.13.patch` fixes the locked generator's Dart compatibility.
-  The polkit helper path is compiled as `/run/wrappers/bin/polkit-agent-helper-1`.
+- The polkit helper path is compiled as `/run/wrappers/bin/polkit-agent-helper-1`.
 - Refresh SDK metadata, the engine pin, and dependency hashes together when
   changing toolchain/dependency pins. `nix/flutter-sdk-update.nix` provides SDK
-  hash probes. Regenerate the shell lock JSON with:
+  hash probes. A lockfile git-ref change is also a hash change: re-verify the
+  affected `nix/dependencies.nix` entry with
+  `nix-prefetch-git --url <url> --rev <resolved-ref>`. Regenerate the shell
+  lock JSON with:
 
 ```sh
 nix-shell -p yq jq --run 'yq -s . src/shell/pubspec.lock | jq -S ".[0]" > nix/pubspec-lock.json'

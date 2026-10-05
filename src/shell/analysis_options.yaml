@@ -36,5 +36,8 @@ analyzer:
     - "**/*.freezed.dart"
     - build/**
     - linux/**
-  plugins:
-    - custom_lint
+
+# Native analyzer plugins (analysis_server_plugin), not the legacy custom_lint
+# runner. riverpod_lint registers its rules as warnings, so they stay enabled.
+plugins:
+  riverpod_lint: ^3.1.9

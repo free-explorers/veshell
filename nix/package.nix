@@ -122,19 +122,13 @@ rustPlatform.buildRustPackage {
 
   installPhase = ''
     runHook preInstall
-    make package PREFIX="$out" PROFILE=release \
+    make install PREFIX="$out" PROFILE=release INSTALL_ENGINE=0 \
       BIN="target/${stdenv.hostPlatform.rust.rustcTarget}/release/veshell" \
-      ENGINE_LIB="${flutterEngine}/release/libflutter_engine.so" \
       APP_LIB="${shellBundle}/lib/libapp.so" DATA_DIR="${shellBundle}/data" \
       SYSTEMD_USER_DIR="$out/lib/systemd/user"
-    # Preserve native plugin libraries, not just the AOT app library.
-    cp -a ${shellBundle}/lib/. "$out/lib/veshell/"
     chmod -R u+w "$out/lib/veshell"
     # Keep engine bytes in the independently published runtime closure.
-    rm "$out/lib/veshell/libflutter_engine.so"
     ln -s ${flutterEngine}/release/libflutter_engine.so "$out/lib/veshell/libflutter_engine.so"
-    substituteInPlace "$out/share/wayland-sessions/veshell.desktop" \
-      --replace-fail 'Exec=veshell-session' "Exec=$out/bin/veshell-session"
     substituteInPlace "$out/bin/veshell-session" \
       --replace-fail '#!/bin/sh' '#!${bash}/bin/bash'
     patchShebangs "$out/bin"

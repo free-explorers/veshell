@@ -7,7 +7,7 @@ let
     (root + "/Makefile")
     (root + "/LICENSE")
     (root + "/src/embedder")
-    (root + "/extra/build")
+    (lib.fileset.fileFilter (file: lib.hasSuffix ".rs" file.name) (root + "/extra/build"))
     (root + "/extra/assets")
     (root + "/extra/settings")
   ];

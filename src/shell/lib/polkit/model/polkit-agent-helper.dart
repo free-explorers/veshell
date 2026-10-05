@@ -4,7 +4,10 @@ import 'dart:io';
 
 import 'package:shell/shared/util/logger.dart';
 
-const helperPath = '/usr/lib/polkit-1/polkit-agent-helper-1';
+const helperPath = String.fromEnvironment(
+  'VESHELL_POLKIT_HELPER_PATH',
+  defaultValue: '/usr/lib/polkit-1/polkit-agent-helper-1',
+);
 const helperSocketPath = '/run/polkit/agent-helper.socket';
 
 enum Event { failed, request, showError, showDebug, complete }

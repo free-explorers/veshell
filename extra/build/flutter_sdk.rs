@@ -11,9 +11,12 @@ pub fn install_flutter_sdk() -> Result<(), Box<dyn std::error::Error>> {
     // Clone the flutter repo if it doesn't exist
     if !std::path::Path::new(FLUTTER_REPO_DIR).exists() {
         println!("Sdk not found, cloning flutter repo...");
-        std::process::Command::new("git")
+        let cloned = std::process::Command::new("git")
             .args(&["clone", FLUTTER_REPO_URL, FLUTTER_REPO_DIR])
             .status()?;
+        if !cloned.success() {
+            return Err("Failed to clone the project Flutter SDK".into());
+        }
     }
 
     let manifest_path = match env::var("CARGO_MANIFEST_PATH") {
@@ -26,6 +29,8 @@ pub fn install_flutter_sdk() -> Result<(), Box<dyn std::error::Error>> {
 
     let _metadata = MetadataCommand::new()
         .manifest_path(manifest_path)
+        .no_deps()
+        .other_options(vec!["--offline".to_owned()])
         .exec()
         .unwrap();
 
@@ -41,7 +46,7 @@ pub fn install_flutter_sdk() -> Result<(), Box<dyn std::error::Error>> {
             "".to_string()
         }
     };
-    if current_version == flutter_version {
+    if current_version.trim() == flutter_version {
         return Ok(());
     }
     println!(

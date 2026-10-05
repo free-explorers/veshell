@@ -25,13 +25,17 @@ cargo run
 
 # Installing Veshell locally
 ```shell
-make install
+make install-local
 ```
 
 # Uninstalling Veshell
 ```shell
-make uninstall
+sudo make uninstall
 ```
+
+For offline builds, staged installs, or distribution packages, see
+[the build and packaging guide](docs/building.md). NixOS instructions are in
+[docs/nixos.md](docs/nixos.md).
 
 # The innovative workflow
 

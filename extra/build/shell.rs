@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{env, path::Path};
 
 use crate::{flutter_sdk::FLUTTER_REPO_DIR, FlutterEngineBuild};
 use lazy_static::lazy_static;
@@ -15,7 +15,10 @@ pub fn build_shell(
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=extra/build/shell.rs");
     println!("cargo:rerun-if-changed=src/shell/pubspec.yaml");
+    println!("cargo:rerun-if-changed=src/shell/pubspec.lock");
+    println!("cargo:rerun-if-changed=src/shell/assets");
     println!("cargo:rerun-if-changed=src/shell/lib");
+    println!("cargo:rerun-if-env-changed=VESHELL_POLKIT_HELPER_PATH");
 
     let absolute_flutter_bin = Path::new(&*flutter_bin_path).canonicalize()?;
     let absolute_dart_bin = Path::new(&*dart_bin_path).canonicalize()?;
@@ -37,7 +40,6 @@ pub fn build_shell(
         .arg("run")
         .arg("build_runner")
         .arg("build")
-        .arg("--delete-conflicting-outputs")
         .current_dir(absolute_shell_directory.clone())
         .status()?;
     if !output.success() {
@@ -46,14 +48,24 @@ pub fn build_shell(
 
     // build shell
     println!("Building shell...");
-    let output = std::process::Command::new(absolute_flutter_bin)
+    let mut command = std::process::Command::new(absolute_flutter_bin);
+    command
         .arg("build")
         .arg("linux")
         .arg(match flutter_engine_build {
             FlutterEngineBuild::Debug => "--debug",
             FlutterEngineBuild::Profile => "--profile",
             FlutterEngineBuild::Release => "--release",
-        })
+        });
+    if let Ok(helper) = env::var("VESHELL_POLKIT_HELPER_PATH") {
+        if !Path::new(&helper).is_absolute() {
+            return Err(
+                "VESHELL_POLKIT_HELPER_PATH must be an absolute final installation path".into(),
+            );
+        }
+        command.arg(format!("--dart-define=VESHELL_POLKIT_HELPER_PATH={helper}"));
+    }
+    let output = command
         .current_dir(absolute_shell_directory.clone())
         .status()?;
 
