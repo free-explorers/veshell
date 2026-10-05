@@ -1,8 +1,5 @@
 [alias]
 bundle = "run --workspace --bin bundle"
 
-[env]
-VESHELL_DEFAULT_CONFIG_DIR = "extra/settings/default"
-
 [build]
 target-dir = "build/target"

@@ -54,7 +54,7 @@ assert lib.assertMsg (
     } ''
       cp -r ${src} "$out"
       chmod -R u+w "$out"
-      patch -d "$out" -p1 < ${./freezed-dart-3.13.patch}
+      patch -d "$out" -p1 < ${../extra/build/freezed-dart-3.13.patch}
     '';
   flutterMode = "release";
   # Select the source-built frontend, patched SDK and gen_snapshot together;
@@ -64,15 +64,10 @@ assert lib.assertMsg (
     "--local-engine-src-path=${flutterEngine.sourceBuild}"
     "--local-engine=host_release"
     "--local-engine-host=host_release"
+    "--dart-define=VESHELL_POLKIT_HELPER_PATH=${polkitHelperPath}"
   ];
   buildInputs = [ gtk3 libpulseaudio ];
 
-  # This constant is compiled into libapp.so, so it cannot be patched when
-  # installing an already compiled bundle. NixOS must provide the setuid helper.
-  postPatch = ''
-    substituteInPlace lib/polkit/model/polkit-agent-helper.dart \
-      --replace-fail '/usr/lib/polkit-1/polkit-agent-helper-1' ${lib.escapeShellArg polkitHelperPath}
-  '';
   preBuild = ''
     export PATH="${codegenDart}/bin:$PATH"
     # The offline package-config hook does not run pub's plugin-link setup.

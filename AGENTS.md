@@ -12,11 +12,13 @@ version-free; every versionable fact is anchored in a project file.
   comparing against `.flutter_sdk/version`. Do not hardcode versions anywhere
   else, and go through these project files when the pin needs to move.
 - The shell build pipeline is `extra/build/shell.rs`: it runs
-  `flutter pub get`, `dart run build_runner build`, and
+  `flutter pub get`, the project codegen wrapper, and
   `flutter build linux --debug/--profile/--release` from `src/shell/`, always
   with the SDK binaries from `.flutter_sdk/bin`. Any
   `flutter`/`dart` found on the generic `PATH` is not guaranteed to satisfy
   the shell's dependency constraints and must not be used for the shell.
+  `extra/build/codegen.dart` applies the shared generator compatibility patch
+  to a private build copy; do not patch the global pub cache.
 - `cargo check` (repo root) is a **single-gate** verification: the build
   script chains pub-get + build_runner + the Flutter build, and fails loudly
   (panic) if any Dart-side step fails. Start here after Rust or Dart changes.
@@ -33,9 +35,9 @@ version-free; every versionable fact is anchored in a project file.
 Run from `src/shell/`, using `../../.flutter_sdk/bin/dart` (the SDK lives at
 `.flutter_sdk/` in the repo root):
 
-- `dart run build_runner build --delete-conflicting-outputs`
+- `dart ../../extra/build/codegen.dart build --delete-conflicting-outputs`
 - If the incremental cache looks stale or generated files have grudges:
-  `dart run build_runner clean` first, then rebuild.
+  `dart ../../extra/build/codegen.dart clean` first, then rebuild.
 - `flutter build linux --debug` reproduces the Dart compile errors on their
   own, without the full cargo gate.
 

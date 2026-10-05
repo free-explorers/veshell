@@ -18,8 +18,9 @@ pub fn link_flutter_engine_shared_library(
 
     println!("cargo:rerun-if-env-changed=VESHELL_ENGINE_DIR");
     println!("cargo:rerun-if-env-changed=VESHELL_LIB_DIR");
+    println!("cargo:rerun-if-env-changed=SKIP_FLUTTER_ENGINE_DOWNLOAD");
     if env::var_os("VESHELL_ENGINE_DIR").is_none() {
-        let flutter_engine_revision = get_flutter_engine_revision();
+        let flutter_engine_revision = get_flutter_engine_revision()?;
         if should_download_flutter_engine_library(&flutter_engine_revision, flutter_engine_build) {
             download_flutter_engine_library(&flutter_engine_revision, flutter_engine_build)?;
         }
@@ -32,22 +33,20 @@ pub fn link_flutter_engine_shared_library(
     Ok(())
 }
 
-fn get_flutter_engine_revision() -> String {
+fn get_flutter_engine_revision() -> Result<String, Box<dyn std::error::Error>> {
     let engine_version_path = format!("{FLUTTER_REPO_DIR}/bin/internal/engine.version");
-    match std::fs::read_to_string(engine_version_path) {
-        Ok(engine_revision) => engine_revision.trim().to_string(),
-        Err(e) => {
-            println!("Error: {e}, failed to read Flutter engine version");
-            String::new()
-        }
+    let revision = std::fs::read_to_string(engine_version_path)?;
+    if revision.trim().is_empty() {
+        return Err("Flutter SDK engine revision is empty".into());
     }
+    Ok(revision.trim().to_owned())
 }
 
 fn should_download_flutter_engine_library(
     flutter_engine_revision: &str,
     flutter_engine_build: FlutterEngineBuild,
 ) -> bool {
-    if option_env!("SKIP_FLUTTER_ENGINE_DOWNLOAD").is_some() {
+    if env::var_os("SKIP_FLUTTER_ENGINE_DOWNLOAD").is_some() {
         return false;
     }
     // Is the revision different? If so, Flutter was probably upgraded.
@@ -61,11 +60,20 @@ fn should_download_flutter_engine_library(
         }
         Err(_) => return true,
     };
+    if !matches!(std::fs::read_to_string(format!("{FLUTTER_ENGINE_LIBS_DIR}/.flutter_engine_header_revision")),
+        Ok(header_revision) if header_revision == flutter_engine_revision)
+    {
+        return true;
+    }
     // Does the shared library exist?
     if Path::new(&format!(
         "{FLUTTER_ENGINE_LIBS_DIR}/{flutter_engine_build}/{FLUTTER_ENGINE_LIB_NAME}"
     ))
-    .exists()
+    .is_file()
+        && Path::new(&format!(
+            "{FLUTTER_ENGINE_LIBS_DIR}/{FLUTTER_ENGINE_HEADER_NAME}"
+        ))
+        .is_file()
     {
         return false;
     }
@@ -77,12 +85,10 @@ fn download_flutter_engine_library(
     flutter_engine_build: FlutterEngineBuild,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Downloading flutter engine library...");
-    let arch = if cfg!(target_arch = "x86_64") {
-        "x86_64"
-    } else if cfg!(target_arch = "aarch64") {
-        "arm64"
-    } else {
-        panic!("Unsupported architecture");
+    let arch = match env::var("CARGO_CFG_TARGET_ARCH").as_deref() {
+        Ok("x86_64") => "x86_64",
+        Ok("aarch64") => "arm64",
+        _ => return Err("Unsupported Flutter engine target architecture".into()),
     };
 
     // Download the archive.
@@ -142,13 +148,29 @@ fn download_flutter_engine_library(
         }
     }
 
-    // Remember the revision.
+    for path in [
+        format!("{FLUTTER_ENGINE_LIBS_DIR}/{flutter_engine_build}/{FLUTTER_ENGINE_LIB_NAME}"),
+        format!("{FLUTTER_ENGINE_LIBS_DIR}/{FLUTTER_ENGINE_HEADER_NAME}"),
+    ] {
+        let metadata = std::fs::metadata(&path)?;
+        if !metadata.is_file() || metadata.len() == 0 {
+            return Err(
+                format!("Engine archive is missing a nonempty required file: {path}").into(),
+            );
+        }
+    }
+
+    // Mark complete only after both required artifacts are installed.
     let revision_file_path =
         format!("{FLUTTER_ENGINE_LIBS_DIR}/.flutter_engine_revision.{flutter_engine_build}");
     let mut revision_file = std::fs::File::create(revision_file_path)
         .expect("Failed to create .flutter_engine_revision");
     write!(revision_file, "{}", flutter_engine_revision)
         .expect("Failed to write .flutter_engine_revision");
+    std::fs::write(
+        format!("{FLUTTER_ENGINE_LIBS_DIR}/.flutter_engine_header_revision"),
+        flutter_engine_revision,
+    )?;
     Ok(())
 }
 
@@ -158,8 +180,8 @@ fn download_from_url(url: &str) -> Result<bytes::Bytes, reqwest::Error> {
 }
 
 fn generate_embedder_bindings() {
-    let engine_dir = env::var("VESHELL_ENGINE_DIR")
-        .unwrap_or_else(|_| FLUTTER_ENGINE_LIBS_DIR.to_owned());
+    let engine_dir =
+        env::var("VESHELL_ENGINE_DIR").unwrap_or_else(|_| FLUTTER_ENGINE_LIBS_DIR.to_owned());
     let embedder_header_path = format!("{engine_dir}/{FLUTTER_ENGINE_HEADER_NAME}");
     println!("cargo:rerun-if-changed={embedder_header_path}");
     println!("Generating embedder bindings...");
@@ -179,8 +201,8 @@ fn generate_embedder_bindings() {
 fn link_libflutter_engine(flutter_engine_build: FlutterEngineBuild) {
     link_libgl();
 
-    let engine_dir = env::var("VESHELL_ENGINE_DIR")
-        .unwrap_or_else(|_| FLUTTER_ENGINE_LIBS_DIR.to_owned());
+    let engine_dir =
+        env::var("VESHELL_ENGINE_DIR").unwrap_or_else(|_| FLUTTER_ENGINE_LIBS_DIR.to_owned());
     let libflutter_engine_dir = format!("{engine_dir}/{flutter_engine_build}");
     println!("cargo:rerun-if-changed={libflutter_engine_dir}/{FLUTTER_ENGINE_LIB_NAME}");
     println!("cargo:rustc-link-search={libflutter_engine_dir}");

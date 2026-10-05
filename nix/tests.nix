@@ -38,6 +38,8 @@ assert enabled.xdg.portal.config.veshell.default == "gtk";
 assert !(builtins.elem mockPackage disabled.environment.systemPackages);
 assert !(builtins.elem mockPackage disabled.services.displayManager.sessionPackages);
 assert builtins.elem (toString ../extra/build/mod.rs) compositorPaths;
+assert !(builtins.elem (toString ../extra/build/codegen.dart) compositorPaths);
+assert !(builtins.elem (toString ../extra/build/freezed-dart-3.13.patch) compositorPaths);
 assert builtins.elem (toString ../src/embedder/resources/cursor.rgba) compositorPaths;
 assert builtins.elem (toString ../Makefile) compositorPaths;
 assert lib.all (file: !(lib.any (directory: lib.hasPrefix directory file) [

@@ -1,3 +1,8 @@
+# Dependencies
+
+The table below lists build libraries and tools. The development SDK/bootstrap
+also needs Git, `patch`, and working network access. Offline packaging supplies
+the prepared shell and engine instead; see [building and packaging](building.md).
 
 <table>
   <thead>
@@ -21,6 +26,9 @@
     </tr>
     <tr>
       <td colspan=4>clang</td>
+    </tr>
+    <tr>
+      <td colspan=4>pkg-config and patch</td>
     </tr>
     <tr>
       <td>ninja-build</td>
@@ -62,7 +70,7 @@
       <td>openssl</td>
       <td>openssl</td>
       <td>openssl-devel</td>
-      <td>openssl</td>
+      <td>libssl-dev</td>
     </tr>
     <tr>
       <td>libstdc</td>
@@ -81,10 +89,10 @@
       <td>libpipewire-0.3-dev</td>
     </tr>
     <tr>
-      <td>GStreamer (runtime plugins vp8enc, webmmux, videoconvert, appsrc; gstreamer/gstreamer-app 0.24 cargo bindings; validated on 1.28)</td>
-      <td>gst-plugins-good</td>
-      <td>gst-plugins-good</td>
-      <td>gst-plugins-good</td>
+      <td>GStreamer build headers</td>
+      <td>gstreamer, gst-plugins-base-libs</td>
+      <td>gstreamer1-devel, gstreamer1-plugins-base-devel</td>
+      <td>libgstreamer1.0-dev, libgstreamer-plugins-base1.0-dev</td>
     </tr>
     <tr>
       <td>dbus-daemon session bus (tests + portal frontend)</td>
@@ -98,3 +106,23 @@
     </tr>
    </tbody>
 </table>
+
+## Runtime requirements
+
+- A usable DRM render node and compatible EGL/GLES drivers.
+- A user session bus and a system D-Bus service.
+- UPower and a PulseAudio-compatible audio server, such as PipeWire-Pulse.
+  These are awaited during shell initialization, even on machines without a battery.
+- Polkit and its authentication helper, with the helper location configured for
+  the distribution. The socket transport is preferred; fallback helper paths
+  must match the installed shell.
+- GStreamer base/good plugins for capture: `appsrc`, `videoconvert`, `vp8enc`,
+  and `webmmux`. Runtime packages include `gst-plugins-base`/`gst-plugins-good`
+  on Arch, `gstreamer1-plugins-base`/`gstreamer1-plugins-good` on Fedora, and
+  `gstreamer1.0-plugins-base`/`gstreamer1.0-plugins-good` on Debian.
+- XWayland for X11 applications and an xdg-desktop-portal frontend/fallback
+  backend for portal integration.
+
+NetworkManager and BlueZ are optional integrations for their corresponding
+shell controls. Enabling real-time audio through RTKit is recommended where
+supported by the distribution.

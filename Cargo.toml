@@ -96,58 +96,22 @@ cargo_metadata = "0.19.1"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [package.metadata.generate-rpm]
-version = "25.05.1"
 assets = [
-    { source = "build/bundle/release/veshell", dest = "/usr/bin/", mode = "755" },
-    { source = "extra/assets/veshell-session", dest = "/usr/bin/", mode = "755" },
-    { source = "extra/assets/veshell.desktop", dest = "/usr/share/wayland-sessions/", mode = "644" },
-    { source = "extra/assets/veshell-portals.conf", dest = "/usr/share/xdg-desktop-portal/", mode = "644" },
-    { source = "extra/assets/veshell.portal", dest = "/usr/share/xdg-desktop-portal/portals/", mode = "644" },
-    { source = "extra/assets/veshell.service", dest = "/usr/lib/systemd/user/", mode = "644" },
-    { source = "extra/assets/veshell-session-stop", dest = "/usr/bin/", mode = "755" },
-    { source = "extra/assets/veshell-shutdown.target", dest = "/usr/lib/systemd/user/", mode = "644" },
+    { source = "build/package-root/usr/bin/*", dest = "/usr/bin/", mode = "755" },
+    { source = "build/package-root/usr/lib/veshell/**/*", dest = "/usr/lib/veshell/", mode = "644" },
+    { source = "build/package-root/usr/lib/systemd/user/*", dest = "/usr/lib/systemd/user/", mode = "644" },
+    { source = "build/package-root/usr/share/veshell/**/*", dest = "/usr/share/veshell/", mode = "644" },
+    { source = "build/package-root/usr/share/wayland-sessions/*", dest = "/usr/share/wayland-sessions/", mode = "644" },
+    { source = "build/package-root/usr/share/xdg-desktop-portal/**/*", dest = "/usr/share/xdg-desktop-portal/", mode = "644" },
 ]
 
 [package.metadata.deb]
+preserve-symlinks = true
 assets = [
-    [
-        "build/bundle/release/veshell",
-        "usr/bin/",
-        "755",
-    ],
-    [
-        "extra/assets/veshell-session",
-        "usr/bin/",
-        "755",
-    ],
-    [
-        "extra/assets/veshell.desktop",
-        "/usr/share/wayland-sessions/",
-        "644",
-    ],
-    [
-        "extra/assets/veshell-portals.conf",
-        "/usr/share/xdg-desktop-portal/",
-        "644",
-    ],
-    [
-        "extra/assets/veshell.portal",
-        "/usr/share/xdg-desktop-portal/portals/",
-        "644",
-    ],
-    [
-        "extra/assets/veshell.service",
-        "/usr/lib/systemd/user/",
-        "644",
-    ],
-    [
-        "extra/assets/veshell-session-stop",
-        "usr/bin/",
-        "755",
-    ],
-    [
-        "extra/assets/veshell-shutdown.target",
-        "/usr/lib/systemd/user/",
-        "644",
-    ],
+    ["build/package-root/usr/bin/*", "usr/bin/", "755"],
+    ["build/package-root/usr/lib/veshell/**/*", "usr/lib/veshell/", "644"],
+    ["build/package-root/usr/lib/systemd/user/*", "usr/lib/systemd/user/", "644"],
+    ["build/package-root/usr/share/veshell/**/*", "usr/share/veshell/", "644"],
+    ["build/package-root/usr/share/wayland-sessions/*", "usr/share/wayland-sessions/", "644"],
+    ["build/package-root/usr/share/xdg-desktop-portal/**/*", "usr/share/xdg-desktop-portal/", "644"],
 ]
