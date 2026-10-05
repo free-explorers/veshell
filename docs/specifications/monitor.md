@@ -277,3 +277,7 @@ the desired-geometry store: brightness is live state, not persisted.
   that sends the `adjust_brightness` platform request, for binding brightness to
   other keys; the compositor clamps to `[1%, 100%]` so a key can never turn the
   panel off.
+- **Suspend.** logind's `PrepareForSleep` is watched: the user level is restored
+  before the system sleeps and the resume is treated as activity, so a panel
+  switched off for the screensaver does not come back dark after a suspend (the
+  kernel and `systemd-backlight` persist the panel state across it).

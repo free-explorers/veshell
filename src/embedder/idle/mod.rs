@@ -75,12 +75,16 @@ impl<BackendData: Backend + 'static> IdleState<BackendData> {
                             refresh_idle_inhibit(state);
                         }
                         dbus::IdleDbusEvent::SimulateActivity => on_activity(state),
+                        dbus::IdleDbusEvent::PreparingForSleep(sleeping) => {
+                            on_prepare_for_sleep(state, sleeping);
+                        }
                     }
                 }
             })
             .expect("Failed to initialize screensaver D-Bus event source");
         if BackendData::RUNS_PORTAL_BACKEND {
-            dbus::spawn(dbus_events);
+            dbus::spawn(dbus_events.clone());
+            dbus::spawn_sleep_watcher(dbus_events);
         }
         let power_sender = BackendData::RUNS_PORTAL_BACKEND.then(dbus::spawn_power_worker);
 
@@ -234,6 +238,22 @@ pub fn on_session_paused<D: Backend + 'static>(state: &mut State<D>) {
 pub fn on_session_activated<D: Backend + 'static>(state: &mut State<D>) {
     state.idle.session_active = true;
     on_activity(state);
+}
+
+/// logind's `PrepareForSleep`: the system is about to suspend or has just
+/// resumed.
+///
+/// The kernel and `systemd-backlight` persist the panel state across suspend,
+/// so a panel that was switched off for the screensaver would come back dark.
+/// Restore the user level before sleeping and treat the resume as activity, so
+/// the machine always wakes to a lit screen.
+pub fn on_prepare_for_sleep<D: Backend + 'static>(state: &mut State<D>, sleeping: bool) {
+    if sleeping {
+        state.idle.cancel_all();
+        state.brightness.wake();
+    } else {
+        on_activity(state);
+    }
 }
 
 /// Every input event funnels through here: it resets the stage machine and
