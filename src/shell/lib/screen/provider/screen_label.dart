@@ -11,38 +11,46 @@ import 'package:shell/workspace/provider/workspace_state.dart';
 part 'screen_label.g.dart';
 
 @riverpod
-Future<String> screenLabel(Ref ref, ScreenId screenId) async {
+Future<String> screenLabel(Ref ref, ScreenId screenId) {
   final screenState = ref.watch(screenStateProvider(screenId));
   if (screenState.label != null) {
-    return screenState.label!;
+    return Future.value(screenState.label!);
   }
-  final workspaceLabels = <String?>[];
+
+  // Every `ref.watch` happens here, before the first suspension point: an
+  // auto-dispose provider must not touch its Ref after an async gap. Each
+  // workspace's label resolves as a future and is awaited in [_joinLabels].
+  final workspaceNames = <Future<String?>>[];
   for (final workspaceId in screenState.workspaceList) {
     final workspaceState = ref.watch(workspaceStateProvider(workspaceId));
-    var workspaceName =
+    final categoryName =
         workspaceState.forcedCategory?.name ?? workspaceState.category?.name;
-    if (workspaceName == null && workspaceState.tileableWindowList.isNotEmpty) {
-      final appId = ref.watch(
-        persistentWindowStateProvider(
-          workspaceState.tileableWindowList.first,
-        ).select(
-          (value) => value.properties.appId,
-        ),
-      );
-
-      final desktopEntry = await ref.watch(
-        localizedDesktopEntryForIdProvider(appId).future,
-      );
-      if (desktopEntry != null) {
-        workspaceName = desktopEntry.entries[DesktopEntryKey.name.string];
-      }
+    if (categoryName != null || workspaceState.tileableWindowList.isEmpty) {
+      workspaceNames.add(Future.value(categoryName));
+      continue;
     }
-    workspaceLabels.add(workspaceName);
+    final appId = ref.watch(
+      persistentWindowStateProvider(
+        workspaceState.tileableWindowList.first,
+      ).select((value) => value.properties.appId),
+    );
+    workspaceNames.add(
+      ref
+          .watch(localizedDesktopEntryForIdProvider(appId).future)
+          .then(
+            (desktopEntry) =>
+                desktopEntry?.entries[DesktopEntryKey.name.string],
+          ),
+    );
   }
-  final notNullLabels = workspaceLabels.withNullsRemoved();
+  return _joinLabels(workspaceNames);
+}
+
+Future<String> _joinLabels(List<Future<String?>> workspaceNames) async {
+  final labels = await Future.wait(workspaceNames);
+  final notNullLabels = labels.withNullsRemoved();
   if (notNullLabels.isEmpty) {
     return 'Empty';
   }
-
-  return workspaceLabels.withNullsRemoved().join(', ');
+  return notNullLabels.join(', ');
 }

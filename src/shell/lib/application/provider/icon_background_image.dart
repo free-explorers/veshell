@@ -93,6 +93,13 @@ Future<Image?> iconBackgroundImage(Ref ref, String path) async {
   // The decoded icon only existed to be baked into [image]; release it now
   // rather than retaining a native image per placeholder.
   icon.dispose();
+  // The provider may have been disposed while the texture was baked; its Ref
+  // must not be used afterwards. Dispose the orphaned image instead of
+  // leaking it, rather than registering a disposal that can no longer run.
+  if (!ref.mounted) {
+    image.dispose();
+    return null;
+  }
   ref.onDispose(image.dispose);
   return image;
 }
