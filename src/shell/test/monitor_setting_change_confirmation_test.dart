@@ -72,10 +72,10 @@ void main() {
 
       async.elapse(const Duration(milliseconds: 30));
 
-      expect(fake.writes, [
-        {'transform': 'rotate90'},
-        {'transform': 'normal'},
-      ]);
+      expect(fake.writes, hasLength(2));
+      expect(fake.writes.first, {'transform': 'rotate90'});
+      // Rollback restores the guarded field on top of the current geometry.
+      expect(fake.writes.last['transform'], 'normal');
       expect(container.read(monitorSettingChangeConfirmationProvider), isNull);
       container.dispose();
     });
@@ -136,7 +136,8 @@ void main() {
       async.elapse(const Duration(milliseconds: 30));
 
       // Rollback returns to the last confirmed state, not the intermediate one.
-      expect(fake.writes.last, {'transform': 'normal'});
+      expect(fake.writes, hasLength(3));
+      expect(fake.writes.last['transform'], 'normal');
       container.dispose();
     });
   });

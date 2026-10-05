@@ -34,10 +34,21 @@ class _ConfirmationScrim extends ConsumerStatefulWidget {
 
 class _ConfirmationScrimState extends ConsumerState<_ConfirmationScrim> {
   Timer? _ticker;
+  late final FocusNode _focusNode;
 
   @override
   void initState() {
     super.initState();
+    _focusNode = FocusNode(debugLabel: 'MonitorSettingChangeConfirmation');
+    // The scrim is the only surface the user may interact with while a
+    // rollback is pending. Pointer is blocked by the opaque hit test below;
+    // taking focus and swallowing keys also stops the settings search (and the
+    // global workspace shortcuts) behind it from reacting to the keyboard.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _focusNode.requestFocus();
+      }
+    });
     // Drives the countdown; the actual rollback timer lives in the notifier.
     _ticker = Timer.periodic(
       const Duration(milliseconds: 100),
@@ -48,6 +59,7 @@ class _ConfirmationScrimState extends ConsumerState<_ConfirmationScrim> {
   @override
   void dispose() {
     _ticker?.cancel();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -65,61 +77,67 @@ class _ConfirmationScrimState extends ConsumerState<_ConfirmationScrim> {
     final seconds = (remaining / 1000).ceil();
 
     return Positioned.fill(
-      // Opaque hit testing so the desktop/settings behind the scrim cannot be
-      // interacted with while a rollback is pending.
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {},
-        child: ColoredBox(
-          color: Colors.black54,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Card(
-                margin: const EdgeInsets.all(32),
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        'Keep display settings?',
-                        style: theme.textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        '${widget.pending.description}. Reverting in '
-                        '$seconds s unless you keep it.',
-                      ),
-                      const SizedBox(height: 16),
-                      LinearProgressIndicator(value: progress),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton(
-                            onPressed: () => ref
-                                .read(
-                                  monitorSettingChangeConfirmationProvider
-                                      .notifier,
-                                )
-                                .rollback(),
-                            child: const Text('Revert'),
-                          ),
-                          const SizedBox(width: 8),
-                          FilledButton(
-                            onPressed: () => ref
-                                .read(
-                                  monitorSettingChangeConfirmationProvider
-                                      .notifier,
-                                )
-                                .confirm(),
-                            child: const Text('Keep'),
-                          ),
-                        ],
-                      ),
-                    ],
+      child: Focus(
+        focusNode: _focusNode,
+        // Swallow every key while the scrim is up, so no shortcut behind it can
+        // act during the countdown.
+        onKeyEvent: (node, event) => KeyEventResult.handled,
+        child: GestureDetector(
+          // Opaque hit testing so the desktop/settings behind the scrim cannot
+          // be interacted with while a rollback is pending.
+          behavior: HitTestBehavior.opaque,
+          onTap: () {},
+          child: ColoredBox(
+            color: Colors.black54,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Card(
+                  margin: const EdgeInsets.all(32),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Keep display settings?',
+                          style: theme.textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          '${widget.pending.description}. Reverting in '
+                          '$seconds s unless you keep it.',
+                        ),
+                        const SizedBox(height: 16),
+                        LinearProgressIndicator(value: progress),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: () => ref
+                                  .read(
+                                    monitorSettingChangeConfirmationProvider
+                                        .notifier,
+                                  )
+                                  .rollback(),
+                              child: const Text('Revert'),
+                            ),
+                            const SizedBox(width: 8),
+                            FilledButton(
+                              onPressed: () => ref
+                                  .read(
+                                    monitorSettingChangeConfirmationProvider
+                                        .notifier,
+                                  )
+                                  .confirm(),
+                              child: const Text('Keep'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
