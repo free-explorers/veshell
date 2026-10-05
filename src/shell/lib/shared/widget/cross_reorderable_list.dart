@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart'
     show
+        Drag,
+        DragEndDetails,
+        DragUpdateDetails,
         GestureDisposition,
         GestureMultiDragStartCallback,
         ImmediateMultiDragGestureRecognizer,
@@ -9,6 +12,7 @@ import 'package:flutter/gestures.dart'
         PointerDownEvent,
         kPrecisePointerHitSlop;
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/shared/widget/multi_view_drag.dart';
 
 /// A [Draggable] that only starts a drag once the pointer has moved by at
 /// least [_ThresholdDraggable.threshold] logical pixels.
@@ -27,11 +31,15 @@ class _ThresholdDraggable<T extends Object> extends Draggable<T> {
     super.onDraggableCanceled,
     super.onDragCompleted,
     super.onDragEnd,
+    super.onDragUpdate,
     super.maxSimultaneousDrags,
     super.hitTestBehavior,
     super.rootOverlay,
     super.allowedButtonsFilter,
+    this.onPointerCancel,
   });
+
+  final VoidCallback? onPointerCancel;
 
   /// Minimum pointer travel, in logical pixels, before a drag starts.
   static const double threshold = 8;
@@ -43,7 +51,28 @@ class _ThresholdDraggable<T extends Object> extends Draggable<T> {
     return _ThresholdMultiDragGestureRecognizer(
       threshold: threshold,
       allowedButtonsFilter: allowedButtonsFilter,
-    )..onStart = onStart;
+    )..onStart = (position) {
+      final drag = onStart(position);
+      return drag == null ? null : _CancelAwareDrag(drag, onPointerCancel);
+    };
+  }
+}
+
+class _CancelAwareDrag implements Drag {
+  _CancelAwareDrag(this.drag, this.onCancel);
+  final Drag drag;
+  final VoidCallback? onCancel;
+
+  @override
+  void update(DragUpdateDetails details) => drag.update(details);
+
+  @override
+  void end(DragEndDetails details) => drag.end(details);
+
+  @override
+  void cancel() {
+    onCancel?.call();
+    drag.cancel();
   }
 }
 
@@ -109,6 +138,7 @@ class CrossReorderableList<T extends Object> extends StatefulWidget {
     this.onListChanged,
     this.onDropInProgress,
     this.feedbackBuilder,
+    this.itemKey,
     super.key,
   });
 
@@ -120,6 +150,9 @@ class CrossReorderableList<T extends Object> extends StatefulWidget {
 
   /// The list of data to be displayed
   final List<T> dataList;
+
+  /// Stable identity when the data objects are recreated during a drag.
+  final Key Function(T data)? itemKey;
 
   /// The scroll direction of the list
   final Axis scrollDirection;
@@ -141,6 +174,55 @@ class _CrossReorderableListState<T extends Object>
   bool dropInProgress = false;
   int? dropIndex;
   T? dropData;
+  T? _draggedData;
+  bool _acceptedHere = false;
+  ShellDragSession? _session;
+
+  Key _keyFor(T data) => widget.itemKey?.call(data) ?? ValueKey(data);
+
+  bool _sameItem(T? a, T? b) =>
+      a != null && b != null && _keyFor(a) == _keyFor(b);
+
+  int _indexOf(List<T> list, T data) =>
+      list.indexWhere((item) => _sameItem(item, data));
+
+  bool _sameOrder(List<T> a, List<T> b) {
+    if (a.length != b.length) return false;
+    for (var index = 0; index < a.length; index++) {
+      if (!_sameItem(a[index], b[index])) return false;
+    }
+    return true;
+  }
+
+  void _removeItem(T data) {
+    localDataList.removeWhere((item) => _sameItem(item, data));
+  }
+
+  void _placeRelative(T dragged, T anchor, {bool after = false}) {
+    if (_sameItem(dragged, anchor)) return;
+    final existingIndex = _indexOf(localDataList, dragged);
+    // Keep the latest data object, even if the drag payload predates a rebuild.
+    final item = existingIndex < 0 ? dragged : localDataList[existingIndex];
+    _removeItem(dragged);
+    final anchorIndex = _indexOf(localDataList, anchor);
+    localDataList.insert(anchorIndex + (after ? 1 : 0), item);
+  }
+
+  void _ensureInserted(T data) {
+    if (_indexOf(localDataList, data) >= 0) return;
+    // The last item is the pinned launcher/new-workspace slot. Blank-space
+    // drops append before it; a genuinely empty list accepts at index zero.
+    localDataList.insert(
+      localDataList.isEmpty ? 0 : localDataList.length - 1,
+      data,
+    );
+  }
+
+  @override
+  void dispose() {
+    _session?.dispose();
+    super.dispose();
+  }
   @override
   void initState() {
     super.initState();
@@ -152,7 +234,20 @@ class _CrossReorderableListState<T extends Object>
     super.didUpdateWidget(oldWidget);
     if (!listEquals(widget.dataList, oldWidget.dataList)) {
       setState(() {
-        localDataList = widget.dataList.toList();
+        if (dropInProgress || _draggedData != null) {
+          if (_sameOrder(widget.dataList, oldWidget.dataList)) {
+            // A rebuild changed instances, not membership/order. Preserve the
+            // pending reorder and foreign preview, refreshing existing data.
+            localDataList = localDataList.map((data) {
+              final index = _indexOf(widget.dataList, data);
+              return index < 0 ? data : widget.dataList[index];
+            }).toList();
+          } else {
+            localDataList = widget.dataList.toList();
+          }
+        } else {
+          localDataList = widget.dataList.toList();
+        }
       });
     }
   }
@@ -162,25 +257,34 @@ class _CrossReorderableListState<T extends Object>
     return MouseRegion(
       onExit: (event) {
         if (dropInProgress) {
-          localDataList.remove(dropData);
+          // Keep the source draggable mounted until release, even outside the
+          // list/view. Only foreign hover previews can be removed here.
+          if (dropData != null && !_sameItem(dropData, _draggedData)) {
+            _removeItem(dropData!);
+          }
           _clearDropInProgress();
         }
       },
-      child: DragTarget(
+      child: ShellDragTarget<T>(
         onWillAcceptWithDetails: (details) {
-          final willAccept = details.data is T;
-          if (willAccept) {
-            setState(() {
-              dropInProgress = true;
-              dropData = details.data! as T;
-            });
-            widget.onDropInProgress?.call(true);
-          }
-          return willAccept;
+          setState(() {
+            dropInProgress = true;
+            dropData = details.data;
+          });
+          widget.onDropInProgress?.call(true);
+          return true;
         },
         onAcceptWithDetails: (data) {
+          _acceptedHere = _sameItem(data.data, _draggedData);
+          _ensureInserted(data.data);
           _notifyListChanged();
           _clearDropInProgress();
+        },
+        onLeave: (data) {
+          if (!_sameItem(data, _draggedData)) {
+            _restoreDatalist();
+            _clearDropInProgress();
+          }
         },
         builder: (context, candidateData, rejectedData) {
           return ListView.custom(
@@ -191,6 +295,7 @@ class _CrossReorderableListState<T extends Object>
                 final item = widget.itemBuilder(context, data);
                 if (item != null) {
                   return LayoutBuilder(
+                    key: _keyFor(data),
                     builder: (context, constraints) {
                       return Stack(
                         children: [
@@ -203,8 +308,24 @@ class _CrossReorderableListState<T extends Object>
                               // scrolls the list. That is the trade-off for
                               // making reordering feel like a desktop drag
                               // (long press stays on items for their menus).
-                              onDragCompleted: _notifyListChanged,
+                              onDragCompleted: () {
+                                if (!_acceptedHere) _removeItem(data);
+                                _notifyListChanged();
+                                _finishDrag();
+                              },
                               onDragStarted: () {
+                                _draggedData = data;
+                                _acceptedHere = false;
+                                _session = ShellDragSession(
+                                  context,
+                                  data,
+                                  ConstrainedBox(
+                                    constraints: constraints,
+                                    child: widget.feedbackBuilder
+                                            ?.call(context, data) ??
+                                        item,
+                                  ),
+                                );
                                 setState(() {
                                   dropInProgress = true;
                                   dropData = data;
@@ -213,8 +334,19 @@ class _CrossReorderableListState<T extends Object>
                                 widget.onDropInProgress?.call(true);
                               },
                               onDraggableCanceled: (velocity, offset) {
-                                _restoreDatalist();
+                                final accepted = _session?.drop() ?? false;
+                                if (accepted) {
+                                  _removeItem(data);
+                                  _notifyListChanged();
+                                } else {
+                                  _restoreDatalist();
+                                }
+                                _finishDrag();
                               },
+                              onDragUpdate: (details) =>
+                                  _session?.update(details.globalPosition),
+                              onPointerCancel: () => _session?.dispose(),
+                              maxSimultaneousDrags: 1,
                               data: data,
                               feedback: Container(
                                 decoration: BoxDecoration(
@@ -227,7 +359,7 @@ class _CrossReorderableListState<T extends Object>
                                     item,
                               ),
                               child: Opacity(
-                                opacity: data == dropData ? 0.5 : 1,
+                                opacity: _sameItem(data, dropData) ? 0.5 : 1,
                                 child: item,
                               ),
                             ),
@@ -240,6 +372,12 @@ class _CrossReorderableListState<T extends Object>
                 return item;
               },
               childCount: localDataList.length,
+              findChildIndexCallback: (key) {
+                final index = localDataList.indexWhere(
+                  (data) => _keyFor(data) == key,
+                );
+                return index < 0 ? null : index;
+              },
             ),
           );
         },
@@ -252,7 +390,7 @@ class _CrossReorderableListState<T extends Object>
   Widget _buildDragTargets(BuildContext context, int index) {
     final data = localDataList[index];
     final previousTarget = Expanded(
-      child: DragTarget<T>(
+      child: ShellDragTarget<T>(
         builder: (
           context,
           candidateData,
@@ -260,12 +398,11 @@ class _CrossReorderableListState<T extends Object>
         ) =>
             Container(),
         onWillAcceptWithDetails: (dragData) {
-          if (dragData.data != data &&
-              (index == 0 || dragData.data != localDataList[index - 1])) {
+          if (!_sameItem(dragData.data, data) &&
+              (index == 0 ||
+                  !_sameItem(dragData.data, localDataList[index - 1]))) {
             setState(() {
-              localDataList
-                ..remove(dragData.data)
-                ..insert(index, dragData.data);
+              _placeRelative(dragData.data, data);
             });
           } else {
             setState(() {
@@ -277,7 +414,7 @@ class _CrossReorderableListState<T extends Object>
       ),
     );
     final nextTarget = Expanded(
-      child: DragTarget<T>(
+      child: ShellDragTarget<T>(
         builder: (
           context,
           candidateData,
@@ -285,13 +422,11 @@ class _CrossReorderableListState<T extends Object>
         ) =>
             Container(),
         onWillAcceptWithDetails: (dragData) {
-          if (dragData.data != data &&
+          if (!_sameItem(dragData.data, data) &&
               index < localDataList.length - 1 &&
-              dragData.data != localDataList[index + 1]) {
+              !_sameItem(dragData.data, localDataList[index + 1])) {
             setState(() {
-              localDataList
-                ..remove(dragData.data)
-                ..insert(index, dragData.data);
+              _placeRelative(dragData.data, data, after: true);
             });
           } else {
             setState(() {
@@ -322,8 +457,8 @@ class _CrossReorderableListState<T extends Object>
 
   /// Notify the parent widget that the list has changed only if it has changed
   void _notifyListChanged() {
-    if (!listEquals(localDataList, widget.dataList)) {
-      widget.onListChanged?.call(localDataList);
+    if (!_sameOrder(localDataList, widget.dataList)) {
+      widget.onListChanged?.call(localDataList.toList());
     }
   }
 
@@ -331,6 +466,14 @@ class _CrossReorderableListState<T extends Object>
     setState(() {
       localDataList = widget.dataList.toList();
     });
+  }
+
+  void _finishDrag() {
+    _session?.dispose();
+    _session = null;
+    _draggedData = null;
+    _acceptedHere = false;
+    _clearDropInProgress();
   }
 
   void _clearDropInProgress() {

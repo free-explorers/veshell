@@ -29,6 +29,87 @@ Future<void> _dragPast(
 }
 
 void main() {
+  testWidgets(
+    'reordering rebuilt data uses identity and keeps latest objects',
+    (tester) async {
+      final revision = ValueNotifier(0);
+      addTearDown(revision.dispose);
+      List<(int, int)>? changed;
+      await tester.pumpWidget(
+        _wrap(
+          ValueListenableBuilder<int>(
+            valueListenable: revision,
+            builder: (_, value, child) => CrossReorderableList<(int, int)>(
+              dataList: [(0, value), (1, value), (2, value)],
+              itemKey: (data) => ValueKey(data.$1),
+              itemBuilder: (_, data) =>
+                  SizedBox(height: 100, child: Text('item-${data.$1}')),
+              onListChanged: (list) => changed = list,
+            ),
+          ),
+        ),
+      );
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('item-0')),
+        kind: PointerDeviceKind.mouse,
+      );
+      await gesture.moveBy(const Offset(0, 30));
+      await tester.pump();
+      revision.value++;
+      await tester.pump();
+      await gesture.moveTo(
+        tester.getCenter(find.text('item-1')) + const Offset(0, 40),
+      );
+      await tester.pump();
+      revision.value++;
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(changed, [(1, 2), (0, 2), (2, 2)]);
+    },
+  );
+
+  testWidgets('a mouse drag survives leaving and re-entering the list', (
+    tester,
+  ) async {
+    List<int>? changed;
+    await tester.pumpWidget(
+      _wrap(
+        Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 200,
+            height: 350,
+            child: CrossReorderableList<int>(
+              dataList: const [0, 1, 2],
+              itemBuilder: (_, data) =>
+                  SizedBox(height: 100, child: Text('item-$data')),
+              onListChanged: (list) => changed = list,
+            ),
+          ),
+        ),
+      ),
+    );
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('item-0')),
+      kind: PointerDeviceKind.mouse,
+    );
+    await gesture.moveBy(const Offset(0, 30));
+    await tester.pump();
+    await gesture.moveTo(const Offset(900, 200));
+    await tester.pump();
+    expect(changed, isNull);
+    expect(find.text('item-0'), findsWidgets);
+    await gesture.moveTo(tester.getCenter(find.text('item-1')));
+    await tester.pump();
+    await gesture.moveBy(const Offset(0, 40));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(changed, [1, 0, 2]);
+  });
+
   testWidgets('dragging an item reorders the list (plain item)', (
     tester,
   ) async {

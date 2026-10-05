@@ -7,8 +7,12 @@ import 'package:shell/notification/model/notification.serializable.dart';
 import 'package:shell/notification/provider/notification_routing.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/screen_state.dart';
+import 'package:shell/screen/provider/workspace_display_mode.dart';
 import 'package:shell/screen/widget/workspace_list.dart';
+import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
+import 'package:shell/window/model/window_properties.serializable.dart';
+import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/workspace/model/workspace.serializable.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/tileable/persistent_window/persistent_window.dart';
@@ -23,6 +27,14 @@ class _FixedScreenState extends ScreenState {
 
   @override
   Screen build(ScreenId screenId) => _screen;
+}
+
+class _FixedWindowState extends PersistentWindowState {
+  @override
+  PersistentWindow build(PersistentWindowId windowId) => PersistentWindow(
+    windowId: windowId,
+    properties: const WindowProperties(appId: 'test'),
+  );
 }
 
 /// Records the windows dropped onto the workspace so the test can assert the
@@ -45,87 +57,98 @@ class _RecordingWorkspaceState extends WorkspaceState {
 }
 
 void main() {
-  testWidgets('dropping a window tile on a workspace button sends it there', (
-    tester,
-  ) async {
-    final workspace = _RecordingWorkspaceState(
-      Workspace(
-        workspaceId: _workspace,
-        tileableWindowList: const IListConst<PersistentWindowId>([]),
-        selectedIndex: 0,
-        visibleLength: 1,
-      ),
-    );
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          screenStateProvider(_screen).overrideWith(
-            () => _FixedScreenState(
-              Screen(
-                screenId: _screen,
-                workspaceList: const IListConst<String>([_workspace]),
-                selectedIndex: 0,
+  for (final alreadyHere in [false, true]) {
+    testWidgets('workspace button drop: alreadyHere=$alreadyHere', (
+      tester,
+    ) async {
+      final workspace = _RecordingWorkspaceState(
+        Workspace(
+          workspaceId: _workspace,
+          tileableWindowList: IList<PersistentWindowId>(
+            alreadyHere ? [_window] : [],
+          ),
+          category: WorkspaceCategory.System,
+          selectedIndex: 0,
+          visibleLength: 1,
+        ),
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            screenStateProvider(_screen).overrideWith(
+              () => _FixedScreenState(
+                Screen(
+                  screenId: _screen,
+                  workspaceList: const IListConst<String>([_workspace]),
+                  selectedIndex: 0,
+                ),
               ),
             ),
-          ),
-          workspaceStateProvider(_workspace).overrideWith(() => workspace),
-          unreadNotificationsForWorkspaceProvider(
-            _workspace,
-          ).overrideWithValue(const IListConst<Notification>([])),
-          recordingWorkspacesProvider.overrideWithValue(
-            const ISetConst<WorkspaceId>({}),
-          ),
-        ],
-        child: const MaterialApp(
-          home: Scaffold(
-            body: Row(
-              children: [
-                SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: WorkspaceListButton(
-                    workspaceId: _workspace,
-                    screenId: _screen,
+            workspaceStateProvider(_workspace).overrideWith(() => workspace),
+            persistentWindowStateProvider(
+              _window,
+            ).overrideWith(_FixedWindowState.new),
+            currentWorkspaceDisplayModeProvider.overrideWithValue(
+              WorkspaceDisplayMode.category,
+            ),
+            unreadNotificationsForWorkspaceProvider(
+              _workspace,
+            ).overrideWithValue(const IListConst<Notification>([])),
+            recordingWorkspacesProvider.overrideWithValue(
+              const ISetConst<WorkspaceId>({}),
+            ),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: Row(
+                children: [
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: WorkspaceListButton(
+                      workspaceId: _workspace,
+                      screenId: _screen,
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: Center(
-                    child: Draggable<PersistentWindowTileable>(
-                      data: PersistentWindowTileable(
-                        windowId: _window,
-                        isSelected: false,
-                      ),
-                      feedback: SizedBox(
-                        width: 50,
-                        height: 50,
-                        child: ColoredBox(color: Colors.red),
-                      ),
-                      child: SizedBox(
-                        key: ValueKey('drag-source'),
-                        width: 50,
-                        height: 50,
-                        child: ColoredBox(color: Colors.green),
+                  Expanded(
+                    child: Center(
+                      child: Draggable<PersistentWindowTileable>(
+                        data: PersistentWindowTileable(
+                          windowId: _window,
+                          isSelected: false,
+                        ),
+                        feedback: SizedBox(
+                          width: 50,
+                          height: 50,
+                          child: ColoredBox(color: Colors.red),
+                        ),
+                        child: SizedBox(
+                          key: ValueKey('drag-source'),
+                          width: 50,
+                          height: 50,
+                          child: ColoredBox(color: Colors.green),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    final gesture = await tester.startGesture(
-      tester.getCenter(find.byKey(const ValueKey('drag-source'))),
-    );
-    await gesture.moveBy(const Offset(0, 30));
-    await tester.pump();
-    await gesture.moveTo(tester.getCenter(find.byType(WorkspaceListButton)));
-    await tester.pump();
-    await gesture.up();
-    await tester.pumpAndSettle();
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(const ValueKey('drag-source'))),
+      );
+      await gesture.moveBy(const Offset(0, 30));
+      await tester.pump();
+      await gesture.moveTo(tester.getCenter(find.byType(WorkspaceListButton)));
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
 
-    expect(workspace.addedWindows, [_window]);
-  });
+      expect(workspace.addedWindows, alreadyHere ? isEmpty : [_window]);
+    });
+  }
 }

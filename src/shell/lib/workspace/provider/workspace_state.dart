@@ -153,6 +153,13 @@ class WorkspaceState extends _$WorkspaceState {
     int index, {
     bool selectWindow = false,
   }) async {
+    // Moving a window onto its own workspace is a no-op, not remove/reinsert.
+    // In particular, the append index was computed before removal and would
+    // be past the end of the shortened list.
+    if (state.tileableWindowList.contains(windowId)) {
+      if (selectWindow) this.selectWindow(windowId);
+      return;
+    }
     final windowWorkspaceMap = ref.read(windowWorkspaceMapProvider);
     if (windowWorkspaceMap.containsKey(windowId)) {
       await ref

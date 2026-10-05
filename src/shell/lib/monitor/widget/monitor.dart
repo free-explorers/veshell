@@ -15,6 +15,7 @@ import 'package:shell/monitor/widget/empty_monitor.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/screen/widget/screen.dart';
 import 'package:shell/settings/widget/monitor_setting_change_confirmation_overlay.dart';
+import 'package:shell/shared/widget/multi_view_drag.dart';
 import 'package:shell/theme/provider/theme.dart';
 
 /// Widget that represent the Monitor in the widget tree
@@ -102,42 +103,48 @@ class MonitorWidget extends HookConsumerWidget {
               }, [monitorName, monitorConfiguration.screenList]);
               return CurrentMonitorName(
                 name: monitorName,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (monitorConfiguration.screenList.isEmpty)
-                      EmptyMonitor(monitorName: monitorName)
-                    else
-                      Flex(
-                        direction: switch (monitorConfiguration.displayMode) {
-                          ScreenDisplayMode.splitVertical => Axis.vertical,
-                          ScreenDisplayMode.splitHorizontal => Axis.horizontal,
-                        },
-                        children: [
-                          for (final screenConfiguration
-                              in monitorConfiguration.screenList) ...[
-                            Flexible(
-                              flex: screenConfiguration.flex,
-                              child: ScreenWidget(
-                                screenId: screenConfiguration.screenId,
+                child: ShellDragView(
+                  origin:
+                      ref.watch(monitorByNameProvider(monitorName))?.location ??
+                      Offset.zero,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (monitorConfiguration.screenList.isEmpty)
+                        EmptyMonitor(monitorName: monitorName)
+                      else
+                        Flex(
+                          direction: switch (monitorConfiguration.displayMode) {
+                            ScreenDisplayMode.splitVertical => Axis.vertical,
+                            ScreenDisplayMode.splitHorizontal =>
+                              Axis.horizontal,
+                          },
+                          children: [
+                            for (final screenConfiguration
+                                in monitorConfiguration.screenList) ...[
+                              Flexible(
+                                flex: screenConfiguration.flex,
+                                child: ScreenWidget(
+                                  screenId: screenConfiguration.screenId,
+                                ),
                               ),
-                            ),
-                            if (screenConfiguration !=
-                                monitorConfiguration.screenList.last)
-                              ScreenDivider(
-                                screenA: screenConfiguration,
-                                screenB:
-                                    monitorConfiguration
-                                        .screenList[monitorConfiguration
-                                            .screenList
-                                            .indexOf(screenConfiguration) +
-                                        1],
-                                displayMode: monitorConfiguration.displayMode,
-                              ),
+                              if (screenConfiguration !=
+                                  monitorConfiguration.screenList.last)
+                                ScreenDivider(
+                                  screenA: screenConfiguration,
+                                  screenB:
+                                      monitorConfiguration
+                                          .screenList[monitorConfiguration
+                                              .screenList
+                                              .indexOf(screenConfiguration) +
+                                          1],
+                                  displayMode: monitorConfiguration.displayMode,
+                                ),
+                            ],
                           ],
-                        ],
-                      ),
-                  ],
+                        ),
+                    ],
+                  ),
                 ),
               );
             },

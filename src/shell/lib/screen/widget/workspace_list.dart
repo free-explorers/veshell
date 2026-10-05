@@ -15,6 +15,7 @@ import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/screen/provider/workspace_display_mode.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/shared/widget/cross_reorderable_list.dart';
+import 'package:shell/shared/widget/multi_view_drag.dart';
 import 'package:shell/theme//provider/theme.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
@@ -230,9 +231,10 @@ class WorkspaceListButton extends HookConsumerWidget {
 
     return NotificationArea(
       channel: workspaceNotificationChannel(workspaceId),
-      child: DragTarget<PersistentWindowTileable>(
+      child: ShellDragTarget<PersistentWindowTileable>(
         onWillAcceptWithDetails: (details) =>
-            details.data is PersistentWindowTileable,
+            !ref.read(workspaceStateProvider(workspaceId))
+                .tileableWindowList.contains(details.data.windowId),
         onAcceptWithDetails: (details) {
           ref
               .read(workspaceStateProvider(workspaceId).notifier)
