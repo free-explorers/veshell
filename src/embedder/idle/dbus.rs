@@ -20,6 +20,9 @@ const LOGIN1_MANAGER: &str = "org.freedesktop.login1.Manager";
 pub enum IdleDbusEvent {
     Inhibited(bool),
     SimulateActivity,
+    /// logind's `PrepareForSleep`: `true` just before the system suspends,
+    /// `false` once it has resumed.
+    PreparingForSleep(bool),
 }
 
 #[derive(Default)]
@@ -90,6 +93,35 @@ pub fn spawn(events: channel::Sender<IdleDbusEvent>) {
             warn!(?error, "Screensaver D-Bus service did not start");
         }
     });
+}
+
+/// Watch logind's `PrepareForSleep` signal so the panel can be restored around
+/// suspend. Only sleep state crosses to the compositor loop; the D-Bus thread
+/// never touches compositor data.
+pub fn spawn_sleep_watcher(events: channel::Sender<IdleDbusEvent>) {
+    std::thread::spawn(move || {
+        if let Err(error) = watch_sleep(events) {
+            warn!(?error, "logind sleep watch ended");
+        }
+    });
+}
+
+fn watch_sleep(events: channel::Sender<IdleDbusEvent>) -> zbus::Result<()> {
+    zbus::block_on(async move {
+        let connection = Connection::system().await?;
+        let proxy = Proxy::new(&connection, LOGIN1_NAME, LOGIN1_PATH, LOGIN1_MANAGER).await?;
+        let mut stream = proxy.receive_signal("PrepareForSleep").await?;
+        while let Some(signal) = stream.next().await {
+            let sleeping: bool = signal.body().deserialize()?;
+            if events
+                .send(IdleDbusEvent::PreparingForSleep(sleeping))
+                .is_err()
+            {
+                break;
+            }
+        }
+        Ok(())
+    })
 }
 
 /// Queue logind power requests off the compositor thread.
