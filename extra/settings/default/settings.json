@@ -46,5 +46,9 @@
         "automaticPowerAction": "suspendThenHibernate",
         "automaticPowerTimeoutSeconds": 600
     },
+    "notifications": {
+        "batteryLowThreshold": 20,
+        "batteryCriticalThreshold": 10
+    },
     "$schema": "../schemas/settings.schema.json"
 }

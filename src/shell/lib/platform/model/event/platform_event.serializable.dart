@@ -7,6 +7,7 @@ import 'package:shell/capture/model/screen_cast_stopped/screen_cast_stopped.seri
 import 'package:shell/capture/model/screenshot_prompt/screenshot_prompt.serializable.dart';
 import 'package:shell/notification/model/notification_close_requested/notification_close_requested.serializable.dart';
 import 'package:shell/notification/model/notification_received/notification_received.serializable.dart';
+import 'package:shell/platform/model/event/brightness_changed/brightness_changed.serializable.dart';
 import 'package:shell/platform/model/event/commit_surface/commit_surface.serializable.dart';
 import 'package:shell/platform/model/event/destroy_subsurface/destroy_subsurface.serializable.dart';
 import 'package:shell/platform/model/event/destroy_surface/destroy_surface.serializable.dart';
@@ -228,6 +229,14 @@ sealed class PlatformEvent with _$PlatformEvent implements PlatformInteraction {
     required String method,
     required WindowAttentionReleasedMessage message,
   }) = WindowAttentionReleasedEvent;
+
+  /// The compositor changed the display brightness (hardware function key or
+  /// the shell's own request). The shell shows the brightness OSD with the
+  /// reported level.
+  const factory PlatformEvent.brightnessChanged({
+    required String method,
+    required BrightnessChangedMessage message,
+  }) = BrightnessChangedEvent;
 
   /// Gesture Swipe Begin Event
   /// This event is sent when the user performs a swipe gesture.

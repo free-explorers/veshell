@@ -282,6 +282,23 @@ class SettingsProperties extends _$SettingsProperties {
           ),
         },
       ),
+      'notifications': const SettingGroup(
+        name: 'Notifications',
+        description: null,
+        icon: MdiIcons.bell,
+        children: {
+          'batteryLowThreshold': SettingProperty<int>(
+            name: 'Low Battery Warning (%)',
+            description:
+                'Show a warning when the battery drains to this percentage',
+          ),
+          'batteryCriticalThreshold': SettingProperty<int>(
+            name: 'Critical Battery Warning (%)',
+            description:
+                'Show a persistent warning when the battery drains to this percentage',
+          ),
+        },
+      ),
       'theme': const SettingGroup(
         name: 'Theme',
         description: null,

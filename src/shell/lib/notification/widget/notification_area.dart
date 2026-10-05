@@ -1,6 +1,9 @@
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/notification/model/notification.serializable.dart'
+    as model;
+import 'package:shell/notification/model/system_notification_category.dart';
 import 'package:shell/notification/provider/notification_channel.dart';
 import 'package:shell/notification/provider/notification_manager.dart';
 import 'package:shell/notification/widget/notification.dart';
@@ -89,39 +92,7 @@ class NotificationArea extends HookConsumerWidget {
                     spacing: 16,
                     children: [
                       for (final notification in notificationList)
-                        Card(
-                          // The `Column` spacing is the whole gap between two
-                          // notifications; keep only the horizontal margin so
-                          // the card's default 4px vertical margin cannot add
-                          // to it.
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          color: Theme.of(context).colorScheme.surfaceContainer,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: borderRadius,
-                            side: BorderSide(
-                              color: Theme.of(context).colorScheme.primary,
-                              width: 2,
-                            ),
-                          ),
-                          child: NotificationWidget(
-                            notification: notification,
-                            onAction: (actionKey) {
-                              ref
-                                  .read(notificationManagerProvider.notifier)
-                                  .invokeAction(notification.id, actionKey);
-                            },
-                            onOpen: () {
-                              ref
-                                  .read(notificationManagerProvider.notifier)
-                                  .openNotification(notification.id);
-                            },
-                            onClose: () {
-                              ref
-                                  .read(notificationManagerProvider.notifier)
-                                  .dismissNotification(notification.id);
-                            },
-                          ),
-                        ),
+                        _buildPopup(context, ref, notification, borderRadius),
                     ],
                   ),
                 ),
@@ -130,6 +101,73 @@ class NotificationArea extends HookConsumerWidget {
           );
         },
         child: child,
+      ),
+    );
+  }
+
+  /// Builds one popup card.
+  ///
+  /// A system notification (volume, brightness, battery) is a transient popup
+  /// owned by its channel: dismissing it simply removes it. Every other
+  /// notification — a D-Bus one or a synthesized attention entry — is closed
+  /// and opened through [NotificationManager], so its persisted state, signals
+  /// and attention bookkeeping stay consistent.
+  Widget _buildPopup(
+    BuildContext context,
+    WidgetRef ref,
+    model.Notification notification,
+    BorderRadius borderRadius,
+  ) {
+    final isSystem =
+        notification.isSynthetic &&
+        systemNotificationCategories.contains(
+          notification.dbusNotification.hints.category,
+        );
+    void removePopup() => ref
+        .read(notificationChannelProvider(channel).notifier)
+        .remove(notification.id);
+
+    return Card(
+      // The `Column` spacing is the whole gap between two notifications; keep
+      // only the horizontal margin so the card's default 4px vertical margin
+      // cannot add to it.
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      color: Theme.of(context).colorScheme.surfaceContainer,
+      shape: RoundedRectangleBorder(
+        borderRadius: borderRadius,
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.primary,
+          width: 2,
+        ),
+      ),
+      child: NotificationWidget(
+        notification: notification,
+        onAction: isSystem
+            ? null
+            : (actionKey) {
+                ref
+                    .read(notificationManagerProvider.notifier)
+                    .invokeAction(notification.id, actionKey);
+              },
+        onOpen: () {
+          if (isSystem) {
+            // A system notification has nowhere to go: tapping dismisses it.
+            removePopup();
+          } else {
+            ref
+                .read(notificationManagerProvider.notifier)
+                .openNotification(notification.id);
+          }
+        },
+        onClose: () {
+          if (isSystem) {
+            removePopup();
+          } else {
+            ref
+                .read(notificationManagerProvider.notifier)
+                .dismissNotification(notification.id);
+          }
+        },
       ),
     );
   }

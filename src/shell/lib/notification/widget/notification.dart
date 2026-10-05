@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/notification/model/notification.serializable.dart' as Me;
 import 'package:shell/notification/model/notification_action.dart';
+import 'package:shell/notification/model/system_notification_category.dart';
 import 'package:shell/shared/util/relative_time.dart';
 
 class NotificationWidget extends StatelessWidget {
@@ -58,6 +59,18 @@ class NotificationWidget extends StatelessWidget {
       localeName: Localizations.localeOf(context).toString(),
     );
 
+    // A system notification (volume, brightness, battery) has no desktop entry
+    // to resolve an icon from; its category selects a Material Design glyph.
+    final hints = notification.dbusNotification.hints;
+    final systemIcon = switch (hints.category) {
+      systemVolumeCategory => MdiIcons.volumeHigh,
+      systemVolumeMutedCategory => MdiIcons.volumeOff,
+      systemBrightnessCategory => MdiIcons.brightness6,
+      systemBatteryCategory => MdiIcons.batteryAlert,
+      _ => null,
+    };
+    final progressValue = hints.value;
+
     final content = Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -67,7 +80,9 @@ class NotificationWidget extends StatelessWidget {
         children: [
           Row(
             children: [
-              if (notification.appId != null)
+              if (systemIcon != null)
+                Icon(systemIcon, size: 16)
+              else if (notification.appId != null)
                 SizedBox.square(
                   dimension: 16,
                   child: AppIconById(id: notification.appId),
@@ -111,6 +126,19 @@ class NotificationWidget extends StatelessWidget {
           ),
           if (notification.dbusNotification.body.isNotEmpty)
             Text(notification.dbusNotification.body),
+          if (progressValue != null) ...[
+            const SizedBox(height: 4),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: (progressValue / 100).clamp(0.0, 1.0),
+                minHeight: 6,
+                backgroundColor: Theme.of(
+                  context,
+                ).colorScheme.surfaceContainerHighest,
+              ),
+            ),
+          ],
           if (notification.dbusNotification.hints.imageData != null)
             SizedBox(
               width: 100,

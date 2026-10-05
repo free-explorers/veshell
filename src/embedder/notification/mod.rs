@@ -228,6 +228,7 @@ fn hints_to_json(hints: &HashMap<String, OwnedValue>) -> serde_json::Value {
     insert_int(&mut out, hints, "x", "x");
     insert_int(&mut out, hints, "y", "y");
     insert_int(&mut out, hints, "urgency", "urgency");
+    insert_int(&mut out, hints, "value", "value");
     serde_json::Value::Object(out)
 }
 
@@ -391,6 +392,8 @@ mod tests {
         hints.insert("resident".to_string(), OwnedValue::from(true));
         hints.insert("x".to_string(), OwnedValue::from(12i32));
         hints.insert("urgency".to_string(), OwnedValue::from(1u8));
+        // The `value` hint is a `byte` progress-bar value (0..100).
+        hints.insert("value".to_string(), OwnedValue::from(42u8));
         // A structurally unsupported value: dropped, not mis-typed.
         hints.insert(
             "image-data".to_string(),
@@ -402,6 +405,7 @@ mod tests {
         assert_eq!(json["resident"].as_bool(), Some(true));
         assert_eq!(json["x"].as_i64(), Some(12));
         assert_eq!(json["urgency"].as_i64(), Some(1));
+        assert_eq!(json["value"].as_i64(), Some(42));
         assert!(json.get("imageData").is_none());
     }
 }

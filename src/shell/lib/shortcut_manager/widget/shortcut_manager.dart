@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/notification/provider/system_notification_manager.dart';
 import 'package:shell/platform/model/request/adjust_brightness/adjust_brightness.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/mpris/provider/mpris_manager.dart';
@@ -51,10 +52,14 @@ class VeshellShortcutManager extends HookConsumerWidget {
               final sink = ref.read(pulseSinkByNameProvider(defaultSink.name));
               if (sink == null) return;
 
+              final volume = min(sink.volume + 0.05, 1.0);
               ref
                   .read(pulseClientProvider)
                   .requireValue
-                  .setSinkVolume(defaultSink.name, min(sink.volume + 0.05, 1));
+                  .setSinkVolume(defaultSink.name, volume);
+              ref
+                  .read(systemNotificationManagerProvider.notifier)
+                  .showVolume(volume: volume, muted: sink.mute);
               return null;
             },
           ),
@@ -64,10 +69,14 @@ class VeshellShortcutManager extends HookConsumerWidget {
               if (defaultSink == null) return;
               final sink = ref.read(pulseSinkByNameProvider(defaultSink.name));
               if (sink == null) return;
+              final volume = max(sink.volume - 0.05, 0.0);
               ref
                   .read(pulseClientProvider)
                   .requireValue
-                  .setSinkVolume(defaultSink.name, max(sink.volume - 0.05, 0));
+                  .setSinkVolume(defaultSink.name, volume);
+              ref
+                  .read(systemNotificationManagerProvider.notifier)
+                  .showVolume(volume: volume, muted: sink.mute);
 
               return null;
             },
@@ -78,10 +87,14 @@ class VeshellShortcutManager extends HookConsumerWidget {
               if (defaultSink == null) return;
               final sink = ref.read(pulseSinkByNameProvider(defaultSink.name));
               if (sink == null) return;
+              final muted = !sink.mute;
               ref
                   .read(pulseClientProvider)
                   .requireValue
-                  .setSinkMute(defaultSink.name, !sink.mute);
+                  .setSinkMute(defaultSink.name, muted);
+              ref
+                  .read(systemNotificationManagerProvider.notifier)
+                  .showVolume(volume: sink.volume, muted: muted);
               return;
             },
           ),
