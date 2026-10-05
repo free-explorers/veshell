@@ -268,8 +268,12 @@ the desired-geometry store: brightness is live state, not persisted.
 - **Only the DRM backend controls it** (`Backend::CONTROLS_BACKLIGHT`): the
   nested backend shares the host's panel and must not dim it behind the host
   compositor.
-- **Keys.** `brightnessUp` / `brightnessDown` adjust the user level in 5% steps
-  through the `adjust_brightness` platform request; the compositor clamps to
-  `[1%, 100%]` so a key can never turn the panel off. The two steps are
-  configurable hotkeys (`system.increaseBrightness`, `system.decreaseBrightness`)
-  under Keyboard → Hotkeys, defaulting to the brightness keys.
+- **Keys.** The hardware brightness keys (`XF86MonBrightnessUp` /
+  `XF86MonBrightnessDown`, what laptop Fn keys emit) are handled by the
+  compositor itself in `handle_embedder_hotkeys`: they move the user level in 5%
+  steps and the keystroke is swallowed, so brightness works before the shell is
+  focused and while the panel is idle-dimmed. The same step is also a
+  configurable hotkey (`system.increaseBrightness`, `system.decreaseBrightness`)
+  that sends the `adjust_brightness` platform request, for binding brightness to
+  other keys; the compositor clamps to `[1%, 100%]` so a key can never turn the
+  panel off.

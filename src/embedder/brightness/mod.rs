@@ -25,6 +25,9 @@ const IDLE_DIM_FRACTION: f32 = 0.1;
 /// readable while still letting the panel go almost fully dark.
 const MIN_USER_FRACTION: f32 = 0.01;
 
+/// How far one brightness key press moves the user level.
+pub const BRIGHTNESS_STEP: f32 = 0.05;
+
 /// One brightness write for one device, in raw kernel units.
 pub(crate) struct Update {
     pub(crate) path: std::path::PathBuf,
