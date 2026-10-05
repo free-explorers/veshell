@@ -106,7 +106,10 @@ class PersistentWindowState extends _$PersistentWindowState
           print('process exited with code $value');
           // This failure/success only resets the visual waiting state. The
           // attribution association lives in [AppLaunch] and is cleared
-          // there, by the same exit.
+          // there, by the same exit. The tile may have been removed (or its
+          // notifier rebuilt) while the process ran, so the notifier state is
+          // only touched while it is still mounted.
+          if (!ref.mounted) return;
           state = state.copyWith(isWaitingForSurface: false);
         }),
       );
