@@ -41,7 +41,7 @@ dependencies:
   freedesktop_desktop_entry:
     git:
       url: https://github.com/free-explorers/freedesktop_desktop_entry.git
-      ref: 8d227217166bd65d1117fce4cb9db6bffaebe75c
+      ref: e3d37d9bf6fab381c06135a4198bf031ac94ca69
 
   jovial_svg: ^1.1.15
   flutter_svg: ^2.0.9
