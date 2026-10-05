@@ -237,6 +237,25 @@ impl<BackendData: Backend + 'static> State<BackendData> {
     pub fn frame_timestamp_millis(&self) -> u32 {
         self.clock.now().as_millis() as u32
     }
+
+    /// Tells the shell the display brightness changed so it can show the
+    /// brightness OSD. Called after every user-driven [`crate::brightness::Brightness::adjust`]
+    /// (the hardware function keys handled in the compositor, and the shell's
+    /// own `adjust_brightness` request). A no-op when no controllable backlight
+    /// exists: there is nothing to report, and the shell should not show an OSD
+    /// for a panel it cannot dim.
+    pub fn notify_brightness_changed(&mut self) {
+        if !self.brightness.is_available() {
+            return;
+        }
+        let fraction = self.brightness.user_fraction();
+        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+        platform_method_channel.invoke_method(
+            "brightness_changed",
+            Some(Box::new(serde_json::json!({ "fraction": fraction }))),
+            None,
+        );
+    }
 }
 
 impl<BackendData: Backend + 'static> DndGrabHandler for State<BackendData> {}

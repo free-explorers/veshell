@@ -96,6 +96,12 @@ impl Brightness {
         self.apply();
     }
 
+    /// The level the user chose, in `[MIN_USER_FRACTION, 1]`. Reported to the
+    /// shell so the brightness OSD shows the value the compositor settled on.
+    pub fn user_fraction(&self) -> f32 {
+        self.user_fraction
+    }
+
     /// Drive the screensaver fade. `progress` runs from `0` (awake) to `1`
     /// (fully dimmed); when `blank` is set the backlight turns off outright,
     /// which wins over the fade.

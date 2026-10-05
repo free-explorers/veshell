@@ -152,6 +152,22 @@
                 }
             },
             "additionalProperties": false
+        },
+        "notifications": {
+            "type": "object",
+            "properties": {
+                "batteryLowThreshold": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                },
+                "batteryCriticalThreshold": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                }
+            },
+            "additionalProperties": false
         }
     }
 }
