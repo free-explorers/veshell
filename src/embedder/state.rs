@@ -9,9 +9,9 @@ use smithay::backend::input::KeyState;
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::delegate_dispatch2;
 use smithay::desktop::{Space, Window};
-use smithay::input::dnd::DndGrabHandler;
+use smithay::input::dnd::{DnDGrab, DndGrabHandler, GrabType, Source};
 use smithay::input::keyboard::{KeyboardHandle, XkbConfig};
-use smithay::input::pointer::{CursorImageStatus, PointerHandle};
+use smithay::input::pointer::{CursorImageStatus, Focus, PointerHandle};
 use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::output::{Output, Scale};
 use smithay::reexports::calloop::generic::Generic;
@@ -25,7 +25,7 @@ use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::{Display, DisplayHandle, Resource};
 use smithay::reexports::x11rb::protocol::xproto::Window as X11Window;
 use smithay::utils::{
-    Buffer as BufferCoords, Clock, Logical, Monotonic, Point, Rectangle, Size, Transform,
+    Buffer as BufferCoords, Clock, Logical, Monotonic, Point, Rectangle, Serial, Size, Transform,
 };
 use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor::{self, get_parent, RectangleKind};
@@ -893,7 +893,49 @@ impl<BackendData: Backend> SelectionHandler for State<BackendData> {
     }
 }
 
-impl<BackendData: Backend> WaylandDndGrabHandler for State<BackendData> {}
+impl<BackendData: Backend + 'static> WaylandDndGrabHandler for State<BackendData> {
+    fn dnd_requested<S: Source>(
+        &mut self,
+        source: S,
+        _icon: Option<WlSurface>,
+        seat: Seat<Self>,
+        serial: Serial,
+        type_: GrabType,
+    ) {
+        // A client (e.g. a browser starting a tab or file drag) asked to begin
+        // a drag in response to the pointer press that installed the implicit
+        // click grab. Install a real `DnDGrab` so the drag is actually driven;
+        // the trait's default implementation cancels the source and drops the
+        // drag on the floor.
+        match type_ {
+            GrabType::Pointer => {
+                let Some(pointer) = seat.get_pointer() else {
+                    source.cancel();
+                    return;
+                };
+                let Some(start_data) = pointer.grab_start_data() else {
+                    source.cancel();
+                    return;
+                };
+                let grab =
+                    DnDGrab::new_pointer(&self.display_handle, start_data, source, seat.clone());
+                pointer.set_grab(self, grab, serial, Focus::Keep);
+            }
+            GrabType::Touch => {
+                let Some(touch) = seat.get_touch() else {
+                    source.cancel();
+                    return;
+                };
+                let Some(start_data) = touch.grab_start_data() else {
+                    source.cancel();
+                    return;
+                };
+                let grab = DnDGrab::new_touch(&self.display_handle, start_data, source, seat);
+                touch.set_grab(self, grab, serial);
+            }
+        }
+    }
+}
 
 impl<BackendData: Backend> DataDeviceHandler for State<BackendData> {
     fn data_device_state(&mut self) -> &mut DataDeviceState {

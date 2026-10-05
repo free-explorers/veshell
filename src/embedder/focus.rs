@@ -128,6 +128,12 @@ impl<BackendData: Backend + 'static> DndFocus<State<BackendData>> for PointerFoc
             (Self::X11Surface(surface), Some(PointerOfferData::X11(offer))) => {
                 DndFocus::motion(surface, data, Some(offer), seat, location, time)
             }
+            (Self::WlSurface(surface), None) => {
+                DndFocus::motion::<S>(surface, data, None, seat, location, time)
+            }
+            (Self::X11Surface(surface), None) => {
+                DndFocus::motion::<S>(surface, data, None, seat, location, time)
+            }
             _ => {}
         }
     }
@@ -145,6 +151,8 @@ impl<BackendData: Backend + 'static> DndFocus<State<BackendData>> for PointerFoc
             (Self::X11Surface(surface), Some(PointerOfferData::X11(offer))) => {
                 DndFocus::leave(surface, data, Some(offer), seat)
             }
+            (Self::WlSurface(surface), None) => DndFocus::leave::<S>(surface, data, None, seat),
+            (Self::X11Surface(surface), None) => DndFocus::leave::<S>(surface, data, None, seat),
             _ => {}
         }
     }
@@ -162,6 +170,8 @@ impl<BackendData: Backend + 'static> DndFocus<State<BackendData>> for PointerFoc
             (Self::X11Surface(surface), Some(PointerOfferData::X11(offer))) => {
                 DndFocus::drop(surface, data, Some(offer), seat)
             }
+            (Self::WlSurface(surface), None) => DndFocus::drop::<S>(surface, data, None, seat),
+            (Self::X11Surface(surface), None) => DndFocus::drop::<S>(surface, data, None, seat),
             _ => {}
         }
     }

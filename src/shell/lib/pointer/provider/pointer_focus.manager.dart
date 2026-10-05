@@ -47,6 +47,21 @@ class PointerFocusManager extends _$PointerFocusManager {
   }
 
   void hoverSurface(PointerFocus focus) {
+    // While a pointer button is held, Flutter re-uses the hit-test path
+    // captured on pointer down, so the surface that received the press keeps
+    // reporting moves even after the pointer leaves it. The mouse tracker
+    // (which re-runs the hit test on every move) is what reports the surface
+    // actually under the cursor, through `enterSurface`. Keep that one: it is
+    // what lets a native drag-and-drop reach a drop target in another window.
+    // The pressed surface is not lost — Smithay's implicit click grab keeps
+    // routing plain presses and drag motions to it until the button is
+    // released.
+    final focusedSurfaceId = state?.surfaceId;
+    if (_maybeDragging &&
+        focusedSurfaceId != null &&
+        focusedSurfaceId != focus.surfaceId) {
+      return;
+    }
     state = focus;
   }
 
