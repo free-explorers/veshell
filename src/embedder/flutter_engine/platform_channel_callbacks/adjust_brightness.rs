@@ -30,6 +30,7 @@ pub fn adjust_brightness<BackendData: Backend + 'static>(
     match serde_json::from_value::<AdjustBrightnessPayload>(args) {
         Ok(payload) => {
             data.brightness.adjust(payload.delta);
+            data.notify_brightness_changed();
             result.success(None);
         }
         Err(error) => result.error(

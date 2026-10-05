@@ -328,6 +328,7 @@ fn handle_embedder_hotkeys<BackendData: Backend + 'static>(
         };
         if let Some(step) = step {
             data.brightness.adjust(step);
+            data.notify_brightness_changed();
             return true;
         }
     }
