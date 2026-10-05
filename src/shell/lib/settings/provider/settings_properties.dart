@@ -162,6 +162,16 @@ class SettingsProperties extends _$SettingsProperties {
                 description: 'Toggle Mute volume',
                 converter: LogicalKeySetConverter(),
               ),
+              'system.increaseBrightness': SettingProperty<LogicalKeySet>(
+                name: 'Increase Brightness',
+                description: 'Increase the display brightness',
+                converter: LogicalKeySetConverter(),
+              ),
+              'system.decreaseBrightness': SettingProperty<LogicalKeySet>(
+                name: 'Decrease Brightness',
+                description: 'Decrease the display brightness',
+                converter: LogicalKeySetConverter(),
+              ),
               'media.playPause': SettingProperty<LogicalKeySet>(
                 name: 'Play/Pause Media',
                 description: 'Toggle playback of the active media player',

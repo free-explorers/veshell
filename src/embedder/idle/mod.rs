@@ -32,6 +32,9 @@ pub struct IdleState<BackendData: Backend + 'static> {
     pub loop_handle: LoopHandle<'static, State<BackendData>>,
     stage: IdleStage,
     dim_alpha: f32,
+    /// Whether the compositor drives a physical backlight. When it does, the
+    /// fade lowers the panel instead of painting the black overlay.
+    hardware_brightness: bool,
     dim_timeout: Duration,
     blank_timeout: Duration,
     fade_duration: Duration,
@@ -60,6 +63,7 @@ impl<BackendData: Backend + 'static> IdleState<BackendData> {
     pub fn new(
         loop_handle: LoopHandle<'static, State<BackendData>>,
         settings: &IdleSettings,
+        hardware_brightness: bool,
     ) -> Self {
         let (dbus_events, dbus_receiver) = channel::channel::<dbus::IdleDbusEvent>();
         loop_handle
@@ -84,6 +88,7 @@ impl<BackendData: Backend + 'static> IdleState<BackendData> {
             loop_handle,
             stage: IdleStage::Active,
             dim_alpha: 0.0,
+            hardware_brightness,
             dim_timeout: Duration::from_secs(settings.dim_timeout_seconds as u64),
             blank_timeout: Duration::from_secs(settings.blank_timeout_seconds as u64),
             fade_duration: Duration::from_secs_f32(settings.fade_seconds.max(0.0)),
@@ -115,7 +120,13 @@ impl<BackendData: Backend + 'static> IdleState<BackendData> {
     }
 
     pub fn dim_alpha(&self) -> f32 {
-        self.dim_alpha
+        // The overlay is the fallback for panels without a controllable
+        // backlight; when the hardware fades, it must not double-dim.
+        if self.hardware_brightness {
+            0.0
+        } else {
+            self.dim_alpha
+        }
     }
 
     pub fn is_blank(&self) -> bool {
@@ -215,6 +226,7 @@ pub fn on_session_paused<D: Backend + 'static>(state: &mut State<D>) {
     state.idle.cancel_all();
     state.idle.dim_alpha = 0.0;
     state.idle.stage = IdleStage::Active;
+    state.brightness.wake();
 }
 
 /// The seat session was activated again (the VT was switched back). Treat the
@@ -240,6 +252,7 @@ pub fn on_activity<D: Backend + 'static>(state: &mut State<D>) {
         state.idle.dim_alpha = 0.0;
         state.idle.cancel_all();
         state.idle.stage = IdleStage::Active;
+        state.brightness.wake();
         (state.idle.request_render)(state);
     }
     if !is_inhibited(state) {
@@ -277,6 +290,7 @@ pub fn refresh_idle_inhibit<D: Backend + 'static>(state: &mut State<D>) {
         state.idle.dim_alpha = 0.0;
         state.idle.cancel_all();
         state.idle.stage = IdleStage::Active;
+        state.brightness.wake();
         (state.idle.request_render)(state);
     } else {
         state.idle.cancel_all();
@@ -331,6 +345,7 @@ fn fade_tick<D: Backend + 'static>(state: &mut State<D>) {
         (fade_started.elapsed().as_secs_f32() / fade_duration.as_secs_f32()).min(1.0)
     };
     state.idle.dim_alpha = progress;
+    state.brightness.set_idle(progress, false);
     (state.idle.request_render)(state);
     if progress >= 1.0 {
         state.idle.fade_started = None;
@@ -349,6 +364,7 @@ fn blank_fired<D: Backend + 'static>(state: &mut State<D>) {
     }
     state.idle.blank_token = None;
     state.idle.dim_alpha = 1.0;
+    state.brightness.set_idle(1.0, true);
     state.idle.cancel_visual_timers();
     if <D as Backend>::CAN_BLANK {
         state.idle.stage = IdleStage::Blank;

@@ -6,7 +6,9 @@
             "system": {
                 "increaseVolume": "volumeUp",
                 "decreaseVolume": "volumeDown",
-                "muteVolume": "volumeMute"
+                "muteVolume": "volumeMute",
+                "increaseBrightness": "brightnessUp",
+                "decreaseBrightness": "brightnessDown"
             },
             "media": {
                 "playPause": "mediaPlayPause",

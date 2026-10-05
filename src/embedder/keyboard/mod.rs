@@ -315,6 +315,23 @@ fn handle_embedder_hotkeys<BackendData: Backend + 'static>(
     data: &mut State<BackendData>,
     event: VeshellKeyEvent,
 ) -> bool {
+    // Display brightness keys are hardware keys owned by the compositor. Driving
+    // the panel here makes them work before the shell is focused and while the
+    // screen is idle-dimmed, and keeps the brightness authority in one place.
+    // The key is swallowed, so the configurable shell hotkeys never see the
+    // function keys; bindings on other keys still work.
+    if event.state == KeyState::Pressed {
+        let step = match event.keysym {
+            Keysym::XF86_MonBrightnessUp => Some(crate::brightness::BRIGHTNESS_STEP),
+            Keysym::XF86_MonBrightnessDown => Some(-crate::brightness::BRIGHTNESS_STEP),
+            _ => None,
+        };
+        if let Some(step) = step {
+            data.brightness.adjust(step);
+            return true;
+        }
+    }
+
     // While a recording runs, the desktop stays live and input flows
     // normally; Print is the only finisher the user controls (Escape and
     // clicks are never a stop action). The recording also finalizes on

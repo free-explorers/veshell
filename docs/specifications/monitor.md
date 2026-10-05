@@ -241,3 +241,39 @@ fractional scale and are forced to the global XWayland client scale.
   that output's scale, replacing the fallback.
 - **On scale change** every window whose `current_output` is the changed
   connector is patched with the new scale, so open windows rescale.
+
+## Backlight brightness
+
+Rust owns the physical display backlight so the screensaver can fade the panel
+itself and the brightness keys have a single authority. This is independent of
+the desired-geometry store: brightness is live state, not persisted.
+
+- **Discovery** reads every `/sys/class/backlight/<name>` with a usable
+  `max_brightness`, and measures the current level at startup as the user level.
+  A device without a readable `max_brightness` is ignored; no device at all
+  means the feature is unavailable.
+- **Writing** prefers `org.freedesktop.login1.Session.SetBrightness("backlight",
+  <name>, <value>)`, resolving the caller's session once through
+  `Manager.GetSession("auto")`. When the system bus, logind or the method is
+  unavailable, the raw `/sys/class/backlight/<name>/brightness` file is written
+  instead. Writes run on a dedicated thread and coalesce bursts, so the
+  screensaver fade (one update per frame) can never build a backlog behind a
+  slow logind round-trip.
+- **The screensaver drives it.** The dim fade lowers the panel from the user
+  level to `min(user, 10%)`, never brightening a panel that is already below
+  that floor; blanking turns the backlight fully off. Waking (input, VT
+  activation, inhibition ending) restores the user level. The black overlay
+  remains the fallback and is drawn only when no controllable backlight exists,
+  so a panel never double-dims.
+- **Only the DRM backend controls it** (`Backend::CONTROLS_BACKLIGHT`): the
+  nested backend shares the host's panel and must not dim it behind the host
+  compositor.
+- **Keys.** The hardware brightness keys (`XF86MonBrightnessUp` /
+  `XF86MonBrightnessDown`, what laptop Fn keys emit) are handled by the
+  compositor itself in `handle_embedder_hotkeys`: they move the user level in 5%
+  steps and the keystroke is swallowed, so brightness works before the shell is
+  focused and while the panel is idle-dimmed. The same step is also a
+  configurable hotkey (`system.increaseBrightness`, `system.decreaseBrightness`)
+  that sends the `adjust_brightness` platform request, for binding brightness to
+  other keys; the compositor clamps to `[1%, 100%]` so a key can never turn the
+  panel off.

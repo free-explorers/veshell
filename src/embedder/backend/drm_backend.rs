@@ -161,6 +161,7 @@ impl Backend for DrmBackend {
     const RUNS_PORTAL_BACKEND: bool = true;
     const RUNS_NOTIFICATION_SERVER: bool = true;
     const CAN_BLANK: bool = true;
+    const CONTROLS_BACKLIGHT: bool = true;
     const SUPPORTS_OUTPUT_TRANSFORM: bool = true;
 
     fn seat_name(&self) -> String {

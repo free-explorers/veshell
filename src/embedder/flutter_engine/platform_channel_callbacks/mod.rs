@@ -8,6 +8,7 @@ use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::state::State;
 
 pub(crate) mod activate_window;
+mod adjust_brightness;
 mod close_window;
 mod get_environment_variables;
 mod get_monitor_layout;
@@ -28,6 +29,7 @@ mod screen_cast_stop;
 mod screenshot_prompt_decision;
 
 use self::activate_window::activate_window;
+use self::adjust_brightness::adjust_brightness;
 use self::close_window::close_window;
 use self::get_environment_variables::get_environment_variables;
 use self::get_monitor_layout::get_monitor_layout;
@@ -55,6 +57,7 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             "activate_window" => activate_window(method_call, result, data),
             "resize_window" => resize_window(method_call, result, data),
             "close_window" => close_window(method_call, result, data),
+            "adjust_brightness" => adjust_brightness(method_call, result, data),
             "get_monitor_layout" => get_monitor_layout(method_call, result, data),
             "get_environment_variables" => get_environment_variables(method_call, result, data),
             "meta_window_patches" => meta_window_patches(method_call, result, data),

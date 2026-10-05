@@ -26,6 +26,11 @@ pub trait Backend {
     /// screensaver reaches full dim. Backends without KMS access (nested)
     /// keep rendering the black overlay instead.
     const CAN_BLANK: bool = false;
+    /// Whether the compositor drives the panel backlight directly.
+    ///
+    /// Only the real DRM session does: the nested backend shares the host's
+    /// panel and must never dim it behind the host compositor's back.
+    const CONTROLS_BACKLIGHT: bool = false;
     /// Only the real seat session (DRM) owns the portal backend name; a
     /// nested or non-session run must not answer portal requests on a
     /// foreign bus.
