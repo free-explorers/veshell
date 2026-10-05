@@ -303,3 +303,9 @@ dropped during startup and never pushed to a shell that cannot receive it.
 
 Action icons (`action-icons`) and hint-driven surfacing
 (urgency/transient/category).
+
+## System notifications
+
+The shell's own transient alerts (volume, brightness, battery) reuse these
+popups but are synthesized and never persisted. See
+[SystemNotification](system_notification.md).
