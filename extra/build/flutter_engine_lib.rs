@@ -16,15 +16,13 @@ pub fn link_flutter_engine_shared_library(
     println!("cargo:rerun-if-changed=extra/build/flutter_engine_lib.rs");
     println!("cargo:rerun-if-changed={FLUTTER_ENGINE_LIBS_DIR}");
 
-    // Get the desired flutter engine revision
-    let flutter_engine_revision = get_flutter_engine_revision();
-
-    // Check if we need to download the flutter engine library
-    let should_download =
-        should_download_flutter_engine_library(&flutter_engine_revision, flutter_engine_build);
-
-    if should_download {
-        download_flutter_engine_library(&flutter_engine_revision, flutter_engine_build).unwrap();
+    println!("cargo:rerun-if-env-changed=VESHELL_ENGINE_DIR");
+    println!("cargo:rerun-if-env-changed=VESHELL_LIB_DIR");
+    if env::var_os("VESHELL_ENGINE_DIR").is_none() {
+        let flutter_engine_revision = get_flutter_engine_revision();
+        if should_download_flutter_engine_library(&flutter_engine_revision, flutter_engine_build) {
+            download_flutter_engine_library(&flutter_engine_revision, flutter_engine_build)?;
+        }
     }
 
     // Generate the embedder bindings
@@ -160,7 +158,9 @@ fn download_from_url(url: &str) -> Result<bytes::Bytes, reqwest::Error> {
 }
 
 fn generate_embedder_bindings() {
-    let embedder_header_path = format!("{FLUTTER_ENGINE_LIBS_DIR}/{FLUTTER_ENGINE_HEADER_NAME}");
+    let engine_dir = env::var("VESHELL_ENGINE_DIR")
+        .unwrap_or_else(|_| FLUTTER_ENGINE_LIBS_DIR.to_owned());
+    let embedder_header_path = format!("{engine_dir}/{FLUTTER_ENGINE_HEADER_NAME}");
     println!("cargo:rerun-if-changed={embedder_header_path}");
     println!("Generating embedder bindings...");
 
@@ -179,7 +179,9 @@ fn generate_embedder_bindings() {
 fn link_libflutter_engine(flutter_engine_build: FlutterEngineBuild) {
     link_libgl();
 
-    let libflutter_engine_dir = format!("{FLUTTER_ENGINE_LIBS_DIR}/{flutter_engine_build}");
+    let engine_dir = env::var("VESHELL_ENGINE_DIR")
+        .unwrap_or_else(|_| FLUTTER_ENGINE_LIBS_DIR.to_owned());
+    let libflutter_engine_dir = format!("{engine_dir}/{flutter_engine_build}");
     println!("cargo:rerun-if-changed={libflutter_engine_dir}/{FLUTTER_ENGINE_LIB_NAME}");
     println!("cargo:rustc-link-search={libflutter_engine_dir}");
     println!("cargo:rustc-link-lib={FLUTTER_ENGINE_LINK_NAME}");
