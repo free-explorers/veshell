@@ -30,6 +30,12 @@
                                 },
                                 "muteVolume": {
                                     "type": "string"
+                                },
+                                "increaseBrightness": {
+                                    "type": "string"
+                                },
+                                "decreaseBrightness": {
+                                    "type": "string"
                                 }
                             }
                         },

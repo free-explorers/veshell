@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/platform/model/request/adjust_brightness/adjust_brightness.serializable.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/mpris/provider/mpris_manager.dart';
 import 'package:shell/shared/pulseaudio/provider/default_sink.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_audio.dart';
@@ -81,6 +83,33 @@ class VeshellShortcutManager extends HookConsumerWidget {
                   .requireValue
                   .setSinkMute(defaultSink.name, !sink.mute);
               return;
+            },
+          ),
+          // Brightness is owned by the compositor (logind/sysfs); the shell
+          // only forwards the requested step. The compositor clamps it and
+          // restores the user level after an idle dim.
+          IncreaseBrightness: CallbackAction<IncreaseBrightness>(
+            onInvoke: (_) {
+              ref
+                  .read(platformManagerProvider.notifier)
+                  .request(
+                    AdjustBrightnessRequest(
+                      message: AdjustBrightnessMessage(delta: 0.05),
+                    ),
+                  );
+              return null;
+            },
+          ),
+          DecreaseBrightness: CallbackAction<DecreaseBrightness>(
+            onInvoke: (_) {
+              ref
+                  .read(platformManagerProvider.notifier)
+                  .request(
+                    AdjustBrightnessRequest(
+                      message: AdjustBrightnessMessage(delta: -0.05),
+                    ),
+                  );
+              return null;
             },
           ),
           // Hardware media keys drive the active MPRIS player. The compositor

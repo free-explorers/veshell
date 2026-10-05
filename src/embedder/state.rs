@@ -151,6 +151,10 @@ pub struct State<BackendData: Backend + 'static> {
     pub idle_notifier_state: IdleNotifierState<State<BackendData>>,
     /// idle-inhibit-unstable-v1: clients can suppress idleness from here.
     pub idle_inhibit_manager_state: IdleInhibitManagerState,
+    /// Display backlight: the physical brightness the screensaver fades and the
+    /// brightness keys drive. Unavailable when no controllable panel exists, in
+    /// which case the screensaver keeps the black overlay.
+    pub brightness: crate::brightness::Brightness,
     /// Capture-owned state: the native selection session, the local recording
     /// session, and the channels that carry their worker results back onto the
     /// compositor loop.
@@ -363,7 +367,13 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let idle_notifier_state =
             IdleNotifierState::<Self>::new(&display_handle, loop_handle.clone());
         let idle_inhibit_manager_state = IdleInhibitManagerState::new::<Self>(&display_handle);
-        let idle = crate::idle::IdleState::new(loop_handle.clone(), &settings.idle);
+        let brightness =
+            crate::brightness::Brightness::new(<BackendData as Backend>::CONTROLS_BACKLIGHT);
+        let idle = crate::idle::IdleState::new(
+            loop_handle.clone(),
+            &settings.idle,
+            brightness.is_available(),
+        );
 
         let mut state = Self {
             running: Arc::new(AtomicBool::new(true)),
@@ -431,6 +441,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             idle,
             idle_notifier_state,
             idle_inhibit_manager_state,
+            brightness,
         };
         // Start watching for idleness right away.
         state.idle.arm_activity_timers();

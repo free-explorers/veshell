@@ -17,3 +17,15 @@ class ToggleMute extends Intent {
   ///
   const ToggleMute();
 }
+
+/// An intent to increaseBrightness
+class IncreaseBrightness extends Intent {
+  ///
+  const IncreaseBrightness();
+}
+
+/// An intent to decreaseBrightness
+class DecreaseBrightness extends Intent {
+  ///
+  const DecreaseBrightness();
+}
