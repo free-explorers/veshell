@@ -64,7 +64,7 @@ class TileableListView extends HookConsumerWidget {
           return SizedBox(
             height: double.infinity,
             child: InkWell(
-              onTap: () => ref
+              onTap: index < 0 ? null : () => ref
                   .read(workspaceStateProvider(workspaceId).notifier)
                   .setSelectedIndex(
                     index,
@@ -102,13 +102,20 @@ class TileableListView extends HookConsumerWidget {
       child: CrossReorderableList<Tileable>(
         key: listKey,
         scrollDirection: Axis.horizontal,
+        itemKey: (tileable) => tileable is PersistentWindowTileable
+            ? ValueKey(tileable.windowId)
+            : const ValueKey('application-launcher'),
         onDropInProgress: (dropInProgress) =>
             dropInProgressState.value = dropInProgress,
         itemBuilder: (context, tileable) {
           // if dropInProgress the tileable could not be in the list
           // so we don't try to record it offset and display a normal item
-          if (dropInProgressState.value) return buildItem(context, tileable);
           final index = tileableList.indexOf(tileable);
+          // Accepted transfers update the workspace asynchronously. Keep an
+          // incoming preview safe until the authoritative list contains it.
+          if (dropInProgressState.value || index < 0) {
+            return buildItem(context, tileable);
+          }
           return LayoutBuilder(
             key: tileableKeyList[index],
             builder: (context, constraints) {
@@ -137,33 +144,25 @@ class TileableListView extends HookConsumerWidget {
         onListChanged: (updatedTileableList) {
           if (updatedTileableList.length > tileableList.length) {
             final addedTileableList = updatedTileableList
+                .whereType<PersistentWindowTileable>()
                 .where(
-                  (element) => !tileableList.contains(element),
+                  (element) => !workspaceState.tileableWindowList
+                      .contains(element.windowId),
                 )
                 .toList();
             for (final tileable in addedTileableList) {
-              if (tileable is PersistentWindowTileable) {
-                ref
-                    .read(workspaceStateProvider(workspaceId).notifier)
-                    .insertWindow(
-                      tileable.windowId,
-                      updatedTileableList.indexOf(tileable),
-                    );
-              }
+              ref
+                  .read(workspaceStateProvider(workspaceId).notifier)
+                  .insertWindow(
+                    tileable.windowId,
+                    updatedTileableList.indexOf(tileable),
+                  );
             }
           } else if (updatedTileableList.length < tileableList.length) {
-            final removedTileableList = tileableList
-                .where((element) => !updatedTileableList.contains(element))
-                .toList();
-            for (final tileable in removedTileableList) {
-              if (tileable is PersistentWindowTileable) {
-                ref
-                    .read(workspaceStateProvider(workspaceId).notifier)
-                    .removeWindow(
-                      tileable.windowId,
-                    );
-              }
-            }
+            // The destination's insertWindow/addWindow owns the transfer,
+            // including removal from this workspace. A second asynchronous
+            // removal here races that transfer and can erase its new owner.
+            return;
           } else {
             ref
                 .read(workspaceStateProvider(workspaceId).notifier)
