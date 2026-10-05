@@ -161,12 +161,20 @@ being written directly.
   `MonitorSettingChangeConfirmation.propose`: the new desired geometry is
   written immediately (so Rust applies it live) and a timer is started
   (`monitorSettingConfirmationTimeout`, 15 s by default).
+- Only **one** change is guarded at a time, and the guard is input-modal: while a
+  change is pending the confirmation overlay is the only interactive surface. It
+  blocks pointer events (opaque hit test over every monitor) and takes focus,
+  swallowing every key, so the settings search and the global workspace
+  shortcuts behind it cannot start or trigger another change. This is what makes
+  the single pending slot safe rather than an assumption.
 - The prompt is mounted in every monitor's `MaterialApp.builder`
   (`MonitorSettingChangeConfirmationOverlay`), above the capture prompts, so it
   is visible on a still-working monitor even when the changed one is unusable.
-  `Keep` cancels the timer; `Revert` — or the timer expiring — writes the last
-  confirmed geometry back, which Rust applies live and republishes through
-  `monitor_layout_changed`.
+  `Keep` cancels the timer; `Revert` — or the timer expiring — restores the last
+  confirmed **guarded** fields (mode, scale, transform) while keeping the
+  current location and mirror target, which Rust applies live and republishes
+  through `monitor_layout_changed`. A location or mirror change made while the
+  guarded change was pending therefore survives the rollback.
 - The rollback timer lives in the notifier, not the widget, so it fires even if
   no view can draw the prompt.
 - Location and mirror changes are written directly: the arrangement editor

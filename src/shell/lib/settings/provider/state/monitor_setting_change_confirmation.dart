@@ -24,7 +24,7 @@ class MonitorSettingChange {
   /// Short human-readable description of what changed.
   final String description;
 
-  /// Last confirmed desired geometry, restored on rollback.
+  /// Last confirmed guarded fields, restored on rollback.
   final Map<String, dynamic> previous;
 
   /// Just-applied desired geometry, kept on confirmation.
@@ -45,6 +45,15 @@ Duration monitorSettingConfirmationTimeout(Ref ref) =>
 /// unless the user keeps it before [monitorSettingConfirmationTimeout]. Kept
 /// alive so the rollback timer survives view rebuilds and still fires when the
 /// changed monitor itself is unusable.
+///
+/// Rollback only reverts the guarded fields: location and mirroring are written
+/// directly and are preserved. See `docs/specifications/monitor.md` (section
+/// "Change confirmation").
+///
+/// Only one change is guarded at a time. This is enforced, not assumed: while a
+/// change is pending the confirmation overlay is the only interactive surface
+/// (it blocks both pointer and keyboard input on every monitor), so no second
+/// guarded change can be started through the UI.
 @Riverpod(keepAlive: true)
 class MonitorSettingChangeConfirmation
     extends _$MonitorSettingChangeConfirmation {
@@ -90,14 +99,20 @@ class MonitorSettingChangeConfirmation
     state = null;
   }
 
-  /// Discard the change and restore the last confirmed settings.
+  /// Discard the change and restore the last confirmed guarded fields, keeping
+  /// the current location and mirror target.
+  ///
+  /// Only the guarded fields (mode, scale, transform) are restored, so a
+  /// location or mirror edit made while the change was pending is not lost.
   void rollback() {
     final pending = state;
     _timer?.cancel();
     _timer = null;
     state = null;
     if (pending != null) {
-      _write(pending.monitorId, pending.previous);
+      ref
+          .read(monitorSettingStateProvider(pending.monitorId).notifier)
+          .restoreGuarded(pending.previous);
     }
   }
 

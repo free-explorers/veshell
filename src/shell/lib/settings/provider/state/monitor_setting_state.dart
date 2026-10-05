@@ -24,62 +24,136 @@ part 'monitor_setting_state.g.dart';
 /// and only kept if the user confirms it before the countdown expires.
 @riverpod
 class MonitorSettingState extends _$MonitorSettingState {
+  /// Fields owned by the confirmation guard.
+  ///
+  /// Location and mirroring are written directly and are deliberately absent:
+  /// they must survive a rollback of a guarded change. See
+  /// `docs/specifications/monitor.md` (section "Change confirmation").
+  static const _guardedFields = <String>[
+    'mode',
+    'fractionnalScale',
+    'transform',
+  ];
+
   @override
   MonitorSetting build(String monitorId) {
     final json = ref.watch(monitorSettingJsonProvider(monitorId));
-    final conf = MonitorSetting.fromJson(
-      json,
-    );
+    final conf = MonitorSetting.fromJson(json);
     return conf;
   }
 
   void setMode(Mode mode) {
-    _propose(state.copyWith(mode: mode), 'Resolution');
+    _applyGuarded((current) => current.copyWith(mode: mode), 'Resolution');
   }
 
   void setLocation(Offset location) {
-    updateFile(state.copyWith(location: location).toJson());
+    _applyDirect((current) => current.copyWith(location: location));
   }
 
   void setTransform(MonitorTransform transform) {
-    _propose(state.copyWith(transform: transform), 'Transform');
+    _applyGuarded(
+      (current) => current.copyWith(transform: transform),
+      'Transform',
+    );
   }
 
   void setMirrorOf(String? monitorId) {
-    updateFile(state.copyWith(mirrorOf: monitorId).toJson());
+    _applyDirect((current) => current.copyWith(mirrorOf: monitorId));
   }
 
   void updateByPath(String path, dynamic newValue) {
     final parts = path.split('.');
-    final json = state.toJson();
-    dynamic current = json;
+    final current = state;
+    final json = current.toJson();
+    dynamic cursor = json;
     for (var i = 0; i < parts.length - 1; i++) {
       final part = parts[i];
-      if (current[part] == null) {
-        current[part] = {};
+      if (cursor[part] == null) {
+        cursor[part] = {};
       }
-      current = current[part];
+      cursor = cursor[part];
     }
 
-    current[parts.last] = newValue;
-    _propose(MonitorSetting.fromJson(json), parts.last);
-  }
-
-  /// Applies [next] through the confirmation guard, unless it is a no-op.
-  void _propose(MonitorSetting next, String description) {
-    if (next == state) {
+    cursor[parts.last] = newValue;
+    final next = MonitorSetting.fromJson(json);
+    if (next == current) {
       return;
     }
+    state = next;
+    _proposeChange(current, next, parts.last);
+  }
+
+  /// Applies a guarded change (mode, scale, transform) through the confirmation
+  /// guard, unless it is a no-op.
+  ///
+  /// [change] is applied to the notifier's state, which is updated
+  /// optimistically before the write: the change is applied live, and the next
+  /// edit must build on it rather than on a value the file watcher has not
+  /// published yet.
+  void _applyGuarded(
+    MonitorSetting Function(MonitorSetting) change,
+    String description,
+  ) {
+    final previous = state;
+    final next = change(previous);
+    if (next == previous) {
+      return;
+    }
+    state = next;
+    _proposeChange(previous, next, description);
+  }
+
+  void _proposeChange(
+    MonitorSetting previous,
+    MonitorSetting next,
+    String description,
+  ) {
     ref
         .read(monitorSettingChangeConfirmationProvider.notifier)
         .propose(
           monitorId: monitorId,
           description: '$description of $monitorId',
-          previous: state.toJson(),
+          previous: previous.toJson(),
           next: next.toJson(),
         );
   }
 
+  /// Applies a direct change (location, mirroring), unless it is a no-op.
+  ///
+  /// Direct changes are not guarded, but they still update the state before
+  /// writing so the next edit never resurrects a value the write replaced.
+  void _applyDirect(MonitorSetting Function(MonitorSetting) change) {
+    final previous = state;
+    final next = change(previous);
+    if (next == previous) {
+      return;
+    }
+    state = next;
+    unawaited(updateFile(next.toJson()));
+  }
+
+  /// Restores the guarded fields from [previous] while keeping the current
+  /// location and mirror target, then persists the result.
+  ///
+  /// Called by the confirmation rollback: only mode, scale and transform are
+  /// reverted, so a location or mirror change made while a guarded change was
+  /// pending is not lost. See `docs/specifications/monitor.md`.
+  void restoreGuarded(Map<String, dynamic> previous) {
+    final json = state.toJson();
+    for (final field in _guardedFields) {
+      if (previous.containsKey(field)) {
+        json[field] = previous[field];
+      }
+    }
+    final restored = MonitorSetting.fromJson(json);
+    state = restored;
+    unawaited(updateFile(restored.toJson()));
+  }
+
+  /// Replaces the persisted geometry with [json].
+  ///
+  /// The confirmation guard writes the live change and the rollback through
+  /// this method; it is the only path that touches `monitor/<monitorId>.json`.
   Future<void> updateFile(Map<String, dynamic> json) async {
     final configDirectory = ref.read(configDirectoryProvider);
     const encoder = JsonEncoder.withIndent('  ');
