@@ -26,7 +26,7 @@ gh release view "$tag" --repo "$repo" --json targetCommitish > "$directory/relea
 jq -e --arg commit "$commit" '.targetCommitish == $commit' "$directory/release.json" >/dev/null
 gh release download "$tag" --repo "$repo" --dir "$directory" --pattern "$kind-SHA256SUMS"
 gh attestation verify "$directory/$kind-SHA256SUMS" --repo "$repo" \
-  --cert-identity "https://github.com/$repo/.github/workflows/nix-source-release.yml@$ref" \
+  --cert-identity "https://github.com/$repo/.github/workflows/nix-package-release.yml@$ref" \
   --source-ref "$ref" --source-digest "$commit" --deny-self-hosted-runners
 # Validate every manifest name before passing it to gh or checksum tooling.
 names=()

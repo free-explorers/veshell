@@ -179,7 +179,8 @@ source-engine integration; these builds disable the normal test phases.
 nix-shell -p yq jq --run 'yq -s . src/shell/pubspec.lock | jq -S ".[0]" > nix/pubspec-lock.json'
 ```
 
-The optional dispatch-only `Nix Source Release` workflow and application
+The optional dispatch-only `Nix Package Release` workflow
+(`.github/workflows/nix-package-release.yml`) and application
 export/import helpers are prepared but have not been verified end-to-end.
 Application publishing is not required for installation. If used, application
 exports exclude the separately published engine closure, and importing requires

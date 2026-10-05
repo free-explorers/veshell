@@ -1,4 +1,4 @@
-name: Nix Source Release
+name: Nix Package Release
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: nix-source-release
+  group: nix-package-release
   cancel-in-progress: false
 
 jobs:
