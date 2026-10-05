@@ -16,14 +16,10 @@ album art, a seek bar, and the transport controls (previous, play/pause, next),
 plus shuffle and repeat. When several players run at once, the header offers a
 switcher.
 
-The players' own volumes are **not** in the media card: every player gets a row
-in the existing Volume card, next to the system (PulseAudio) output volume. The
-two are distinct — MPRIS `Volume` is a player's internal volume, applied before
-the audio reaches the sink the system slider drives. Each row shows that
-player's application icon — its MPRIS `DesktopEntry`, falling back to the name
-from its bus name when a player does not implement that property (Brave, for
-one) — so it is clear which application it controls. Rows are shown for every
-known player, so one can be adjusted without making it the active player.
+Volume is controlled only through the existing Volume card's PulseAudio
+controls. MPRIS player volume is not exposed or tracked: some players (including
+Chromium-based browsers) report `Volume` but do not implement writes, making a
+separate player slider misleading.
 
 Unlike the notification server, MPRIS is **not** a service Veshell owns: it is a
 client of the session bus. It therefore lives entirely in the Dart shell,
@@ -52,7 +48,7 @@ Every player exposes both interfaces at the fixed path
 | Interface | Properties read |
 |---|---|
 | `org.mpris.MediaPlayer2` | `Identity`, `DesktopEntry`, `CanRaise` |
-| `org.mpris.MediaPlayer2.Player` | `PlaybackStatus`, `LoopStatus`, `Shuffle`, `Volume`, `Rate`, `Metadata`, `Position`, `CanGoNext`, `CanGoPrevious`, `CanPlay`, `CanPause`, `CanSeek`, `CanControl` |
+| `org.mpris.MediaPlayer2.Player` | `PlaybackStatus`, `LoopStatus`, `Shuffle`, `Rate`, `Metadata`, `Position`, `CanGoNext`, `CanGoPrevious`, `CanPlay`, `CanPause`, `CanSeek`, `CanControl` |
 
 `GetAll` builds the first snapshot; a `PropertiesChanged` signal for the Player
 interface applies the changed keys and leaves every other field untouched, so a
@@ -92,12 +88,11 @@ selected player clears the selection, falling back to rule 2.
 | Next / previous | `Next` / `Previous` |
 | Stop | `Stop` |
 | Seek | `SetPosition(trackId, position)`, or relative `Seek(offset)` when the track id is unknown or `NoTrack` |
-| Volume | `Volume` property, clamped to `0.0..1.0` |
 | Shuffle | `Shuffle` property |
 | Repeat | `LoopStatus` property, cycled off → repeat all → repeat one |
 | Bring to front | `Raise` on the root interface |
 
-Volume, shuffle, loop and seek update the snapshot optimistically so the UI
+Shuffle, loop and seek update the snapshot optimistically so the UI
 responds immediately; the write is best-effort and a failure is only logged.
 Transport buttons are disabled when the player cannot perform the action
 (`CanControl`, `CanGoNext`, `CanGoPrevious`, `CanPlay`, `CanPause`), and the

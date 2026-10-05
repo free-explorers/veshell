@@ -42,7 +42,6 @@ MprisPlayer playerFromProperties({
       _string(playerProperties, 'LoopStatus') ?? 'None',
     ),
     shuffle: _boolean(playerProperties, 'Shuffle'),
-    volume: _double(playerProperties, 'Volume') ?? 1,
     rate: _double(playerProperties, 'Rate') ?? 1,
     track: trackFromMetadata(playerProperties['Metadata']),
     position: _duration(playerProperties, 'Position') ?? Duration.zero,
@@ -81,7 +80,6 @@ MprisPlayer playerWithChanges(
       (value) => MprisLoopStatus.fromDbusValue(value.asString()),
     ),
     shuffle: _pick(changed, 'Shuffle', player.shuffle, (v) => v.asBoolean()),
-    volume: _pick(changed, 'Volume', player.volume, (v) => v.asDouble()),
     rate: _pick(changed, 'Rate', player.rate, (v) => v.asDouble()),
     track: changed.containsKey('Metadata')
         ? trackFromMetadata(changed['Metadata'])

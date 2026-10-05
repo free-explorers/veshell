@@ -31,9 +31,6 @@ abstract class MprisPlayer with _$MprisPlayer {
 
     @Default(false) bool shuffle,
 
-    /// `Volume`, normalized to `0.0..1.0`.
-    @Default(1) double volume,
-
     /// `Rate`, the playback speed multiplier (`1.0` is normal).
     @Default(1) double rate,
 

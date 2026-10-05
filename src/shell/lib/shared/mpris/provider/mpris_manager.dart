@@ -139,30 +139,6 @@ class MprisManager extends _$MprisManager {
     }
   }
 
-  /// Sets the active player's volume, normalized to `0.0..1.0`.
-  void setVolume(double volume) {
-    final player = activePlayer;
-    if (player == null) {
-      return;
-    }
-    setVolumeFor(player.busName, volume);
-  }
-
-  /// Sets the volume of the player identified by [busName], normalized to
-  /// `0.0..1.0`.
-  ///
-  /// Unlike [setVolume] this does not depend on the active player, so the
-  /// Volume card can drive every player independently.
-  void setVolumeFor(String busName, double volume) {
-    final player = _players[busName];
-    if (player == null) {
-      return;
-    }
-    final clamped = volume.clamp(0.0, 1.0);
-    _updatePlayer(player.copyWith(volume: clamped));
-    unawaited(_setPlayerProperty(busName, 'Volume', DBusDouble(clamped)));
-  }
-
   /// Cycles the active player's shuffle state.
   void toggleShuffle() {
     final player = activePlayer;

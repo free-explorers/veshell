@@ -14,7 +14,6 @@ void main() {
           'PlaybackStatus': const DBusString('Playing'),
           'LoopStatus': const DBusString('Track'),
           'Shuffle': const DBusBoolean(true),
-          'Volume': const DBusDouble(0.5),
           'Rate': const DBusDouble(1),
           'Position': const DBusInt64(30000000),
           'CanGoNext': const DBusBoolean(true),
@@ -44,7 +43,6 @@ void main() {
       expect(player.playbackStatus, MprisPlaybackStatus.playing);
       expect(player.loopStatus, MprisLoopStatus.track);
       expect(player.shuffle, isTrue);
-      expect(player.volume, 0.5);
       expect(player.canSeek, isTrue);
       expect(player.canRaise, isTrue);
       expect(player.track.trackId, '/track/1');
@@ -66,7 +64,6 @@ void main() {
       expect(player.identity, 'spotify');
       expect(player.playbackStatus, MprisPlaybackStatus.stopped);
       expect(player.loopStatus, MprisLoopStatus.none);
-      expect(player.volume, 1);
       expect(player.track.title, isNull);
     });
 
@@ -90,12 +87,12 @@ void main() {
         busName: 'org.mpris.MediaPlayer2.mpd',
         playerProperties: {
           'PlaybackStatus': const DBusInt64(42),
-          'Volume': const DBusString('loud'),
+          'Rate': const DBusString('fast'),
         },
       );
 
       expect(player.playbackStatus, MprisPlaybackStatus.stopped);
-      expect(player.volume, 1);
+      expect(player.rate, 1);
     });
   });
 
@@ -103,7 +100,7 @@ void main() {
     test('applies partial changes and keeps untouched fields', () {
       const player = MprisPlayer(
         busName: 'org.mpris.MediaPlayer2.spotify',
-        volume: 0.5,
+        rate: 0.5,
         position: Duration(seconds: 10),
       );
 
@@ -115,7 +112,7 @@ void main() {
 
       expect(updated.playbackStatus, MprisPlaybackStatus.paused);
       expect(updated.shuffle, isTrue);
-      expect(updated.volume, 0.5);
+      expect(updated.rate, 0.5);
       expect(updated.position, const Duration(seconds: 20));
       expect(updated.positionUpdatedAt, DateTime.utc(2026));
     });

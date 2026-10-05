@@ -4,7 +4,6 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:shell/overview/helm/control_panel/media_player/widget/media_player_volume_control.dart';
 import 'package:shell/shared/pulseaudio/provider/default_sink.dart';
 import 'package:shell/shared/pulseaudio/provider/default_source.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_audio.dart';
@@ -72,7 +71,6 @@ class AudioControl extends HookConsumerWidget {
             ),
             if (isExpanded && openMode.value == OpenMode.input)
               const AudioInputList(),
-            const MediaPlayerVolumeControl(),
           ],
         );
       },
