@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/monitor/provider/monitor_arrangement.dart';
 import 'package:shell/monitor/provider/monitor_placement.dart';
 import 'package:shell/monitor/widget/monitor_arrangement/monitor_arrangement_canvas.dart';
@@ -33,6 +34,8 @@ void main() {
       ProviderScope(
         overrides: [monitorPlacementsProvider.overrideWithValue(_placements)],
         child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: SizedBox(
               width: 800,
@@ -87,6 +90,8 @@ void main() {
         ProviderScope(
           overrides: [monitorPlacementsProvider.overrideWithValue(_placements)],
           child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             home: Scaffold(
               body: Align(
                 alignment: Alignment.topLeft,

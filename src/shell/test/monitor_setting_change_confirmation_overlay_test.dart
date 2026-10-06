@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/settings/provider/state/monitor_setting_change_confirmation.dart';
 import 'package:shell/settings/widget/monitor_setting_change_confirmation_overlay.dart';
 
@@ -29,6 +30,8 @@ void main() {
           monitorSettingChangeConfirmationProvider.overrideWithValue(pending),
         ],
         child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: ValueListenableBuilder<bool>(
             valueListenable: showScrim,
             builder: (context, value, _) => Stack(

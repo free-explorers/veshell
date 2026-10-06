@@ -1,6 +1,7 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/helm/monitoring_panel/disk_monitoring/provider/disk_space.dart';
 
 class DiskUsageMonitoring extends HookConsumerWidget {
@@ -28,7 +29,7 @@ class DiskUsageMonitoring extends HookConsumerWidget {
                 const SizedBox(width: 16),
                 Expanded(
                   child: Text(
-                    'Disks',
+                    context.l10n.disks,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
@@ -49,15 +50,24 @@ class DiskUsageMonitoring extends HookConsumerWidget {
                         const Spacer(),
                         // bytes to smallest integere unit
                         Text(switch (disk.availableSpace) {
-                          > 1024 * 1024 * 1024 * 1024 =>
-                            '${(disk.availableSpace / 1024 / 1024 / 1024 / 1024).round()} TB',
-                          > 1024 * 1024 * 1024 =>
-                            '${(disk.availableSpace / 1024 / 1024 / 1024).round()} GB',
-                          > 1024 * 1024 =>
-                            '${(disk.availableSpace / 1024 / 1024).round()} MB',
-                          > 1024 =>
-                            '${(disk.availableSpace / 1024).round()} KB',
-                          _ => '${disk.availableSpace} B',
+                          > 1024 * 1024 * 1024 * 1024 => context.measurement(
+                            (disk.availableSpace / 1024 / 1024 / 1024 / 1024)
+                                .round(),
+                            'TB',
+                          ),
+                          > 1024 * 1024 * 1024 => context.measurement(
+                            (disk.availableSpace / 1024 / 1024 / 1024).round(),
+                            'GB',
+                          ),
+                          > 1024 * 1024 => context.measurement(
+                            (disk.availableSpace / 1024 / 1024).round(),
+                            'MB',
+                          ),
+                          > 1024 => context.measurement(
+                            (disk.availableSpace / 1024).round(),
+                            'KB',
+                          ),
+                          _ => context.measurement(disk.availableSpace, 'B'),
                         }),
                       ],
                     ),

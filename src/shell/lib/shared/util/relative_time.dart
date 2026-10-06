@@ -1,4 +1,5 @@
-import 'package:intl/intl.dart';
+import 'package:flutter/widgets.dart';
+import 'package:shell/l10n/app_localizations.dart';
 
 /// Formats [dateTime] as a short, human-readable age for a notification header.
 ///
@@ -6,12 +7,7 @@ import 'package:intl/intl.dart';
 /// - then minutes, hours, days, weeks, months, years, each pluralized and
 ///   suffixed with `ago` (e.g. `5 minutes ago`).
 ///
-/// [localeName] is a BCP-47 tag — call it with
-/// `Localizations.localeOf(context).toString()` — and is handed to `intl` so
-/// the plural category is selected for the reader's language. The English
-/// strings are still inline: when app-wide localization (ARB catalogs) lands,
-/// move them into `AppLocalizations` and read them from here; the call sites do
-/// not change.
+/// [localeName] selects the generated ARB messages and plural rules.
 ///
 /// [now] is injectable so the result is deterministic in tests.
 String formatRelativeTime(
@@ -19,38 +15,42 @@ String formatRelativeTime(
   required String localeName,
   DateTime? now,
 }) {
+  final parts = localeName.replaceAll('-', '_').split('_');
+  final l10n = lookupAppLocalizations(
+    basicLocaleListResolution([
+      Locale.fromSubtags(
+        languageCode: parts.first,
+        scriptCode: parts.length > 1 && parts[1].length == 4 ? parts[1] : null,
+        countryCode: parts.length > 1 && parts.last.length != 4
+            ? parts.last
+            : null,
+      ),
+    ], AppLocalizations.supportedLocales),
+  );
   final elapsed = (now ?? DateTime.now()).difference(dateTime);
   final seconds = elapsed.inSeconds;
 
   if (seconds < _minute) {
-    return 'Now';
+    return l10n.now;
   }
   if (seconds < _hour) {
-    return _plural(elapsed.inMinutes, 'minute', localeName);
+    return l10n.minutesAgo(elapsed.inMinutes);
   }
   if (seconds < _day) {
-    return _plural(elapsed.inHours, 'hour', localeName);
+    return l10n.hoursAgo(elapsed.inHours);
   }
   final days = elapsed.inDays;
   if (days < 7) {
-    return _plural(days, 'day', localeName);
+    return l10n.daysAgo(days);
   }
   if (days < 35) {
-    return _plural(days ~/ 7, 'week', localeName);
+    return l10n.weeksAgo(days ~/ 7);
   }
   if (days < 365) {
-    return _plural(days ~/ 30, 'month', localeName);
+    return l10n.monthsAgo(days ~/ 30);
   }
-  return _plural(days ~/ 365, 'year', localeName);
+  return l10n.yearsAgo(days ~/ 365);
 }
-
-/// `1 <unit> ago` / `N <unit>s ago`, pluralized for [localeName].
-String _plural(int count, String unit, String localeName) => Intl.plural(
-      count,
-      one: '1 $unit ago',
-      other: '$count ${unit}s ago',
-      locale: localeName,
-    );
 
 const int _minute = 60;
 const int _hour = 60 * _minute;

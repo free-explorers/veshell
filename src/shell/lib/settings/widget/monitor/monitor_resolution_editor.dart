@@ -1,5 +1,6 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/provider/monitor_by_name.dart';
 import 'package:shell/overview/widget/search/settings/setting_value_editor.dart';
@@ -43,7 +44,7 @@ class MonitorResolutionEditor extends HookConsumerWidget
             ExpandableContainer.of(context).toggle();
           },
           title: Text(
-            '${size.width.round()} x ${size.height.round()}',
+            context.l10n.dimensions(size.width.round(), size.height.round()),
           ),
         );
       },

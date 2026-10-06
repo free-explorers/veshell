@@ -3,6 +3,7 @@ import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
@@ -13,6 +14,7 @@ part 'screen_label.g.dart';
 @riverpod
 Future<String> screenLabel(Ref ref, ScreenId screenId) {
   final screenState = ref.watch(screenStateProvider(screenId));
+  final l10n = ref.watch(shellLocalizationsProvider);
   if (screenState.label != null) {
     return Future.value(screenState.label!);
   }
@@ -24,7 +26,8 @@ Future<String> screenLabel(Ref ref, ScreenId screenId) {
   for (final workspaceId in screenState.workspaceList) {
     final workspaceState = ref.watch(workspaceStateProvider(workspaceId));
     final categoryName =
-        workspaceState.forcedCategory?.name ?? workspaceState.category?.name;
+        (workspaceState.forcedCategory ?? workspaceState.category)
+            ?.localizedName(l10n);
     if (categoryName != null || workspaceState.tileableWindowList.isEmpty) {
       workspaceNames.add(Future.value(categoryName));
       continue;
@@ -43,14 +46,17 @@ Future<String> screenLabel(Ref ref, ScreenId screenId) {
           ),
     );
   }
-  return _joinLabels(workspaceNames);
+  return _joinLabels(workspaceNames, l10n.empty);
 }
 
-Future<String> _joinLabels(List<Future<String?>> workspaceNames) async {
+Future<String> _joinLabels(
+  List<Future<String?>> workspaceNames,
+  String emptyLabel,
+) async {
   final labels = await Future.wait(workspaceNames);
   final notNullLabels = labels.withNullsRemoved();
   if (notNullLabels.isEmpty) {
-    return 'Empty';
+    return emptyLabel;
   }
   return notNullLabels.join(', ');
 }

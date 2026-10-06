@@ -2,6 +2,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/capture/widget/capture_prompt_overlay.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/main.dart';
 import 'package:shell/monitor/model/monitor_configuration.serializable.dart';
 import 'package:shell/monitor/model/screen_configuration.serializable.dart';
@@ -39,6 +40,9 @@ class MonitorWidget extends HookConsumerWidget {
     // Trusted shell dialogs (Polkit) push on this monitor's navigator.
     final navigatorKey = ref.watch(navigatorKeyForViewProvider(viewId));
     return MaterialApp(
+      locale: ref.watch(shellLocaleProvider),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       navigatorKey: navigatorKey,
       theme: lightTheme,
       darkTheme: darkTheme,

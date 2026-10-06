@@ -6,6 +6,7 @@ import 'package:hooks_riverpod/experimental/persist.dart';
 import 'package:riverpod_annotation/experimental/json_persist.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_manager.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
@@ -272,7 +273,9 @@ class NotificationManager extends _$NotificationManager {
         appName: appName,
         replacesId: 0,
         appIcon: '',
-        summary: '$appName requests attention',
+        summary: ref
+            .read(shellLocalizationsProvider)
+            .requestsAttention(appName),
         actions: const [],
         hints: const NotificationHints(),
         expireTimeout: -1,
@@ -332,7 +335,10 @@ class NotificationManager extends _$NotificationManager {
         // Fall through to the window identity.
       }
     }
-    return metaWindow.title ?? metaWindow.windowClass ?? appId ?? 'Application';
+    return metaWindow.title ??
+        metaWindow.windowClass ??
+        appId ??
+        ref.read(shellLocalizationsProvider).application;
   }
 
   /// Reads a meta window state, returning `null` while it is not initialized.

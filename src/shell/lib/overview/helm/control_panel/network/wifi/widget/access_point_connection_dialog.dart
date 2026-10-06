@@ -1,5 +1,6 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/helm/control_panel/network/wifi/model/wifi_access_point.dart';
 
 class AccessPointConnectionDialog extends HookConsumerWidget {
@@ -26,29 +27,28 @@ class AccessPointConnectionDialog extends HookConsumerWidget {
               ),
               DropdownButtonFormField<String>(
                 initialValue: 'WPA-PSK',
-                items: <String>[
-                  'WPA-PSK',
-                  'WPA-EAP',
-                  'WPA2-PSK',
-                  'WPA2-EAP',
-                  'NONE',
-                ].map((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
-                  );
-                }).toList(),
+                items:
+                    <String>[
+                      'WPA-PSK',
+                      'WPA-EAP',
+                      'WPA2-PSK',
+                      'WPA2-EAP',
+                      'NONE',
+                    ].map((String value) {
+                      return DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value),
+                      );
+                    }).toList(),
                 onChanged: (String? newValue) {
                   // Handle the selected value here
                 },
-                decoration: const InputDecoration(
-                  labelText: 'Key Management',
+                decoration: InputDecoration(
+                  labelText: context.l10n.keyManagement,
                 ),
               ),
-              const TextField(
-                decoration: InputDecoration(
-                  labelText: 'Password',
-                ),
+              TextField(
+                decoration: InputDecoration(labelText: context.l10n.password),
               ),
             ],
           ),

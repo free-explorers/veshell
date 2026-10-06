@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/monitor/provider/monitor_arrangement.dart';
 
 /// Canvas that lays every connected monitor out proportionally to its logical
@@ -352,8 +353,10 @@ class MonitorArrangementTile extends StatelessWidget {
               children: [
                 Text(placement.monitorId, style: theme.textTheme.titleMedium),
                 Text(
-                  '${placement.logicalSize.width.round()} x '
-                  '${placement.logicalSize.height.round()}',
+                  context.l10n.dimensions(
+                    placement.logicalSize.width.round(),
+                    placement.logicalSize.height.round(),
+                  ),
                   style: theme.textTheme.bodySmall,
                 ),
               ],

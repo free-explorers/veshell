@@ -3,40 +3,54 @@ import 'package:uuid/uuid.dart';
 
 const _expandedEnlargePadding = 12.0;
 
-typedef ExpandableBuilder = Widget Function(
-  BuildContext context, {
-  required bool isExpanded,
-});
+typedef ExpandableBuilder =
+    Widget Function(BuildContext context, {required bool isExpanded});
 
 class ExpandableContainer extends StatefulWidget {
-  const ExpandableContainer({
-    required this.builder,
-    super.key,
-  });
+  const ExpandableContainer({required this.builder, super.key});
 
   final ExpandableBuilder builder;
   @override
   State<ExpandableContainer> createState() => ExpandableContainerState();
 
   static ExpandableContainerState of(BuildContext context) {
-    final scope =
-        context.dependOnInheritedWidgetOfExactType<_ExpandableContainerScope>();
+    final state = maybeOf(context);
     assert(() {
-      if (scope == null) {
-        throw FlutterError(
-          'No ExpandableContainer found in context',
-        );
+      if (state == null) {
+        throw FlutterError('No ExpandableContainer found in context');
       }
       return true;
     }());
-    return scope!.expandableContainerState;
+    return state!;
   }
+
+  static ExpandableContainerState? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<_ExpandableContainerScope>()
+      ?.expandableContainerState;
 }
 
 class ExpandableContainerState extends State<ExpandableContainer> {
   bool isExpanded = false;
   final String uuid = const Uuid().v4();
-  late PageRouteBuilder<LayoutBuilder>? _expandedRoute;
+  PageRouteBuilder<LayoutBuilder>? _expandedRoute;
+
+  @override
+  void dispose() {
+    final route = _expandedRoute;
+    _expandedRoute = null;
+    // Removing a route during the owner's teardown can mutate the Navigator
+    // while it is building. Close only our orphaned popup after this frame.
+    if (route != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final navigator = route.navigator;
+        if (navigator != null && navigator.mounted && route.isActive) {
+          navigator.removeRoute(route);
+        }
+      });
+    }
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return buildHeroContainer(context, isExpanded: false);
@@ -57,19 +71,18 @@ class ExpandableContainerState extends State<ExpandableContainer> {
   }
 
   void expand() {
-    if (isExpanded) return;
+    if (!mounted || isExpanded) return;
     final currentBox = context.findRenderObject()! as RenderBox;
-    final currentCoordinates = currentBox.localToGlobal(
-      Offset.zero,
-    );
+    final currentCoordinates = currentBox.localToGlobal(Offset.zero);
 
-    _expandedRoute = PageRouteBuilder<LayoutBuilder>(
+    final route = PageRouteBuilder<LayoutBuilder>(
       opaque: false,
       barrierColor: Colors.black38,
       barrierDismissible: true,
       pageBuilder: (BuildContext context, _, __) {
         return LayoutBuilder(
           builder: (context, constraints) {
+            if (!mounted) return const SizedBox.shrink();
             return Stack(
               children: [
                 Positioned(
@@ -90,21 +103,22 @@ class ExpandableContainerState extends State<ExpandableContainer> {
         );
       },
     );
-    _expandedRoute!.popped.then((_) {
+    _expandedRoute = route;
+    route.popped.then((_) {
+      if (!mounted || _expandedRoute != route) return;
       setState(() {
+        _expandedRoute = null;
         isExpanded = false;
       });
     });
-    Navigator.of(context).push(
-      _expandedRoute!,
-    );
+    Navigator.of(context).push(route);
     setState(() {
       isExpanded = true;
     });
   }
 
   void collapse() {
-    if (!isExpanded) return;
+    if (!mounted || !isExpanded) return;
     setState(() {
       isExpanded = false;
       Navigator.of(context).pop();

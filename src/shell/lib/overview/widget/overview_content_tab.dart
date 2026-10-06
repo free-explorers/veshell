@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/file_explorer/widget/file_entry_icon.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/model/overview_content.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
@@ -35,7 +36,7 @@ class OverviewContentTab extends StatelessWidget {
     return switch (content) {
       HelmOverviewContent() => _OverviewPanelTab(
         icon: const Icon(MdiIcons.shipWheel),
-        label: 'Helm',
+        label: context.l10n.helm,
         isSelected: isSelected,
         onTap: onSelect,
       ),
@@ -75,7 +76,7 @@ class _WindowContentTab extends ConsumerWidget {
     final label =
         entry?.entries[DesktopEntryKey.name.string] ??
         window.properties.title ??
-        'Unknown';
+        context.l10n.unknown;
 
     return _OverviewPanelTab(
       icon: Padding(

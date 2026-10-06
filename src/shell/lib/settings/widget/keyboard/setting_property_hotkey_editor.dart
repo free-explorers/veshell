@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/widget/search/settings/setting_value_editor.dart';
 import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/provider/settings_properties.dart';
@@ -31,10 +32,9 @@ class SettingPropertyHotkeyEditor extends HookConsumerWidget
     final pressedNum = useState<int>(0);
     final focusNode = useFocusNode();
     void updateValue(LogicalKeySet newValue) {
-      ref.read(settingsPropertiesProvider.notifier).updateProperty(
-            path,
-            property.serializeValue(newValue),
-          );
+      ref
+          .read(settingsPropertiesProvider.notifier)
+          .updateProperty(path, property.serializeValue(newValue));
       onChanged(newValue);
     }
 
@@ -75,10 +75,8 @@ class SettingPropertyHotkeyEditor extends HookConsumerWidget
         return KeyEventResult.handled;
       },
       child: keysPressed.value.isEmpty
-          ? const Text('Press any key')
-          : HotkeyViewer(
-              hotkey: LogicalKeySet.fromSet(keysPressed.value),
-            ),
+          ? Text(context.l10n.pressAnyKey)
+          : HotkeyViewer(hotkey: LogicalKeySet.fromSet(keysPressed.value)),
     );
   }
 }

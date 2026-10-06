@@ -1,6 +1,7 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/systemd/provider/session.dart';
 
 class SessionControls extends HookConsumerWidget {
@@ -20,7 +21,7 @@ class SessionControls extends HookConsumerWidget {
           children: [
             if (availableActions.contains(SessionControlAction.lock))
               Tooltip(
-                message: 'Lock',
+                message: context.l10n.lock,
                 preferBelow: true,
                 verticalOffset: 32,
                 child: IconButton(
@@ -35,7 +36,7 @@ class SessionControls extends HookConsumerWidget {
               ),
             if (availableActions.contains(SessionControlAction.logout))
               Tooltip(
-                message: 'Log out',
+                message: context.l10n.logOut,
                 preferBelow: true,
                 verticalOffset: 32,
                 child: IconButton(
@@ -50,7 +51,7 @@ class SessionControls extends HookConsumerWidget {
               ),
             if (availableActions.contains(SessionControlAction.sleep))
               Tooltip(
-                message: 'Sleep',
+                message: context.l10n.sleep,
                 preferBelow: true,
                 verticalOffset: 32,
                 child: IconButton(
@@ -65,7 +66,7 @@ class SessionControls extends HookConsumerWidget {
               ),
             if (availableActions.contains(SessionControlAction.hibernate))
               Tooltip(
-                message: 'Hibernate',
+                message: context.l10n.hibernate,
                 preferBelow: true,
                 verticalOffset: 32,
                 child: IconButton(
@@ -80,12 +81,12 @@ class SessionControls extends HookConsumerWidget {
                       await showDialog<void>(
                         context: context,
                         builder: (context) => AlertDialog(
-                          title: const Text('Unable to hibernate'),
+                          title: Text(context.l10n.unableToHibernate),
                           content: Text('$message'),
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('OK'),
+                              child: Text(context.l10n.ok),
                             ),
                           ],
                         ),
@@ -100,7 +101,7 @@ class SessionControls extends HookConsumerWidget {
               ),
             if (availableActions.contains(SessionControlAction.reboot))
               Tooltip(
-                message: 'Reboot',
+                message: context.l10n.reboot,
                 preferBelow: true,
                 verticalOffset: 32,
                 child: IconButton(
@@ -115,7 +116,7 @@ class SessionControls extends HookConsumerWidget {
               ),
             if (availableActions.contains(SessionControlAction.shutdown))
               Tooltip(
-                message: 'Shut down',
+                message: context.l10n.shutDown,
                 preferBelow: true,
                 verticalOffset: 32,
                 child: IconButton(

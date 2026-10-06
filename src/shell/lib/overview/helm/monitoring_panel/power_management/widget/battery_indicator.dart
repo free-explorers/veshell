@@ -2,6 +2,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/helm/monitoring_panel/disk_monitoring/widget/disk_usage_monitoring.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_battery_device.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_client.dart';
@@ -39,7 +40,7 @@ class PowerIndicator extends HookConsumerWidget {
                 const SizedBox(width: 16),
                 Expanded(
                   child: Text(
-                    'Power',
+                    context.l10n.power,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
@@ -92,7 +93,7 @@ class SystemBatteryIndicator extends HookWidget {
       builder: (context, snapshot) {
         return BatteryIndicator(
           icon: icon,
-          label: 'Battery',
+          label: context.l10n.battery,
           percentage: device.percentage,
         );
       },
@@ -221,7 +222,7 @@ class BatteryIndicator extends StatelessWidget {
                       ),
                     ),
                     // bytes to smallest integere unit
-                    Text('$percentage%'),
+                    Text(context.l10n.percentValue(percentage)),
                   ],
                 ),
                 SliderTheme(

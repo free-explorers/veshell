@@ -2,6 +2,7 @@ import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:path/path.dart' as path;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/provider/desktop_entries.dart';
+import 'package:shell/l10n/l10n.dart';
 
 part 'localized_desktop_entries.g.dart';
 
@@ -9,11 +10,24 @@ part 'localized_desktop_entries.g.dart';
 Future<Map<String, LocalizedDesktopEntry>> localizedDesktopEntries(
   Ref ref,
 ) async {
+  final locales = ref.watch(systemLocalesProvider);
+  final locale = locales.isEmpty ? null : locales.first;
   final desktopEntries = await ref.watch(
     installedDesktopEntriesProvider.future,
   );
   return desktopEntries.map(
-    (key, value) => MapEntry(key, value.localize(lang: 'en')),
+    (key, value) => MapEntry(
+      key,
+      value.localize(
+        lang: locale?.languageCode ?? 'en',
+        country: locale?.countryCode,
+        modifier: switch (locale?.scriptCode) {
+          'Latn' => 'latin',
+          'Cyrl' => 'cyrillic',
+          _ => null,
+        },
+      ),
+    ),
   );
 }
 

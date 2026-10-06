@@ -16,6 +16,7 @@ pub fn build_shell(
     println!("cargo:rerun-if-changed=extra/build/shell.rs");
     println!("cargo:rerun-if-changed=src/shell/pubspec.yaml");
     println!("cargo:rerun-if-changed=src/shell/pubspec.lock");
+    println!("cargo:rerun-if-changed=src/shell/l10n.yaml");
     println!("cargo:rerun-if-changed=src/shell/assets");
     println!("cargo:rerun-if-changed=src/shell/lib");
     println!("cargo:rerun-if-env-changed=VESHELL_POLKIT_HELPER_PATH");

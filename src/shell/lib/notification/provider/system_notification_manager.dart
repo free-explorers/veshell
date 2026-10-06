@@ -1,4 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/notification/model/dbus_notification.serializable.dart';
 import 'package:shell/notification/model/notification.serializable.dart';
 import 'package:shell/notification/model/notification_hints.serializable.dart';
@@ -14,10 +15,6 @@ part 'system_notification_manager.g.dart';
 /// to replace an earlier popup of the same kind instead of stacking (a held
 /// volume key must not pile up one popup per step).
 enum SystemNotificationKind { volume, brightness, batteryLow, batteryCritical }
-
-/// App name shown on a system notification. There is no D-Bus sender, so the
-/// real name would not resolve to an icon or an application.
-const systemNotificationAppName = 'System';
 
 /// How long a volume/brightness OSD stays on screen.
 const systemOsdDuration = Duration(seconds: 2);
@@ -67,8 +64,10 @@ class SystemNotificationManager extends _$SystemNotificationManager {
     final percent = (volume.clamp(0.0, 1.0) * 100).round();
     _show(
       SystemNotificationKind.volume,
-      summary: 'Volume',
-      body: muted ? 'Muted' : '$percent%',
+      summary: ref.read(shellLocalizationsProvider).volume,
+      body: muted
+          ? ref.read(shellLocalizationsProvider).muted
+          : ref.read(shellLocalizationsProvider).percentValue(percent),
       category: muted ? systemVolumeMutedCategory : systemVolumeCategory,
       value: muted ? 0 : percent,
       timeout: systemOsdDuration,
@@ -80,8 +79,8 @@ class SystemNotificationManager extends _$SystemNotificationManager {
     final percent = (fraction.clamp(0.0, 1.0) * 100).round();
     _show(
       SystemNotificationKind.brightness,
-      summary: 'Brightness',
-      body: '$percent%',
+      summary: ref.read(shellLocalizationsProvider).brightness,
+      body: ref.read(shellLocalizationsProvider).percentValue(percent),
       category: systemBrightnessCategory,
       value: percent,
       timeout: systemOsdDuration,
@@ -95,8 +94,10 @@ class SystemNotificationManager extends _$SystemNotificationManager {
       isCritical
           ? SystemNotificationKind.batteryCritical
           : SystemNotificationKind.batteryLow,
-      summary: isCritical ? 'Battery critically low' : 'Battery low',
-      body: '$percent% remaining',
+      summary: isCritical
+          ? ref.read(shellLocalizationsProvider).batteryCritical
+          : ref.read(shellLocalizationsProvider).batteryLow,
+      body: ref.read(shellLocalizationsProvider).batteryRemaining(percent),
       category: systemBatteryCategory,
       value: percent,
       timeout: isCritical ? null : systemBatteryLowDuration,
@@ -129,7 +130,7 @@ class SystemNotificationManager extends _$SystemNotificationManager {
       appId: null,
       dbusNotification: DbusNotification(
         pid: null,
-        appName: systemNotificationAppName,
+        appName: ref.read(shellLocalizationsProvider).system,
         replacesId: 0,
         appIcon: '',
         summary: summary,

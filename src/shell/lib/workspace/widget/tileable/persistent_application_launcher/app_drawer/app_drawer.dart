@@ -1,6 +1,7 @@
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/app_drawer/app_grid.dart';
 
 class AppDrawer extends HookConsumerWidget {
@@ -38,9 +39,7 @@ class AppDrawer extends HookConsumerWidget {
 class _AppDrawerTextField extends HookConsumerWidget {
   const _AppDrawerTextField({required this.onSearchTextChange});
 
-  final void Function(
-    String searchText,
-  ) onSearchTextChange;
+  final void Function(String searchText) onSearchTextChange;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -52,16 +51,13 @@ class _AppDrawerTextField extends HookConsumerWidget {
       },
     );
 
-    useEffect(
-      () {
-        searchController.addListener(onListener);
+    useEffect(() {
+      searchController.addListener(onListener);
 
-        return () {
-          searchController.removeListener(onListener);
-        };
-      },
-      [searchController],
-    );
+      return () {
+        searchController.removeListener(onListener);
+      };
+    }, [searchController]);
 
     return TextField(
       controller: searchController,
@@ -72,7 +68,7 @@ class _AppDrawerTextField extends HookConsumerWidget {
           padding: EdgeInsets.fromLTRB(16, 0, 16, 0),
           child: Icon(Icons.search),
         ),
-        hintText: 'Search apps',
+        hintText: context.l10n.searchApps,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(24),
           borderSide: BorderSide.none,

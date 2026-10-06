@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/workspace/model/workspace.serializable.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
@@ -77,6 +78,8 @@ void main() {
           workspaceStateProvider('destination').overrideWith(() => workspace),
         ],
         child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: Row(
               children: [

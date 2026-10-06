@@ -1,6 +1,7 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/helm/monitoring_panel/memory_monitoring/provider/memory_chart.dart';
 import 'package:shell/overview/helm/monitoring_panel/memory_monitoring/provider/memory_stats.dart';
 import 'package:shell/overview/helm/monitoring_panel/memory_monitoring/provider/processes_memory_stats.dart';
@@ -17,8 +18,8 @@ class MemoryMonitoringWidget extends ConsumerWidget {
     final spots = ref.watch(memoryChartProvider);
     return MonitoringCard(
       icon: MdiIcons.memory,
-      title: 'Memory',
-      badge: '${stats.memoryUsage}%',
+      title: context.l10n.memory,
+      badge: context.l10n.percentValue(stats.memoryUsage),
       series: [
         MonitoringSeries(
           spots: spots,

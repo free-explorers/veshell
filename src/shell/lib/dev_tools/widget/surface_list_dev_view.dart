@@ -1,6 +1,7 @@
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 
 enum SurfaceType { xdgToplevel, x11Surface }
 
@@ -21,8 +22,10 @@ class SurfaceListDevView extends HookConsumerWidget {
                     (e) => ListTile(
                       selected: selectedCategory.value == e,
                       title: switch (e) {
-                        SurfaceType.xdgToplevel => const Text('XDG Toplevel'),
-                        SurfaceType.x11Surface => const Text('X11 Surface'),
+                        SurfaceType.xdgToplevel => Text(
+                          context.l10n.xdgToplevel,
+                        ),
+                        SurfaceType.x11Surface => Text(context.l10n.x11Surface),
                       },
                       onTap: () => selectedCategory.value = e,
                     ),
@@ -69,14 +72,14 @@ class SurfaceListDevView extends HookConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('ID: $surfaceId'),
-                    Text('Title: ${properties.title}'),
-                    Text('AppId: ${properties.appId}'),
-                    Text('Pid: ${properties.pid}'),
-                    Text('Mapped: ${surfaceState.mapped}'),
-                    Text('Committed: ${surfaceState.committed}'),
-                    Text('Geometry: ${surfaceState.geometry}'),
-                    Text('Matched Window: $matchedWindowId'),
+                    Text(context.l10n.debugId('$surfaceId')),
+                    Text(context.l10n.debugTitle('${properties.title}')),
+                    Text(context.l10n.debugAppId('${properties.appId}')),
+                    Text(context.l10n.debugPid('${properties.pid}')),
+                    Text(context.l10n.debugMapped('${surfaceState.mapped}')),
+                    Text(context.l10n.debugCommitted('${surfaceState.committed}')),
+                    Text(context.l10n.debugGeometry('${surfaceState.geometry}')),
+                    Text(context.l10n.debugMatchedWindow('$matchedWindowId')),
                   ],
                 ),
               ),
@@ -132,19 +135,19 @@ class SurfaceListDevView extends HookConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('ID: $x11SurfaceId'),
-                    Text('Title: ${properties.title}'),
-                    Text('AppId: ${properties.appId}'),
-                    Text('Pid: ${properties.pid}'),
-                    Text('Mapped: ${x11SurfaceState.mapped}'),
-                    Text('Geometry: ${x11SurfaceState.geometry}'),
-                    Text('Associated WlSurface: ${x11SurfaceState.surfaceId}'),
+                    Text(context.l10n.debugId('$x11SurfaceId')),
+                    Text(context.l10n.debugTitle('${properties.title}')),
+                    Text(context.l10n.debugAppId('${properties.appId}')),
+                    Text(context.l10n.debugPid('${properties.pid}')),
+                    Text(context.l10n.debugMapped('${x11SurfaceState.mapped}')),
+                    Text(context.l10n.debugGeometry('${x11SurfaceState.geometry}')),
+                    Text(context.l10n.debugAssociatedSurface('${x11SurfaceState.surfaceId}')),
                     Text(
-                      'Override Redirect: ${x11SurfaceState.overrideRedirect}',
+                      context.l10n.debugOverrideRedirect('${x11SurfaceState.overrideRedirect}'),
                     ),
-                    Text('Parent: ${x11SurfaceState.parent}'),
-                    Text('Children: ${x11SurfaceState.children.length}'),
-                    Text('Matched Window: $matchedWindowId'),
+                    Text(context.l10n.debugParent('${x11SurfaceState.parent}')),
+                    Text(context.l10n.debugChildren('${x11SurfaceState.children.length}')),
+                    Text(context.l10n.debugMatchedWindow('$matchedWindowId')),
                   ],
                 ),
               ),

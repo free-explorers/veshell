@@ -7,6 +7,7 @@ import 'package:shell/application/provider/logs_for_pid.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/capture/provider/recording_workspaces.dart';
 import 'package:shell/capture/provider/screen_cast_indicator.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
@@ -172,7 +173,7 @@ class PersistentWindowTileable extends Tileable {
                       const SizedBox(width: 16),
                       Flexible(
                         child: Text(
-                          title ?? 'Unknown',
+                          title ?? context.l10n.unknown,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -183,7 +184,7 @@ class PersistentWindowTileable extends Tileable {
                           child: IconButton(
                             visualDensity: VisualDensity.compact,
                             color: Colors.red,
-                            tooltip: 'Stop recording',
+                            tooltip: context.l10n.stopRecording,
                             onPressed: () {
                               for (final session in recordingSessions) {
                                 ref
@@ -235,7 +236,7 @@ class PersistentWindowTileable extends Tileable {
           }
         },
         leadingIcon: const Icon(MdiIcons.headCog),
-        child: const Text('Show execution logs'),
+        child: Text(context.l10n.showExecutionLogs),
       ),
       Consumer(
         builder: (context, subref, child) {
@@ -270,11 +271,16 @@ class PersistentWindowTileable extends Tileable {
                         ? Theme.of(context).colorScheme.primary
                         : null,
                   ),
-                  child: Text(e.name),
+                  child: Text(switch (e) {
+                    DisplayMode.maximized => context.l10n.maximized,
+                    DisplayMode.game => context.l10n.game,
+                    DisplayMode.fullscreen => context.l10n.fullscreen,
+                    DisplayMode.floating => context.l10n.floating,
+                  }),
                 ),
               ),
             ],
-            child: const Text('Display mode'),
+            child: Text(context.l10n.displayMode),
           );
         },
       ),
@@ -285,7 +291,7 @@ class PersistentWindowTileable extends Tileable {
               .closeWindow();
         },
         leadingIcon: const Icon(MdiIcons.close),
-        child: const Text('Close'),
+        child: Text(context.l10n.close),
       ),
     ];
   }

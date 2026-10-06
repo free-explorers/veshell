@@ -2,6 +2,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/widget/app_icon.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/helm/control_panel/media_player/widget/mpris_artwork.dart';
 import 'package:shell/overview/helm/control_panel/media_player/widget/mpris_seek_bar.dart';
 import 'package:shell/shared/mpris/model/mpris_loop_status.dart';
@@ -89,7 +90,7 @@ class _MediaHeader extends ConsumerWidget {
         const SizedBox(width: 16),
         Expanded(
           child: Text(
-            identity.isEmpty ? 'Media' : identity,
+            identity.isEmpty ? context.l10n.media : identity,
             style: theme.textTheme.titleLarge,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -97,14 +98,14 @@ class _MediaHeader extends ConsumerWidget {
         ),
         if (canRaise)
           IconButton(
-            tooltip: 'Bring to front',
+            tooltip: context.l10n.bringToFront,
             visualDensity: VisualDensity.compact,
             onPressed: () => ref.read(mprisManagerProvider.notifier).raise(),
             icon: const Icon(MdiIcons.openInNew),
           ),
         if (players.length > 1)
           PopupMenuButton<String>(
-            tooltip: 'Switch player',
+            tooltip: context.l10n.switchPlayer,
             icon: const Icon(MdiIcons.playlistMusic),
             initialValue: player.busName,
             onSelected: (busName) =>
@@ -162,7 +163,7 @@ class _NowPlaying extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                track.displayTitle ?? 'Nothing playing',
+                track.displayTitle ?? context.l10n.nothingPlaying,
                 style: theme.textTheme.titleMedium,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -201,33 +202,33 @@ class _TransportControls extends ConsumerWidget {
       children: [
         if (enabled)
           IconButton(
-            tooltip: 'Shuffle',
+            tooltip: context.l10n.shuffle,
             isSelected: player.shuffle,
             onPressed: notifier.toggleShuffle,
             icon: const Icon(MdiIcons.shuffle),
           ),
         IconButton(
-          tooltip: 'Previous',
+          tooltip: context.l10n.previous,
           onPressed: enabled && player.canGoPrevious ? notifier.previous : null,
           icon: const Icon(MdiIcons.skipPrevious),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: IconButton.filled(
-            tooltip: player.isPlaying ? 'Pause' : 'Play',
+            tooltip: player.isPlaying ? context.l10n.pause : context.l10n.play,
             iconSize: 32,
             onPressed: canToggle ? notifier.playPause : null,
             icon: Icon(player.isPlaying ? MdiIcons.pause : MdiIcons.play),
           ),
         ),
         IconButton(
-          tooltip: 'Next',
+          tooltip: context.l10n.next,
           onPressed: enabled && player.canGoNext ? notifier.next : null,
           icon: const Icon(MdiIcons.skipNext),
         ),
         if (enabled)
           IconButton(
-            tooltip: 'Repeat',
+            tooltip: context.l10n.repeat,
             isSelected: player.loopStatus != MprisLoopStatus.none,
             onPressed: notifier.cycleLoopStatus,
             icon: Icon(switch (player.loopStatus) {

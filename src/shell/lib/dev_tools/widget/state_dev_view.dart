@@ -1,6 +1,7 @@
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/widget/meta_surface.dart';
@@ -18,10 +19,7 @@ class StateDevView extends HookConsumerWidget {
     return const SingleChildScrollView(
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          MonitorStateViewer(),
-          Divider(),
-        ],
+        children: [MonitorStateViewer(), Divider()],
       ),
     );
   }
@@ -33,7 +31,7 @@ class MonitorStateViewer extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final monitorList = ref.watch(connectedMonitorListProvider);
     return DataContainer(
-      title: 'Monitors',
+      title: context.l10n.monitors,
       children: [
         ...monitorList.map(
           (e) => ExpandableDataRow(
@@ -75,7 +73,7 @@ class MonitorStateViewer extends HookConsumerWidget {
                 ),
                 ExpandableDataRow(
                   isExpanded: true,
-                  property: 'Screens',
+                  property: context.l10n.screens,
                   builder: (context) {
                     return Consumer(
                       builder: (context, ref, child) {
@@ -130,19 +128,18 @@ class ScreenStateViewer extends HookConsumerWidget {
           property: 'workspaceList [${screenState.workspaceList.length}]',
           builder: (context) {
             return DataContainer(
-              children: screenState.workspaceList.map(
-                (e) {
-                  final isSelected = screenState.workspaceList.indexOf(e) ==
-                      screenState.selectedIndex;
-                  return ExpandableDataRow(
-                    isExpanded: isSelected,
-                    property: "$e ${isSelected ? '- Selected' : ''}",
-                    builder: (context) => WorkspaceStateViewer(
-                      workspaceId: e,
-                    ),
-                  );
-                },
-              ).toList(),
+              children: screenState.workspaceList.map((e) {
+                final isSelected =
+                    screenState.workspaceList.indexOf(e) ==
+                    screenState.selectedIndex;
+                return ExpandableDataRow(
+                  isExpanded: isSelected,
+                  property: isSelected
+                      ? context.l10n.debugSelectedItem('$e')
+                      : '$e',
+                  builder: (context) => WorkspaceStateViewer(workspaceId: e),
+                );
+              }).toList(),
             );
           },
         ),
@@ -183,12 +180,12 @@ class WorkspaceStateViewer extends HookConsumerWidget {
             children: workspaceState.tileableWindowList
                 .map(
                   (e) => ExpandableDataRow(
-                    isExpanded: workspaceState.tileableWindowList.indexOf(e) ==
+                    isExpanded:
+                        workspaceState.tileableWindowList.indexOf(e) ==
                         workspaceState.selectedIndex,
                     property: e.toString(),
-                    builder: (context) => PersistentWindowStateViewer(
-                      windowId: e,
-                    ),
+                    builder: (context) =>
+                        PersistentWindowStateViewer(windowId: e),
                   ),
                 )
                 .toList(),
@@ -204,8 +201,9 @@ class PersistentWindowStateViewer extends HookConsumerWidget {
   final PersistentWindowId windowId;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final persistentWindowState =
-        ref.watch(persistentWindowStateProvider(windowId));
+    final persistentWindowState = ref.watch(
+      persistentWindowStateProvider(windowId),
+    );
     return DataContainer(
       children: [
         ExpandableDataRow(
@@ -257,26 +255,11 @@ class MetaWindowStateViewer extends HookConsumerWidget {
     final metaWindowState = ref.watch(metaWindowStateProvider(metaWindowId));
     return DataContainer(
       children: [
-        DataRow(
-          value: metaWindowState.title,
-          property: 'title',
-        ),
-        DataRow(
-          value: metaWindowState.appId,
-          property: 'appId',
-        ),
-        DataRow(
-          value: metaWindowState.windowClass,
-          property: 'windowClass',
-        ),
-        DataRow(
-          value: metaWindowState.startupId,
-          property: 'startupId',
-        ),
-        DataRow(
-          value: metaWindowState.pid.toString(),
-          property: 'pid',
-        ),
+        DataRow(value: metaWindowState.title, property: 'title'),
+        DataRow(value: metaWindowState.appId, property: 'appId'),
+        DataRow(value: metaWindowState.windowClass, property: 'windowClass'),
+        DataRow(value: metaWindowState.startupId, property: 'startupId'),
+        DataRow(value: metaWindowState.pid.toString(), property: 'pid'),
         DataRow(
           value: metaWindowState.geometry?.toString(),
           property: 'geometry',
@@ -313,10 +296,7 @@ class DataContainer extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         border: Border(
-          left: BorderSide(
-            color: Theme.of(context).hoverColor,
-            width: 2,
-          ),
+          left: BorderSide(color: Theme.of(context).hoverColor, width: 2),
         ),
       ),
       child: Column(
@@ -330,9 +310,7 @@ class DataContainer extends StatelessWidget {
               return children[index];
             },
             separatorBuilder: (context, index) {
-              return const Divider(
-                height: 2,
-              );
+              return const Divider(height: 2);
             },
             itemCount: children.length,
           ),
@@ -353,13 +331,9 @@ class DataRow extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const SizedBox(
-            width: 24,
-          ),
+          const SizedBox(width: 24),
           SizedBox(width: 100, child: Text(property)),
-          const SizedBox(
-            width: 24,
-          ),
+          const SizedBox(width: 24),
           Text(value ?? 'null'),
         ],
       ),
@@ -403,9 +377,7 @@ class ExpandableDataRow extends HookWidget {
           ),
         ),
         if (isExpandedState.value) ...[
-          const Divider(
-            height: 2,
-          ),
+          const Divider(height: 2),
           Padding(
             padding: const EdgeInsets.only(left: 10),
             child: Builder(builder: builder),

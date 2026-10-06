@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart' hide Notification;
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/notification/model/dbus_notification.serializable.dart';
 import 'package:shell/notification/model/notification.serializable.dart';
 import 'package:shell/notification/model/notification_hints.serializable.dart';
@@ -23,6 +24,8 @@ Notification _notification({List<String> actions = const []}) => Notification(
 );
 
 Widget _wrap(Widget child) => MaterialApp(
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
   home: Scaffold(body: Material(child: child)),
 );
 
@@ -44,8 +47,9 @@ void main() {
     expect(opened, isTrue);
   });
 
-  testWidgets('body tap opens; the default action is left to the caller',
-      (tester) async {
+  testWidgets('body tap opens; the default action is left to the caller', (
+    tester,
+  ) async {
     var opened = false;
     String? invoked;
     await tester.pumpWidget(

@@ -2,6 +2,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/monitor/model/monitor_configuration.serializable.dart';
 import 'package:shell/monitor/provider/monitor_configuration_state.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
@@ -38,7 +39,7 @@ class ScreenConfigurationMenu extends HookConsumerWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Screens',
+                  context.l10n.screens,
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
@@ -160,7 +161,7 @@ class ScreenPicker extends HookConsumerWidget {
         if (index == screenList.length) {
           return ListTile(
             leading: const Icon(MdiIcons.plus),
-            title: const Text('Create new screen'),
+            title: Text(context.l10n.createNewScreen),
             onTap: () {
               final newScreenId = ref
                   .read(screenManagerProvider.notifier)
@@ -217,9 +218,9 @@ class ScreenListTile extends HookConsumerWidget {
         itemBuilder: (context) {
           return [
             PopupMenuItem<void>(
-              child: const ListTile(
-                leading: Icon(MdiIcons.pencil),
-                title: Text('Rename'),
+              child: ListTile(
+                leading: const Icon(MdiIcons.pencil),
+                title: Text(context.l10n.rename),
               ),
               onTap: () async {
                 final newLabel = await showDialog<String?>(
@@ -232,9 +233,9 @@ class ScreenListTile extends HookConsumerWidget {
               },
             ),
             PopupMenuItem<void>(
-              child: const ListTile(
+              child: ListTile(
                 leading: Icon(MdiIcons.delete),
-                title: Text('Delete'),
+                title: Text(context.l10n.delete),
               ),
               onTap: () {
                 final monitorId = ref.read(monitorForScreenProvider(screenId));
@@ -268,7 +269,7 @@ class RenameScreenDialog extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final newLabel = useState<String?>(null);
     return AlertDialog(
-      title: const Text('Rename Screen'),
+      title: Text(context.l10n.renameScreen),
       content: TextField(
         onSubmitted: (value) => Navigator.of(context).pop(value),
         autofocus: true,
@@ -281,13 +282,13 @@ class RenameScreenDialog extends HookConsumerWidget {
           onPressed: () {
             Navigator.of(context).pop();
           },
-          child: const Text('Cancel'),
+          child: Text(context.l10n.cancel),
         ),
         TextButton(
           onPressed: () {
             Navigator.of(context).pop(newLabel.value);
           },
-          child: const Text('Save'),
+          child: Text(context.l10n.save),
         ),
       ],
     );

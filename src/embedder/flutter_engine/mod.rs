@@ -104,6 +104,7 @@ use smithay::backend::input::KeyState;
 mod callbacks;
 pub mod compositor;
 pub mod embedder;
+mod locales;
 mod mouse_cursor;
 pub mod platform_channel_callbacks;
 pub mod platform_channels;
@@ -515,6 +516,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                 if result != 0 {
                     return Err(format!("Could not run the Flutter engine, error {result}").into());
                 }
+                locales::update_engine_locales(flutter_engine)?;
 
                 Ok((this, embedder_channels))
             })

@@ -1,4 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/shared/provider/dbus_client.dart';
 import 'package:ubuntu_session/ubuntu_session.dart';
 
@@ -89,7 +90,7 @@ class Session extends _$Session {
     final capability = await state.canHibernate();
     if (capability != 'yes' && capability != 'challenge') {
       throw StateError(
-        'Hibernation is unavailable on this system (logind: $capability).',
+        ref.read(shellLocalizationsProvider).hibernationUnavailable(capability),
       );
     }
     await state.hibernate(true);

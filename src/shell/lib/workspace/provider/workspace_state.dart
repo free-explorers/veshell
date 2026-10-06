@@ -9,6 +9,7 @@ import 'package:hooks_riverpod/misc.dart';
 import 'package:riverpod_annotation/experimental/json_persist.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/shared/provider/persistent_storage_state.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
@@ -41,6 +42,26 @@ enum WorkspaceCategory {
 
 enum MeaningfulApplicationCategory { IDE, WebBrowser, Player }
 
+extension WorkspaceCategoryLocalization on WorkspaceCategory {
+  String localizedName(AppLocalizations l10n) => switch (this) {
+    WorkspaceCategory.Game => l10n.game,
+    WorkspaceCategory.Development => l10n.development,
+    WorkspaceCategory.Video => l10n.video,
+    WorkspaceCategory.Audio => l10n.audio,
+    WorkspaceCategory.AudioVideo => l10n.audioVideo,
+    WorkspaceCategory.Graphics => l10n.graphics,
+    WorkspaceCategory.Office => l10n.office,
+    WorkspaceCategory.Science => l10n.science,
+    WorkspaceCategory.Education => l10n.education,
+    WorkspaceCategory.FileManager => l10n.fileManager,
+    WorkspaceCategory.InstantMessaging => l10n.instantMessaging,
+    WorkspaceCategory.Network => l10n.network,
+    WorkspaceCategory.Settings => l10n.settings,
+    WorkspaceCategory.System => l10n.system,
+    WorkspaceCategory.Utility => l10n.utility,
+  };
+}
+
 /// Workspace provider
 @riverpod
 @JsonPersist()
@@ -57,19 +78,19 @@ class WorkspaceState extends _$WorkspaceState {
     );
 
     return stateOrNull?.copyWith(
-          tileableWindowList: stateOrNull!.tileableWindowList.where(
-            (tileableId) {
-              try {
-                ref.read(persistentWindowStateProvider(tileableId));
-                return true;
-              } catch (e) {
-                print(
-                  'Failed to load persistentWindowsState while restoring workspace state',
-                );
-                return false;
-              }
-            },
-          ).toIList(),
+          tileableWindowList: stateOrNull!.tileableWindowList.where((
+            tileableId,
+          ) {
+            try {
+              ref.read(persistentWindowStateProvider(tileableId));
+              return true;
+            } catch (e) {
+              print(
+                'Failed to load persistentWindowsState while restoring workspace state',
+              );
+              return false;
+            }
+          }).toIList(),
         ) ??
         Workspace(
           workspaceId: workspaceId,
@@ -213,15 +234,11 @@ class WorkspaceState extends _$WorkspaceState {
   }
 
   void setSelectedIndex(int index) {
-    state = state.copyWith(
-      selectedIndex: index,
-    );
+    state = state.copyWith(selectedIndex: index);
   }
 
   void setVisibleLength(int length) {
-    state = state.copyWith(
-      visibleLength: length,
-    );
+    state = state.copyWith(visibleLength: length);
   }
 
   Future<WorkspaceCategory?> _determineCategory(

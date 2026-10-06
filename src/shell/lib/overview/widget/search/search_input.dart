@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/theme//provider/theme.dart';
 
 class SearchInput extends StatelessWidget {
@@ -28,7 +29,7 @@ class SearchInput extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(12, 12, 32, 12),
           child: Icon(Icons.search, size: 28),
         ),
-        hintText: 'Search',
+        hintText: context.l10n.search,
         fillColor: Theme.of(context).colorScheme.surface,
         filled: true,
         border: const OutlineInputBorder(

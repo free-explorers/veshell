@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
@@ -9,6 +10,7 @@ import 'package:shell/application/util/normalizing_svg_file_loader.dart';
 import 'package:shell/file_explorer/model/directory_path.dart';
 import 'package:shell/file_preview/model/file_preview.dart';
 import 'package:shell/file_preview/provider/file_preview.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/theme/provider/theme.dart';
 
 /// Renders the preview of [path] in the overview's content slot.
@@ -66,8 +68,7 @@ class _TextPreview extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (isTruncated)
-          const _InfoBar(label: 'Preview truncated to the first 256 KiB'),
+        if (isTruncated) _InfoBar(label: context.l10n.previewTruncated),
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -97,7 +98,7 @@ class _ImagePreview extends StatelessWidget {
           fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) => _MessagePreview(
             icon: MdiIcons.imageBrokenVariant,
-            message: 'Cannot decode ${p.basename(path)}',
+            message: context.l10n.cannotDecodeFile(p.basename(path)),
           ),
         ),
       ),
@@ -130,7 +131,7 @@ class _BinaryPreview extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _InfoBar(label: 'Binary · ${_formatBytes(size)}'),
+        _InfoBar(label: context.l10n.binarySize(_formatBytes(context, size))),
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -162,9 +163,13 @@ class _MetadataPreview extends StatelessWidget {
       icon: MdiIcons.fileOutline,
       title: name,
       lines: [
-        _formatBytes(size),
-        'Modified ${_formatModified(modified)}',
-        'No inline preview for this type',
+        _formatBytes(context, size),
+        context.l10n.modifiedAt(
+          DateFormat.yMMMd(
+            context.l10n.localeName,
+          ).add_jm().format(modified.toLocal()),
+        ),
+        context.l10n.noInlinePreview,
       ],
     );
   }
@@ -182,8 +187,11 @@ class _DirectoryPreview extends StatelessWidget {
       icon: MdiIcons.folderOutline,
       title: name,
       lines: [
-        if (entryCount >= 1000) '1000+ items' else '$entryCount items',
-        'Double click or Super+D to open',
+        if (entryCount >= 1000)
+          context.l10n.manyItems
+        else
+          context.l10n.itemCount(entryCount),
+        context.l10n.openDirectoryHint,
       ],
     );
   }
@@ -261,7 +269,7 @@ class _InfoBar extends StatelessWidget {
   }
 }
 
-String _formatBytes(int bytes) {
+String _formatBytes(BuildContext context, int bytes) {
   const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
   var value = bytes.toDouble();
   var unitIndex = 0;
@@ -270,8 +278,5 @@ String _formatBytes(int bytes) {
     unitIndex++;
   }
   final digits = value >= 10 || unitIndex == 0 ? 0 : 1;
-  return '${value.toStringAsFixed(digits)} ${units[unitIndex]}';
+  return context.measurement(value, units[unitIndex], decimalDigits: digits);
 }
-
-String _formatModified(DateTime modified) =>
-    modified.toLocal().toString().split('.').first;

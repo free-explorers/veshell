@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:ui';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/settings/model/types/monitor_setting.serializable.dart';
 import 'package:shell/settings/provider/state/monitor_setting_change_confirmation.dart';
@@ -43,7 +44,7 @@ class MonitorSettingState extends _$MonitorSettingState {
   }
 
   void setMode(Mode mode) {
-    _applyGuarded((current) => current.copyWith(mode: mode), 'Resolution');
+    _applyGuarded((current) => current.copyWith(mode: mode), 'mode');
   }
 
   void setLocation(Offset location) {
@@ -53,7 +54,7 @@ class MonitorSettingState extends _$MonitorSettingState {
   void setTransform(MonitorTransform transform) {
     _applyGuarded(
       (current) => current.copyWith(transform: transform),
-      'Transform',
+      'transform',
     );
   }
 
@@ -108,11 +109,18 @@ class MonitorSettingState extends _$MonitorSettingState {
     MonitorSetting next,
     String description,
   ) {
+    final l10n = ref.read(shellLocalizationsProvider);
+    final setting = switch (description) {
+      'mode' => l10n.resolution,
+      'fractionnalScale' => l10n.fractionalScale,
+      'transform' => l10n.transform,
+      _ => description,
+    };
     ref
         .read(monitorSettingChangeConfirmationProvider.notifier)
         .propose(
           monitorId: monitorId,
-          description: '$description of $monitorId',
+          description: l10n.monitorSettingChanged(setting, monitorId),
           previous: previous.toJson(),
           next: next.toJson(),
         );
