@@ -36,7 +36,7 @@ use smithay::desktop::utils::OutputPresentationFeedback;
 use smithay::input::pointer::CursorImageStatus;
 use smithay::output::{Mode, Scale};
 use smithay::output::{Output, PhysicalProperties};
-use smithay::reexports::calloop::channel::Event as CalloopEvent;
+use smithay::reexports::calloop::channel::{self, Event as CalloopEvent};
 use smithay::reexports::calloop::RegistrationToken;
 use smithay::reexports::calloop::{EventLoop, LoopHandle};
 use smithay::reexports::drm::control::{
@@ -522,8 +522,12 @@ pub fn run_drm_backend() {
 
     // Initialize already present connectors.
     for node in nodes_available {
-        state.device_changed(node);
+        state.device_changed(node, OutputUpdates::Deferred);
     }
+    // Publish the complete initial layout once, rather than every partial
+    // layout. Outputs are still mapped individually for default placement.
+    state.determine_highest_hz_crtc();
+    state.on_outputs_changed();
 
     // Mandatory formats by the Wayland spec.
     // TODO: Add more formats based on the GLES version.
@@ -693,7 +697,7 @@ pub fn run_drm_backend() {
             }
             UdevEvent::Changed { device_id } => {
                 if let Ok(node) = DrmNode::from_dev_id(device_id) {
-                    data.device_changed(node)
+                    data.device_changed(node, OutputUpdates::Immediate)
                 }
             }
             UdevEvent::Removed { device_id: _ } => {
@@ -722,17 +726,23 @@ pub fn run_drm_backend() {
 
     state::State::<DrmBackend>::start_xwayland(&mut state);
 
-    import_environment();
-
-    // Notify systemd we're ready.
-    if let Err(err) = sd_notify::notify(true, &[NotifyState::Ready]) {
-        warn!("error notifying systemd: {err:?}");
-    };
-
-    // Send ready notification to the NOTIFY_FD file descriptor.
-    if let Err(err) = notify_fd() {
-        warn!("error notifying fd: {err:?}");
-    }
+    // Let Flutter tasks and page flips run while the activation environment is
+    // imported. Services must still wait for the import before being notified.
+    let (environment_imported, rx_environment_imported) = channel::channel();
+    event_loop
+        .handle()
+        .insert_source(rx_environment_imported, |event, _, _| {
+            if let CalloopEvent::Msg(()) = event {
+                if let Err(err) = sd_notify::notify(true, &[NotifyState::Ready]) {
+                    warn!("error notifying systemd: {err:?}");
+                }
+                if let Err(err) = notify_fd() {
+                    warn!("error notifying fd: {err:?}");
+                }
+            }
+        })
+        .unwrap();
+    import_environment(environment_imported);
 
     while state.running.load(Ordering::SeqCst) {
         let result = event_loop.dispatch(None, &mut state);
@@ -855,12 +865,21 @@ enum DeviceAddError {
     AddNode(egl::Error),
 }
 
+/// Whether a connector change should publish its geometry immediately, or be
+/// deferred so the initial connector scan can publish one complete layout.
+#[derive(Clone, Copy)]
+enum OutputUpdates {
+    Immediate,
+    Deferred,
+}
+
 impl State<DrmBackend> {
     fn connector_connected(
         &mut self,
         node: DrmNode,
         connector: connector::Info,
         crtc: crtc::Handle,
+        updates: OutputUpdates,
     ) {
         let interface_id = connector.interface_id() as u64;
         let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
@@ -1103,8 +1122,10 @@ impl State<DrmBackend> {
         device.surfaces.insert(crtc, surface);
 
         self.map_output(&output, position);
-        self.determine_highest_hz_crtc();
-        self.on_outputs_changed();
+        if matches!(updates, OutputUpdates::Immediate) {
+            self.determine_highest_hz_crtc();
+            self.on_outputs_changed();
+        }
         self.schedule_initial_render(node, crtc, self.loop_handle.clone());
     }
 
@@ -1113,6 +1134,7 @@ impl State<DrmBackend> {
         node: DrmNode,
         connector: connector::Info,
         crtc: crtc::Handle,
+        updates: OutputUpdates,
     ) {
         let device = if let Some(device) = self.backend_data.gpus.get_mut(&node) {
             device
@@ -1151,8 +1173,10 @@ impl State<DrmBackend> {
             self.unmap_output(&output);
         }
 
-        self.determine_highest_hz_crtc();
-        self.on_outputs_changed();
+        if matches!(updates, OutputUpdates::Immediate) {
+            self.determine_highest_hz_crtc();
+            self.on_outputs_changed();
+        }
     }
 
     fn device_added(&mut self, node: DrmNode, path: &Path) -> Result<(), DeviceAddError> {
@@ -1230,7 +1254,7 @@ impl State<DrmBackend> {
         Ok(())
     }
 
-    fn device_changed(&mut self, node: DrmNode) {
+    fn device_changed(&mut self, node: DrmNode, updates: OutputUpdates) {
         let device = if let Some(device) = self.backend_data.gpus.get_mut(&node) {
             device
         } else {
@@ -1246,11 +1270,11 @@ impl State<DrmBackend> {
                 DrmScanEvent::Connected {
                     connector,
                     crtc: Some(crtc),
-                } => self.connector_connected(node, connector, crtc),
+                } => self.connector_connected(node, connector, crtc, updates),
                 DrmScanEvent::Disconnected {
                     connector,
                     crtc: Some(crtc),
-                } => self.connector_disconnected(node, connector, crtc),
+                } => self.connector_disconnected(node, connector, crtc, updates),
                 _ => {}
             }
         }
@@ -1271,7 +1295,7 @@ impl State<DrmBackend> {
             .collect();
 
         for (connector, crtc) in crtcs {
-            self.connector_disconnected(node, connector, crtc);
+            self.connector_disconnected(node, connector, crtc, OutputUpdates::Immediate);
         }
 
         // drop the backends on this side
@@ -1683,7 +1707,7 @@ fn notify_fd() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn import_environment() {
+fn import_environment(completed: channel::Sender<()>) {
     let variables = [
         "WAYLAND_DISPLAY",
         "DISPLAY",
@@ -1704,21 +1728,28 @@ fn import_environment() {
             ),
         ])
         .spawn();
-    // Wait for the import process to complete, otherwise services will start too fast without
-    // environment variables available.
+    // Spawn on the compositor thread to snapshot its current environment, but
+    // wait off-thread so the first Flutter frame is not blocked by external
+    // commands. Notify readiness only once the import has finished (or failed).
     match rv {
-        Ok(mut child) => match child.wait() {
-            Ok(status) => {
-                if !status.success() {
-                    warn!("import environment shell exited with {status}");
+        Ok(mut child) => {
+            std::thread::spawn(move || {
+                match child.wait() {
+                    Ok(status) => {
+                        if !status.success() {
+                            warn!("import environment shell exited with {status}");
+                        }
+                    }
+                    Err(err) => {
+                        warn!("error waiting for import environment shell: {err:?}");
+                    }
                 }
-            }
-            Err(err) => {
-                warn!("error waiting for import environment shell: {err:?}");
-            }
-        },
+                let _ = completed.send(());
+            });
+        }
         Err(err) => {
             warn!("error spawning shell to import environment: {err:?}");
+            let _ = completed.send(());
         }
     }
 }

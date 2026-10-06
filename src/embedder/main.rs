@@ -48,10 +48,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     debug!("Starting Veshell");
 
-    // Resolve the recording counter font once, before the compositor can
-    // render: the lookup shells out to `fc-match`, which must not run on
-    // the render thread's first recorded frame.
-    backend::render::warm_recording_font();
+    // Font lookup and parsing are independent of display setup. Rendering
+    // only reads the completed cache, never waiting for this worker.
+    if let Err(error) = std::thread::Builder::new()
+        .name("recording-font".into())
+        .spawn(backend::render::warm_recording_font)
+    {
+        tracing::warn!(?error, "Failed to start recording font warmup");
+    }
 
     // Fix XWayland crash when too many file descriptors are open.
     let _ = rlimit::increase_nofile_limit(u64::MAX);
