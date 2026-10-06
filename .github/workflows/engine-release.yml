@@ -1,0 +1,116 @@
+name: Engine Release
+
+# Builds and publishes our own portable Flutter engine SDK, replacing the
+# meta-flutter binaries the distro recipes and the dev build consume.
+#
+# This is expensive (a multi-gigabyte checkout and a multi-hour gn/ninja build),
+# so it is workflow_dispatch only and never runs as part of an app release.
+# Run it once per pinned engine revision, before pointing packaging/release.json
+# at the result.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Runtime mode to build
+        required: true
+        type: choice
+        options: [release, debug, profile, debug-unopt]
+        default: release
+      revision:
+        description: Flutter engine revision (SDK bin/internal/engine.version)
+        required: true
+        type: string
+      publish:
+        description: Publish a GitHub release
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  linux-x86_64:
+    if: github.repository == 'free-explorers/veshell'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MODE: ${{ inputs.mode }}
+      REVISION: ${{ inputs.revision }}
+      ASSET: linux-engine-sdk-${{ inputs.mode }}-x86_64-${{ inputs.revision }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Reclaim disk for the engine build
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h / /mnt
+          available=$(df --output=avail -B1 / | tr -dc '0-9')
+          (( available >= 30 * 1024 * 1024 * 1024 ))
+
+      - name: Install the build toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            git curl python3 python3-venv ninja-build pkg-config \
+            xz-utils file libgl1-mesa-dev libegl1-mesa-dev
+
+      - name: Build the engine SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          packaging/engine/build-engine.sh "$MODE" "$REVISION" "$PWD/dist" "$RUNNER_TEMP/engine-build"
+
+      - name: Attest the engine checksum
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v2
+        with:
+          subject-path: dist/${{ env.ASSET }}.tar.gz.sha256
+
+      - name: Publish the engine release
+        if: inputs.publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$ASSET" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release $ASSET already exists; not overwriting it." >&2
+            exit 0
+          fi
+          gh release create "$ASSET" \
+            "dist/$ASSET.tar.gz" "dist/$ASSET.tar.gz.sha256" \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "$ASSET" --prerelease --latest=false \
+            --notes "Source-built Linux x86_64 Flutter engine SDK ($MODE) for engine revision $REVISION."
+
+      - name: Record the manifest update
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(cut -d' ' -f1 "dist/$ASSET.tar.gz.sha256")"
+          {
+            echo "## Engine SDK built"
+            echo
+            echo "Tag: \`$ASSET\`"
+            echo
+            echo "Point \`packaging/release.json\` at it:"
+            echo
+            echo '```json'
+            echo '"engine": {'
+            echo "  \"url\": \"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$ASSET/$ASSET.tar.gz\","
+            echo "  \"sha256\": \"$sha\""
+            echo '}'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

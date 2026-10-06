@@ -40,6 +40,10 @@ packaging/
 ├── ci/
 │   ├── arch-deps.txt            # Arch build dependencies for the CI container
 │   └── prebuilt-in-container.sh # release build entry point for the container
+├── engine/                      # build our own portable Flutter engine SDK
+│   ├── build-engine.sh
+│   ├── patches/0001-clang-toolchain.patch
+│   └── README.md
 ├── arch/
 │   ├── PKGBUILD                 # Arch / Manjaro source package (generated)
 │   ├── build-veshell.sh         # copy of scripts/build-veshell.sh
@@ -71,7 +75,7 @@ consume **pinned, checksummed upstream Flutter artifacts**. Concretely:
 | Veshell source | git commit | `_veshell_commit` |
 | Flutter SDK | official stable bundle | sha256 |
 | Flutter engine artifacts | `flutter_infra_release` | sha256 (6 zips) |
-| Flutter embedder engine | meta-flutter release | sha256 |
+| Flutter embedder engine | meta-flutter release (transitional, see `engine/`) | sha256 |
 | Rust crates | `cargo vendor` | generated tarball sha256 |
 | Dart packages | pub cache | generated tarball sha256 |
 
@@ -80,11 +84,12 @@ Rust build runs with `CARGO_NET_OFFLINE=true` against the vendored crate tree.
 `scripts/generate-inputs.sh verify` re-checks every upstream hash.
 
 **Engine strategy.** The distro recipes currently consume the prebuilt
-meta-flutter engine (`flutter.engine`). The Nix channel instead source-builds the
-engine through `free-explorers/flutter-engine-nix`, pinned as
-`nix.engine_source` in the manifest. The direction is to build the engine
-ourselves and drop the meta-flutter dependency, after which the distro recipes
-switch to our own published engine artifacts.
+meta-flutter engine (`flutter.engine`). `packaging/engine/` builds our own
+portable engine SDK from source and the dispatch-only `Engine Release` workflow
+publishes it; once a revision is published, point `flutter.engine` at it and
+re-render, and set `VESHELL_ENGINE_REPO` for dev builds. The Nix channel already
+source-builds its engine through `free-explorers/flutter-engine-nix`, pinned as
+`nix.engine_source` in the manifest.
 
 ### Single source of truth
 
