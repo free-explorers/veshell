@@ -1,6 +1,8 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/settings/provider/state/theme_color_setting.dart';
+import 'package:shell/theme/fonts.dart';
 
 part 'theme.g.dart';
 
@@ -12,10 +14,18 @@ class VeshellTheme extends _$VeshellTheme {
   @override
   (ThemeData, ThemeData) build() {
     final color = ref.watch(themeColorSettingProvider);
+    final fallbacks = shellFontFallbacks(ref.watch(shellLocaleProvider));
+
+    ThemeData defaults(Brightness brightness) => ThemeData(
+      useMaterial3: true,
+      brightness: brightness,
+      fontFamily: 'Roboto',
+      fontFamilyFallback: fallbacks,
+    );
 
     return (
-      _buildTheme(ThemeData.light(useMaterial3: true), color),
-      _buildTheme(ThemeData.dark(useMaterial3: true), color),
+      _buildTheme(defaults(Brightness.light), color),
+      _buildTheme(defaults(Brightness.dark), color),
     );
   }
 
@@ -43,7 +53,9 @@ class VeshellTheme extends _$VeshellTheme {
           color: colorScheme.surface.withAlpha(200),
           borderRadius: BorderRadius.circular(4),
         ),
-        textStyle: TextStyle(color: colorScheme.onSurface),
+        textStyle: defaultTheme.textTheme.bodyMedium!.copyWith(
+          color: colorScheme.onSurface,
+        ),
       ),
     );
 

@@ -36,7 +36,7 @@ void main() {
         container: container,
         child: MaterialApp(
           navigatorKey: navigator,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: shellLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: ExpandableContainer(
@@ -180,7 +180,7 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: const MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: shellLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(body: VeshellLanguageEditor()),
         ),

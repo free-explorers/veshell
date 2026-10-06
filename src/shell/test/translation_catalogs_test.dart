@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' as flutter;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
 
 void main() {
@@ -214,7 +215,7 @@ void main() {
         await tester.pumpWidget(
           MaterialApp(
             locale: _catalogLocale(language),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            localizationsDelegates: shellLocalizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             home: Builder(
               builder: (context) {
@@ -225,7 +226,15 @@ void main() {
                       : TextDirection.ltr,
                 );
                 expect(MaterialLocalizations.of(context), isNotNull);
-                return Scaffold(body: Text(context.l10n.languageAutonym));
+                expect(flutter.MaterialLocalizations.of(context), isNotNull);
+                return Scaffold(
+                  body: Column(
+                    children: [
+                      Text(context.l10n.languageAutonym),
+                      const TextField(),
+                    ],
+                  ),
+                );
               },
             ),
           ),

@@ -109,6 +109,7 @@ the prepared shell and engine instead; see [building and packaging](building.md)
 
 ## Runtime requirements
 
+- Fontconfig, Roboto, and Noto fonts for all shipped scripts (see below).
 - A usable DRM render node and compatible EGL/GLES drivers.
 - A user session bus and a system D-Bus service.
 - UPower and a PulseAudio-compatible audio server, such as PipeWire-Pulse.
@@ -126,3 +127,38 @@ the prepared shell and engine instead; see [building and packaging](building.md)
 NetworkManager and BlueZ are optional integrations for their corresponding
 shell controls. Enabling real-time audio through RTKit is recommended where
 supported by the distribution.
+
+### UI fonts
+
+UI fonts are distribution-managed runtime dependencies, not bundled assets.
+The shell requests `Roboto`, with `Noto Sans`, `Noto Sans Arabic` (also Urdu),
+`Noto Sans Bengali`, `Noto Sans Devanagari` (Hindi), and `Noto Sans CJK`
+families for Simplified Chinese (SC), Traditional Chinese (TC), Japanese (JP)
+and Korean (KR) as fallbacks. Install all scripts, even for an English UI:
+the language picker, app names and notifications can contain mixed languages.
+
+| Distribution | Runtime font packages |
+| --- | --- |
+| Arch | `fontconfig`, `ttf-roboto`, `noto-fonts`, `noto-fonts-cjk` |
+| Fedora | `fontconfig`, `google-roboto-fonts`, `google-noto-sans-fonts`, `google-noto-sans-arabic-fonts`, `google-noto-sans-bengali-fonts`, `google-noto-sans-devanagari-fonts`, `google-noto-sans-cjk-fonts` |
+| Debian/Ubuntu | `fontconfig`, `fonts-roboto`, `fonts-noto-core`, `fonts-noto-cjk` |
+| Nix/NixOS | `fontconfig`, `roboto`, `noto-fonts`, `noto-fonts-cjk-sans` (provided by the package/module) |
+
+The Debian/RPM payload metadata declares the above font dependencies (RPM
+names target Fedora; other RPM distributions must adapt them). The Nix wrapper
+provides a Fontconfig configuration with those font packages while retaining
+host font directories/configuration; an explicit `FONTCONFIG_FILE` override
+remains respected. The NixOS module also installs the fonts system-wide.
+
+Font versions, licenses, updates and caches are managed by the distribution;
+rendering is not byte-for-byte identical across distributions. Missing families
+may silently substitute other fonts or leave missing glyphs. After installation,
+restart Veshell and check the actual environment with:
+
+```sh
+python3 extra/tests/system_fonts.py
+```
+
+The check requires only Python 3 and `fc-match`. It verifies family resolution
+and coverage of the current ARB catalogs at regular, medium and bold weights.
+If using a custom `FONTCONFIG_FILE`, run the check with that same environment.

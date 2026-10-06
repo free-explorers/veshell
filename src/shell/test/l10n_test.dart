@@ -23,7 +23,7 @@ void main() {
           screenCastConsentProvider.overrideWith(_UnnamedWindowConsent.new),
         ],
         child: const MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: shellLocalizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(body: Center(child: ScreenCastConsentPicker())),
         ),
@@ -100,29 +100,33 @@ Exec=files
     expect(formatRelativeTime(now, localeName: 'zh-Hant-HK', now: now), '現在');
   });
 
-  testWidgets('monitor roots and dialogs share generated delegates', (
+  testWidgets('monitor roots and dialogs share shell delegates', (
     tester,
   ) async {
     Widget root() => MaterialApp(
-      locale: const Locale('en', 'GB'),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      locale: const Locale('fr'),
+      localizationsDelegates: shellLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Builder(
         builder: (context) => TextButton(
           onPressed: () => showDialog<void>(
             context: context,
-            builder: (context) =>
-                AlertDialog(title: Text(context.l10n.authenticate)),
+            builder: (context) => AlertDialog(
+              title: Text(context.l10n.authenticate),
+              content: const TextField(),
+            ),
           ),
           child: Text(context.l10n.cancel),
         ),
       ),
     );
     await tester.pumpWidget(root());
-    expect(find.text('Cancel'), findsOneWidget);
-    await tester.tap(find.text('Cancel'));
+    final l10n = lookupAppLocalizations(const Locale('fr'));
+    expect(find.text(l10n.cancel), findsOneWidget);
+    await tester.tap(find.text(l10n.cancel));
     await tester.pumpAndSettle();
-    expect(find.text('Authenticate'), findsOneWidget);
+    expect(find.text(l10n.authenticate), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

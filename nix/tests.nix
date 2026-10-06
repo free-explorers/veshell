@@ -28,6 +28,9 @@ assert builtins.elem mockPackage enabled.environment.systemPackages;
 assert builtins.elem mockPackage enabled.services.displayManager.sessionPackages;
 assert builtins.elem mockPackage enabled.systemd.packages;
 assert enabled.hardware.graphics.enable;
+assert lib.all (font: builtins.elem font enabled.fonts.packages) [
+  pkgs.roboto pkgs.noto-fonts pkgs.noto-fonts-cjk-sans
+];
 assert enabled.services.upower.enable;
 assert enabled.security.polkit.enable;
 assert enabled.security.wrappers.polkit-agent-helper-1.setuid;
