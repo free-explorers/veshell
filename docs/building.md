@@ -33,7 +33,9 @@ Rust optimization profiles and Flutter runtime modes are distinct. Standard
 `debug`, `profile`, and `release` output directories select the corresponding
 Flutter mode. For a custom Cargo profile, set `VESHELL_FLUTTER_MODE` explicitly
 to one of those modes. Cargo's `PROFILE` classification is not used to identify
-the custom `profile` directory.
+the custom `profile` directory. Inference finds the profile above Cargo's
+`build/` directory and supports both `build/<package>-<hash>/out` and
+`build/<package>/<hash>/out` layouts, rather than assuming a fixed depth.
 
 ## Offline packaging
 
