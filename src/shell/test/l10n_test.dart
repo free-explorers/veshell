@@ -50,6 +50,7 @@ Exec=files
       final container = ProviderContainer(
         overrides: [
           configuredSettingsJsonProvider.overrideWith(_EmptySettings.new),
+          veshellLanguagePreferenceProvider.overrideWith((ref) => 'en'),
           installedDesktopEntriesProvider.overrideWith(
             (ref) async => {'files': entry},
           ),
@@ -93,7 +94,10 @@ Exec=files
     dispatcher.localesTestValue = const [Locale('en', 'US')];
     expect(container.read(systemLocalesProvider), const [Locale('en', 'US')]);
     final now = DateTime(2026);
-    expect(formatRelativeTime(now, localeName: 'zh-Hant-TW', now: now), 'Now');
+    expect(formatRelativeTime(now, localeName: 'zz', now: now), 'Now');
+    expect(formatRelativeTime(now, localeName: 'zh-Hans-CN', now: now), '现在');
+    expect(formatRelativeTime(now, localeName: 'zh-TW', now: now), '現在');
+    expect(formatRelativeTime(now, localeName: 'zh-Hant-HK', now: now), '現在');
   });
 
   testWidgets('monitor roots and dialogs share generated delegates', (

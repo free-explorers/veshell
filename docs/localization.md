@@ -3,8 +3,13 @@
 Veshell uses Flutter's built-in `gen-l10n` and ARB catalogs, following
 [Flutter's internationalization guide](https://docs.flutter.dev/ui/internationalization).
 English (`src/shell/lib/l10n/app_en.arb`) is the source language and fallback.
-The source catalog currently ships English only; adding a system locale does
-not add a Veshell translation.
+The app ships English, Arabic, Bengali, Chinese (Simplified and Traditional),
+French, German, Hindi, Indonesian, Italian, Japanese, Korean, Polish,
+Portuguese (including Brazil and Portugal variants), Russian, Spanish,
+Turkish, Urdu, and Vietnamese. Adding a system locale does not
+add a Veshell translation. English stays first in the generated supported
+locale list through `preferred-supported-locales` in `src/shell/l10n.yaml`,
+so unsupported system languages continue to fall back to English.
 
 ## System locale editor
 
@@ -39,7 +44,7 @@ overrides can still take precedence. No automatic logout is performed.
 Settings always shows **Veshell language** immediately after **System locale**.
 It lists only generated `AppLocalizations.supportedLocales`, not Linux's installed
 locales. Each catalog's `languageAutonym` supplies its native-language label.
-Currently English is the only choice.
+All shipped languages and regional variants are available, labeled in their own language.
 
 Before reading locale1, the picker uses the session's language preferences.
 Once the system editor has loaded or saved its configuration, it uses the
@@ -58,6 +63,11 @@ override. Selecting it clears `system.language` and restores automatic
 resolution, when confirmed with the inline check. Unsupported system languages fall back to English; the picker
 still offers all shipped catalogs, but not a misleading "Same as system" choice.
 Unknown or removed catalog tags fall back safely to normal locale resolution.
+Chinese regional preferences for Taiwan, Hong Kong, and Macao select Traditional
+Chinese when no explicit script is specified; explicit scripts take precedence.
+The generic Chinese catalog remains Simplified Chinese. Portuguese regional
+preferences select the Brazilian or European catalog when appropriate, with
+the generic Portuguese catalog available for other regions.
 
 ### Catalog messages
 
@@ -114,10 +124,13 @@ dialog delegates. `veshell_language_test.dart` covers conditional picker
 ordering, shipped-only choices, preference resolution, clearing overrides,
 and persistence.
 `l10n_extraction_test.dart` guards common UI text boundaries
-against new hardcoded strings. `system_locale_test.dart` covers staged edits,
+against new hardcoded strings. `translation_catalogs_test.dart` checks all
+catalogs for completeness, locale selection, placeholders, Russian, Polish and Arabic
+plural forms, and delegate loading and text direction for every language.
+`system_locale_test.dart` covers staged edits,
 regional override preservation, authorization failures, concurrent edits, and
 the locale1 D-Bus contract on a private test bus (without changing host locales).
 Rust tests cover Linux locale parsing and
 preference ordering. New translations should additionally be checked visually
-for long text, clipping, and right-to-left layout; no RTL translation is
-currently shipped.
+for long text, clipping, and right-to-left layout (Arabic and Urdu), and reviewed by
+native speakers for translation quality.

@@ -81,7 +81,21 @@ Locale resolveVeshellLocale(
   for (final locale in supported) {
     if (locale.toLanguageTag() == preference) return locale;
   }
-  return basicLocaleListResolution(system, supported);
+  return basicLocaleListResolution([
+    for (final locale in system)
+      // Linux locales often specify a Chinese region without a script.
+      // Do not resolve Taiwan/Hong Kong/Macao to the Simplified catalog.
+      if (locale.languageCode == 'zh' &&
+          locale.scriptCode == null &&
+          const {'TW', 'HK', 'MO'}.contains(locale.countryCode))
+        Locale.fromSubtags(
+          languageCode: 'zh',
+          scriptCode: 'Hant',
+          countryCode: locale.countryCode,
+        )
+      else
+        locale,
+  ], supported);
 }
 
 final shellLocaleProvider = Provider<Locale>((ref) {

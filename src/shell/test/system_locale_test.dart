@@ -129,7 +129,9 @@ void main() {
     final loadingServiceHeight = tester
         .getSize(find.byType(SystemLocaleEditor))
         .height;
-    expect(loadingServiceHeight, lessThanOrEqualTo(80));
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.byType(DropdownButton<String>), findsNothing);
+    expect(loadingServiceHeight, lessThanOrEqualTo(8));
     readReady.complete();
     await tester.pump();
     await tester.pump();
@@ -137,11 +139,16 @@ void main() {
       tester.getSize(find.byType(SystemLocaleEditor)).height,
       loadingServiceHeight,
     );
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.byType(DropdownButton<String>), findsNothing);
     installedReady.complete(_installed);
     await tester.pumpAndSettle();
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+    expect(find.byType(DropdownButton<String>), findsOneWidget);
+    // The thin loading bar intentionally grows into a full-height dropdown.
     expect(
       tester.getSize(find.byType(SystemLocaleEditor)).height,
-      closeTo(loadingServiceHeight, 8),
+      allOf(greaterThan(loadingServiceHeight), lessThanOrEqualTo(80)),
     );
     expect(tester.takeException(), isNull);
   });
@@ -280,7 +287,8 @@ void main() {
         container.read(settingsPropertiesProvider)['system']!.children,
         contains('language'),
       );
-      expect(container.read(systemLanguageSupportedProvider), isFalse);
+      expect(container.read(systemLanguageSupportedProvider), isTrue);
+      expect(container.read(shellLocaleProvider), const Locale('fr'));
       expect(container.read(systemLocalesProvider), const [Locale('en', 'US')]);
       await container.read(systemLocaleProvider.future);
       await container
@@ -294,16 +302,13 @@ void main() {
     },
   );
 
-  test(
-    'reading French disables system-language matching on English sessions',
-    () async {
-      final service = _FakeLocaleService({'LANG': 'fr_FR.UTF-8'});
-      final container = _container(service);
-      await container.read(systemLocaleProvider.future);
-      expect(container.read(systemLanguageSupportedProvider), isFalse);
-      expect(container.read(shellLocaleProvider), const Locale('en'));
-    },
-  );
+  test('reading French selects its catalog on English sessions', () async {
+    final service = _FakeLocaleService({'LANG': 'fr_FR.UTF-8'});
+    final container = _container(service);
+    await container.read(systemLocaleProvider.future);
+    expect(container.read(systemLanguageSupportedProvider), isTrue);
+    expect(container.read(shellLocaleProvider), const Locale('fr'));
+  });
 
   test('save sends the complete configuration and refreshes state', () async {
     final service = _FakeLocaleService({

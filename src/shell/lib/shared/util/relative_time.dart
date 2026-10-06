@@ -1,5 +1,5 @@
 import 'package:flutter/widgets.dart';
-import 'package:shell/l10n/app_localizations.dart';
+import 'package:shell/l10n/l10n.dart';
 
 /// Formats [dateTime] as a short, human-readable age for a notification header.
 ///
@@ -17,7 +17,7 @@ String formatRelativeTime(
 }) {
   final parts = localeName.replaceAll('-', '_').split('_');
   final l10n = lookupAppLocalizations(
-    basicLocaleListResolution([
+    resolveVeshellLocale([
       Locale.fromSubtags(
         languageCode: parts.first,
         scriptCode: parts.length > 1 && parts[1].length == 4 ? parts[1] : null,
