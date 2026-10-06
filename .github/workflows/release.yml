@@ -1,0 +1,183 @@
+name: Release
+
+# Publishes a GitHub release to the distribution channels.
+#
+# Triggered when a release is published. The release tag must match
+# packaging/release.json (for example v0.2.0-beta.1). The manifest is the single
+# source of truth; the workflow verifies the recipes are rendered from it, then
+# builds the prebuilt payload and pushes the AUR packages.
+#
+# Required repository secret:
+#   AUR_SSH_PRIVATE_KEY   SSH private key authorized for AUR (user `aur`)
+#
+# Until that secret exists the AUR job publishes nothing and the release still
+# succeeds.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (for example v0.2.0-beta.1)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+jobs:
+  validate:
+    if: github.repository == 'free-explorers/veshell'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      release_id: ${{ steps.manifest.outputs.release_id }}
+      tag: ${{ steps.manifest.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Check the tag against the release manifest
+        id: manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${RELEASE_TAG:?a release tag is required}"
+          release_id="$(python3 -c 'import json; m = json.load(open("packaging/release.json")); p = m.get("prerelease"); print((m["version"] + "-" + p) if p else m["version"])')"
+          if [[ "${tag#v}" != "$release_id" ]]; then
+            printf 'error: tag %s does not match packaging/release.json (%s)\n' "$tag" "$release_id" >&2
+            printf '       expected tag v%s\n' "$release_id" >&2
+            exit 1
+          fi
+          printf 'release_id=%s\n' "$release_id" >> "$GITHUB_OUTPUT"
+          printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the recipes are rendered from the manifest
+        run: python3 packaging/scripts/render-recipes.py --check
+
+  prebuilt:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    outputs:
+      prebuilt_sha: ${{ steps.publish.outputs.prebuilt_sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Reclaim host disk for the container build
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Build the prebuilt payload in an Arch Linux container
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/work" \
+            -w /work \
+            archlinux:base-devel \
+            bash /work/packaging/ci/prebuilt-in-container.sh
+          sudo chown -R "$(id -u):$(id -g)" out
+          test -f out/SHA256SUMS
+          cat out/SHA256SUMS
+
+      - name: Attest the prebuilt checksum manifest
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v2
+        with:
+          subject-path: out/SHA256SUMS
+
+      - name: Publish the prebuilt assets to the release
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          prebuilt_sha="$(cut -d' ' -f1 out/SHA256SUMS)"
+          printf 'prebuilt_sha=%s\n' "$prebuilt_sha" >> "$GITHUB_OUTPUT"
+          gh release upload "$RELEASE_TAG" \
+            out/veshell-*.tar.zst out/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+  aur:
+    needs: [validate, prebuilt]
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Install tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          pacman-key --init
+          pacman-key --populate archlinux
+          pacman -Syu --noconfirm --needed base-devel git openssh python sudo
+          id build >/dev/null 2>&1 || useradd -m build
+
+      - name: Prepare the source AUR package
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$(pwd)"
+          chown -R build:build "$work/packaging/arch"
+          sudo -u build bash -c "cd '$work/packaging/arch' && makepkg --printsrcinfo" \
+            > "$work/packaging/arch/.SRCINFO"
+          head -n 15 "$work/packaging/arch/.SRCINFO"
+
+      - name: Generate the binary AUR package
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$(pwd)"
+          rm -rf /tmp/aur-bin
+          python3 packaging/scripts/gen-aur-bin.py \
+            --prebuilt-sha "${{ needs.prebuilt.outputs.prebuilt_sha }}" \
+            --tag "$RELEASE_TAG" \
+            --out /tmp/aur-bin
+          chown -R build:build /tmp/aur-bin
+          sudo -u build bash -c "cd /tmp/aur-bin && makepkg --printsrcinfo" \
+            > /tmp/aur-bin/.SRCINFO
+          head -n 15 /tmp/aur-bin/.SRCINFO
+
+      - name: Publish to the AUR
+        shell: bash
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${AUR_SSH_PRIVATE_KEY:-}" ]]; then
+            echo "AUR_SSH_PRIVATE_KEY is not configured; skipping the AUR publish." >&2
+            exit 0
+          fi
+          key="$RUNNER_TEMP/aur_key"
+          install -d -m700 "$(dirname "$key")"
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > "$key"
+          chmod 600 "$key"
+          AUR_SSH_KEY="$key" packaging/scripts/aur-publish.sh veshell packaging/arch
+          AUR_SSH_KEY="$key" packaging/scripts/aur-publish.sh veshell-bin /tmp/aur-bin

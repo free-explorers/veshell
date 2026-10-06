@@ -1,0 +1,77 @@
+Source: veshell
+Section: x11
+Priority: optional
+Maintainer: Veshell packaging <packaging@example.invalid>
+Build-Depends:
+ debhelper-compat (= 13),
+ rustc,
+ cargo,
+ clang,
+ libclang-dev,
+ bindgen,
+ cmake,
+ ninja-build,
+ pkg-config,
+ git,
+ unzip,
+ zstd,
+ xz-utils,
+ libgtk-3-dev,
+ libpulse-dev,
+ libinput-dev,
+ libseat-dev,
+ libgbm-dev,
+ libglvnd-dev,
+ libssl-dev,
+ libpipewire-0.3-dev,
+ libgstreamer1.0-dev,
+ libgstreamer-plugins-base1.0-dev,
+ libxkbcommon-dev,
+ libdisplay-info-dev,
+ libwayland-dev,
+ libsystemd-dev,
+ libudev-dev,
+ libdrm-dev,
+ libvulkan-dev,
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+Homepage: https://github.com/free-explorers/veshell
+Vcs-Git: https://github.com/free-explorers/veshell.git
+
+Package: veshell
+Architecture: amd64 arm64
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ fontconfig,
+ fonts-roboto,
+ fonts-noto-core,
+ fonts-noto-cjk,
+ libgl1,
+ libgbm1,
+ libinput10,
+ libseat1,
+ libxkbcommon0,
+ systemd | systemd-standalone-sysusers,
+ pipewire | pulseaudio,
+ gstreamer1.0-plugins-base,
+ gstreamer1.0-plugins-good,
+ dbus,
+ upower,
+ polkitd | policykit-1,
+ xwayland,
+ xdg-desktop-portal,
+ xdg-utils,
+Recommends:
+ network-manager,
+ bluez,
+ rtkit,
+ xdg-desktop-portal-gtk,
+Description: innovative Not-Desktop environment built with Flutter and Rust
+ Veshell is a Wayland/drm compositor paired with a Flutter shell. It provides
+ a predictable, spatially organized workflow and reduces the need to manage
+ windows manually.
+ .
+ This package carries the compositor, the AOT-compiled Dart shell, the
+ matching Flutter embedder engine and the session, portal and systemd user
+ units. It depends on distribution-managed fonts and runtime services.

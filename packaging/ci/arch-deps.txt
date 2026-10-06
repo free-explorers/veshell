@@ -1,0 +1,29 @@
+# Packages required to build the Veshell payload on Arch (CI container).
+# Kept in sync with the makedepends/depends in packaging/templates/PKGBUILD.in.
+base-devel
+git
+curl
+python
+rust
+clang
+cmake
+ninja
+pkgconf
+unzip
+zstd
+xz
+gtk3
+libpulse
+libinput
+seatd
+libgbm
+mesa
+openssl
+pipewire
+gstreamer
+gst-plugins-base-libs
+libxkbcommon
+libdisplay-info
+wayland
+systemd-libs
+vulkan-icd-loader

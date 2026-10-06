@@ -144,6 +144,15 @@ Packagers must declare native runtime dependencies and required services,
 configure polkit/helper paths, and follow their distro's installation policy.
 Do not use Nix-linked binaries as portable Debian/RPM release artifacts.
 
+## Distribution packaging
+
+Ready-to-use recipes for Arch/Manjaro, Fedora and Debian live in
+[`packaging/`](../packaging/README.md). They build the Dart shell and the Rust
+compositor from source and consume only pinned, checksummed upstream Flutter
+inputs; the Rust build and `pub get` run offline against vendored trees. The
+same recipes explain why Flutter keeps these packages out of the Debian and
+Fedora main repositories today.
+
 ## Checks
 
 ```sh

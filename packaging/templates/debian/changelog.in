@@ -1,0 +1,7 @@
+@NAME@ (@DEB_VERSION@) unstable; urgency=medium
+
+  * Veshell @RELEASE_ID@ (@CHANNEL@).
+  * Build the Dart shell from source against the pinned Flutter SDK and
+    matching engine artifacts, then the Rust compositor from vendored crates.
+
+ -- @MAINTAINER@  @DATE_RFC2822@

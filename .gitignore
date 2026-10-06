@@ -10,3 +10,16 @@ target
 
 # stale tool checkouts
 .depot_tools/
+
+# packaging build leftovers and generated inputs
+packaging/dist/
+packaging/arch/pkg/
+packaging/arch/src/
+packaging/arch/*.pkg.tar.*
+packaging/arch/*.log
+packaging/*/debian/.build-inputs/
+__pycache__/
+
+# release pipeline scratch (CI)
+/out/
+/.inputs/
