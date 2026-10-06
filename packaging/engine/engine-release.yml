@@ -1,12 +1,17 @@
 name: Engine Release
 
-# Builds and publishes our own portable Flutter engine SDK, replacing the
-# meta-flutter binaries the distro recipes and the dev build consume.
+# Builds and publishes the portable Flutter engine SDK that Veshell's distro
+# recipes and dev build consume, replacing the meta-flutter binaries.
 #
-# This is expensive (a multi-gigabyte checkout and a multi-hour gn/ninja build),
+# This file belongs in the dedicated engine repository
+# (free-explorers/flutter-engine), NOT in free-explorers/veshell: engine
+# releases are versioned by engine revision and must not be mixed with
+# application releases. The rest of packaging/engine/ (build-engine.sh,
+# patches/, README.md) is that repository's content; copy it to the engine
+# repository's root and place this file at its .github/workflows/.
+#
+# It is expensive (a multi-gigabyte checkout and a multi-hour gn/ninja build),
 # so it is workflow_dispatch only and never runs as part of an app release.
-# Run it once per pinned engine revision, before pointing packaging/release.json
-# at the result.
 
 on:
   workflow_dispatch:
@@ -32,7 +37,7 @@ permissions:
 
 jobs:
   linux-x86_64:
-    if: github.repository == 'free-explorers/veshell'
+    if: github.repository == 'free-explorers/flutter-engine'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     permissions:
@@ -73,7 +78,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          packaging/engine/build-engine.sh "$MODE" "$REVISION" "$PWD/dist" "$RUNNER_TEMP/engine-build"
+          bash build-engine.sh "$MODE" "$REVISION" "$PWD/dist" "$RUNNER_TEMP/engine-build"
 
       - name: Attest the engine checksum
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v2

@@ -153,9 +153,10 @@ inputs; the Rust build and `pub get` run offline against vendored trees. The
 same recipes explain why Flutter keeps these packages out of the Debian and
 Fedora main repositories today.
 
-The embedding engine is currently a pinned upstream artifact. `packaging/engine/`
-builds a portable engine SDK from source, published by the `Engine Release`
-workflow, so that dependency can be dropped.
+The embedding engine is currently a pinned upstream artifact. It is built from
+source in the dedicated `free-explorers/flutter-engine` repository
+(`packaging/engine/` holds that repository's content); its releases are not held
+in this repository.
 
 ## Checks
 
