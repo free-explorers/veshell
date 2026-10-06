@@ -96,6 +96,8 @@ cargo_metadata = "0.19.1"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [package.metadata.generate-rpm]
+# Fedora font package names; other RPM distributions may override these.
+requires = { fontconfig = "*", google-roboto-fonts = "*", google-noto-sans-fonts = "*", google-noto-sans-arabic-fonts = "*", google-noto-sans-bengali-fonts = "*", google-noto-sans-devanagari-fonts = "*", google-noto-sans-cjk-fonts = "*" }
 assets = [
     { source = "build/package-root/usr/bin/*", dest = "/usr/bin/", mode = "755" },
     { source = "build/package-root/usr/lib/veshell/**/*", dest = "/usr/lib/veshell/", mode = "644" },
@@ -106,6 +108,7 @@ assets = [
 ]
 
 [package.metadata.deb]
+depends = "$auto, fontconfig, fonts-roboto, fonts-noto-core, fonts-noto-cjk"
 preserve-symlinks = true
 assets = [
     ["build/package-root/usr/bin/*", "usr/bin/", "755"],

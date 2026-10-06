@@ -3,6 +3,10 @@
 Veshell uses Flutter's built-in `gen-l10n` and ARB catalogs, following
 [Flutter's internationalization guide](https://docs.flutter.dev/ui/internationalization).
 English (`src/shell/lib/l10n/app_en.arb`) is the source language and fallback.
+App roots must use `shellLocalizationsDelegates` from `lib/l10n/l10n.dart`,
+not just the generated delegates: `material_ui` and its Cupertino dependency
+have separate localization types from Flutter's SDK widgets. The shared list
+provides both, including in navigator dialogs and overlays.
 The app ships English, Arabic, Bengali, Chinese (Simplified and Traditional),
 French, German, Hindi, Indonesian, Italian, Japanese, Korean, Polish,
 Portuguese (including Brazil and Portugal variants), Russian, Spanish,
@@ -10,6 +14,20 @@ Turkish, Urdu, and Vietnamese. Adding a system locale does not
 add a Veshell translation. English stays first in the generated supported
 locale list through `preferred-supported-locales` in `src/shell/l10n.yaml`,
 so unsupported system languages continue to fall back to English.
+
+## Fonts
+
+The shell requests system-installed Roboto and Noto fallbacks for every shipped
+script through Fontconfig. Both themes and tooltips use these families.
+CJK fallback ordering follows the Veshell language (including Traditional
+Chinese), while all fallbacks remain available for mixed-script labels.
+Install the distribution font packages listed in `docs/dependencies.md`;
+font files are not vendored or downloaded by the shell. Font versions and
+rendering follow the distribution and local Fontconfig configuration.
+Flutter tests check theme/fallback configuration, not host font availability.
+Run `python3 extra/tests/system_fonts.py` to check installed families and
+translation glyph coverage. When adding a new script, update the fallback
+list, distribution dependencies and this runtime check.
 
 ## System locale editor
 

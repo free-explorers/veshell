@@ -29,6 +29,9 @@
   pipewire,
   gst_all_1,
   fontconfig,
+  roboto,
+  noto-fonts,
+  noto-fonts-cjk-sans,
   libpulseaudio,
   vulkan-loader,
   xwayland,
@@ -48,6 +51,8 @@
 }:
 let
   manifest = builtins.fromTOML (builtins.readFile ../Cargo.toml);
+  runtimeFonts = [ roboto noto-fonts noto-fonts-cjk-sans ];
+  fontsConf = fontconfig.makeFontsConf { fontDirectories = runtimeFonts; };
   runtimeLibraries = [
     wayland
     libGL
@@ -137,6 +142,7 @@ rustPlatform.buildRustPackage {
 
   postFixup = ''
     wrapProgram "$out/bin/veshell" \
+      --set-default FONTCONFIG_FILE "${fontsConf}" \
       --set VESHELL_DEFAULT_CONFIG_DIR "$out/share/veshell/settings/default" \
       --prefix PATH : ${lib.makeBinPath runtimePrograms} \
       --prefix LD_LIBRARY_PATH : "$out/lib/veshell:/run/opengl-driver/lib:${lib.makeLibraryPath runtimeLibraries}" \
@@ -148,7 +154,7 @@ rustPlatform.buildRustPackage {
   '';
 
   passthru = {
-    inherit flutterSdk shellBundle flutterEngine;
+    inherit flutterSdk shellBundle flutterEngine runtimeFonts;
     providedSessions = [ "veshell" ];
   };
   meta = {

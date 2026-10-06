@@ -1,10 +1,18 @@
 import 'package:flutter/widgets.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:material_ui/material_ui.dart' as material_ui;
 import 'package:shell/l10n/app_localizations.dart';
 import 'package:shell/settings/provider/util/configured_settings_json.dart';
 
 export 'package:shell/l10n/app_localizations.dart';
+
+/// The UI packages define distinct Material/Cupertino localization types.
+/// Keep Flutter's delegates too: SDK widgets and package widgets can coexist.
+const shellLocalizationsDelegates = <LocalizationsDelegate<dynamic>>[
+  ...AppLocalizations.localizationsDelegates,
+  ...material_ui.GlobalMaterialLocalizations.delegates,
+];
 
 /// The session's preferred locales, before any Veshell-only fallback choice.
 final systemLocalesProvider = NotifierProvider<SystemLocales, List<Locale>>(

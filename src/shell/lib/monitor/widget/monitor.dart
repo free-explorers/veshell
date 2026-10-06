@@ -41,7 +41,7 @@ class MonitorWidget extends HookConsumerWidget {
     final navigatorKey = ref.watch(navigatorKeyForViewProvider(viewId));
     return MaterialApp(
       locale: ref.watch(shellLocaleProvider),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: shellLocalizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       navigatorKey: navigatorKey,
       theme: lightTheme,
