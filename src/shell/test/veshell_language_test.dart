@@ -119,7 +119,7 @@ void main() {
 
   test('Settings always shows the picker after the system locale', () {
     final dispatcher = TestWidgetsFlutterBinding.instance.platformDispatcher
-      ..localesTestValue = const [Locale('de')];
+      ..localesTestValue = const [Locale('zz')];
     addTearDown(dispatcher.clearLocalesTestValue);
     final container = ProviderContainer(
       overrides: [
@@ -156,7 +156,7 @@ void main() {
     tester,
   ) async {
     final dispatcher = TestWidgetsFlutterBinding.instance.platformDispatcher
-      ..localesTestValue = const [Locale('de')];
+      ..localesTestValue = const [Locale('zz')];
     addTearDown(dispatcher.clearLocalesTestValue);
     final directory = Directory(
       '/tmp/opencode',
@@ -221,7 +221,12 @@ void main() {
     final matchingDropdown = tester.widget<DropdownButton<String>>(
       find.byType(DropdownButton<String>),
     );
-    expect(matchingDropdown.items!.map((item) => item.value), ['', 'en']);
+    expect(matchingDropdown.items!.map((item) => item.value), [
+      '',
+      ...AppLocalizations.supportedLocales.map(
+        (locale) => locale.toLanguageTag(),
+      ),
+    ]);
     expect(matchingDropdown.value, 'en');
     expect(container.read(veshellFollowsSystemProvider), isFalse);
     await tester.runAsync(() async {
