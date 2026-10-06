@@ -7,11 +7,16 @@ name: Release
 # source of truth; the workflow verifies the recipes are rendered from it, then
 # builds the prebuilt payload and pushes the AUR packages.
 #
-# Required repository secret:
+# Optional channel secrets. Each channel job is skipped when its secret is
+# absent, so a release still succeeds before the channels are configured:
 #   AUR_SSH_PRIVATE_KEY   SSH private key authorized for AUR (user `aur`)
+#   COPR_CONFIG           copr-cli config content (login/username/token)
+#   OSC_CONFIG            oscrc content (OBS apiurl + credentials)
 #
-# Until that secret exists the AUR job publishes nothing and the release still
-# succeeds.
+# Optional repository variables (defaults shown):
+#   COPR_PROJECT          free-explorers/veshell
+#   OBS_PROJECT           home:free-explorers
+#   OBS_PACKAGE           veshell
 #
 # The Nix channel reuses the attested-closure workflow
 # (nix-package-release.yml) and requires the separately published
@@ -158,9 +163,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          work="$(pwd)"
           rm -rf /tmp/aur-bin
-          python3 packaging/scripts/gen-aur-bin.py \
+          python3 packaging/scripts/gen-bin-recipes.py --format aur \
             --prebuilt-sha "${{ needs.prebuilt.outputs.prebuilt_sha }}" \
             --tag "$RELEASE_TAG" \
             --out /tmp/aur-bin
@@ -185,6 +189,86 @@ jobs:
           chmod 600 "$key"
           AUR_SSH_KEY="$key" packaging/scripts/aur-publish.sh veshell packaging/arch
           AUR_SSH_KEY="$key" packaging/scripts/aur-publish.sh veshell-bin /tmp/aur-bin
+
+  copr:
+    name: Publish to COPR
+    needs: [validate, prebuilt]
+    runs-on: ubuntu-24.04
+    container: fedora:latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Install tooling
+        shell: bash
+        run: dnf install -y git python3 rpm-build copr-cli gh
+
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Render the binary recipe and submit to COPR
+        shell: bash
+        env:
+          COPR_CONFIG_CONTENT: ${{ secrets.COPR_CONFIG }}
+          COPR_PROJECT: ${{ vars.COPR_PROJECT || 'free-explorers/veshell' }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${COPR_CONFIG_CONTENT:-}" ]]; then
+            echo "COPR_CONFIG is not configured; skipping the COPR publish." >&2
+            exit 0
+          fi
+          printf '%s\n' "$COPR_CONFIG_CONTENT" > "$RUNNER_TEMP/copr"
+          rm -rf /tmp/rpm-bin
+          python3 packaging/scripts/gen-bin-recipes.py --format rpm \
+            --prebuilt-sha "${{ needs.prebuilt.outputs.prebuilt_sha }}" \
+            --tag "$RELEASE_TAG" --out /tmp/rpm-bin
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'veshell-*.tar.zst' --dir /tmp/rpm-bin
+          COPR_CONFIG="$RUNNER_TEMP/copr" \
+            packaging/scripts/copr-publish.sh /tmp/rpm-bin "$COPR_PROJECT"
+
+  obs:
+    name: Publish to OBS
+    needs: [validate, prebuilt]
+    runs-on: ubuntu-24.04
+    container: opensuse/tumbleweed:latest
+    timeout-minutes: 45
+    steps:
+      - name: Install tooling
+        shell: bash
+        run: zypper --non-interactive install git python3 osc curl
+
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Render the binary recipe and submit to OBS
+        shell: bash
+        env:
+          OSC_CONFIG_CONTENT: ${{ secrets.OSC_CONFIG }}
+          OBS_PROJECT: ${{ vars.OBS_PROJECT || 'home:free-explorers' }}
+          OBS_PACKAGE: ${{ vars.OBS_PACKAGE || 'veshell' }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${OSC_CONFIG_CONTENT:-}" ]]; then
+            echo "OSC_CONFIG is not configured; skipping the OBS publish." >&2
+            exit 0
+          fi
+          install -d -m700 "$RUNNER_TEMP/osc"
+          printf '%s\n' "$OSC_CONFIG_CONTENT" > "$RUNNER_TEMP/osc/oscrc"
+          chmod 600 "$RUNNER_TEMP/osc/oscrc"
+          rm -rf /tmp/rpm-bin
+          python3 packaging/scripts/gen-bin-recipes.py --format rpm \
+            --prebuilt-sha "${{ needs.prebuilt.outputs.prebuilt_sha }}" \
+            --tag "$RELEASE_TAG" --out /tmp/rpm-bin
+          asset="veshell-${{ needs.validate.outputs.release_id }}-x86_64.tar.zst"
+          curl -fsSL -o "/tmp/rpm-bin/$asset" \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/$asset"
+          OSC_CONFIG="$RUNNER_TEMP/osc/oscrc" \
+            packaging/scripts/obs-publish.sh /tmp/rpm-bin "$OBS_PROJECT" "$OBS_PACKAGE"
 
   nix:
     name: Publish the Nix channel

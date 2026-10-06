@@ -1,7 +1,7 @@
 # Maintainer: @MAINTAINER@
 # Arch/Manjaro binary package for Veshell.
 #
-# Generated at release time by packaging/scripts/gen-aur-bin.py from
+# Generated at release time by packaging/scripts/gen-bin-recipes.py from
 # packaging/templates/PKGBUILD-bin.in. Do not edit by hand.
 #
 # This installs the prebuilt payload published on the GitHub release

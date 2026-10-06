@@ -23,15 +23,19 @@ packaging/
 │   ├── PKGBUILD.in
 │   ├── PKGBUILD-bin.in          # AUR veshell-bin (rendered at release time)
 │   ├── veshell.spec.in
+│   ├── veshell-bin.spec.in      # RPM veshell-bin (rendered at release time)
+│   ├── veshell-bin.changes.in
 │   └── debian/{changelog,rules}.in
 ├── scripts/
 │   ├── build-veshell.sh         # the shared hermetic build (copied into each recipe)
 │   ├── fetch-inputs.sh          # download + verify + lay out every pinned input
 │   ├── build-prebuilt.sh        # build the prebuilt payload tarball
 │   ├── generate-inputs.sh       # regenerates the generated inputs + verifies pins
-│   ├── render-recipes.py        # release.json + templates -> recipes
-│   ├── gen-aur-bin.py           # render the AUR veshell-bin recipe
+│   ├── render-recipes.py        # release.json + templates -> source recipes
+│   ├── gen-bin-recipes.py       # prebuilt hash -> AUR/RPM veshell-bin recipes
 │   ├── aur-publish.sh           # push a package to the AUR
+│   ├── copr-publish.sh          # submit the binary SRPM to COPR
+│   ├── obs-publish.sh           # commit the binary package to OBS
 │   └── sync-helpers.sh          # copies build-veshell.sh into each recipe
 ├── ci/
 │   ├── arch-deps.txt            # Arch build dependencies for the CI container
@@ -113,7 +117,11 @@ hand is a mistake: change `release.json` or the templates and re-render.
    the release.
 3. **aur** — regenerates `.SRCINFO`, renders `veshell-bin` from the prebuilt
    hash, and pushes `veshell` and `veshell-bin` to the AUR.
-4. **nix** — calls the attested-closure workflow
+4. **copr** — builds the `veshell-bin` SRPM from the prebuilt payload and
+   submits it to COPR.
+5. **obs** — commits the `veshell-bin` spec, changes and prebuilt payload to the
+   Open Build Service.
+6. **nix** — calls the attested-closure workflow
    (`.github/workflows/nix-package-release.yml`) to publish the Nix channel. It
    needs the separately published `flutter-engine-nix` engine release; the Nix
    toolchain is not used by the distro recipes.
@@ -122,13 +130,23 @@ hand is a mistake: change `release.json` or the templates and re-render.
 artifacts and the two generated inputs before the build, so nothing is fetched
 unverified.
 
-The AUR job is a no-op until the `AUR_SSH_PRIVATE_KEY` repository secret is set
-(an SSH key registered for your AUR account); the rest of the release still
-succeeds. Both AUR packages must exist first — create them once in the AUR web
-UI. See `scripts/aur-publish.sh`.
+Every channel job is a no-op until its secret is configured, so a release still
+succeeds before the channels are set up:
 
-OBS (RPM/DEB breadth) and COPR are the next channels to wire in; the rendered
-recipes and the prebuilt payload are already the inputs they need.
+| Job | Secret | Variables (default) |
+| --- | --- | --- |
+| aur | `AUR_SSH_PRIVATE_KEY` | — |
+| copr | `COPR_CONFIG` | `COPR_PROJECT` (`free-explorers/veshell`) |
+| obs | `OSC_CONFIG` | `OBS_PROJECT` (`home:free-explorers`), `OBS_PACKAGE` (`veshell`) |
+
+Both AUR packages, the COPR project, and the OBS project/package must exist
+first; create them once in the respective web UI.
+
+The OBS and COPR channels ship the `veshell-bin` binary RPM built from the
+prebuilt payload (the same model as the AUR `veshell-bin`), because Flutter's
+~1.9 GB of pinned inputs exceed the services' upload limits. A source RPM on
+those services needs a server-side `_service` or builder-side fetching, and is
+worth doing once we publish our own engine.
 
 ### Compliance note
 
@@ -224,6 +242,10 @@ non-LTO final link cannot resolve its symbols and the link fails with undefined
 - **AUR**: `scripts/aur-publish.sh` exercised against a local bare git remote
   (first push, idempotent re-run, and `--dry-run`); the `veshell-bin` recipe is
   validated with `makepkg --printsrcinfo`.
+- **OBS / COPR**: `scripts/obs-publish.sh` and `scripts/copr-publish.sh`
+  exercised against stubbed `osc`/`rpmbuild`; the `veshell-bin` RPM spec is
+  rendered from the manifest. Not built on a real service here (no OBS/COPR
+  credentials, no `rpmbuild` on the validation host).
 - **Fedora**: recipe supplied; not built here (no `rpmbuild` available on the
   validation host).
 - **Debian**: recipe supplied; not built here (no `debhelper` available on the
