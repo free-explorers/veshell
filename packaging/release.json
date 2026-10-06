@@ -51,6 +51,13 @@
       "sha256": "764e05ba612aaf943523c76a87dd89952f44984a3ec1b48c03aa8b227dafb56c"
     }
   },
+  "nix": {
+    "engine_source": {
+      "repository": "free-explorers/flutter-engine-nix",
+      "revision": "1566f7a7e174ebd9204d8bb1010545d62aff2e22",
+      "sha256": "0f5i01vjyvn0h811qvwr6dhi56kclrlynq3r4w9idm7r8sk20nnw"
+    }
+  },
   "inputs": {
     "cargo_vendor": {
       "sha256": "a99abcb0d71d55620df66fe6a81b4543273ca6143311d6c145a204d2241af21f"

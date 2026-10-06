@@ -12,6 +12,10 @@ name: Release
 #
 # Until that secret exists the AUR job publishes nothing and the release still
 # succeeds.
+#
+# The Nix channel reuses the attested-closure workflow
+# (nix-package-release.yml) and requires the separately published
+# free-explorers/flutter-engine-nix engine release to exist.
 
 on:
   release:
@@ -181,3 +185,12 @@ jobs:
           chmod 600 "$key"
           AUR_SSH_KEY="$key" packaging/scripts/aur-publish.sh veshell packaging/arch
           AUR_SSH_KEY="$key" packaging/scripts/aur-publish.sh veshell-bin /tmp/aur-bin
+
+  nix:
+    name: Publish the Nix channel
+    needs: [validate, prebuilt]
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/nix-package-release.yml

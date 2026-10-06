@@ -2,9 +2,10 @@
 """Render the distribution packaging recipes from the release manifest.
 
 packaging/release.json is the single source of truth. This script validates it,
-computes the per-distro version strings, and renders packaging/templates/ into
-packaging/arch/, packaging/fedora/ and packaging/debian/. Rendered files carry a
-"do not edit" header.
+checks that the repository's other pins (Cargo.toml and the Nix SDK/engine pin
+files) agree with it, computes the per-distro version strings, and renders
+packaging/templates/ into packaging/arch/, packaging/fedora/ and
+packaging/debian/. Rendered files carry a "do not edit" header.
 
 Usage:
     packaging/scripts/render-recipes.py [--check] [MANIFEST]
@@ -25,11 +26,21 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+try:
+    import tomllib as _toml
+except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
+    _toml = None
+
 ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = ROOT.parent
 DEFAULT_MANIFEST = ROOT / "release.json"
 
 HELPER = ROOT / "scripts" / "build-veshell.sh"
 RECIPES = ("arch", "fedora", "debian")
+
+CARGO_TOML = REPO_ROOT / "Cargo.toml"
+NIX_FLUTTER_SDK = REPO_ROOT / "nix" / "flutter-sdk.json"
+NIX_ENGINE_REPOSITORY = REPO_ROOT / "nix" / "engine-repository.json"
 
 # template -> rendered output (both relative to packaging/)
 RENDER_PAIRS = {
@@ -50,6 +61,7 @@ COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 PRERELEASE_RE = re.compile(r"^[A-Za-z0-9.]+$")
 DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})$")
+REPO_RE = re.compile(r"^[^/]+/[^/]+$")
 
 
 def fail(message: str) -> "NoReturn":  # noqa: F821
@@ -108,6 +120,63 @@ def validate(manifest: dict) -> None:
         require(manifest, f"{path}.sha256", str, SHA256_RE)
     require(manifest, "inputs.cargo_vendor.sha256", str, SHA256_RE)
     require(manifest, "inputs.pubcache.sha256", str, SHA256_RE)
+    require(manifest, "nix.engine_source.repository", str, REPO_RE)
+    require(manifest, "nix.engine_source.revision", str, COMMIT_RE)
+    require(manifest, "nix.engine_source.sha256", str)
+
+
+def cargo_metadata() -> dict:
+    """Read Cargo.toml, falling back to a minimal parser on Python < 3.11."""
+    if not CARGO_TOML.is_file():
+        fail("missing Cargo.toml")
+    if _toml is not None:
+        with CARGO_TOML.open("rb") as handle:
+            return _toml.load(handle)
+    pins: dict = {"package": {}}
+    section = ""
+    for line in CARGO_TOML.read_text().splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            section = stripped.strip("[]")
+            continue
+        match = re.match(r'^(\w+)\s*=\s*"([^"]*)"', stripped)
+        if not match:
+            continue
+        if section == "package" and match.group(1) == "version":
+            pins["package"]["version"] = match.group(2)
+        if section == "package.metadata" and match.group(1) == "flutter_version":
+            pins["package"].setdefault("metadata", {})["flutter_version"] = match.group(2)
+    return pins
+
+
+def validate_repo_pins(manifest: dict) -> None:
+    """Every other pin in the repository must agree with the manifest."""
+    cargo = cargo_metadata()
+    cargo_version = cargo.get("package", {}).get("version")
+    if cargo_version != manifest["version"]:
+        fail(f"Cargo.toml package.version ({cargo_version}) != manifest version ({manifest['version']})")
+    cargo_flutter = cargo.get("package", {}).get("metadata", {}).get("flutter_version")
+    flutter_version = manifest["flutter"]["version"]
+    if cargo_flutter != flutter_version:
+        fail(f"Cargo.toml metadata.flutter_version ({cargo_flutter}) != manifest flutter.version ({flutter_version})")
+
+    if not NIX_FLUTTER_SDK.is_file():
+        fail(f"missing {NIX_FLUTTER_SDK.relative_to(REPO_ROOT)}")
+    sdk_pins = json.loads(NIX_FLUTTER_SDK.read_text())
+    if flutter_version not in sdk_pins:
+        fail(f"nix/flutter-sdk.json has no entry for Flutter {flutter_version}")
+    nix_engine_version = sdk_pins[flutter_version].get("engineVersion")
+    manifest_engine = manifest["flutter"]["engine_revision"]
+    if nix_engine_version != manifest_engine:
+        fail(f"nix/flutter-sdk.json engineVersion ({nix_engine_version}) != manifest flutter.engine_revision ({manifest_engine})")
+
+    if not NIX_ENGINE_REPOSITORY.is_file():
+        fail(f"missing {NIX_ENGINE_REPOSITORY.relative_to(REPO_ROOT)}")
+    nix_engine = json.loads(NIX_ENGINE_REPOSITORY.read_text())
+    source = manifest["nix"]["engine_source"]
+    for key in ("repository", "revision", "sha256"):
+        if nix_engine.get(key) != source[key]:
+            fail(f"nix/engine-repository.json {key} ({nix_engine.get(key)}) != manifest nix.engine_source.{key} ({source[key]})")
 
 
 def helper_sha256() -> str:
@@ -213,6 +282,7 @@ def main() -> int:
 
     manifest = json.loads(manifest_path.read_text())
     validate(manifest)
+    validate_repo_pins(manifest)
     tokens = build_tokens(manifest)
 
     out_of_date = []

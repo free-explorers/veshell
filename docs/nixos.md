@@ -158,8 +158,11 @@ source-engine integration; these builds disable the normal test phases.
 
 ## Maintainer notes
 
-- `Cargo.toml` is the authoritative Flutter version pin. `nix/flutter-sdk.json`
-  and `nix/flutter-tools-lock.json` hold the verified SDK/tooling metadata.
+- `packaging/release.json` is the release source of truth; `Cargo.toml`,
+  `nix/flutter-sdk.json` and `nix/engine-repository.json` must agree with it
+  (enforced by `packaging/scripts/render-recipes.py --check`).
+  `nix/flutter-sdk.json` and `nix/flutter-tools-lock.json` hold the verified
+  SDK/tooling metadata.
 - `nix/engine-repository.json` pins the independent engine packaging source.
   The shell explicitly uses its matching frontend, platform kernel, and
   `gen_snapshot`; matching version strings alone are insufficient.
@@ -181,10 +184,12 @@ source-engine integration; these builds disable the normal test phases.
 nix-shell -p yq jq --run 'yq -s . src/shell/pubspec.lock | jq -S ".[0]" > nix/pubspec-lock.json'
 ```
 
-The optional dispatch-only `Nix Package Release` workflow
-(`.github/workflows/nix-package-release.yml`) and application
-export/import helpers are prepared but have not been verified end-to-end.
-Application publishing is not required for installation. If used, application
-exports exclude the separately published engine closure, and importing requires
-verification of both repositories. No Veshell application release is currently
-published; do not treat those helpers as a tested installation path.
+The `Nix Package Release` workflow
+(`.github/workflows/nix-package-release.yml`) is called by the unified release
+pipeline (`.github/workflows/release.yml`) when a release is published, and can
+still be dispatched manually. It and the application export/import helpers are
+prepared but have not been verified end-to-end. Application publishing is not
+required for installation. If used, application exports exclude the separately
+published engine closure, and importing requires verification of both
+repositories. No Veshell application release is currently published; do not
+treat those helpers as a tested installation path.

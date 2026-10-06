@@ -5,7 +5,7 @@
   "description": "Single source of truth consumed by packaging/scripts/render-recipes.py and the release pipeline. URL fields pin the exact upstream artifacts; sha256 fields pin their content.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "name", "version", "channel", "date", "commit", "maintainer", "polkit_helper", "mirrors", "flutter", "inputs"],
+  "required": ["schema", "name", "version", "channel", "date", "commit", "maintainer", "polkit_helper", "mirrors", "flutter", "nix", "inputs"],
   "properties": {
     "schema": { "const": 1 },
     "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
@@ -61,6 +61,24 @@
           }
         },
         "engine": { "$ref": "#/definitions/artifact" }
+      }
+    },
+    "nix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["engine_source"],
+      "properties": {
+        "engine_source": {
+          "type": "object",
+          "description": "Nix-specific source-build pin for the Flutter engine; mirrors nix/engine-repository.json.",
+          "additionalProperties": false,
+          "required": ["repository", "revision", "sha256"],
+          "properties": {
+            "repository": { "type": "string", "pattern": "^[^/]+/[^/]+$" },
+            "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+            "sha256": { "type": "string", "minLength": 1 }
+          }
+        }
       }
     },
     "inputs": {

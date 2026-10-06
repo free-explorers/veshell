@@ -75,6 +75,13 @@ consume **pinned, checksummed upstream Flutter artifacts**. Concretely:
 Rust build runs with `CARGO_NET_OFFLINE=true` against the vendored crate tree.
 `scripts/generate-inputs.sh verify` re-checks every upstream hash.
 
+**Engine strategy.** The distro recipes currently consume the prebuilt
+meta-flutter engine (`flutter.engine`). The Nix channel instead source-builds the
+engine through `free-explorers/flutter-engine-nix`, pinned as
+`nix.engine_source` in the manifest. The direction is to build the engine
+ourselves and drop the meta-flutter dependency, after which the distro recipes
+switch to our own published engine artifacts.
+
 ### Single source of truth
 
 `release.json` holds the release version, the pinned Flutter SDK/engine
@@ -89,21 +96,27 @@ packaging/scripts/render-recipes.py --check  # verify they are in sync (CI)
 The renderer applies the per-distro version mapping (Arch `0.2.0beta1`,
 RPM `0.2.0` with `Release: 0.1.beta1`, Debian `0.2.0~beta.1-1`) and refuses to
 run when a recipe's copy of `build-veshell.sh` drifts from the canonical helper.
-Editing a rendered recipe by hand is a mistake: change `release.json` or the
-templates and re-render.
+`--check` also fails if `Cargo.toml`, `nix/flutter-sdk.json` or
+`nix/engine-repository.json` disagree with the manifest, so one release identity
+covers the distro recipes and the Nix packaging. Editing a rendered recipe by
+hand is a mistake: change `release.json` or the templates and re-render.
 
 ## Release pipeline
 
 `.github/workflows/release.yml` runs when a GitHub release is published:
 
 1. **validate** — the release tag must match the manifest (tag `v0.2.0-beta.1`
-   for release id `0.2.0-beta.1`), and the recipes must already be rendered
-   (`--check`).
+   for release id `0.2.0-beta.1`), the recipes must already be rendered
+   (`--check`), and the repository pins must agree with the manifest.
 2. **prebuilt** — builds `veshell-<release>-x86_64.tar.zst` inside an
    `archlinux:base-devel` container, attests `SHA256SUMS`, and uploads both to
    the release.
 3. **aur** — regenerates `.SRCINFO`, renders `veshell-bin` from the prebuilt
    hash, and pushes `veshell` and `veshell-bin` to the AUR.
+4. **nix** — calls the attested-closure workflow
+   (`.github/workflows/nix-package-release.yml`) to publish the Nix channel. It
+   needs the separately published `flutter-engine-nix` engine release; the Nix
+   toolchain is not used by the distro recipes.
 
 `scripts/fetch-inputs.sh` downloads and checksum-verifies the pinned SDK/engine
 artifacts and the two generated inputs before the build, so nothing is fetched
