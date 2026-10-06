@@ -32,6 +32,9 @@ Rules:
   geometry file and Rust applies it best-effort. An apply may be rejected by the
   hardware, in which case the next `monitor_layout_changed` publishes the
   actual state back to Flutter.
+  Initial DRM connector discovery maps each output as it is configured, then
+  publishes one complete monitor-layout snapshot and computes frame pacing
+  after the scan. Runtime hotplug changes are published immediately.
 - `monitor/<connector>.json` is the only place desired geometry is persisted.
   When the file is absent, `MonitorSettingJson` falls back to the live `Monitor`
   ("reset to detected") without writing anything; it is created by

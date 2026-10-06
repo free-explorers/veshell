@@ -37,7 +37,7 @@ use smithay::{
     utils::{Buffer, Logical, Monotonic, Physical, Point, Rectangle, Scale, Size, Time, Transform},
 };
 
-pub static CLEAR_COLOR: [f32; 4] = [0.8, 0.8, 0.9, 1.0];
+pub static CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 mod fractionnal_memory;
 mod fractionnal_texture;
 smithay::backend::renderer::element::render_elements! {
@@ -502,36 +502,51 @@ where
     elements
 }
 
+struct RecordingFontCache(OnceLock<Option<fontdue::Font>>);
+
+impl RecordingFontCache {
+    fn get(&self) -> Option<&fontdue::Font> {
+        // Unlike get_or_init, get never waits for an in-progress initializer.
+        self.0.get().and_then(Option::as_ref)
+    }
+
+    fn warm(&self, load: impl FnOnce() -> Option<fontdue::Font>) {
+        self.0.get_or_init(load);
+    }
+}
+
+static RECORDING_FONT: RecordingFontCache = RecordingFontCache(OnceLock::new());
+
+/// Reads the completed font cache without blocking. Until warmup completes,
+/// only the counter digits are omitted; the recording chip remains visible.
+fn recording_font() -> Option<&'static fontdue::Font> {
+    RECORDING_FONT.get()
+}
+
 /// Resolves (once, process-wide) the fontconfig substitution for the
 /// shell's label font: Flutter asks fontconfig for the "Roboto" family,
 /// and the recording counter uses the same resolution so its text matches
 /// the shell's typography on any machine. The resolution shells out to
-/// `fc-match` and reads a file, so it is pre-warmed at startup and never
-/// runs on the render thread's first recorded frame.
-fn recording_font() -> Option<&'static fontdue::Font> {
-    static FONT: OnceLock<Option<fontdue::Font>> = OnceLock::new();
-    FONT.get_or_init(|| {
-        let file = std::process::Command::new("fc-match")
-            .arg("--format=%{file}")
-            .arg("Roboto")
-            .output()
-            .ok()?
-            .stdout;
-        let file = String::from_utf8(file).ok()?;
-        fontdue::Font::from_bytes(
-            std::fs::read(file.trim_end()).ok()?,
-            fontdue::FontSettings::default(),
-        )
-        .ok()
-    })
-    .as_ref()
+/// `fc-match` and reads a file, so only the background warmup may call it.
+fn load_recording_font() -> Option<fontdue::Font> {
+    let file = std::process::Command::new("fc-match")
+        .arg("--format=%{file}")
+        .arg("Roboto")
+        .output()
+        .ok()?
+        .stdout;
+    let file = String::from_utf8(file).ok()?;
+    fontdue::Font::from_bytes(
+        std::fs::read(file.trim_end()).ok()?,
+        fontdue::FontSettings::default(),
+    )
+    .ok()
 }
 
-/// Pre-resolves the recording counter font. Call from startup so the
-/// first recording never pays the `fc-match` subprocess on the render
-/// thread; absence of fontconfig just disables the counter digits.
+/// Pre-resolves the recording counter font on the startup worker. Absence of
+/// fontconfig disables only the counter digits, and rendering never waits.
 pub fn warm_recording_font() {
-    let _ = recording_font();
+    RECORDING_FONT.warm(load_recording_font);
 }
 
 /// Rasterizes the counter text with the fontconfig-resolved family
@@ -852,6 +867,7 @@ mod counter_bitmap_tests {
 
     #[test]
     fn counter_bitmap_is_rasterized() {
+        warm_recording_font();
         let (data, size) = recording_counter_bitmap(&test_chip(63), 1.0).expect("bitmap built");
         assert!(size.w > 20 && size.h > 8, "size {size:?}");
         let bytes = size.w * size.h * 4;
@@ -863,6 +879,38 @@ mod counter_bitmap_tests {
             "max coverage {max}, bright bytes {bright}"
         );
         eprintln!("bitmap size {size:?}, max {max}, bright bytes {bright}");
+    }
+
+    #[test]
+    fn recording_font_cache_does_not_wait_for_warmup() {
+        let cache = std::sync::Arc::new(RecordingFontCache(OnceLock::new()));
+        let worker_cache = cache.clone();
+        let (started, rx_started) = std::sync::mpsc::channel();
+        let (finish, rx_finish) = std::sync::mpsc::channel();
+        assert!(cache.get().is_none());
+        let worker = std::thread::spawn(move || {
+            worker_cache.warm(|| {
+                started.send(()).unwrap();
+                rx_finish.recv().unwrap();
+                None
+            });
+        });
+        rx_started.recv().unwrap();
+        let reader_cache = cache.clone();
+        let (read, rx_read) = std::sync::mpsc::channel();
+        let reader = std::thread::spawn(move || {
+            read.send(reader_cache.get().is_none()).unwrap();
+        });
+        let result = rx_read.recv_timeout(std::time::Duration::from_secs(5));
+        // Release the initializer even if the reader regresses and blocks,
+        // so this test fails rather than leaving the suite hung.
+        finish.send(()).unwrap();
+        worker.join().unwrap();
+        reader.join().unwrap();
+        assert!(result.expect("font reads must not wait for warmup"));
+        assert!(cache.get().is_none());
+        // An unavailable font is cached, not retried on subsequent reads.
+        cache.warm(|| panic!("font warmup must run only once"));
     }
 
     #[test]

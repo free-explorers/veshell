@@ -119,7 +119,22 @@ impl BuildConfig {
 }
 
 fn output_profile(out: &Path) -> Option<&str> {
-    out.ancestors().nth(3)?.file_name()?.to_str()
+    if out.file_name()? != "out" {
+        return None;
+    }
+    // Cargo v1 uses <profile>/build/<package>-<hash>/out, while v2 uses
+    // <profile>/build/<package>/<hash>/out. Find the build directory instead
+    // of assuming that the profile is always at the same ancestor depth.
+    let build = out
+        .ancestors()
+        .find(|dir| dir.file_name().is_some_and(|name| name == "build"))?;
+    // Do not mistake an unrelated build directory higher in an unfamiliar
+    // path for Cargo's build directory. from_env falls back to PROFILE.
+    let suffix_depth = out.strip_prefix(build).ok()?.components().count();
+    if !matches!(suffix_depth, 2 | 3) {
+        return None;
+    }
+    build.parent()?.file_name()?.to_str()
 }
 
 #[cfg(test)]
@@ -154,6 +169,32 @@ mod tests {
             FlutterEngineBuild::Profile
         );
         assert!("distro-release".parse::<FlutterEngineBuild>().is_err());
+    }
+
+    #[test]
+    fn cargo_output_supports_both_build_dir_layouts() {
+        for profile in ["debug", "release", "profile", "distro-release"] {
+            for root in ["/build/target", "/cache/aarch64-unknown-linux-gnu"] {
+                for suffix in ["build/veshell-hash/out", "build/veshell/hash/out"] {
+                    let out = PathBuf::from(root).join(profile).join(suffix);
+                    assert_eq!(output_profile(&out), Some(profile), "{}", out.display());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cargo_output_does_not_guess_from_an_unrecognized_layout() {
+        for out in [
+            "/cache/release/veshell/hash/out",
+            "/cache/build/unrecognized/release/veshell/hash/out",
+            "/cache/release/build/veshell/hash/run",
+            "/cache/release/build/veshell-hash",
+            "/out",
+            "out",
+        ] {
+            assert_eq!(output_profile(Path::new(out)), None, "{out}");
+        }
     }
 
     #[test]
