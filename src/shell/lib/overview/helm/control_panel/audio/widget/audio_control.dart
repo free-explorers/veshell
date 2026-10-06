@@ -4,6 +4,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/shared/pulseaudio/provider/default_sink.dart';
 import 'package:shell/shared/pulseaudio/provider/default_source.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_audio.dart';
@@ -38,7 +39,7 @@ class AudioControl extends HookConsumerWidget {
                   const SizedBox(width: 16),
                   Expanded(
                     child: Text(
-                      'Volume',
+                      context.l10n.volume,
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                   ),

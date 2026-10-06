@@ -3,6 +3,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/capture/model/screen_cast_consent/screen_cast_consent.serializable.dart';
 import 'package:shell/capture/provider/screen_cast_consent.dart';
+import 'package:shell/l10n/l10n.dart';
 
 /// The trusted screen cast consent picker.
 ///
@@ -27,10 +28,12 @@ class ScreenCastConsentPicker extends HookConsumerWidget {
     // Never upscale the request kinds in the copy: a WINDOW-only request
     // talks about windows, a mixed one names both explicitly (spec 8.2:
     // the picker is filtered by the request's types, never substituted).
-    final offersOutputs =
-        consent.sources.any((source) => source.kind == CaptureSourceKind.outputs);
-    final offersWindows =
-        consent.sources.any((source) => source.kind == CaptureSourceKind.windows);
+    final offersOutputs = consent.sources.any(
+      (source) => source.kind == CaptureSourceKind.outputs,
+    );
+    final offersWindows = consent.sources.any(
+      (source) => source.kind == CaptureSourceKind.windows,
+    );
 
     return Card(
       color: Theme.of(context).colorScheme.surfaceContainer,
@@ -43,19 +46,16 @@ class ScreenCastConsentPicker extends HookConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 24),
-              Text(
-                switch ((offersOutputs, offersWindows)) {
-                  (true, false) => 'Share your screen?',
-                  (false, true) => 'Share a window?',
-                  _ => 'Share a screen or a window?',
-                },
-                style: theme.textTheme.headlineMedium,
-              ),
+              Text(switch ((offersOutputs, offersWindows)) {
+                (true, false) => context.l10n.shareScreenQuestion,
+                (false, true) => context.l10n.shareWindowQuestion,
+                _ => context.l10n.shareScreenOrWindowQuestion,
+              }, style: theme.textTheme.headlineMedium),
               const SizedBox(height: 8),
               Text(
                 consent.appName.isEmpty
-                    ? 'An application wants shared content.'
-                    : '${consent.appName} wants to share with you.',
+                    ? context.l10n.applicationWantsContent
+                    : context.l10n.applicationShareRequest(consent.appName),
               ),
               const SizedBox(height: 24),
               // Windows first, then screens: Brave and Chromium send
@@ -72,8 +72,8 @@ class ScreenCastConsentPicker extends HookConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       for (final group in [
-                        (CaptureSourceKind.windows, 'Windows'),
-                        (CaptureSourceKind.outputs, 'Screens'),
+                        (CaptureSourceKind.windows, context.l10n.windows),
+                        (CaptureSourceKind.outputs, context.l10n.screens),
                       ]) ...[
                         if (offersOutputs &&
                             offersWindows &&
@@ -91,7 +91,11 @@ class ScreenCastConsentPicker extends HookConsumerWidget {
                           RadioListTile<String>(
                             value: source.id,
                             groupValue: approvedSource,
-                            title: Text(source.label),
+                            title: Text(
+                              source.label.isEmpty
+                                  ? context.l10n.untitledWindow
+                                  : source.label,
+                            ),
                             onChanged: (value) {
                               if (value != null) {
                                 selectedSource.value = value;
@@ -112,21 +116,21 @@ class ScreenCastConsentPicker extends HookConsumerWidget {
                     onPressed: ref
                         .read(screenCastConsentProvider.notifier)
                         .cancel,
-                    child: const Text('Cancel'),
+                    child: Text(context.l10n.cancel),
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton(
                     onPressed: approvedSource == null
                         ? null
                         : () => ref
-                            .read(screenCastConsentProvider.notifier)
-                            .approve(approvedSource),
+                              .read(screenCastConsentProvider.notifier)
+                              .approve(approvedSource),
                     child: Text(
                       offersOutputs && offersWindows
-                          ? 'Share'
+                          ? context.l10n.share
                           : offersWindows
-                              ? 'Share window'
-                              : 'Share',
+                          ? context.l10n.shareWindow
+                          : context.l10n.share,
                     ),
                   ),
                 ],

@@ -1,6 +1,7 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/helm/control_panel/network/widget/device_status.dart';
 import 'package:shell/overview/helm/control_panel/network/wifi/provider/wifi_manager.dart';
 import 'package:shell/overview/helm/control_panel/network/wifi/widget/available_access_point_list.dart';
@@ -11,10 +12,7 @@ import 'package:shell/shared/nm/provider/nm_device.dart';
 import 'package:shell/shared/widget/expandable_card.dart';
 
 class WifiControl extends HookConsumerWidget {
-  const WifiControl(
-    this.address, {
-    super.key,
-  });
+  const WifiControl(this.address, {super.key});
   final String address;
 
   @override
@@ -32,15 +30,13 @@ class WifiControl extends HookConsumerWidget {
               child: Row(
                 children: [
                   WifiControlIcon(address),
-                  const SizedBox(
-                    width: 16,
-                  ),
+                  const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Wifi',
+                          context.l10n.wifi,
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                         DeviceStatus(address: address),
@@ -56,9 +52,7 @@ class WifiControl extends HookConsumerWidget {
                           .setWirelessEnabled(value);
                     },
                   ),
-                  const SizedBox(
-                    width: 8,
-                  ),
+                  const SizedBox(width: 8),
                   if (!isExpanded)
                     IconButton.filledTonal(
                       visualDensity: VisualDensity.compact,
@@ -75,8 +69,9 @@ class WifiControl extends HookConsumerWidget {
                   if (isExpanded)
                     Consumer(
                       builder: (context, ref, child) {
-                        final wifiManagerState =
-                            ref.watch(wifiManagerProvider(address));
+                        final wifiManagerState = ref.watch(
+                          wifiManagerProvider(address),
+                        );
                         if (wifiManagerState.isScanning) {
                           return const Padding(
                             padding: EdgeInsets.all(4),

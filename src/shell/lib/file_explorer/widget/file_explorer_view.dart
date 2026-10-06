@@ -9,6 +9,7 @@ import 'package:shell/file_explorer/provider/directory_listing.dart';
 import 'package:shell/file_explorer/provider/file_explorer_state.dart';
 import 'package:shell/file_explorer/provider/filtered_entry_list.dart';
 import 'package:shell/file_explorer/widget/file_entry_icon.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 
 /// Height of one file explorer row; fixed so the selection can be scrolled into
@@ -171,7 +172,7 @@ class _BreadcrumbBar extends HookWidget {
         children: [
           const SizedBox(width: 4),
           IconButton(
-            tooltip: 'Up',
+            tooltip: context.l10n.up,
             onPressed: path.parent == null ? null : onOpenParent,
             icon: const Icon(MdiIcons.arrowLeft),
           ),
@@ -361,7 +362,7 @@ class _EmptyDirectory extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Text(
-        isFiltered ? 'No matching items' : 'This folder is empty',
+        isFiltered ? context.l10n.noMatchingItems : context.l10n.folderEmpty,
         style: Theme.of(context).textTheme.bodyLarge,
       ),
     );
@@ -386,7 +387,7 @@ class _DirectoryError extends HookConsumerWidget {
             const Icon(MdiIcons.folderAlertOutline, size: 48),
             const SizedBox(height: 12),
             Text(
-              'Cannot open ${path.path}',
+              context.l10n.cannotOpenPath(path.path),
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleMedium,
             ),
@@ -402,7 +403,7 @@ class _DirectoryError extends HookConsumerWidget {
             FilledButton.icon(
               onPressed: () => ref.invalidate(directoryListingProvider(path)),
               icon: const Icon(MdiIcons.refresh),
-              label: const Text('Retry'),
+              label: Text(context.l10n.retry),
             ),
           ],
         ),

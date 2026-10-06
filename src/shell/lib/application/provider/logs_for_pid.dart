@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/l10n/l10n.dart';
 
 part 'logs_for_pid.g.dart';
 
@@ -84,7 +85,7 @@ class LogsForPid extends _$LogsForPid {
       builder: (context) => AlertDialog(
         content: state.lines.isNotEmpty
             ? SingleChildScrollView(child: Text(state.lines.join('\n')))
-            : const Text('No logs yet'),
+            : Text(context.l10n.noLogsYet),
       ),
     );
   }

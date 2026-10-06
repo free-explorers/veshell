@@ -1,6 +1,7 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/provider/cpu_chart.dart';
 import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/provider/cpu_stats.dart';
 import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/provider/processes_cpu_stats.dart';
@@ -17,8 +18,8 @@ class CpuMonitoringWidget extends ConsumerWidget {
     final spots = ref.watch(cpuChartProvider);
     return MonitoringCard(
       icon: MdiIcons.chip,
-      title: 'CPU',
-      badge: '${stats.cpuLoad}%',
+      title: context.l10n.cpu,
+      badge: context.l10n.percentValue(stats.cpuLoad),
       series: [
         MonitoringSeries(
           spots: spots,

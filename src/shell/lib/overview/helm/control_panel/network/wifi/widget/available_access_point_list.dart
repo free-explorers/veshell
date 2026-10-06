@@ -2,6 +2,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/helm/control_panel/network/wifi/model/wifi_access_point.dart';
 import 'package:shell/overview/helm/control_panel/network/wifi/provider/single_expanded_state.dart';
 import 'package:shell/overview/helm/control_panel/network/wifi/provider/wifi_access_point_list.dart';
@@ -13,10 +14,7 @@ import 'package:shell/shared/widget/expandable.dart';
 import 'package:shell/shared/widget/expandable_card.dart';
 
 class AvailableAccessPointList extends HookConsumerWidget {
-  const AvailableAccessPointList({
-    required this.address,
-    super.key,
-  });
+  const AvailableAccessPointList({required this.address, super.key});
 
   final String address;
 
@@ -26,9 +24,7 @@ class AvailableAccessPointList extends HookConsumerWidget {
 
     final availableAccessPoint = ref
         .watch(wifiAccessPointListProvider(address))
-        .where(
-          (element) => element.settingsConnection == null,
-        )
+        .where((element) => element.settingsConnection == null)
         .toList();
     return Flexible(
       child: ColoredBox(
@@ -63,16 +59,12 @@ class AvailableAccessPointTile extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isExpanded =
         ref.watch(singleExpandedProvider('AvailableAccessPointTile')) ==
-            accessPoint.ssid;
+        accessPoint.ssid;
 
     final textController = useTextEditingController();
     final tile = ListTile(
-      leading: AccessPointIcon(
-        accessPoint: accessPoint.bestAccessPoint!,
-      ),
-      title: AccessPointLabel(
-        accessPoint: accessPoint.bestAccessPoint!,
-      ),
+      leading: AccessPointIcon(accessPoint: accessPoint.bestAccessPoint!),
+      title: AccessPointLabel(accessPoint: accessPoint.bestAccessPoint!),
       trailing: const Icon(MdiIcons.plus),
       onTap: () {
         ref
@@ -108,16 +100,14 @@ class AvailableAccessPointTile extends HookConsumerWidget {
                     child: TextField(
                       onSubmitted: (_) => onSubmitted(),
                       controller: textController,
-                      decoration: const InputDecoration(
-                        hintText: 'Password',
+                      decoration: InputDecoration(
+                        hintText: context.l10n.password,
                       ),
                       obscureText: true,
                       autofocus: true,
                     ),
                   ),
-                  const SizedBox(
-                    width: 16,
-                  ),
+                  const SizedBox(width: 16),
                   IconButton(
                     onPressed: onSubmitted,
                     icon: const Icon(MdiIcons.wifiPlus),

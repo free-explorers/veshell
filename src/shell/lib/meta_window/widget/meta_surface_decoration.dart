@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/provider/meta_window_dragging_state.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/meta_window_window_map.dart';
@@ -96,7 +97,7 @@ class WindowTitleBar extends HookConsumerWidget {
               const Spacer(),
               if (ownerDialogWindowId != null)
                 IconButton(
-                  tooltip: 'Extract to new tile',
+                  tooltip: context.l10n.extractToNewTile,
                   onPressed: () {
                     unawaited(
                       ref

@@ -13,24 +13,25 @@ class ClockWidget extends HookConsumerWidget {
     ref.listen(nowDateTimeProvider, (prev, next) {
       if (prev?.minute != next.minute) now.value = next;
     });
-    final currentTime = DateFormat('hh:mm a').format(now.value);
-    final currentDate = DateFormat('MMMM dd, yyyy').format(now.value);
+    final locale = Localizations.localeOf(context).toString();
+    final currentTime = DateFormat.jm(locale).format(now.value);
+    final currentDate = DateFormat.yMMMMd(locale).format(now.value);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
           currentTime,
-          style: Theme.of(context).textTheme.titleMedium!.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium!.copyWith(fontWeight: FontWeight.w500),
         ),
         const SizedBox(width: 16),
         Text(
           currentDate,
-          style: Theme.of(context).textTheme.titleMedium!.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium!.copyWith(fontWeight: FontWeight.w500),
         ),
       ],
     );

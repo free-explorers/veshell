@@ -1,6 +1,7 @@
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 
 class PolkitAuthenticationDialog extends HookConsumerWidget {
   const PolkitAuthenticationDialog(this.message, {super.key});
@@ -20,13 +21,11 @@ class PolkitAuthenticationDialog extends HookConsumerWidget {
             children: [
               const SizedBox(height: 32),
               Text(
-                'Authentication required',
+                context.l10n.authenticationRequired,
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
               const SizedBox(height: 32),
-              Text(
-                message,
-              ),
+              Text(message),
               const SizedBox(height: 32),
               TextField(
                 onChanged: (value) {
@@ -38,7 +37,7 @@ class PolkitAuthenticationDialog extends HookConsumerWidget {
                 autofocus: true,
                 style: Theme.of(context).textTheme.titleMedium,
                 decoration: InputDecoration(
-                  hintText: 'Password',
+                  hintText: context.l10n.password,
                   border: const OutlineInputBorder(
                     borderRadius: BorderRadius.all(Radius.circular(24)),
                   ),
@@ -56,7 +55,7 @@ class PolkitAuthenticationDialog extends HookConsumerWidget {
                     onPressed: () {
                       Navigator.of(context).pop();
                     },
-                    child: const Text('Cancel'),
+                    child: Text(context.l10n.cancel),
                   ),
                   const SizedBox(width: 16),
                   FilledButton(
@@ -65,7 +64,7 @@ class PolkitAuthenticationDialog extends HookConsumerWidget {
                         : () {
                             Navigator.of(context).pop(passwordState.value);
                           },
-                    child: const Text('Authenticate'),
+                    child: Text(context.l10n.authenticate),
                   ),
                 ],
               ),

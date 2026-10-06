@@ -6,6 +6,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/widget/app_icon.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/helm/monitoring_panel/model/process_ranking.dart';
 import 'package:shell/overview/helm/monitoring_panel/provider/process_name.dart';
 import 'package:shell/shared/widget/expandable_card.dart';
@@ -120,9 +121,7 @@ class MonitoringCard extends StatelessWidget {
                                 ? MdiIcons.chevronUp
                                 : MdiIcons.chevronDown,
                           ),
-                          style: IconButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                          ),
+                          style: IconButton.styleFrom(padding: EdgeInsets.zero),
                           visualDensity: VisualDensity.compact,
                         ),
                       ],
@@ -157,12 +156,8 @@ class MonitoringChart extends StatelessWidget {
     final spots = [for (final line in series) ...line.spots];
     return LineChart(
       LineChartData(
-        minX: spots.isEmpty
-            ? 0
-            : spots.map((spot) => spot.x).reduce(math.min),
-        maxX: spots.isEmpty
-            ? 0
-            : spots.map((spot) => spot.x).reduce(math.max),
+        minX: spots.isEmpty ? 0 : spots.map((spot) => spot.x).reduce(math.min),
+        maxX: spots.isEmpty ? 0 : spots.map((spot) => spot.x).reduce(math.max),
         maxY: 100,
         minY: 0,
         gridData: const FlGridData(show: false),
@@ -193,11 +188,7 @@ class MonitoringChart extends StatelessWidget {
 /// Sorted per-process percentage list shared by the monitoring cards.
 class ProcessMetricList extends ConsumerWidget {
   /// Creates the list for [percentages], keyed by pid.
-  const ProcessMetricList({
-    required this.percentages,
-    this.header,
-    super.key,
-  });
+  const ProcessMetricList({required this.percentages, this.header, super.key});
 
   /// Percentage per pid.
   final IMap<int, double> percentages;
@@ -240,7 +231,9 @@ class _ProcessMetricRow extends ConsumerWidget {
         child: AppIconById(id: processName, fallback: const SizedBox.shrink()),
       ),
       title: Text(processName),
-      trailing: Text('${process.value.toStringAsFixed(2)}%'),
+      trailing: Text(
+        context.l10n.percentValue(num.parse(process.value.toStringAsFixed(2))),
+      ),
     );
   }
 }

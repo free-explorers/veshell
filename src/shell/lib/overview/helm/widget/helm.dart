@@ -1,6 +1,7 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/notification/provider/notification_list.dart';
 import 'package:shell/overview/helm/control_panel/audio/widget/audio_control.dart';
 import 'package:shell/overview/helm/control_panel/bluetooth/widget/bluetooth_control.dart';
@@ -114,13 +115,13 @@ class _TabbedLayout extends ConsumerWidget {
         children: [
           TabBar.secondary(
             tabs: [
-              const Tab(
+              Tab(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(MdiIcons.tuneVertical),
-                    SizedBox(width: 8),
-                    Text('Controls'),
+                    const Icon(MdiIcons.tuneVertical),
+                    const SizedBox(width: 8),
+                    Text(context.l10n.controls),
                   ],
                 ),
               ),
@@ -134,7 +135,7 @@ class _TabbedLayout extends ConsumerWidget {
                       child: const Icon(MdiIcons.bullhornVariant),
                     ),
                     const SizedBox(width: 8),
-                    const Text('Notifications'),
+                    Text(context.l10n.notifications),
                   ],
                 ),
               ),

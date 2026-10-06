@@ -10,23 +10,32 @@ part 'configured_settings_json.g.dart';
 @riverpod
 class ConfiguredSettingsJson extends _$ConfiguredSettingsJson {
   StreamSubscription<FileSystemEvent>? _subscription;
+
+  /// Publish edits immediately; the atomic file writer is debounced and its
+  /// filesystem notification arrives later.
+  void publish(Map<String, dynamic> values) {
+    state = Map<String, dynamic>.of(values);
+  }
+
   @override
   Map<String, dynamic> build() {
     final configDirectory = ref.watch(configDirectoryProvider);
-    final configuredSettingsFile =
-        File('${configDirectory.path}/settings.json');
+    final configuredSettingsFile = File(
+      '${configDirectory.path}/settings.json',
+    );
 
     _subscription?.cancel();
 
     if (!configuredSettingsFile.existsSync()) {
-      _subscription =
-          configDirectory.watch(events: FileSystemEvent.move).listen((event) {
-        if (event is FileSystemMoveEvent) {
-          if (event.destination == configuredSettingsFile.path) {
-            ref.invalidateSelf();
-          }
-        }
-      });
+      _subscription = configDirectory
+          .watch(events: FileSystemEvent.move)
+          .listen((event) {
+            if (event is FileSystemMoveEvent) {
+              if (event.destination == configuredSettingsFile.path) {
+                ref.invalidateSelf();
+              }
+            }
+          });
       return {};
     }
     _subscription = configuredSettingsFile.watch().listen((event) {
@@ -38,9 +47,8 @@ class ConfiguredSettingsJson extends _$ConfiguredSettingsJson {
     });
 
     try {
-      return jsonDecode(
-        configuredSettingsFile.readAsStringSync(),
-      ) as Map<String, dynamic>;
+      return jsonDecode(configuredSettingsFile.readAsStringSync())
+          as Map<String, dynamic>;
     } on Exception catch (_) {
       return {};
     }

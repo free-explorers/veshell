@@ -915,7 +915,8 @@ pub fn window_source_entries<BackendData: crate::backend::Backend + 'static>(
                 .title
                 .clone()
                 .or_else(|| meta_window.app_id.clone())
-                .unwrap_or_else(|| "Untitled window".to_string()),
+                // The shell supplies the localized unnamed-window caption.
+                .unwrap_or_default(),
             kind: SourceKind::Window,
         })
         .collect()

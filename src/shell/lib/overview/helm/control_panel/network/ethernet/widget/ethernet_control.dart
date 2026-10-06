@@ -1,16 +1,14 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/helm/control_panel/network/widget/device_status.dart';
 import 'package:shell/shared/nm/provider/nm_client.dart';
 import 'package:shell/shared/nm/provider/nm_device.dart';
 import 'package:shell/shared/widget/expandable_card.dart';
 
 class EthernetControl extends HookConsumerWidget {
-  const EthernetControl(
-    this.address, {
-    super.key,
-  });
+  const EthernetControl(this.address, {super.key});
   final String address;
 
   @override
@@ -30,15 +28,13 @@ class EthernetControl extends HookConsumerWidget {
                     MdiIcons.ethernet,
                     color: Theme.of(context).colorScheme.primary,
                   ),
-                  const SizedBox(
-                    width: 16,
-                  ),
+                  const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Ethernet',
+                          context.l10n.ethernet,
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                         DeviceStatus(address: address),

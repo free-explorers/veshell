@@ -3,6 +3,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/helm/control_panel/bluetooth/provider/bluetooth_manager.dart';
 import 'package:shell/overview/helm/control_panel/bluetooth/widget/bluetooth_device_list_tile.dart';
 import 'package:shell/shared/bluez/provider/bluez_device.dart';
@@ -10,9 +11,7 @@ import 'package:shell/shared/bluez/provider/bluez_devices.dart';
 import 'package:shell/shared/widget/expandable_card.dart';
 
 class BluetoothControl extends HookConsumerWidget {
-  const BluetoothControl({
-    super.key,
-  });
+  const BluetoothControl({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -23,20 +22,20 @@ class BluetoothControl extends HookConsumerWidget {
         .map((address) => ref.watch(bluezDeviceProvider(address)))
         .nonNulls
         // First connected then paired then unpaired
-        .sorted(
-      (a, b) {
-        if (a.connected == b.connected) {
-          if (a.paired == b.paired) {
-            return a.name.compareTo(b.name ?? '');
+        .sorted((a, b) {
+          if (a.connected == b.connected) {
+            if (a.paired == b.paired) {
+              return a.name.compareTo(b.name ?? '');
+            }
+            return (b.paired ?? false) ? 1 : -1;
           }
-          return (b.paired ?? false) ? 1 : -1;
-        }
-        return (b.connected ?? false) ? 1 : -1;
-      },
-    ).toList();
+          return (b.connected ?? false) ? 1 : -1;
+        })
+        .toList();
 
-    final connectedDevices =
-        devices.where((device) => device.connected).toList();
+    final connectedDevices = devices
+        .where((device) => device.connected)
+        .toList();
     return ExpandableCard(
       builder: (context, isExpanded) {
         final displayedDevices = isExpanded ? devices : connectedDevices;
@@ -53,12 +52,10 @@ class BluetoothControl extends HookConsumerWidget {
                     MdiIcons.bluetooth,
                     color: Theme.of(context).colorScheme.primary,
                   ),
-                  const SizedBox(
-                    width: 16,
-                  ),
+                  const SizedBox(width: 16),
                   Expanded(
                     child: Text(
-                      'Bluetooth',
+                      context.l10n.bluetooth,
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                   ),
@@ -81,9 +78,8 @@ class BluetoothControl extends HookConsumerWidget {
                 color: Colors.black12,
                 child: ListView.builder(
                   shrinkWrap: true,
-                  itemBuilder: (context, index) => BluetoothDeviceListTile(
-                    displayedDevices[index].address,
-                  ),
+                  itemBuilder: (context, index) =>
+                      BluetoothDeviceListTile(displayedDevices[index].address),
                   itemCount: displayedDevices.length,
                 ),
               ),
@@ -97,7 +93,7 @@ class BluetoothControl extends HookConsumerWidget {
                   ref.read(bluetoothManagerProvider.notifier).startDiscovery();
                   ExpandableCard.of(context).expand();
                 },
-                child: const Text('View more'),
+                child: Text(context.l10n.viewMore),
               ),
           ],
         );

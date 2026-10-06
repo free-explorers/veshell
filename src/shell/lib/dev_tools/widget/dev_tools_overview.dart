@@ -5,6 +5,7 @@ import 'package:shell/dev_tools/provider/matching_logs.dart';
 import 'package:shell/dev_tools/widget/state_dev_view.dart';
 import 'package:shell/dev_tools/widget/surface_list_dev_view.dart';
 import 'package:shell/dev_tools/widget/window_list_dev_view.dart';
+import 'package:shell/l10n/l10n.dart';
 
 enum DevToolCategories { state, matching, surfaces, windows }
 
@@ -26,10 +27,14 @@ class DevToolsOverview extends HookConsumerWidget {
                     (e) => ListTile(
                       selected: selectedCategory.value == e,
                       title: switch (e) {
-                        DevToolCategories.state => const Text('State'),
-                        DevToolCategories.matching => const Text('Matching'),
-                        DevToolCategories.surfaces => const Text('Surfaces'),
-                        DevToolCategories.windows => const Text('Windows'),
+                        DevToolCategories.state => Text(context.l10n.state),
+                        DevToolCategories.matching => Text(
+                          context.l10n.matching,
+                        ),
+                        DevToolCategories.surfaces => Text(
+                          context.l10n.surfaces,
+                        ),
+                        DevToolCategories.windows => Text(context.l10n.windows),
                       },
                       onTap: () => selectedCategory.value = e,
                     ),

@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/file_explorer/model/directory_path.dart';
 import 'package:shell/file_explorer/model/file_entry.dart';
 import 'package:shell/file_explorer/provider/directory_listing.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/model/search_mode.dart';
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/overview/widget/search/search_engine.dart';
@@ -53,6 +54,8 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: CurrentScreenId(
             screenId: screenId,
             child: Scaffold(body: SearchEngine()),

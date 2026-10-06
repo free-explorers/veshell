@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/file_explorer/model/directory_path.dart';
 import 'package:shell/file_preview/model/file_preview.dart';
+import 'package:shell/l10n/l10n.dart';
 
 part 'file_preview.g.dart';
 
@@ -47,7 +48,9 @@ Future<FilePreview> filePreview(Ref ref, DirectoryPath path) async {
     return FilePreview.error(message: error.message);
   }
   if (stat.type == FileSystemEntityType.notFound) {
-    return FilePreview.error(message: 'No such file: ${path.path}');
+    return FilePreview.error(
+      message: ref.read(shellLocalizationsProvider).fileNotFound(path.path),
+    );
   }
 
   final name = p.basename(path.path);

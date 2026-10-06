@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart' hide Notification;
 import 'package:shell/capture/provider/recording_workspaces.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/notification/model/notification.serializable.dart';
 import 'package:shell/notification/provider/notification_routing.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
@@ -99,6 +100,8 @@ void main() {
             ),
           ],
           child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             home: Scaffold(
               body: Row(
                 children: [

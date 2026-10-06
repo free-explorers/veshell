@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/monitor/provider/monitor_arrangement.dart';
 import 'package:shell/monitor/widget/monitor_arrangement/monitor_arrangement_canvas.dart';
 
@@ -16,6 +17,8 @@ MonitorPlacement _placement(String id, Offset location) => MonitorPlacement(
 
 Widget _canvas({required void Function(String, Offset) onChanged}) {
   return MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(
       body: SizedBox(
         width: 800,

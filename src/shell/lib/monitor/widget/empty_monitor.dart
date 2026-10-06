@@ -1,6 +1,7 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/provider/monitor_configuration_state.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
@@ -41,13 +42,13 @@ class EmptyMonitor extends HookConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'No screens on this monitor',
+                  context.l10n.noScreensOnMonitor,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.titleMedium,
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Create a screen, or move an unused one here.',
+                  context.l10n.createOrMoveScreen,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodySmall,
                 ),
@@ -55,7 +56,7 @@ class EmptyMonitor extends HookConsumerWidget {
                 FilledButton.icon(
                   onPressed: () => _addScreen(ref),
                   icon: const Icon(MdiIcons.plus),
-                  label: const Text('Create screen'),
+                  label: Text(context.l10n.createScreen),
                 ),
                 for (final screenId in availableScreens) ...[
                   const SizedBox(height: 8),
@@ -89,6 +90,6 @@ class _AvailableScreenLabel extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final label = ref.watch(screenLabelProvider(screenId));
-    return Text('Move "${label.value ?? screenId}" here');
+    return Text(context.l10n.moveScreenHere(label.value ?? screenId));
   }
 }

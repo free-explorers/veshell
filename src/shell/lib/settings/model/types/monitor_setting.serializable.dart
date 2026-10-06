@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:shell/l10n/app_localizations.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/shared/util/json_converter/offset.dart';
 
@@ -52,14 +53,14 @@ extension MonitorTransformX on MonitorTransform {
   };
 
   /// Human-readable label for the settings UI.
-  String get label => switch (this) {
-    MonitorTransform.normal => 'Normal',
-    MonitorTransform.rotate90 => 'Rotate 90°',
-    MonitorTransform.rotate180 => 'Rotate 180°',
-    MonitorTransform.rotate270 => 'Rotate 270°',
-    MonitorTransform.flipped => 'Flipped',
-    MonitorTransform.flipped90 => 'Flipped + Rotate 90°',
-    MonitorTransform.flipped180 => 'Flipped + Rotate 180°',
-    MonitorTransform.flipped270 => 'Flipped + Rotate 270°',
+  String label(AppLocalizations l10n) => switch (this) {
+    MonitorTransform.normal => l10n.transformNormal,
+    MonitorTransform.rotate90 => l10n.transformRotate(90),
+    MonitorTransform.rotate180 => l10n.transformRotate(180),
+    MonitorTransform.rotate270 => l10n.transformRotate(270),
+    MonitorTransform.flipped => l10n.transformFlipped,
+    MonitorTransform.flipped90 => l10n.transformFlippedRotate(90),
+    MonitorTransform.flipped180 => l10n.transformFlippedRotate(180),
+    MonitorTransform.flipped270 => l10n.transformFlippedRotate(270),
   };
 }

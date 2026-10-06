@@ -1,6 +1,7 @@
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/monitor/provider/monitor_arrangement.dart';
 import 'package:shell/monitor/provider/monitor_placement.dart';
 import 'package:shell/monitor/widget/monitor_arrangement/monitor_arrangement_canvas.dart';
@@ -140,8 +141,7 @@ class MonitorArrangementEditor extends HookConsumerWidget {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    'Monitors overlap. Move them apart to '
-                                    'apply.',
+                                    context.l10n.monitorsOverlap,
                                     style: TextStyle(
                                       color: theme.colorScheme.onErrorContainer,
                                     ),
@@ -160,12 +160,12 @@ class MonitorArrangementEditor extends HookConsumerWidget {
                     children: [
                       TextButton(
                         onPressed: resetToDefault,
-                        child: const Text('Reset to default'),
+                        child: Text(context.l10n.resetToDefault),
                       ),
                       const Spacer(),
                       FilledButton(
                         onPressed: canApply ? apply : null,
-                        child: const Text('Apply'),
+                        child: Text(context.l10n.apply),
                       ),
                     ],
                   ),

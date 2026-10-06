@@ -1,5 +1,6 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/provider/monitor_by_name.dart';
 import 'package:shell/overview/widget/search/settings/setting_value_editor.dart';
@@ -27,8 +28,9 @@ class MonitorRefreshRateEditor extends HookConsumerWidget
     final monitor = ref.watch(monitorByNameProvider(monitorName))!;
     final currentMode = monitor.currentMode!;
 
-    final modeList =
-        monitor.modes.where((mode) => mode.size == currentMode.size);
+    final modeList = monitor.modes.where(
+      (mode) => mode.size == currentMode.size,
+    );
     final modeMapPerRefreshRate = <int, List<Mode>>{};
     for (final mode in modeList) {
       modeMapPerRefreshRate.putIfAbsent(mode.refreshRate, () => []).add(mode);
@@ -47,7 +49,7 @@ class MonitorRefreshRateEditor extends HookConsumerWidget
             ExpandableContainer.of(context).toggle();
           },
           title: Text(
-            '${(refreshRate / 1000).round()} Hz',
+            context.l10n.valueWithUnit('${(refreshRate / 1000).round()}', 'Hz'),
           ),
         );
       },

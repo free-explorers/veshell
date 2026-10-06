@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/provider/util/json_value_by_path.dart';
 import 'package:shell/shared/util/json_converter/logical_key_set.dart';
@@ -24,6 +25,8 @@ void main() {
           jsonValueByPathProvider(path).overrideWithValue('ctrl+alt+m'),
         ],
         child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: Builder(builder: (context) => property.build(context, path)),
           ),
@@ -48,6 +51,8 @@ void main() {
       ProviderScope(
         overrides: [jsonValueByPathProvider(path).overrideWithValue('null')],
         child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: Builder(builder: (context) => property.build(context, path)),
           ),

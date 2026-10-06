@@ -1,6 +1,7 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/provider/meta_window_manager.dart';
 import 'package:shell/notification/provider/notification_list.dart';
 import 'package:shell/notification/provider/notification_manager.dart';
@@ -30,14 +31,14 @@ class NotificationPanel extends HookConsumerWidget {
                 const SizedBox(width: 16),
                 Expanded(
                   child: Text(
-                    'Notifications',
+                    context.l10n.notifications,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
                 IconButton.filledTonal(
                   visualDensity: VisualDensity.compact,
                   iconSize: 20,
-                  tooltip: 'Clear all',
+                  tooltip: context.l10n.clearAll,
                   onPressed: notificationList.isEmpty
                       ? null
                       : () => ref
@@ -118,10 +119,13 @@ class _EmptyNotifications extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             ),
             const SizedBox(height: 12),
-            Text('No activity yet', style: theme.textTheme.titleMedium),
+            Text(
+              context.l10n.noActivityYet,
+              style: theme.textTheme.titleMedium,
+            ),
             const SizedBox(height: 4),
             Text(
-              'Your notification history is currently empty',
+              context.l10n.notificationHistoryEmpty,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,

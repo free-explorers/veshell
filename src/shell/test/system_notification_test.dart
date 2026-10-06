@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart' hide Notification;
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/notification/model/dbus_notification.serializable.dart';
 import 'package:shell/notification/model/notification.serializable.dart'
     as model;
@@ -240,6 +241,8 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: NotificationArea(channel: channel, child: SizedBox()),
           ),

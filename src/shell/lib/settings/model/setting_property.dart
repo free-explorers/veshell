@@ -1,6 +1,7 @@
 import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/settings/model/setting_definition.dart';
 import 'package:shell/settings/widget/expandable_search_result.dart';
 import 'package:shell/settings/widget/keyboard/setting_property_hotkey_editor.dart';
@@ -26,7 +27,8 @@ abstract class SettingProperty<T>
       BuildContext context,
       String path,
       SettingProperty<T> property,
-    )? buildSearchResult,
+    )?
+    buildSearchResult,
   }) = _SettingProperty;
   const SettingProperty._();
 
@@ -60,49 +62,49 @@ Widget defaultBuildSearchResult<T>(
   return switch (property) {
     // primitive types
     SettingProperty<String>() => ExpandableSearchResult(
-        path: path,
-        property: property,
-        buildValue: (context, value, {required isExpanded}) => Text('$value'),
-        buildEditor: (context, {required isExpanded}) =>
-            SettingPropertyStringEditor(
-          path: path,
-          property: property as SettingProperty<String>,
-        ),
-      ),
+      path: path,
+      property: property,
+      buildValue: (context, value, {required isExpanded}) => Text('$value'),
+      buildEditor: (context, {required isExpanded}) =>
+          SettingPropertyStringEditor(
+            path: path,
+            property: property as SettingProperty<String>,
+          ),
+    ),
     SettingProperty<bool>() => SettingPropertyBoolEditor(
-        path: path,
-        property: property as SettingProperty<bool>,
-      ),
+      path: path,
+      property: property as SettingProperty<bool>,
+    ),
     SettingProperty<int>() => SettingPropertyIntEditor(
-        path: path,
-        property: property as SettingProperty<int>,
-      ),
+      path: path,
+      property: property as SettingProperty<int>,
+    ),
     SettingProperty<double>() => ExpandableSearchResult(
-        path: path,
-        property: property,
-        buildValue: (context, value, {required isExpanded}) => Text('$value'),
-        buildEditor: (context, {required isExpanded}) =>
-            SettingPropertyDoubleEditor(
-          path: path,
-          property: property as SettingProperty<double>,
-        ),
-      ),
+      path: path,
+      property: property,
+      buildValue: (context, value, {required isExpanded}) => Text('$value'),
+      buildEditor: (context, {required isExpanded}) =>
+          SettingPropertyDoubleEditor(
+            path: path,
+            property: property as SettingProperty<double>,
+          ),
+    ),
     SettingProperty<Color>() => ExpandableSearchResult(
-        path: path,
-        property: property,
-        buildValue: (context, value, {required isExpanded}) => ColorIndicator(
-          color: (property as SettingProperty<Color>).castValue(value),
-        ),
-        buildEditor: (context, {required isExpanded}) =>
-            SettingPropertyColorEditor(
-          path: path,
-          property: property as SettingProperty<Color>,
-        ),
+      path: path,
+      property: property,
+      buildValue: (context, value, {required isExpanded}) => ColorIndicator(
+        color: (property as SettingProperty<Color>).castValue(value),
       ),
+      buildEditor: (context, {required isExpanded}) =>
+          SettingPropertyColorEditor(
+            path: path,
+            property: property as SettingProperty<Color>,
+          ),
+    ),
     SettingProperty<LogicalKeySet>() => buildHotkeySearchResult(
-        path,
-        property as SettingProperty<LogicalKeySet>,
-      ),
+      path,
+      property as SettingProperty<LogicalKeySet>,
+    ),
     SettingProperty<T>() => throw UnimplementedError(),
   };
 }
@@ -117,15 +119,15 @@ Widget buildHotkeySearchResult(
     buildValue: (context, value, {required isExpanded}) {
       final hotkey = property.tryCastValue(value);
       if (hotkey == null) {
-        return const Text('Not set');
+        return Text(context.l10n.notSet);
       }
       return HotkeyViewer(hotkey: hotkey);
     },
     buildEditor: (context, {required isExpanded}) =>
         SettingPropertyHotkeyEditor(
-      path: path,
-      property: property,
-      onChanged: (_) {},
-    ),
+          path: path,
+          property: property,
+          onChanged: (_) {},
+        ),
   );
 }

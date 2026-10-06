@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/capture/provider/screen_cast_consent.dart';
 import 'package:shell/capture/provider/screen_cast_indicator.dart';
 import 'package:shell/capture/provider/screenshot_prompt.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/provider/meta_window_manager.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/monitor/provider/monitor_manager.dart';
@@ -64,11 +65,12 @@ void main() async {
   });
   runWidget(
     ProviderScope(
-      child: _EagerInitialization(
-        child: Veshell(
-          key: globalVeshellKey,
+      overrides: [
+        veshellLanguagePreferenceProvider.overrideWith(
+          configuredVeshellLanguagePreference,
         ),
-      ),
+      ],
+      child: _EagerInitialization(child: Veshell(key: globalVeshellKey)),
     ),
   );
 }
@@ -94,11 +96,7 @@ class _VeshellState extends ConsumerState<Veshell> with WidgetsBindingObserver {
           message: GetEnvironmentVariablesMessage(),
         ),
       )
-      ..request(
-        GetMonitorLayoutRequest(
-          message: GetMonitorLayoutMessage(),
-        ),
-      )
+      ..request(GetMonitorLayoutRequest(message: GetMonitorLayoutMessage()))
       ..request(const ShellReadyRequest());
   }
 
@@ -142,9 +140,7 @@ class _VeshellState extends ConsumerState<Veshell> with WidgetsBindingObserver {
             (view) => View(
               view: view,
               child: VeshellShortcutManager(
-                child: MonitorWidget(
-                  viewId: view.viewId,
-                ),
+                child: MonitorWidget(viewId: view.viewId),
               ),
             ),
           )
@@ -184,21 +180,14 @@ class _EagerInitialization extends ConsumerWidget {
       ..listen(gpuStatsStateProvider, (_, _) {});
 
     // Handle error states and loading states
-    if (results.any(
-      (element) => element.isLoading,
-    )) {
+    if (results.any((element) => element.isLoading)) {
       return InitializationStatus(
         asyncValue: const AsyncLoading(),
         child: child,
       );
-    } else if (results.any(
-      (element) => element.hasError,
-    )) {
+    } else if (results.any((element) => element.hasError)) {
       return InitializationStatus(
-        asyncValue: AsyncError(
-          Error(),
-          StackTrace.current,
-        ),
+        asyncValue: AsyncError(Error(), StackTrace.current),
         child: child,
       );
     }

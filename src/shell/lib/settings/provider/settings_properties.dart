@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/monitor/widget/monitor_arrangement/monitor_arrangement_editor.dart';
@@ -14,6 +15,8 @@ import 'package:shell/settings/provider/util/config_directory.dart';
 import 'package:shell/settings/provider/util/configured_settings_json.dart';
 import 'package:shell/settings/provider/util/default_settings_json.dart';
 import 'package:shell/settings/widget/expandable_search_result.dart';
+import 'package:shell/settings/widget/locale/system_locale_editor.dart';
+import 'package:shell/settings/widget/locale/veshell_language_editor.dart';
 import 'package:shell/settings/widget/monitor/monitor_mirror_editor.dart';
 import 'package:shell/settings/widget/monitor/monitor_mirror_value.dart';
 import 'package:shell/settings/widget/monitor/monitor_refresh_rate_editor.dart';
@@ -32,18 +35,52 @@ part 'settings_properties.g.dart';
 class SettingsProperties extends _$SettingsProperties {
   @override
   Map<String, SettingGroup> build() {
+    final l10n = ref.watch(shellLocalizationsProvider);
     final monitors = ref.watch(connectedMonitorListProvider);
     return {
+      'system': SettingGroup(
+        name: l10n.languageAndRegion,
+        description: null,
+        icon: MdiIcons.translate,
+        children: {
+          'locale': SettingProperty<void>(
+            name: l10n.systemLocale,
+            description: l10n.systemLocaleDescription,
+            buildSearchResult: (context, path, property) =>
+                ExpandableSearchResult<void>(
+                  path: path,
+                  property: property,
+                  buildValue: (context, value, {required isExpanded}) =>
+                      const SystemLocaleValue(),
+                  buildEditor: (context, {required isExpanded}) =>
+                      const SystemLocaleEditor(),
+                ),
+          ),
+          'language': SettingProperty<String>(
+            name: l10n.veshellLanguage,
+            description: l10n.veshellLanguageDescription,
+            buildSearchResult: (context, path, property) =>
+                ExpandableSearchResult<String>(
+                  path: path,
+                  property: property,
+                  buildValue: (context, value, {required isExpanded}) =>
+                      const VeshellLanguageValue(),
+                  buildEditor: (context, {required isExpanded}) =>
+                      const VeshellLanguageEditor(),
+                ),
+          ),
+        },
+      ),
       'monitors': SettingGroup(
-        name: 'Monitors',
+        name: l10n.monitors,
         description: null,
         icon: MdiIcons.monitor,
         children: {
           // Arranging is only meaningful with more than one monitor.
           if (monitors.length > 1)
             'arrange': SettingProperty<void>(
-              name: 'Arrange Monitors',
-              description: 'Position monitors relative to each other',
+              name: l10n.arrangeMonitors,
+              description: l10n.arrangeMonitorsDescription,
               buildSearchResult: (context, path, property) =>
                   ExpandableSearchResult<void>(
                     path: path,
@@ -61,8 +98,8 @@ class SettingsProperties extends _$SettingsProperties {
               description: e.description,
               children: {
                 'resolution': SettingProperty<MonitorResolution>(
-                  name: 'Resolution',
-                  description: 'Monitor resolution',
+                  name: l10n.resolution,
+                  description: l10n.resolutionDescription,
                   buildSearchResult: (context, path, property) =>
                       ExpandableSearchResult(
                         path: path,
@@ -77,8 +114,8 @@ class SettingsProperties extends _$SettingsProperties {
                       ),
                 ),
                 'refreshRate': SettingProperty<MonitorRefreshRate>(
-                  name: 'Refresh Rate',
-                  description: 'Monitor refresh rate',
+                  name: l10n.refreshRate,
+                  description: l10n.refreshRateDescription,
                   buildSearchResult: (context, path, property) =>
                       ExpandableSearchResult(
                         path: path,
@@ -92,13 +129,13 @@ class SettingsProperties extends _$SettingsProperties {
                             ),
                       ),
                 ),
-                'fractionnalScale': const SettingProperty<double>(
-                  name: 'Fractionnal Scale',
-                  description: 'Monitor fractionnal scaling',
+                'fractionnalScale': SettingProperty<double>(
+                  name: l10n.fractionalScale,
+                  description: l10n.fractionalScaleDescription,
                 ),
                 'transform': SettingProperty<MonitorTransform>(
-                  name: 'Transform',
-                  description: 'Display rotation and mirroring',
+                  name: l10n.transform,
+                  description: l10n.transformDescription,
                   buildSearchResult: (context, path, property) =>
                       ExpandableSearchResult<MonitorTransform>(
                         path: path,
@@ -113,8 +150,8 @@ class SettingsProperties extends _$SettingsProperties {
                       ),
                 ),
                 'mirrorOf': SettingProperty<String?>(
-                  name: 'Mirror',
-                  description: 'Mirror another monitor on this one',
+                  name: l10n.mirror,
+                  description: l10n.mirrorDescription,
                   buildSearchResult: (context, path, property) =>
                       ExpandableSearchResult<String?>(
                         path: path,
@@ -129,193 +166,187 @@ class SettingsProperties extends _$SettingsProperties {
             ),
         },
       ),
-      'keyboard': const SettingGroup(
-        name: 'Keyboard',
+      'keyboard': SettingGroup(
+        name: l10n.keyboard,
         description: null,
         icon: MdiIcons.keyboard,
         children: {
           'layout': SettingProperty<String>(
-            name: 'Layout',
-            description: 'Keyboard layout',
+            name: l10n.layout,
+            description: l10n.layoutDescription,
           ),
           'swapAltAndWin': SettingProperty<bool>(
-            name: 'Swap Alt and Win',
-            description:
-                'Improve thumb ergonomics by swapping the Alt and Win keys',
+            name: l10n.swapAltAndWin,
+            description: l10n.swapAltAndWinDescription,
           ),
           'hotkeys': SettingGroup(
-            name: 'Hotkeys',
-            description: 'Hotkeys settings',
+            name: l10n.hotkeys,
+            description: l10n.hotkeysDescription,
             children: {
               'system.increaseVolume': SettingProperty<LogicalKeySet>(
-                name: 'Increase Volume',
-                description: 'Increase the volume',
-                converter: LogicalKeySetConverter(),
+                name: l10n.increaseVolume,
+                description: l10n.increaseVolumeDescription,
+                converter: const LogicalKeySetConverter(),
               ),
               'system.decreaseVolume': SettingProperty<LogicalKeySet>(
-                name: 'Decrease Volume',
-                description: 'Decrease the volume',
-                converter: LogicalKeySetConverter(),
+                name: l10n.decreaseVolume,
+                description: l10n.decreaseVolumeDescription,
+                converter: const LogicalKeySetConverter(),
               ),
               'system.muteVolume': SettingProperty<LogicalKeySet>(
-                name: 'Mute Volume',
-                description: 'Toggle Mute volume',
-                converter: LogicalKeySetConverter(),
+                name: l10n.muteVolume,
+                description: l10n.muteVolumeDescription,
+                converter: const LogicalKeySetConverter(),
               ),
               'system.increaseBrightness': SettingProperty<LogicalKeySet>(
-                name: 'Increase Brightness',
-                description: 'Increase the display brightness',
-                converter: LogicalKeySetConverter(),
+                name: l10n.increaseBrightness,
+                description: l10n.increaseBrightnessDescription,
+                converter: const LogicalKeySetConverter(),
               ),
               'system.decreaseBrightness': SettingProperty<LogicalKeySet>(
-                name: 'Decrease Brightness',
-                description: 'Decrease the display brightness',
-                converter: LogicalKeySetConverter(),
+                name: l10n.decreaseBrightness,
+                description: l10n.decreaseBrightnessDescription,
+                converter: const LogicalKeySetConverter(),
               ),
               'media.playPause': SettingProperty<LogicalKeySet>(
-                name: 'Play/Pause Media',
-                description: 'Toggle playback of the active media player',
-                converter: LogicalKeySetConverter(),
+                name: l10n.playPauseMedia,
+                description: l10n.playPauseMediaDescription,
+                converter: const LogicalKeySetConverter(),
               ),
               'media.next': SettingProperty<LogicalKeySet>(
-                name: 'Next Track',
-                description: 'Skip to the next track',
-                converter: LogicalKeySetConverter(),
+                name: l10n.nextTrack,
+                description: l10n.nextTrackDescription,
+                converter: const LogicalKeySetConverter(),
               ),
               'media.previous': SettingProperty<LogicalKeySet>(
-                name: 'Previous Track',
-                description: 'Go back to the previous track',
-                converter: LogicalKeySetConverter(),
+                name: l10n.previousTrack,
+                description: l10n.previousTrackDescription,
+                converter: const LogicalKeySetConverter(),
               ),
               'media.stop': SettingProperty<LogicalKeySet>(
-                name: 'Stop Media',
-                description: 'Stop the active media player',
-                converter: LogicalKeySetConverter(),
+                name: l10n.stopMedia,
+                description: l10n.stopMediaDescription,
+                converter: const LogicalKeySetConverter(),
               ),
               'screen.focusWorkspaceAbove': SettingProperty<LogicalKeySet>(
-                name: 'Focus Workspace Above',
-                description: 'Focus workspace above',
-                converter: LogicalKeySetConverter(),
+                name: l10n.focusWorkspaceAbove,
+                description: l10n.focusWorkspaceAboveDescription,
+                converter: const LogicalKeySetConverter(),
               ),
               'screen.focusWorkspaceBelow': SettingProperty<LogicalKeySet>(
-                name: 'Focus Workspace Below',
-                description: 'Focus workspace below',
-                converter: LogicalKeySetConverter(),
+                name: l10n.focusWorkspaceBelow,
+                description: l10n.focusWorkspaceBelowDescription,
+                converter: const LogicalKeySetConverter(),
               ),
               'screen.reorderWorkspaceAbove': SettingProperty<LogicalKeySet>(
-                name: 'Move Workspace Up',
-                description: 'Move the current workspace up',
-                converter: LogicalKeySetConverter(),
+                name: l10n.moveWorkspaceUp,
+                description: l10n.moveWorkspaceUpDescription,
+                converter: const LogicalKeySetConverter(),
               ),
               'screen.reorderWorkspaceBelow': SettingProperty<LogicalKeySet>(
-                name: 'Move Workspace Down',
-                description: 'Move the current workspace down',
-                converter: LogicalKeySetConverter(),
+                name: l10n.moveWorkspaceDown,
+                description: l10n.moveWorkspaceDownDescription,
+                converter: const LogicalKeySetConverter(),
               ),
               'workspace.focusLeftTileable': SettingProperty<LogicalKeySet>(
-                name: 'Focus Left Tileable',
-                description: 'Focus the next tileable on the left',
-                converter: LogicalKeySetConverter(),
+                name: l10n.focusLeftTileable,
+                description: l10n.focusLeftTileableDescription,
+                converter: const LogicalKeySetConverter(),
               ),
               'workspace.focusRightTileable': SettingProperty<LogicalKeySet>(
-                name: 'Focus Right Tileable',
-                description: 'Focus the next tileable on the right',
-                converter: LogicalKeySetConverter(),
+                name: l10n.focusRightTileable,
+                description: l10n.focusRightTileableDescription,
+                converter: const LogicalKeySetConverter(),
               ),
               'workspace.reorderLeftTileable': SettingProperty<LogicalKeySet>(
-                name: 'Move Tileable Left',
-                description: 'Move the current tileable to the left',
-                converter: LogicalKeySetConverter(),
+                name: l10n.moveTileableLeft,
+                description: l10n.moveTileableLeftDescription,
+                converter: const LogicalKeySetConverter(),
               ),
               'workspace.reorderRightTileable': SettingProperty<LogicalKeySet>(
-                name: 'Move Tileable Right',
-                description: 'Move the current tileable to the right',
-                converter: LogicalKeySetConverter(),
+                name: l10n.moveTileableRight,
+                description: l10n.moveTileableRightDescription,
+                converter: const LogicalKeySetConverter(),
               ),
               'workspace.closeTileable': SettingProperty<LogicalKeySet>(
-                name: 'Close Tileable',
-                description: 'Close the currently focused tileable',
-                converter: LogicalKeySetConverter(),
+                name: l10n.closeTileable,
+                description: l10n.closeTileableDescription,
+                converter: const LogicalKeySetConverter(),
               ),
             },
           ),
         },
       ),
-      'mouseAndTouchpad': const SettingGroup(
-        name: 'Mouse and Touchpad',
+      'mouseAndTouchpad': SettingGroup(
+        name: l10n.mouseAndTouchpad,
         description: null,
         icon: MdiIcons.mouse,
         children: {
           'naturalScrolling': SettingProperty<bool>(
-            name: 'Natural Scrolling',
-            description:
-                'Toggle Natural scrolling (reversed scrolling direction)',
+            name: l10n.naturalScrolling,
+            description: l10n.naturalScrollingDescription,
           ),
         },
       ),
-      'idle': const SettingGroup(
-        name: 'Power and Idle',
+      'idle': SettingGroup(
+        name: l10n.powerAndIdle,
         description: null,
         icon: MdiIcons.lightningBolt,
         children: {
           'dimTimeoutSeconds': SettingProperty<int>(
-            name: 'Dim After (seconds)',
-            description: 'Set to 0 to disable idle dimming',
+            name: l10n.dimAfter,
+            description: l10n.dimAfterDescription,
           ),
           'blankTimeoutSeconds': SettingProperty<int>(
-            name: 'Blank After (seconds)',
-            description: 'Set to 0 to disable display blanking',
+            name: l10n.blankAfter,
+            description: l10n.blankAfterDescription,
           ),
           'fadeSeconds': SettingProperty<double>(
-            name: 'Dim Fade Duration (seconds)',
-            description: 'Duration of the transition to the dimmed screen',
+            name: l10n.dimFadeDuration,
+            description: l10n.dimFadeDurationDescription,
           ),
           'automaticPowerAction': SettingProperty<String>(
-            name: 'Automatic Power Action',
-            description:
-                'suspendThenHibernate uses logind when available, otherwise it suspends',
+            name: l10n.automaticPowerAction,
+            description: l10n.automaticPowerActionDescription,
           ),
           'automaticPowerTimeoutSeconds': SettingProperty<int>(
-            name: 'Automatic Power After (seconds)',
-            description:
-                'Default is 600 seconds; set to 0 to disable automatic sleep or hibernate',
+            name: l10n.automaticPowerAfter,
+            description: l10n.automaticPowerAfterDescription,
           ),
         },
       ),
-      'notifications': const SettingGroup(
-        name: 'Notifications',
+      'notifications': SettingGroup(
+        name: l10n.notifications,
         description: null,
         icon: MdiIcons.bell,
         children: {
           'batteryLowThreshold': SettingProperty<int>(
-            name: 'Low Battery Warning (%)',
-            description:
-                'Show a warning when the battery drains to this percentage',
+            name: l10n.lowBatteryWarning,
+            description: l10n.lowBatteryWarningDescription,
           ),
           'batteryCriticalThreshold': SettingProperty<int>(
-            name: 'Critical Battery Warning (%)',
-            description:
-                'Show a persistent warning when the battery drains to this percentage',
+            name: l10n.criticalBatteryWarning,
+            description: l10n.criticalBatteryWarningDescription,
           ),
         },
       ),
-      'theme': const SettingGroup(
-        name: 'Theme',
+      'theme': SettingGroup(
+        name: l10n.theme,
         description: null,
         icon: MdiIcons.palette,
         children: {
           'color': SettingProperty<Color>(
-            name: 'Color',
-            description: 'Theme color',
-            converter: ColorConverter(),
+            name: l10n.color,
+            description: l10n.colorDescription,
+            converter: const ColorConverter(),
           ),
           'gtkTheme': SettingProperty<String>(
-            name: 'GTK Theme',
-            description: 'GTK theme',
+            name: l10n.gtkTheme,
+            description: l10n.gtkThemeDescription,
           ),
           'iconTheme': SettingProperty<String>(
-            name: 'Icon Theme',
-            description: 'Icon theme',
+            name: l10n.iconTheme,
+            description: l10n.iconThemeDescription,
           ),
         },
       ),
@@ -379,5 +410,6 @@ class SettingsProperties extends _$SettingsProperties {
       '${configDirectory.path}/settings.json',
       encoder.convert(json),
     );
+    ref.read(configuredSettingsJsonProvider.notifier).publish(json);
   }
 }

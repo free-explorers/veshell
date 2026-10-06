@@ -2,6 +2,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/capture/provider/recording_workspaces.dart';
 import 'package:shell/capture/provider/screen_cast_indicator.dart';
+import 'package:shell/l10n/l10n.dart';
 
 /// The persistent trusted indicator (capture specification section 8.3):
 /// one card per **orphan** cast, naming the shared target with a Stop action.
@@ -43,16 +44,17 @@ class ScreenCastIndicatorBar extends HookConsumerWidget {
                   const Icon(Icons.screen_share),
                   const SizedBox(width: 8),
                   // One stream shortcut naming the shared target.
-                  Text(stream.sourceLabel.isEmpty
-                      ? "Screen sharing active"
-                      : "Sharing ${stream.sourceLabel}"),
+                  Text(
+                    stream.sourceLabel.isEmpty
+                        ? context.l10n.screenSharingActive
+                        : context.l10n.sharingSource(stream.sourceLabel),
+                  ),
                   const SizedBox(width: 16),
                   ElevatedButton(
-                    onPressed: () =>
-                        ref.read(screenCastIndicatorProvider.notifier).stop(
-                              stream.sessionHandle,
-                            ),
-                    child: const Text('Stop'),
+                    onPressed: () => ref
+                        .read(screenCastIndicatorProvider.notifier)
+                        .stop(stream.sessionHandle),
+                    child: Text(context.l10n.stop),
                   ),
                 ],
               ),

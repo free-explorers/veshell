@@ -8,6 +8,7 @@ import 'package:shell/file_explorer/model/file_entry.dart';
 import 'package:shell/file_explorer/provider/directory_listing.dart';
 import 'package:shell/file_explorer/provider/file_explorer_state.dart';
 import 'package:shell/file_explorer/widget/file_explorer_view.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 
 void main() {
@@ -37,6 +38,8 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: CurrentScreenId(
             screenId: 'test',
             child: Scaffold(
@@ -100,6 +103,8 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: CurrentScreenId(
             screenId: 'test',
             child: Scaffold(
@@ -138,6 +143,8 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: CurrentScreenId(
             screenId: 'test',
             child: Scaffold(

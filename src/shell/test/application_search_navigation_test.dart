@@ -4,6 +4,7 @@ import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/app_drawer.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/overview/widget/search/search_engine.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
@@ -43,6 +44,8 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: CurrentScreenId(
             screenId: screenId,
             child: Scaffold(body: SearchEngine()),

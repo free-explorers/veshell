@@ -1,4 +1,7 @@
 {
+    "system": {
+        "language": null
+    },
     "keyboard": {
         "layout": "us(altgr-intl)",
         "swapAltAndWin": false,

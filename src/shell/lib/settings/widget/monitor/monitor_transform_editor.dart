@@ -1,5 +1,6 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/widget/search/settings/setting_value_editor.dart';
 import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/model/types/monitor_setting.serializable.dart';
@@ -30,7 +31,7 @@ class MonitorTransformEditor extends ConsumerWidget
       children: [
         for (final transform in MonitorTransform.values)
           ListTile(
-            title: Text(transform.label),
+            title: Text(transform.label(context.l10n)),
             onTap: () {
               ref
                   .read(monitorSettingStateProvider(monitorName).notifier)

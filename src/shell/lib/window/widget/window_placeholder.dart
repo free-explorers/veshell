@@ -11,6 +11,7 @@ import 'package:shell/application/provider/icon_background_image.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/application/widget/logs_viewer.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/platform/provider/platform_event_recorder.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
@@ -42,7 +43,7 @@ class WindowPlaceholder extends HookConsumerWidget {
     final isFocused = focusNode?.hasFocus ?? false;
     final backgroundFocusNode = useFocusNode(debugLabel: 'background InkWell');
     final moreMenuController = useMemoized(MenuController.new);
-    const moreMenuLabel = 'Launch and record all platform events';
+    final moreMenuLabel = context.l10n.launchAndRecord;
 
     // The process of the launch this placeholder started, and whether it
     // exited with a non-zero code. Kept locally: the failure only affects the
@@ -123,7 +124,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                       alignmentOffset: const Offset(0, 4),
                       menuChildren: [
                         Directionality(
-                          textDirection: TextDirection.ltr,
+                          textDirection: Directionality.of(context),
                           child: MenuItemButton(
                             trailingIcon: const Icon(MdiIcons.bug),
                             onPressed: () {
@@ -132,12 +133,12 @@ class WindowPlaceholder extends HookConsumerWidget {
                                   .recordLaunch(window.windowId);
                               moreMenuController.close();
                             },
-                            child: const Text(moreMenuLabel),
+                            child: Text(moreMenuLabel),
                           ),
                         ),
                       ],
                       builder: (context, controller, child) => IconButton(
-                        tooltip: 'More',
+                        tooltip: context.l10n.more,
                         onPressed: () => controller.isOpen
                             ? controller.close()
                             : controller.open(),
@@ -173,7 +174,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                         children: [
                           Text(
                             entry?.entries[DesktopEntryKey.name.string] ??
-                                'Unknown',
+                                context.l10n.unknown,
                             style: Theme.of(context).textTheme.displayMedium,
                             textAlign: TextAlign.center,
                             softWrap: false,
@@ -189,7 +190,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                                 entry?.entries[DesktopEntryKey
                                     .tryExec
                                     .string] ??
-                                'Unknown',
+                                context.l10n.unknown,
                             customExec: window.customExec,
                             onChanged: (customExec) => ref
                                 .read(
@@ -208,7 +209,7 @@ class WindowPlaceholder extends HookConsumerWidget {
             ),
             Expanded(
               child: Text(
-                'Click to start the application',
+                context.l10n.clickToStartApplication,
                 style: Theme.of(context).textTheme.headlineSmall!.copyWith(
                   color: isFocused
                       ? Theme.of(context).colorScheme.primary
@@ -221,9 +222,7 @@ class WindowPlaceholder extends HookConsumerWidget {
 
         return Stack(
           children: [
-            Positioned.fill(
-              child: _PlaceholderBackground(iconPath: iconPath),
-            ),
+            Positioned.fill(child: _PlaceholderBackground(iconPath: iconPath)),
             Positioned.fill(
               child: InkWell(
                 focusNode: backgroundFocusNode,
@@ -268,7 +267,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                                     top: 8,
                                     right: 8,
                                     child: IconButton(
-                                      tooltip: 'Close logs',
+                                      tooltip: context.l10n.closeLogs,
                                       onPressed: () =>
                                           launchFailed.value = false,
                                       icon: const Icon(MdiIcons.close),
@@ -441,10 +440,10 @@ class DisplayModeRow extends StatelessWidget {
                         Padding(
                           padding: const EdgeInsets.only(right: 16),
                           child: Text(switch (mode) {
-                            DisplayMode.maximized => 'Maximized',
-                            DisplayMode.game => 'Game',
-                            DisplayMode.fullscreen => 'Fullscreen',
-                            DisplayMode.floating => 'Floating',
+                            DisplayMode.maximized => context.l10n.maximized,
+                            DisplayMode.game => context.l10n.game,
+                            DisplayMode.fullscreen => context.l10n.fullscreen,
+                            DisplayMode.floating => context.l10n.floating,
                           }, style: Theme.of(context).textTheme.bodyMedium),
                         ),
                     ],

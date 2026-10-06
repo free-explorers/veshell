@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/settings/provider/state/monitor_setting_change_confirmation.dart';
 
 /// Full-view confirmation for a pending display change.
@@ -101,13 +102,15 @@ class _ConfirmationScrimState extends ConsumerState<_ConfirmationScrim> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          'Keep display settings?',
+                          context.l10n.keepDisplaySettings,
                           style: theme.textTheme.titleLarge,
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          '${widget.pending.description}. Reverting in '
-                          '$seconds s unless you keep it.',
+                          context.l10n.displaySettingsCountdown(
+                            widget.pending.description,
+                            seconds,
+                          ),
                         ),
                         const SizedBox(height: 16),
                         LinearProgressIndicator(value: progress),
@@ -122,7 +125,7 @@ class _ConfirmationScrimState extends ConsumerState<_ConfirmationScrim> {
                                         .notifier,
                                   )
                                   .rollback(),
-                              child: const Text('Revert'),
+                              child: Text(context.l10n.revert),
                             ),
                             const SizedBox(width: 8),
                             FilledButton(
@@ -132,7 +135,7 @@ class _ConfirmationScrimState extends ConsumerState<_ConfirmationScrim> {
                                         .notifier,
                                   )
                                   .confirm(),
-                              child: const Text('Keep'),
+                              child: Text(context.l10n.keep),
                             ),
                           ],
                         ),

@@ -1,6 +1,7 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/capture/provider/screenshot_prompt.dart';
+import 'package:shell/l10n/l10n.dart';
 
 /// The trusted screenshot/color-pick prompt picker.
 ///
@@ -19,9 +20,12 @@ class ScreenshotPromptPicker extends ConsumerWidget {
     if (prompt == null) {
       return const SizedBox.shrink();
     }
-    final subject = switch (prompt.kind) {
-      'color' => 'pick a color',
-      _ => 'take a screenshot of the whole screen',
+    final app = prompt.appName.isEmpty
+        ? context.l10n.anApplication
+        : prompt.appName;
+    final request = switch (prompt.kind) {
+      'color' => context.l10n.colorCaptureRequest(app),
+      _ => context.l10n.screenshotRequest(app),
     };
 
     return Card(
@@ -36,27 +40,25 @@ class ScreenshotPromptPicker extends ConsumerWidget {
             children: [
               const SizedBox(height: 24),
               Text(
-                'Allow capture?',
+                context.l10n.allowCapture,
                 style: theme.textTheme.headlineMedium,
               ),
               const SizedBox(height: 8),
-              Text(
-                prompt.appName.isEmpty
-                    ? 'An application wants to $subject.'
-                    : '${prompt.appName} wants to $subject.',
-              ),
+              Text(request),
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   OutlinedButton(
-                    onPressed: () => ref.read(screenshotPromptProvider.notifier).cancel(),
-                    child: const Text('Deny'),
+                    onPressed: () =>
+                        ref.read(screenshotPromptProvider.notifier).cancel(),
+                    child: Text(context.l10n.deny),
                   ),
                   const SizedBox(width: 12),
                   FilledButton(
-                    onPressed: () => ref.read(screenshotPromptProvider.notifier).approve(),
-                    child: const Text('Allow'),
+                    onPressed: () =>
+                        ref.read(screenshotPromptProvider.notifier).approve(),
+                    child: Text(context.l10n.allow),
                   ),
                 ],
               ),

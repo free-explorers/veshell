@@ -1,5 +1,6 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/l10n/l10n.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/overview/widget/search/settings/setting_value_editor.dart';
 import 'package:shell/settings/model/setting_property.dart';
@@ -37,7 +38,7 @@ class MonitorMirrorEditor extends ConsumerWidget
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        ListTile(title: const Text('None'), onTap: () => select(null)),
+        ListTile(title: Text(context.l10n.none), onTap: () => select(null)),
         for (final monitor in monitors.where((m) => m.name != monitorName))
           ListTile(
             title: Text(monitor.name),
