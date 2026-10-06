@@ -40,11 +40,7 @@ packaging/
 ├── ci/
 │   ├── arch-deps.txt            # Arch build dependencies for the CI container
 │   └── prebuilt-in-container.sh # release build entry point for the container
-├── engine/                      # content for free-explorers/flutter-engine
-│   ├── build-engine.sh
-│   ├── patches/0001-clang-toolchain.patch
-│   ├── engine-release.yml       # that repo's .github/workflows/
-│   └── README.md
+├── engine/README.md             # the engine repository and the switch to it
 ├── arch/
 │   ├── PKGBUILD                 # Arch / Manjaro source package (generated)
 │   ├── build-veshell.sh         # copy of scripts/build-veshell.sh
@@ -85,12 +81,12 @@ Rust build runs with `CARGO_NET_OFFLINE=true` against the vendored crate tree.
 `scripts/generate-inputs.sh verify` re-checks every upstream hash.
 
 **Engine strategy.** The distro recipes currently consume the prebuilt
-meta-flutter engine (`flutter.engine`). `packaging/engine/` holds the content of
-the dedicated engine repository `free-explorers/flutter-engine`, which
-source-builds a portable engine SDK and publishes it **there** — engine releases
-are never held in this repository. Once a revision is published, point
-`flutter.engine` at it, re-render, and set `VESHELL_ENGINE_REPO` for dev builds.
-The Nix channel already source-builds its engine through
+meta-flutter engine (`flutter.engine`). The dedicated engine repository
+`free-explorers/flutter-engine` source-builds a portable engine SDK and
+publishes it **there** — engine releases are never held in this repository.
+`engine/README.md` documents it and the switch. Once a revision is published,
+point `flutter.engine` at it, re-render, and set `VESHELL_ENGINE_REPO` for dev
+builds. The Nix channel already source-builds its engine through
 `free-explorers/flutter-engine-nix`, pinned as `nix.engine_source`.
 
 ### Single source of truth

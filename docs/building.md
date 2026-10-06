@@ -154,9 +154,8 @@ same recipes explain why Flutter keeps these packages out of the Debian and
 Fedora main repositories today.
 
 The embedding engine is currently a pinned upstream artifact. It is built from
-source in the dedicated `free-explorers/flutter-engine` repository
-(`packaging/engine/` holds that repository's content); its releases are not held
-in this repository.
+source in the dedicated `free-explorers/flutter-engine` repository; its releases
+are not held in this repository.
 
 ## Checks
 
