@@ -8,8 +8,7 @@ shift 2
 [[ $kind == package && $# == 3 ]]
 [[ ${GITHUB_REPOSITORY:-} == free-explorers/veshell ]]
 [[ ${GITHUB_SHA:-} =~ ^[0-9a-f]{40}$ ]]
-# Release-triggered runs publish from the release tag; manual runs use a branch.
-[[ ${GITHUB_REF:-} == refs/heads/ci/nix-source-release || ${GITHUB_REF:-} == refs/heads/main || ${GITHUB_REF:-} == refs/tags/* ]]
+[[ ${GITHUB_REF:-} == refs/heads/ci/nix-source-release || ${GITHUB_REF:-} == refs/heads/main ]]
 [[ ${ENGINE_OUTPUT:-} =~ ^/nix/store/[0-9a-z]{32}-[^/]+$ ]]
 [[ ${RAW_ENGINE_OUTPUT:-} =~ ^/nix/store/[0-9a-z]{32}-[^/]+$ ]]
 [[ ${RUNTIME_OUTPUT:-} =~ ^/nix/store/[0-9a-z]{32}-[^/]+$ ]]

@@ -7,7 +7,7 @@ export GH_HOST=github.com
 commit=${1:?Expected the trusted full 40-hex source commit}
 tag=${2:?Expected nix-engine-HASH release tag}
 kind=${3:?Expected package}
-ref=${4:?Expected refs/heads/ci/nix-source-release, refs/heads/main or a refs/tags/* ref}
+ref=${4:?Expected refs/heads/ci/nix-source-release or refs/heads/main}
 [[ $# == 5 && $5 == --trust-github-release ]] || {
   echo 'Root import requires explicit --trust-github-release consent.' >&2; exit 1;
 }
@@ -18,7 +18,7 @@ ref=${4:?Expected refs/heads/ci/nix-source-release, refs/heads/main or a refs/ta
 engine_hash=${BASH_REMATCH[1]}
 package_commit=${BASH_REMATCH[2]}
 [[ $package_commit == "$commit" ]]
-[[ $ref == refs/heads/ci/nix-source-release || $ref == refs/heads/main || $ref == refs/tags/* ]]
+[[ $ref == refs/heads/ci/nix-source-release || $ref == refs/heads/main ]]
 repo=free-explorers/veshell
 directory=$(mktemp -d)
 trap 'rm -rf "$directory"' EXIT
