@@ -62,7 +62,7 @@ assert lib.assertMsg (
     # The offline package-config hook does not run pub's plugin-link setup.
     mkdir -p linux/flutter/ephemeral/.plugin_symlinks
     ln -s "$(packagePath pulseaudio)" linux/flutter/ephemeral/.plugin_symlinks/pulseaudio
-    packageRun build_runner build
+    packageRun build_runner build --force-jit
   '';
   installPhase = ''
     runHook preInstall
