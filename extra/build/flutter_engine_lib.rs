@@ -18,6 +18,7 @@ pub fn link_flutter_engine_shared_library(
 
     println!("cargo:rerun-if-env-changed=VESHELL_ENGINE_DIR");
     println!("cargo:rerun-if-env-changed=VESHELL_LIB_DIR");
+    println!("cargo:rerun-if-env-changed=VESHELL_ENGINE_REPO");
     println!("cargo:rerun-if-env-changed=SKIP_FLUTTER_ENGINE_DOWNLOAD");
     if env::var_os("VESHELL_ENGINE_DIR").is_none() {
         let flutter_engine_revision = get_flutter_engine_revision()?;
@@ -91,10 +92,12 @@ fn download_flutter_engine_library(
         _ => return Err("Unsupported Flutter engine target architecture".into()),
     };
 
-    // Download the archive.
-    let url = format!("https://github.com/meta-flutter/flutter-engine/releases/download/linux-engine-sdk-{}-{}-{}/linux-engine-sdk-{}-{}-{}.tar.gz",
-                          flutter_engine_build, arch, flutter_engine_revision,
-                          flutter_engine_build, arch, flutter_engine_revision);
+    // Download the archive. Defaults to meta-flutter; set VESHELL_ENGINE_REPO
+    // (for example free-explorers/veshell) to use our own source-built engine.
+    let engine_repo = env::var("VESHELL_ENGINE_REPO")
+        .unwrap_or_else(|_| "meta-flutter/flutter-engine".to_owned());
+    let asset = format!("linux-engine-sdk-{flutter_engine_build}-{arch}-{flutter_engine_revision}");
+    let url = format!("https://github.com/{engine_repo}/releases/download/{asset}/{asset}.tar.gz");
     let sha256_url = format!("{}.sha256", url);
 
     // Download the archive and its SHA256 checksum

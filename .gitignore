@@ -10,3 +10,6 @@ target
 
 # stale tool checkouts
 .depot_tools/
+
+# CI scratch
+__pycache__/

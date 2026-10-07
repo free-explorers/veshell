@@ -37,6 +37,9 @@ For offline builds, staged installs, or distribution packages, see
 [the build and packaging guide](docs/building.md). NixOS instructions are in
 [docs/nixos.md](docs/nixos.md).
 
+Distribution packaging and prebuilt releases (Arch/Manjaro, Fedora, Debian) live
+in [`veshell-packaging`](https://github.com/free-explorers/veshell-packaging).
+
 # The innovative workflow
 
 The workflow is designed to synergize with your spatial awareness in order to provide a most intuitive and ergonomic navigation and organization in the digital environment.
