@@ -119,6 +119,30 @@ hashes, metadata, and expected outputs before invoking `sudo nix-store --import`
 Attestation establishes provenance, not that the code is bug-free. Import alone
 does not install Veshell or activate a session.
 
+## Reuse the application build
+
+The packaging repository `free-explorers/veshell-packaging` publishes attested
+application closures (package, SDK and shell) on its release tags, together with
+the `nix/import-release.sh` and `nix/export-release.sh` helpers. Importing one
+reuses those store paths and the matching engine; it does not configure a binary
+cache.
+
+Run from this checkout at the commit the release was built from, fetching the
+helper from the release tag itself:
+
+```sh
+VESHELL_COMMIT=$(git rev-parse HEAD)
+curl -fsSLO https://raw.githubusercontent.com/free-explorers/veshell-packaging/v0.1.0/nix/import-release.sh
+bash import-release.sh "$VESHELL_COMMIT" v0.1.0 package refs/tags/v0.1.0 \
+  --trust-github-release
+```
+
+The helper resolves the release ref to a packaging commit, verifies the
+attestation of `nix-package-release.yml` at that ref, checks the recorded Veshell
+commit, engine pin, engine/runtime outputs and nixpkgs revision against this
+checkout, and imports the attested engine closure first. Application publishing
+is optional: building from this checkout (above) works without it.
+
 ## Troubleshooting
 
 - **No usable GPU:** check `ls -l /dev/dri`. Graphical testing needs a render node
@@ -186,12 +210,15 @@ source-engine integration; these builds disable the normal test phases.
 nix-shell -p yq jq --run 'yq -s . src/shell/pubspec.lock | jq -S ".[0]" > nix/pubspec-lock.json'
 ```
 
-The `Nix Package Release` workflow
-(`.github/workflows/nix-package-release.yml`) is dispatch-only for now. It
-belongs in `free-explorers/veshell-packaging` alongside the other channels and
-has not been moved yet. It and the application export/import helpers are
-prepared but have not been verified end-to-end. Application publishing is not
-required for installation. If used, application exports exclude the separately
-published engine closure, and importing requires verification of both
-repositories. No Veshell application release is currently published; do not
-treat those helpers as a tested installation path.
+The `Nix Package Release` workflow now lives in
+`free-explorers/veshell-packaging`
+(`.github/workflows/nix-package-release.yml`) and runs on the same release event
+as the distro channels. It checks out this repository at the commit pinned in
+the packaging `release.json`, imports the separately attested engine closure,
+builds the package/SDK/shell closures and uploads the attested `package-*`
+assets to the packaging release. Application exports exclude the separately
+published engine closure, and importing verifies both repositories. The
+application `export-release.sh` and `import-release.sh` helpers live in the
+packaging repository next to the workflow that uses them, and are run with the
+working directory set to the pinned Veshell checkout. They are prepared but have
+not been verified end-to-end.
