@@ -158,9 +158,11 @@ source-engine integration; these builds disable the normal test phases.
 
 ## Maintainer notes
 
-- `packaging/release.json` is the release source of truth; `Cargo.toml`,
-  `nix/flutter-sdk.json` and `nix/engine-repository.json` must agree with it
-  (enforced by `packaging/scripts/render-recipes.py --check`).
+- The packaging release manifest lives in
+  `free-explorers/veshell-packaging` (`release.json`). `Cargo.toml`,
+  `nix/flutter-sdk.json` and `nix/engine-repository.json` here must agree with
+  it; the packaging repo's
+  `scripts/render-recipes.py --check --veshell-src <checkout>` enforces that.
   `nix/flutter-sdk.json` and `nix/flutter-tools-lock.json` hold the verified
   SDK/tooling metadata.
 - `nix/engine-repository.json` pins the independent engine packaging source.
@@ -185,9 +187,9 @@ nix-shell -p yq jq --run 'yq -s . src/shell/pubspec.lock | jq -S ".[0]" > nix/pu
 ```
 
 The `Nix Package Release` workflow
-(`.github/workflows/nix-package-release.yml`) is called by the unified release
-pipeline (`.github/workflows/release.yml`) when a release is published, and can
-still be dispatched manually. It and the application export/import helpers are
+(`.github/workflows/nix-package-release.yml`) is dispatch-only for now. It
+belongs in `free-explorers/veshell-packaging` alongside the other channels and
+has not been moved yet. It and the application export/import helpers are
 prepared but have not been verified end-to-end. Application publishing is not
 required for installation. If used, application exports exclude the separately
 published engine closure, and importing requires verification of both

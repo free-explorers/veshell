@@ -37,8 +37,8 @@ For offline builds, staged installs, or distribution packages, see
 [the build and packaging guide](docs/building.md). NixOS instructions are in
 [docs/nixos.md](docs/nixos.md).
 
-Distribution packaging recipes (Arch/Manjaro, Fedora, Debian) live in
-[`packaging/`](packaging/README.md).
+Distribution packaging and prebuilt releases (Arch/Manjaro, Fedora, Debian) live
+in [`veshell-packaging`](https://github.com/free-explorers/veshell-packaging).
 
 # The innovative workflow
 
