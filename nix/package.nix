@@ -29,6 +29,7 @@
   pipewire,
   gst_all_1,
   fontconfig,
+  makeFontsConf,
   roboto,
   noto-fonts,
   noto-fonts-cjk-sans,
@@ -52,7 +53,7 @@
 let
   manifest = builtins.fromTOML (builtins.readFile ../Cargo.toml);
   runtimeFonts = [ roboto noto-fonts noto-fonts-cjk-sans ];
-  fontsConf = fontconfig.makeFontsConf { fontDirectories = runtimeFonts; };
+  fontsConf = makeFontsConf { fontDirectories = runtimeFonts; };
   runtimeLibraries = [
     wayland
     libGL
