@@ -242,6 +242,15 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         self.clock.now().as_millis() as u32
     }
 
+    /// Ask the backend to composite the current state on the next idle.
+    ///
+    /// Rendering is on demand — a Flutter present, a client commit or input
+    /// schedules one — instead of the vsync tick rendering every retrace.
+    pub fn request_render(&mut self) {
+        let request = self.idle.render_request();
+        request(self);
+    }
+
     /// Tells the shell the display brightness changed so it can show the
     /// brightness OSD. Called after every user-driven [`crate::brightness::Brightness::adjust`]
     /// (the hardware function keys handled in the compositor, and the shell's

@@ -62,27 +62,35 @@ by the DRM backend directly as a render element above the Flutter texture
 (`get_frame_elements_from_dmabuf`), not only through the shell's
 `MetaSurfaceWidget`. It is presented on each output retrace rather than being
 limited to the shell's frame production, so a dropped or late Flutter frame
-does not delay the game. Compositing is driven by the KMS vblank.
+does not delay the game.
+
+Rendering is **on demand**: a Flutter present, a client commit, pointer input
+or the idle fade schedules a composite, and the output is presented on the next
+retrace. The vsync timer only delivers Flutter's vsync batons and the Wayland
+frame callbacks; it no longer renders every retrace.
+
+While active, the game surface is also **kept out of Flutter**: its external
+texture frame is not signalled and the shell draws a placeholder instead of
+`MetaSurfaceWidget`. A game frame therefore does not schedule a Flutter frame,
+so there is no duplicate rasterization and no full-output damage from the shell
+— only the game's own damaged region is repainted.
 
 **Input.** Keyboard, pointer motion, buttons and axis are forwarded straight to
 the client by Smithay (`KeyboardHandle::input_forward`, `PointerHandle`) and
 never pass through Flutter or the shell widget tree, so shell event handling
 cannot add a frame between the device and the game.
 
-**Pacing.** The output is composited every retrace and Flutter's vsync batons
-are delivered by a timer (`vsync_tick`), not gated on a page flip: a static
-shell, or a static game, cannot stall the render pump.
+**Pacing.** Flutter's vsync batons are delivered by a timer (`vsync_tick`), not
+gated on a page flip: a static shell, or a static game, cannot stall the pump.
+The timer is not vblank-aligned (Smithay only surfaces DRM vblanks for page
+flips), so baton timing can jitter by a fraction of a frame.
 
 **Trade-offs and non-goals.**
 
-- The client buffer is still imported into a Flutter external texture and the
-  shell still builds the (covered) surface route, so while active the frame is
-  effectively produced twice. A follow-up could stop feeding the surface to
-  Flutter once the native render owns the output.
-- The compositor re-composites the whole output each retrace, including the
-  full-screen Flutter texture, even when only the game changed.
+- The client buffer is still imported into a Flutter external texture even while
+  active, but it is neither signalled nor drawn, so the cost is the import, not
+  a second rasterization.
 - There is no per-app frame pacing, no VRR/adaptive-sync handshake and no
-  latency instrumentation; the mode trades power and some duplicated work for
-  responsiveness.
+  latency instrumentation; the mode trades some complexity for responsiveness.
 - Entering and leaving the mode is not a hot path: it costs a resize configure,
   a route transition and, on leave, synthetic key releases.

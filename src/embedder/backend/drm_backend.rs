@@ -1413,8 +1413,6 @@ impl State<DrmBackend> {
         if let CursorImageStatus::Surface(wl_surface) = cursor_status {
             send_frames_surface_tree(&wl_surface, frame_timestamp)
         }
-
-        idle_request_render(self);
     }
 
     // If crtc is `Some()`, render it, else render all crtcs

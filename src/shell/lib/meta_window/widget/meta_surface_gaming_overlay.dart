@@ -119,10 +119,16 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
             tag: heroUuid,
             child: _SizedSurface(
               size: surfaceSize,
-              child: MetaSurfaceWidget(
-                metaWindowId: metaWindowId,
-                decorated: false,
-              ),
+              // While the native render owns the output the shell must not draw
+              // the game: a placeholder keeps the surface out of Flutter (no
+              // duplicate rasterization, and the surface state stops driving
+              // Flutter frames).
+              child: metaWindowState.gameModeActivated
+                  ? const SizedBox.expand()
+                  : MetaSurfaceWidget(
+                      metaWindowId: metaWindowId,
+                      decorated: false,
+                    ),
             ),
           ),
         ),
@@ -217,6 +223,11 @@ class _GamingZoomRoute extends HookConsumerWidget {
     final geometry = ref.watch(
       metaWindowStateProvider(metaWindowId).select((value) => value.geometry),
     );
+    final active = ref.watch(
+      metaWindowStateProvider(
+        metaWindowId,
+      ).select((value) => value.gameModeActivated),
+    );
 
     ref.listen(
       metaWindowStateProvider(
@@ -267,10 +278,9 @@ class _GamingZoomRoute extends HookConsumerWidget {
                   ),
                 ],
               ),
-          child: MetaSurfaceWidget(
-            metaWindowId: metaWindowId,
-            decorated: false,
-          ),
+          child: active
+              ? const SizedBox.expand()
+              : MetaSurfaceWidget(metaWindowId: metaWindowId, decorated: false),
         ),
       ),
     );

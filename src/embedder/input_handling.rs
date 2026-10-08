@@ -57,6 +57,7 @@ impl<BackendData: Backend> State<BackendData> {
     ) where
         BackendData: Backend + 'static,
     {
+        self.request_render();
         let pointer: smithay::input::pointer::PointerHandle<State<BackendData>> =
             self.pointer.clone();
         let mut pointer_location = self.pointer.current_location();
@@ -128,6 +129,7 @@ impl<BackendData: Backend> State<BackendData> {
     ) where
         BackendData: Backend + 'static,
     {
+        self.request_render();
         let serial = SERIAL_COUNTER.next_serial();
         let Some(bounds) = self.output_bounds() else {
             debug!("dropping absolute pointer motion: no mapped output");
@@ -192,6 +194,7 @@ impl<BackendData: Backend> State<BackendData> {
     ) where
         BackendData: Backend + 'static,
     {
+        self.request_render();
         // While a screenshot session is active the drag is native: the
         // button never reaches the frozen desktop below. Positions come
         // from the session's own tracking (the Smithay pointer is frozen).
@@ -321,6 +324,7 @@ impl<BackendData: Backend> State<BackendData> {
     ) where
         BackendData: Backend + 'static,
     {
+        self.request_render();
         // Scroll events are irrelevant while the desktop is frozen for a
         // screenshot selection.
         if self.capture_state.session.is_some() {

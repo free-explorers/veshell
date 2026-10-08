@@ -599,6 +599,9 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     // backstop for a deactivation that bypassed it.
                     self.game_mode_forwarded_keys.clear();
                 }
+                // Entering/leaving the native takeover changes what is drawn:
+                // composite it now (rendering is on demand).
+                self.request_render();
             }
             MetaWindowPatch::UpdateIsRecording { id, value } => {
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
