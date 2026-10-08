@@ -180,6 +180,7 @@
   "extractToNewTile": "Extraer a un nuevo mosaico",
   "gamingPaused": "Modo de juego en pausa",
   "clickToResume": "Haz clic para reanudar",
+  "exitGamingHint": "Pulsa Ctrl+Esc para salir",
   "allowCapture": "¿Permitir captura?",
   "colorCaptureRequest": "{app} quiere seleccionar un color.",
   "screenshotRequest": "{app} quiere capturar toda la pantalla.",

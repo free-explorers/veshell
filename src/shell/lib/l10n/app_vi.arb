@@ -180,6 +180,7 @@
   "extractToNewTile": "Tách sang ô mới",
   "gamingPaused": "Chế độ chơi game đang tạm dừng",
   "clickToResume": "Nhấp để tiếp tục",
+  "exitGamingHint": "Nhấn Ctrl+Esc để thoát",
   "allowCapture": "Cho phép chụp?",
   "colorCaptureRequest": "{app} muốn chọn một màu.",
   "screenshotRequest": "{app} muốn chụp ảnh toàn bộ màn hình.",

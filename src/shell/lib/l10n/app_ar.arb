@@ -180,6 +180,7 @@
   "extractToNewTile": "استخراج إلى بلاطة جديدة",
   "gamingPaused": "وضع الألعاب متوقف مؤقتًا",
   "clickToResume": "انقر للاستئناف",
+  "exitGamingHint": "اضغط Ctrl+Esc للخروج",
   "allowCapture": "السماح بالالتقاط؟",
   "colorCaptureRequest": "يريد {app} اختيار لون.",
   "screenshotRequest": "يريد {app} التقاط صورة للشاشة بأكملها.",

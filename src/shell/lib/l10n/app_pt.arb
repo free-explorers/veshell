@@ -180,6 +180,7 @@
   "extractToNewTile": "Extrair para um novo bloco",
   "gamingPaused": "Modo de jogo em pausa",
   "clickToResume": "Clique para retomar",
+  "exitGamingHint": "Prima Ctrl+Esc para sair",
   "allowCapture": "Permitir captura?",
   "colorCaptureRequest": "{app} quer selecionar uma cor.",
   "screenshotRequest": "{app} quer capturar a tela inteira.",

@@ -180,6 +180,7 @@
   "extractToNewTile": "Ekstrak ke ubin baru",
   "gamingPaused": "Mode permainan dijeda",
   "clickToResume": "Klik untuk melanjutkan",
+  "exitGamingHint": "Tekan Ctrl+Esc untuk keluar",
   "allowCapture": "Izinkan pengambilan?",
   "colorCaptureRequest": "{app} ingin memilih warna.",
   "screenshotRequest": "{app} ingin mengambil tangkapan seluruh layar.",

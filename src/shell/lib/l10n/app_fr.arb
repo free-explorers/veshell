@@ -180,6 +180,7 @@
   "extractToNewTile": "Extraire dans une nouvelle tuile",
   "gamingPaused": "Mode jeu en pause",
   "clickToResume": "Cliquez pour reprendre",
+  "exitGamingHint": "Ctrl+Esc pour quitter",
   "allowCapture": "Autoriser la capture ?",
   "colorCaptureRequest": "{app} souhaite sélectionner une couleur.",
   "screenshotRequest": "{app} souhaite capturer l’ensemble de l’écran.",

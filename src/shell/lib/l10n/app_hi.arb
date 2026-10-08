@@ -180,6 +180,7 @@
   "extractToNewTile": "नई टाइल में निकालें",
   "gamingPaused": "गेमिंग मोड रुका हुआ है",
   "clickToResume": "जारी रखने के लिए क्लिक करें",
+  "exitGamingHint": "बाहर निकलने के लिए Ctrl+Esc दबाएँ",
   "allowCapture": "कैप्चर की अनुमति दें?",
   "colorCaptureRequest": "{app} एक रंग चुनना चाहता है।",
   "screenshotRequest": "{app} पूरी स्क्रीन का स्क्रीनशॉट लेना चाहता है।",

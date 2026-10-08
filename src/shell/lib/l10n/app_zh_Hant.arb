@@ -180,6 +180,7 @@
   "extractToNewTile": "擷取至新平鋪項目",
   "gamingPaused": "遊戲模式已暫停",
   "clickToResume": "點擊以繼續",
+  "exitGamingHint": "按 Ctrl+Esc 退出",
   "allowCapture": "允許擷取？",
   "colorCaptureRequest": "{app} 想要選取顏色。",
   "screenshotRequest": "{app} 想要擷取整個螢幕的截圖。",

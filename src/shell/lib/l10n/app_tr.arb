@@ -180,6 +180,7 @@
   "extractToNewTile": "Yeni döşemeye çıkar",
   "gamingPaused": "Oyun modu duraklatıldı",
   "clickToResume": "Devam etmek için tıklayın",
+  "exitGamingHint": "Çıkmak için Ctrl+Esc",
   "allowCapture": "Yakalamaya izin verilsin mi?",
   "colorCaptureRequest": "{app} bir renk seçmek istiyor.",
   "screenshotRequest": "{app} tüm ekranın görüntüsünü almak istiyor.",

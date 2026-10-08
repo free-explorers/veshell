@@ -180,6 +180,7 @@
   "extractToNewTile": "新しいタイルに取り出す",
   "gamingPaused": "ゲームモードは一時停止中",
   "clickToResume": "クリックして再開",
+  "exitGamingHint": "終了するには Ctrl+Esc",
   "allowCapture": "キャプチャを許可しますか？",
   "colorCaptureRequest": "{app} が色の選択を求めています。",
   "screenshotRequest": "{app} が画面全体のスクリーンショットを撮ろうとしています。",

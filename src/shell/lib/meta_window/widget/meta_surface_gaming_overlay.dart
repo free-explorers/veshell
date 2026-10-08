@@ -158,6 +158,13 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
                           context.l10n.clickToResume,
                           style: const TextStyle(color: Colors.white),
                         ),
+                        Text(
+                          context.l10n.exitGamingHint,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                        ),
                       ],
                     ),
                   ),

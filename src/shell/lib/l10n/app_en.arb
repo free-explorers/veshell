@@ -210,6 +210,7 @@
   "extractToNewTile": "Extract to new tile",
   "gamingPaused": "Gaming mode paused",
   "clickToResume": "Click to resume",
+  "exitGamingHint": "Press Ctrl+Esc to exit",
   "allowCapture": "Allow capture?",
   "colorCaptureRequest": "{app} wants to pick a color.",
   "@colorCaptureRequest": {"description": "Color picker permission prompt; app is an application name or the generic application label", "placeholders": {"app": {"type": "String"}}},

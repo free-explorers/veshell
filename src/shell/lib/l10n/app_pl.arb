@@ -180,6 +180,7 @@
   "extractToNewTile": "Wyodrębnij do nowego kafelka",
   "gamingPaused": "Tryb gry wstrzymany",
   "clickToResume": "Kliknij, aby wznowić",
+  "exitGamingHint": "Naciśnij Ctrl+Esc, aby wyjść",
   "allowCapture": "Zezwolić na przechwytywanie?",
   "colorCaptureRequest": "{app} chce wybrać kolor.",
   "screenshotRequest": "{app} chce zrobić zrzut całego ekranu.",

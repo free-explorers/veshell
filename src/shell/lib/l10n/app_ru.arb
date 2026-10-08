@@ -180,6 +180,7 @@
   "extractToNewTile": "Извлечь в новую плитку",
   "gamingPaused": "Игровой режим приостановлен",
   "clickToResume": "Нажмите для продолжения",
+  "exitGamingHint": "Нажмите Ctrl+Esc, чтобы выйти",
   "allowCapture": "Разрешить захват?",
   "colorCaptureRequest": "{app} хочет выбрать цвет.",
   "screenshotRequest": "{app} хочет сделать снимок всего экрана.",

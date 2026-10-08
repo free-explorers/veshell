@@ -180,6 +180,7 @@
   "extractToNewTile": "In neue Kachel auslagern",
   "gamingPaused": "Spielmodus pausiert",
   "clickToResume": "Zum Fortsetzen klicken",
+  "exitGamingHint": "Ctrl+Esc zum Beenden",
   "allowCapture": "Aufnahme erlauben?",
   "colorCaptureRequest": "{app} möchte eine Farbe auswählen.",
   "screenshotRequest": "{app} möchte ein Bildschirmfoto des gesamten Bildschirms aufnehmen.",
