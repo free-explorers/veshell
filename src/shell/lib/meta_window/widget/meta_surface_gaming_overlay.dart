@@ -9,7 +9,6 @@ import 'package:shell/meta_window/widget/meta_surface.dart';
 import 'package:shell/monitor/provider/monitor_placement.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
-import 'package:shell/shared/util/logger.dart';
 import 'package:uuid/uuid.dart';
 
 class MetaSurfaceGamingOverlay extends HookConsumerWidget {
@@ -46,8 +45,11 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
       final route = PageRouteBuilder<void>(
         opaque: false,
         transitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (context, _, __) =>
-            _GamingZoomRoute(metaWindowId: metaWindowId, heroUuid: heroUuid),
+        pageBuilder: (context, _, __) => _GamingZoomRoute(
+          metaWindowId: metaWindowId,
+          heroUuid: heroUuid,
+          monitorName: monitorName,
+        ),
       );
       zoomRoute.value = route;
       Navigator.of(context, rootNavigator: true).push(route).whenComplete(() {
@@ -180,9 +182,14 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
 /// shuttle: a skipped transition, a missing source Hero or an accessibility
 /// "reduce motion" setting would otherwise leave the compositor ungathered.
 class _GamingZoomRoute extends HookConsumerWidget {
-  const _GamingZoomRoute({required this.metaWindowId, required this.heroUuid});
+  const _GamingZoomRoute({
+    required this.metaWindowId,
+    required this.heroUuid,
+    required this.monitorName,
+  });
   final String metaWindowId;
   final String heroUuid;
+  final String monitorName;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -204,19 +211,34 @@ class _GamingZoomRoute extends HookConsumerWidget {
       },
     );
 
-    return GamingActivationTrigger(
-      metaWindowId: metaWindowId,
-      child: Hero(
-        tag: heroUuid,
-        flightShuttleBuilder:
-            (
-              flightContext,
-              animation,
-              flightDirection,
-              fromContext,
-              toContext,
-            ) => _SizedSurface(size: geometry?.size, child: toContext.widget),
-        child: MetaSurfaceWidget(metaWindowId: metaWindowId, decorated: false),
+    // The route (and the Hero flight, which rebuilds the destination inside the
+    // navigator's overlay) is outside the monitor's `CurrentMonitorName`, so
+    // re-provide it: `MetaSurfaceWidget` reads it to report the output.
+    return CurrentMonitorName(
+      name: monitorName,
+      child: GamingActivationTrigger(
+        metaWindowId: metaWindowId,
+        child: Hero(
+          tag: heroUuid,
+          flightShuttleBuilder:
+              (
+                flightContext,
+                animation,
+                flightDirection,
+                fromContext,
+                toContext,
+              ) => CurrentMonitorName(
+                name: monitorName,
+                child: _SizedSurface(
+                  size: geometry?.size,
+                  child: toContext.widget,
+                ),
+              ),
+          child: MetaSurfaceWidget(
+            metaWindowId: metaWindowId,
+            decorated: false,
+          ),
+        ),
       ),
     );
   }
@@ -248,10 +270,6 @@ class GamingActivationTrigger extends HookConsumerWidget {
       if (route == null || animation == null) return null;
 
       void onStatus(AnimationStatus status) {
-        geometryLog.info(
-          'gaming activation status=$status offstage=${route.offstage} '
-          'activated=${activated.value}',
-        );
         if (status != AnimationStatus.completed || activated.value) return;
         // Flutter's hero measurement briefly takes the route offstage, which
         // swaps its animation for `kAlwaysCompleteAnimation` for one frame.
@@ -265,9 +283,6 @@ class GamingActivationTrigger extends HookConsumerWidget {
         // "modify a provider while building" error. Defer it past the frame.
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!context.mounted) return;
-          geometryLog.info(
-            'gaming activation: patching true for $metaWindowId',
-          );
           ref
               .read(metaWindowStateProvider(metaWindowId).notifier)
               .patch(UpdateGameModeActivated(id: metaWindowId, value: true));
