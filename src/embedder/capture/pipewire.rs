@@ -16,7 +16,7 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::io::Cursor;
-use std::os::fd::{AsFd, BorrowedFd};
+use std::os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd};
 use std::ptr::NonNull;
 
 use pipewire as pipewire_crate;
@@ -24,7 +24,6 @@ use pipewire::keys;
 use pipewire::registry::GlobalObject;
 use pipewire::spa::utils::dict::DictRef;
 use pipewire::types::ObjectType;
-use pipewire_crate::sys as pipewire_sys;
 use std::rc::Rc;
 
 use pipewire::context::ContextRc;
@@ -33,32 +32,41 @@ use pipewire::loop_::Timeout;
 use pipewire::main_loop::MainLoopRc;
 use pipewire::properties::PropertiesBox;
 use pipewire::spa::buffer::meta::MetaHeader;
-use pipewire::spa::buffer::{meta::Metadata, DataFlags, DataType};
+use pipewire::spa::buffer::{meta::Metadata, DataType};
 use pipewire::spa::param::format::{FormatProperties, MediaSubtype, MediaType};
 use pipewire::spa::param::format_utils::parse_format;
 use pipewire::spa::param::video::{VideoFormat, VideoInfoRaw};
 use pipewire::spa::param::ParamType;
+use pipewire::spa::pod::deserialize::PodDeserializer;
 use pipewire::spa::pod::serialize::PodSerializer;
-use pipewire::spa::pod::{self, ChoiceValue, Pod, Property};
+use pipewire::spa::pod::{self, ChoiceValue, Pod, PodPropFlags, Property, PropertyFlags};
 use pipewire::spa::sys::{self, spa_meta_header};
 use pipewire::spa::utils::{
     Choice, ChoiceEnum, ChoiceFlags, Direction, Fraction, Rectangle as SpaRectangle, SpaTypes,
 };
-use pipewire::stream::{Stream, StreamFlags, StreamListener, StreamRc, StreamState};
+use pipewire::stream::{StreamFlags, StreamListener, StreamRc, StreamState};
 use pipewire::sys::{pw_buffer, pw_stream_queue_buffer, pw_stream_return_buffer};
 
+use smithay::backend::allocator::dmabuf::Dmabuf;
+use smithay::backend::allocator::Fourcc;
+use smithay::backend::renderer::sync::SyncPoint;
 use smithay::reexports::calloop::generic::Generic;
 use smithay::reexports::calloop::{Interest, LoopHandle, Mode, PostAction, RegistrationToken};
-use smithay::utils::{Logical, Physical, Point, Rectangle, Size};
+use smithay::reexports::gbm::Modifier;
+use smithay::utils::{Physical, Size};
 use zbus::zvariant::OwnedObjectPath;
 
+use super::shm::ShmBuffer;
+use crate::backend::CaptureDmabufSetup;
 use crate::portal::service::SourceKind;
 use crate::state::State;
 use crate::Backend;
 
-/// Frame budget ceiling: never faster than 30 FPS regardless of consumer.
-const MAX_FRAMERATE_NUM: u32 = 30;
-const BYTES_PER_PIXEL: usize = 4;
+/// Frame budget ceiling: the producer never advertises above this rate
+/// regardless of consumer. With the dmabuf transport in place a frame costs
+/// a GPU render and no CPU copy, so the ceiling can match a common display
+/// refresh; consumers that ask for less still get less.
+const MAX_FRAMERATE_NUM: u32 = 60;
 
 /// Producer events delivered to the compositor loop from the PipeWire
 /// main loop.
@@ -316,7 +324,7 @@ pub struct ActiveStream {
     pub consumer_app_id: Option<String>,
     /// Whether a consumer is pulling frames right now.
     pub active: bool,
-    /// Last frame copy for this stream: the 30 FPS budget is enforced
+    /// Last frame copy for this stream: the frame budget is enforced
     /// against output-damage presents, never above.
     pub last_frame: Option<std::time::Instant>,
     /// Transient restore grant carried in the Start result (Chromium
@@ -341,6 +349,9 @@ pub struct Producer {
     /// The compositor loop answers one [ProducerEvent] per pw call back.
     to_loop: smithay::reexports::calloop::channel::Sender<ProducerEvent>,
     streams: HashMap<OwnedObjectPath, StreamEntry>,
+    /// The dmabuf allocator and renderable formats, or None to stay on the
+    /// shared-memory transport.
+    dmabufs: Option<CaptureDmabufSetup>,
 }
 
 struct StreamEntry {
@@ -354,22 +365,54 @@ struct StreamEntry {
     inner: Rc<RefCell<StreamInner>>,
 }
 
+/// The buffer transport a stream negotiated: a dmabuf (GPU, zero-copy) or
+/// the shared-memory fallback.
+#[derive(Clone, Copy, Debug)]
+enum StreamTransport {
+    /// The consumer fixated a dmabuf modifier; buffers are allocated by the
+    /// producer and rendered into directly.
+    Dmabuf { modifier: Modifier },
+    /// The consumer only understands shared memory; the producer allocates
+    /// sealed memfds and copies rendered frames in.
+    Shm,
+}
+
+/// The result of submitting a rendered dmabuf frame to the producer.
+pub enum FrameQueue {
+    /// The buffer was queued to the consumer immediately (the render fence
+    /// had already signaled, or none was exportable).
+    Queued,
+    /// The render fence had not signaled; the buffer is held until the
+    /// caller reports the fence readable and calls
+    /// [`Producer::queue_deferred_frame`].
+    Deferred { id: u64, fence: OwnedFd },
+}
+
 /// Mutable producer state shared with the PipeWire callbacks.
 struct StreamInner {
     descriptor: StreamDescriptor,
     /// Negotiated buffer size; None until the SPA fixated the format.
     ready_size: Option<Size<i32, Physical>>,
     node_id: Option<u32>,
-    /// Frames are written directly into the pw-negotiated MemFd buffers.
-    /// With `MAP_BUFFERS`, `add_buffer` hands over an already-mapped
-    /// `spa_data.data`; the compositor records it keyed by the buffer's
-    /// mapped pointer so `queue_frame` can copy without touching fd
-    /// bookkeeping.
-    buffers: HashMap<*mut u8, usize>,
+    /// Chosen after format negotiation; None until the transport settles.
+    transport: Option<StreamTransport>,
+    /// Producer-owned dmabufs keyed by the first plane's fd (the fd the
+    /// producer advertises in the SPA buffer).
+    dmabufs: HashMap<i64, Dmabuf>,
+    /// Producer-owned shared-memory buffers keyed by their memfd.
+    shmbufs: HashMap<i64, ShmBuffer>,
+    /// Monotonic frame sequence stamped into the SPA header.
+    sequence: u64,
+    /// Dequeued dmabufs whose render fence has not signaled yet, keyed by a
+    /// monotonic id. [`Producer::queue_deferred_frame`] releases them to the
+    /// consumer once the fence fires.
+    pending: HashMap<u64, NonNull<pw_buffer>>,
+    /// Next id handed to a deferred frame.
+    next_pending: u64,
 }
 
-// Raw mapped pointers keyed across callback invocations; the memory is
-// valid only while the buffer registration is in the map.
+// The maps hold GPU/CPU buffers; all access happens on the compositor loop
+// thread, but PipeWire's raw callbacks force the `Send` bound on the state.
 unsafe impl Send for StreamInner {}
 
 fn make_pod(buffer: &mut Vec<u8>, object: pod::Object) -> &Pod {
@@ -378,21 +421,18 @@ fn make_pod(buffer: &mut Vec<u8>, object: pod::Object) -> &Pod {
     Pod::from_bytes(buffer).expect("pod rehydration from owned memory")
 }
 
-/// One format offer: RGBA only, fixed size, framerate parameterized by
-/// the output refresh, capped at the 30 FPS budget.
-/// Retained the shell format offer shape; the stream today connects with
-/// the negotiated params only (this backend's role).
-#[allow(dead_code)]
-fn make_video_params(buffer: &mut Vec<u8>, size: Size<i32, Physical>) -> &Pod {
-    let object = pod::object!(
-        SpaTypes::ObjectParamFormat,
-        ParamType::EnumFormat,
+/// One format offer: RGBA only, fixed size, framerate parameterized by the
+/// output refresh, capped at [`MAX_FRAMERATE_NUM`]. A non-empty `modifiers`
+/// list yields the dmabuf variant (with a modifier choice the consumer
+/// fixates); an empty list yields the shared-memory variant.
+fn make_video_params_object(size: Size<i32, Physical>, modifiers: &[Modifier]) -> pod::Object {
+    let mut properties = vec![
         pod::property!(FormatProperties::MediaType, Id, MediaType::Video),
         pod::property!(FormatProperties::MediaSubtype, Id, MediaSubtype::Raw),
         // RGBA byte order matches the compositor readback exactly: the
-        // M1 Abgr8888 framebuffer maps back as R,G,B,A bytes, and the
-        // first real session streamed red/blue-swapped because a BGRx
-        // declare was negotiated against those bytes.
+        // Abgr8888 framebuffer maps back as R,G,B,A bytes, and the first
+        // real session streamed red/blue-swapped when a BGRx declare was
+        // negotiated against those bytes.
         pod::property!(FormatProperties::VideoFormat, Id, VideoFormat::RGBA),
         pod::property!(
             FormatProperties::VideoSize,
@@ -407,8 +447,8 @@ fn make_video_params(buffer: &mut Vec<u8>, size: Size<i32, Physical>) -> &Pod {
             Fraction,
             Fraction { num: 0, denom: 1 }
         ),
-        // Fixed framerate range [1, 30]: the consumer passes on a rate it
-        // can keep up with, the producer never promises above 30 FPS.
+        // The consumer passes on a rate it can keep up with; the producer
+        // never promises above MAX_FRAMERATE_NUM.
         pod::property!(
             FormatProperties::VideoMaxFramerate,
             Choice,
@@ -424,8 +464,133 @@ fn make_video_params(buffer: &mut Vec<u8>, size: Size<i32, Physical>) -> &Pod {
                 denom: 1
             }
         ),
-    );
-    make_pod(buffer, object)
+    ];
+
+    if !modifiers.is_empty() {
+        // With several modifiers the daemon must not pick one for us: it
+        // reports DONT_FIXATE, we test-allocate, and we answer with the
+        // single modifier that works on this renderer.
+        let dont_fixate = if modifiers.len() > 1 {
+            PropertyFlags::from_bits_retain(sys::SPA_POD_PROP_FLAG_DONT_FIXATE)
+        } else {
+            PropertyFlags::empty()
+        };
+        let alternatives = modifiers
+            .iter()
+            .map(|modifier| u64::from(*modifier) as i64)
+            .collect::<Vec<_>>();
+        properties.push(Property {
+            key: FormatProperties::VideoModifier.as_raw(),
+            flags: PropertyFlags::MANDATORY | dont_fixate,
+            value: pod::Value::Choice(ChoiceValue::Long(Choice(
+                ChoiceFlags::empty(),
+                ChoiceEnum::Enum {
+                    default: alternatives[0],
+                    alternatives,
+                },
+            ))),
+        });
+    }
+
+    pod::Object {
+        type_: SpaTypes::ObjectParamFormat.as_raw(),
+        id: ParamType::EnumFormat.as_raw(),
+        properties,
+    }
+}
+
+/// The initial EnumFormat offer for a stream: the dmabuf variant first
+/// (when the backend can allocate one), then the always-available
+/// shared-memory variant. The consumer's fixation decides the transport,
+/// which is how the SHM fallback is reached without reconnecting.
+fn make_initial_video_params(
+    size: Size<i32, Physical>,
+    modifiers: &[Modifier],
+) -> Vec<pod::Object> {
+    let mut params = Vec::new();
+    if !modifiers.is_empty() {
+        params.push(make_video_params_object(size, modifiers));
+    }
+    params.push(make_video_params_object(size, &[]));
+    params
+}
+
+/// The Buffers params for a negotiated transport: the data type flags and
+/// the plane count. The producer allocates the buffers itself
+/// (`PW_STREAM_FLAG_ALLOC_BUFFERS`), so no size/stride is declared here.
+fn buffers_object(plane_count: usize, dma: bool) -> pod::Object {
+    let data_type = if dma {
+        DataType::DmaBuf
+    } else {
+        DataType::MemFd
+    };
+    let flags = 1 << data_type.as_raw();
+    pod::object!(
+        SpaTypes::ObjectParamBuffers,
+        ParamType::Buffers,
+        Property::new(
+            sys::SPA_PARAM_BUFFERS_buffers,
+            pod::Value::Choice(ChoiceValue::Int(Choice(
+                ChoiceFlags::empty(),
+                ChoiceEnum::Range {
+                    default: 8,
+                    min: 2,
+                    max: 16
+                }
+            ))),
+        ),
+        Property::new(
+            sys::SPA_PARAM_BUFFERS_blocks,
+            pod::Value::Int(plane_count as i32),
+        ),
+        Property::new(
+            sys::SPA_PARAM_BUFFERS_dataType,
+            pod::Value::Choice(ChoiceValue::Int(Choice(
+                ChoiceFlags::empty(),
+                ChoiceEnum::Flags {
+                    default: flags,
+                    flags: vec![flags],
+                }
+            ))),
+        ),
+    )
+}
+
+/// The Meta params: the SPA header carries the frame sequence and a
+/// "timestamp unknown" marker. Presentation timestamps are deliberately
+/// not invented here; elapsed time is not part of the sharing contract.
+fn header_meta_object() -> pod::Object {
+    pod::object!(
+        SpaTypes::ObjectParamMeta,
+        ParamType::Meta,
+        Property::new(
+            sys::SPA_PARAM_META_type,
+            pod::Value::Id(pipewire::spa::utils::Id(
+                <MetaHeader as Metadata>::META_TYPE
+            )),
+        ),
+        Property::new(
+            sys::SPA_PARAM_META_size,
+            pod::Value::Int(std::mem::size_of::<spa_meta_header>() as i32),
+        ),
+    )
+}
+
+/// Picks the first offered modifier that actually allocates on this
+/// renderer. Returning the modifier a consumer proposed is what lets the
+/// fixate handshake commit to a format that can really be rendered.
+fn choose_modifier(
+    allocator: &dyn crate::backend::CaptureDmabufAllocator,
+    size: Size<i32, Physical>,
+    alternatives: &[i64],
+) -> Option<Modifier> {
+    alternatives.iter().find_map(|raw| {
+        let modifier = Modifier::from(*raw as u64);
+        allocator
+            .allocate(size.w as u32, size.h as u32, Fourcc::Abgr8888, &[modifier])
+            .ok()
+            .map(|_| modifier)
+    })
 }
 
 impl Producer {
@@ -434,6 +599,7 @@ impl Producer {
     pub fn new<BackendData: Backend + 'static>(
         loop_handle: &LoopHandle<'static, State<BackendData>>,
         to_loop: smithay::reexports::calloop::channel::Sender<ProducerEvent>,
+        dmabufs: Option<CaptureDmabufSetup>,
     ) -> Result<Self, String> {
         let main_loop = MainLoopRc::new(None).map_err(|error| format!("MainLoop: {error:?}"))?;
         let context =
@@ -546,6 +712,7 @@ impl Producer {
             _registry: registry,
             to_loop,
             streams: HashMap::new(),
+            dmabufs,
         })
     }
 
@@ -603,7 +770,12 @@ impl Producer {
             descriptor: descriptor.clone(),
             ready_size: None,
             node_id: None,
-            buffers: HashMap::new(),
+            transport: None,
+            dmabufs: HashMap::new(),
+            shmbufs: HashMap::new(),
+            sequence: 0,
+            pending: HashMap::new(),
+            next_pending: 0,
         }));
         self.streams.insert(
             session_handle.clone(),
@@ -628,10 +800,15 @@ impl Producer {
         let to_loop_paused = to_loop.clone();
         let to_loop_streaming = to_loop.clone();
         let to_loop_params = to_loop.clone();
+        let to_loop_buffers = to_loop.clone();
         let lock = inner.clone();
         let lock_params = inner.clone();
         let lock_buffers = inner.clone();
         let lock_remove = inner.clone();
+        // The GBM allocator lives for the callbacks, which run on the
+        // compositor loop thread during `iterate`.
+        let dmabufs = self.dmabufs.clone();
+        let dmabufs_buffers = dmabufs.clone();
 
         let listener = stream
             .add_local_listener_with_user_data(())
@@ -727,117 +904,238 @@ impl Producer {
                     return;
                 }
 
-                let negotiated_size = {
-                    let mut format = VideoInfoRaw::new();
-                    if format.parse(pod).is_err() {
-                        fatal("error parsing the negotiated format".to_string());
-                        return;
-                    }
-                    if format.format() != VideoFormat::RGBA {
-                        fatal("pipewire negotiated away RGBA; stream unusable".to_string());
-                        return;
-                    }
-                    Size::<i32, Physical>::from((
-                        format.size().width as i32,
-                        format.size().height as i32,
-                    ))
-                };
+                let mut format = VideoInfoRaw::new();
+                if format.parse(pod).is_err() {
+                    fatal("error parsing the negotiated format".to_string());
+                    return;
+                }
+                if format.format() != VideoFormat::RGBA {
+                    fatal("pipewire negotiated away RGBA; stream unusable".to_string());
+                    return;
+                }
+                let negotiated_size = Size::<i32, Physical>::from((
+                    format.size().width as i32,
+                    format.size().height as i32,
+                ));
 
                 let expected = lock_params.borrow().descriptor.size;
                 if negotiated_size != expected {
                     fatal("negotiated size does not match the output size".to_string());
                     return;
                 }
-                lock_params.borrow_mut().ready_size = Some(expected);
 
+                // The transport follows from whether the fixated format
+                // carries a dmabuf modifier: present means the dmabuf path,
+                // absent means the shared-memory fallback the offer always
+                // includes.
+                let object = match pod.as_object() {
+                    Ok(object) => object,
+                    Err(_) => {
+                        fatal("pipewire sent a format without an object".to_string());
+                        return;
+                    }
+                };
+                let modifier_prop =
+                    object.find_prop(pipewire::spa::utils::Id(FormatProperties::VideoModifier.0));
+
+                let plane_count = match modifier_prop {
+                    // Several modifiers were offered; the daemon refused to
+                    // pick one. Test-allocate and answer with the single
+                    // modifier that really works here, then wait for the
+                    // follow-up param_changed that fixates it.
+                    Some(prop) if prop.flags().contains(PodPropFlags::DONT_FIXATE) => {
+                        let Some(setup) = dmabufs.as_ref() else {
+                            fatal(
+                                "pipewire proposed a dmabuf modifier without a GBM device"
+                                    .to_string(),
+                            );
+                            return;
+                        };
+                        let Ok((_, choice)) = PodDeserializer::deserialize_from::<Choice<i64>>(
+                            prop.value().as_bytes(),
+                        ) else {
+                            fatal("unparsable dmabuf modifier list".to_string());
+                            return;
+                        };
+                        let ChoiceEnum::Enum { alternatives, .. } = choice.1 else {
+                            fatal("dmabuf modifiers were not offered as an enum".to_string());
+                            return;
+                        };
+                        let Some(modifier) =
+                            choose_modifier(&*setup.allocator, expected, &alternatives)
+                        else {
+                            fatal("no offered dmabuf modifier can be rendered here".to_string());
+                            return;
+                        };
+                        let fixed = make_video_params_object(expected, &[modifier]);
+                        let mut b0 = Vec::new();
+                        let mut b1 = Vec::new();
+                        let pods = &mut [
+                            make_pod(&mut b0, fixed),
+                            make_pod(&mut b1, make_video_params_object(expected, &[])),
+                        ];
+                        if let Err(error) = stream.update_params(pods) {
+                            tracing::warn!("error fixing the dmabuf modifier: {error:?}");
+                        }
+                        return;
+                    }
+                    // A single or already-fixated modifier: prove the
+                    // renderer can render into it, then commit to dmabuf.
+                    Some(_) => {
+                        let modifier = Modifier::from(format.modifier());
+                        let Some(setup) = dmabufs.as_ref() else {
+                            fatal("pipewire negotiated a dmabuf without a GBM device".to_string());
+                            return;
+                        };
+                        match setup.allocator.allocate(
+                            expected.w as u32,
+                            expected.h as u32,
+                            Fourcc::Abgr8888,
+                            &[modifier],
+                        ) {
+                            Ok(dmabuf) => dmabuf.num_planes(),
+                            Err(error) => {
+                                fatal(format!("unusable dmabuf modifier: {error}"));
+                                return;
+                            }
+                        }
+                    }
+                    None => 1,
+                };
+                let dma = modifier_prop.is_some();
+                let modifier = Modifier::from(format.modifier());
+                {
+                    let mut inner = lock_params.borrow_mut();
+                    inner.ready_size = Some(expected);
+                    inner.transport = Some(if dma {
+                        StreamTransport::Dmabuf { modifier }
+                    } else {
+                        StreamTransport::Shm
+                    });
+                    tracing::info!(
+                        session = %inner.descriptor.session_handle,
+                        dma,
+                        plane_count,
+                        modifier = ?modifier,
+                        "screen-cast transport negotiated"
+                    );
+                }
+
+                let buffers = buffers_object(plane_count, dma);
+                // Only the SPA header is advertised. `SPA_META_VideoDamage`
+                // is deliberately absent: Veshell has no sub-region damage
+                // source yet (see free-explorers/veshell#63), so advertising
+                // it would either always report the whole output or, worse,
+                // risk stale regions. Every frame is sent fully damaged.
+                let meta = header_meta_object();
                 let mut b1 = Vec::new();
                 let mut b2 = Vec::new();
-                // Buffers params declare the standard sysmem portal
-                // shape: pw-allocated MemFd shared memory (the merged
-                // datatype must intersect the consumer's demand — the
-                // live negotiation trace showed MemPtr-only intersected
-                // with a MemFd-only consumer as empty, i.e. `error alloc
-                // buffers`), geometry explicit, count as a 2..16 range.
-                let stride = expected.w as usize * BYTES_PER_PIXEL;
-                let total = stride * expected.h as usize;
-                let buffers_object = pod::object!(
-                    SpaTypes::ObjectParamBuffers,
-                    ParamType::Buffers,
-                    Property::new(
-                        sys::SPA_PARAM_BUFFERS_buffers,
-                        pod::Value::Choice(ChoiceValue::Int(Choice(
-                            ChoiceFlags::empty(),
-                            ChoiceEnum::Range {
-                                default: 8,
-                                min: 2,
-                                max: 16
-                            }
-                        ))),
-                    ),
-                    Property::new(sys::SPA_PARAM_BUFFERS_blocks, pod::Value::Int(1),),
-                    Property::new(sys::SPA_PARAM_BUFFERS_size, pod::Value::Int(total as i32),),
-                    Property::new(
-                        sys::SPA_PARAM_BUFFERS_stride,
-                        pod::Value::Int(stride as i32),
-                    ),
-                    Property::new(
-                        sys::SPA_PARAM_BUFFERS_dataType,
-                        pod::Value::Choice(ChoiceValue::Int(Choice(
-                            ChoiceFlags::empty(),
-                            ChoiceEnum::Flags {
-                                default: 1 << DataType::MemFd.as_raw(),
-                                flags: vec![
-                                    1 << DataType::MemFd.as_raw(),
-                                    1 << DataType::MemPtr.as_raw(),
-                                ],
-                            }
-                        ))),
-                    ),
-                );
-                let meta_object = pod::object!(
-                    SpaTypes::ObjectParamMeta,
-                    ParamType::Meta,
-                    Property::new(
-                        sys::SPA_PARAM_META_type,
-                        pod::Value::Id(pipewire::spa::utils::Id(
-                            <MetaHeader as Metadata>::META_TYPE
-                        )),
-                    ),
-                    Property::new(
-                        sys::SPA_PARAM_META_size,
-                        pod::Value::Int(std::mem::size_of::<spa_meta_header>() as i32),
-                    ),
-                );
-                let pod1 = make_pod(&mut b1, buffers_object);
-                let pod2 = make_pod(&mut b2, meta_object);
-                let params = unsafe { &mut [pod1, pod2] };
-                if let Err(error) = stream.update_params(params) {
+                let pods = &mut [make_pod(&mut b1, buffers), make_pod(&mut b2, meta)];
+                if let Err(error) = stream.update_params(pods) {
                     tracing::warn!("error updating stream params: {error:?}");
                 }
             })
             .add_buffer(move |_, (), buffer| {
-                // pw owns the buffer memory and, with MAP_BUFFERS,
-                // hands add_buffer a fully mapped MemFd: record the
-                // mapped pointer (with its fillable size) so queue_frame
-                // can copy without touching fd bookkeeping. The spa_data
-                // is left exactly as pw allocated it.
+                // The producer allocates every buffer itself
+                // (ALLOC_BUFFERS): a GPU dmabuf to render into, or a sealed
+                // memfd to copy rendered frames into. Both are keyed by the
+                // fd PipeWire hands back on dequeue.
                 unsafe {
                     let spa_buffer = (*buffer).buffer;
-                    if (*spa_buffer).n_datas < 1 {
+                    if (*spa_buffer).n_datas < 1 || (*spa_buffer).datas.is_null() {
                         tracing::warn!("spa buffer has no data planes");
                         return;
                     }
-                    let raw_datas = (*spa_buffer).datas;
-                    let data = *raw_datas;
-                    if data.data.is_null() {
-                        tracing::warn!("spa buffer has no mapped memory");
-                        return;
+                    let mut inner = lock_buffers.borrow_mut();
+                    let size = inner.descriptor.size;
+                    match inner.transport {
+                        Some(StreamTransport::Dmabuf { modifier }) => {
+                            let Some(setup) = dmabufs_buffers.as_ref() else {
+                                return;
+                            };
+                            let dmabuf = match setup.allocator.allocate(
+                                size.w as u32,
+                                size.h as u32,
+                                Fourcc::Abgr8888,
+                                &[modifier],
+                            ) {
+                                Ok(dmabuf) => dmabuf,
+                                Err(error) => {
+                                    let session_handle =
+                                        inner.descriptor.session_handle.clone();
+                                    drop(inner);
+                                    let _ = to_loop_buffers.send(ProducerEvent::Fatal {
+                                        session_handle,
+                                        message: format!(
+                                            "Unable to allocate a screen-cast dmabuf: {error}"
+                                        ),
+                                    });
+                                    return;
+                                }
+                            };
+                            let plane_count = dmabuf.num_planes();
+                            if ((*spa_buffer).n_datas as usize) < plane_count {
+                                tracing::warn!("spa buffer has fewer planes than the dmabuf");
+                                return;
+                            }
+                            for (i, (fd, (stride, offset))) in dmabuf
+                                .handles()
+                                .zip(dmabuf.strides().zip(dmabuf.offsets()))
+                                .enumerate()
+                            {
+                                let spa_data = (*spa_buffer).datas.add(i);
+                                (*spa_data).type_ = DataType::DmaBuf.as_raw();
+                                // dma-buf consumers ignore maxsize; some
+                                // legacy ones only check it is non-zero.
+                                (*spa_data).maxsize = 1;
+                                (*spa_data).fd = fd.as_raw_fd() as i64;
+                                (*spa_data).flags = sys::SPA_DATA_FLAG_READWRITE;
+                                let chunk = (*spa_data).chunk;
+                                (*chunk).stride = stride as i32;
+                                (*chunk).offset = offset;
+                            }
+                            let fd = (*(*spa_buffer).datas).fd;
+                            inner.dmabufs.insert(fd, dmabuf);
+                            tracing::debug!(
+                                modifier = ?modifier,
+                                plane_count,
+                                "allocated screen-cast dmabuf"
+                            );
+                        }
+                        Some(StreamTransport::Shm) => {
+                            let shmbuf = match ShmBuffer::allocate(size.w as u32, size.h as u32) {
+                                Ok(shmbuf) => shmbuf,
+                                Err(error) => {
+                                    let session_handle =
+                                        inner.descriptor.session_handle.clone();
+                                    drop(inner);
+                                    let _ = to_loop_buffers.send(ProducerEvent::Fatal {
+                                        session_handle,
+                                        message: format!(
+                                            "Unable to allocate a screen-cast buffer: {error}"
+                                        ),
+                                    });
+                                    return;
+                                }
+                            };
+                            let spa_data = (*spa_buffer).datas;
+                            (*spa_data).type_ = DataType::MemFd.as_raw();
+                            (*spa_data).maxsize = shmbuf.size;
+                            (*spa_data).fd = shmbuf.as_raw_fd() as i64;
+                            (*spa_data).flags = sys::SPA_DATA_FLAG_READWRITE;
+                            let chunk = (*spa_data).chunk;
+                            (*chunk).stride = shmbuf.stride;
+                            (*chunk).offset = 0;
+                            let fd = (*spa_data).fd;
+                            tracing::debug!(
+                                stride = shmbuf.stride,
+                                size = shmbuf.size,
+                                "allocated screen-cast shm buffer"
+                            );
+                            inner.shmbufs.insert(fd, shmbuf);
+                        }
+                        None => {}
                     }
-                    let mapped = data.data as *mut u8;
-                    lock_buffers
-                        .borrow_mut()
-                        .buffers
-                        .insert(mapped, data.maxsize as usize);
                 }
             })
             .remove_buffer(move |_, (), buffer| unsafe {
@@ -845,8 +1143,10 @@ impl Producer {
                 if (*spa_buffer).n_datas < 1 || (*spa_buffer).datas.is_null() {
                     return;
                 }
-                let mapped = (*(*spa_buffer).datas).data as *mut u8;
-                lock_remove.borrow_mut().buffers.remove(&mapped);
+                let fd = (*(*spa_buffer).datas).fd;
+                let mut inner = lock_remove.borrow_mut();
+                inner.dmabufs.remove(&fd);
+                inner.shmbufs.remove(&fd);
             })
             .register()
             .map_err(|error| format!("attach stream listener: {error}"))
@@ -858,18 +1158,33 @@ impl Producer {
             .expect("stream entry was just inserted");
         entry.listener = Some(listener);
 
-        let mut b = Vec::new();
-        let pod = make_video_params(&mut b, descriptor.size);
-        let mut pods: [&Pod; 1] = [pod];
+        // Offer the dmabuf variant (monitor shares on a GBM backend) plus
+        // the shared-memory variant; the consumer's fixation picks the
+        // transport. The producer allocates the buffers (ALLOC_BUFFERS), so
+        // no daemon-side memory allocation is involved.
+        let modifiers: Vec<Modifier> = match (&self.dmabufs, descriptor.source_kind) {
+            (Some(setup), SourceKind::Monitor) => setup
+                .formats
+                .iter()
+                .map(|(_fourcc, modifier)| *modifier)
+                .collect(),
+            _ => Vec::new(),
+        };
+        let objects = make_initial_video_params(descriptor.size, &modifiers);
+        let mut buffers: Vec<Vec<u8>> = objects.iter().map(|_| Vec::new()).collect();
+        let mut pods: Vec<&Pod> = objects
+            .iter()
+            .zip(buffers.iter_mut())
+            .map(|(object, buffer)| make_pod(buffer, object.clone()))
+            .collect();
         if let Err(error) = stream.connect(
             Direction::Output,
             None,
-            // MAP_BUFFERS: pw allocates the MemFd buffer memory itself
-            // (the consumer's demand in the merged negotiation) and maps
-            // it into this process; ALLOC_BUFFERS here would instead
-            // require the client-side NO_MEM allocation that failed
-            // live. The driver role stays: the shell drives the graph.
-            StreamFlags::DRIVER | StreamFlags::MAP_BUFFERS,
+            // The producer allocates every buffer. Combined with the offers
+            // above this is zero-copy when the consumer imports dmabufs,
+            // and a sealed memfd copy otherwise. The driver role stays: the
+            // shell drives the graph.
+            StreamFlags::DRIVER | StreamFlags::ALLOC_BUFFERS,
             &mut pods,
         ) {
             let _ = self.to_loop.send(ProducerEvent::Fatal {
@@ -880,58 +1195,146 @@ impl Producer {
         }
     }
 
-    /// Queues a rendered frame into the shared buffers of the session.
+    /// Copies a rendered frame into the shared-memory buffers of a session.
+    /// Only used on the shared-memory transport; dmabuf sessions render
+    /// directly through [`Producer::begin_dmabuf_frame`].
     pub fn queue_frame(&mut self, session_handle: OwnedObjectPath, pixels: &[u8]) {
         let Some(entry) = self.streams.get(&session_handle) else {
             return;
         };
-        let inner = entry.inner.borrow_mut();
-        let Some(size) = inner.ready_size else {
-            // not ready: drop frame - pw never handed a buffer
-            return;
-        };
-        drop(inner);
-        // The frame geometry is fixed at negotiation: a size drift means
-        // the output mode changed under the session, and a truncated or
-        // short frame would reach the consumer as garbage. Close instead
-        // of silently copying a partial frame.
-        let expected_len = size.w as usize * size.h as usize * BYTES_PER_PIXEL;
-        if pixels.len() != expected_len {
-            let _ = self.to_loop.send(ProducerEvent::Fatal {
-                session_handle,
-                message: format!("frame is {} bytes, expected {expected_len}", pixels.len()),
-            });
-            return;
+        {
+            let inner = entry.inner.borrow();
+            if inner.ready_size.is_none() || !matches!(inner.transport, Some(StreamTransport::Shm))
+            {
+                // Not ready yet, or a dmabuf session whose frames render
+                // straight into the GPU buffer.
+                return;
+            }
         }
         // Dequeue the buffer the consumer handed back for refill.
         let pw_buffer_ptr = unsafe { entry.stream.dequeue_raw_buffer() };
         let Some(pw_buffer_ptr) = std::ptr::NonNull::new(pw_buffer_ptr) else {
             return;
         };
-        let mut inner = entry.inner.borrow_mut();
+        let inner = entry.inner.borrow();
         unsafe {
             let spa_buffer = (*pw_buffer_ptr.as_ptr()).buffer;
-            let raw_datas = (*spa_buffer).datas;
-            let data = *raw_datas;
-            let mapped = data.data as *mut u8;
-            let Some(&capacity) = inner.buffers.get(&mapped) else {
-                drop(pw_buffer_ptr);
+            let spa_data = (*spa_buffer).datas;
+            let fd = (*spa_data).fd;
+            let Some(shmbuf) = inner.shmbufs.get(&fd) else {
                 pw_stream_return_buffer(entry.stream.as_raw_ptr(), pw_buffer_ptr.as_ptr());
                 return;
             };
-            // Pixels land at chunk offset 0; the pw-negotiated memory's
-            // stride matches the frame stride exactly (the Buffers pod
-            // declared the geometry), so the copy is stride-exact.
-            let copied = pixels.len().min(capacity);
-            std::ptr::copy_nonoverlapping(pixels.as_ptr(), mapped, copied);
-            let chunk = (*raw_datas).chunk;
+            // The frame geometry is fixed at negotiation: a size drift
+            // means the output mode changed under the session, and a
+            // truncated frame would reach the consumer as garbage.
+            if pixels.len() != shmbuf.len() {
+                let expected = shmbuf.len();
+                let session_handle = inner.descriptor.session_handle.clone();
+                drop(inner);
+                let _ = self.to_loop.send(ProducerEvent::Fatal {
+                    session_handle,
+                    message: format!("frame is {} bytes, expected {expected}", pixels.len()),
+                });
+                pw_stream_return_buffer(entry.stream.as_raw_ptr(), pw_buffer_ptr.as_ptr());
+                return;
+            }
+            shmbuf.copy_frame(pixels);
+            let chunk = (*spa_data).chunk;
             (*chunk).offset = 0;
-            (*chunk).stride = (inner.descriptor.size.w as usize * BYTES_PER_PIXEL) as i32;
-            (*chunk).size = copied as u32;
+            (*chunk).stride = shmbuf.stride;
+            (*chunk).size = shmbuf.size;
+            (*chunk).flags = sys::SPA_CHUNK_FLAG_NONE as i32;
         }
-        drop(inner);
         unsafe {
             pw_stream_queue_buffer(entry.stream.as_raw_ptr(), pw_buffer_ptr.as_ptr());
+        }
+    }
+
+    /// Whether a live session negotiated the dmabuf transport.
+    pub fn is_dmabuf_stream(&self, session_handle: &OwnedObjectPath) -> bool {
+        self.streams.get(session_handle).is_some_and(|entry| {
+            matches!(
+                entry.inner.borrow().transport,
+                Some(StreamTransport::Dmabuf { .. })
+            )
+        })
+    }
+
+    /// Dequeues a dmabuf buffer for the compositor to render into. The
+    /// returned handle must be completed with
+    /// [`Producer::finish_dmabuf_frame`].
+    pub fn begin_dmabuf_frame(
+        &mut self,
+        session_handle: &OwnedObjectPath,
+    ) -> Option<(Dmabuf, NonNull<pw_buffer>)> {
+        let entry = self.streams.get(session_handle)?;
+        if !matches!(
+            entry.inner.borrow().transport,
+            Some(StreamTransport::Dmabuf { .. })
+        ) {
+            return None;
+        }
+        let buffer = NonNull::new(unsafe { entry.stream.dequeue_raw_buffer() })?;
+        let dmabuf = unsafe {
+            let spa_buffer = (*buffer.as_ptr()).buffer;
+            let fd = (*(*spa_buffer).datas).fd;
+            entry.inner.borrow().dmabufs.get(&fd)?.clone()
+        };
+        Some((dmabuf, buffer))
+    }
+
+    /// Submits a buffer rendered into by [`Producer::begin_dmabuf_frame`].
+    ///
+    /// When the render fence has not signaled yet the buffer is held back
+    /// (never handed to the consumer half-written); the caller must then
+    /// call [`Producer::queue_deferred_frame`] once the returned fence is
+    /// readable. `rendered` false marks the frame corrupted.
+    pub fn finish_dmabuf_frame(
+        &mut self,
+        session_handle: &OwnedObjectPath,
+        buffer: NonNull<pw_buffer>,
+        rendered: bool,
+        sync: Option<SyncPoint>,
+    ) -> FrameQueue {
+        let Some(entry) = self.streams.get(session_handle) else {
+            return FrameQueue::Queued;
+        };
+        if rendered {
+            if let Some(sync) = sync {
+                if !sync.is_reached() {
+                    if let Some(fence) = sync.export() {
+                        let mut inner = entry.inner.borrow_mut();
+                        let id = inner.next_pending;
+                        inner.next_pending = inner.next_pending.wrapping_add(1);
+                        inner.pending.insert(id, buffer);
+                        tracing::debug!(id, "screen-cast frame deferred on its render fence");
+                        return FrameQueue::Deferred { id, fence };
+                    }
+                }
+            }
+            // SAFETY: the buffer was dequeued from this stream and has not
+            // been queued back yet.
+            unsafe { mark_dmabuf_good_and_queue(entry, buffer) };
+        } else {
+            // SAFETY: as above.
+            unsafe { mark_dmabuf_corrupted_and_queue(entry, buffer) };
+        }
+        FrameQueue::Queued
+    }
+
+    /// Releases a buffer held by [`Producer::finish_dmabuf_frame`] once its
+    /// render fence has signaled.
+    pub fn queue_deferred_frame(&mut self, session_handle: &OwnedObjectPath, id: u64) {
+        let Some(entry) = self.streams.get(session_handle) else {
+            return;
+        };
+        let buffer = entry.inner.borrow_mut().pending.remove(&id);
+        if let Some(buffer) = buffer {
+            tracing::debug!(id, "screen-cast deferred frame queued");
+            // SAFETY: the buffer was dequeued from this stream and held
+            // across the fence; it is queued back exactly once.
+            unsafe { mark_dmabuf_good_and_queue(entry, buffer) };
         }
     }
 
@@ -943,4 +1346,61 @@ impl Producer {
             let _ = entry.stream.disconnect();
         }
     }
+}
+
+/// Stamps a completed dmabuf frame and returns it to the consumer.
+///
+/// # Safety
+///
+/// `buffer` must be a dequeued, not-yet-requeued dmabuf buffer of `entry`.
+unsafe fn mark_dmabuf_good_and_queue(entry: &StreamEntry, buffer: NonNull<pw_buffer>) {
+    let spa_buffer = (*buffer.as_ptr()).buffer;
+    let spa_data = (*spa_buffer).datas;
+    let chunk = (*spa_data).chunk;
+    // dma-buf consumers ignore size; some legacy ones want it non-zero.
+    (*chunk).size = 1;
+    (*chunk).flags = sys::SPA_CHUNK_FLAG_NONE as i32;
+    let mut inner = entry.inner.borrow_mut();
+    inner.sequence = inner.sequence.wrapping_add(1);
+    if let Some(header) = find_meta_header(spa_buffer) {
+        let header = header.as_ptr();
+        (*header).flags = 0;
+        (*header).seq = inner.sequence;
+        // Presentation timestamps are unknown, never invented.
+        (*header).pts = -1;
+    }
+    drop(inner);
+    pw_stream_queue_buffer(entry.stream.as_raw_ptr(), buffer.as_ptr());
+}
+
+/// Marks a failed frame corrupted and returns it to the consumer so the
+/// buffer is not lost.
+///
+/// # Safety
+///
+/// As [`mark_dmabuf_good_and_queue`].
+unsafe fn mark_dmabuf_corrupted_and_queue(entry: &StreamEntry, buffer: NonNull<pw_buffer>) {
+    let spa_buffer = (*buffer.as_ptr()).buffer;
+    let chunk = (*(*spa_buffer).datas).chunk;
+    (*chunk).size = 0;
+    (*chunk).flags = sys::SPA_CHUNK_FLAG_CORRUPTED as i32;
+    if let Some(header) = find_meta_header(spa_buffer) {
+        (*header.as_ptr()).flags = sys::SPA_META_HEADER_FLAG_CORRUPTED;
+    }
+    pw_stream_queue_buffer(entry.stream.as_raw_ptr(), buffer.as_ptr());
+}
+
+/// The SPA header of a dequeued buffer, when the consumer negotiated one.
+///
+/// # Safety
+///
+/// `buffer` must be a valid `spa_buffer` whose headers are initialised.
+unsafe fn find_meta_header(buffer: *mut sys::spa_buffer) -> Option<NonNull<spa_meta_header>> {
+    let header = sys::spa_buffer_find_meta_data(
+        buffer,
+        sys::SPA_META_Header,
+        std::mem::size_of::<spa_meta_header>(),
+    )
+    .cast::<spa_meta_header>();
+    NonNull::new(header)
 }

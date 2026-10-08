@@ -204,6 +204,28 @@ impl Backend for DrmBackend {
 
         Swapchain::new(dmabuf_allocator, width, height, Fourcc::Argb8888, modifiers)
     }
+
+    fn capture_dmabuf_setup(&mut self) -> Option<super::CaptureDmabufSetup> {
+        let data = self.get_primary_gpu_data_mut();
+        // Only the RGBA byte order the capture readback already produces
+        // (Abgr8888 maps back as R,G,B,A) is offered, so the dmabuf path
+        // and the shared-memory path agree on channels.
+        let formats = data
+            .renderer
+            .egl_context()
+            .dmabuf_texture_formats()
+            .iter()
+            .filter(|format| format.code == Fourcc::Abgr8888)
+            .map(|format| (format.code, format.modifier))
+            .collect::<Vec<_>>();
+        if formats.is_empty() {
+            return None;
+        }
+        Some(super::CaptureDmabufSetup {
+            allocator: std::rc::Rc::new(data.gbm_device.clone()),
+            formats,
+        })
+    }
 }
 
 impl DrmBackend {
