@@ -59,6 +59,12 @@ impl<BackendData: Backend + 'static> KeyRepeater<BackendData> {
         }
     }
 
+    /// Stops any in-flight repeat and forgets it.
+    pub fn stop(&mut self) {
+        self.cancel();
+        self.repeating_event = None;
+    }
+
     fn cancel(&mut self) {
         if let Some(token) = self.timer_token.take() {
             self.loop_handle.remove(token);

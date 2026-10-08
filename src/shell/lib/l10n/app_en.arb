@@ -208,7 +208,7 @@
   "manyItems": "1000+ items",
   "openDirectoryHint": "Double click or Super+D to open",
   "extractToNewTile": "Extract to new tile",
-  "gamingPaused": "Gaming Mode in pause",
+  "gamingPaused": "Gaming mode paused",
   "clickToResume": "Click to resume",
   "allowCapture": "Allow capture?",
   "colorCaptureRequest": "{app} wants to pick a color.",

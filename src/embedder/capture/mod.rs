@@ -766,19 +766,7 @@ fn take_output_snapshot<BackendData: Backend + 'static>(
         .ok_or_else(|| format!("Output {} has no geometry", output.name()))?
         .to_f64();
     let output_name = output.name();
-    let game_surface_list: Vec<
-        smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
-    > = state
-        .meta_window_state
-        .meta_windows
-        .values()
-        .filter_map(|meta_window| {
-            (meta_window.game_mode_activated
-                && meta_window.current_output.as_deref() == Some(output_name.as_str()))
-            .then(|| state.surfaces.get(&meta_window.surface_id).cloned())
-            .flatten()
-        })
-        .collect();
+    let game_surface_list = state.game_mode_surfaces_for_output(&output_name);
 
     let (size, pixels) = state
         .backend_data
@@ -830,17 +818,7 @@ pub fn render_output_into_dmabuf<BackendData: Backend + 'static>(
         .ok_or_else(|| format!("Output {} has no geometry", output.name()))?
         .to_f64();
     let output_name = output.name();
-    let game_surface_list: Vec<WlSurface> = state
-        .meta_window_state
-        .meta_windows
-        .values()
-        .filter_map(|meta_window| {
-            (meta_window.game_mode_activated
-                && meta_window.current_output.as_deref() == Some(output_name.as_str()))
-            .then(|| state.surfaces.get(&meta_window.surface_id).cloned())
-            .flatten()
-        })
-        .collect();
+    let game_surface_list = state.game_mode_surfaces_for_output(&output_name);
 
     state
         .backend_data

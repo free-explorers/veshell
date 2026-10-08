@@ -201,8 +201,13 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         // with it, so their surfaces stop rendering for any session.
         crate::portal::service::close_source_share_sessions(self, meta_window_id);
 
-        if self.meta_window_state.meta_window_in_gaming_mode == Some(meta_window_id.clone()) {
+        if self.meta_window_state.meta_window_in_gaming_mode.as_deref()
+            == Some(meta_window_id.as_str())
+        {
             self.meta_window_state.meta_window_in_gaming_mode = None;
+            // The client is gone; drop the keys it was holding so the next
+            // gaming session starts from a clean slate.
+            self.game_mode_forwarded_keys.clear();
         }
 
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
@@ -287,10 +292,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             }
             MetaWindowPatch::UpdateMapped { id, value } => {
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
-                    if meta_window.mapped == value.clone() {
+                    if meta_window.mapped == value {
                         return;
                     }
-                    meta_window.mapped = value.clone();
+                    meta_window.mapped = value;
                 }
                 if value == false {
                     // An unmapped window stops rendering: there is no
@@ -508,10 +513,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             }
             MetaWindowPatch::UpdateNeedDecoration { id, value } => {
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
-                    if meta_window.need_decoration == value.clone() {
+                    if meta_window.need_decoration == value {
                         return;
                     }
-                    meta_window.need_decoration = value.clone();
+                    meta_window.need_decoration = value;
                 }
             }
             MetaWindowPatch::UpdateCurrentOutput { id, value } => {
@@ -535,35 +540,59 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 }
             }
             MetaWindowPatch::UpdateGameModeActivated { id, value } => {
-                if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
-                    if meta_window.game_mode_activated == value.clone() {
+                let activated = {
+                    let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) else {
+                        return;
+                    };
+                    if meta_window.game_mode_activated == value {
                         return;
                     }
-                    meta_window.game_mode_activated = value.clone();
-                    if value {
-                        self.meta_window_state.meta_window_in_gaming_mode = Some(id);
-
-                        if let Some(surface) = self.surfaces.get(&meta_window.surface_id) {
-                            if let Some(x11_surface) =
-                                self.x11_surface_per_wl_surface.get(surface).cloned()
-                            {
-                                let _ = self
-                                    .xwayland_state
-                                    .as_mut()
-                                    .unwrap()
-                                    .xwm
-                                    .as_mut()
-                                    .unwrap()
-                                    .raise_window(&x11_surface);
-                            }
-                            self.pointer_focus =
-                                Some((PointerFocusTarget::from(surface), (0.0, 0.0).into()));
+                    meta_window.game_mode_activated = value;
+                    value.then(|| (meta_window.surface_id, meta_window.current_output.clone()))
+                };
+                if let Some((surface_id, current_output)) = activated {
+                    self.meta_window_state.meta_window_in_gaming_mode = Some(id.clone());
+                    // Flutter must not keep believing keys it was handed are
+                    // held: from here they go to the client.
+                    crate::keyboard::release_flutter_keys(self);
+                    if let Some(surface) = self.surfaces.get(&surface_id).cloned() {
+                        if let Some(x11_surface) =
+                            self.x11_surface_per_wl_surface.get(&surface).cloned()
+                        {
+                            let _ = self
+                                .xwayland_state
+                                .as_mut()
+                                .unwrap()
+                                .xwm
+                                .as_mut()
+                                .unwrap()
+                                .raise_window(&x11_surface);
                         }
-                    } else {
-                        if self.meta_window_state.meta_window_in_gaming_mode == Some(id) {
-                            self.meta_window_state.meta_window_in_gaming_mode = None;
-                        }
+                        // Enter the client at the surface's own origin, not at
+                        // `(0, 0)`: a game on a monitor that does not start at
+                        // the layout origin would otherwise receive pointer
+                        // coordinates offset by the monitor position. The frame
+                        // makes the enter/leave pair reach the client before the
+                        // next event.
+                        let origin = current_output
+                            .as_deref()
+                            .and_then(|name| {
+                                self.space.outputs().find(|output| output.name() == name)
+                            })
+                            .and_then(|output| self.space.output_geometry(output))
+                            .map(|geometry| geometry.loc.to_f64())
+                            .unwrap_or_else(|| (0.0, 0.0).into());
+                        self.pointer_focus = Some((PointerFocusTarget::from(&surface), origin));
+                        self.refresh_pointer_focus();
                     }
+                } else {
+                    if self.meta_window_state.meta_window_in_gaming_mode == Some(id) {
+                        self.meta_window_state.meta_window_in_gaming_mode = None;
+                    }
+                    // Any keys the client was handed are released by the
+                    // input path that disables the mode; this is the
+                    // backstop for a deactivation that bypassed it.
+                    self.game_mode_forwarded_keys.clear();
                 }
             }
             MetaWindowPatch::UpdateIsRecording { id, value } => {
@@ -591,10 +620,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         xwayland_scale_ratio = ?xwayland_scale_ratio,
                         "Applying native window scale patch"
                     );
-                    if meta_window.scale_ratio == value.clone() {
+                    if meta_window.scale_ratio == value {
                         return;
                     }
-                    meta_window.scale_ratio = value.clone();
+                    meta_window.scale_ratio = value;
 
                     if let Some(surface) = self.surfaces.get(&meta_window.surface_id) {
                         if let Some(x11_surface) = self.x11_surface_per_wl_surface.get(surface) {

@@ -268,6 +268,16 @@ pub fn handle_keyboard_event<BackendData: Backend + 'static>(
             time,
             mods_changed,
         );
+        // Remember what the client was handed so the grab can hand it back:
+        // leaving gaming mode must replay a release for every key still held.
+        match state {
+            KeyState::Pressed => {
+                data.game_mode_forwarded_keys.insert(key_code);
+            }
+            KeyState::Released => {
+                data.game_mode_forwarded_keys.remove(&key_code);
+            }
+        }
         return;
     }
 
@@ -308,6 +318,56 @@ pub fn handle_keyboard_event<BackendData: Backend + 'static>(
                 data.key_repeater.up(veshell_key_event);
             }
         }
+    }
+}
+
+/// Replays a release for every key the gaming-mode client still believes is held.
+///
+/// While gaming mode is active, [`handle_keyboard_event`] forwards key events
+/// straight to the client instead of routing them through
+/// [`SuperKeyForwarding`]. The chord that ends the mode (`Ctrl+Esc`) is consumed
+/// by [`handle_embedder_hotkeys`], and the releases that follow it go back to
+/// Flutter, so without this the client would keep the Ctrl of `Ctrl+Esc` — and
+/// any other held key — down. The seat state is updated first so the modifiers
+/// event that accompanies each release is correct.
+fn release_game_mode_forwarded_keys<BackendData: Backend + 'static>(data: &mut State<BackendData>) {
+    let keyboard = data.keyboard.clone();
+    for key_code in std::mem::take(&mut data.game_mode_forwarded_keys) {
+        let (_, mods_changed) =
+            keyboard.input_intercept(data, key_code, KeyState::Released, |_, _, _| ());
+        keyboard.input_forward(
+            data,
+            key_code,
+            KeyState::Released,
+            SERIAL_COUNTER.next_serial(),
+            0,
+            mods_changed,
+        );
+    }
+}
+
+/// Clears the keys Flutter still believes are held when a client takes over.
+///
+/// Entering gaming mode routes key events to the client, so a key Flutter saw
+/// pressed would never get its release. Replay the releases to Flutter and stop
+/// any in-flight repeat first.
+pub fn release_flutter_keys<BackendData: Backend + 'static>(data: &mut State<BackendData>) {
+    data.key_repeater.stop();
+    let released: Vec<VeshellKeyEvent> = data
+        .flutter_sent_keys
+        .drain()
+        .map(|(_, mut event)| {
+            event.state = KeyState::Released;
+            event
+        })
+        .collect();
+    let Some(engine) = data.flutter_engine.as_mut() else {
+        return;
+    };
+    for event in released {
+        engine
+            .send_key_event(event, false)
+            .expect("Failed to release a Flutter key");
     }
 }
 
@@ -399,6 +459,10 @@ fn handle_embedder_hotkeys<BackendData: Backend + 'static>(
     // disable gaming mode
     if event.keysym == Keysym::Escape && event.mods.ctrl {
         if let Some(meta_window_id) = data.meta_window_state.meta_window_in_gaming_mode.clone() {
+            // The client only ever saw the presses of keys forwarded while
+            // gaming: release them now, before the mode is torn down, or it
+            // keeps them held (the Ctrl of this very chord among them).
+            release_game_mode_forwarded_keys(data);
             data.patch_meta_window(
                 crate::meta_window_state::meta_window::MetaWindowPatch::UpdateGameModeActivated {
                     id: meta_window_id,

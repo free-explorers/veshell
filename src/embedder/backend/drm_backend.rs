@@ -1441,6 +1441,13 @@ impl State<DrmBackend> {
             return;
         };
 
+        // A game-mode surface belongs to the output the shell placed its tile
+        // on: rendering it on every output would duplicate the game on the
+        // other monitors. Capture readback already scopes the same way. Read it
+        // before the renderer takes a mutable borrow of the backend.
+        let output_name = output.name();
+        let game_surfaces = self.game_mode_surfaces_for_output(&output_name);
+
         // A mirroring output presents the source monitor's Flutter frame,
         // scaled to its own geometry; otherwise it presents its own view.
         let mirror_source = self.mirror_source(&output);
@@ -1520,17 +1527,7 @@ impl State<DrmBackend> {
             self.surface_id_under_cursor != None,
             true,
             self.idle.dim_alpha(),
-            self.meta_window_state
-                .meta_windows
-                .values()
-                .filter_map(|meta_window| {
-                    if meta_window.game_mode_activated {
-                        Some(self.surfaces.get(&meta_window.surface_id).unwrap())
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>(),
+            game_surfaces.iter().collect::<Vec<_>>(),
             capture_overlay,
             recording_chip,
         );

@@ -205,6 +205,26 @@ impl<BackendData: Backend> State<BackendData> {
             return;
         }
 
+        // Gaming mode forwards the button straight to the client. It must not
+        // touch the Flutter button tracker: those events never reach Flutter,
+        // and a press tracked here would desync the next Flutter event.
+        if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
+            let state = wl_pointer::ButtonState::from(event.state());
+
+            let pointer = self.pointer.clone();
+            pointer.button(
+                self,
+                &ButtonEvent {
+                    button: event.button_code(),
+                    state: state.try_into().unwrap(),
+                    serial: SERIAL_COUNTER.next_serial(),
+                    time: event.time_msec(),
+                },
+            );
+            pointer.frame(self);
+            return;
+        }
+
         let had_buttons_pressed = self
             .flutter_engine()
             .mouse_button_tracker
@@ -236,22 +256,6 @@ impl<BackendData: Backend> State<BackendData> {
                 FlutterPointerPhase_kUp
             }
         };
-        if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
-            let state = wl_pointer::ButtonState::from(event.state());
-
-            let pointer = self.pointer.clone();
-            pointer.button(
-                self,
-                &ButtonEvent {
-                    button: event.button_code(),
-                    state: state.try_into().unwrap(),
-                    serial: SERIAL_COUNTER.next_serial(),
-                    time: event.time_msec(),
-                },
-            );
-            pointer.frame(self);
-            return;
-        }
         if event.state() == ButtonState::Released
             && !self
                 .flutter_engine()
@@ -360,6 +364,12 @@ impl<BackendData: Backend> State<BackendData> {
         let pointer = self.pointer.clone();
         pointer.axis(self, frame);
         self.register_frame();
+
+        // Gaming mode already delivered the axis to the focused client; keep it
+        // out of Flutter, like motion and buttons.
+        if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
+            return;
+        }
 
         // Flutter distinguish Mouse and Trackpad scrolls, so we need to send a separate event for each
         if event.source() == AxisSource::Wheel || event.source() == AxisSource::WheelTilt {

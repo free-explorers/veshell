@@ -380,6 +380,9 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                         Some(geometry) => geometry.to_f64(),
                         None => return,
                     };
+                    // Read before `bind()` takes a mutable borrow of the
+                    // backend.
+                    let game_surfaces = data.game_mode_surfaces_for_output(&output.name());
 
                     let render_result = match data.backend_data.backend.bind() {
                         Ok((renderer, mut framebuffer)) => {
@@ -406,18 +409,7 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                                         data.surface_id_under_cursor != None,
                                         <Winit as Backend>::FLIP_FLUTTER_TEXTURE,
                                         data.idle.dim_alpha(),
-                                        data.meta_window_state
-                                            .meta_windows
-                                            .values()
-                                            .filter_map(|meta_window| {
-                                                meta_window
-                                                    .game_mode_activated
-                                                    .then(|| {
-                                                        data.surfaces.get(&meta_window.surface_id)
-                                                    })
-                                                    .flatten()
-                                            })
-                                            .collect::<Vec<_>>(),
+                                        game_surfaces.iter().collect::<Vec<_>>(),
                                         data.capture_state.session.as_ref().filter(|session| {
                                             session.output.name() == output.name()
                                         }),

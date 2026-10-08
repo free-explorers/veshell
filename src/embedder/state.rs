@@ -94,6 +94,10 @@ pub struct State<BackendData: Backend + 'static> {
     pub flutter_engine: Option<Box<FlutterEngine<BackendData>>>,
     pub flutter_sent_keys: HashMap<Keycode, VeshellKeyEvent>,
     pub super_key_forwarding: crate::keyboard::SuperKeyForwarding,
+    /// Keycodes forwarded to the gaming-mode client and still held. Used to
+    /// replay the matching releases when gaming mode ends, so the client can't
+    /// keep believing the Ctrl of `Ctrl+Esc` (or any other held key) is down.
+    pub game_mode_forwarded_keys: HashSet<Keycode>,
     pub gl: Option<Gles2>,
     pub imported_dmabufs: Vec<Dmabuf>,
     pub is_next_flutter_frame_scheduled: bool,
@@ -409,6 +413,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             flutter_engine: None,
             flutter_sent_keys: HashMap::new(),
             super_key_forwarding: Default::default(),
+            game_mode_forwarded_keys: HashSet::new(),
             dmabuf_state,
             seat,
             seat_state,
