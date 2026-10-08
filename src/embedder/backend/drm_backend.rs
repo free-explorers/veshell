@@ -153,6 +153,8 @@ fn idle_apply_blank(state: &mut State<DrmBackend>) {
             if let Err(err) = surface.compositor.clear() {
                 warn!("Failed to blank drm surface: {err:?}");
             }
+            // The pending flip is gone with the planes; unblock rendering.
+            surface.frame_pending = false;
         }
     }
 }
@@ -491,6 +493,9 @@ pub fn run_drm_backend() {
                         if let Err(err) = surface.compositor.reset_state() {
                             warn!("Failed to reset drm surface state: {}", err);
                         }
+                        // Any flip queued before the pause is gone; do not let
+                        // it keep rendering blocked.
+                        surface.frame_pending = false;
                     }
                     if data.idle.is_blank() {
                         // Activation may restore connector power behind our
@@ -1191,6 +1196,7 @@ impl State<DrmBackend> {
             view_id,
             last_queue: None,
             last_gaming_present: None,
+            frame_pending: false,
         };
 
         device.surfaces.insert(crtc, surface);
@@ -1389,6 +1395,8 @@ impl State<DrmBackend> {
         if let Some(gpu_data) = self.backend_data.gpus.get_mut(&node) {
             if let Some(surface) = gpu_data.surfaces.get_mut(&crtc) {
                 let _ = surface.compositor.frame_submitted();
+                // The flip completed: the output may render again.
+                surface.frame_pending = false;
                 // Instrumentation: a completed flip is a presented frame. When
                 // it carried a game surface, report how long it took to present
                 // and how far apart gaming frames are (the achieved pace). A
@@ -1494,6 +1502,34 @@ impl State<DrmBackend> {
         if self.idle.is_blank() {
             // Outputs are powered down for the screensaver; rendering (and
             // the frame callback that would revive them) is suspended.
+            return;
+        }
+
+        // While the seat session is paused the KMS device rejects every commit.
+        // Retrying would spin on failed renders (and flood the log), so leave
+        // the output alone until the session resumes.
+        let gpu_active = self
+            .backend_data
+            .gpus
+            .get(&node)
+            .map(|gpu| gpu.drm_device.is_active())
+            .unwrap_or(false);
+        if !gpu_active {
+            return;
+        }
+
+        // A frame is already in flight on this output. Rendering again would
+        // only queue a second flip that the vblank coalesces away, and every
+        // pointer motion would pay for a full render. The next `on_vblank`
+        // repaints with the latest state, cursor included.
+        let frame_pending = self
+            .backend_data
+            .gpus
+            .get(&node)
+            .and_then(|gpu| gpu.surfaces.get(&crtc))
+            .map(|surface| surface.frame_pending)
+            .unwrap_or(false);
+        if frame_pending {
             return;
         }
 
@@ -1630,6 +1666,8 @@ impl State<DrmBackend> {
                 // whether a game surface rode it, so `on_vblank` can report the
                 // presentation latency of gaming frames.
                 surface.last_queue = Some((Instant::now(), had_game_surfaces));
+                // Hold off further renders until this flip's vblank.
+                surface.frame_pending = true;
             }
             Err(err) => {
                 eprintln!("Failed to render frame: {}", err);
@@ -1721,6 +1759,10 @@ struct SurfaceData {
     /// Instrumentation: when the previous gaming frame was presented, to report
     /// the achieved pace.
     last_gaming_present: Option<Instant>,
+    /// Whether a flip queued on this output is still awaiting its vblank.
+    /// While set, rendering is skipped and the vblank repaints instead, which
+    /// caps the render rate to the refresh and keeps pointer motion cheap.
+    frame_pending: bool,
 }
 
 pub type GbmDrmCompositor = DrmCompositor<
