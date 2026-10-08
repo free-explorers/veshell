@@ -20,9 +20,9 @@ use smithay::{
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     render_elements,
     utils::{Buffer as BufferCoords, IsAlive, Logical, Monotonic, Point, Size, Time, Transform},
-    wayland::compositor::with_states,
+    wayland::compositor::{with_states, SurfaceAttributes},
 };
-use tracing::warn;
+use tracing::{debug, warn};
 use xcursor::{
     parser::{parse_xcursor, Image},
     CursorTheme,
@@ -291,6 +291,20 @@ where
                 Transform::Normal,
                 &Size::from((1, 1)), /* Size doesn't matter for Transform::Normal */
             )
+    });
+
+    // Diagnostic: the client (often XWayland) owns the cursor buffer and its
+    // `buffer_scale`; log both so an oversized cursor can be traced to the
+    // client's buffer or to the scale we apply.
+    with_states(&surface, |states| {
+        let mut cache = states.cached_state.get::<SurfaceAttributes>();
+        let attributes = cache.current();
+        debug!(
+            buffer = ?attributes.buffer,
+            buffer_scale = attributes.buffer_scale,
+            ?scale,
+            "drawing client cursor surface"
+        );
     });
 
     render_elements_from_surface_tree(
