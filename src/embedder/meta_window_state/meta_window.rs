@@ -622,6 +622,12 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     // input path that disables the mode; this is the
                     // backstop for a deactivation that bypassed it.
                     self.game_mode_forwarded_keys.clear();
+                    // The game no longer owns the pointer: clear the focus the
+                    // compositor set on entry so motion stops reaching it until
+                    // the shell re-establishes a focus.
+                    if self.pointer_focus.take().is_some() {
+                        self.refresh_pointer_focus();
+                    }
                     // Give the output back to the compositor's fixed cadence.
                     if let Some(name) = self
                         .meta_window_state

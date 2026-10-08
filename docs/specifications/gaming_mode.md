@@ -55,6 +55,11 @@ configure.
   on entry: shell widget churn (the surface is swapped for a placeholder, the
   route covers the tile) must not clear them, or the game stops receiving
   motion, buttons or keys.
+- While activated the pointer is confined to the game's output: crossing to
+  another monitor would re-show the cursor there and hand the other desktop a
+  stray pointer.
+- Deactivation clears the compositor-set pointer focus, so a paused game stops
+  receiving motion even before the shell re-establishes a focus.
 - Leaving gaming mode never leaves the client believing a key is held, and
   entering it never leaves Flutter believing a key is held.
 - The window geometry patched on entry is logical, matching every other

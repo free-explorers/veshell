@@ -625,10 +625,25 @@ impl<BackendData: Backend> State<BackendData> {
     where
         BackendData: Backend + 'static,
     {
-        match self.output_bounds() {
+        // While a game owns the pointer it stays on the game's output: letting
+        // it cross to another monitor would re-show the cursor there and hand
+        // the other desktop a stray pointer.
+        let bounds = self.gaming_output_bounds().or_else(|| self.output_bounds());
+        match bounds {
             Some(bounds) => clamp_to_bounds(pos, bounds),
             None => pos,
         }
+    }
+
+    /// Geometry of the output the active game owns, if any.
+    fn gaming_output_bounds(&self) -> Option<Rectangle<i32, Logical>> {
+        let meta_window_id = self.meta_window_state.meta_window_in_gaming_mode.as_ref()?;
+        let meta_window = self.meta_window_state.meta_windows.get(meta_window_id)?;
+        let output = meta_window
+            .current_output
+            .as_deref()
+            .and_then(|name| self.space.outputs().find(|output| output.name() == name))?;
+        self.space.output_geometry(output)
     }
 
     /// Fractional scale of the output that owns `view_id`, if any.
