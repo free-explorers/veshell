@@ -51,3 +51,38 @@ configure.
   entering it never leaves Flutter believing a key is held.
 - The window geometry patched on entry is logical, matching every other
   fullscreen path.
+
+## Performance and latency
+
+Gaming mode exists to take the game off the shell's critical path, in both
+directions.
+
+**Rendering.** While `game_mode_activated`, the client's surface is composited
+by the DRM backend directly as a render element above the Flutter texture
+(`get_frame_elements_from_dmabuf`), not only through the shell's
+`MetaSurfaceWidget`. It is presented on each output retrace rather than being
+limited to the shell's frame production, so a dropped or late Flutter frame
+does not delay the game. Compositing is driven by the KMS vblank.
+
+**Input.** Keyboard, pointer motion, buttons and axis are forwarded straight to
+the client by Smithay (`KeyboardHandle::input_forward`, `PointerHandle`) and
+never pass through Flutter or the shell widget tree, so shell event handling
+cannot add a frame between the device and the game.
+
+**Pacing.** The output is composited every retrace and Flutter's vsync batons
+are delivered by a timer (`vsync_tick`), not gated on a page flip: a static
+shell, or a static game, cannot stall the render pump.
+
+**Trade-offs and non-goals.**
+
+- The client buffer is still imported into a Flutter external texture and the
+  shell still builds the (covered) surface route, so while active the frame is
+  effectively produced twice. A follow-up could stop feeding the surface to
+  Flutter once the native render owns the output.
+- The compositor re-composites the whole output each retrace, including the
+  full-screen Flutter texture, even when only the game changed.
+- There is no per-app frame pacing, no VRR/adaptive-sync handshake and no
+  latency instrumentation; the mode trades power and some duplicated work for
+  responsiveness.
+- Entering and leaving the mode is not a hot path: it costs a resize configure,
+  a route transition and, on leave, synthetic key releases.
