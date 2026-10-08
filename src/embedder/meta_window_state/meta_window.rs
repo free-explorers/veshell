@@ -520,23 +520,33 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 }
             }
             MetaWindowPatch::UpdateCurrentOutput { id, value } => {
+                let mut changed = false;
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
-                    if meta_window.current_output == value.clone() {
+                    if meta_window.current_output == value {
                         return;
                     }
                     meta_window.current_output = value.clone();
-                    let scale = value
+                    changed = true;
+                }
+                if changed {
+                    if let Some(scale) = value
                         .as_deref()
-                        .and_then(|name| self.output_scale_for_name(name));
-                    if let Some(scale) = scale {
+                        .and_then(|name| self.output_scale_for_name(name))
+                    {
                         self.patch_meta_window(
                             MetaWindowPatch::UpdateScaleRatio {
-                                id: id,
+                                id: id.clone(),
                                 value: scale,
                             },
                             true,
                         );
                     }
+                    // Advertise the output to the client (`wl_surface.enter`).
+                    // Windows are composited by the shell, so they never pass
+                    // through the compositor's `Space`; without a display for
+                    // the surface a fullscreen client (Chromium) keeps its
+                    // previous size instead of filling the output.
+                    self.send_output_enter(&id);
                 }
             }
             MetaWindowPatch::UpdateGameModeActivated { id, value } => {
@@ -552,6 +562,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 };
                 if let Some((surface_id, current_output)) = activated {
                     self.meta_window_state.meta_window_in_gaming_mode = Some(id.clone());
+                    // Make sure the client knew the output before it was asked
+                    // to go fullscreen; a late enter can still let Chromium
+                    // pick up the display.
+                    self.send_output_enter(&id);
                     // Flutter must not keep believing keys it was handed are
                     // held: from here they go to the client.
                     crate::keyboard::release_flutter_keys(self);

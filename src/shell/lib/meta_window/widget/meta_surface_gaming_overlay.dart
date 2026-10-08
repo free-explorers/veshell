@@ -60,6 +60,12 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
       );
       WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
         if (!context.mounted) return;
+        // Advertise the output before the fullscreen configure: the compositor
+        // answers with `wl_surface.enter`, and Chromium needs a display for the
+        // surface to size a fullscreen window.
+        ref
+            .read(metaWindowStateProvider(metaWindowId).notifier)
+            .patch(UpdateCurrentOutput(id: metaWindowId, value: monitorName));
         final geometry = ref.read(
           metaWindowStateProvider(
             metaWindowId,

@@ -257,6 +257,41 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .map(|output| output.current_scale().fractional_scale())
     }
 
+    /// Advertises the output a window lives on to its client
+    /// (`wl_surface.enter`).
+    ///
+    /// Windows are composited by the shell, so they never pass through the
+    /// compositor's `Space` and would otherwise never receive a `wl_output`.
+    /// Without a display for the surface a fullscreen client (Chromium) keeps
+    /// its previous size instead of filling the output. Idempotent: the
+    /// compositor ignores an output the surface has already entered.
+    pub fn send_output_enter(&self, meta_window_id: &str) {
+        let Some(meta_window) = self.meta_window_state.meta_windows.get(meta_window_id) else {
+            return;
+        };
+        let Some(output_name) = meta_window.current_output.as_deref() else {
+            return;
+        };
+        let Some(output) = self
+            .space
+            .outputs()
+            .find(|output| output.name() == output_name)
+            .cloned()
+        else {
+            return;
+        };
+        let Some(surface) = self.surfaces.get(&meta_window.surface_id) else {
+            return;
+        };
+        tracing::info!(
+            target: "veshell::geometry",
+            meta_window_id,
+            output = %output_name,
+            "Advertising output to client (wl_surface.enter)"
+        );
+        output.enter(surface);
+    }
+
     /// Preferred scale for a meta window that has no `current_output` yet.
     ///
     /// Window placement is owned by the shell, so at creation time Rust cannot
