@@ -11,7 +11,6 @@ pub fn pointer_exit<BackendData: Backend + 'static>(
     // See `pointer_focus`: while a game owns the input the compositor keeps the
     // focus it set on entry, so a shell-side exit must not clear it.
     if data.meta_window_state.meta_window_in_gaming_mode.is_some() {
-        tracing::debug!("ignoring pointer exit while a game owns the input");
         result.success(None);
         return;
     }

@@ -35,7 +35,6 @@ pub fn pointer_focus<BackendData: Backend + 'static>(
     // that through would clear the focus and the game would stop receiving
     // motion and buttons.
     if data.meta_window_state.meta_window_in_gaming_mode.is_some() {
-        tracing::debug!("ignoring pointer focus change while a game owns the input");
         result.success(None);
         return;
     }

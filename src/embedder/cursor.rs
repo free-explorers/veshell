@@ -1,5 +1,3 @@
-use crate::wayland::wayland::get_surface_id;
-
 use std::env;
 use std::{collections::HashMap, io::Read, sync::Mutex};
 
@@ -13,7 +11,7 @@ use smithay::{
             element::{
                 memory::{MemoryRenderBuffer, MemoryRenderBufferRenderElement},
                 surface::{render_elements_from_surface_tree, WaylandSurfaceRenderElement},
-                Element, Kind,
+                Kind,
             },
             ImportAll, ImportMem, Renderer,
         },
@@ -24,7 +22,7 @@ use smithay::{
     utils::{Buffer as BufferCoords, IsAlive, Logical, Monotonic, Point, Size, Time, Transform},
     wayland::compositor::with_states,
 };
-use tracing::{debug, warn};
+use tracing::warn;
 use xcursor::{
     parser::{parse_xcursor, Image},
     CursorTheme,
@@ -230,12 +228,6 @@ where
             pointer_images
                 .iter()
                 .find_map(|(image, texture)| if image == &frame { Some(texture) } else { None });
-        debug!(
-            width = frame.width,
-            height = frame.height,
-            integer_scale,
-            "drawing named cursor"
-        );
         let pointer_image = match maybe_image {
             Some(image) => image,
             None => {
@@ -282,7 +274,7 @@ pub fn draw_surface_cursor<R>(
     scale: utils::Scale<f64>,
 ) -> Vec<(CursorRenderElement<R>, Point<i32, BufferCoords>)>
 where
-    R: Renderer + ImportAll + ImportMem,
+    R: Renderer + ImportAll,
     <R as RendererSuper>::TextureId: Clone + 'static,
 {
     let position = location.into();
@@ -301,30 +293,15 @@ where
             )
     });
 
-    let elements: Vec<(CursorRenderElement<R>, Point<i32, BufferCoords>)> =
-        render_elements_from_surface_tree(
-            renderer,
-            surface,
-            position.to_physical_precise_round(scale),
-            scale,
-            1.0,
-            Kind::Cursor,
-        )
-        .into_iter()
-        .map(|element| (element, h))
-        .collect();
-
-    // Diagnostic: log the rendered cursor size against the output scale so an
-    // oversized client cursor can be attributed to the client's buffer or to
-    // the scale we apply.
-    for (element, _) in &elements {
-        debug!(
-            surface = get_surface_id(surface),
-            size = ?element.geometry(scale).size,
-            ?scale,
-            "client cursor rendered size"
-        );
-    }
-
-    elements
+    render_elements_from_surface_tree(
+        renderer,
+        surface,
+        position.to_physical_precise_round(scale),
+        scale,
+        1.0,
+        Kind::Cursor,
+    )
+    .into_iter()
+    .map(|elem| (elem, h))
+    .collect()
 }
