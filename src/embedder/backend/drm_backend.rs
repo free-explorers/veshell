@@ -742,6 +742,11 @@ pub fn run_drm_backend() {
         .insert_source(rx_baton, move |baton, _, data| {
             if let CalloopEvent::Msg(baton) = baton {
                 data.batons.push(baton);
+                // Flutter is waiting for a frame. The render/vblank chain stops
+                // on a frame with no damage (queue_frame returns EmptyFrame),
+                // and the baton is only delivered on a vblank — so without
+                // kicking a render here a static scene deadlocks the shell.
+                idle_request_render(data);
             }
         })
         .unwrap();
