@@ -21,6 +21,7 @@ use crate::flutter_engine::embedder::{
 };
 use crate::flutter_engine::view::view_id_for_output;
 use crate::flutter_engine::{view, FlutterEngine};
+use crate::focus::PointerFocusTarget;
 use crate::settings::MouseAndTouchpadSettings;
 use crate::state::State;
 
@@ -69,6 +70,12 @@ impl<BackendData: Backend> State<BackendData> {
         if self.capture_state.session.is_some() {
             crate::capture::capture_pointer_motion_delta(self, event.delta());
             return;
+        }
+
+        // The game owns the pointer while it is active: derive the focus from
+        // its own surface so a stray shell update cannot starve it of motion.
+        if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
+            self.pointer_focus = self.gaming_pointer_focus();
         }
 
         // clamp to screen limits
@@ -152,6 +159,12 @@ impl<BackendData: Backend> State<BackendData> {
         if self.capture_state.session.is_some() {
             crate::capture::capture_pointer_motion_to(self, pointer_location);
             return;
+        }
+
+        // See `on_pointer_motion`: keep the active game's pointer focus derived
+        // from its surface.
+        if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
+            self.pointer_focus = self.gaming_pointer_focus();
         }
 
         let pointer = self.pointer.clone();
@@ -532,6 +545,26 @@ impl<BackendData: Backend> State<BackendData> {
             gesture_view_id,
         );
         self.pointer_gesture_view_id = None;
+    }
+
+    /// Pointer focus for the window that owns the input in gaming mode.
+    ///
+    /// Derived from the gaming window's own surface instead of trusting the
+    /// stored `pointer_focus`: as long as the game owns the output it is the
+    /// only valid pointer target, so motion and buttons keep flowing even if a
+    /// shell-side focus update slipped through.
+    pub(crate) fn gaming_pointer_focus(&self) -> Option<(PointerFocusTarget, Point<f64, Logical>)> {
+        let meta_window_id = self.meta_window_state.meta_window_in_gaming_mode.as_ref()?;
+        let meta_window = self.meta_window_state.meta_windows.get(meta_window_id)?;
+        let surface = self.surfaces.get(&meta_window.surface_id)?;
+        let origin = meta_window
+            .current_output
+            .as_deref()
+            .and_then(|name| self.space.outputs().find(|output| output.name() == name))
+            .and_then(|output| self.space.output_geometry(output))
+            .map(|geometry| geometry.loc.to_f64())
+            .unwrap_or_else(|| (0.0, 0.0).into());
+        Some((PointerFocusTarget::from(surface), origin))
     }
 
     /// Re-drives the Smithay pointer with the current `pointer_focus`.

@@ -593,6 +593,11 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                             .map(|geometry| geometry.loc.to_f64())
                             .unwrap_or_else(|| (0.0, 0.0).into());
                         self.pointer_focus = Some((PointerFocusTarget::from(&surface), origin));
+                        tracing::debug!(
+                            surface_id = ?surface_id,
+                            ?origin,
+                            "gaming: pointer focus set to the client"
+                        );
                         self.refresh_pointer_focus();
                     }
                 } else {

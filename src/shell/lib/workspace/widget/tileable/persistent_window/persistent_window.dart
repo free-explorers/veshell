@@ -58,10 +58,11 @@ class PersistentWindowTileable extends Tileable {
         // that node goes defunct when the mode switches to `game` and Flutter
         // keeps it as the primary focus. Global hotkeys then cannot resolve
         // their action context: their intents fall through and the keys are
-        // forwarded to the client (the paused game grabs the keyboard). Ask
-        // the tile's own scope for focus, which drops the detached child, so
-        // navigation keeps working while the game tile is shown.
-        persistentFocusNode.requestFocus();
+        // forwarded to the client (the paused game grabs the keyboard). Park
+        // focus on the tile's own scope, without descending into the detached
+        // child (`requestFocus` would reparent and refocus it), so navigation
+        // keeps working while the game tile is shown.
+        persistentFocusNode.requestScopeFocus();
         return null;
       }
 
@@ -94,7 +95,11 @@ class PersistentWindowTileable extends Tileable {
           node: persistentFocusNode,
           autofocus: true,
           onFocusChange: (value) {
-            if (value) {
+            // In game mode the overlay never builds `primaryFocusNode`, so it
+            // is detached. Re-autofocusing it here would reparent it and make
+            // the defunct node the primary focus again, which breaks the
+            // shell's hotkeys while the pause overlay is shown.
+            if (value && window.displayMode != DisplayMode.game) {
               persistentFocusNode.autofocus(primaryFocusNode);
             }
           },
