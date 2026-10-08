@@ -20,9 +20,9 @@ use smithay::{
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     render_elements,
     utils::{Buffer as BufferCoords, IsAlive, Logical, Monotonic, Point, Size, Time, Transform},
-    wayland::compositor::{with_states, SurfaceAttributes},
+    wayland::compositor::with_states,
 };
-use tracing::{debug, warn};
+use tracing::warn;
 use xcursor::{
     parser::{parse_xcursor, Image},
     CursorTheme,
@@ -293,29 +293,18 @@ where
             )
     });
 
-    // Diagnostic: the client (often XWayland) owns the cursor buffer and its
-    // `buffer_scale`; log both so an oversized cursor can be traced to the
-    // client's buffer or to the scale we apply.
-    with_states(&surface, |states| {
-        let mut cache = states.cached_state.get::<SurfaceAttributes>();
-        let attributes = cache.current();
-        debug!(
-            buffer = ?attributes.buffer,
-            buffer_scale = attributes.buffer_scale,
-            ?scale,
-            "drawing client cursor surface"
-        );
-    });
+    let elements: Vec<(CursorRenderElement<R>, Point<i32, BufferCoords>)> =
+        render_elements_from_surface_tree(
+            renderer,
+            surface,
+            position.to_physical_precise_round(scale),
+            scale,
+            1.0,
+            Kind::Cursor,
+        )
+        .into_iter()
+        .map(|element| (element, h))
+        .collect();
 
-    render_elements_from_surface_tree(
-        renderer,
-        surface,
-        position.to_physical_precise_round(scale),
-        scale,
-        1.0,
-        Kind::Cursor,
-    )
-    .into_iter()
-    .map(|elem| (elem, h))
-    .collect()
+    elements
 }
