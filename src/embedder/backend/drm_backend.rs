@@ -6,6 +6,7 @@ use std::os::fd::FromRawFd;
 use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use sd_notify::NotifyState;
 use serde_json::json;
@@ -37,6 +38,7 @@ use smithay::input::pointer::CursorImageStatus;
 use smithay::output::{Mode, Scale};
 use smithay::output::{Output, PhysicalProperties};
 use smithay::reexports::calloop::channel::{self, Event as CalloopEvent};
+use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::calloop::RegistrationToken;
 use smithay::reexports::calloop::{EventLoop, LoopHandle};
 use smithay::reexports::drm::control::{
@@ -551,6 +553,23 @@ pub fn run_drm_backend() {
     state.determine_highest_hz_crtc();
     state.on_outputs_changed();
 
+    // Drive Flutter's vsync from a timer at the pacing refresh, not from page
+    // flips. A frame with no damage produces no flip (and so no vblank), and
+    // tying vsync to flips would freeze the shell on any static scene.
+    if let Some((mhz, _node, _crtc)) = state.backend_data.pacing_crtc {
+        let interval = Duration::from_nanos((1_000_000_000_000u64 / (mhz.max(1) as u64)).max(1));
+        event_loop
+            .handle()
+            .insert_source(
+                Timer::from_duration(interval),
+                move |_, _, data: &mut State<DrmBackend>| {
+                    data.vsync_tick();
+                    TimeoutAction::ToDuration(interval)
+                },
+            )
+            .unwrap();
+    }
+
     // Mandatory formats by the Wayland spec.
     // TODO: Add more formats based on the GLES version.
     state
@@ -742,11 +761,6 @@ pub fn run_drm_backend() {
         .insert_source(rx_baton, move |baton, _, data| {
             if let CalloopEvent::Msg(baton) = baton {
                 data.batons.push(baton);
-                // Flutter is waiting for a frame. The render/vblank chain stops
-                // on a frame with no damage (queue_frame returns EmptyFrame),
-                // and the baton is only delivered on a vblank — so without
-                // kicking a render here a static scene deadlocks the shell.
-                idle_request_render(data);
             }
         })
         .unwrap();
@@ -1354,22 +1368,26 @@ impl State<DrmBackend> {
         }
 
         // The Flutter context is shared among all outputs, so its vsync batons
-        // must be delivered once per frame rather than once per node. The
-        // globally fastest CRTC paces that delivery; a node rendering on its
-        // own schedule does not drain a second baton.
-        let (mhz, pacing_node, pacing_crtc) = match self.backend_data.pacing_crtc {
-            Some(pacing_crtc) => pacing_crtc,
-            None => return,
+        // are delivered once per frame by the vsync timer (`vsync_tick`), not
+        // per vblank: a frame with no damage produces no flip, and therefore no
+        // vblank, so tying Flutter's vsync to flips would freeze the shell on a
+        // static scene.
+    }
+
+    /// Delivers one vsync tick to Flutter and to Wayland clients, and requests
+    /// a render so cursor and Flutter damage keep being presented.
+    ///
+    /// Driven by a timer at the pacing refresh, never by a page flip: a frame
+    /// with no damage is not queued (Smithay returns `EmptyFrame`), so no
+    /// vblank follows on a static scene.
+    fn vsync_tick(&mut self) {
+        let Some((mhz, _node, _crtc)) = self.backend_data.pacing_crtc else {
+            return;
         };
 
-        if pacing_node != node || pacing_crtc != crtc {
-            return;
-        }
-
-        let drained: Vec<_> = self.batons.drain(..).collect(); // Mutable borrow ends here
-
+        let drained: Vec<_> = self.batons.drain(..).collect();
         for baton in drained {
-            self.flutter_engine().on_vsync(baton, mhz as u32).unwrap();
+            let _ = self.flutter_engine().on_vsync(baton, mhz as u32);
         }
         let frame_timestamp = self.frame_timestamp_millis();
         for surface in self.xdg_shell_state.toplevel_surfaces() {
@@ -1395,6 +1413,8 @@ impl State<DrmBackend> {
         if let CursorImageStatus::Surface(wl_surface) = cursor_status {
             send_frames_surface_tree(&wl_surface, frame_timestamp)
         }
+
+        idle_request_render(self);
     }
 
     // If crtc is `Some()`, render it, else render all crtcs
@@ -1545,13 +1565,18 @@ impl State<DrmBackend> {
         );
 
         match rendered {
-            Ok(_frame_result) => match surface.compositor.queue_frame(None) {
-                Ok(()) => {}
-                Err(err) => {
+            Ok(frame_result) => {
+                if frame_result.is_empty {
+                    // No damage: there is nothing to present. `queue_frame`
+                    // would only return `EmptyFrame`; the vsync timer keeps the
+                    // render loop (and Flutter) alive regardless.
+                    return;
+                }
+                if let Err(err) = surface.compositor.queue_frame(None) {
                     warn!("error queueing frame: {err}");
                     return;
                 }
-            },
+            }
             Err(err) => {
                 eprintln!("Failed to render frame: {}", err);
             }
