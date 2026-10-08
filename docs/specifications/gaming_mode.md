@@ -47,6 +47,14 @@ configure.
   backends and in capture readback.
 - `game_mode_activated` and `meta_window_in_gaming_mode` name the same window;
   removing that window clears both.
+- A paused game tile never holds the keyboard: switching the tile to `game`
+  keeps the shell's own focus scope focused (`PersistentWindow`), so global
+  hotkeys still resolve and navigation works. Only `game_mode_activated` routes
+  key events to the client.
+- While activated the compositor keeps the pointer and keyboard focus it set
+  on entry: shell widget churn (the surface is swapped for a placeholder, the
+  route covers the tile) must not clear them, or the game stops receiving
+  motion, buttons or keys.
 - Leaving gaming mode never leaves the client believing a key is held, and
   entering it never leaves Flutter believing a key is held.
 - The window geometry patched on entry is logical, matching every other

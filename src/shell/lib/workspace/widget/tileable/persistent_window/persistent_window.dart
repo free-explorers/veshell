@@ -49,15 +49,29 @@ class PersistentWindowTileable extends Tileable {
         ..canRequestFocus = isSelected
         ..descendantsAreFocusable = isSelected;
 
-      if (isSelected) {
-        if (persistentFocusNode.focusedChild != null) {
-          persistentFocusNode.focusedChild!.requestFocus();
-        } else {
-          persistentFocusNode.requestFocus();
-        }
+      if (!isSelected) {
+        return null;
+      }
+
+      if (window.displayMode == DisplayMode.game) {
+        // The gaming overlay never builds the tile's `primaryFocusNode`, so
+        // that node goes defunct when the mode switches to `game` and Flutter
+        // keeps it as the primary focus. Global hotkeys then cannot resolve
+        // their action context: their intents fall through and the keys are
+        // forwarded to the client (the paused game grabs the keyboard). Ask
+        // the tile's own scope for focus, which drops the detached child, so
+        // navigation keeps working while the game tile is shown.
+        persistentFocusNode.requestFocus();
+        return null;
+      }
+
+      if (persistentFocusNode.focusedChild != null) {
+        persistentFocusNode.focusedChild!.requestFocus();
+      } else {
+        persistentFocusNode.requestFocus();
       }
       return null;
-    }, [isSelected]);
+    }, [isSelected, window.displayMode]);
 
     final dialogMetaWindowIds = ref
         .watch(dialogSetForWindowProvider(windowId))
