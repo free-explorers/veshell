@@ -79,6 +79,25 @@ impl Backend for Winit {
             .collect::<Vec<_>>();
         Swapchain::new(dmabuf_allocator, width, height, Fourcc::Argb8888, modifiers)
     }
+
+    fn capture_dmabuf_setup(&mut self) -> Option<super::CaptureDmabufSetup> {
+        let formats = self
+            .backend
+            .renderer()
+            .egl_context()
+            .dmabuf_texture_formats()
+            .iter()
+            .filter(|format| format.code == Fourcc::Abgr8888)
+            .map(|format| (format.code, format.modifier))
+            .collect::<Vec<_>>();
+        if formats.is_empty() {
+            return None;
+        }
+        Some(super::CaptureDmabufSetup {
+            allocator: std::rc::Rc::new(self.gbm_device.clone()),
+            formats,
+        })
+    }
 }
 
 impl DmabufHandler for State<Winit> {

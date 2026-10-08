@@ -1253,8 +1253,11 @@ fn begin_portal_capture<BackendData: crate::backend::Backend + 'static>(
     }
 }
 
-/// Frame budget ceiling for damage-driven delivery (30 FPS).
-const MIN_FRAME_INTERVAL: std::time::Duration = std::time::Duration::from_millis(33);
+/// Frame budget ceiling for damage-driven delivery (60 FPS). The dmabuf
+/// transport makes a frame a GPU render with no CPU copy, so the ceiling can
+/// match a common display refresh; a static scene still falls back to the
+/// idle heartbeat below.
+const MIN_FRAME_INTERVAL: std::time::Duration = std::time::Duration::from_nanos(1_000_000_000 / 60);
 /// Idle refresh: a static desktop with no Flutter presents still refreshes
 /// consumers at this low rate (cursor moves do not present frames today).
 const IDLE_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
@@ -1263,7 +1266,7 @@ const IDLE_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_mil
 ///
 /// The fast path is damage-driven: output presents call
 /// [on_view_frame_presented] and copy only what changed is delivered up to
-/// the 30 FPS budget. This timer covers a completely static scene, where
+/// the frame budget. This timer covers a completely static scene, where
 /// no present ever fires, so consumers keep a quiet heartbeat instead of
 /// hanging on the last frame.
 ///
@@ -1294,12 +1297,63 @@ pub fn schedule_frame_delivery<BackendData: crate::backend::Backend + 'static>(
         .expect("timer can be scheduled");
 }
 
+/// Renders one screen-cast frame on the dmabuf transport, if that is the
+/// session's transport. Returns `false` when the session is on shared memory
+/// so the caller takes the copy path.
+///
+/// Each frame is rendered and sent fully. Per-region damage
+/// (`SPA_META_VideoDamage`, partial render) is intentionally not attempted:
+/// it needs a sub-region damage signal that Veshell does not have yet (see
+/// free-explorers/veshell#63) and would otherwise risk stale regions.
+fn deliver_dmabuf_frame<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    session_handle: &OwnedObjectPath,
+    output: &smithay::output::Output,
+) -> bool {
+    let is_dmabuf = state
+        .portal_state
+        .pipewire_producer
+        .as_ref()
+        .is_some_and(|producer| producer.is_dmabuf_stream(session_handle));
+    if !is_dmabuf {
+        return false;
+    }
+    let frame = state
+        .portal_state
+        .pipewire_producer
+        .as_mut()
+        .and_then(|producer| producer.begin_dmabuf_frame(session_handle));
+    let Some((mut dmabuf, buffer)) = frame else {
+        return true;
+    };
+    let render = crate::capture::render_output_into_dmabuf(state, output, &mut dmabuf);
+    let (rendered, sync) = match render {
+        Ok(sync) => (true, Some(sync)),
+        Err(error) => {
+            tracing::debug!(%error, "dmabuf screen-cast render failed");
+            (false, None)
+        }
+    };
+    let outcome = state
+        .portal_state
+        .pipewire_producer
+        .as_mut()
+        .map(|producer| producer.finish_dmabuf_frame(session_handle, buffer, rendered, sync));
+    if let Some(outcome) = outcome {
+        defer_screen_cast_queue(state, session_handle.clone(), outcome);
+    }
+    true
+}
+
 /// Copies the output into the shared buffers of exactly one session.
 fn deliver_session_frame<BackendData: crate::backend::Backend + 'static>(
     state: &mut crate::state::State<BackendData>,
     session_handle: &OwnedObjectPath,
     output: &smithay::output::Output,
 ) {
+    if deliver_dmabuf_frame(state, session_handle, output) {
+        return;
+    }
     match crate::capture::capture_output_pixels(state, output) {
         Ok(snapshot) => {
             if let Some(producer) = state.portal_state.pipewire_producer.as_mut() {
@@ -1308,6 +1362,40 @@ fn deliver_session_frame<BackendData: crate::backend::Backend + 'static>(
         }
         Err(_) => {
             tracing::debug!("frame capture failed; producer is quiet until the next tick");
+        }
+    }
+}
+
+/// Holds a rendered dmabuf frame back from the consumer until its GPU render
+/// fence signals, by registering the exported fence with the compositor loop.
+/// A frame that was already complete (or could not export a fence) is queued
+/// immediately by the producer and does not reach here.
+fn defer_screen_cast_queue<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    session_handle: OwnedObjectPath,
+    outcome: crate::capture::pipewire::FrameQueue,
+) {
+    let crate::capture::pipewire::FrameQueue::Deferred { id, fence } = outcome else {
+        return;
+    };
+    use smithay::reexports::calloop::generic::Generic;
+    use smithay::reexports::calloop::{Interest, Mode, PostAction};
+
+    let fallback_handle = session_handle.clone();
+    let source = Generic::new(fence, Interest::READ, Mode::OneShot);
+    let inserted = state.loop_handle.insert_source(source, move |_, _, state| {
+        if let Some(producer) = state.portal_state.pipewire_producer.as_mut() {
+            producer.queue_deferred_frame(&session_handle, id);
+        }
+        Ok::<PostAction, std::io::Error>(PostAction::Remove)
+    });
+    if let Err(error) = inserted {
+        tracing::debug!(
+            ?error,
+            "unable to defer a screen-cast frame on its render fence"
+        );
+        if let Some(producer) = state.portal_state.pipewire_producer.as_mut() {
+            producer.queue_deferred_frame(&fallback_handle, id);
         }
     }
 }
@@ -1380,7 +1468,7 @@ fn deliver_window_frame<BackendData: crate::backend::Backend + 'static>(
 /// Called from the Flutter present path whenever a backing store is
 /// presented to a view: this is authoritative output damage. Every
 /// screen-cast session whose source lives on that view's output receives a
-/// frame copy, throttled to the 30 FPS budget per session (damaged faster,
+/// frame copy, throttled to the frame budget per session (damaged faster,
 /// delivered no faster than a consumer reasonably displays).
 pub fn on_view_frame_presented<BackendData: crate::backend::Backend + 'static>(
     state: &mut crate::state::State<BackendData>,
@@ -1389,7 +1477,7 @@ pub fn on_view_frame_presented<BackendData: crate::backend::Backend + 'static>(
     let now = std::time::Instant::now();
     // Window streams are all due together on any present: every client's
     // texture is composited into the presented frame, so a present is the
-    // damage beat for every window share, bounded by the same 30 FPS
+    // damage beat for every window share, bounded by the same frame
     // budget per session.
     let due_windows: Vec<OwnedObjectPath> = state
         .portal_state
@@ -1448,14 +1536,27 @@ pub fn on_view_frame_presented<BackendData: crate::backend::Backend + 'static>(
     let Some(output) = output else {
         return;
     };
-    let captured = crate::capture::capture_output_pixels(state, &output).ok();
-    let Some(captured) = captured else {
-        tracing::debug!("frame capture failed after a present; producer stays quiet");
-        return;
-    };
+    let mut shm_pixels: Option<Vec<u8>> = None;
     for handle in due {
-        if let Some(producer) = state.portal_state.pipewire_producer.as_mut() {
-            producer.queue_frame(handle.clone(), &captured.pixels);
+        if deliver_dmabuf_frame(state, &handle, &output) {
+            if let Some(stream) = state.portal_state.active_streams.get_mut(&handle) {
+                stream.last_frame = Some(now);
+            }
+            continue;
+        }
+        if shm_pixels.is_none() {
+            match crate::capture::capture_output_pixels(state, &output) {
+                Ok(captured) => shm_pixels = Some(captured.pixels),
+                Err(_) => {
+                    tracing::debug!("frame capture failed after a present; producer stays quiet");
+                }
+            }
+        }
+        if let (Some(pixels), Some(producer)) = (
+            shm_pixels.as_deref(),
+            state.portal_state.pipewire_producer.as_mut(),
+        ) {
+            producer.queue_frame(handle.clone(), pixels);
         }
         if let Some(stream) = state.portal_state.active_streams.get_mut(&handle) {
             stream.last_frame = Some(now);
@@ -1486,9 +1587,11 @@ fn begin_shared_stream<BackendData: crate::backend::Backend + 'static>(
         return;
     };
     if state.portal_state.pipewire_producer.is_none() {
+        let dmabufs = state.backend_data.capture_dmabuf_setup();
         match crate::capture::pipewire::Producer::new(
             &state.loop_handle,
             state.portal_state.producer_delivery_sender.clone(),
+            dmabufs,
         ) {
             Ok(producer) => {
                 state.portal_state.pipewire_producer = Some(producer);

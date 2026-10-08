@@ -7,11 +7,13 @@ use std::thread;
 pub mod pipewire;
 pub mod recording;
 pub mod selection;
+pub mod shm;
 pub mod state;
 
 pub use state::CaptureState;
 
 use smithay::backend::allocator::dmabuf::{AsDmabuf, Dmabuf};
+use smithay::backend::allocator::Buffer as _;
 use smithay::backend::allocator::{Fourcc, Slot};
 use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::element::memory::MemoryRenderBufferRenderElement;
@@ -19,6 +21,7 @@ use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::surface::render_elements_from_surface_tree;
 use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::gles::{GlesRenderbuffer, GlesRenderer};
+use smithay::backend::renderer::sync::SyncPoint;
 use smithay::backend::renderer::utils::with_renderer_surface_state;
 use smithay::backend::renderer::{Bind, ExportMem, ImportAll, ImportMem, Offscreen};
 use smithay::output::Output;
@@ -799,6 +802,106 @@ fn take_output_snapshot<BackendData: Backend + 'static>(
     })
 }
 
+/// Renders the output's live desktop (Flutter texture plus game-mode
+/// surfaces; no cursor, no shell overlays) directly into a capture-owned
+/// dmabuf the PipeWire producer allocated. The GPU writes the shared
+/// buffer, which is the whole point of the dmabuf transport: no CPU
+/// readback and no copy into shared memory.
+///
+/// Returns the render fence so the caller can hold the buffer back from the
+/// consumer until the GPU has actually finished writing it.
+///
+/// The buffer must already be the output's physical mode size; the producer
+/// allocates it at the negotiated geometry.
+pub fn render_output_into_dmabuf<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    output: &Output,
+    dmabuf: &mut Dmabuf,
+) -> Result<SyncPoint, String> {
+    let view_id = output
+        .user_data()
+        .get::<OutputViewIdWrapper>()
+        .ok_or_else(|| format!("Output {} has no Flutter view", output.name()))?
+        .view_id;
+    let flutter_dmabuf = latest_flutter_dmabuf(state, view_id)?;
+    let geometry = state
+        .space
+        .output_geometry(output)
+        .ok_or_else(|| format!("Output {} has no geometry", output.name()))?
+        .to_f64();
+    let output_name = output.name();
+    let game_surface_list: Vec<WlSurface> = state
+        .meta_window_state
+        .meta_windows
+        .values()
+        .filter_map(|meta_window| {
+            (meta_window.game_mode_activated
+                && meta_window.current_output.as_deref() == Some(output_name.as_str()))
+            .then(|| state.surfaces.get(&meta_window.surface_id).cloned())
+            .flatten()
+        })
+        .collect();
+
+    state
+        .backend_data
+        .with_primary_renderer_mut(|renderer| {
+            render_output_into_target(
+                renderer,
+                output,
+                &flutter_dmabuf,
+                geometry,
+                BackendData::FLIP_FLUTTER_TEXTURE,
+                game_surface_list.iter().collect(),
+                dmabuf,
+            )
+        })
+        .ok_or_else(|| "No renderer is available to render the output".to_string())?
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_output_into_target(
+    renderer: &mut GlesRenderer,
+    output: &Output,
+    flutter_dmabuf: &Dmabuf,
+    output_geometry: Rectangle<f64, Logical>,
+    flip_flutter_texture: bool,
+    game_surface_list: Vec<&WlSurface>,
+    target_dmabuf: &mut Dmabuf,
+) -> Result<SyncPoint, String> {
+    let mode = output
+        .current_mode()
+        .ok_or_else(|| format!("Output {} has no mode", output.name()))?;
+    let size = mode.size.to_logical(1).to_buffer(1, Transform::Normal);
+    if target_dmabuf.size() != size {
+        return Err(format!(
+            "The screen-cast buffer is {:?}, expected {size:?}",
+            target_dmabuf.size()
+        ));
+    }
+    let elements = get_frame_elements_from_dmabuf(
+        renderer,
+        output,
+        flutter_dmabuf,
+        output_geometry,
+        flip_flutter_texture,
+        game_surface_list,
+    );
+    let mut target = renderer
+        .bind(target_dmabuf)
+        .map_err(|error| format!("Unable to bind the screen-cast buffer: {error}"))?;
+    // Full-frame by design: Veshell has no sub-region damage source. The
+    // desktop is a single full-surface Flutter texture, the Flutter engine
+    // force-disables partial repaint for the external-view/compositor path,
+    // and `FlutterPresentInfo`'s frame damage is not forwarded through it, so
+    // any damage signal would just be "whole output". A fresh tracker each
+    // frame reflects that honestly. See free-explorers/veshell#63.
+    let mut damage_tracker = OutputDamageTracker::from_output(output);
+    let result = damage_tracker
+        .render_output(renderer, &mut target, 0, &elements, [0.0, 0.0, 0.0, 1.0])
+        .map_err(|error| format!("Unable to render the screen cast: {error}"))?;
+    Ok(result.sync)
+}
+
 fn compose_desktop_area(
     area: Rectangle<f64, Logical>,
     scale: f64,
@@ -1240,11 +1343,13 @@ pub struct RecordingGeometry {
     pub fps: u32,
 }
 
-/// Frame cadence of a local recording, capped at the shared 30 FPS
-/// budget (specification section 6).
-const RECORDING_FPS: u32 = 30;
+/// Frame cadence of a local recording, capped at the display refresh
+/// budget. Encoding is realtime and frame counting is independent of
+/// this cap (PTS come from elapsed time), so a slow encoder drops frames
+/// instead of stretching the video.
+const RECORDING_FPS: u32 = 60;
 const RECORDING_FRAME_INTERVAL: std::time::Duration =
-    std::time::Duration::from_millis(1000 / RECORDING_FPS as u64);
+    std::time::Duration::from_nanos(1_000_000_000 / RECORDING_FPS as u64);
 /// The idle heartbeat keeps a static scene refreshing while presents
 /// carry the live-motion cadence (damage-coupled delivery per spec 6).
 const RECORDING_HEARTBEAT_INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
@@ -1465,7 +1570,7 @@ fn schedule_recording_heartbeat<BackendData: Backend + 'static>(
 
 /// The presented Flutter frame is fresh damage for exactly one output:
 /// the recording on that output gets one copy per present, throttled to
-/// the 30 FPS budget by its own last-frame timestamp.
+/// its fixed FPS budget by its own last-frame timestamp.
 pub fn on_view_frame_presented_for_recording<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     view_id: i64,

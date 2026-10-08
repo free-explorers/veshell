@@ -1,11 +1,54 @@
+use std::os::fd::AsFd;
+use std::rc::Rc;
+
 use smithay::backend::{
     allocator::{
-        dmabuf::{AnyError, Dmabuf},
-        Allocator, Swapchain,
+        dmabuf::{AnyError, Dmabuf, DmabufAllocator},
+        gbm::{GbmAllocator, GbmBufferFlags, GbmDevice},
+        Allocator, Fourcc, Swapchain,
     },
     renderer::gles::GlesRenderer,
     session::libseat::LibSeatSession,
 };
+use smithay::reexports::gbm::Modifier;
+
+/// Allocates capture-owned dmabufs the primary renderer can render into and
+/// a PipeWire consumer can import. Implemented by the backend's GBM device;
+/// `None` from [`Backend::capture_dmabuf_setup`] keeps the shared-memory
+/// producer path.
+pub trait CaptureDmabufAllocator {
+    fn allocate(
+        &self,
+        width: u32,
+        height: u32,
+        fourcc: Fourcc,
+        modifiers: &[Modifier],
+    ) -> Result<Dmabuf, String>;
+}
+
+impl<A: AsFd + Clone + 'static> CaptureDmabufAllocator for GbmDevice<A> {
+    fn allocate(
+        &self,
+        width: u32,
+        height: u32,
+        fourcc: Fourcc,
+        modifiers: &[Modifier],
+    ) -> Result<Dmabuf, String> {
+        let mut allocator =
+            DmabufAllocator(GbmAllocator::new(self.clone(), GbmBufferFlags::RENDERING));
+        allocator
+            .create_buffer(width, height, fourcc, modifiers)
+            .map_err(|error| format!("{error:?}"))
+    }
+}
+
+/// Everything the PipeWire producer needs to offer and allocate dmabufs:
+/// the allocator plus the renderer-supported `(fourcc, modifier)` list.
+#[derive(Clone)]
+pub struct CaptureDmabufSetup {
+    pub allocator: Rc<dyn CaptureDmabufAllocator>,
+    pub formats: Vec<(Fourcc, Modifier)>,
+}
 
 pub mod drm_backend;
 pub mod render;
@@ -59,4 +102,10 @@ pub trait Backend {
         width: u32,
         height: u32,
     ) -> Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>>;
+
+    /// The dmabuf allocator and the renderer-supported `(fourcc, modifier)`
+    /// list for the PipeWire producer, or `None` when the backend cannot
+    /// render into and export dmabufs (the producer then stays on shared
+    /// memory).
+    fn capture_dmabuf_setup(&mut self) -> Option<CaptureDmabufSetup>;
 }

@@ -35,7 +35,20 @@ const STALL_DROP_LIMIT: u64 = 120;
 const VP8_REALTIME_DEADLINE_USEC: i64 = 1;
 const VP8_CPU_USED: i32 = 8;
 const VP8_THREADS: i32 = 2;
-const VP8_KEYFRAME_MAX_DIST: i32 = 90;
+/// Keyframe spacing in seconds; the encoder's frame-count distance is
+/// derived from the session rate so seek granularity does not drift when
+/// the rate changes.
+const VP8_KEYFRAME_SECONDS: i32 = 2;
+/// Encoder bit budget in bits per pixel per second. libvpx ships a
+/// resolution-independent `target-bitrate` default (256 kbit/s), which
+/// starves any real output and was the visible quality ceiling; the worker
+/// scales the target with the frame geometry and rate instead. ~0.1
+/// bit/pixel is a high-quality budget for screen content.
+const VP8_BITS_PER_PIXEL: f64 = 0.1;
+/// Floor and ceiling for the derived target: tiny captures still get a
+/// usable budget, and very large or high-rate captures stay bounded.
+const VP8_MIN_TARGET_BITRATE: i32 = 1_000_000;
+const VP8_MAX_TARGET_BITRATE: i32 = 40_000_000;
 
 /// Commands travelling from the compositor loop to the worker thread.
 pub enum RecordingCommand {
@@ -121,6 +134,20 @@ pub fn frame_len(geometry: &RecordingGeometry) -> Result<usize, String> {
         .checked_mul(height)
         .and_then(|pixels| pixels.checked_mul(FRAME_BYTES_PER_PIXEL))
         .ok_or_else(|| "Recording buffer is too large".to_string())
+}
+
+/// The VP8 target bitrate for a session, scaled by resolution and rate and
+/// clamped to a sane band. `target-bitrate` counts bits per second, so the
+/// per-pixel budget multiplies by both dimensions and the rate; this is
+/// what keeps a large capture from being encoded at the encoder's
+/// resolution-independent default.
+fn vp8_target_bitrate(geometry: &RecordingGeometry) -> i32 {
+    let width = geometry.size.w.max(0) as f64;
+    let height = geometry.size.h.max(0) as f64;
+    let target = width * height * geometry.fps as f64 * VP8_BITS_PER_PIXEL;
+    target
+        .round()
+        .clamp(VP8_MIN_TARGET_BITRATE as f64, VP8_MAX_TARGET_BITRATE as f64) as i32
 }
 
 /// Spawns the worker thread. Feed frames with
@@ -270,7 +297,11 @@ fn build_recording_pipeline(
     encoder.set_property("deadline", VP8_REALTIME_DEADLINE_USEC);
     encoder.set_property("cpu-used", VP8_CPU_USED);
     encoder.set_property("threads", VP8_THREADS);
-    encoder.set_property("keyframe-max-dist", VP8_KEYFRAME_MAX_DIST);
+    encoder.set_property(
+        "keyframe-max-dist",
+        (geometry.fps as i32 * VP8_KEYFRAME_SECONDS).max(1),
+    );
+    encoder.set_property("target-bitrate", vp8_target_bitrate(geometry));
     let mux = gst::ElementFactory::make("webmmux")
         .build()
         .map_err(|_| "webmmux is unavailable; install the GStreamer good plugins".to_string())?;
@@ -559,6 +590,42 @@ mod tests {
 
     fn recording_geometry(size: Size<i32, Physical>) -> RecordingGeometry {
         RecordingGeometry { size, fps: 30 }
+    }
+
+    /// The derived bitrate must scale with both resolution and rate, be
+    /// clamped at the ends, and never collapse to the encoder's
+    /// resolution-independent default.
+    #[test]
+    fn target_bitrate_scales_with_resolution_and_rate() {
+        let baseline = vp8_target_bitrate(&RecordingGeometry {
+            size: (1920, 1080).into(),
+            fps: 30,
+        });
+        let faster = vp8_target_bitrate(&RecordingGeometry {
+            size: (1920, 1080).into(),
+            fps: 60,
+        });
+        let larger = vp8_target_bitrate(&RecordingGeometry {
+            size: (3840, 2160).into(),
+            fps: 30,
+        });
+        let tiny = vp8_target_bitrate(&RecordingGeometry {
+            size: (16, 16).into(),
+            fps: 30,
+        });
+        let huge = vp8_target_bitrate(&RecordingGeometry {
+            size: (7680, 4320).into(),
+            fps: 60,
+        });
+
+        assert!(baseline > 1_000_000, "1080p30 must clear the floor");
+        assert!(faster > baseline, "a higher rate needs a bigger budget");
+        assert!(larger > baseline, "more pixels need a bigger budget");
+        assert_eq!(tiny, VP8_MIN_TARGET_BITRATE, "tiny captures hit the floor");
+        assert_eq!(
+            huge, VP8_MAX_TARGET_BITRATE,
+            "huge captures hit the ceiling"
+        );
     }
 
     fn rgba_frame(size: Size<i32, Physical>, red: u8) -> Vec<u8> {
