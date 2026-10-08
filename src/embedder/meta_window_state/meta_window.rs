@@ -334,8 +334,13 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                                         state.size = target_size;
                                     }
                                     Some(DisplayMode::Fullscreen) => {
+                                        // Maximized and fullscreen share the
+                                        // tile geometry; only the surface
+                                        // state differs, so a client drops its
+                                        // toolbars in fullscreen. Setting both
+                                        // would make it read as maximized.
                                         state.states.set(xdg_toplevel::State::Fullscreen);
-                                        state.states.set(xdg_toplevel::State::Maximized);
+                                        state.states.unset(xdg_toplevel::State::Maximized);
                                         state.size = target_size;
                                     }
                                     Some(DisplayMode::Floating) => {
