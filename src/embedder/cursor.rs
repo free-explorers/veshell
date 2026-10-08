@@ -1,3 +1,5 @@
+use crate::wayland::wayland::get_surface_id;
+
 use std::env;
 use std::{collections::HashMap, io::Read, sync::Mutex};
 
@@ -317,6 +319,7 @@ where
     // the scale we apply.
     for (element, _) in &elements {
         debug!(
+            surface = get_surface_id(surface),
             size = ?element.geometry(scale).size,
             ?scale,
             "client cursor rendered size"

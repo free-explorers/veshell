@@ -803,6 +803,12 @@ where
     }
 
     if capture_overlay.is_none() && output_geometry.contains(cursor_location) {
+        debug!(
+            output = %output.name(),
+            ?scale,
+            ?cursor_location,
+            "drawing cursor for output"
+        );
         let cursor_element = draw_cursor(
             renderer,
             cursor_image_status,
