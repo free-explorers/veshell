@@ -81,16 +81,36 @@ if hash systemctl &> /dev/null; then
     # The real values are published by the compositor itself once it starts.
     systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY WAYLAND_SOCKET
 
+    # Session teardown shared by the normal exit path and the signal trap
+    # below. It is idempotent, so running it twice is harmless.
+    teardown() {
+        # Force stop of graphical-session.target.
+        systemctl --user start --job-mode=replace-irreversibly veshell-shutdown.target
+
+        # Unset environment that we've set (the compositor has published its
+        # own WAYLAND_DISPLAY/DISPLAY for dbus activation; with the session
+        # gone they must not linger for the next login).
+        systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY WAYLAND_SOCKET XDG_SESSION_TYPE XDG_CURRENT_DESKTOP
+    }
+
+    # logind ends the session by killing this wrapper with SIGTERM (GDM
+    # teardown, `loginctl terminate-session`), which the compositor - a user
+    # service outside the session scope - would otherwise survive. It would
+    # then keep running in the background with the applications it launched
+    # (music keeps playing, browsers keep running) until the next login
+    # recovers the stale session. Stop it explicitly so its ExecStop tears the
+    # graphical session down right away.
+    #
+    # The wait must run in the background: a foreground `systemctl --wait`
+    # defers the trap until the service stops on its own, which never happens
+    # on logout.
+    trap 'systemctl --user stop veshell.service; teardown; exit 0' TERM INT HUP
+
     # Start veshell and wait for it to terminate.
-    systemctl --user --wait start veshell.service
+    systemctl --user --wait start veshell.service &
+    wait
 
-    # Force stop of graphical-session.target.
-    systemctl --user start --job-mode=replace-irreversibly veshell-shutdown.target
-
-    # Unset environment that we've set (the compositor has published its own
-    # WAYLAND_DISPLAY/DISPLAY for dbus activation; with the session gone they
-    # must not linger for the next login).
-    systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY WAYLAND_SOCKET XDG_SESSION_TYPE XDG_CURRENT_DESKTOP
+    teardown
 elif hash dinitctl &> /dev/null; then
     # Check that the user dinit daemon is running
     if ! pgrep -u $(id -u) dinit &> /dev/null; then

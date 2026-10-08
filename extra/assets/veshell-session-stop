@@ -4,6 +4,14 @@
 # whenever the compositor stops, no matter who asked (clean exit, crash, or
 # the session wrapper having been killed before it could do it).
 
+# Stop the applications the session launched. They run in transient
+# veshell-launch-*.service units in app.slice, which are not part of
+# graphical-session.target: stopping the target alone would leave them (and
+# their descendants) running in the background after logout. Queued without
+# blocking so a slow-to-die application cannot outlast TimeoutStopSec and
+# abort the rest of the teardown; the user manager finishes the stop jobs.
+systemctl --user stop --no-block 'veshell-launch-*.service' 2>/dev/null || true
+
 # Force stop of graphical-session.target so the user manager never keeps an
 # orphaned active target after the compositor is gone.
 systemctl --user start --job-mode=replace-irreversibly veshell-shutdown.target
