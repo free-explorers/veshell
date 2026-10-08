@@ -29,6 +29,22 @@ pub fn activate_window<BackendData: Backend + 'static>(
     let args = method_call.arguments().unwrap().clone();
     let payload: ActivateWindowPayload = serde_json::from_value(args).unwrap();
 
+    // While the game owns the input the compositor keeps the focus it set on
+    // entry; the shell's focus churn (the zoom route takes focus) must not
+    // unfocus the client mid-game.
+    if !payload.activate
+        && data
+            .meta_window_state
+            .meta_window_in_gaming_mode
+            .as_ref()
+            .and_then(|id| data.meta_window_state.meta_windows.get(id))
+            .is_some_and(|window| window.surface_id == payload.surface_id)
+    {
+        tracing::debug!("ignoring client deactivation while a game owns the input");
+        result.success(None);
+        return;
+    }
+
     let pointer = data.seat.get_pointer().unwrap();
 
     if pointer.is_grabbed() {

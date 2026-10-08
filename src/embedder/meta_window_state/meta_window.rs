@@ -599,6 +599,20 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                             "gaming: pointer focus set to the client"
                         );
                         self.refresh_pointer_focus();
+                        // The compositor owns the client's focus from here until
+                        // deactivation: set the keyboard focus too, so the game
+                        // gets keys even though the shell's own widget focus
+                        // moves (the zoom route takes it).
+                        if let Err((code, message)) =
+                            crate::flutter_engine::platform_channel_callbacks::activate_window::focus_surface(
+                                self,
+                                &surface,
+                            )
+                        {
+                            warn!(
+                                "gaming: could not focus the client keyboard: {code}: {message}"
+                            );
+                        }
                     }
                 } else {
                     if self.meta_window_state.meta_window_in_gaming_mode.as_ref() == Some(&id) {

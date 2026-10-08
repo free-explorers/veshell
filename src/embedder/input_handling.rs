@@ -227,6 +227,11 @@ impl<BackendData: Backend> State<BackendData> {
         if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
             let state = wl_pointer::ButtonState::from(event.state());
 
+            debug!(
+                focus = ?self.pointer_focus,
+                button = event.button_code(),
+                "gaming pointer button"
+            );
             let pointer = self.pointer.clone();
             pointer.button(
                 self,
