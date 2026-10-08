@@ -11,7 +11,7 @@ use smithay::{
             element::{
                 memory::{MemoryRenderBuffer, MemoryRenderBufferRenderElement},
                 surface::{render_elements_from_surface_tree, WaylandSurfaceRenderElement},
-                Kind,
+                Element, Kind,
             },
             ImportAll, ImportMem, Renderer,
         },
@@ -22,7 +22,7 @@ use smithay::{
     utils::{Buffer as BufferCoords, IsAlive, Logical, Monotonic, Point, Size, Time, Transform},
     wayland::compositor::with_states,
 };
-use tracing::warn;
+use tracing::{debug, warn};
 use xcursor::{
     parser::{parse_xcursor, Image},
     CursorTheme,
@@ -274,7 +274,7 @@ pub fn draw_surface_cursor<R>(
     scale: utils::Scale<f64>,
 ) -> Vec<(CursorRenderElement<R>, Point<i32, BufferCoords>)>
 where
-    R: Renderer + ImportAll,
+    R: Renderer + ImportAll + ImportMem,
     <R as RendererSuper>::TextureId: Clone + 'static,
 {
     let position = location.into();
@@ -305,6 +305,17 @@ where
         .into_iter()
         .map(|element| (element, h))
         .collect();
+
+    // Diagnostic: log the rendered cursor size against the output scale so an
+    // oversized client cursor can be attributed to the client's buffer or to
+    // the scale we apply.
+    for (element, _) in &elements {
+        debug!(
+            size = ?element.geometry(scale).size,
+            ?scale,
+            "client cursor rendered size"
+        );
+    }
 
     elements
 }
