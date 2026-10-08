@@ -2,6 +2,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_gaming_state.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/widget/meta_surface.dart';
@@ -86,6 +87,17 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
                 ),
               );
         }
+        // Go fullscreen only after the resize: the configure that carries the
+        // fullscreen state must already have the monitor size, because
+        // Chromium latches the size from that configure.
+        ref
+            .read(metaWindowStateProvider(metaWindowId).notifier)
+            .patch(
+              UpdateDisplayMode(
+                id: metaWindowId,
+                value: MetaWindowDisplayMode.fullscreen,
+              ),
+            );
         if (metaWindowGamingState == MetaWindowGamingStatus.running &&
             !ref
                 .read(metaWindowStateProvider(metaWindowId))
@@ -94,7 +106,7 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
         }
       });
       return null;
-    }, const []);
+    }, [metaWindowId]);
 
     final fallbackSize =
         (logicalMonitorSize != null && logicalMonitorSize.width > 0)
@@ -229,14 +241,22 @@ class GamingActivationTrigger extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final animation = ModalRoute.of(context)?.animation;
+    final activated = useRef(false);
     useEffect(() {
       if (animation == null) return null;
 
       void onStatus(AnimationStatus status) {
-        if (status != AnimationStatus.completed) return;
-        ref
-            .read(metaWindowStateProvider(metaWindowId).notifier)
-            .patch(UpdateGameModeActivated(id: metaWindowId, value: true));
+        if (status != AnimationStatus.completed || activated.value) return;
+        activated.value = true;
+        // flutter_hooks runs `useEffect` during build and `addStatusListener`
+        // can notify synchronously, so writing the provider here would be a
+        // "modify a provider while building" error. Defer it past the frame.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!context.mounted) return;
+          ref
+              .read(metaWindowStateProvider(metaWindowId).notifier)
+              .patch(UpdateGameModeActivated(id: metaWindowId, value: true));
+        });
       }
 
       animation.addStatusListener(onStatus);

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:hooks_riverpod/experimental/persist.dart';
 import 'package:riverpod_annotation/experimental/json_persist.dart';
@@ -9,7 +8,6 @@ import 'package:shell/application/model/launch_config.serializable.dart';
 import 'package:shell/application/provider/app_launch.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
-import 'package:shell/monitor/provider/monitor_placement.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/shared/provider/persistent_storage_state.dart';
 import 'package:shell/shared/util/logger.dart';
@@ -135,34 +133,12 @@ class PersistentWindowState extends _$PersistentWindowState
     final metaWindowId = state.metaWindowId;
     if (metaWindowId == null) return;
 
-    // In gaming mode the window is composited natively at the whole monitor
-    // size. The compositor must learn that size in the same configure that
-    // carries the fullscreen state: Chromium latches the size from that
-    // configure, so requesting fullscreen while the window still has the tile
-    // geometry leaves it at the old size. Resize first, then go fullscreen.
-    if (state.displayMode == DisplayMode.game) {
-      final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
-      final monitorName = metaWindow.currentOutput;
-      if (monitorName != null) {
-        final size = ref.read(monitorLogicalSizeForNameProvider(monitorName));
-        if (size != null && size.width > 0 && size.height > 0) {
-          final geometry = metaWindow.geometry;
-          ref
-              .read(metaWindowStateProvider(metaWindowId).notifier)
-              .patch(
-                MetaWindowPatchMessage.updateGeometry(
-                  id: metaWindowId,
-                  value: Rect.fromLTWH(
-                    geometry?.left ?? 0,
-                    geometry?.top ?? 0,
-                    size.width,
-                    size.height,
-                  ),
-                ),
-              );
-        }
-      }
-    }
+    // Gaming mode owns its own transition: the overlay resizes the window to
+    // the monitor's logical size and only then requests fullscreen, so the
+    // configure that carries the fullscreen state already has the final size.
+    // Requesting fullscreen here, before that resize, latches Chromium to the
+    // tile size (the meta window has no `currentOutput` yet at this point).
+    if (state.displayMode == DisplayMode.game) return;
 
     final metaDisplayMode = switch (state.displayMode) {
       DisplayMode.maximized => MetaWindowDisplayMode.maximized,
