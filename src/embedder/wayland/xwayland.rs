@@ -77,6 +77,11 @@ pub mod xwayland {
                     }
                 };
 
+                tracing::debug!(
+                    scale,
+                    cursor_size = ?size,
+                    "reloading the Xwayland default cursor"
+                );
                 if let Err(err) = wm.set_cursor(&pixels_rgba, size, hotspot) {
                     warn!(
                         id = ?wm.id(),
@@ -287,6 +292,7 @@ pub mod xwayland {
                     .ok()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(24);
+                tracing::debug!(new_scale, cursor_size, "updating the Xwayland scale");
 
                 // update xorg dpi
                 if let Some(xwm) = xwayland.xwm.as_mut() {

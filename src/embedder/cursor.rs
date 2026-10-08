@@ -228,6 +228,12 @@ where
             pointer_images
                 .iter()
                 .find_map(|(image, texture)| if image == &frame { Some(texture) } else { None });
+        debug!(
+            width = frame.width,
+            height = frame.height,
+            integer_scale,
+            "drawing named cursor"
+        );
         let pointer_image = match maybe_image {
             Some(image) => image,
             None => {
