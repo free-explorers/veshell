@@ -5,12 +5,9 @@ import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/provider/meta_window_gaming_state.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/widget/meta_surface.dart';
-import 'package:shell/monitor/provider/monitor_arrangement.dart';
-import 'package:shell/monitor/provider/monitor_by_name.dart';
+import 'package:shell/monitor/provider/monitor_placement.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
-import 'package:shell/settings/model/types/monitor_setting.serializable.dart';
-import 'package:shell/settings/provider/state/monitor_setting_state.dart';
 import 'package:uuid/uuid.dart';
 
 class MetaSurfaceGamingOverlay extends HookConsumerWidget {
@@ -34,15 +31,9 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
     // physical mode divided by its fractional scale), exactly like the
     // arrangement canvas. Using the physical mode directly desyncs the tile on
     // a scaled monitor.
-    final monitor = ref.watch(monitorByNameProvider(monitorName));
-    final monitorSetting = ref.watch(monitorSettingStateProvider(monitorName));
-    final logicalMonitorSize = monitor == null
-        ? null
-        : monitorLogicalSize(
-            monitor,
-            monitorSetting.fractionnalScale,
-            transposed: monitorSetting.transform.isTransposed,
-          );
+    final logicalMonitorSize = ref.watch(
+      monitorLogicalSizeForNameProvider(monitorName),
+    );
 
     final zoomToGamingMode = useCallback(() {
       if (zoomRoute.value != null) return;
@@ -68,22 +59,14 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
       );
       WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
         if (!context.mounted) return;
-        final monitor = ref.read(monitorByNameProvider(monitorName));
-        final monitorSetting = ref.read(
-          monitorSettingStateProvider(monitorName),
-        );
         final geometry = ref.read(
           metaWindowStateProvider(
             metaWindowId,
           ).select((value) => value.geometry),
         );
-        final size = monitor == null
-            ? geometry?.size
-            : monitorLogicalSize(
-                monitor,
-                monitorSetting.fractionnalScale,
-                transposed: monitorSetting.transform.isTransposed,
-              );
+        final size =
+            ref.read(monitorLogicalSizeForNameProvider(monitorName)) ??
+            geometry?.size;
 
         if (geometry != null &&
             size != null &&

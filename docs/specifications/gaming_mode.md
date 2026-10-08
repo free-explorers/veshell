@@ -22,9 +22,12 @@ configure.
 
 ## Lifecycle
 
-1. The shell sets `displayMode = game` and patches `fullscreen`.
-2. The overlay patches the window geometry to the monitor's **logical** size
-   (physical mode ÷ fractional scale) and pushes a fullscreen route.
+1. The shell sets `displayMode = game`, resizes the window to the monitor's
+   **logical** size (physical mode ÷ fractional scale) and then patches
+   `fullscreen`. The resize must come first: the fullscreen configure has to
+   carry the final size, because Chromium latches the size from the configure
+   that sets fullscreen.
+2. The overlay pushes a fullscreen route.
 3. When the route's own transition completes, the shell patches
    `UpdateGameModeActivated(true)`. Activation is tied to the route, not to the
    Hero flight: a skipped transition, a missing source Hero or reduced-motion
