@@ -20,7 +20,8 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
     // Keeps the gaming-state provider alive while the tile owns the overlay,
     // so a pause survives a route push/pop and resets when the tile leaves
     // gaming mode.
-    ref.watch(metaWindowGamingStateProvider(metaWindowId));
+    final gamingStatus = ref.watch(metaWindowGamingStateProvider(metaWindowId));
+    final paused = gamingStatus == MetaWindowGamingStatus.paused;
     final heroUuid = useMemoized(() => const Uuid().v4(), []);
     // The route currently zoomed in, if any. Owning it here makes a second tap
     // during the flight a no-op instead of stacking routes.
@@ -58,9 +59,6 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
     }, [metaWindowId]);
 
     useEffect(() {
-      final metaWindowGamingState = ref.read(
-        metaWindowGamingStateProvider(metaWindowId),
-      );
       WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
         if (!context.mounted) return;
         final geometry = ref.read(
@@ -101,12 +99,9 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
                 value: MetaWindowDisplayMode.fullscreen,
               ),
             );
-        if (metaWindowGamingState == MetaWindowGamingStatus.running &&
-            !ref
-                .read(metaWindowStateProvider(metaWindowId))
-                .gameModeActivated) {
-          zoomToGamingMode();
-        }
+        // Deliberately no auto-zoom: a game stays paused (instructions visible)
+        // until the user resumes it, so merely navigating to the tile never
+        // grabs the input.
       });
       return null;
     }, [metaWindowId]);
@@ -131,46 +126,54 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
             ),
           ),
         ),
-        if (metaWindowState.gameModeActivated == false) ...[
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: zoomToGamingMode,
-              child: ColoredBox(
-                color: Colors.black38,
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: const BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.all(Radius.circular(8)),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      spacing: 16,
-                      children: [
-                        Text(
-                          context.l10n.gamingPaused,
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                        Text(
-                          context.l10n.clickToResume,
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                        Text(
-                          context.l10n.exitGamingHint,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
+        // The scrim (dim + instructions) fades with the zoom: opacity follows
+        // the paused/running state, so starting a game lifts the dim while the
+        // hero flies, and pausing brings it back.
+        Positioned.fill(
+          child: IgnorePointer(
+            ignoring: !paused,
+            child: AnimatedOpacity(
+              opacity: paused ? 1 : 0,
+              duration: const Duration(milliseconds: 300),
+              child: GestureDetector(
+                onTap: zoomToGamingMode,
+                child: ColoredBox(
+                  color: Colors.black38,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: const BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.all(Radius.circular(8)),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        spacing: 16,
+                        children: [
+                          Text(
+                            context.l10n.gamingPaused,
+                            style: const TextStyle(color: Colors.white),
                           ),
-                        ),
-                      ],
+                          Text(
+                            context.l10n.clickToResume,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          Text(
+                            context.l10n.exitGamingHint,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
           ),
-        ],
+        ),
       ],
     );
   }

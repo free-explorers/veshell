@@ -208,7 +208,7 @@
   "manyItems": "1000+ items",
   "openDirectoryHint": "Double click or Super+D to open",
   "extractToNewTile": "Extract to new tile",
-  "gamingPaused": "Gaming mode paused",
+  "gamingPaused": "Gaming mode",
   "clickToResume": "Click to resume",
   "exitGamingHint": "Press Ctrl+Esc to exit",
   "allowCapture": "Allow capture?",

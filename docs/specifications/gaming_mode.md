@@ -24,22 +24,21 @@ configure.
 
 1. The shell sets `displayMode = game`.
 2. The overlay resizes the window to the monitor's **logical** size (physical
-   mode ÷ fractional scale), then patches `fullscreen`, then pushes a
-   fullscreen route. The resize must come first: the fullscreen configure has
-   to carry the final size, because Chromium latches the size from the
-   configure that sets fullscreen.
-3. When the route's own transition completes, the shell patches
+   mode ÷ fractional scale), then patches `fullscreen`. It does **not**
+   activate: the tile stays paused, with the dim and the instructions over the
+   game, so entering or navigating to a game tile never grabs the input.
+3. Clicking resumes: the dim fades while a fullscreen route zooms the surface
+   in.
+4. When the route's own transition completes, the shell patches
    `UpdateGameModeActivated(true)`. Activation is tied to the route, not to the
    Hero flight: a skipped transition, a missing source Hero or reduced-motion
    must still grab the compositor.
-4. The compositor sets `game_mode_activated` and `meta_window_in_gaming_mode`,
+5. The compositor sets `game_mode_activated` and `meta_window_in_gaming_mode`,
    enters the client at the surface origin, and starts forwarding keyboard,
    pointer motion, buttons and axis to it.
-5. `Ctrl+Esc` clears the flag. The compositor replays a release for every key
+6. `Ctrl+Esc` clears the flag. The compositor replays a release for every key
    the client was still holding (the `Ctrl` of the chord included) before the
-   grab is dropped, then the shell pops the route and shows the paused scrim.
-6. Clicking the scrim resumes from step 2; the paused state is remembered for
-   as long as the tile owns the overlay.
+   grab is dropped, then the shell pops the route and the dim fades back in.
 
 ## Invariants
 

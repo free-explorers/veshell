@@ -8,7 +8,9 @@ enum MetaWindowGamingStatus { running, paused }
 class MetaWindowGamingState extends _$MetaWindowGamingState {
   @override
   MetaWindowGamingStatus build(String metaWindowId) {
-    return MetaWindowGamingStatus.running;
+    // A game starts paused: the tile shows the instructions instead of grabbing
+    // input, so the user resumes deliberately.
+    return MetaWindowGamingStatus.paused;
   }
 
   void set(MetaWindowGamingStatus status) {
