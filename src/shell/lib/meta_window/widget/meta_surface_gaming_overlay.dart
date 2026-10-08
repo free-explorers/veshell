@@ -141,31 +141,49 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
                   color: Colors.black38,
                   child: Center(
                     child: Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(24),
                       decoration: const BoxDecoration(
                         color: Colors.black54,
-                        borderRadius: BorderRadius.all(Radius.circular(8)),
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
                       ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        spacing: 16,
-                        children: [
-                          Text(
-                            context.l10n.gamingPaused,
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                          Text(
-                            context.l10n.clickToResume,
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                          Text(
-                            context.l10n.exitGamingHint,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 360),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              context.l10n.gamingPaused,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 32,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 12),
+                            Text(
+                              context.l10n.gamingModeDescription,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 14,
+                                height: 1.4,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              context.l10n.clickToEnter,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              context.l10n.exitGamingHint,
+                              style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -230,12 +248,24 @@ class _GamingZoomRoute extends HookConsumerWidget {
                 flightDirection,
                 fromContext,
                 toContext,
-              ) => CurrentMonitorName(
-                name: monitorName,
-                child: _SizedSurface(
-                  size: geometry?.size,
-                  child: toContext.widget,
-                ),
+              ) => Stack(
+                fit: StackFit.expand,
+                children: [
+                  CurrentMonitorName(
+                    name: monitorName,
+                    child: _SizedSurface(
+                      size: geometry?.size,
+                      child: toContext.widget,
+                    ),
+                  ),
+                  // The dim travels with the hero and fades over the transition,
+                  // so it is visible while the surface zooms (a plain sibling
+                  // scrim would sit under the route and be hidden).
+                  FadeTransition(
+                    opacity: ReverseAnimation(animation),
+                    child: const ColoredBox(color: Colors.black38),
+                  ),
+                ],
               ),
           child: MetaSurfaceWidget(
             metaWindowId: metaWindowId,
