@@ -6,7 +6,7 @@ use std::os::fd::FromRawFd;
 use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::Ordering;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use sd_notify::NotifyState;
 use serde_json::json;
@@ -18,7 +18,7 @@ use smithay::backend::drm::compositor::{DrmCompositor, FrameFlags};
 use smithay::backend::drm::exporter::gbm::GbmFramebufferExporter;
 use smithay::backend::drm::{
     CreateDrmNodeError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent, DrmEventMetadata, DrmNode,
-    NodeType,
+    NodeType, VrrSupport,
 };
 use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
 use smithay::backend::input::{
@@ -227,6 +227,37 @@ impl Backend for DrmBackend {
             allocator: std::rc::Rc::new(data.gbm_device.clone()),
             formats,
         })
+    }
+
+    fn set_output_vrr(state: &mut State<DrmBackend>, output_name: &str, enabled: bool) {
+        for gpu_data in state.backend_data.gpus.values_mut() {
+            for surface in gpu_data.surfaces.values_mut() {
+                if surface.name != output_name {
+                    continue;
+                }
+                match surface.compositor.vrr_supported(surface.connector_handle) {
+                    Ok(VrrSupport::Supported) => {
+                        if let Err(err) = surface.compositor.use_vrr(enabled) {
+                            warn!("Failed to toggle VRR on {output_name}: {err:?}");
+                        } else {
+                            info!(
+                                "VRR {} for gaming mode on {output_name}",
+                                if enabled { "enabled" } else { "disabled" }
+                            );
+                        }
+                    }
+                    // A modeset here would flicker the output while entering or
+                    // leaving the game, so leave the mode alone.
+                    Ok(support) => {
+                        debug!("VRR not toggled on {output_name}: {support:?}");
+                    }
+                    Err(err) => {
+                        warn!("Could not query VRR support on {output_name}: {err:?}");
+                    }
+                }
+                return;
+            }
+        }
     }
 }
 
@@ -1158,6 +1189,8 @@ impl State<DrmBackend> {
             global: Some(global),
             compositor,
             view_id,
+            last_queue: None,
+            last_gaming_present: None,
         };
 
         device.surfaces.insert(crtc, surface);
@@ -1356,6 +1389,24 @@ impl State<DrmBackend> {
         if let Some(gpu_data) = self.backend_data.gpus.get_mut(&node) {
             if let Some(surface) = gpu_data.surfaces.get_mut(&crtc) {
                 let _ = surface.compositor.frame_submitted();
+                // Instrumentation: a completed flip is a presented frame. When
+                // it carried a game surface, report how long it took to present
+                // and how far apart gaming frames are (the achieved pace). A
+                // non-gaming frame ends the current gaming streak so the next
+                // one starts its interval count fresh.
+                match surface.last_queue.take() {
+                    Some((queued_at, true)) => {
+                        let now = Instant::now();
+                        let since_previous = surface.last_gaming_present.replace(now);
+                        debug!(
+                            "game present: {:?} after queue, {:?} since previous",
+                            now.saturating_duration_since(queued_at),
+                            since_previous.map(|previous| now.saturating_duration_since(previous)),
+                        );
+                    }
+                    Some((_, false)) => surface.last_gaming_present = None,
+                    None => {}
+                }
             }
         }
 
@@ -1470,6 +1521,7 @@ impl State<DrmBackend> {
         // before the renderer takes a mutable borrow of the backend.
         let output_name = output.name();
         let game_surfaces = self.game_mode_surfaces_for_output(&output_name);
+        let had_game_surfaces = !game_surfaces.is_empty();
 
         // A mirroring output presents the source monitor's Flutter frame,
         // scaled to its own geometry; otherwise it presents its own view.
@@ -1574,6 +1626,10 @@ impl State<DrmBackend> {
                     warn!("error queueing frame: {err}");
                     return;
                 }
+                // Instrumentation: remember when this frame was queued and
+                // whether a game surface rode it, so `on_vblank` can report the
+                // presentation latency of gaming frames.
+                surface.last_queue = Some((Instant::now(), had_game_surfaces));
             }
             Err(err) => {
                 eprintln!("Failed to render frame: {}", err);
@@ -1658,6 +1714,13 @@ struct SurfaceData {
     global: Option<GlobalId>,
     compositor: GbmDrmCompositor,
     view_id: i64,
+    /// Instrumentation: the last frame queued on this CRTC and whether a game
+    /// surface rode it. Set in `render_surface`, consumed by `on_vblank` to
+    /// report presentation latency for gaming frames.
+    last_queue: Option<(Instant, bool)>,
+    /// Instrumentation: when the previous gaming frame was presented, to report
+    /// the achieved pace.
+    last_gaming_present: Option<Instant>,
 }
 
 pub type GbmDrmCompositor = DrmCompositor<

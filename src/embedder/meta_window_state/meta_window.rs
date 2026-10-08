@@ -560,6 +560,11 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     // Flutter must not keep believing keys it was handed are
                     // held: from here they go to the client.
                     crate::keyboard::release_flutter_keys(self);
+                    // Let the game pace the panel itself while it owns the
+                    // output; disabled again on the way out.
+                    if let Some(name) = current_output.as_deref() {
+                        BackendData::set_output_vrr(self, name, true);
+                    }
                     if let Some(surface) = self.surfaces.get(&surface_id).cloned() {
                         if let Some(x11_surface) =
                             self.x11_surface_per_wl_surface.get(&surface).cloned()
@@ -591,13 +596,22 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         self.refresh_pointer_focus();
                     }
                 } else {
-                    if self.meta_window_state.meta_window_in_gaming_mode == Some(id) {
+                    if self.meta_window_state.meta_window_in_gaming_mode.as_ref() == Some(&id) {
                         self.meta_window_state.meta_window_in_gaming_mode = None;
                     }
                     // Any keys the client was handed are released by the
                     // input path that disables the mode; this is the
                     // backstop for a deactivation that bypassed it.
                     self.game_mode_forwarded_keys.clear();
+                    // Give the output back to the compositor's fixed cadence.
+                    if let Some(name) = self
+                        .meta_window_state
+                        .meta_windows
+                        .get(&id)
+                        .and_then(|window| window.current_output.clone())
+                    {
+                        BackendData::set_output_vrr(self, &name, false);
+                    }
                 }
                 // Entering/leaving the native takeover changes what is drawn:
                 // composite it now (rendering is on demand).

@@ -80,17 +80,32 @@ the client by Smithay (`KeyboardHandle::input_forward`, `PointerHandle`) and
 never pass through Flutter or the shell widget tree, so shell event handling
 cannot add a frame between the device and the game.
 
-**Pacing.** Flutter's vsync batons are delivered by a timer (`vsync_tick`), not
-gated on a page flip: a static shell, or a static game, cannot stall the pump.
-The timer is not vblank-aligned (Smithay only surfaces DRM vblanks for page
-flips), so baton timing can jitter by a fraction of a frame.
+**Pacing and adaptive sync.** Flutter's vsync batons are delivered by a timer
+(`vsync_tick`), not gated on a page flip: a static shell, or a static game,
+cannot stall the pump. The timer is not vblank-aligned (Smithay only surfaces
+DRM vblanks for page flips), so baton timing can jitter by a fraction of a
+frame.
+
+The game is not paced by that timer. On-demand rendering presents its frame when
+the client commits, and while a window is in gaming mode the DRM backend enables
+adaptive sync (VRR) on that output when the connector supports it without a
+modeset (`Backend::set_output_vrr`). The panel then refreshes when the game
+presents instead of at a fixed cadence, and holds the last frame while the game
+is idle. A connector that needs a modeset, or does not support VRR, is left at
+the fixed cadence, so entering or leaving the mode never flickers the output.
+
+**Instrumentation.** Every presented frame that carried a game surface logs, at
+`debug`, the time between queueing and presentation and the interval since the
+previous gaming frame (the achieved pace). That measures the compositor's own
+contribution to latency and makes pacing regressions visible without a profiler.
 
 **Trade-offs and non-goals.**
 
 - The client buffer is still imported into a Flutter external texture even while
   active, but it is neither signalled nor drawn, so the cost is the import, not
   a second rasterization.
-- There is no per-app frame pacing, no VRR/adaptive-sync handshake and no
-  latency instrumentation; the mode trades some complexity for responsiveness.
+- Adaptive sync is toggled, but the compositor does not implement its own
+  frame-pacing loop (for example a synthetic cadence for a 30 fps game); the
+  client's own presentation and the Wayland frame callbacks drive it.
 - Entering and leaving the mode is not a hot path: it costs a resize configure,
   a route transition and, on leave, synthetic key releases.
