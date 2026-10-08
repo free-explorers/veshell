@@ -9,6 +9,7 @@ import 'package:shell/meta_window/widget/meta_surface.dart';
 import 'package:shell/monitor/provider/monitor_placement.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:uuid/uuid.dart';
 
 class MetaSurfaceGamingOverlay extends HookConsumerWidget {
@@ -240,19 +241,33 @@ class GamingActivationTrigger extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final animation = ModalRoute.of(context)?.animation;
+    final route = ModalRoute.of(context);
+    final animation = route?.animation;
     final activated = useRef(false);
     useEffect(() {
-      if (animation == null) return null;
+      if (route == null || animation == null) return null;
 
       void onStatus(AnimationStatus status) {
+        geometryLog.info(
+          'gaming activation status=$status offstage=${route.offstage} '
+          'activated=${activated.value}',
+        );
         if (status != AnimationStatus.completed || activated.value) return;
+        // Flutter's hero measurement briefly takes the route offstage, which
+        // swaps its animation for `kAlwaysCompleteAnimation` for one frame.
+        // That is not the end of the transition; activating there would grab
+        // the input and cover the still-running hero flight with the native
+        // render. Wait for the real completion.
+        if (route.offstage) return;
         activated.value = true;
         // flutter_hooks runs `useEffect` during build and `addStatusListener`
         // can notify synchronously, so writing the provider here would be a
         // "modify a provider while building" error. Defer it past the frame.
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!context.mounted) return;
+          geometryLog.info(
+            'gaming activation: patching true for $metaWindowId',
+          );
           ref
               .read(metaWindowStateProvider(metaWindowId).notifier)
               .patch(UpdateGameModeActivated(id: metaWindowId, value: true));
@@ -263,11 +278,11 @@ class GamingActivationTrigger extends HookConsumerWidget {
       // `addStatusListener` does not replay a status already reached (for
       // example when animations are disabled and the route settles
       // instantly).
-      if (animation.status == AnimationStatus.completed) {
+      if (animation.status == AnimationStatus.completed && !route.offstage) {
         onStatus(AnimationStatus.completed);
       }
       return () => animation.removeStatusListener(onStatus);
-    }, [animation]);
+    }, [animation, route]);
     return child;
   }
 }
