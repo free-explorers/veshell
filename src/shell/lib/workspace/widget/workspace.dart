@@ -33,6 +33,22 @@ class WorkspaceWidget extends HookConsumerWidget {
       debugLabel: 'WorkspaceScope',
     );
 
+    // `FocusScope.autofocus` only fires once per element lifetime (its flag is
+    // reset only when the widget is deactivated). Reversing the workspace
+    // hotkey mid-animation returns to a page that is still alive, so autofocus
+    // no-ops while the workspace we leave loses focus, parking focus on the
+    // root scope where the screen shortcuts no longer fire. Request focus
+    // explicitly every time this workspace becomes selected instead.
+    useEffect(
+      () {
+        if (isSelected) {
+          workspaceFocusScopeNode.requestFocus();
+        }
+        return null;
+      },
+      [isSelected],
+    );
+
     final appLauncher = PersistentApplicationSelector(
       isSelected: workspaceState.selectedIndex ==
           workspaceState.tileableWindowList.length,
@@ -125,6 +141,16 @@ class WorkspaceWidget extends HookConsumerWidget {
           },
           autofocus: isSelected,
           canRequestFocus: isSelected,
+          // Only the selected workspace may take focus; an unselected one must
+          // not steal it (for instance while it is animating away).
+          //
+          // It is set explicitly because a `FocusScopeNode` reports
+          // `descendantsAreFocusable` as `canRequestFocus && _descendants...`,
+          // and `Focus` writes that getter straight back into the node.
+          // Leaving it unset would latch it to false once the workspace is
+          // deselected, never restoring it and making the launcher search and
+          // window placeholders unreachable.
+          descendantsAreFocusable: isSelected,
           // A workspace-local overlay hosts the tileable notification popups so
           // they are clipped and scrolled by the workspace instead of floating
           // above the whole shell from the root overlay.
