@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:shell/window/model/matching_info.serializable.dart';
 import 'package:shell/window/model/window_base.dart';
 
@@ -13,6 +15,37 @@ int matchingCost<T>(T desired, T found, int mismatchCost, int skipCost) {
 }
 
 const INF_COST = 100000;
+
+/// Tolerance, in logical pixels, when comparing a window's geometry to a
+/// monitor's logical size to recognize a screen-filling window. Clients round
+/// the committed size, so an exact comparison would be brittle.
+const outputSizeTolerance = 1.0;
+
+/// Whether [windowSize] matches any of [monitorSizes] within [tolerance].
+///
+/// Recognizes a window sized to fill an output from its geometry — the size
+/// half of the fullscreen detection, used when the compositor's fullscreen
+/// hint is not enough on its own. A null, empty or non-positive window size
+/// never matches, and monitors with a non-positive logical size are ignored.
+bool matchesOutputSize(
+  Size? windowSize,
+  Iterable<Size> monitorSizes, {
+  double tolerance = outputSizeTolerance,
+}) {
+  if (windowSize == null || windowSize.width <= 0 || windowSize.height <= 0) {
+    return false;
+  }
+  for (final monitorSize in monitorSizes) {
+    if (monitorSize.width <= 0 || monitorSize.height <= 0) {
+      continue;
+    }
+    if ((monitorSize.width - windowSize.width).abs() <= tolerance &&
+        (monitorSize.height - windowSize.height).abs() <= tolerance) {
+      return true;
+    }
+  }
+  return false;
+}
 
 /// Maximum cost for a title mismatch.
 ///

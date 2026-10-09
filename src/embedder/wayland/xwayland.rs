@@ -767,14 +767,37 @@ pub mod xwayland {
 
         fn fullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
             let geometry = window.geometry();
+            let meta_window_id = window.wl_surface().and_then(|wl_surface| {
+                self.get_meta_window(get_surface_id(&wl_surface))
+                    .map(|meta_window| meta_window.id)
+            });
 
             info!("is_fullscreen {:?}", window.is_fullscreen());
             window.set_fullscreen(true).unwrap();
             window.configure(geometry).unwrap();
+
+            if let Some(id) = meta_window_id {
+                self.patch_meta_window(
+                    MetaWindowPatch::UpdateIsFullscreen { id, value: true },
+                    true,
+                );
+            }
         }
         fn unfullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
+            let meta_window_id = window.wl_surface().and_then(|wl_surface| {
+                self.get_meta_window(get_surface_id(&wl_surface))
+                    .map(|meta_window| meta_window.id)
+            });
+
             info!("unfullscreen_request");
             window.set_fullscreen(false).unwrap();
+
+            if let Some(id) = meta_window_id {
+                self.patch_meta_window(
+                    MetaWindowPatch::UpdateIsFullscreen { id, value: false },
+                    true,
+                );
+            }
         }
         fn maximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
             info!("maximize_request");

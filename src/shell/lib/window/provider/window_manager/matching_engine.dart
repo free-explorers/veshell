@@ -7,6 +7,7 @@ import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/meta_window/provider/process_info_state.dart';
+import 'package:shell/monitor/provider/monitor_placement.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/window/model/matching_decision.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
@@ -19,6 +20,7 @@ import 'package:shell/window/provider/window_manager/matching_decision_recorder.
 import 'package:shell/window/provider/window_manager/matching_utils.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/window/provider/window_manager/windows_available_for_matching.dart';
+import 'package:shell/window/provider/window_navigation.dart';
 
 part 'matching_engine.g.dart';
 
@@ -198,32 +200,8 @@ class MatchingEngine extends _$MatchingEngine {
       return (null, null);
     }
     final candidates = candidateWindowSet.toList();
-    final costs = [
-      for (final windowId in candidates)
-        windowMatchingCost(
-          metaWindowMatchInfo,
-          _getWindowMatchingInfo(windowId),
-          _getWindowState(windowId),
-        ),
-    ];
-
-    // Pick the least cost. The burst mapping order is not stable, so ties are
-    // broken on a fixed key instead of relying on iteration order: two
-    // candidates only tie when every signal is identical, and the choice must
-    // still be reproducible.
-    var bestIndex = 0;
-    for (var i = 1; i < candidates.length; i++) {
-      final betterCost = costs[i].total < costs[bestIndex].total;
-      final tiedButStable =
-          costs[i].total == costs[bestIndex].total &&
-          _stableWindowKey(candidates[i]).compareTo(
-                _stableWindowKey(candidates[bestIndex]),
-              ) <
-              0;
-      if (betterCost || tiedButStable) {
-        bestIndex = i;
-      }
-    }
+    final costs = _matchingCosts(metaWindowMatchInfo, candidates);
+    final bestIndex = _bestMatchingIndex(candidates, costs);
 
     final bestCost = costs[bestIndex].total;
     recordMatchingDecision(
@@ -262,6 +240,43 @@ class MatchingEngine extends _$MatchingEngine {
         DialogWindowId() => 'd:${windowId.uuid}',
       };
 
+  /// [windowMatchingCost] of each candidate against the same native window, in
+  /// order. Shared by every matcher so the cost model has a single call site.
+  List<MatchingCost> _matchingCosts(
+    MatchingInfo metaWindowMatchInfo,
+    List<WindowId> candidates,
+  ) => [
+        for (final windowId in candidates)
+          windowMatchingCost(
+            metaWindowMatchInfo,
+            _getWindowMatchingInfo(windowId),
+            _getWindowState(windowId),
+          ),
+      ];
+
+  /// Index of the least-cost candidate in [candidates] given [costs].
+  ///
+  /// The burst mapping order is not stable, so exact ties are broken on the
+  /// fixed [_stableWindowKey] instead of relying on iteration order: two
+  /// candidates only tie when every signal is identical, and the choice must
+  /// still be reproducible. The tie-break never overrides a better match.
+  int _bestMatchingIndex(List<WindowId> candidates, List<MatchingCost> costs) {
+    var bestIndex = 0;
+    for (var i = 1; i < candidates.length; i++) {
+      final betterCost = costs[i].total < costs[bestIndex].total;
+      final tiedButStable =
+          costs[i].total == costs[bestIndex].total &&
+          _stableWindowKey(candidates[i]).compareTo(
+                _stableWindowKey(candidates[bestIndex]),
+              ) <
+              0;
+      if (betterCost || tiedButStable) {
+        bestIndex = i;
+      }
+    }
+    return bestIndex;
+  }
+
   /// Best sibling for [metaWindowId] by **ordinary** app-id matching only.
   ///
   /// Deliberately excludes provenance and process-sibling recovery, which are
@@ -286,27 +301,8 @@ class MatchingEngine extends _$MatchingEngine {
     if (candidates.isEmpty) {
       return (null, null);
     }
-    final costs = [
-      for (final windowId in candidates)
-        windowMatchingCost(
-          metaWindowMatchInfo,
-          _getWindowMatchingInfo(windowId),
-          _getWindowState(windowId),
-        ),
-    ];
-    var bestIndex = 0;
-    for (var i = 1; i < candidates.length; i++) {
-      final better = costs[i].total < costs[bestIndex].total;
-      final tiedButStable =
-          costs[i].total == costs[bestIndex].total &&
-          _stableWindowKey(candidates[i]).compareTo(
-                _stableWindowKey(candidates[bestIndex]),
-              ) <
-              0;
-      if (better || tiedButStable) {
-        bestIndex = i;
-      }
-    }
+    final costs = _matchingCosts(metaWindowMatchInfo, candidates);
+    final bestIndex = _bestMatchingIndex(candidates, costs);
     return (candidates[bestIndex], costs[bestIndex]);
   }
 
@@ -330,6 +326,100 @@ class MatchingEngine extends _$MatchingEngine {
       }
     }
     return null;
+  }
+
+  /// Best **empty** persistent placeholder for [metaWindowId] by ordinary
+  /// identity cost (title, class, startup id), or `null` when none matches.
+  ///
+  /// Used by extract-to-tile: a window pulled out of its owner tile lands on an
+  /// existing empty placeholder of the same application when one matches,
+  /// instead of always spawning a new tile. Occupied tiles are ignored so the
+  /// extraction does not simply re-absorb the window into another tile's
+  /// displayed set, and [excludedWindowIds] removes the tile it is extracted
+  /// from.
+  PersistentWindowId? findBestEmptyPlaceholderFor(
+    MetaWindowId metaWindowId, {
+    List<WindowId> excludedWindowIds = const [],
+  }) {
+    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+    final metaWindowMatchInfo = MatchingInfo.fromMetaWindow(metaWindow);
+    final candidates = ref
+        .read(windowsAvailableForMatchingProvider)
+        .whereType<PersistentWindowId>()
+        .where((windowId) {
+          if (excludedWindowIds.contains(windowId)) return false;
+          final state = ref.read(persistentWindowStateProvider(windowId));
+          if (state.metaWindowId != null) return false;
+          return state.properties.appId == metaWindowMatchInfo.appId;
+        })
+        .toList();
+    if (candidates.isEmpty) {
+      return null;
+    }
+    final costs = _matchingCosts(metaWindowMatchInfo, candidates);
+    return candidates[_bestMatchingIndex(candidates, costs)];
+  }
+
+  /// Extracts a native window into a tile.
+  ///
+  /// Prefers an existing empty placeholder of the same application (see
+  /// [findBestEmptyPlaceholderFor]); when none matches, a new persistent tile
+  /// is created. [excludedWindowIds] is forwarded so the caller can keep the
+  /// window from landing back on the tile it is extracted from. The destination
+  /// tile is then brought into view, so an extraction the user triggered (or an
+  /// automatic fullscreen-like one) reveals the window it just pulled out.
+  Future<WindowId> extractMetaWindowToTile(
+    MetaWindowId metaWindowId, {
+    List<WindowId> excludedWindowIds = const [],
+  }) async {
+    final placeholder = findBestEmptyPlaceholderFor(
+      metaWindowId,
+      excludedWindowIds: excludedWindowIds,
+    );
+    final WindowId destination;
+    if (placeholder != null) {
+      matchingLog.info(
+        'Extracting $metaWindowId onto existing empty placeholder $placeholder',
+      );
+      ref
+          .read(persistentWindowStateProvider(placeholder).notifier)
+          .addMetaWindow(metaWindowId);
+      destination = placeholder;
+    } else {
+      destination = await ref
+          .read(windowManagerProvider.notifier)
+          .createPersistentWindowForMetaWindow(metaWindowId: metaWindowId);
+    }
+    // The window now owns its tile: select it, its workspace and its screen and
+    // activate the native surface, so the extraction is not silent.
+    bringWindowIntoView(ref, destination);
+    return destination;
+  }
+
+  /// Whether [metaWindowId] is a fullscreen-like surface.
+  ///
+  /// True when the compositor reports the toplevel fullscreen (`isFullscreen`)
+  /// — a protocol-fullscreen window need not have a geometry equal to its
+  /// output — or when the window's geometry matches a connected monitor's
+  /// logical size (physical mode divided by its fractional scale). Either way
+  /// the window is a top-level application surface, not a dialog, even when a
+  /// relation ties it to an owner — a game launched from a launcher, a
+  /// fullscreen player opened from a browser.
+  ///
+  /// [MetaWindow.currentOutput] cannot be used here: the compositor only sets
+  /// it once the window renders in a tile, i.e. after routing. Every connected
+  /// monitor is tried instead.
+  bool isFullscreenLike(MetaWindowId metaWindowId) {
+    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+    if (metaWindow.isFullscreen) {
+      return true;
+    }
+    return matchesOutputSize(
+      metaWindow.geometry?.size,
+      ref
+          .read(monitorPlacementsProvider)
+          .map((placement) => placement.logicalSize),
+    );
   }
 
   /// Resolves the top-level tile that ultimately owns [windowId].

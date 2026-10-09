@@ -30,6 +30,7 @@ sealed class MetaWindowCreatedMessage
     String? startupId,
     @Default(false) bool isFixedSized,
     @Default(false) bool isModal,
+    @Default(false) bool isFullscreen,
     @RectConverter() Rect? geometry,
   }) = _MetaWindowCreatedMessage;
 
