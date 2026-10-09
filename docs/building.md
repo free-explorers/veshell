@@ -20,9 +20,12 @@ For direct code generation, after resolving dependencies:
 
 ```sh
 cd src/shell
-../../.flutter_sdk/bin/flutter pub get
-../../.flutter_sdk/bin/dart run build_runner build
+FLUTTER_SUPPRESS_ANALYTICS=true ../../.flutter_sdk/bin/flutter pub get
+../../.flutter_sdk/bin/dart --suppress-analytics run build_runner build
 ```
+
+The suppression flags keep Flutter/Dart from reporting usage analytics; the
+automatic pipeline applies the same settings. See [privacy](privacy.md).
 
 With the pinned generator set, codegen needs no source patching. Do not run
 pub-get/codegen concurrently in the same shell directory. After forcibly
