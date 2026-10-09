@@ -297,11 +297,15 @@ never candidates: extraction adds a displayed surface, it does not merge into
 another tile's window set. As everywhere else, placeholders stay user-created —
 extraction only ever creates the single new tile it needs.
 
-The destination tile is then brought into view (`bringWindowIntoView`): its
-screen is focused, the overview is hidden, its workspace and tile are selected
-and the native window is activated. An extraction is therefore never silent —
-the window the user pulled out (or that was extracted automatically) is revealed
-wherever its tile lives.
+A newly created tile takes a display mode from the extraction: the automatic
+fullscreen-like path defaults it to `game`, so a game or fullscreen player
+extracted on its own starts in the mode that hands it the output. An existing
+placeholder keeps its own persisted display mode, and a manual extraction uses
+the normal default. The destination tile is then brought into view
+(`bringWindowIntoView`): its screen is focused, the overview is hidden, its
+workspace and tile are selected and the native window is activated. An
+extraction is therefore never silent — the window the user pulled out (or that
+was extracted automatically) is revealed wherever its tile lives.
 
 ### Tie-break
 

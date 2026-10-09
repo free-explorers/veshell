@@ -11,6 +11,7 @@ import 'package:shell/monitor/provider/monitor_placement.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/window/model/matching_decision.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
+import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_base.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
@@ -364,13 +365,16 @@ class MatchingEngine extends _$MatchingEngine {
   ///
   /// Prefers an existing empty placeholder of the same application (see
   /// [findBestEmptyPlaceholderFor]); when none matches, a new persistent tile
-  /// is created. [excludedWindowIds] is forwarded so the caller can keep the
-  /// window from landing back on the tile it is extracted from. The destination
-  /// tile is then brought into view, so an extraction the user triggered (or an
+  /// is created with [newTileDisplayMode] (defaulting to the normal mode). An
+  /// existing placeholder keeps its own persisted display mode.
+  /// [excludedWindowIds] is forwarded so the caller can keep the window from
+  /// landing back on the tile it is extracted from. The destination tile is
+  /// then brought into view, so an extraction the user triggered (or an
   /// automatic fullscreen-like one) reveals the window it just pulled out.
   Future<WindowId> extractMetaWindowToTile(
     MetaWindowId metaWindowId, {
     List<WindowId> excludedWindowIds = const [],
+    DisplayMode? newTileDisplayMode,
   }) async {
     final placeholder = findBestEmptyPlaceholderFor(
       metaWindowId,
@@ -388,7 +392,10 @@ class MatchingEngine extends _$MatchingEngine {
     } else {
       destination = await ref
           .read(windowManagerProvider.notifier)
-          .createPersistentWindowForMetaWindow(metaWindowId: metaWindowId);
+          .createPersistentWindowForMetaWindow(
+            metaWindowId: metaWindowId,
+            displayMode: newTileDisplayMode,
+          );
     }
     // The window now owns its tile: select it, its workspace and its screen and
     // activate the native surface, so the extraction is not silent.
