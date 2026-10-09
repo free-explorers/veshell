@@ -1,6 +1,6 @@
 [package]
 name = "veshell"
-version = "0.1.0"
+version = "0.1.1"
 description = "An innovative not-desktop environment for Linux made with modern technologies like Flutter and Rust."
 authors = ["Adrien Peslerbe <adrien@pesler.be>"]
 license = "GPL-3.0-or-later"
