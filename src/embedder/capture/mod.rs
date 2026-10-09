@@ -34,7 +34,9 @@ use smithay::wayland::selection::SelectionTarget;
 use tracing::{debug, info, warn};
 
 use self::selection::{NATIVE_SCREENSHOT_MIME, PNG_MIME};
-use crate::backend::render::get_frame_elements_from_dmabuf;
+use crate::backend::render::{
+    get_cursor_elements, get_frame_elements_from_dmabuf, CaptureCursor, VeshellRenderElements,
+};
 use crate::flutter_engine::view::OutputViewIdWrapper;
 use crate::meta_window_state::meta_window::MetaWindow;
 use crate::{Backend, State};
@@ -59,9 +61,11 @@ pub struct CaptureSnapshot {
 /// the user composes against stays owned by the capture, never by a
 /// swapchain buffer that could be recycled.
 ///
-/// The cursor is not part of the captured image: while the session runs a
-/// native crosshair is drawn instead (see the render side) and the snapshot
-/// renders the frozen frame without any cursor.
+/// The cursor is not part of the screenshot's captured image: while the
+/// session runs a native crosshair is drawn instead (see the render side)
+/// and the snapshot renders the frozen frame without any cursor. A
+/// recording's snapshot does include the cursor, so the video shows the
+/// pointer.
 ///
 /// The selection is drawn natively over the output the pointer was on when
 /// the hotkey fired; the drag is confined to [output_geometry].
@@ -135,7 +139,7 @@ pub fn begin_capture_session<BackendData: Backend + 'static>(
         return;
     };
 
-    let snapshot = match take_output_snapshot(state, &output) {
+    let snapshot = match take_output_snapshot(state, &output, record) {
         Ok(snapshot) => snapshot,
         Err(message) => {
             warn!("Unable to start a screenshot session: {message}");
@@ -400,12 +404,15 @@ struct CapturedOutput {
 /// Grabs the output's current desktop pixels for a shared stream: the
 /// full-frame path mirrors the screenshot snapshot pipeline (capture
 /// specification section 6 allows full-frame copies as the initial
-/// delivery implementation).
+/// delivery implementation). `include_cursor` is the requesting session's
+/// portal cursor mode: `EMBEDDED` casts get the pointer, `HIDDEN` ones do
+/// not.
 pub fn capture_output_pixels<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     output: &Output,
+    include_cursor: bool,
 ) -> Result<CaptureSnapshot, String> {
-    take_output_snapshot(state, output)
+    take_output_snapshot(state, output, include_cursor)
 }
 
 // Element set for the isolated window capture render (a macro invocation: no rustdoc).
@@ -626,7 +633,7 @@ pub fn capture_full_output<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     output: &Output,
 ) -> Result<(Size<i32, Physical>, Vec<u8>), String> {
-    let snapshot = take_output_snapshot(state, output)?;
+    let snapshot = take_output_snapshot(state, output, false)?;
     let geometry = state
         .space
         .output_geometry(output)
@@ -662,7 +669,7 @@ pub fn take_portal_pending_snapshot<BackendData: Backend + 'static>(
     output: &Output,
     pointer: Point<f64, Logical>,
 ) -> Result<PendingPortalPixels, String> {
-    let snapshot = take_output_snapshot(state, output)?;
+    let snapshot = take_output_snapshot(state, output, false)?;
     let geometry = state
         .space
         .output_geometry(output)
@@ -715,7 +722,7 @@ pub fn sample_output_pixel<BackendData: Backend + 'static>(
     output: &Output,
     location: Point<f64, Logical>,
 ) -> Result<(f64, f64, f64), String> {
-    let snapshot = take_output_snapshot(state, output)?;
+    let snapshot = take_output_snapshot(state, output, false)?;
     let geometry = state
         .space
         .output_geometry(output)
@@ -750,9 +757,16 @@ pub fn encode_portal_png(size: Size<i32, Physical>, pixels: &[u8]) -> Result<Pat
     Ok(path)
 }
 
+/// Renders the output's current desktop into capture-owned CPU storage.
+///
+/// `include_cursor` composites the pointer on top: local recordings want it
+/// so the video shows the cursor, while screenshots and portal captures
+/// stay pointer-free. The rendered result is an owned `Vec<u8>` copy, never
+/// a swapchain buffer that could be recycled under it.
 fn take_output_snapshot<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     output: &Output,
+    include_cursor: bool,
 ) -> Result<CaptureSnapshot, String> {
     let view_id = output
         .user_data()
@@ -767,6 +781,14 @@ fn take_output_snapshot<BackendData: Backend + 'static>(
         .to_f64();
     let output_name = output.name();
     let game_surface_list = state.game_mode_surfaces_for_output(&output_name);
+    let cursor = include_cursor.then(|| CaptureCursor {
+        cursor_image_status: &state.cursor_image_status,
+        cursor_state: &state.cursor_state,
+        location: state.pointer.current_location(),
+        is_surface_under_pointer: state.surface_id_under_cursor.is_some(),
+        gaming_mode: !game_surface_list.is_empty(),
+        now: state.clock.now(),
+    });
 
     let (size, pixels) = state
         .backend_data
@@ -778,6 +800,7 @@ fn take_output_snapshot<BackendData: Backend + 'static>(
                 geometry,
                 BackendData::FLIP_FLUTTER_TEXTURE,
                 game_surface_list.iter().collect(),
+                cursor,
             )?;
             orient_readback(output, bytes)
         })
@@ -791,10 +814,11 @@ fn take_output_snapshot<BackendData: Backend + 'static>(
 }
 
 /// Renders the output's live desktop (Flutter texture plus game-mode
-/// surfaces; no cursor, no shell overlays) directly into a capture-owned
-/// dmabuf the PipeWire producer allocated. The GPU writes the shared
-/// buffer, which is the whole point of the dmabuf transport: no CPU
-/// readback and no copy into shared memory.
+/// surfaces, plus the pointer when the session asked for `EMBEDDED`;
+/// shell overlays are never drawn) directly into a capture-owned dmabuf
+/// the PipeWire producer allocated. The GPU writes the shared buffer,
+/// which is the whole point of the dmabuf transport: no CPU readback and
+/// no copy into shared memory.
 ///
 /// Returns the render fence so the caller can hold the buffer back from the
 /// consumer until the GPU has actually finished writing it.
@@ -805,6 +829,7 @@ pub fn render_output_into_dmabuf<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
     output: &Output,
     dmabuf: &mut Dmabuf,
+    include_cursor: bool,
 ) -> Result<SyncPoint, String> {
     let view_id = output
         .user_data()
@@ -819,6 +844,14 @@ pub fn render_output_into_dmabuf<BackendData: Backend + 'static>(
         .to_f64();
     let output_name = output.name();
     let game_surface_list = state.game_mode_surfaces_for_output(&output_name);
+    let cursor = include_cursor.then(|| CaptureCursor {
+        cursor_image_status: &state.cursor_image_status,
+        cursor_state: &state.cursor_state,
+        location: state.pointer.current_location(),
+        is_surface_under_pointer: state.surface_id_under_cursor.is_some(),
+        gaming_mode: !game_surface_list.is_empty(),
+        now: state.clock.now(),
+    });
 
     state
         .backend_data
@@ -831,9 +864,47 @@ pub fn render_output_into_dmabuf<BackendData: Backend + 'static>(
                 BackendData::FLIP_FLUTTER_TEXTURE,
                 game_surface_list.iter().collect(),
                 dmabuf,
+                cursor,
             )
         })
         .ok_or_else(|| "No renderer is available to render the output".to_string())?
+}
+
+/// The element stack for one capture render: the pointer when the caller
+/// asked for it, then the desktop frame (Flutter texture plus game-mode
+/// surfaces) beneath it. Shell overlays are never included.
+fn capture_frame_elements(
+    renderer: &mut GlesRenderer,
+    output: &Output,
+    flutter_dmabuf: &Dmabuf,
+    output_geometry: Rectangle<f64, Logical>,
+    flip_flutter_texture: bool,
+    game_surface_list: Vec<&WlSurface>,
+    cursor: Option<CaptureCursor<'_>>,
+) -> Vec<VeshellRenderElements<GlesRenderer>> {
+    let mut elements: Vec<VeshellRenderElements<GlesRenderer>> = Vec::new();
+    if let Some(cursor) = cursor {
+        elements.extend(get_cursor_elements(
+            renderer,
+            output_geometry,
+            output.current_scale(),
+            cursor.now,
+            cursor.cursor_image_status,
+            cursor.cursor_state,
+            cursor.location,
+            cursor.is_surface_under_pointer,
+            cursor.gaming_mode,
+        ));
+    }
+    elements.extend(get_frame_elements_from_dmabuf(
+        renderer,
+        output,
+        flutter_dmabuf,
+        output_geometry,
+        flip_flutter_texture,
+        game_surface_list,
+    ));
+    elements
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -845,6 +916,7 @@ fn render_output_into_target(
     flip_flutter_texture: bool,
     game_surface_list: Vec<&WlSurface>,
     target_dmabuf: &mut Dmabuf,
+    cursor: Option<CaptureCursor<'_>>,
 ) -> Result<SyncPoint, String> {
     let mode = output
         .current_mode()
@@ -856,13 +928,14 @@ fn render_output_into_target(
             target_dmabuf.size()
         ));
     }
-    let elements = get_frame_elements_from_dmabuf(
+    let elements = capture_frame_elements(
         renderer,
         output,
         flutter_dmabuf,
         output_geometry,
         flip_flutter_texture,
         game_surface_list,
+        cursor,
     );
     let mut target = renderer
         .bind(target_dmabuf)
@@ -1160,6 +1233,7 @@ fn render_output_to_memory(
     output_geometry: Rectangle<f64, Logical>,
     flip_flutter_texture: bool,
     game_surface_list: Vec<&smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
+    cursor: Option<CaptureCursor<'_>>,
 ) -> Result<Vec<u8>, String> {
     let mode = output
         .current_mode()
@@ -1171,16 +1245,18 @@ fn render_output_to_memory(
     let mut target = renderer
         .bind(&mut target_buffer)
         .map_err(|error| format!("Unable to bind capture buffer: {error}"))?;
-    // The cursor is deliberately not rendered: a screenshot should not
-    // contain the pointer. Game-mode surfaces stay, they are part of the
-    // desktop the user sees.
-    let elements = get_frame_elements_from_dmabuf(
+    // Local recordings and embedded-cursor screen casts composite the
+    // pointer on top; screenshots and HIDDEN captures pass no cursor so the
+    // pointer never reaches the pixels. Game-mode surfaces always stay,
+    // they are part of the desktop the user sees.
+    let elements = capture_frame_elements(
         renderer,
         output,
         flutter_dmabuf,
         output_geometry,
         flip_flutter_texture,
         game_surface_list,
+        cursor,
     );
     let mut damage_tracker = OutputDamageTracker::from_output(output);
     damage_tracker
@@ -1625,7 +1701,7 @@ fn deliver_recording_frame<BackendData: Backend + 'static>(
         return;
     }
 
-    let snapshot = match take_output_snapshot(state, &output) {
+    let snapshot = match take_output_snapshot(state, &output, true) {
         Ok(snapshot) => snapshot,
         Err(message) => {
             debug!("Recording frame skipped: {message}");
