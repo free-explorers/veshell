@@ -97,11 +97,15 @@ the client by Smithay (`KeyboardHandle::input_forward`, `PointerHandle`) and
 never pass through Flutter or the shell widget tree, so shell event handling
 cannot add a frame between the device and the game.
 
-**Pacing and adaptive sync.** Flutter's vsync batons are delivered by a timer
-(`vsync_tick`), not gated on a page flip: a static shell, or a static game,
-cannot stall the pump. The timer is not vblank-aligned (Smithay only surfaces
-DRM vblanks for page flips), so baton timing can jitter by a fraction of a
-frame.
+**Pacing and adaptive sync.** Flutter's vsync batons and the Wayland surface
+frame callbacks are delivered from the pacing output's page-flip vblank, so
+while the shell is presenting they stay aligned with the panel. A page flip only
+happens when something is damaged, though, and a static shell has no vblank to
+deliver from, so a fallback timer at the pacing refresh covers that case: it
+ticks only once a whole refresh passed without a vblank (a static scene, or a
+dropped frame), so a running scene is never double-ticked. Both take one cheap
+wake-up per refresh and back off while the output is blanked or the seat
+inactive.
 
 The game is not paced by that timer. On-demand rendering presents its frame when
 the client commits, and while a window is in gaming mode the DRM backend enables

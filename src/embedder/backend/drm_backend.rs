@@ -131,6 +131,11 @@ pub struct DrmBackend {
     /// shared by all outputs, this single CRTC paces `on_vsync` baton delivery
     /// so Flutter sees exactly one frame callback per frame.
     pacing_crtc: Option<(i32, DrmNode, crtc::Handle)>,
+    /// When the last vsync tick was delivered, by a page-flip vblank or by the
+    /// fallback timer. The timer uses it to stay silent while a running scene's
+    /// vblanks are delivering, and to step in only once a whole refresh has
+    /// passed with no vblank.
+    last_vsync_tick: Option<Instant>,
 }
 
 /// Screensaver wake hook: re-insert every blanked output into the render loop.
@@ -436,6 +441,7 @@ pub fn run_drm_backend() {
             primary_gpu,
             highest_hz_crtc: HashMap::new(),
             pacing_crtc: None,
+            last_vsync_tick: None,
         },
         None,
         settings_manager,
@@ -589,22 +595,21 @@ pub fn run_drm_backend() {
     state.determine_highest_hz_crtc();
     state.on_outputs_changed();
 
-    // Drive Flutter's vsync from a timer at the pacing refresh, not from page
-    // flips. A frame with no damage produces no flip (and so no vblank), and
-    // tying vsync to flips would freeze the shell on any static scene.
-    if let Some((mhz, _node, _crtc)) = state.backend_data.pacing_crtc {
-        let interval = Duration::from_nanos((1_000_000_000_000u64 / (mhz.max(1) as u64)).max(1));
-        event_loop
-            .handle()
-            .insert_source(
-                Timer::from_duration(interval),
-                move |_, _, data: &mut State<DrmBackend>| {
-                    data.vsync_tick();
-                    TimeoutAction::ToDuration(interval)
-                },
-            )
-            .unwrap();
-    }
+    // Drive Flutter's vsync from a timer at the pacing refresh, as the idle
+    // fallback to the page-flip vblank (see `on_vsync_timer` / `on_vblank`): a
+    // running scene delivers its batons from the hardware vblank and this timer
+    // stays silent, so tying vsync to a free-running timer no longer drifts
+    // against the panel. It only ticks when nothing flipped for a whole refresh.
+    let initial_interval = state.pacing_interval().unwrap_or(Duration::from_millis(16));
+    event_loop
+        .handle()
+        .insert_source(
+            Timer::from_duration(initial_interval),
+            move |_, _, data: &mut State<DrmBackend>| {
+                TimeoutAction::ToDuration(data.on_vsync_timer())
+            },
+        )
+        .unwrap();
 
     // Mandatory formats by the Wayland spec.
     // TODO: Add more formats based on the GLES version.
@@ -1418,6 +1423,19 @@ impl State<DrmBackend> {
             }
         }
 
+        // The pacing CRTC's page-flip vblank is the primary vsync source: while
+        // the shell is presenting, its batons are delivered in step with the
+        // panel instead of a drifting timer. Only this CRTC delivers; the
+        // Flutter context is shared, so bouncing every output would tick it
+        // more than once per frame.
+        if self
+            .backend_data
+            .pacing_crtc
+            .is_some_and(|(_, pace_node, pace_crtc)| pace_node == node && pace_crtc == crtc)
+        {
+            self.deliver_vsync_tick(Instant::now());
+        }
+
         // Each DRM node renders its own surfaces, driven by its fastest CRTC.
         // This keeps nodes that don't own the globally fastest output alive.
         if let Some(&(_, fastest_crtc)) = self.backend_data.highest_hz_crtc.get(&node) {
@@ -1426,20 +1444,43 @@ impl State<DrmBackend> {
             }
         }
 
-        // The Flutter context is shared among all outputs, so its vsync batons
-        // are delivered once per frame by the vsync timer (`vsync_tick`), not
-        // per vblank: a frame with no damage produces no flip, and therefore no
-        // vblank, so tying Flutter's vsync to flips would freeze the shell on a
-        // static scene.
+        // The Flutter context is shared among all outputs, so its batons are
+        // delivered once per frame from the pacing CRTC's vblank, above. A
+        // frame with no damage produces no flip, and therefore no vblank, so
+        // the fallback timer (`on_vsync_timer`) covers a static scene instead
+        // of flips driving baton delivery.
     }
 
-    /// Delivers one vsync tick to Flutter and to Wayland clients, and requests
-    /// a render so cursor and Flutter damage keep being presented.
+    /// Interval of the pacing CRTC's refresh, if an output is connected.
+    fn pacing_interval(&self) -> Option<Duration> {
+        let (mhz, _node, _crtc) = self.backend_data.pacing_crtc?;
+        Some(Duration::from_nanos(
+            (1_000_000_000_000u64 / (mhz.max(1) as u64)).max(1),
+        ))
+    }
+
+    /// Whether the DRM device that owns the pacing output is usable: the seat
+    /// session is active and the device was not paused.
+    fn pacing_device_active(&self) -> bool {
+        let Some((_mhz, node, _crtc)) = self.backend_data.pacing_crtc else {
+            return false;
+        };
+        self.backend_data
+            .gpus
+            .get(&node)
+            .map(|gpu| gpu.drm_device.is_active())
+            .unwrap_or(false)
+    }
+
+    /// Delivers one vsync to Flutter and to Wayland clients: drains the pending
+    /// Flutter batons, then sends the surface frame callbacks and the cursor's.
     ///
-    /// Driven by a timer at the pacing refresh, never by a page flip: a frame
-    /// with no damage is not queued (Smithay returns `EmptyFrame`), so no
-    /// vblank follows on a static scene.
-    fn vsync_tick(&mut self) {
+    /// Records the delivery so the fallback timer can tell whether a page-flip
+    /// vblank already drove this frame. It does not render: presenting is the
+    /// on-demand [`State::request_render`] path.
+    fn deliver_vsync_tick(&mut self, now: Instant) {
+        self.backend_data.last_vsync_tick = Some(now);
+
         let Some((mhz, _node, _crtc)) = self.backend_data.pacing_crtc else {
             return;
         };
@@ -1472,6 +1513,47 @@ impl State<DrmBackend> {
         if let CursorImageStatus::Surface(wl_surface) = cursor_status {
             send_frames_surface_tree(&wl_surface, frame_timestamp)
         }
+    }
+
+    /// Fallback vsync source, armed at the pacing refresh.
+    ///
+    /// The primary source is the pacing CRTC's page-flip vblank
+    /// ([`Self::on_vblank`]): while the shell is presenting, its batons are
+    /// delivered in step with the panel instead of drifting against a timer.
+    /// This timer only covers the idle case, where a frame with no damage
+    /// produces no flip and therefore no vblank: it ticks only once a whole
+    /// refresh plus a small slack passed with no vblank, so a running scene is
+    /// never ticked twice.
+    ///
+    /// It keeps one cheap wake-up per refresh, so a client's pending frame
+    /// callback is never held back, and backs off while the output is blanked
+    /// or the seat inactive (where no vblank can arrive to cover it).
+    fn on_vsync_timer(&mut self) -> Duration {
+        let Some(interval) = self.pacing_interval() else {
+            // No output to pace against (a hotplug is in progress): retry
+            // slowly instead of spinning.
+            return Duration::from_millis(100);
+        };
+
+        if self.idle.is_blank() || !self.pacing_device_active() {
+            return Duration::from_millis(100);
+        }
+
+        // A page flip completes at most one refresh apart, so a vblank keeps
+        // `last_vsync_tick` within one refresh of now. Only step in once a
+        // whole refresh plus slack passed with no vblank: a static scene, or a
+        // dropped frame.
+        let slack = Duration::from_millis(2);
+        let now = Instant::now();
+        let due = match self.backend_data.last_vsync_tick {
+            Some(last) => now.saturating_duration_since(last) >= interval + slack,
+            None => true,
+        };
+        if due {
+            self.deliver_vsync_tick(now);
+        }
+
+        interval + slack
     }
 
     // If crtc is `Some()`, render it, else render all crtcs
