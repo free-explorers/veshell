@@ -33,6 +33,20 @@ class WorkspaceWidget extends HookConsumerWidget {
       debugLabel: 'WorkspaceScope',
     );
 
+    // Only the selected workspace of the screen the compositor reports as
+    // focused may take focus. Every monitor mounts its own selected workspace
+    // and the launcher's search field autofocuses, so without the screen gate
+    // they all grab focus on mount and the last one wins: at startup that is an
+    // arbitrary monitor, and the screen under the pointer never holds focus,
+    // which leaves its actions and shortcuts dead until the pointer enters it.
+    //
+    // `platformFocusedScreen` (not `focusedScreen`) is the gate: it stays null
+    // until the compositor's monitor layout is known, so no screen can grab
+    // focus from a persisted fallback and pin the wrong monitor at startup.
+    final isFocusedScreen =
+        ref.watch(platformFocusedScreenProvider) == CurrentScreenId.of(context);
+    final workspaceCanFocus = isSelected && isFocusedScreen;
+
     // `FocusScope.autofocus` only fires once per element lifetime (its flag is
     // reset only when the widget is deactivated). Reversing the workspace
     // hotkey mid-animation returns to a page that is still alive, so autofocus
@@ -41,12 +55,12 @@ class WorkspaceWidget extends HookConsumerWidget {
     // explicitly every time this workspace becomes selected instead.
     useEffect(
       () {
-        if (isSelected) {
+        if (workspaceCanFocus) {
           workspaceFocusScopeNode.requestFocus();
         }
         return null;
       },
-      [isSelected],
+      [workspaceCanFocus],
     );
 
     final appLauncher = PersistentApplicationSelector(
@@ -139,10 +153,10 @@ class WorkspaceWidget extends HookConsumerWidget {
           onFocusChange: (value) {
             focusLog.info('Focus changed $value for Workspace $workspaceId');
           },
-          autofocus: isSelected,
-          canRequestFocus: isSelected,
-          // Only the selected workspace may take focus; an unselected one must
-          // not steal it (for instance while it is animating away).
+          autofocus: workspaceCanFocus,
+          // Only the selected workspace of the focused screen may take focus;
+          // an unselected one must not steal it, and neither must one on a
+          // monitor the compositor has not focused.
           //
           // It is set explicitly because a `FocusScopeNode` reports
           // `descendantsAreFocusable` as `canRequestFocus && _descendants...`,
@@ -150,7 +164,8 @@ class WorkspaceWidget extends HookConsumerWidget {
           // Leaving it unset would latch it to false once the workspace is
           // deselected, never restoring it and making the launcher search and
           // window placeholders unreachable.
-          descendantsAreFocusable: isSelected,
+          canRequestFocus: workspaceCanFocus,
+          descendantsAreFocusable: workspaceCanFocus,
           // A workspace-local overlay hosts the tileable notification popups so
           // they are clipped and scrolled by the workspace instead of floating
           // above the whole shell from the root overlay.
