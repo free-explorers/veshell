@@ -58,6 +58,10 @@ configure.
 - While activated the pointer is confined to the game's output: crossing to
   another monitor would re-show the cursor there and hand the other desktop a
   stray pointer.
+- While activated the client's cursor image is authoritative: a game cursor
+  surface is drawn even though the shell stops reporting a surface under the
+  pointer, and a client that hides its cursor hides it — the shell's own cursor
+  (from Flutter `MouseRegion`s) never overrides it.
 - Deactivation clears the compositor-set pointer focus, so a paused game stops
   receiving motion even before the shell re-establishes a focus.
 - Leaving gaming mode never leaves the client believing a key is held, and

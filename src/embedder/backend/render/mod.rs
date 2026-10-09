@@ -803,6 +803,8 @@ where
     }
 
     if capture_overlay.is_none() && output_geometry.contains(cursor_location) {
+        // A game on this output owns the cursor: it is the only pointer target,
+        // so its cursor image is authoritative (see `draw_cursor`).
         let cursor_element = draw_cursor(
             renderer,
             cursor_image_status,
@@ -811,6 +813,7 @@ where
             now,
             cursor_location - output_geometry.loc,
             is_surface_under_pointer,
+            !surfaces_in_gaming_mode.is_empty(),
         );
 
         let cursor_elements: Vec<VeshellRenderElements<R>> = cursor_element
