@@ -201,8 +201,13 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         // with it, so their surfaces stop rendering for any session.
         crate::portal::service::close_source_share_sessions(self, meta_window_id);
 
-        if self.meta_window_state.meta_window_in_gaming_mode == Some(meta_window_id.clone()) {
+        if self.meta_window_state.meta_window_in_gaming_mode.as_deref()
+            == Some(meta_window_id.as_str())
+        {
             self.meta_window_state.meta_window_in_gaming_mode = None;
+            // The client is gone; drop the keys it was holding so the next
+            // gaming session starts from a clean slate.
+            self.game_mode_forwarded_keys.clear();
         }
 
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
@@ -287,10 +292,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             }
             MetaWindowPatch::UpdateMapped { id, value } => {
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
-                    if meta_window.mapped == value.clone() {
+                    if meta_window.mapped == value {
                         return;
                     }
-                    meta_window.mapped = value.clone();
+                    meta_window.mapped = value;
                 }
                 if value == false {
                     // An unmapped window stops rendering: there is no
@@ -329,8 +334,13 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                                         state.size = target_size;
                                     }
                                     Some(DisplayMode::Fullscreen) => {
+                                        // Maximized and fullscreen share the
+                                        // tile geometry; only the surface
+                                        // state differs, so a client drops its
+                                        // toolbars in fullscreen. Setting both
+                                        // would make it read as maximized.
                                         state.states.set(xdg_toplevel::State::Fullscreen);
-                                        state.states.set(xdg_toplevel::State::Maximized);
+                                        state.states.unset(xdg_toplevel::State::Maximized);
                                         state.size = target_size;
                                     }
                                     Some(DisplayMode::Floating) => {
@@ -508,10 +518,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             }
             MetaWindowPatch::UpdateNeedDecoration { id, value } => {
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
-                    if meta_window.need_decoration == value.clone() {
+                    if meta_window.need_decoration == value {
                         return;
                     }
-                    meta_window.need_decoration = value.clone();
+                    meta_window.need_decoration = value;
                 }
             }
             MetaWindowPatch::UpdateCurrentOutput { id, value } => {
@@ -535,36 +545,97 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 }
             }
             MetaWindowPatch::UpdateGameModeActivated { id, value } => {
-                if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
-                    if meta_window.game_mode_activated == value.clone() {
+                let activated = {
+                    let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) else {
+                        return;
+                    };
+                    if meta_window.game_mode_activated == value {
                         return;
                     }
-                    meta_window.game_mode_activated = value.clone();
-                    if value {
-                        self.meta_window_state.meta_window_in_gaming_mode = Some(id);
-
-                        if let Some(surface) = self.surfaces.get(&meta_window.surface_id) {
-                            if let Some(x11_surface) =
-                                self.x11_surface_per_wl_surface.get(surface).cloned()
-                            {
-                                let _ = self
-                                    .xwayland_state
-                                    .as_mut()
-                                    .unwrap()
-                                    .xwm
-                                    .as_mut()
-                                    .unwrap()
-                                    .raise_window(&x11_surface);
-                            }
-                            self.pointer_focus =
-                                Some((PointerFocusTarget::from(surface), (0.0, 0.0).into()));
+                    meta_window.game_mode_activated = value;
+                    value.then(|| (meta_window.surface_id, meta_window.current_output.clone()))
+                };
+                if let Some((surface_id, current_output)) = activated {
+                    self.meta_window_state.meta_window_in_gaming_mode = Some(id.clone());
+                    // Flutter must not keep believing keys it was handed are
+                    // held: from here they go to the client.
+                    crate::keyboard::release_flutter_keys(self);
+                    // Let the game pace the panel itself while it owns the
+                    // output; disabled again on the way out.
+                    if let Some(name) = current_output.as_deref() {
+                        BackendData::set_output_vrr(self, name, true);
+                    }
+                    if let Some(surface) = self.surfaces.get(&surface_id).cloned() {
+                        if let Some(x11_surface) =
+                            self.x11_surface_per_wl_surface.get(&surface).cloned()
+                        {
+                            let _ = self
+                                .xwayland_state
+                                .as_mut()
+                                .unwrap()
+                                .xwm
+                                .as_mut()
+                                .unwrap()
+                                .raise_window(&x11_surface);
                         }
-                    } else {
-                        if self.meta_window_state.meta_window_in_gaming_mode == Some(id) {
-                            self.meta_window_state.meta_window_in_gaming_mode = None;
+                        // Enter the client at the surface's own origin, not at
+                        // `(0, 0)`: a game on a monitor that does not start at
+                        // the layout origin would otherwise receive pointer
+                        // coordinates offset by the monitor position. The frame
+                        // makes the enter/leave pair reach the client before the
+                        // next event.
+                        let origin = current_output
+                            .as_deref()
+                            .and_then(|name| {
+                                self.space.outputs().find(|output| output.name() == name)
+                            })
+                            .and_then(|output| self.space.output_geometry(output))
+                            .map(|geometry| geometry.loc.to_f64())
+                            .unwrap_or_else(|| (0.0, 0.0).into());
+                        self.pointer_focus = Some((PointerFocusTarget::from(&surface), origin));
+                        self.refresh_pointer_focus();
+                        // The compositor owns the client's focus from here until
+                        // deactivation: set the keyboard focus too, so the game
+                        // gets keys even though the shell's own widget focus
+                        // moves (the zoom route takes it).
+                        if let Err((code, message)) =
+                            crate::flutter_engine::platform_channel_callbacks::activate_window::focus_surface(
+                                self,
+                                &surface,
+                            )
+                        {
+                            warn!(
+                                "gaming: could not focus the client keyboard: {code}: {message}"
+                            );
                         }
                     }
+                } else {
+                    if self.meta_window_state.meta_window_in_gaming_mode.as_ref() == Some(&id) {
+                        self.meta_window_state.meta_window_in_gaming_mode = None;
+                    }
+                    // Any keys the client was handed are released by the
+                    // input path that disables the mode; this is the
+                    // backstop for a deactivation that bypassed it.
+                    self.game_mode_forwarded_keys.clear();
+                    // The game no longer owns the pointer: clear the focus the
+                    // compositor set on entry so motion stops reaching it until
+                    // the shell re-establishes a focus.
+                    if self.pointer_focus.take().is_some() {
+                        self.refresh_pointer_focus();
+                    }
+                    // Give the output back to the compositor's fixed cadence.
+                    if let Some(name) = self
+                        .meta_window_state
+                        .meta_windows
+                        .get(&id)
+                        .and_then(|window| window.current_output.clone())
+                    {
+                        BackendData::set_output_vrr(self, &name, false);
+                    }
                 }
+                // Entering/leaving the native takeover changes what is drawn:
+                // composite it now (rendering is on demand).
+                self.request_render();
             }
             MetaWindowPatch::UpdateIsRecording { id, value } => {
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
@@ -591,10 +662,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         xwayland_scale_ratio = ?xwayland_scale_ratio,
                         "Applying native window scale patch"
                     );
-                    if meta_window.scale_ratio == value.clone() {
+                    if meta_window.scale_ratio == value {
                         return;
                     }
-                    meta_window.scale_ratio = value.clone();
+                    meta_window.scale_ratio = value;
 
                     if let Some(surface) = self.surfaces.get(&meta_window.surface_id) {
                         if let Some(x11_surface) = self.x11_surface_per_wl_surface.get(surface) {

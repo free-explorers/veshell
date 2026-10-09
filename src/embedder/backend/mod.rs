@@ -12,6 +12,8 @@ use smithay::backend::{
 };
 use smithay::reexports::gbm::Modifier;
 
+use crate::state::State;
+
 /// Allocates capture-owned dmabufs the primary renderer can render into and
 /// a PipeWire consumer can import. Implemented by the backend's GBM device;
 /// `None` from [`Backend::capture_dmabuf_setup`] keeps the shared-memory
@@ -108,4 +110,18 @@ pub trait Backend {
     /// render into and export dmabufs (the producer then stays on shared
     /// memory).
     fn capture_dmabuf_setup(&mut self) -> Option<CaptureDmabufSetup>;
+
+    /// Enable or disable adaptive sync (VRR) on the named output.
+    ///
+    /// Called when a window enters or leaves gaming mode so the game can pace
+    /// the panel itself instead of the compositor's fixed cadence. Backends
+    /// without KMS access ignore it. The DRM backend only toggles it when the
+    /// connector supports it without a modeset, so it can never flicker the
+    /// output.
+    fn set_output_vrr(state: &mut State<Self>, output_name: &str, enabled: bool)
+    where
+        Self: Sized + 'static,
+    {
+        let _ = (state, output_name, enabled);
+    }
 }

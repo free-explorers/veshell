@@ -29,6 +29,16 @@ pub fn pointer_focus<BackendData: Backend + 'static>(
     mut result: Box<dyn MethodResult<serde_json::Value>>,
     data: &mut State<BackendData>,
 ) {
+    // While a game owns the input the compositor keeps the pointer focus it set
+    // on activation. The shell swaps the surface for a placeholder (and the
+    // fullscreen route covers the tile), which fires a surface exit; letting
+    // that through would clear the focus and the game would stop receiving
+    // motion and buttons.
+    if data.meta_window_state.meta_window_in_gaming_mode.is_some() {
+        result.success(None);
+        return;
+    }
+
     let args = method_call.arguments().unwrap().clone();
     let payload: PointerFocusMessage = serde_json::from_value(args).unwrap();
 

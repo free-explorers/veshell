@@ -130,7 +130,15 @@ class PersistentWindowState extends _$PersistentWindowState
   }
 
   void updateMetaWindowDisplayMode() {
-    if (state.metaWindowId == null) return;
+    final metaWindowId = state.metaWindowId;
+    if (metaWindowId == null) return;
+
+    // Gaming mode owns its own transition: the overlay resizes the window to
+    // the monitor's logical size and only then requests fullscreen, so the
+    // configure that carries the fullscreen state already has the final size.
+    // Requesting fullscreen here, before that resize, latches Chromium to the
+    // tile size (the meta window has no `currentOutput` yet at this point).
+    if (state.displayMode == DisplayMode.game) return;
 
     final metaDisplayMode = switch (state.displayMode) {
       DisplayMode.maximized => MetaWindowDisplayMode.maximized,
@@ -140,10 +148,10 @@ class PersistentWindowState extends _$PersistentWindowState
     };
 
     ref
-        .read(metaWindowStateProvider(state.metaWindowId!).notifier)
+        .read(metaWindowStateProvider(metaWindowId).notifier)
         .patch(
           MetaWindowPatchMessage.updateDisplayMode(
-            id: state.metaWindowId!,
+            id: metaWindowId,
             value: metaDisplayMode,
           ),
         );

@@ -190,16 +190,31 @@ pub mod xwayland {
                             xwm: None,
                             display: display_number,
                         });
-                        let mut wm = X11Wm::start_wm(
+                        let wm = X11Wm::start_wm(
                             data.loop_handle.clone(),
                             &data.display_handle,
                             x11_socket,
                             client.clone(),
                         )
                         .expect("Failed to attach X11 Window Manager");
-                        let xwayland_state = data.xwayland_state.as_mut().unwrap();
-                        xwayland_state.xwm = Some(wm);
-                        xwayland_state.reload_cursor(1.);
+                        data.xwayland_state.as_mut().unwrap().xwm = Some(wm);
+                        // Xwayland starts lazily, after `on_outputs_changed`
+                        // already ran, so the X toolkit settings (cursor size,
+                        // DPI, client scale) were never applied. Without them
+                        // the first X client falls back to its own defaults,
+                        // which on a multi-monitor setup made it use a 2x
+                        // cursor until an output change re-applied the scale.
+                        let highest_scale = data
+                            .space
+                            .outputs()
+                            .map(|output| output.current_scale().fractional_scale())
+                            .fold(f64::NAN, f64::max);
+                        let highest_scale = if highest_scale.is_nan() {
+                            1.0
+                        } else {
+                            highest_scale
+                        };
+                        data.update_xwayland_scale(highest_scale);
 
                         std::env::set_var("DISPLAY", format!(":{}", display_number));
                         if let Some(flutter_engine) = data.flutter_engine.as_mut() {

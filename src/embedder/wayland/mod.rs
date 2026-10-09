@@ -188,6 +188,19 @@ pub mod wayland {
                 root_surface = parent;
             }
 
+            // A surface whose window is actively in gaming mode is composited
+            // natively: its Flutter external texture is not signalled, so a
+            // game frame does not schedule a Flutter frame (no duplicate
+            // rasterization, no full-output recomposite). The native render is
+            // requested below instead.
+            let root_surface_id = get_surface_id(&root_surface);
+            let game_active = self
+                .meta_window_state
+                .meta_window_id_per_surface_id
+                .get(&root_surface_id)
+                .and_then(|id| self.meta_window_state.meta_windows.get(id))
+                .is_some_and(|window| window.game_mode_activated);
+
             let (subsurfaces_below, subsurfaces_above) = get_direct_subsurfaces(surface);
 
             // Make sure Flutter knows about subsurfaces
@@ -353,9 +366,11 @@ pub mod wayland {
                         let swapchain = self.texture_swapchains.entry(texture_id).or_default();
                         swapchain.commit(texture.clone());
 
-                        self.flutter_engine_mut()
-                            .mark_external_texture_frame_available(texture_id)
-                            .unwrap();
+                        if !game_active {
+                            self.flutter_engine_mut()
+                                .mark_external_texture_frame_available(texture_id)
+                                .unwrap();
+                        }
 
                         (texture_id, Some(size))
                     } else {
@@ -440,6 +455,9 @@ pub mod wayland {
                 Some(Box::new(json!(surface_message))),
                 None,
             );
+
+            // Fresh client damage: composite it.
+            self.request_render();
         }
 
         fn destroyed(&mut self, _surface: &WlSurface) {

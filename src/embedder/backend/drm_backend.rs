@@ -6,6 +6,7 @@ use std::os::fd::FromRawFd;
 use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::Ordering;
+use std::time::{Duration, Instant};
 
 use sd_notify::NotifyState;
 use serde_json::json;
@@ -17,7 +18,7 @@ use smithay::backend::drm::compositor::{DrmCompositor, FrameFlags};
 use smithay::backend::drm::exporter::gbm::GbmFramebufferExporter;
 use smithay::backend::drm::{
     CreateDrmNodeError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent, DrmEventMetadata, DrmNode,
-    NodeType,
+    NodeType, VrrSupport,
 };
 use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
 use smithay::backend::input::{
@@ -37,6 +38,7 @@ use smithay::input::pointer::CursorImageStatus;
 use smithay::output::{Mode, Scale};
 use smithay::output::{Output, PhysicalProperties};
 use smithay::reexports::calloop::channel::{self, Event as CalloopEvent};
+use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::calloop::RegistrationToken;
 use smithay::reexports::calloop::{EventLoop, LoopHandle};
 use smithay::reexports::drm::control::{
@@ -129,6 +131,11 @@ pub struct DrmBackend {
     /// shared by all outputs, this single CRTC paces `on_vsync` baton delivery
     /// so Flutter sees exactly one frame callback per frame.
     pacing_crtc: Option<(i32, DrmNode, crtc::Handle)>,
+    /// When the last vsync tick was delivered, by a page-flip vblank or by the
+    /// fallback timer. The timer uses it to stay silent while a running scene's
+    /// vblanks are delivering, and to step in only once a whole refresh has
+    /// passed with no vblank.
+    last_vsync_tick: Option<Instant>,
 }
 
 /// Screensaver wake hook: re-insert every blanked output into the render loop.
@@ -151,6 +158,8 @@ fn idle_apply_blank(state: &mut State<DrmBackend>) {
             if let Err(err) = surface.compositor.clear() {
                 warn!("Failed to blank drm surface: {err:?}");
             }
+            // The pending flip is gone with the planes; unblock rendering.
+            surface.frame_pending = false;
         }
     }
 }
@@ -225,6 +234,37 @@ impl Backend for DrmBackend {
             allocator: std::rc::Rc::new(data.gbm_device.clone()),
             formats,
         })
+    }
+
+    fn set_output_vrr(state: &mut State<DrmBackend>, output_name: &str, enabled: bool) {
+        for gpu_data in state.backend_data.gpus.values_mut() {
+            for surface in gpu_data.surfaces.values_mut() {
+                if surface.name != output_name {
+                    continue;
+                }
+                match surface.compositor.vrr_supported(surface.connector_handle) {
+                    Ok(VrrSupport::Supported) => {
+                        if let Err(err) = surface.compositor.use_vrr(enabled) {
+                            warn!("Failed to toggle VRR on {output_name}: {err:?}");
+                        } else {
+                            info!(
+                                "VRR {} for gaming mode on {output_name}",
+                                if enabled { "enabled" } else { "disabled" }
+                            );
+                        }
+                    }
+                    // A modeset here would flicker the output while entering or
+                    // leaving the game, so leave the mode alone.
+                    Ok(support) => {
+                        debug!("VRR not toggled on {output_name}: {support:?}");
+                    }
+                    Err(err) => {
+                        warn!("Could not query VRR support on {output_name}: {err:?}");
+                    }
+                }
+                return;
+            }
+        }
     }
 }
 
@@ -401,6 +441,7 @@ pub fn run_drm_backend() {
             primary_gpu,
             highest_hz_crtc: HashMap::new(),
             pacing_crtc: None,
+            last_vsync_tick: None,
         },
         None,
         settings_manager,
@@ -458,6 +499,9 @@ pub fn run_drm_backend() {
                         if let Err(err) = surface.compositor.reset_state() {
                             warn!("Failed to reset drm surface state: {}", err);
                         }
+                        // Any flip queued before the pause is gone; do not let
+                        // it keep rendering blocked.
+                        surface.frame_pending = false;
                     }
                     if data.idle.is_blank() {
                         // Activation may restore connector power behind our
@@ -550,6 +594,22 @@ pub fn run_drm_backend() {
     // layout. Outputs are still mapped individually for default placement.
     state.determine_highest_hz_crtc();
     state.on_outputs_changed();
+
+    // Drive Flutter's vsync from a timer at the pacing refresh, as the idle
+    // fallback to the page-flip vblank (see `on_vsync_timer` / `on_vblank`): a
+    // running scene delivers its batons from the hardware vblank and this timer
+    // stays silent, so tying vsync to a free-running timer no longer drifts
+    // against the panel. It only ticks when nothing flipped for a whole refresh.
+    let initial_interval = state.pacing_interval().unwrap_or(Duration::from_millis(16));
+    event_loop
+        .handle()
+        .insert_source(
+            Timer::from_duration(initial_interval),
+            move |_, _, data: &mut State<DrmBackend>| {
+                TimeoutAction::ToDuration(data.on_vsync_timer())
+            },
+        )
+        .unwrap();
 
     // Mandatory formats by the Wayland spec.
     // TODO: Add more formats based on the GLES version.
@@ -1139,6 +1199,9 @@ impl State<DrmBackend> {
             global: Some(global),
             compositor,
             view_id,
+            last_queue: None,
+            last_gaming_present: None,
+            frame_pending: false,
         };
 
         device.surfaces.insert(crtc, surface);
@@ -1337,7 +1400,40 @@ impl State<DrmBackend> {
         if let Some(gpu_data) = self.backend_data.gpus.get_mut(&node) {
             if let Some(surface) = gpu_data.surfaces.get_mut(&crtc) {
                 let _ = surface.compositor.frame_submitted();
+                // The flip completed: the output may render again.
+                surface.frame_pending = false;
+                // Instrumentation: a completed flip is a presented frame. When
+                // it carried a game surface, report how long it took to present
+                // and how far apart gaming frames are (the achieved pace). A
+                // non-gaming frame ends the current gaming streak so the next
+                // one starts its interval count fresh.
+                match surface.last_queue.take() {
+                    Some((queued_at, true)) => {
+                        let now = Instant::now();
+                        let since_previous = surface.last_gaming_present.replace(now);
+                        debug!(
+                            "game present: {:?} after queue, {:?} since previous",
+                            now.saturating_duration_since(queued_at),
+                            since_previous.map(|previous| now.saturating_duration_since(previous)),
+                        );
+                    }
+                    Some((_, false)) => surface.last_gaming_present = None,
+                    None => {}
+                }
             }
+        }
+
+        // The pacing CRTC's page-flip vblank is the primary vsync source: while
+        // the shell is presenting, its batons are delivered in step with the
+        // panel instead of a drifting timer. Only this CRTC delivers; the
+        // Flutter context is shared, so bouncing every output would tick it
+        // more than once per frame.
+        if self
+            .backend_data
+            .pacing_crtc
+            .is_some_and(|(_, pace_node, pace_crtc)| pace_node == node && pace_crtc == crtc)
+        {
+            self.deliver_vsync_tick(Instant::now());
         }
 
         // Each DRM node renders its own surfaces, driven by its fastest CRTC.
@@ -1348,23 +1444,50 @@ impl State<DrmBackend> {
             }
         }
 
-        // The Flutter context is shared among all outputs, so its vsync batons
-        // must be delivered once per frame rather than once per node. The
-        // globally fastest CRTC paces that delivery; a node rendering on its
-        // own schedule does not drain a second baton.
-        let (mhz, pacing_node, pacing_crtc) = match self.backend_data.pacing_crtc {
-            Some(pacing_crtc) => pacing_crtc,
-            None => return,
+        // The Flutter context is shared among all outputs, so its batons are
+        // delivered once per frame from the pacing CRTC's vblank, above. A
+        // frame with no damage produces no flip, and therefore no vblank, so
+        // the fallback timer (`on_vsync_timer`) covers a static scene instead
+        // of flips driving baton delivery.
+    }
+
+    /// Interval of the pacing CRTC's refresh, if an output is connected.
+    fn pacing_interval(&self) -> Option<Duration> {
+        let (mhz, _node, _crtc) = self.backend_data.pacing_crtc?;
+        Some(Duration::from_nanos(
+            (1_000_000_000_000u64 / (mhz.max(1) as u64)).max(1),
+        ))
+    }
+
+    /// Whether the DRM device that owns the pacing output is usable: the seat
+    /// session is active and the device was not paused.
+    fn pacing_device_active(&self) -> bool {
+        let Some((_mhz, node, _crtc)) = self.backend_data.pacing_crtc else {
+            return false;
+        };
+        self.backend_data
+            .gpus
+            .get(&node)
+            .map(|gpu| gpu.drm_device.is_active())
+            .unwrap_or(false)
+    }
+
+    /// Delivers one vsync to Flutter and to Wayland clients: drains the pending
+    /// Flutter batons, then sends the surface frame callbacks and the cursor's.
+    ///
+    /// Records the delivery so the fallback timer can tell whether a page-flip
+    /// vblank already drove this frame. It does not render: presenting is the
+    /// on-demand [`State::request_render`] path.
+    fn deliver_vsync_tick(&mut self, now: Instant) {
+        self.backend_data.last_vsync_tick = Some(now);
+
+        let Some((mhz, _node, _crtc)) = self.backend_data.pacing_crtc else {
+            return;
         };
 
-        if pacing_node != node || pacing_crtc != crtc {
-            return;
-        }
-
-        let drained: Vec<_> = self.batons.drain(..).collect(); // Mutable borrow ends here
-
+        let drained: Vec<_> = self.batons.drain(..).collect();
         for baton in drained {
-            self.flutter_engine().on_vsync(baton, mhz as u32).unwrap();
+            let _ = self.flutter_engine().on_vsync(baton, mhz as u32);
         }
         let frame_timestamp = self.frame_timestamp_millis();
         for surface in self.xdg_shell_state.toplevel_surfaces() {
@@ -1390,6 +1513,47 @@ impl State<DrmBackend> {
         if let CursorImageStatus::Surface(wl_surface) = cursor_status {
             send_frames_surface_tree(&wl_surface, frame_timestamp)
         }
+    }
+
+    /// Fallback vsync source, armed at the pacing refresh.
+    ///
+    /// The primary source is the pacing CRTC's page-flip vblank
+    /// ([`Self::on_vblank`]): while the shell is presenting, its batons are
+    /// delivered in step with the panel instead of drifting against a timer.
+    /// This timer only covers the idle case, where a frame with no damage
+    /// produces no flip and therefore no vblank: it ticks only once a whole
+    /// refresh plus a small slack passed with no vblank, so a running scene is
+    /// never ticked twice.
+    ///
+    /// It keeps one cheap wake-up per refresh, so a client's pending frame
+    /// callback is never held back, and backs off while the output is blanked
+    /// or the seat inactive (where no vblank can arrive to cover it).
+    fn on_vsync_timer(&mut self) -> Duration {
+        let Some(interval) = self.pacing_interval() else {
+            // No output to pace against (a hotplug is in progress): retry
+            // slowly instead of spinning.
+            return Duration::from_millis(100);
+        };
+
+        if self.idle.is_blank() || !self.pacing_device_active() {
+            return Duration::from_millis(100);
+        }
+
+        // A page flip completes at most one refresh apart, so a vblank keeps
+        // `last_vsync_tick` within one refresh of now. Only step in once a
+        // whole refresh plus slack passed with no vblank: a static scene, or a
+        // dropped frame.
+        let slack = Duration::from_millis(2);
+        let now = Instant::now();
+        let due = match self.backend_data.last_vsync_tick {
+            Some(last) => now.saturating_duration_since(last) >= interval + slack,
+            None => true,
+        };
+        if due {
+            self.deliver_vsync_tick(now);
+        }
+
+        interval + slack
     }
 
     // If crtc is `Some()`, render it, else render all crtcs
@@ -1423,6 +1587,34 @@ impl State<DrmBackend> {
             return;
         }
 
+        // While the seat session is paused the KMS device rejects every commit.
+        // Retrying would spin on failed renders (and flood the log), so leave
+        // the output alone until the session resumes.
+        let gpu_active = self
+            .backend_data
+            .gpus
+            .get(&node)
+            .map(|gpu| gpu.drm_device.is_active())
+            .unwrap_or(false);
+        if !gpu_active {
+            return;
+        }
+
+        // A frame is already in flight on this output. Rendering again would
+        // only queue a second flip that the vblank coalesces away, and every
+        // pointer motion would pay for a full render. The next `on_vblank`
+        // repaints with the latest state, cursor included.
+        let frame_pending = self
+            .backend_data
+            .gpus
+            .get(&node)
+            .and_then(|gpu| gpu.surfaces.get(&crtc))
+            .map(|surface| surface.frame_pending)
+            .unwrap_or(false);
+        if frame_pending {
+            return;
+        }
+
         // Resolve the output and, when it mirrors another monitor, the
         // source's Flutter view. This reads the whole `State`, so it must
         // happen before the GPU state is borrowed mutably below.
@@ -1440,6 +1632,14 @@ impl State<DrmBackend> {
         let Some(output) = output else {
             return;
         };
+
+        // A game-mode surface belongs to the output the shell placed its tile
+        // on: rendering it on every output would duplicate the game on the
+        // other monitors. Capture readback already scopes the same way. Read it
+        // before the renderer takes a mutable borrow of the backend.
+        let output_name = output.name();
+        let game_surfaces = self.game_mode_surfaces_for_output(&output_name);
+        let had_game_surfaces = !game_surfaces.is_empty();
 
         // A mirroring output presents the source monitor's Flutter frame,
         // scaled to its own geometry; otherwise it presents its own view.
@@ -1520,17 +1720,7 @@ impl State<DrmBackend> {
             self.surface_id_under_cursor != None,
             true,
             self.idle.dim_alpha(),
-            self.meta_window_state
-                .meta_windows
-                .values()
-                .filter_map(|meta_window| {
-                    if meta_window.game_mode_activated {
-                        Some(self.surfaces.get(&meta_window.surface_id).unwrap())
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>(),
+            game_surfaces.iter().collect::<Vec<_>>(),
             capture_overlay,
             recording_chip,
         );
@@ -1543,13 +1733,24 @@ impl State<DrmBackend> {
         );
 
         match rendered {
-            Ok(_frame_result) => match surface.compositor.queue_frame(None) {
-                Ok(()) => {}
-                Err(err) => {
+            Ok(frame_result) => {
+                if frame_result.is_empty {
+                    // No damage: there is nothing to present. `queue_frame`
+                    // would only return `EmptyFrame`; the vsync timer keeps the
+                    // render loop (and Flutter) alive regardless.
+                    return;
+                }
+                if let Err(err) = surface.compositor.queue_frame(None) {
                     warn!("error queueing frame: {err}");
                     return;
                 }
-            },
+                // Instrumentation: remember when this frame was queued and
+                // whether a game surface rode it, so `on_vblank` can report the
+                // presentation latency of gaming frames.
+                surface.last_queue = Some((Instant::now(), had_game_surfaces));
+                // Hold off further renders until this flip's vblank.
+                surface.frame_pending = true;
+            }
             Err(err) => {
                 eprintln!("Failed to render frame: {}", err);
             }
@@ -1633,6 +1834,17 @@ struct SurfaceData {
     global: Option<GlobalId>,
     compositor: GbmDrmCompositor,
     view_id: i64,
+    /// Instrumentation: the last frame queued on this CRTC and whether a game
+    /// surface rode it. Set in `render_surface`, consumed by `on_vblank` to
+    /// report presentation latency for gaming frames.
+    last_queue: Option<(Instant, bool)>,
+    /// Instrumentation: when the previous gaming frame was presented, to report
+    /// the achieved pace.
+    last_gaming_present: Option<Instant>,
+    /// Whether a flip queued on this output is still awaiting its vblank.
+    /// While set, rendering is skipped and the vblank repaints instead, which
+    /// caps the render rate to the refresh and keeps pointer motion cheap.
+    frame_pending: bool,
 }
 
 pub type GbmDrmCompositor = DrmCompositor<

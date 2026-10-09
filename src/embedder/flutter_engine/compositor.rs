@@ -103,6 +103,9 @@ impl FlutterCompositor {
                             // rides the damage signal instead of
                             // rendering an unconditional 30 Hz loop.
                             crate::capture::on_view_frame_presented_for_recording(data, id.view_id);
+                            // The presented frame is fresh damage: composite
+                            // it (rendering is on demand).
+                            data.request_render();
                         }
                         BackingStoreEvent::Collected(id) => {
                             if let Some(view) =

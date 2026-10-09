@@ -119,6 +119,13 @@ impl<BackendData: Backend + 'static> IdleState<BackendData> {
         self.request_render = callback;
     }
 
+    /// The backend's render-request hook, usable from outside the idle state
+    /// machine (rendering is on demand: a Flutter present, a client commit or
+    /// input schedules one).
+    pub fn render_request(&self) -> fn(&mut State<BackendData>) {
+        self.request_render
+    }
+
     pub fn set_apply_blank(&mut self, callback: fn(&mut State<BackendData>)) {
         self.apply_blank = callback;
     }

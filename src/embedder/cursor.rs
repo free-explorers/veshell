@@ -183,6 +183,7 @@ pub fn draw_cursor<R>(
     time: Time<Monotonic>,
     location: Point<f64, Logical>,
     is_surface_under_pointer: bool,
+    gaming_mode: bool,
 ) -> Vec<(CursorRenderElement<R>, Point<i32, BufferCoords>)>
 where
     R: Renderer + ImportMem + ImportAll,
@@ -202,13 +203,28 @@ where
     let mut state_ref = cursor_state.lock().unwrap();
     let state = &mut *state_ref;
 
-    let named_cursor = state.current_cursor.or(match cursor_status {
-        CursorImageStatus::Named(named_cursor) => Some(named_cursor),
-        _ => None,
-    });
+    // While a game owns the output it is the only pointer target, so its cursor
+    // image is authoritative. The shell's own cursor (set from Flutter's
+    // `MouseRegion`s) must not override it: a game that draws a custom cursor
+    // would otherwise show the shell's arrow, and one that hides the cursor
+    // would still show it. Outside gaming mode the shell keeps priority, so the
+    // desktop cursor is unchanged.
+    let named_cursor = if gaming_mode {
+        match cursor_status {
+            CursorImageStatus::Named(named_cursor) => Some(named_cursor),
+            _ => None,
+        }
+    } else {
+        state.current_cursor.or(match cursor_status {
+            CursorImageStatus::Named(named_cursor) => Some(named_cursor),
+            _ => None,
+        })
+    };
 
     if let CursorImageStatus::Surface(ref wl_surface) = cursor_status {
-        if is_surface_under_pointer {
+        // The game is under the pointer by definition while it owns the output,
+        // even though the shell stops reporting a surface under the cursor.
+        if gaming_mode || is_surface_under_pointer {
             return draw_surface_cursor(
                 renderer,
                 wl_surface,

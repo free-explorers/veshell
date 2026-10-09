@@ -158,6 +158,46 @@ impl MetaWindowState {
         }
         meta_windows
     }
+
+    /// Ids of the windows in gaming mode placed on the output named
+    /// `output_name`.
+    ///
+    /// A game surface belongs to the output its tile was placed on: rendering it
+    /// on every output would duplicate the game on the other monitors.
+    pub fn game_mode_window_ids_for_output(&self, output_name: &str) -> Vec<String> {
+        self.meta_windows
+            .values()
+            .filter(|meta_window| {
+                meta_window.game_mode_activated
+                    && meta_window.current_output.as_deref() == Some(output_name)
+            })
+            .map(|meta_window| meta_window.id.clone())
+            .collect()
+    }
+}
+
+impl<BackendData: Backend + 'static> State<BackendData> {
+    /// Surfaces of the windows in gaming mode on the output named `output_name`.
+    ///
+    /// A game surface belongs to the output its tile was placed on: rendering it
+    /// on every output would duplicate the game on the other monitors. The
+    /// surfaces are cloned out so a caller can take `&mut self` afterwards (the
+    /// capture path renders through the backend).
+    pub fn game_mode_surfaces_for_output(
+        &self,
+        output_name: &str,
+    ) -> Vec<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface> {
+        self.meta_window_state
+            .game_mode_window_ids_for_output(output_name)
+            .into_iter()
+            .filter_map(|id| {
+                self.meta_window_state
+                    .meta_windows
+                    .get(&id)
+                    .and_then(|meta_window| self.surfaces.get(&meta_window.surface_id).cloned())
+            })
+            .collect()
+    }
 }
 
 /// Whether two app ids name the same application.
@@ -657,5 +697,34 @@ mod tests {
         let mut state = state_with(vec![window("w", 7, Some("org.example.App"))], &["w"]);
         state.forget_meta_window("w");
         assert!(state.focus_order.is_empty());
+    }
+
+    #[test]
+    fn game_mode_windows_are_scoped_to_their_output() {
+        let mut on_first = window("first", 1, None);
+        on_first.game_mode_activated = true;
+        on_first.current_output = Some("DP-1".to_string());
+        let mut on_second = window("second", 2, None);
+        on_second.game_mode_activated = true;
+        on_second.current_output = Some("HDMI-A-1".to_string());
+        let state = state_with(vec![on_first, on_second], &[]);
+
+        assert_eq!(
+            state.game_mode_window_ids_for_output("DP-1"),
+            vec!["first".to_string()]
+        );
+        assert_eq!(
+            state.game_mode_window_ids_for_output("HDMI-A-1"),
+            vec!["second".to_string()]
+        );
+        assert!(state.game_mode_window_ids_for_output("eDP-1").is_empty());
+    }
+
+    #[test]
+    fn non_game_windows_are_never_in_game_mode() {
+        let mut idle = window("idle", 1, None);
+        idle.current_output = Some("DP-1".to_string());
+        let state = state_with(vec![idle], &[]);
+        assert!(state.game_mode_window_ids_for_output("DP-1").is_empty());
     }
 }
