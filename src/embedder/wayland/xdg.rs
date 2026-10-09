@@ -440,8 +440,23 @@ pub mod xdg {
                 if let Some(meta_window) = self.get_meta_window(get_surface_id(&surface)) {
                     self.patch_meta_window(
                         MetaWindowPatch::UpdateNeedDecoration {
-                            id: meta_window.id,
+                            id: meta_window.id.clone(),
                             value: is_ssd,
+                        },
+                        true,
+                    );
+                    // The acked configure is the state the toplevel actually
+                    // negotiated: patch the fullscreen hint from it so a client
+                    // request and a later shell-driven un-fullscreen both clear
+                    // or set it (the `fullscreen_request` handler alone would
+                    // latch it).
+                    self.patch_meta_window(
+                        MetaWindowPatch::UpdateIsFullscreen {
+                            id: meta_window.id,
+                            value: configure
+                                .state
+                                .states
+                                .contains(xdg_toplevel::State::Fullscreen),
                         },
                         true,
                     );

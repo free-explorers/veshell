@@ -61,6 +61,11 @@ sealed class MetaWindowPatchMessage
     required bool value,
   }) = UpdateIsModal;
 
+  const factory MetaWindowPatchMessage.updateIsFullscreen({
+    required String id,
+    required bool value,
+  }) = UpdateIsFullscreen;
+
   const factory MetaWindowPatchMessage.updateDisplayMode({
     required String id,
     MetaWindowDisplayMode? value,

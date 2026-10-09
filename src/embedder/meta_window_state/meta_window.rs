@@ -74,6 +74,14 @@ pub enum MetaWindowPatch {
         id: String,
         value: bool,
     },
+    /// Whether the toplevel negotiates a fullscreen state (client-requested or
+    /// shell-requested). A fullscreen window is a top-level application surface,
+    /// so the shell extracts it to its own tile instead of turning it into a
+    /// dialog on a relation.
+    UpdateIsFullscreen {
+        id: String,
+        value: bool,
+    },
     UpdateDisplayMode {
         id: String,
         value: Option<DisplayMode>,
@@ -136,6 +144,10 @@ pub struct MetaWindow {
     pub startup_id: Option<String>,
     pub is_fixed_sized: bool,
     pub is_modal: bool,
+    /// Client- or shell-negotiated xdg `Fullscreen` / X11 `_NET_WM_STATE_FULLSCREEN`
+    /// state. Unlike [`MetaWindow::display_mode`], which is the shell's requested
+    /// mode, this reflects the state the toplevel actually acked.
+    pub is_fullscreen: bool,
     pub geometry: Option<MyRectangle<i32, Logical>>,
     pub need_decoration: bool,
     pub current_output: Option<String>,
@@ -416,6 +428,14 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         return;
                     }
                     meta_window.is_modal = value;
+                }
+            }
+            MetaWindowPatch::UpdateIsFullscreen { id, value } => {
+                if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
+                    if meta_window.is_fullscreen == value {
+                        return;
+                    }
+                    meta_window.is_fullscreen = value;
                 }
             }
             MetaWindowPatch::UpdateGeometry { id, value } => {

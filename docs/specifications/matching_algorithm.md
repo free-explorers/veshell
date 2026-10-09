@@ -99,6 +99,13 @@ None of these signals is authoritative on its own, and every one may be absent, 
 - **Geometry hints** — always available; medium reliability.
   - Source: committed `min`/`max` size and modal state.
   - Notes: `min == max` on both axes indicates a fixed-size window; modal is a dialog indicator.
+- **Fullscreen / output size** — available once negotiated; high reliability.
+  - Source: committed xdg `Fullscreen` state, X11 `_NET_WM_STATE_FULLSCREEN`, and the window geometry.
+  - Notes: a fullscreen toplevel is a top-level application surface, not a dialog.
+    The shell also treats a window whose geometry matches a connected monitor's
+    logical size (physical mode ÷ fractional scale) as fullscreen-like, so a
+    client that fills the screen without requesting the protocol is handled the
+    same way. See [Extract to tile](#extract-to-tile).
 - **Role and popup parent** — always available; authoritative.
   - Source: `xdg_toplevel` / `xdg_popup`.
   - Notes: popups and menus belong to their parent surface and never become tiles.
@@ -167,6 +174,11 @@ All of these are observed on the live surfaces and, where meaningful, mirrored o
   dialogues the rest.
 - **Dialogs stay visible.** A dialog is attached to its owner tile and rendered
   above the tile's displayed surface, never hidden.
+- **Fullscreen-like surfaces are tiles.** A fullscreen window, or one whose
+  geometry matches a monitor's logical size, is a top-level application surface.
+  A relation (activation, provenance, process sibling) must not turn it into a
+  dialog: it is extracted to its own tile even when it was opened from another
+  window. See [Extract to tile](#extract-to-tile).
 - **One redistributor, displayed window included.** The same pass runs for the
   clicked tile at its burst settle and for any other tile with an overflow. No
   tile — launched or not — keeps a window it does not fit.
@@ -248,6 +260,16 @@ fixed-size the burst is still gathering (bounded), so the relation on the real
 window stays an owner hint and the real window is matched onto the tile. The
 helper then becomes the leftover that is turned into a dialog at the settle.
 
+A window that is **fullscreen-like** is never turned into a dialog by a
+relation. It is fullscreen (`Fullscreen` state / `_NET_WM_STATE_FULLSCREEN`) or
+its geometry matches a connected monitor's logical size. A game launched from
+Steam or a fullscreen player opened from a browser reports `activatedBy` to its
+launcher; routing it as a dialog would hide it behind the launcher's tile. Such
+a window is instead [extracted to a tile](#extract-to-tile). The client-declared
+`parent` and the modal hint stay authoritative, so an explicit child or modal is
+still a dialog, and a late activation hint never pulls a fullscreen-like window
+back into its opener's tile.
+
 A tile renders its dialogs whether or not it currently has a main window
 (`WindowDialogs`, shared with `WindowWidget`): when the only windows an
 application opened so far are dialog-like (for example an updater or a splash
@@ -258,6 +280,28 @@ of the tile's biggest size: a dialog bigger than the cap and resizable is
 configured down to it, while a fixed-size one is scaled down uniformly. A
 dialog already smaller than the cap is left alone, so a manual resize survives.
 Either way a margin is left through which the window behind stays visible.
+
+### Extract to tile
+
+A native window can leave its owner tile and become (or join) a tile. This is
+the path behind the dialog titlebar's **Extract to new tile** button and behind
+the automatic fullscreen-like exception in [Dialog routing](#dialog-routing).
+
+Extraction matches the window against the **empty** persistent placeholders of
+its application using the ordinary identity cost (`appId` gate, then stored
+title, class, startup id) and picks the best, with the stable tie-break. The
+tile the window is extracted from is excluded, so the window cannot simply
+re-absorb there. Only when no empty placeholder matches is a new persistent tile
+created, placed on the focused screen's active workspace. Occupied tiles are
+never candidates: extraction adds a displayed surface, it does not merge into
+another tile's window set. As everywhere else, placeholders stay user-created —
+extraction only ever creates the single new tile it needs.
+
+The destination tile is then brought into view (`bringWindowIntoView`): its
+screen is focused, the overview is hidden, its workspace and tile are selected
+and the native window is activated. An extraction is therefore never silent —
+the window the user pulled out (or that was extracted automatically) is revealed
+wherever its tile lives.
 
 ### Tie-break
 

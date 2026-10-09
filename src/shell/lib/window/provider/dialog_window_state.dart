@@ -7,6 +7,7 @@ import 'package:shell/window/model/dialog_window.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/model/window_properties.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
+import 'package:shell/window/provider/window_manager/matching_engine.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/window/provider/window_provider.mixin.dart';
 
@@ -25,23 +26,25 @@ class DialogWindowState extends _$DialogWindowState
     state = window;
   }
 
-  /// Detaches this dialog's native window into a new persistent window placed
-  /// on the focused workspace, then removes this dialog.
+  /// Detaches this dialog's native window into a tile, then removes this
+  /// dialog.
   ///
-  /// The meta window itself stays alive: the new persistent window takes over
-  /// its ownership through the window map, identity coming from the native
-  /// window (resolved to a desktop entry when one exists). The extraction
+  /// The meta window itself stays alive: the target tile takes over its
+  /// ownership through the window map, identity coming from the native window
+  /// (resolved to a desktop entry when one exists). An existing empty
+  /// placeholder of the same application is preferred over a new tile (see
+  /// [MatchingEngine.extractMetaWindowToTile]); the tile this dialog hangs off
+  /// is excluded so the window cannot simply re-absorb there. The extraction
   /// button in the dialog titlebar is the only entry point.
   ///
-  /// Ordering matters: the meta window is detached *before* the persistent
-  /// window is created so no rebroadcast ever routes it back here, and the
-  /// dialog is destroyed *after* — leaving ownership cleanly re-pointed.
+  /// Ordering matters: the meta window is detached *before* the tile is chosen
+  /// so no rebroadcast ever routes it back here, and the dialog is destroyed
+  /// *after* — leaving ownership cleanly re-pointed.
   Future<void> extractToTile() async {
     final metaWindowId = state.metaWindowId;
 
     matchingLog.info(
-      'Extracting dialog $windowId meta window $metaWindowId '
-      'to a new persistent window',
+      'Extracting dialog $windowId meta window $metaWindowId to a tile',
     );
 
     // Detach the meta window from this dialog without notifying so the
@@ -49,10 +52,13 @@ class DialogWindowState extends _$DialogWindowState
     removeMetaWindow(metaWindowId, shouldNotify: false);
 
     await ref
-        .read(windowManagerProvider.notifier)
-        .createPersistentWindowForMetaWindow(metaWindowId: metaWindowId);
+        .read(matchingEngineProvider.notifier)
+        .extractMetaWindowToTile(
+          metaWindowId,
+          excludedWindowIds: [state.parentWindowId],
+        );
 
-    // Destroying this dialog leaves the mapping to the new persistent window.
+    // This leaves the mapping pointing at the chosen persistent window.
     removeWindow();
   }
 

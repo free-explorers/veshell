@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -203,6 +205,21 @@ class MetaWindowManager extends _$MetaWindowManager {
     }
     if (relationOwner != null) {
       final rootOwner = engine.rootTileFor(relationOwner);
+      // A fullscreen-like surface is a top-level application window, not a
+      // dialog: a game launched from a launcher or a fullscreen player opened
+      // from a browser gets its own tile (or an existing empty placeholder of
+      // its app) even though a relation ties it to an owner. The owner tile is
+      // excluded so the window cannot simply land back on it.
+      if (engine.isFullscreenLike(id)) {
+        _recordRouting(metaWindow, branch: 'outputSized', owner: rootOwner);
+        unawaited(
+          engine.extractMetaWindowToTile(
+            id,
+            excludedWindowIds: [rootOwner],
+          ),
+        );
+        return;
+      }
       _recordRouting(metaWindow, branch: 'relation', owner: rootOwner);
       _createDialog(id, rootOwner);
       return;
@@ -262,6 +279,15 @@ class MetaWindowManager extends _$MetaWindowManager {
     }
     final metaWindow = ref.read(metaWindowStateProvider(id));
     final engine = ref.read(matchingEngineProvider.notifier);
+
+    // A late activation relation must not pull a fullscreen-like surface back
+    // into its opener's tile: it is a top-level window. A client parent or
+    // modal hint stays authoritative.
+    if (!metaWindow.isModal &&
+        metaWindow.parent == null &&
+        engine.isFullscreenLike(id)) {
+      return;
+    }
 
     final WindowId? owner;
     if (metaWindow.isModal || metaWindow.parent != null) {
