@@ -12,35 +12,96 @@ It provides an [innovative workflow](#the-innovative-workflow) that utilizes hum
 This project is under the umbrella of the [Free Explorers Collective](https://free-explorers.com), a community of Open Source enthusiast that funds and collaborate on Open Source software. 
 By becoming a Free Explorer you can get involve into the project and support it.
 
-# Installation requirements
+# Installation
 
-- Installing rust and cargo using [rustup](https://rustup.rs/)
+Veshell is distributed through community channels; there is no vendor repository.
+
+## Arch / Manjaro (AUR)
+
+Three packages are available: `veshell` (builds from source), `veshell-bin`
+(prebuilt) and `veshell-git` (tracks development). Install one of them with an
+AUR helper, for example:
+
+```sh
+yay -S veshell-bin
+```
+
+## Fedora (COPR)
+
+```sh
+sudo dnf copr enable @free-explorers/veshell
+sudo dnf install veshell-bin
+```
+
+## openSUSE Tumbleweed, Slowroll and Leap 16.0 (OBS)
+
+```sh
+sudo zypper addrepo -f \
+  https://download.opensuse.org/repositories/home:/PapyElGringo/openSUSE_Tumbleweed/ veshell
+sudo zypper --gpg-auto-import-keys refresh
+sudo zypper install veshell-bin
+```
+
+Use `openSUSE_Slowroll` or `16.0` instead of `openSUSE_Tumbleweed` on those
+releases.
+
+## Debian 13 and Ubuntu 26.04 (OBS)
+
+```sh
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://download.opensuse.org/repositories/home:/PapyElGringo/xUbuntu_26.04/Release.key \
+  | sudo gpg --batch --no-tty --yes --dearmor -o /etc/apt/keyrings/veshell.gpg
+echo "deb [signed-by=/etc/apt/keyrings/veshell.gpg] https://download.opensuse.org/repositories/home:/PapyElGringo/xUbuntu_26.04/ ./" \
+  | sudo tee /etc/apt/sources.list.d/veshell.list
+sudo apt update && sudo apt install veshell-bin
+```
+
+Use `Debian_13` instead of `xUbuntu_26.04` on Debian.
+
+## NixOS
+
+See [NixOS packaging](docs/nixos.md).
+
+The project ships no analytics; see
+[privacy and telemetry](docs/privacy.md) for the build-time tooling and artifact
+provenance.
+
+# Building from source
+
+These instructions need the full toolchain; none of it is required to install a
+distribution package.
+
+## Build requirements
+
+- Rust and Cargo via [rustup](https://rustup.rs/)
 - [System dependencies](./docs/dependencies.md)
 
-# Trying Veshell
+## Trying Veshell
 
-```shell
+```sh
 cargo run
 ```
 
-# Installing Veshell locally
-```shell
+## Installing a local build
+
+`make install-local` builds and then installs system-wide (`sudo make install`
+with `PREFIX=/usr`):
+
+```sh
 make install-local
 ```
 
-# Uninstalling Veshell
-```shell
+Remove it again with:
+
+```sh
 sudo make uninstall
 ```
 
-For offline builds, staged installs, or distribution packages, see
-[the build and packaging guide](docs/building.md). NixOS instructions are in
-[docs/nixos.md](docs/nixos.md). The project ships no analytics; see
-[privacy and telemetry](docs/privacy.md) for the build-time tooling and
-artifact provenance.
-
-Distribution packaging and prebuilt releases (Arch/Manjaro, Fedora, Debian) live
-in [`veshell-packaging`](https://github.com/free-explorers/veshell-packaging).
+This only removes a `make install-local` tree; it never touches a distribution
+package. For offline builds and staged installs, see
+[the build and packaging guide](docs/building.md). Distribution packaging and
+prebuilt releases live in
+[`veshell-packaging`](https://github.com/free-explorers/veshell-packaging).
 
 # The innovative workflow
 
