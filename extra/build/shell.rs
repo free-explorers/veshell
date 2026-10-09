@@ -10,6 +10,14 @@ lazy_static! {
 
 const SHELL_DIRECTORY: &str = "src/shell";
 
+// Flutter and Dart report usage analytics to Google by default. The project
+// build must not emit telemetry, and must not depend on whatever global opt-out
+// state the developer's machine happens to have. `FLUTTER_SUPPRESS_ANALYTICS`
+// suppresses the Flutter tool (including the nested `dart pub` it spawns),
+// while the Dart CLI additionally needs `--suppress-analytics` on the command.
+const SUPPRESS_ANALYTICS_ENV: &str = "FLUTTER_SUPPRESS_ANALYTICS";
+const SUPPRESS_ANALYTICS_FLAG: &str = "--suppress-analytics";
+
 pub fn build_shell(
     flutter_engine_build: FlutterEngineBuild,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -28,6 +36,7 @@ pub fn build_shell(
     let output = std::process::Command::new(absolute_flutter_bin.clone())
         .arg("pub")
         .arg("get")
+        .env(SUPPRESS_ANALYTICS_ENV, "true")
         .current_dir(absolute_shell_directory.clone())
         .status()?;
 
@@ -38,9 +47,11 @@ pub fn build_shell(
     // run build_runner
     println!("Running build_runner...");
     let output = std::process::Command::new(absolute_dart_bin)
+        .arg(SUPPRESS_ANALYTICS_FLAG)
         .arg("run")
         .arg("build_runner")
         .arg("build")
+        .env(SUPPRESS_ANALYTICS_ENV, "true")
         .current_dir(absolute_shell_directory.clone())
         .status()?;
     if !output.success() {
@@ -53,6 +64,7 @@ pub fn build_shell(
     command
         .arg("build")
         .arg("linux")
+        .env(SUPPRESS_ANALYTICS_ENV, "true")
         .arg(match flutter_engine_build {
             FlutterEngineBuild::Debug => "--debug",
             FlutterEngineBuild::Profile => "--profile",
