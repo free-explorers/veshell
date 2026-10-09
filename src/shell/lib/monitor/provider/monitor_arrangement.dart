@@ -255,3 +255,24 @@ Map<MonitorId, Offset> changedLocations(
   }
   return changed;
 }
+
+/// Writes to perform when applying the [edited] arrangement, relative to the
+/// live [originalLocations].
+///
+/// The edited layout is first transposed so its bounding-box top-left is
+/// `(0, 0)` — the invariant for `monitor/<connector>.json`. The canvas lets the
+/// user drag the arrangement anywhere, so the staged layout can sit at a
+/// non-zero origin (for example after dragging every monitor down); writing it
+/// as-is would persist that origin and move the monitors' bounding box away
+/// from the compositor's layout origin. Comparing against the live locations
+/// means an already-anchored arrangement writes nothing, while a translated one
+/// is re-anchored at the origin.
+Map<MonitorId, Offset> transposedWrites(
+  Map<MonitorId, Offset> originalLocations,
+  List<MonitorPlacement> edited,
+) {
+  final transposed = toRelativeArrangement(edited);
+  return changedLocations(originalLocations, {
+    for (final placement in transposed) placement.monitorId: placement.location,
+  });
+}

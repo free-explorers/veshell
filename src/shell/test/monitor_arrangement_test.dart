@@ -162,6 +162,69 @@ void main() {
     });
   });
 
+  group('transposedWrites', () {
+    const a = MonitorPlacement(
+      monitorId: 'A',
+      description: 'A',
+      logicalSize: Size(2560, 1440),
+      location: Offset.zero,
+      scale: 1,
+    );
+    const b = MonitorPlacement(
+      monitorId: 'B',
+      description: 'B',
+      logicalSize: Size(1920, 1080),
+      location: Offset(2560, 0),
+      scale: 1,
+    );
+
+    test('re-anchors a translated arrangement at the origin', () {
+      // The live layout sits at y = 1920; the edited layout is the same shape,
+      // so applying must write it back at the origin.
+      final writes = transposedWrites(
+        {'A': const Offset(0, 1920), 'B': const Offset(2560, 1920)},
+        [
+          a.copyWith(location: const Offset(0, 1920)),
+          b.copyWith(location: const Offset(2560, 1920)),
+        ],
+      );
+
+      expect(writes, {'A': Offset.zero, 'B': const Offset(2560, 0)});
+    });
+
+    test('writes nothing when the arrangement is already anchored', () {
+      final writes = transposedWrites(
+        {'A': Offset.zero, 'B': const Offset(2560, 0)},
+        [a, b],
+      );
+
+      expect(writes, isEmpty);
+    });
+
+    test('keeps a relative move anchored at the origin', () {
+      final writes = transposedWrites(
+        {'A': Offset.zero, 'B': const Offset(2560, 0)},
+        [a.copyWith(location: const Offset(0, 1440)), b],
+      );
+
+      expect(writes, {'A': const Offset(0, 1440)});
+    });
+
+    test('writes nothing when the arrangement is only translated', () {
+      // Dragging every monitor down does not change the relative layout, so
+      // there is nothing to persist.
+      final writes = transposedWrites(
+        {'A': Offset.zero, 'B': const Offset(2560, 0)},
+        [
+          a.copyWith(location: const Offset(0, 1920)),
+          b.copyWith(location: const Offset(2560, 1920)),
+        ],
+      );
+
+      expect(writes, isEmpty);
+    });
+  });
+
   group('toRelativeArrangement', () {
     test('translates the arrangement so its top-left is at the origin', () {
       final placements = [

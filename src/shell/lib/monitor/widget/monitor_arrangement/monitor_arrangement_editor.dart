@@ -43,23 +43,19 @@ class MonitorArrangementEditor extends HookConsumerWidget {
         ),
     ];
 
-    final initialRelative = {
-      for (final placement in toRelativeArrangement(placements))
-        placement.monitorId: placement.location,
-    };
-    final editedRelative = {
-      for (final placement in relative) placement.monitorId: placement.location,
-    };
     final originalLocations = {
       for (final placement in placements)
         placement.monitorId: placement.location,
     };
-    final writes = changedLocations(originalLocations, editedRelative);
-    final edited = changedLocations(initialRelative, editedRelative);
+    // Applying always re-anchors the arrangement at the origin (see
+    // `transposedWrites`); `writes` is non-empty when that anchoring or a move
+    // changes anything, so it also lets the user normalise a layout whose
+    // origin drifted, without having to move a monitor first.
+    final writes = transposedWrites(originalLocations, relative);
     final overlaps = arrangementsOverlap(
       relative.map((placement) => placement.rect),
     );
-    final canApply = edited.isNotEmpty && !overlaps;
+    final canApply = writes.isNotEmpty && !overlaps;
 
     void resetToDefault() {
       // Only the locations are reset: the mode and scale overrides are kept,
