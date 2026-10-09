@@ -180,7 +180,7 @@
   "extractToNewTile": "새 타일로 추출",
   "gamingPaused": "게임 모드",
   "clickToEnter": "클릭하여 시작",
-  "gamingModeDescription": "이 모드에서는 게임이 화면과 입력에 직접 접근합니다.",
+  "gamingModeDescription": "이 모드에서는 게임이 화면과 입력에 직접 접근하며 성능과 지연 시간이 최적화됩니다.",
   "exitGamingHint": "종료하려면 Ctrl+Esc",
   "allowCapture": "캡처를 허용할까요?",
   "colorCaptureRequest": "{app}에서 색상을 선택하려고 합니다.",

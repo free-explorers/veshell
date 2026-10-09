@@ -180,7 +180,7 @@
   "extractToNewTile": "新しいタイルに取り出す",
   "gamingPaused": "ゲームモード",
   "clickToEnter": "クリックして開始",
-  "gamingModeDescription": "このモードではゲームが画面と入力に直接アクセスできます。",
+  "gamingModeDescription": "このモードではゲームが画面と入力に直接アクセスでき、パフォーマンスとレイテンシーが最適化されます。",
   "exitGamingHint": "終了するには Ctrl+Esc",
   "allowCapture": "キャプチャを許可しますか？",
   "colorCaptureRequest": "{app} が色の選択を求めています。",

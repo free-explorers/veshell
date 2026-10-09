@@ -180,7 +180,7 @@
   "extractToNewTile": "Извлечь в новую плитку",
   "gamingPaused": "Игровой режим",
   "clickToEnter": "Нажмите, чтобы войти",
-  "gamingModeDescription": "В этом режиме игра получает прямой доступ к экрану и вводу.",
+  "gamingModeDescription": "В этом режиме игра получает прямой доступ к экрану и вводу, а также оптимизируются производительность и задержка.",
   "exitGamingHint": "Нажмите Ctrl+Esc, чтобы выйти",
   "allowCapture": "Разрешить захват?",
   "colorCaptureRequest": "{app} хочет выбрать цвет.",

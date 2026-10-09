@@ -180,7 +180,7 @@
   "extractToNewTile": "نئی ٹائل میں نکالیں",
   "gamingPaused": "گیمنگ موڈ",
   "clickToEnter": "داخل ہونے کے لیے کلک کریں",
-  "gamingModeDescription": "یہ موڈ گیم کو اسکرین اور ان پٹ تک براہ راست رسائی دیتا ہے۔",
+  "gamingModeDescription": "یہ موڈ گیم کو اسکرین اور ان پٹ تک براہ راست رسائی دیتا ہے اور کارکردگی اور تاخیر کو بہتر بناتا ہے۔",
   "exitGamingHint": "باہر نکلنے کے لیے Ctrl+Esc دبائیں",
   "allowCapture": "کیپچر کی اجازت دیں؟",
   "colorCaptureRequest": "{app} ایک رنگ منتخب کرنا چاہتی ہے۔",

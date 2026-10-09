@@ -180,7 +180,7 @@
   "extractToNewTile": "Wyodrębnij do nowego kafelka",
   "gamingPaused": "Tryb gry",
   "clickToEnter": "Kliknij, aby wejść",
-  "gamingModeDescription": "Ten tryb daje grze bezpośredni dostęp do ekranu i danych wejściowych.",
+  "gamingModeDescription": "Ten tryb daje grze bezpośredni dostęp do ekranu i danych wejściowych oraz optymalizuje wydajność i opóźnienia.",
   "exitGamingHint": "Naciśnij Ctrl+Esc, aby wyjść",
   "allowCapture": "Zezwolić na przechwytywanie?",
   "colorCaptureRequest": "{app} chce wybrać kolor.",

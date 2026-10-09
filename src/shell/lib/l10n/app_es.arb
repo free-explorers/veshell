@@ -180,7 +180,7 @@
   "extractToNewTile": "Extraer a un nuevo mosaico",
   "gamingPaused": "Modo de juego",
   "clickToEnter": "Haz clic para entrar",
-  "gamingModeDescription": "Este modo da al juego acceso directo a la pantalla y la entrada.",
+  "gamingModeDescription": "Este modo da al juego acceso directo a la pantalla y la entrada, y optimiza el rendimiento y la latencia.",
   "exitGamingHint": "Pulsa Ctrl+Esc para salir",
   "allowCapture": "¿Permitir captura?",
   "colorCaptureRequest": "{app} quiere seleccionar un color.",

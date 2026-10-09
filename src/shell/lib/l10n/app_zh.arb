@@ -180,7 +180,7 @@
   "extractToNewTile": "提取到新平铺项",
   "gamingPaused": "游戏模式",
   "clickToEnter": "点击进入",
-  "gamingModeDescription": "此模式让游戏直接访问屏幕和输入。",
+  "gamingModeDescription": "此模式让游戏直接访问屏幕和输入，并优化性能与延迟。",
   "exitGamingHint": "按 Ctrl+Esc 退出",
   "allowCapture": "允许捕获？",
   "colorCaptureRequest": "{app} 想要选取颜色。",

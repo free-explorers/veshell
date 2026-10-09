@@ -210,7 +210,7 @@
   "extractToNewTile": "Extract to new tile",
   "gamingPaused": "Gaming mode",
   "clickToEnter": "Click to enter",
-  "gamingModeDescription": "This mode gives the game direct access to the screen and input.",
+  "gamingModeDescription": "This mode gives the game direct access to the screen and input, and optimizes performance and latency.",
   "exitGamingHint": "Press Ctrl+Esc to exit",
   "allowCapture": "Allow capture?",
   "colorCaptureRequest": "{app} wants to pick a color.",

@@ -180,7 +180,7 @@
   "extractToNewTile": "Yeni döşemeye çıkar",
   "gamingPaused": "Oyun modu",
   "clickToEnter": "Girmek için tıklayın",
-  "gamingModeDescription": "Bu mod, oyuna ekrana ve girişe doğrudan erişim verir.",
+  "gamingModeDescription": "Bu mod, oyuna ekrana ve girişe doğrudan erişim verir; performansı ve gecikmeyi optimize eder.",
   "exitGamingHint": "Çıkmak için Ctrl+Esc",
   "allowCapture": "Yakalamaya izin verilsin mi?",
   "colorCaptureRequest": "{app} bir renk seçmek istiyor.",

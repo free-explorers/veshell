@@ -180,7 +180,7 @@
   "extractToNewTile": "استخراج إلى بلاطة جديدة",
   "gamingPaused": "وضع الألعاب",
   "clickToEnter": "انقر للدخول",
-  "gamingModeDescription": "يمنح هذا الوضع اللعبة وصولاً مباشرًا إلى الشاشة والإدخال.",
+  "gamingModeDescription": "يمنح هذا الوضع اللعبة وصولاً مباشرًا إلى الشاشة والإدخال، مع تحسين الأداء وزمن الاستجابة.",
   "exitGamingHint": "اضغط Ctrl+Esc للخروج",
   "allowCapture": "السماح بالالتقاط؟",
   "colorCaptureRequest": "يريد {app} اختيار لون.",

@@ -180,7 +180,7 @@
   "extractToNewTile": "Estrai in un nuovo riquadro",
   "gamingPaused": "Modalità gioco",
   "clickToEnter": "Fai clic per entrare",
-  "gamingModeDescription": "Questa modalità dà al gioco accesso diretto a schermo e input.",
+  "gamingModeDescription": "Questa modalità dà al gioco accesso diretto a schermo e input, ottimizzando prestazioni e latenza.",
   "exitGamingHint": "Premi Ctrl+Esc per uscire",
   "allowCapture": "Consentire la cattura?",
   "colorCaptureRequest": "{app} vuole selezionare un colore.",

@@ -180,7 +180,7 @@
   "extractToNewTile": "नई टाइल में निकालें",
   "gamingPaused": "गेमिंग मोड",
   "clickToEnter": "प्रवेश करने के लिए क्लिक करें",
-  "gamingModeDescription": "यह मोड गेम को स्क्रीन और इनपुट तक सीधी पहुँच देता है।",
+  "gamingModeDescription": "यह मोड गेम को स्क्रीन और इनपुट तक सीधी पहुँच देता है और प्रदर्शन व विलंबता को बेहतर बनाता है।",
   "exitGamingHint": "बाहर निकलने के लिए Ctrl+Esc दबाएँ",
   "allowCapture": "कैप्चर की अनुमति दें?",
   "colorCaptureRequest": "{app} एक रंग चुनना चाहता है।",
