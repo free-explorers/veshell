@@ -39,6 +39,10 @@ configure.
 6. `Ctrl+Esc` clears the flag. The compositor replays a release for every key
    the client was still holding (the `Ctrl` of the chord included) before the
    grab is dropped, then the shell pops the route and the dim fades back in.
+7. A game that closes itself leaves gaming mode through the same exit: the
+   window removal deactivates the mode before the window is dropped, so the
+   compositor releases the pointer focus it set on entry and the shell pops the
+   zoom route exactly as for `Ctrl+Esc`.
 
 ## Invariants
 
@@ -63,7 +67,9 @@ configure.
   pointer, and a client that hides its cursor hides it — the shell's own cursor
   (from Flutter `MouseRegion`s) never overrides it.
 - Deactivation clears the compositor-set pointer focus, so a paused game stops
-  receiving motion even before the shell re-establishes a focus.
+  receiving motion even before the shell re-establishes a focus. A game that
+  closes itself deactivates before its window is removed, so the freed surface
+  is never left as the pointer focus and Flutter gets its pointer events back.
 - Leaving gaming mode never leaves the client believing a key is held, and
   entering it never leaves Flutter believing a key is held.
 - The window geometry patched on entry is logical, matching every other

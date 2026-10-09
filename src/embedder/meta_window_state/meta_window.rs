@@ -198,6 +198,26 @@ impl<BackendData: Backend + 'static> State<BackendData> {
     }
 
     pub fn remove_meta_window(&mut self, meta_window_id: &String) {
+        // A game that closes itself is torn down through this path, not through
+        // an `UpdateGameModeActivated(false)` patch. Without that deactivation
+        // the shell never pops its gaming route and the compositor keeps the
+        // pointer focus it set on entry, now targeting a freed surface, so
+        // Flutter never gets its pointer events back. Deactivate first so both
+        // release cleanly: this clears the compositor-set pointer focus, hands
+        // the output back its fixed cadence, drops the forwarded keys and tells
+        // the shell to leave the mode.
+        if self.meta_window_state.meta_window_in_gaming_mode.as_deref()
+            == Some(meta_window_id.as_str())
+        {
+            self.patch_meta_window(
+                MetaWindowPatch::UpdateGameModeActivated {
+                    id: meta_window_id.clone(),
+                    value: false,
+                },
+                true,
+            );
+        }
+
         self.meta_window_state
             .meta_windows
             .remove(meta_window_id)
@@ -213,12 +233,18 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         // with it, so their surfaces stop rendering for any session.
         crate::portal::service::close_source_share_sessions(self, meta_window_id);
 
+        // Backstop for a window that was torn down with the gaming flags out of
+        // sync (the deactivation patch above already cleared the focus, the
+        // output cadence and the forwarded keys): the client is gone, so the
+        // pointer focus must not keep naming it and the next gaming session
+        // must start from a clean slate.
         if self.meta_window_state.meta_window_in_gaming_mode.as_deref()
             == Some(meta_window_id.as_str())
         {
             self.meta_window_state.meta_window_in_gaming_mode = None;
-            // The client is gone; drop the keys it was holding so the next
-            // gaming session starts from a clean slate.
+            if self.pointer_focus.take().is_some() {
+                self.refresh_pointer_focus();
+            }
             self.game_mode_forwarded_keys.clear();
         }
 
