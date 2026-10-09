@@ -13,6 +13,7 @@ import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/window/model/matching_decision.dart';
+import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
@@ -216,6 +217,9 @@ class MetaWindowManager extends _$MetaWindowManager {
           engine.extractMetaWindowToTile(
             id,
             excludedWindowIds: [rootOwner],
+            // A game or fullscreen player extracted on its own is shown in
+            // gaming mode by default; an existing placeholder keeps its mode.
+            newTileDisplayMode: DisplayMode.game,
           ),
         );
         return;

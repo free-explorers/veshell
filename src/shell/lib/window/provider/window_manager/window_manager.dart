@@ -108,6 +108,7 @@ class WindowManager extends _$WindowManager {
 
   Future<PersistentWindowId> createPersistentWindowForMetaWindow({
     required MetaWindowId metaWindowId,
+    DisplayMode? displayMode,
   }) async {
     // create a new window
     final windowId = PersistentWindowId(_uuidGenerator.v4());
@@ -129,6 +130,7 @@ class WindowManager extends _$WindowManager {
             desktopEntryForSurface?.desktopEntry.id ?? (metaWindow.appId ?? ''),
       ),
       metaWindowId: metaWindowId,
+      displayMode: displayMode ?? DisplayMode.maximized,
     );
 
     ref
