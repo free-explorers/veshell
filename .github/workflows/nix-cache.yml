@@ -1,0 +1,111 @@
+name: Nix Cache
+
+# Builds the flake at the released commit and pushes the package, SDK and shell
+# closures to the project Cachix cache. The engine is substituted from that
+# cache (pushed by free-explorers/flutter-engine-nix); it is never built here.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to build and cache
+        required: false
+        default: main
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nix-cache-${{ github.event.release.tag_name || inputs.ref || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cache:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.release.tag_name || inputs.ref || github.ref }}
+
+      - name: Reclaim unused runner tools and require 30 GiB
+        shell: bash
+        run: |
+          set -euo pipefail
+          nproc
+          free -h
+          df -h / /mnt
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          available=$(df --output=avail -B1 / | tr -dc '0-9')
+          (( available >= 30 * 1024 * 1024 * 1024 ))
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+        with:
+          extra_nix_config: |
+            max-jobs = 1
+            cores = 4
+            experimental-features = nix-command flakes
+
+      - name: Use the project cache
+        uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: veshell
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Require the engine closure in the cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          engine=$(nix eval --raw .#engine.outPath)
+          hash=${engine#/nix/store/}
+          hash=${hash%%-*}
+          if ! curl -fsS "https://veshell.cachix.org/$hash.narinfo" >/dev/null; then
+            echo "Engine $engine is not in the veshell cache. Run the flutter-engine-nix release workflow first." >&2
+            exit 1
+          fi
+
+      - name: Build the package, SDK and shell (60 minute bound)
+        timeout-minutes: 60
+        shell: bash
+        run: |
+          set -euo pipefail
+          setsid timeout --signal=INT --kill-after=60s 60m \
+            nix build .#default .#sdk .#shell --print-out-paths --no-link \
+              --max-jobs 1 --cores 4 > "$RUNNER_TEMP/roots" &
+          pid=$!
+          trap 'kill -INT -- -"$pid" 2>/dev/null || true' EXIT INT TERM
+          while kill -0 "$pid" 2>/dev/null; do
+            available=$(df --output=avail -B1 /nix/store | tr -dc '0-9')
+            if (( available < 2 * 1024 * 1024 * 1024 )); then
+              echo 'Stopping package build: less than 2 GiB remains.' >&2
+              kill -TERM -- -"$pid" 2>/dev/null || true
+              exit 1
+            fi
+            sleep 30
+          done
+          wait "$pid"
+          trap - EXIT INT TERM
+          cat "$RUNNER_TEMP/roots"
+          package=$(sed -n '1p' "$RUNNER_TEMP/roots")
+          test -x "$package/bin/veshell"
+
+      - name: Push the package, SDK and shell to the cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t roots < "$RUNNER_TEMP/roots"
+          cachix push veshell "${roots[@]}"
+
+      - name: Final resource sample
+        if: always()
+        shell: bash
+        run: |
+          free -h
+          df -h / /mnt
