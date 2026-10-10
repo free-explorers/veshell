@@ -98,8 +98,9 @@ nix build github:free-explorers/veshell#engine
   `overlays`. Its `nixpkgs` input and the engine packaging pin the same nixpkgs
   revision; keep them in step.
 - The engine, SDK, shell and package closures are published to the `veshell`
-  Cachix cache by the `flutter-engine-nix` and `veshell-packaging` release
-  workflows. Users substitute from it; a source build is only the fallback.
+  Cachix cache by `.github/workflows/nix-cache.yml` here and by
+  `flutter-engine-nix`. Users substitute from it; a source build is only the
+  fallback.
 - The Flutter SDK/tooling pins (`nix/flutter-sdk.json`,
   `nix/flutter-tools-lock.json`, `nix/engine-repository.json`,
   `nix/dependencies.nix`) are checked against `veshell-packaging`'s
