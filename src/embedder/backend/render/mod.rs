@@ -126,9 +126,9 @@ where
 }
 
 /// The desktop frame without the pointer: Flutter texture plus surfaces
-/// rendered through the game-mode fallback. Used both by the frozen screen
-/// render (real cursor drawn by the caller) and by the capture readback
-/// (no cursor at all).
+/// rendered through the game-mode fallback. Callers that need the pointer
+/// add [`get_cursor_elements`] on top: the live desktop render and local
+/// recordings do, while screenshots and portal captures stay pointer-free.
 pub fn get_frame_elements_from_dmabuf<R>(
     renderer: &mut R,
     output: &Output,
@@ -181,6 +181,65 @@ where
     }
 
     elements
+}
+
+/// Cursor imagery to composite into a capture readback. Screenshots and
+/// portal captures omit it; local recordings include it so the pointer is
+/// visible in the video.
+pub struct CaptureCursor<'a> {
+    pub cursor_image_status: &'a Mutex<CursorImageStatus>,
+    pub cursor_state: &'a Mutex<CursorStateInner>,
+    /// Global logical pointer location.
+    pub location: Point<f64, Logical>,
+    pub is_surface_under_pointer: bool,
+    pub gaming_mode: bool,
+    pub now: Time<Monotonic>,
+}
+
+/// The pointer imagery for one output, stacked exactly like the live
+/// desktop draws it. Returns nothing when the pointer is outside the
+/// output's geometry.
+pub fn get_cursor_elements<R>(
+    renderer: &mut R,
+    output_geometry: Rectangle<f64, Logical>,
+    scale: smithay::output::Scale,
+    now: Time<Monotonic>,
+    cursor_image_status: &Mutex<CursorImageStatus>,
+    cursor_state: &Mutex<CursorStateInner>,
+    cursor_location: Point<f64, Logical>,
+    is_surface_under_pointer: bool,
+    gaming_mode: bool,
+) -> Vec<VeshellRenderElements<R>>
+where
+    R: Renderer + ImportAll + ImportMem + ImportDma,
+    <R as RendererSuper>::TextureId: Send + Clone + 'static,
+    <R as RendererSuper>::Error:,
+    VeshellRenderElements<R>: RenderElement<R>,
+{
+    if !output_geometry.contains(cursor_location) {
+        return Vec::new();
+    }
+    // A game on this output owns the cursor: it is the only pointer target,
+    // so its cursor image is authoritative (see `draw_cursor`).
+    draw_cursor(
+        renderer,
+        cursor_image_status,
+        cursor_state,
+        scale,
+        now,
+        cursor_location - output_geometry.loc,
+        is_surface_under_pointer,
+        gaming_mode,
+    )
+    .into_iter()
+    .map(|(elem, hotspot)| {
+        VeshellRenderElements::Cursor(RelocateRenderElement::from_element(
+            elem,
+            Point::from((-hotspot.x, -hotspot.y)),
+            Relocate::Relative,
+        ))
+    })
+    .collect()
 }
 
 /// The selected area drawn natively while a screenshot session runs.
@@ -802,32 +861,21 @@ where
         ));
     }
 
-    if capture_overlay.is_none() && output_geometry.contains(cursor_location) {
-        // A game on this output owns the cursor: it is the only pointer target,
-        // so its cursor image is authoritative (see `draw_cursor`).
-        let cursor_element = draw_cursor(
+    if capture_overlay.is_none() {
+        // The desktop cursor is drawn on top of everything else. During a
+        // screenshot session it is replaced by the native selection overlay
+        // (see `get_capture_overlay_elements`).
+        elements.extend(get_cursor_elements(
             renderer,
-            cursor_image_status,
-            cursor_state,
+            output_geometry,
             scale,
             now,
-            cursor_location - output_geometry.loc,
+            cursor_image_status,
+            cursor_state,
+            cursor_location,
             is_surface_under_pointer,
             !surfaces_in_gaming_mode.is_empty(),
-        );
-
-        let cursor_elements: Vec<VeshellRenderElements<R>> = cursor_element
-            .into_iter()
-            .map(|(elem, hotspot)| {
-                VeshellRenderElements::Cursor(RelocateRenderElement::from_element(
-                    elem,
-                    Point::from((-hotspot.x, -hotspot.y)),
-                    Relocate::Relative,
-                ))
-            })
-            .collect();
-
-        elements.extend(cursor_elements);
+        ));
     }
 
     let mut frame_elements = get_frame_elements_from_dmabuf(

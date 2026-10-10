@@ -59,6 +59,7 @@ use zbus::zvariant::OwnedObjectPath;
 use super::shm::ShmBuffer;
 use crate::backend::CaptureDmabufSetup;
 use crate::portal::service::SourceKind;
+use crate::portal::CursorModes;
 use crate::state::State;
 use crate::Backend;
 
@@ -308,6 +309,10 @@ pub struct ActiveStream {
     pub source_id: String,
     /// The portal source kind of this stream (monitor or window).
     pub source_kind: SourceKind,
+    /// The cursor mode the client requested for this cast. `EMBEDDED`
+    /// composites the pointer into delivered frames; `HIDDEN` (the portal
+    /// default) leaves them pointer-free.
+    pub cursor_mode: CursorModes,
     pub position: (i32, i32),
     pub size: (i32, i32),
     pub label: String,

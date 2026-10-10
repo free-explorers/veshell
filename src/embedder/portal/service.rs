@@ -10,9 +10,9 @@ use serde_json::json;
 use zbus::zvariant::OwnedObjectPath;
 
 use super::{
-    caller_is_frontend, encode_restore_data, make_reply_pair, Caller, PortalCall, PortalReply,
-    ReplyLink, ScreenCastConstraints, SourceTypes, RESPONSE_CANCELLED, RESPONSE_FAILED,
-    RESPONSE_OK,
+    caller_is_frontend, encode_restore_data, make_reply_pair, Caller, CursorModes, PortalCall,
+    PortalReply, ReplyLink, ScreenCastConstraints, SourceTypes, RESPONSE_CANCELLED,
+    RESPONSE_FAILED, RESPONSE_OK,
 };
 
 pub use super::FrontendOwner;
@@ -1002,6 +1002,16 @@ pub fn handle_consent_decision<BackendData: crate::backend::Backend + 'static>(
         // The requesting app id drives the shell's recording indicator.
         // Capture it before the runtime consumes the pending consent.
         let app_id = consent_app_id(state, &session_handle, consent_token).unwrap_or_default();
+        // The cursor mode the client asked for (SelectSources/Start merged
+        // at parse time) decides whether delivered frames embed the pointer.
+        let cursor_mode = state
+            .portal_state
+            .runtime
+            .as_ref()
+            .and_then(|runtime| runtime.ledger.sessions.get(&session_handle))
+            .and_then(|session| session.constraints.as_ref())
+            .map(|constraints| constraints.cursor_mode)
+            .unwrap_or(CursorModes::HIDDEN);
         // The ledger now holds the reply link pending; the producer
         // publishes a node and NodeReady completes the flow. Approval on a
         // session that died resolves cancelled without delivery: no node
@@ -1032,7 +1042,14 @@ pub fn handle_consent_decision<BackendData: crate::backend::Backend + 'static>(
         } else {
             None
         };
-        begin_shared_stream(state, &session_handle, source, restore_token, app_id);
+        begin_shared_stream(
+            state,
+            &session_handle,
+            source,
+            restore_token,
+            app_id,
+            cursor_mode,
+        );
     } else {
         handle_consent_through_runtime(state, &session_handle, consent_token, outcome);
     }
@@ -1297,6 +1314,20 @@ pub fn schedule_frame_delivery<BackendData: crate::backend::Backend + 'static>(
         .expect("timer can be scheduled");
 }
 
+/// Whether the active stream for `session_handle` asked for the pointer in
+/// its frames (`cursor_mode = EMBEDDED`). Unknown sessions fall back to the
+/// portal's pointer-free default.
+fn stream_embeds_cursor<BackendData: crate::backend::Backend + 'static>(
+    state: &crate::state::State<BackendData>,
+    session_handle: &OwnedObjectPath,
+) -> bool {
+    state
+        .portal_state
+        .active_streams
+        .get(session_handle)
+        .is_some_and(|stream| stream.cursor_mode.contains(CursorModes::EMBEDDED))
+}
+
 /// Renders one screen-cast frame on the dmabuf transport, if that is the
 /// session's transport. Returns `false` when the session is on shared memory
 /// so the caller takes the copy path.
@@ -1326,7 +1357,9 @@ fn deliver_dmabuf_frame<BackendData: crate::backend::Backend + 'static>(
     let Some((mut dmabuf, buffer)) = frame else {
         return true;
     };
-    let render = crate::capture::render_output_into_dmabuf(state, output, &mut dmabuf);
+    let include_cursor = stream_embeds_cursor(state, session_handle);
+    let render =
+        crate::capture::render_output_into_dmabuf(state, output, &mut dmabuf, include_cursor);
     let (rendered, sync) = match render {
         Ok(sync) => (true, Some(sync)),
         Err(error) => {
@@ -1354,7 +1387,8 @@ fn deliver_session_frame<BackendData: crate::backend::Backend + 'static>(
     if deliver_dmabuf_frame(state, session_handle, output) {
         return;
     }
-    match crate::capture::capture_output_pixels(state, output) {
+    let include_cursor = stream_embeds_cursor(state, session_handle);
+    match crate::capture::capture_output_pixels(state, output, include_cursor) {
         Ok(snapshot) => {
             if let Some(producer) = state.portal_state.pipewire_producer.as_mut() {
                 producer.queue_frame(session_handle.clone(), &snapshot.pixels);
@@ -1526,8 +1560,6 @@ pub fn on_view_frame_presented<BackendData: crate::backend::Backend + 'static>(
         // capturing anything.
         return;
     }
-    // All sessions on one output share one capture: their sources are the
-    // same pixels, and the copy is at most once per output per present.
     let output = state
         .space
         .outputs()
@@ -1536,7 +1568,11 @@ pub fn on_view_frame_presented<BackendData: crate::backend::Backend + 'static>(
     let Some(output) = output else {
         return;
     };
-    let mut shm_pixels: Option<Vec<u8>> = None;
+    // Sessions on one output with the same cursor mode share one capture:
+    // their sources are the same pixels, and the copy is at most once per
+    // (output, cursor mode) per present. Embedded-cursor casts composite
+    // the pointer; HIDDEN ones stay pointer-free.
+    let mut shm_pixels: [Option<Vec<u8>>; 2] = [None, None];
     for handle in due {
         if deliver_dmabuf_frame(state, &handle, &output) {
             if let Some(stream) = state.portal_state.active_streams.get_mut(&handle) {
@@ -1544,16 +1580,18 @@ pub fn on_view_frame_presented<BackendData: crate::backend::Backend + 'static>(
             }
             continue;
         }
-        if shm_pixels.is_none() {
-            match crate::capture::capture_output_pixels(state, &output) {
-                Ok(captured) => shm_pixels = Some(captured.pixels),
+        let include_cursor = stream_embeds_cursor(state, &handle);
+        let slot = &mut shm_pixels[include_cursor as usize];
+        if slot.is_none() {
+            match crate::capture::capture_output_pixels(state, &output, include_cursor) {
+                Ok(captured) => *slot = Some(captured.pixels),
                 Err(_) => {
                     tracing::debug!("frame capture failed after a present; producer stays quiet");
                 }
             }
         }
         if let (Some(pixels), Some(producer)) = (
-            shm_pixels.as_deref(),
+            slot.as_deref(),
             state.portal_state.pipewire_producer.as_mut(),
         ) {
             producer.queue_frame(handle.clone(), pixels);
@@ -1576,6 +1614,7 @@ fn begin_shared_stream<BackendData: crate::backend::Backend + 'static>(
     source: CaptureSource,
     restore_token: Option<String>,
     app_id: String,
+    cursor_mode: CursorModes,
 ) {
     let target = match source.kind {
         SourceKind::Monitor => resolve_monitor_target(state, &source.id),
@@ -1619,6 +1658,7 @@ fn begin_shared_stream<BackendData: crate::backend::Backend + 'static>(
             node_id: 0,
             source_id: source.id.clone(),
             source_kind: source.kind,
+            cursor_mode,
             position: target.position,
             size: (target.stream_size.w, target.stream_size.h),
             label: source.label.clone(),
@@ -3630,6 +3670,7 @@ mod tests {
                 node_id: 1,
                 source_id: "window-1".into(),
                 source_kind: SourceKind::Window,
+                cursor_mode: CursorModes::HIDDEN,
                 position: (0, 0),
                 size: (100, 100),
                 label: "window-1".into(),
@@ -3647,6 +3688,7 @@ mod tests {
                 node_id: 2,
                 source_id: "window-2".into(),
                 source_kind: SourceKind::Window,
+                cursor_mode: CursorModes::HIDDEN,
                 position: (0, 0),
                 size: (100, 100),
                 label: "window-2".into(),
@@ -3665,6 +3707,7 @@ mod tests {
                 node_id: 3,
                 source_id: "DP-1".into(),
                 source_kind: SourceKind::Monitor,
+                cursor_mode: CursorModes::HIDDEN,
                 position: (0, 0),
                 size: (1920, 1080),
                 label: "DP-1".into(),
@@ -4349,6 +4392,7 @@ mod tests {
             node_id: 42,
             source_id: "DP-2".into(),
             source_kind: SourceKind::Monitor,
+            cursor_mode: CursorModes::HIDDEN,
             position: (0, 1080),
             size: (2560, 1440),
             label: "DP-2".into(),
@@ -4384,6 +4428,7 @@ mod tests {
             node_id: 42,
             source_id: "DP-2".into(),
             source_kind: SourceKind::Monitor,
+            cursor_mode: CursorModes::HIDDEN,
             position: (0, 0),
             size: (1920, 1080),
             label: "DP-2".into(),
