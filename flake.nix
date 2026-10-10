@@ -47,5 +47,43 @@
         default = module;
         veshell = module;
       };
+
+      # Dependency-complete development shell for `nix develop` + `cargo run`.
+      # The repository build still drives everything; the pinned SDK and source
+      # engine are linked in when available so that it does not have to clone
+      # the Flutter repository or download meta-flutter's engine.
+      devShells.${system}.default = pkgs.mkShell {
+        packages = with pkgs; [
+          cargo rustc rustfmt clippy
+          pkg-config cmake ninja clang git unzip xz zstd
+          wayland libinput libdisplay-info seatd libgbm libxkbcommon pixman
+          udev openssl pipewire gst_all_1.gstreamer gst_all_1.gst-plugins-base
+          gtk3 libpulseaudio libGL libepoxy vulkan-loader fontconfig
+        ];
+        env = {
+          # The shell builds a release bundle and the source engine is
+          # release-only, so debug/profile engine modes are not wired here.
+          VESHELL_FLUTTER_MODE = "release";
+          SKIP_FLUTTER_ENGINE_DOWNLOAD = "1";
+          LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
+            pkgs.wayland
+            pkgs.libGL
+            pkgs.libpulseaudio
+          ];
+        };
+        shellHook = ''
+          # Link the pinned SDK when it exposes the `version` file the build
+          # checks; otherwise the recipe's own `git clone` flow installs it.
+          if [ ! -e .flutter_sdk ] && [ -f ${veshell.flutterSdk}/version ]; then
+            ln -sfn ${veshell.flutterSdk} .flutter_sdk
+          fi
+          engine_dir=extra/third_party/flutter_engine
+          mkdir -p "$engine_dir/release"
+          ln -sfn ${veshell.flutterEngine}/release/libflutter_engine.so "$engine_dir/release/libflutter_engine.so"
+          ln -sfn ${veshell.flutterEngine}/flutter_embedder.h "$engine_dir/flutter_embedder.h"
+          echo "Veshell dev shell: run 'cargo run' (release shell, pinned source engine)."
+        '';
+      };
     };
 }
