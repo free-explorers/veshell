@@ -59,18 +59,26 @@ VESHELL_BACKEND=winit RUST_LOG=info nix run github:free-explorers/veshell
 
 ## The Flutter engine
 
-The package builds its matching Flutter engine from source
+Veshell builds its matching Flutter engine from source
 ([flutter-engine-nix](https://github.com/free-explorers/flutter-engine-nix),
-pinned in `nix/engine-repository.json`). The first build compiles the engine and
-is expensive; later builds and systems reuse the Nix store. To build only the
-engine:
+pinned in `nix/engine-repository.json`). Prebuilt engine, SDK, shell and package
+closures are published to the `veshell` Cachix cache, so normal installations
+substitute them instead of compiling the engine.
+
+The flake advertises the cache through `nixConfig`, which Nix applies only when
+flake configuration is accepted. If you do not set `accept-flake-config = true`,
+add the cache once — with `cachix use veshell`, or by hand:
+
+```ini
+extra-substituters = https://veshell.cachix.org
+extra-trusted-public-keys = veshell.cachix.org-1:C8J71PCJ1Fx4+4shICPNsSOnGgijVEHZCTrWhbYyjOI=
+```
+
+To build only the engine (for example to warm the cache yourself):
 
 ```sh
 nix build github:free-explorers/veshell#engine
 ```
-
-No binary cache is published yet, so `nix run` and `nix profile add` compile
-from source the first time.
 
 ## Troubleshooting
 
@@ -87,10 +95,11 @@ from source the first time.
 ## Maintainer notes
 
 - `flake.nix` is the single entry point: `packages`, `nixosModules` and
-  `overlays`. Its `nixpkgs` input, `nix/release.nix` and the engine packaging all
-  pin the same nixpkgs revision; keep them in step.
-- `nix/release.nix` mirrors the flake's pinned roots for the packaging
-  repository's Nix workflow, which is not flake-aware yet. Prefer the flake.
+  `overlays`. Its `nixpkgs` input and the engine packaging pin the same nixpkgs
+  revision; keep them in step.
+- The engine, SDK, shell and package closures are published to the `veshell`
+  Cachix cache by the `flutter-engine-nix` and `veshell-packaging` release
+  workflows. Users substitute from it; a source build is only the fallback.
 - The Flutter SDK/tooling pins (`nix/flutter-sdk.json`,
   `nix/flutter-tools-lock.json`, `nix/engine-repository.json`,
   `nix/dependencies.nix`) are checked against `veshell-packaging`'s

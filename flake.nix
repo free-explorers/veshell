@@ -1,10 +1,20 @@
 {
   description = "Veshell — an innovative not-desktop environment built with Flutter and Rust";
 
-  # The Flutter engine packaging (free-explorers/flutter-engine-nix) and the
-  # release roots in nix/release.nix are evaluated against this exact nixpkgs
-  # revision. Keep all three in step.
+  # The Flutter engine packaging (free-explorers/flutter-engine-nix) is evaluated
+  # against this exact nixpkgs revision; its default.nix pins the same one.
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/774debe7a0d1b496e35677ad955a1011c6ff74f3";
+
+  # Engine, SDK, shell and package closures are published here by the release
+  # workflows, so `nix run` / `nix profile add` substitute instead of compiling
+  # the Flutter engine. Nix applies a flake's substituters only when flake
+  # configuration is accepted; docs/nixos.md shows the manual equivalent.
+  nixConfig = {
+    extra-substituters = [ "https://veshell.cachix.org" ];
+    extra-trusted-public-keys = [
+      "veshell.cachix.org-1:C8J71PCJ1Fx4+4shICPNsSOnGgijVEHZCTrWhbYyjOI="
+    ];
+  };
 
   outputs = { self, nixpkgs }:
     let
@@ -24,10 +34,12 @@
       packages.${system} = {
         default = veshell;
         veshell = veshell;
-        # The source-built engine, exposed so it can be built or cached on its
-        # own; it is also what `nix build` pulls in for the package.
+        # Split out so the release workflows can build and push each closure on
+        # its own. `engine` is the source pin from flutter-engine-nix.
         engine = veshell.flutterEngine.passthru.sourceBuild;
         runtime = veshell.flutterEngine.passthru.runtime;
+        sdk = veshell.flutterSdk;
+        shell = veshell.shellBundle;
       };
 
       overlays.default = final: prev: {
