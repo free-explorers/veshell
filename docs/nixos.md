@@ -61,9 +61,9 @@ VESHELL_BACKEND=winit RUST_LOG=info nix run github:free-explorers/veshell
 
 Veshell builds its matching Flutter engine from source
 ([flutter-engine-nix](https://github.com/free-explorers/flutter-engine-nix),
-pinned in `nix/engine-repository.json`). Prebuilt engine, SDK, shell and package
-closures are published to the `veshell` Cachix cache, so normal installations
-substitute them instead of compiling the engine.
+pinned in `nix/engine-repository.json`). The engine is published to the `veshell`
+Cachix cache, so normal installations substitute it instead of compiling it; the
+SDK, shell and Rust binary build locally in a few minutes.
 
 The flake advertises the cache through `nixConfig`, which Nix applies only when
 flake configuration is accepted. If you do not set `accept-flake-config = true`,
@@ -97,10 +97,10 @@ nix build github:free-explorers/veshell#engine
 - `flake.nix` is the single entry point: `packages`, `nixosModules` and
   `overlays`. Its `nixpkgs` input and the engine packaging pin the same nixpkgs
   revision; keep them in step.
-- The engine, SDK, shell and package closures are published to the `veshell`
-  Cachix cache by `.github/workflows/nix-cache.yml` here and by
-  `flutter-engine-nix`. Users substitute from it; a source build is only the
-  fallback.
+- The engine closure is published to the `veshell` Cachix cache by
+  `flutter-engine-nix`'s release workflow. Users substitute it; the SDK, shell
+  and package build locally in a few minutes, and a source engine build is only
+  the fallback.
 - The Flutter SDK/tooling pins (`nix/flutter-sdk.json`,
   `nix/flutter-tools-lock.json`, `nix/engine-repository.json`,
   `nix/dependencies.nix`) are checked against `veshell-packaging`'s

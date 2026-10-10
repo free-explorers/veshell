@@ -34,12 +34,9 @@
       packages.${system} = {
         default = veshell;
         veshell = veshell;
-        # Split out so the release workflows can build and push each closure on
-        # its own. `engine` is the source pin from flutter-engine-nix.
+        # The source-built engine alone, so the one expensive piece can be
+        # pre-built with `nix build .#engine`. The app itself builds in minutes.
         engine = veshell.flutterEngine.passthru.sourceBuild;
-        runtime = veshell.flutterEngine.passthru.runtime;
-        sdk = veshell.flutterSdk;
-        shell = veshell.shellBundle;
       };
 
       overlays.default = final: prev: {
