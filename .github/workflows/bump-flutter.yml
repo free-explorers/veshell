@@ -36,7 +36,6 @@ concurrency:
 env:
   ENGINE_NIX_REPO: free-explorers/flutter-engine-nix
   ENGINE_REPO: free-explorers/flutter-engine
-  ENGINE_MODE: release
 
 jobs:
   bump:
@@ -84,11 +83,10 @@ jobs:
           GH_TOKEN: ${{ secrets.BUMP_TOKEN }}
           VERSION: ${{ inputs.version }}
           REVISION: ${{ steps.engine.outputs.revision }}
-          MODE: ${{ env.ENGINE_MODE }}
         run: |
           set -euo pipefail
           gh workflow run release.yml --repo "$ENGINE_NIX_REPO" --ref main -f flutter_version="$VERSION"
-          gh workflow run engine-release.yml --repo "$ENGINE_REPO" --ref main -f mode="$MODE" -f revision="$REVISION" -f publish=true
+          gh workflow run engine-release.yml --repo "$ENGINE_REPO" --ref main -f revision="$REVISION" -f publish=true
 
       - name: Resolve the Nix SDK hashes
         env:
