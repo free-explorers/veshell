@@ -100,8 +100,12 @@
             };
         in
         {
-          default = mkDevShell "release";
+          # Development defaults to a debug engine (JIT), matching `cargo run`'s
+          # default profile. Installs — the package, `nix run` and the NixOS
+          # module — use the release engine.
+          default = mkDevShell "debug";
           debug = mkDevShell "debug";
+          release = mkDevShell "release";
           profile = mkDevShell "profile";
         };
     };

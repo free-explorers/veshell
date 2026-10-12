@@ -80,6 +80,12 @@ To build only the engine (for example to warm the cache yourself):
 nix build github:free-explorers/veshell#engine
 ```
 
+For development, `nix develop` links a **debug** engine (JIT, matching `cargo
+run`'s default profile) and sets `VESHELL_FLUTTER_MODE`; `nix develop .#release`
+(or `.#profile`) selects another mode. Nix compiles a mode only when it is asked
+for, and installs — the package, `nix run` and the NixOS module — always use the
+release engine.
+
 ## Troubleshooting
 
 - **No usable GPU:** check `ls -l /dev/dri`. Graphical testing needs a render node
