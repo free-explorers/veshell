@@ -22,6 +22,11 @@
       pkgs = import nixpkgs { inherit system; };
       veshell = import ./default.nix { inherit pkgs; };
 
+      # The engine for a runtime mode. release is what the package uses; debug
+      # and profile are compiled on demand for development. Nix only builds a
+      # mode when something asks for it, so nothing is spent unless it is used.
+      enginePackages = mode: pkgs.callPackage ./nix/engine.nix { runtimeMode = mode; };
+
       # Default the NixOS module to the flake's tested package; an explicit
       # programs.veshell.package still wins, and the module itself falls back to
       # the caller's pkgs when it is imported directly by path.
@@ -37,6 +42,8 @@
         # The source-built engine alone, so the one expensive piece can be
         # pre-built with `nix build .#engine`. The app itself builds in minutes.
         engine = veshell.flutterEngine.passthru.sourceBuild;
+        engine-debug = (enginePackages "debug").engine;
+        engine-profile = (enginePackages "profile").engine;
       };
 
       overlays.default = final: prev: {
@@ -52,38 +59,50 @@
       # The repository build still drives everything; the pinned SDK and source
       # engine are linked in when available so that it does not have to clone
       # the Flutter repository or download meta-flutter's engine.
-      devShells.${system}.default = pkgs.mkShell {
-        packages = with pkgs; [
-          cargo rustc rustfmt clippy
-          pkg-config cmake ninja clang git unzip xz zstd
-          wayland libinput libdisplay-info seatd libgbm libxkbcommon pixman
-          udev openssl pipewire gst_all_1.gstreamer gst_all_1.gst-plugins-base
-          gtk3 libpulseaudio libGL libepoxy vulkan-loader fontconfig
-        ];
-        env = {
-          # The shell builds a release bundle and the source engine is
-          # release-only, so debug/profile engine modes are not wired here.
-          VESHELL_FLUTTER_MODE = "release";
-          SKIP_FLUTTER_ENGINE_DOWNLOAD = "1";
-          LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
-          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
-            pkgs.wayland
-            pkgs.libGL
-            pkgs.libpulseaudio
-          ];
+      devShells.${system} =
+        let
+          mkDevShell = mode:
+            let
+              runtime = (enginePackages mode).runtime;
+            in
+            pkgs.mkShell {
+              packages = with pkgs; [
+                cargo rustc rustfmt clippy
+                pkg-config cmake ninja clang git unzip xz zstd
+                wayland libinput libdisplay-info seatd libgbm libxkbcommon pixman
+                udev openssl pipewire gst_all_1.gstreamer gst_all_1.gst-plugins-base
+                gtk3 libpulseaudio libGL libepoxy vulkan-loader fontconfig
+              ];
+              env = {
+                # Selects the bundle the repository build produces and the engine
+                # linked below; `nix develop .#debug` compiles the debug engine.
+                VESHELL_FLUTTER_MODE = mode;
+                SKIP_FLUTTER_ENGINE_DOWNLOAD = "1";
+                LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+                LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
+                  pkgs.wayland
+                  pkgs.libGL
+                  pkgs.libpulseaudio
+                ];
+              };
+              shellHook = ''
+                # Link the pinned SDK when it exposes the `version` file the build
+                # checks; otherwise the recipe's own `git clone` flow installs it.
+                if [ ! -e .flutter_sdk ] && [ -f ${veshell.flutterSdk}/version ]; then
+                  ln -sfn ${veshell.flutterSdk} .flutter_sdk
+                fi
+                engine_dir=extra/third_party/flutter_engine
+                mkdir -p "$engine_dir/${mode}"
+                ln -sfn ${runtime}/lib/libflutter_engine.so "$engine_dir/${mode}/libflutter_engine.so"
+                ln -sfn ${runtime}/include/flutter_embedder.h "$engine_dir/flutter_embedder.h"
+                echo "Veshell dev shell (${mode}): run 'cargo run'."
+              '';
+            };
+        in
+        {
+          default = mkDevShell "release";
+          debug = mkDevShell "debug";
+          profile = mkDevShell "profile";
         };
-        shellHook = ''
-          # Link the pinned SDK when it exposes the `version` file the build
-          # checks; otherwise the recipe's own `git clone` flow installs it.
-          if [ ! -e .flutter_sdk ] && [ -f ${veshell.flutterSdk}/version ]; then
-            ln -sfn ${veshell.flutterSdk} .flutter_sdk
-          fi
-          engine_dir=extra/third_party/flutter_engine
-          mkdir -p "$engine_dir/release"
-          ln -sfn ${veshell.flutterEngine}/release/libflutter_engine.so "$engine_dir/release/libflutter_engine.so"
-          ln -sfn ${veshell.flutterEngine}/flutter_embedder.h "$engine_dir/flutter_embedder.h"
-          echo "Veshell dev shell: run 'cargo run' (release shell, pinned source engine)."
-        '';
-      };
     };
 }
