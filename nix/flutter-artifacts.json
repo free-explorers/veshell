@@ -35,5 +35,42 @@
       "url": "https://github.com/free-explorers/flutter-engine/releases/download/linux-engine-sdk-release-x86_64-a804b261645ef8c13eb3d5c44a5c2fb0340c5539/linux-engine-sdk-release-x86_64-a804b261645ef8c13eb3d5c44a5c2fb0340c5539.tar.gz",
       "sha256": "539254d41100c2dc338920dae968dc2cf0b7c35e5f00764ab5d24ebc37712f87"
     }
+  },
+  "3.47.7": {
+    "channel": "stable",
+    "sdk": {
+      "url": "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.7-stable.tar.xz",
+      "sha256": "af7455f540df951184c7953fbe3cf884766e7541dacf8571f9f582db03dd6230"
+    },
+    "artifacts": {
+      "patched_sdk": {
+        "url": "https://storage.googleapis.com/flutter_infra_release/flutter/deb287481e3ce9468f3434937ced4240a70539ca/flutter_patched_sdk.zip",
+        "sha256": "e80fa5e63f51751507627456294bef28419c4facd09c33f7f49a7b4d986846f3"
+      },
+      "patched_sdk_product": {
+        "url": "https://storage.googleapis.com/flutter_infra_release/flutter/deb287481e3ce9468f3434937ced4240a70539ca/flutter_patched_sdk_product.zip",
+        "sha256": "8b2ad98bd8c2f86e647da5c3863de0ffb34dc00887a005c8074971ebd76e4454"
+      },
+      "linux_x64_artifacts": {
+        "url": "https://storage.googleapis.com/flutter_infra_release/flutter/deb287481e3ce9468f3434937ced4240a70539ca/linux-x64/artifacts.zip",
+        "sha256": "1a716b779bc669def11c0ebac97d5400efa201824419fe67397802ffe5cdb756"
+      },
+      "linux_x64_debug_gtk": {
+        "url": "https://storage.googleapis.com/flutter_infra_release/flutter/deb287481e3ce9468f3434937ced4240a70539ca/linux-x64-debug/linux-x64-flutter-gtk.zip",
+        "sha256": "e1ed3d3ccc0d42d1dc58fa141dc83c4be511e5a2a1cbe0319c2aa8ae6afeadc4"
+      },
+      "linux_x64_profile_gtk": {
+        "url": "https://storage.googleapis.com/flutter_infra_release/flutter/deb287481e3ce9468f3434937ced4240a70539ca/linux-x64-profile/linux-x64-flutter-gtk.zip",
+        "sha256": "853bee7a69edf5931f02121086118bd8dbfe01d081192c6d6cae232b1abede47"
+      },
+      "linux_x64_release_gtk": {
+        "url": "https://storage.googleapis.com/flutter_infra_release/flutter/deb287481e3ce9468f3434937ced4240a70539ca/linux-x64-release/linux-x64-flutter-gtk.zip",
+        "sha256": "a6da7b0d57c82519d7b901462344676fe089068caca336466dcf3e1c270e9aa8"
+      }
+    },
+    "engine": {
+      "url": "https://github.com/free-explorers/flutter-engine/releases/download/linux-engine-sdk-release-x86_64-deb287481e3ce9468f3434937ced4240a70539ca/linux-engine-sdk-release-x86_64-deb287481e3ce9468f3434937ced4240a70539ca.tar.gz",
+      "sha256": "7f111525f32a590d1f00526758f1fecb520424b98aecc6afac82d5014a1684c7"
+    }
   }
 }
