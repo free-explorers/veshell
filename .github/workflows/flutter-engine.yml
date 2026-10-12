@@ -1,23 +1,18 @@
 name: Flutter Engine Cache
 
-# Keyed on the Flutter version. When Cargo.toml's flutter_version reaches main
-# with a new value (or the engine pin changes), the source engine is built and
-# pushed to the project Cachix cache. When it is already cached, `nix build`
-# substitutes it, so no separate cache lookup is needed.
+# Triggered by merging a Bump Flutter Version pull request (head bump/flutter*):
+# that PR is where the new flutter_version and its provenance are reviewed, so
+# it — not a file diff or a cache lookup — is the switch. When the engine is
+# already published, `nix build` substitutes it from the cache.
 
 on:
   push:
     branches: [main]
-    paths:
-      - Cargo.toml
-      - nix/engine-repository.json
-      - nix/engine.nix
-      - flake.nix
-      - flake.lock
   workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: flutter-engine-cache
@@ -34,39 +29,28 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Decide whether the Flutter version changed
+      - name: Decide whether a Flutter bump was merged
         id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          flutter_version() {
-            python3 - "$1" <<'PY'
-          import sys, tomllib
-          print(tomllib.load(open(sys.argv[1], "rb"))["package"]["metadata"]["flutter_version"])
-          PY
-          }
-          current=$(flutter_version Cargo.toml)
-          before="${{ github.event.before }}"
-          previous=""
-          if [[ -n "$before" && "$before" != 0000000000000000000000000000000000000000 ]] && git cat-file -e "$before:Cargo.toml" 2>/dev/null; then
-            git show "$before:Cargo.toml" > "$RUNNER_TEMP/before.toml"
-            previous=$(flutter_version "$RUNNER_TEMP/before.toml")
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
-          engine_pin_changed=false
-          if [[ -n "$before" && "$before" != 0000000000000000000000000000000000000000 ]]; then
-            git diff --name-only "$before" HEAD | grep -qx 'nix/engine-repository.json' && engine_pin_changed=true
-          fi
-          {
-            echo "flutter_version: ${previous:-<none>} -> $current"
-            echo "engine pin changed: $engine_pin_changed"
-          } >> "$GITHUB_STEP_SUMMARY"
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "$current" != "$previous" || "$engine_pin_changed" == "true" ]]; then
-            echo "build=true" >> "$GITHUB_OUTPUT"
+          pr="$(gh api "repos/${{ github.repository }}/commits/$GITHUB_SHA/pulls" --jq '.[0] // empty')"
+          ref=""
+          [[ -n "$pr" ]] && ref="$(printf '%s' "$pr" | jq -r '.head.ref')"
+          if [[ "$ref" != bump/flutter* ]]; then
+            echo "not a Flutter bump (${ref:-no pull request}); skipping" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "run=false" >> "$GITHUB_OUTPUT"
           else
-            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Flutter bump $ref merged; building the engine" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "run=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Reclaim unused runner tools and require 30 GiB
-        if: steps.decide.outputs.build == 'true'
+        if: steps.decide.outputs.run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -79,7 +63,7 @@ jobs:
           (( available >= 30 * 1024 * 1024 * 1024 ))
 
       - name: Install Nix
-        if: steps.decide.outputs.build == 'true'
+        if: steps.decide.outputs.run == 'true'
         uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
         with:
           extra_nix_config: |
@@ -88,14 +72,14 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Use the project cache
-        if: steps.decide.outputs.build == 'true'
+        if: steps.decide.outputs.run == 'true'
         uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
           name: veshell
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build and publish the engine and runtime
-        if: steps.decide.outputs.build == 'true'
+        if: steps.decide.outputs.run == 'true'
         timeout-minutes: 300
         shell: bash
         run: |
