@@ -16,6 +16,17 @@
                 "swapAltAndWin": {
                     "type": "boolean"
                 },
+                "repeat": {
+                    "type": "boolean"
+                },
+                "repeatDelayMs": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "repeatRate": {
+                    "type": "integer",
+                    "minimum": 0
+                },
                 "hotkeys": {
                     "type": "object",
                     "properties": {

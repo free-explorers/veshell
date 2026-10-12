@@ -179,6 +179,18 @@ class SettingsProperties extends _$SettingsProperties {
             name: l10n.swapAltAndWin,
             description: l10n.swapAltAndWinDescription,
           ),
+          'repeat': SettingProperty<bool>(
+            name: l10n.keyRepeat,
+            description: l10n.keyRepeatDescription,
+          ),
+          'repeatDelayMs': SettingProperty<int>(
+            name: l10n.keyRepeatDelay,
+            description: l10n.keyRepeatDelayDescription,
+          ),
+          'repeatRate': SettingProperty<int>(
+            name: l10n.keyRepeatRate,
+            description: l10n.keyRepeatRateDescription,
+          ),
           'hotkeys': SettingGroup(
             name: l10n.hotkeys,
             description: l10n.hotkeysDescription,

@@ -6,7 +6,7 @@ use smithay::backend::input::KeyState;
 use smithay::backend::session::Session;
 use smithay::input::keyboard::ModifiersState;
 use smithay::utils::SERIAL_COUNTER;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 use xkbcommon::xkb::{Keycode, Keysym};
 
 use crate::backend::Backend;
@@ -187,28 +187,22 @@ pub fn swap_left_alt_and_meta<BackendData: Backend + 'static>(
     data: &mut State<BackendData>,
     key_code: Keycode,
 ) -> Keycode {
-    let swap_alt_and_win = data
-        .settings_manager
-        .get_settings()
-        .keyboard
-        .swap_alt_and_win;
-    info!("swap_alt_and_win: {}", swap_alt_and_win);
-    if swap_alt_and_win {
-        let mut linux_code = key_code.raw() - 8;
-        if data.meta_window_state.meta_window_in_gaming_mode.is_none() {
-            // Swap Meta ant leftAlt keycode
-            if linux_code == input_linux::sys::KEY_LEFTMETA as u32 {
-                info!("keycode is meta replace by leftalt");
-                linux_code = input_linux::sys::KEY_LEFTALT as u32
-            } else if linux_code == input_linux::sys::KEY_LEFTALT as u32 {
-                info!("keycode is leftalt replace by leftmeta ");
-                linux_code = input_linux::sys::KEY_LEFTMETA as u32
-            }
-        }
-        Keycode::new(linux_code + 8)
-    } else {
-        key_code
+    if !data.swap_alt_and_win {
+        return key_code;
     }
+
+    let mut linux_code = key_code.raw() - 8;
+    if data.meta_window_state.meta_window_in_gaming_mode.is_none() {
+        // Swap the Meta and left Alt keycodes.
+        if linux_code == input_linux::sys::KEY_LEFTMETA as u32 {
+            debug!("keycode is meta, replaced by leftalt");
+            linux_code = input_linux::sys::KEY_LEFTALT as u32;
+        } else if linux_code == input_linux::sys::KEY_LEFTALT as u32 {
+            debug!("keycode is leftalt, replaced by leftmeta");
+            linux_code = input_linux::sys::KEY_LEFTMETA as u32;
+        }
+    }
+    Keycode::new(linux_code + 8)
 }
 
 pub fn handle_keyboard_event<BackendData: Backend + 'static>(
@@ -308,17 +302,29 @@ pub fn handle_keyboard_event<BackendData: Backend + 'static>(
     if !mods_changed {
         match state {
             KeyState::Pressed => {
-                data.key_repeater.down(
-                    veshell_key_event,
-                    Duration::from_millis(data.repeat_delay),
-                    Duration::from_millis(data.repeat_rate),
-                );
+                if let Some(interval) = repeat_interval(data.repeat_rate) {
+                    data.key_repeater.down(
+                        veshell_key_event,
+                        Duration::from_millis(data.repeat_delay),
+                        interval,
+                    );
+                }
             }
             KeyState::Released => {
                 data.key_repeater.up(veshell_key_event);
             }
         }
     }
+}
+
+/// Converts a repeat rate in characters per second into the timer interval used
+/// by [`key_repeater::KeyRepeater`].
+///
+/// The rate is the same value advertised to clients through
+/// `wl_keyboard.repeat_info`, where `0` means "repeating disabled". `None`
+/// therefore disables the shell's own repeat as well.
+pub(crate) fn repeat_interval(rate: u64) -> Option<Duration> {
+    (rate > 0).then(|| Duration::from_millis((1000 / rate).max(1)))
 }
 
 /// Replays a release for every key the gaming-mode client still believes is held.
@@ -481,6 +487,7 @@ pub fn post_flutter_handle_key_event<BackendData: Backend + 'static>(
     data: &mut State<BackendData>,
     event: VeshellKeyEvent,
     handled: bool,
+    repeat: bool,
 ) {
     let text_input = &mut data.flutter_engine.as_mut().unwrap().text_input;
     if text_input.is_active() {
@@ -490,6 +497,15 @@ pub fn post_flutter_handle_key_event<BackendData: Backend + 'static>(
         }
         // It doesn't matter if the text field captured the key event or not.
         // As long as it stays active, don't forward events to the Wayland client.
+        return;
+    }
+
+    // Auto-repeat exists only to feed the Flutter shell, which (unlike Wayland
+    // clients) does not repeat keys on its own. Wayland hands repetition to the
+    // client through `wl_keyboard.repeat_info`, so forwarding these synthesized
+    // repeats would double every held key in the focused client. Repeats never
+    // mutate the forwarding state either: they are not key transitions.
+    if repeat {
         return;
     }
 
@@ -527,6 +543,17 @@ mod tests {
 
     fn held(keys: &[u32]) -> HashSet<Keycode> {
         keys.iter().map(|code| Keycode::new(*code)).collect()
+    }
+
+    #[test]
+    fn repeat_interval_maps_rate_to_milliseconds() {
+        // A rate of 0 disables repeating entirely, mirroring `repeat_info`.
+        assert_eq!(repeat_interval(0), None);
+        // 30 chars/s -> 33 ms between repeats.
+        assert_eq!(repeat_interval(30), Some(Duration::from_millis(33)));
+        assert_eq!(repeat_interval(25), Some(Duration::from_millis(40)));
+        // A pathologically high rate still yields a non-zero interval.
+        assert_eq!(repeat_interval(5000), Some(Duration::from_millis(1)));
     }
 
     #[test]

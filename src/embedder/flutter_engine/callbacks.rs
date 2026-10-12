@@ -242,9 +242,14 @@ where
 
 pub struct FlutterKeyEventData {
     pub key_event: VeshellKeyEvent,
-    pub tx_flutter_handled_key_event: channel::Sender<(VeshellKeyEvent, bool)>,
+    pub tx_flutter_handled_key_event: channel::Sender<(VeshellKeyEvent, bool, bool)>,
     pub key_event_channel: BasicMessageChannel<Value>,
     pub raw_key_event: Value,
+    /// Whether this event is an auto-repeat synthesized by
+    /// [`crate::keyboard::key_repeater::KeyRepeater`] rather than a physical
+    /// key transition. Repeats feed the Flutter shell but must not be forwarded
+    /// to the focused Wayland client, which owns its own repetition.
+    pub repeat: bool,
 }
 
 pub unsafe extern "C" fn key_event_callback(handled: bool, user_data: *mut c_void) {
@@ -254,6 +259,7 @@ pub unsafe extern "C" fn key_event_callback(handled: bool, user_data: *mut c_voi
     debug!(?handled, "Flutter key data queued");
 
     let event = data.key_event;
+    let repeat = data.repeat;
     let tx = data.tx_flutter_handled_key_event.clone();
     data.key_event_channel.send(
         &data.raw_key_event,
@@ -268,7 +274,7 @@ pub unsafe extern "C" fn key_event_callback(handled: bool, user_data: *mut c_voi
                 ?handled,
                 "Flutter key event result",
             );
-            tx.send((event, handled)).ok();
+            tx.send((event, handled, repeat)).ok();
         })),
     );
 }
