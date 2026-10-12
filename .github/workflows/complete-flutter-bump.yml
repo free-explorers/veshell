@@ -56,7 +56,7 @@ jobs:
             git checkout -q -B "$branch" "origin/$branch"
             changed=0
             version=$(python3 -c 'import tomllib;print(tomllib.load(open("Cargo.toml","rb"))["package"]["metadata"]["flutter_version"])')
-            revision=$(python3 -c 'import json,re;d=json.load(open("nix/flutter-artifacts.json"));print(re.search(r"[0-9a-f]{40}", d[sys.argv[1]]["engine"]["url"]).group(0))' "$version")
+            revision=$(python3 -c 'import json,re,sys;d=json.load(open("nix/flutter-artifacts.json"));print(re.search(r"[0-9a-f]{40}", d[sys.argv[1]]["engine"]["url"]).group(0))' "$version")
 
             if ! python3 -c 'import json,sys;d=json.load(open("nix/flutter-artifacts.json"));sys.exit(0 if d[sys.argv[1]]["engine"].get("sha256") else 1)' "$version"; then
               url=$(gh release view "linux-engine-sdk-release-x86_64-$revision" --repo "$ENGINE_REPO" \
