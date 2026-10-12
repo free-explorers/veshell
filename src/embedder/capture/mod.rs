@@ -1622,32 +1622,19 @@ fn schedule_recording_heartbeat<BackendData: Backend + 'static>(
         .expect("Recording heartbeat timer can be scheduled");
 }
 
-/// The presented Flutter frame is fresh damage for exactly one output:
-/// the recording on that output gets one copy per present, throttled to
-/// its fixed FPS budget by its own last-frame timestamp.
-pub fn on_view_frame_presented_for_recording<BackendData: Backend + 'static>(
+/// Delivers one frame to the live recording on `output_name` when its FPS
+/// budget allows, stamping the last-frame time. Shared by the Flutter
+/// present damage path and the pointer-motion path.
+fn deliver_recording_if_due<BackendData: Backend + 'static>(
     state: &mut State<BackendData>,
-    view_id: i64,
+    output_name: &str,
 ) {
-    let Some((output_name, generation)) =
-        state
-            .capture_state
-            .recording_session
-            .as_ref()
-            .and_then(|recording| {
-                state
-                    .space
-                    .outputs()
-                    .find_map(|output| {
-                        output
-                            .user_data()
-                            .get::<crate::flutter_engine::view::OutputViewIdWrapper>()
-                            .filter(|wrapper| wrapper.view_id == view_id)
-                            .map(|_| output.name())
-                    })
-                    .filter(|name| *name == recording.output_name())
-                    .map(|name| (name, recording.generation))
-            })
+    let Some(generation) = state
+        .capture_state
+        .recording_session
+        .as_ref()
+        .filter(|recording| recording.output_name() == output_name)
+        .map(|recording| recording.generation)
     else {
         return;
     };
@@ -1660,16 +1647,60 @@ pub fn on_view_frame_presented_for_recording<BackendData: Backend + 'static>(
                 std::time::Instant::now().duration_since(last) >= RECORDING_FRAME_INTERVAL
             })
         });
-    if due {
-        state
-            .capture_state
-            .recording_session
-            .as_mut()
-            .map(|recording| {
-                recording.last_frame = Some(std::time::Instant::now());
-            });
-        deliver_recording_frame(state, generation);
+    if !due {
+        return;
     }
+    if let Some(recording) = state.capture_state.recording_session.as_mut() {
+        recording.last_frame = Some(std::time::Instant::now());
+    }
+    deliver_recording_frame(state, generation);
+}
+
+/// The presented Flutter frame is fresh damage for exactly one output:
+/// the recording on that output gets one copy per present, throttled to
+/// its fixed FPS budget by its own last-frame timestamp.
+pub fn on_view_frame_presented_for_recording<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    view_id: i64,
+) {
+    if state.capture_state.recording_session.is_none() {
+        return;
+    }
+    let Some(output_name) = state.space.outputs().find_map(|output| {
+        output
+            .user_data()
+            .get::<crate::flutter_engine::view::OutputViewIdWrapper>()
+            .filter(|wrapper| wrapper.view_id == view_id)
+            .map(|_| output.name())
+    }) else {
+        return;
+    };
+    deliver_recording_if_due(state, &output_name);
+}
+
+/// A pointer move refreshes the recording on the output under the pointer.
+///
+/// A recording is otherwise fed only by Flutter presents and the idle
+/// heartbeat, so a cursor moving over an unchanged scene advanced only
+/// every [`RECORDING_HEARTBEAT_INTERVAL`] and the recorded pointer visibly
+/// jumped. A move is genuine new damage for a recording, throttled to the
+/// same FPS budget as every other frame.
+pub fn on_pointer_motion_for_recording<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+) {
+    if state.capture_state.recording_session.is_none() {
+        return;
+    }
+    let pointer = state.pointer.current_location();
+    let Some(output_name) = state
+        .space
+        .output_under(pointer)
+        .next()
+        .map(|output| output.name())
+    else {
+        return;
+    };
+    deliver_recording_if_due(state, &output_name);
 }
 
 /// Copies the output once, crops it to the fixed area, and hands the

@@ -1541,6 +1541,21 @@ pub fn on_view_frame_presented<BackendData: crate::backend::Backend + 'static>(
     }) else {
         return;
     };
+    deliver_due_monitor_frames(state, &output_name, false);
+}
+
+/// Delivers one copy to every due monitor session on `output_name`,
+/// throttled to the per-session frame budget. Sessions with the same cursor
+/// mode share one capture: their sources are the same pixels, so the copy
+/// is at most once per `(output, cursor mode)`. With `embedded_only`, only
+/// casts that embed the pointer are considered: the pointer-motion trigger
+/// uses this, since a `HIDDEN` cast has no reason to refresh on a move that
+/// changes nothing in its pixels.
+fn deliver_due_monitor_frames<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    output_name: &str,
+    embedded_only: bool,
+) {
     let now = std::time::Instant::now();
     // Sessions due for a fresh copy from this damage event.
     let due: Vec<OwnedObjectPath> = state
@@ -1549,6 +1564,7 @@ pub fn on_view_frame_presented<BackendData: crate::backend::Backend + 'static>(
         .iter()
         .filter(|(_handle, stream)| {
             stream.source_id == output_name
+                && (!embedded_only || stream.cursor_mode.contains(CursorModes::EMBEDDED))
                 && stream
                     .last_frame
                     .is_none_or(|last| now.duration_since(last) >= MIN_FRAME_INTERVAL)
@@ -1568,10 +1584,8 @@ pub fn on_view_frame_presented<BackendData: crate::backend::Backend + 'static>(
     let Some(output) = output else {
         return;
     };
-    // Sessions on one output with the same cursor mode share one capture:
-    // their sources are the same pixels, and the copy is at most once per
-    // (output, cursor mode) per present. Embedded-cursor casts composite
-    // the pointer; HIDDEN ones stay pointer-free.
+    // Embedded-cursor casts composite the pointer; HIDDEN ones stay
+    // pointer-free.
     let mut shm_pixels: [Option<Vec<u8>>; 2] = [None, None];
     for handle in due {
         if deliver_dmabuf_frame(state, &handle, &output) {
@@ -1586,7 +1600,9 @@ pub fn on_view_frame_presented<BackendData: crate::backend::Backend + 'static>(
             match crate::capture::capture_output_pixels(state, &output, include_cursor) {
                 Ok(captured) => *slot = Some(captured.pixels),
                 Err(_) => {
-                    tracing::debug!("frame capture failed after a present; producer stays quiet");
+                    tracing::debug!(
+                        "frame capture failed; producer stays quiet until the next tick"
+                    );
                 }
             }
         }
@@ -1600,6 +1616,32 @@ pub fn on_view_frame_presented<BackendData: crate::backend::Backend + 'static>(
             stream.last_frame = Some(now);
         }
     }
+}
+
+/// A pointer move is fresh damage for the monitor casts on the output under
+/// the pointer.
+///
+/// Embedded-cursor casts are otherwise fed only by Flutter presents and the
+/// idle heartbeat, so a cursor moving over an unchanged scene advanced only
+/// every [`IDLE_REFRESH_INTERVAL`] and the streamed pointer visibly jumped.
+/// `HIDDEN` casts are not driven here: a move changes nothing in their
+/// pixels. Window casts never embed the pointer, so they are not either.
+pub fn on_pointer_motion<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+) {
+    if state.portal_state.active_streams.is_empty() {
+        return;
+    }
+    let pointer = state.pointer.current_location();
+    let Some(output_name) = state
+        .space
+        .output_under(pointer)
+        .next()
+        .map(|output| output.name())
+    else {
+        return;
+    };
+    deliver_due_monitor_frames(state, &output_name, true);
 }
 
 /// Kicks off the PipeWire stream for the approved session (spec 7).
