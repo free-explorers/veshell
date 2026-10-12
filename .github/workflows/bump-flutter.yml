@@ -82,14 +82,33 @@ jobs:
           echo "revision=$revision" >> "$GITHUB_OUTPUT"
 
       - name: Drive the engine repositories
+        id: engines
         env:
           GH_TOKEN: ${{ secrets.BUMP_TOKEN }}
           VERSION: ${{ inputs.version }}
           REVISION: ${{ steps.engine.outputs.revision }}
         run: |
           set -euo pipefail
-          gh workflow run release.yml --repo "$ENGINE_NIX_REPO" --ref main -f flutter_version="$VERSION"
-          gh workflow run engine-release.yml --repo "$ENGINE_REPO" --ref main -f revision="$REVISION" -f publish=true
+          # Dispatch, then look up the run each dispatch started so the bump pull
+          # request can link straight at the builds it is waiting on. They run for
+          # hours and the dispatch call does not hand back a run id, so poll for
+          # the first run created at or after the dispatch.
+          dispatch() {
+            local repo="$1" workflow="$2"; shift 2
+            local since url="" filter="" tries=0
+            since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            gh workflow run "$workflow" --repo "$repo" --ref main "$@"
+            filter="[.[] | select(.createdAt >= \"$since\")][0].url // empty"
+            while (( tries++ < 30 )); do
+              url="$(gh run list --repo "$repo" --workflow "$workflow" --limit 5 \
+                --json url,createdAt --jq "$filter")"
+              [[ -n "$url" ]] && break
+              sleep 2
+            done
+            printf '%s' "${url:-https://github.com/$repo/actions/workflows/$workflow}"
+          }
+          echo "nix_run=$(dispatch "$ENGINE_NIX_REPO" release.yml -f flutter_version="$VERSION")" >> "$GITHUB_OUTPUT"
+          echo "engine_run=$(dispatch "$ENGINE_REPO" engine-release.yml -f revision="$REVISION" -f publish=true)" >> "$GITHUB_OUTPUT"
 
       - name: Resolve the Nix SDK hashes
         env:
@@ -120,6 +139,9 @@ jobs:
           GH_TOKEN: ${{ secrets.PR_TOKEN }}
           VERSION: ${{ inputs.version }}
           CHANNEL: ${{ inputs.channel }}
+          NIX_RUN: ${{ steps.engines.outputs.nix_run }}
+          ENGINE_RUN: ${{ steps.engines.outputs.engine_run }}
+          BUMP_RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
           git config user.name "Veshell release bot"
@@ -131,11 +153,18 @@ jobs:
           Bump Flutter to **$VERSION** ($CHANNEL).
 
           - engine revision \`${{ steps.engine.outputs.revision }}\`
-          - drives free-explorers/flutter-engine-nix and free-explorers/flutter-engine
           - provisioning the CDN artifact hashes and the Nix SDK hashes
 
+          Engine builds, dispatched by this run and running for a few hours:
+
+          - [flutter-engine-nix]($NIX_RUN) — source engine, published to the Cachix cache
+          - [flutter-engine]($ENGINE_RUN) — release/debug/profile prebuilt artifacts
+
           Merging this triggers the engine cache. The prebuilt engine sha256 and the
-          engine-repository pin are filled by Complete Flutter Bump.
+          engine-repository pin are filled by Complete Flutter Bump, which each engine
+          repository dispatches when its build finishes.
+
+          [Bump run]($BUMP_RUN)
           EOF
           gh pr create --base main --head "bump/flutter-v$VERSION" \
             --title "Bump Flutter to $VERSION" --body-file "$RUNNER_TEMP/body.md"
