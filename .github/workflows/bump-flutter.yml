@@ -10,6 +10,9 @@ name: Bump Flutter Version
 #
 # Requires BUMP_TOKEN: a fine-grained token with Actions: write on
 # free-explorers/flutter-engine-nix and free-explorers/flutter-engine.
+# Requires PR_TOKEN: a fine-grained token with Pull requests: read and write on
+# this repository, because the organization forbids Actions from creating
+# pull requests.
 
 on:
   workflow_dispatch:
@@ -111,7 +114,10 @@ jobs:
 
       - name: Commit and open the bump pull request
         env:
-          GH_TOKEN: ${{ github.token }}
+          # PR_TOKEN, not github.token: the organization forbids Actions from
+          # creating pull requests, and a PR opened with github.token would not
+          # trigger the pull_request workflows either.
+          GH_TOKEN: ${{ secrets.PR_TOKEN }}
           VERSION: ${{ inputs.version }}
           CHANNEL: ${{ inputs.channel }}
         run: |

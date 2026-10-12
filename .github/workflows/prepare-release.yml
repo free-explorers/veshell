@@ -4,6 +4,10 @@ name: Prepare Release
 # cargoHash, and files a PR whose body is the release notes plus a machine
 # readable marker the Release workflow reads back. Nothing is published here;
 # the checks on the PR and the merge are what release.
+#
+# Requires PR_TOKEN: a fine-grained token with Pull requests: read and write on
+# this repository, because the organization forbids Actions from creating
+# pull requests.
 
 on:
   workflow_dispatch:
@@ -115,7 +119,10 @@ jobs:
 
       - name: Commit and open the release pull request
         env:
-          GH_TOKEN: ${{ github.token }}
+          # PR_TOKEN, not github.token: the organization forbids Actions from
+          # creating pull requests, and a PR opened with github.token would not
+          # trigger Release Check or the formatter either.
+          GH_TOKEN: ${{ secrets.PR_TOKEN }}
           VERSION: ${{ inputs.version }}
           PRERELEASE: ${{ inputs.prerelease }}
           CHANNEL: ${{ inputs.channel }}
