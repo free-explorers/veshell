@@ -1,0 +1,97 @@
+name: Flutter Engine Cache
+
+# Keeps the source-built Flutter engine in the project Cachix cache so nobody
+# has to compile it. The engine derivation is a function of the Flutter version
+# (Cargo.toml) and the engine pin (nix/engine-repository.json); any change to
+# them flips the store path, so the cache check below is exact — it builds only
+# when the result is genuinely missing and skips the multi-hour build otherwise.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Cargo.toml
+      - nix/engine-repository.json
+      - nix/engine.nix
+      - flake.nix
+      - flake.lock
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flutter-engine-cache
+  cancel-in-progress: false
+
+jobs:
+  engine:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Reclaim unused runner tools and require 30 GiB
+        shell: bash
+        run: |
+          set -euo pipefail
+          nproc
+          free -h
+          df -h / /mnt
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          available=$(df --output=avail -B1 / | tr -dc '0-9')
+          (( available >= 30 * 1024 * 1024 * 1024 ))
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+        with:
+          extra_nix_config: |
+            max-jobs = 1
+            cores = 4
+            experimental-features = nix-command flakes
+
+      - name: Use the project cache
+        uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: veshell
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Check whether the engine is already cached
+        id: cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          engine=$(nix eval --raw .#engine.outPath)
+          hash=${engine#/nix/store/}
+          hash=${hash%%-*}
+          if curl -fsS "https://veshell.cachix.org/$hash.narinfo" >/dev/null; then
+            echo "Engine $engine is already cached; nothing to build." >> "$GITHUB_STEP_SUMMARY"
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Engine $engine is missing; building it." >> "$GITHUB_STEP_SUMMARY"
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and publish the engine and runtime
+        if: steps.cache.outputs.hit != 'true'
+        timeout-minutes: 300
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t roots < <(
+            nix build .#engine .#runtime --print-out-paths --no-link \
+              --max-jobs 1 --cores 4
+          )
+          printf '%s\n' "${roots[@]}"
+          cachix push veshell "${roots[@]}"
+
+      - name: Final resource sample
+        if: always()
+        shell: bash
+        run: |
+          free -h
+          df -h / /mnt
