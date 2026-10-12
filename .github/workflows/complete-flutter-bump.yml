@@ -5,6 +5,10 @@ name: Complete Flutter Bump
 # nix/flutter-artifacts.json, and the engine-repository pin in
 # nix/engine-repository.json. The engine repositories dispatch it when their
 # builds finish, so the bump never holds a runner waiting and nothing polls.
+#
+# Requires PR_TOKEN: a fine-grained token with Contents: read and write on this
+# repository, so the completion commit is pushed as a user and its pull_request
+# runs execute rather than waiting for approval.
 
 on:
   # The engine repositories dispatch this when their builds finish, so there
@@ -30,6 +34,11 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+          # PR_TOKEN, not github.token: this job pushes the completion commit, and
+          # a push authenticated by github.token triggers the pull_request runs as
+          # github-actions[bot], which leaves them in action_required instead of
+          # running them. The branch push still uses these checkout credentials.
+          token: ${{ secrets.PR_TOKEN }}
 
       - name: Install Nix
         uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
