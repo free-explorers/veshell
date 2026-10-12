@@ -123,7 +123,10 @@ def main() -> int:
     print("resolving the bootstrap Dart hash")
     resolve(f"(import ./nix/flutter-sdk-update.nix {{ pkgs = p; }}).dart", set_dart, "dartHash")
     print("resolving the Flutter tools lock hash")
-    resolve(f"(import ./nix/flutter-sdk-update.nix {{ pkgs = p; lockHash = p.lib.fakeHash; }}).toolsLock",
+    # No lockHash override here: the seed above already makes the pin fake, and
+    # resolve() converges by rewriting the pin. Pinning the expression itself to
+    # p.lib.fakeHash would make every attempt mismatch forever.
+    resolve(f"(import ./nix/flutter-sdk-update.nix {{ pkgs = p; }}).toolsLock",
             set_tools_lock, "toolsLockHash")
     print("resolving the artifact hashes")
     resolve(f"(import ./nix/flutter-sdk-update.nix {{ pkgs = p; }}).artifacts", set_artifact, "artifactHashes")
