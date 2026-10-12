@@ -1,0 +1,120 @@
+name: Release
+
+# One action to publish a release everywhere.
+#
+# The requested version must already be set in Cargo.toml (with its Cargo.lock),
+# and the Flutter/engine pins must be resolved in nix/ — this workflow does not
+# bump them. It then:
+#   1. syncs the packaging manifest (release.json) from this checkout and
+#      re-renders the distro recipes,
+#   2. publishes the packaging release, which triggers the distro pipeline
+#      (prebuilt payloads, AUR, COPR, OBS, install smoke),
+#   3. creates the product release here, tagging the built commit.
+#
+# Requires the PACKAGING_TOKEN secret: a fine-grained token with Contents: write
+# on free-explorers/veshell-packaging (to push the manifest and create the
+# release). The built-in token cannot reach the other repository.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release; must match Cargo.toml (for example 0.2.0)
+        required: true
+        type: string
+      channel:
+        description: Release channel
+        required: true
+        default: beta
+        type: choice
+        options: [beta, stable]
+      prerelease:
+        description: Pre-release id (for example beta.1); empty for a final release
+        required: false
+        default: ""
+        type: string
+      notes:
+        description: Release notes (markdown); generated notes are used when empty
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  VESHELL_REPO: free-explorers/veshell
+  PACKAGING_REPO: free-explorers/veshell-packaging
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate the version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          cargo_version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml","rb"))["package"]["version"])')
+          if [[ "$cargo_version" != "$VERSION" ]]; then
+            echo "error: Cargo.toml version ($cargo_version) != requested ($VERSION); bump it before releasing" >&2
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "error: tag v$VERSION already exists" >&2
+            exit 1
+          fi
+
+      - name: Prepare the packaging manifest and recipes
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGING_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          PRERELEASE: ${{ inputs.prerelease }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          git clone --quiet "https://x-access-token:${GH_TOKEN}@github.com/${PACKAGING_REPO}.git" packaging
+          git -C packaging config user.name "Veshell release bot"
+          git -C packaging config user.email "releases@veshell.invalid"
+          args=(--version "$VERSION" --channel "$CHANNEL" --commit "$GITHUB_SHA" --veshell-src "$GITHUB_WORKSPACE")
+          [[ -n "$PRERELEASE" ]] && args+=(--prerelease "$PRERELEASE")
+          python3 packaging/scripts/prepare-release.py "${args[@]}"
+          git -C packaging add --all
+          git -C packaging commit --quiet -m "release: v$VERSION"
+          git -C packaging push --quiet origin HEAD:main
+
+      - name: Create the packaging release (triggers the distro pipeline)
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGING_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          gh release create "$tag" --repo "$PACKAGING_REPO" --target main \
+            --title "$tag" --notes "Packaging artifacts for Veshell $VERSION."
+
+      - name: Create the product release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          git tag "$tag"
+          git push --quiet origin "$tag"
+          if [[ -n "$NOTES" ]]; then
+            printf '%s' "$NOTES" > "$RUNNER_TEMP/notes.md"
+            gh release create "$tag" --repo "$VESHELL_REPO" --title "$tag" --notes-file "$RUNNER_TEMP/notes.md"
+          else
+            gh release create "$tag" --repo "$VESHELL_REPO" --title "$tag" --generate-notes
+          fi
