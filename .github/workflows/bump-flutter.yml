@@ -5,6 +5,9 @@ name: Bump Flutter Version
 # bump/flutter-v<version> pull request. Merging that PR is what triggers the
 # engine cache (#95) and, later, the release (#99).
 #
+# The prebuilt engine's sha256 and the engine-repository pin cannot exist yet at
+# this point, so Complete Flutter Bump fills them once those builds land.
+#
 # Requires BUMP_TOKEN: a fine-grained token with Actions: write on
 # free-explorers/flutter-engine-nix and free-explorers/flutter-engine.
 
@@ -87,103 +90,26 @@ jobs:
           gh workflow run release.yml --repo "$ENGINE_NIX_REPO" --ref main -f flutter_version="$VERSION"
           gh workflow run engine-release.yml --repo "$ENGINE_REPO" --ref main -f mode="$MODE" -f revision="$REVISION" -f publish=true
 
-      - name: Probe the Nix SDK hashes
-        id: nix
+      - name: Resolve the Nix SDK hashes
         env:
           VERSION: ${{ inputs.version }}
           CHANNEL: ${{ inputs.channel }}
           REVISION: ${{ steps.engine.outputs.revision }}
         run: |
           set -euo pipefail
-          to_sri() { nix hash convert --to sri --hash-algo sha256 "$1" 2>/dev/null || nix hash to-sri --type sha256 "$1"; }
-          note() { echo "$*" >> "$GITHUB_STEP_SUMMARY"; }
-          flutter_hash=$(to_sri "$(nix-prefetch-url --unpack "https://github.com/flutter/flutter/archive/$VERSION.tar.gz")")
           dart_version=$(python3 -c 'import json,urllib.request as u;d=json.load(u.urlopen("https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json"));print(next(r["dart_sdk_version"] for r in d["releases"] if r["version"]=="'"$VERSION"'" and r["channel"]=="'"$CHANNEL"'"))')
-          dart_hash=$(to_sri "$(nix-prefetch-url --type sha256 "https://storage.googleapis.com/dart-archive/channels/stable/release/$dart_version/sdk/dartsdk-linux-x64-release.zip")")
+          nix shell nixpkgs#yq nixpkgs#jq -c python3 nix/probe-sdk-hashes.py \
+            --version "$VERSION" --engine-version "$REVISION" --dart-version "$dart_version"
 
-          # Seed the pin (with fake hashes for the two generated ones) so the
-          # probe tool can read it, and point Cargo.toml at the new version.
-          python3 - "$VERSION" "$REVISION" "$flutter_hash" "$dart_version" "$dart_hash" <<'PY'
-          import json, re, sys
-          version, engine, fh, dv, dh = sys.argv[1:6]
-          cargo = open("Cargo.toml").read()
-          open("Cargo.toml", "w").write(re.sub(r'(?m)^(flutter_version\s*=\s*)"[^"]*"', rf'\g<1>"{version}"', cargo))
-          path = "nix/flutter-sdk.json"
-          data = json.load(open(path))
-          data[version] = {
-              "engineVersion": engine, "flutterHash": fh, "dartVersion": dv,
-              "dartHash": {"x86_64-linux": dh},
-              "artifactHashes": {"universal": {"x86_64-linux": "sha256-AAAA"}, "linux": {"x86_64-linux": "sha256-AAAA"}},
-              "toolsLockHash": "sha256-AAAA",
-          }
-          json.dump(dict(sorted(data.items())), open(path, "w"), indent=2)
-          PY
-
-          # The generated artifact hashes (nixpkgs runs the Flutter tool); the
-          # build fails with the real value, keyed by the derivation name.
-          pf='let f = builtins.getFlake (toString ./.); p = f.inputs.nixpkgs.legacyPackages.x86_64-linux;'
-          set_hash() {
-            python3 - "$VERSION" "$1" "$2" "$3" <<'PY'
-          import json, sys
-          version, path, section, value = sys.argv[1:5]
-          data = json.load(open(path))
-          if section != "toolsLock":
-              platform, system = section.split(".")
-              data[version]["artifactHashes"][platform][system] = value
-          else:
-              data[version]["toolsLockHash"] = value
-          json.dump(dict(sorted(data.items())), open(path, "w"), indent=2)
-          PY
-          }
-          resolved=false
-          for _ in $(seq 1 8); do
-            log=$(mktemp)
-            nix build --impure --no-link --print-out-paths --expr "${pf} in (import ./nix/flutter-sdk-update.nix { pkgs = p; artifactHash = p.lib.fakeHash; flutterPlatform = \"universal\"; }).artifacts" >"$log" 2>&1 || true
-            value=$(grep -oE 'got: +sha256-[A-Za-z0-9+/=]+' "$log" | head -1 | awk '{print $2}')
-            [[ -n "$value" ]] || { note "universal artifact hash resolved"; break; }
-            set_hash nix/flutter-sdk.json universal.x86_64-linux "$value"
-          done
-          for _ in $(seq 1 8); do
-            log=$(mktemp)
-            nix build --impure --no-link --print-out-paths --expr "${pf} in (import ./nix/flutter-sdk-update.nix { pkgs = p; artifactHash = p.lib.fakeHash; flutterPlatform = \"linux\"; }).artifacts" >"$log" 2>&1 || true
-            value=$(grep -oE 'got: +sha256-[A-Za-z0-9+/=]+' "$log" | head -1 | awk '{print $2}')
-            [[ -n "$value" ]] || { note "linux artifact hash resolved"; break; }
-            set_hash nix/flutter-sdk.json linux.x86_64-linux "$value"
-          done
-          for _ in $(seq 1 8); do
-            log=$(mktemp)
-            nix build --impure --no-link --print-out-paths --expr "${pf} in (import ./nix/flutter-sdk-update.nix { pkgs = p; lockHash = p.lib.fakeHash; }).toolsLock" >"$log" 2>&1 || true
-            value=$(grep -oE 'got: +sha256-[A-Za-z0-9+/=]+' "$log" | head -1 | awk '{print $2}')
-            [[ -n "$value" ]] || { note "tools lock hash resolved"; break; }
-            set_hash nix/flutter-sdk.json toolsLock "$value"
-          done
-          if grep -q 'sha256-AAAA' nix/flutter-sdk.json; then
-            echo "error: could not resolve every generated hash; see the run log" >&2; exit 1
-          fi
-          {
-            echo "flutter_hash=$flutter_hash"
-            echo "dart_hash=$dart_hash"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Resolve the provenance and write the pin
+      - name: Resolve the CDN provenance
         env:
           VERSION: ${{ inputs.version }}
           CHANNEL: ${{ inputs.channel }}
         run: |
           set -euo pipefail
-          pin=$(python3 -c 'import json,sys;d=json.load(open("nix/flutter-sdk.json"));e=d[sys.argv[1]];print(e["artifactHashes"]["universal"]["x86_64-linux"]);print(e["artifactHashes"]["linux"]["x86_64-linux"]);print(e["toolsLockHash"])' "$VERSION")
-          universal=$(printf '%s\n' "$pin" | sed -n 1p)
-          linux=$(printf '%s\n' "$pin" | sed -n 2p)
-          tools_lock=$(printf '%s\n' "$pin" | sed -n 3p)
-          # The engine.sha256 is filled by Complete Flutter Bump once the
-          # prebuilt engine release exists.
-          python3 nix/bump-flutter.py \
-            --version "$VERSION" --channel "$CHANNEL" \
-            --flutter-hash "${{ steps.nix.outputs.flutter_hash }}" \
-            --dart-hash "${{ steps.nix.outputs.dart_hash }}" \
-            --artifact-hash-universal "$universal" \
-            --artifact-hash-linux "$linux" \
-            --tools-lock-hash "$tools_lock"
+          # engine.sha256 is filled by Complete Flutter Bump once the prebuilt
+          # engine release exists.
+          python3 nix/bump-flutter.py --version "$VERSION" --channel "$CHANNEL"
 
       - name: Commit and open the bump pull request
         env:
@@ -194,7 +120,7 @@ jobs:
           set -euo pipefail
           git config user.name "Veshell release bot"
           git config user.email "releases@veshell.invalid"
-          git add Cargo.toml nix/flutter-sdk.json nix/flutter-artifacts.json
+          git add Cargo.toml nix/flutter-sdk.json nix/flutter-tools-lock.json nix/flutter-artifacts.json
           git commit -m "nix: bump Flutter to $VERSION"
           git push -u origin "bump/flutter-v$VERSION"
           cat > "$RUNNER_TEMP/body.md" <<EOF
@@ -204,7 +130,8 @@ jobs:
           - drives free-explorers/flutter-engine-nix and free-explorers/flutter-engine
           - provisioning the CDN artifact hashes and the Nix SDK hashes
 
-          Merging this triggers the engine cache.
+          Merging this triggers the engine cache. The prebuilt engine sha256 and the
+          engine-repository pin are filled by Complete Flutter Bump.
           EOF
           gh pr create --base main --head "bump/flutter-v$VERSION" \
             --title "Bump Flutter to $VERSION" --body-file "$RUNNER_TEMP/body.md"

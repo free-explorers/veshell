@@ -63,11 +63,6 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--version", required=True)
     parser.add_argument("--channel", default="stable", choices=["stable", "beta", "dev"])
-    parser.add_argument("--flutter-hash", required=True, help="nix hash (SRI) of the Flutter SDK source")
-    parser.add_argument("--dart-hash", required=True, help="nix hash (SRI) of the bootstrap Dart SDK")
-    parser.add_argument("--artifact-hash-universal", required=True)
-    parser.add_argument("--artifact-hash-linux", required=True)
-    parser.add_argument("--tools-lock-hash", required=True)
     parser.add_argument("--engine-sha256", default=None, help="sha256 (hex) of the published engine tarball; omitted while the engine build is still running")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -101,28 +96,18 @@ def main() -> int:
         engine["sha256"] = args.engine_sha256
 
     flutter_entry = {"channel": args.channel, "sdk": sdk, "artifacts": artifacts, "engine": engine}
-    sdk_entry = {
-        "engineVersion": engine_revision,
-        "flutterHash": args.flutter_hash,
-        "dartVersion": dart_version,
-        "dartHash": {"x86_64-linux": args.dart_hash},
-        "artifactHashes": {
-            "universal": {"x86_64-linux": args.artifact_hash_universal},
-            "linux": {"x86_64-linux": args.artifact_hash_linux},
-        },
-        "toolsLockHash": args.tools_lock_hash,
-    }
+    # nix/flutter-sdk.json is written by nix/probe-sdk-hashes.py, which owns the
+    # Nix fixed-output hashes.
 
     if args.dry_run:
-        print(json.dumps({"flutter": {version: flutter_entry}, "sdk": {version: sdk_entry}}, indent=2))
+        print(json.dumps({"nix/flutter-artifacts.json": {version: flutter_entry}}, indent=2))
         return 0
 
-    for name, key, value in (("nix/flutter-artifacts.json", version, flutter_entry), ("nix/flutter-sdk.json", version, sdk_entry)):
-        path = ROOT / name
-        existing = json.loads(path.read_text()) if path.is_file() else {}
-        existing[key] = value
-        path.write_text(json.dumps(dict(sorted(existing.items())), indent=2, ensure_ascii=False) + "\n")
-        print(f"wrote {name}: {version}")
+    path = ROOT / "nix/flutter-artifacts.json"
+    existing = json.loads(path.read_text()) if path.is_file() else {}
+    existing[version] = flutter_entry
+    path.write_text(json.dumps(dict(sorted(existing.items())), indent=2, ensure_ascii=False) + "\n")
+    print(f"wrote nix/flutter-artifacts.json: {version}")
 
     cargo = ROOT / "Cargo.toml"
     text = cargo.read_text()
