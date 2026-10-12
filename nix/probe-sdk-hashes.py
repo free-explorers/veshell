@@ -129,7 +129,16 @@ def main() -> int:
     resolve(f"(import ./nix/flutter-sdk-update.nix {{ pkgs = p; }}).toolsLock",
             set_tools_lock, "toolsLockHash")
     print("resolving the artifact hashes")
-    resolve(f"(import ./nix/flutter-sdk-update.nix {{ pkgs = p; }}).artifacts", set_artifact, "artifactHashes")
+    # Every platform the SDK declares: nix/flutter.nix sets
+    # supportedTargetFlutterPlatforms = [ "universal" "linux" ], and the wrapper
+    # fetches one artifact set per platform. Probing only the default
+    # ("universal") leaves the linux slot at lib.fakeHash, which the success
+    # check below would not have noticed.
+    for platform in ("universal", "linux"):
+        resolve(
+            f"(import ./nix/flutter-sdk-update.nix {{ pkgs = p; flutterPlatform = \"{platform}\"; }}).artifacts",
+            set_artifact, f"artifactHashes.{platform}",
+        )
 
     print("regenerating nix/flutter-tools-lock.json")
     result = build(f"(import ./nix/flutter-sdk-update.nix {{ pkgs = p; }}).toolsLock")
@@ -141,6 +150,21 @@ def main() -> int:
     TOOLS_LOCK.write_text(rendered.stdout if rendered.stdout.endswith("\n") else rendered.stdout + "\n")
 
     entry = load()[args.version]
+    # A probe that returns success without the value it was supposed to write is
+    # the failure this guards against: never commit a pin still holding fakeHash.
+    unresolved = [
+        label
+        for label, value in (
+            ("flutterHash", entry["flutterHash"]),
+            ("dartHash", entry["dartHash"][SYSTEM]),
+            ("artifactHashes.universal", entry["artifactHashes"]["universal"][SYSTEM]),
+            ("artifactHashes.linux", entry["artifactHashes"]["linux"][SYSTEM]),
+            ("toolsLockHash", entry["toolsLockHash"]),
+        )
+        if value == FAKE
+    ]
+    if unresolved:
+        fail("still at lib.fakeHash after probing: " + ", ".join(unresolved))
     print(json.dumps({
         "flutterHash": entry["flutterHash"],
         "dartHash": entry["dartHash"][SYSTEM],
