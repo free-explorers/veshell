@@ -76,7 +76,7 @@ downloads, not telemetry.
 | Flutter SDK | `github.com/flutter/flutter.git`, checked out by tag | pinned tag, not a commit |
 | Dart SDK | `storage.googleapis.com/flutter_infra_release/...` | trusted over TLS |
 | Linux engine artifacts | `storage.googleapis.com/flutter_infra_release/...` | trusted over TLS |
-| Embedder `libflutter_engine.so` | a GitHub release (`meta-flutter/flutter-engine` by default, or `VESHELL_ENGINE_REPO`) | SHA-256 fetched from the same release |
+| Embedder `libflutter_engine.so` | a GitHub release (`free-explorers/flutter-engine` by default, or `VESHELL_ENGINE_REPO`) | SHA-256 fetched from the same release |
 | Dart packages | `pub.dev` and `github.com/free-explorers/*` | lockfile revisions |
 
 The Nix path is stronger: `nix/flutter-sdk.json` pins SHA-256 hashes for the
