@@ -1,0 +1,127 @@
+name: Prepare Release
+
+# Opens the release pull request. It bumps the version, refreshes the Nix
+# cargoHash, and files a PR whose body becomes the release notes; the checks on
+# that PR and the merge are what release. Nothing is published here.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release (for example 0.2.0)
+        required: true
+        type: string
+      channel:
+        description: Release channel
+        required: true
+        default: beta
+        type: choice
+        options: [beta, stable]
+      prerelease:
+        description: Pre-release id (for example beta.1); empty for a final release
+        required: false
+        default: ""
+        type: string
+      notes:
+        description: Release notes (markdown) that become the pull request body
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: prepare-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard the version
+        env:
+          VERSION: ${{ inputs.version }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "error: version must be x.y.z" >&2; exit 1; }
+          [[ -z "$PRERELEASE" || "$PRERELEASE" =~ ^[A-Za-z0-9.]+$ ]] || { echo "error: bad prerelease id" >&2; exit 1; }
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "error: tag v$VERSION already exists" >&2; exit 1
+          fi
+          if git ls-remote --exit-code --heads origin "release/v$VERSION" >/dev/null 2>&1; then
+            echo "error: branch release/v$VERSION already exists" >&2; exit 1
+          fi
+
+      - name: Bump the version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          python3 - "$VERSION" <<'PY'
+          import os, re, sys
+          path = "Cargo.toml"
+          text = open(path).read()
+          updated, n = re.subn(r'(?m)^(version\s*=\s*)"[^"]*"', r'\g<1>"%s"' % sys.argv[1], text, count=1)
+          if n != 1:
+              raise SystemExit("could not find the [package] version in Cargo.toml")
+          open(path, "w").write(updated)
+          PY
+          cargo update -p veshell --offline 2>/dev/null || cargo update -p veshell
+          git checkout -b "release/v$VERSION"
+          git diff --stat
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Refresh the Nix cargoHash
+        run: |
+          set -euo pipefail
+          file=nix/dependencies.nix
+          cp "$file" "$file.orig"
+          sed -i 's|cargoHash = "sha256-[^"]*"|cargoHash = lib.fakeHash|' "$file"
+          log="$(mktemp)"
+          nix build .#default --no-link --max-jobs 1 >"$log" 2>&1 || true
+          got="$(grep -oE 'got: +sha256-[A-Za-z0-9+/=]+' "$log" | head -1 | awk '{print $2}')"
+          if [[ -z "$got" ]]; then
+            echo "error: could not determine the cargoHash; output follows" >&2
+            cat "$log" >&2
+            mv "$file.orig" "$file"
+            exit 1
+          fi
+          sed -i "s|cargoHash = lib.fakeHash|cargoHash = \"$got\"|" "$file"
+          rm -f "$file.orig"
+          git diff --stat
+
+      - name: Commit and open the release pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          PRERELEASE: ${{ inputs.prerelease }}
+          CHANNEL: ${{ inputs.channel }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          set -euo pipefail
+          git config user.name "Veshell release bot"
+          git config user.email "releases@veshell.invalid"
+          git add Cargo.toml Cargo.lock nix/dependencies.nix
+          git commit -m "release: v$VERSION"
+          git push -u origin "release/v$VERSION"
+          if [[ -n "$NOTES" ]]; then
+            printf '%s' "$NOTES" > "$RUNNER_TEMP/body.md"
+          else
+            printf 'Release %s (channel %s).\n\n_No hand-written notes; the merged pull request body is used as the release notes._\n' \
+              "v$VERSION" "$CHANNEL" > "$RUNNER_TEMP/body.md"
+          fi
+          gh pr create --base main --head "release/v$VERSION" \
+            --title "Release v$VERSION" --body-file "$RUNNER_TEMP/body.md"

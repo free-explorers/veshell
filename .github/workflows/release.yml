@@ -1,46 +1,21 @@
 name: Release
 
-# One action to publish a release everywhere.
-#
-# The requested version must already be set in Cargo.toml (with its Cargo.lock),
-# and the Flutter/engine pins must be resolved in nix/ — this workflow does not
-# bump them. It then:
-#   1. syncs the packaging manifest (release.json) from this checkout and
-#      re-renders the distro recipes,
-#   2. publishes the packaging release, which triggers the distro pipeline
-#      (prebuilt payloads, AUR, COPR, OBS, install smoke),
-#   3. creates the product release here, tagging the built commit.
+# Runs on every push to main, but only acts when the version in Cargo.toml has no
+# tag yet: that is a merged release pull request. It then publishes everywhere:
+# syncs the packaging manifest, triggers the distro pipeline (payloads, AUR,
+# COPR, OBS, smoke), tags the commit and creates the product release. The body
+# of the merged release pull request becomes the release notes.
 #
 # Requires the PACKAGING_TOKEN secret: a fine-grained token with Contents: write
-# on free-explorers/veshell-packaging (to push the manifest and create the
-# release). The built-in token cannot reach the other repository.
+# on free-explorers/veshell-packaging.
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: Version to release; must match Cargo.toml (for example 0.2.0)
-        required: true
-        type: string
-      channel:
-        description: Release channel
-        required: true
-        default: beta
-        type: choice
-        options: [beta, stable]
-      prerelease:
-        description: Pre-release id (for example beta.1); empty for a final release
-        required: false
-        default: ""
-        type: string
-      notes:
-        description: Release notes (markdown); generated notes are used when empty
-        required: false
-        default: ""
-        type: string
+  push:
+    branches: [main]
 
 permissions:
   contents: write
+  pull-requests: read
 
 concurrency:
   group: release
@@ -59,62 +34,68 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate the version
-        env:
-          VERSION: ${{ inputs.version }}
+      - name: Decide whether this commit is an unreleased version
+        id: decide
         run: |
           set -euo pipefail
-          cargo_version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml","rb"))["package"]["version"])')
-          if [[ "$cargo_version" != "$VERSION" ]]; then
-            echo "error: Cargo.toml version ($cargo_version) != requested ($VERSION); bump it before releasing" >&2
-            exit 1
-          fi
-          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
-            echo "error: tag v$VERSION already exists" >&2
-            exit 1
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml","rb"))["package"]["version"])')
+          tag="v$version"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "tag $tag already exists; nothing to release" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+            echo "release=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Prepare the packaging manifest and recipes
+      - name: Collect the release notes from the merged pull request
+        if: steps.decide.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.decide.outputs.tag }}
+        run: |
+          set -euo pipefail
+          body=$(gh api "repos/${{ github.repository }}/commits/$GITHUB_SHA/pulls" --jq '.[0].body // ""')
+          if [[ -z "$body" ]]; then
+            body="Release $TAG."
+          fi
+          printf '%s\n' "$body" > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+
+      - name: Sync the packaging manifest and recipes
+        if: steps.decide.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ secrets.PACKAGING_TOKEN }}
-          VERSION: ${{ inputs.version }}
-          PRERELEASE: ${{ inputs.prerelease }}
-          CHANNEL: ${{ inputs.channel }}
+          VERSION: ${{ steps.decide.outputs.version }}
         run: |
           set -euo pipefail
           git clone --quiet "https://x-access-token:${GH_TOKEN}@github.com/${PACKAGING_REPO}.git" packaging
           git -C packaging config user.name "Veshell release bot"
           git -C packaging config user.email "releases@veshell.invalid"
-          args=(--version "$VERSION" --channel "$CHANNEL" --commit "$GITHUB_SHA" --veshell-src "$GITHUB_WORKSPACE")
-          [[ -n "$PRERELEASE" ]] && args+=(--prerelease "$PRERELEASE")
-          python3 packaging/scripts/prepare-release.py "${args[@]}"
+          python3 packaging/scripts/prepare-release.py \
+            --version "$VERSION" --commit "$GITHUB_SHA" --veshell-src "$GITHUB_WORKSPACE"
           git -C packaging add --all
           git -C packaging commit --quiet -m "release: v$VERSION"
           git -C packaging push --quiet origin HEAD:main
 
-      - name: Create the packaging release (triggers the distro pipeline)
+      - name: Publish the packaging release (triggers the distro pipeline)
+        if: steps.decide.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ secrets.PACKAGING_TOKEN }}
-          VERSION: ${{ inputs.version }}
+          TAG: ${{ steps.decide.outputs.tag }}
         run: |
           set -euo pipefail
-          tag="v$VERSION"
-          gh release create "$tag" --repo "$PACKAGING_REPO" --target main \
-            --title "$tag" --notes "Packaging artifacts for Veshell $VERSION."
+          gh release create "$TAG" --repo "$PACKAGING_REPO" --target main \
+            --title "$TAG" --notes "Packaging artifacts for Veshell $TAG."
 
-      - name: Create the product release
+      - name: Tag and create the product release
+        if: steps.decide.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ inputs.version }}
-          NOTES: ${{ inputs.notes }}
+          TAG: ${{ steps.decide.outputs.tag }}
         run: |
           set -euo pipefail
-          tag="v$VERSION"
-          git tag "$tag"
-          git push --quiet origin "$tag"
-          if [[ -n "$NOTES" ]]; then
-            printf '%s' "$NOTES" > "$RUNNER_TEMP/notes.md"
-            gh release create "$tag" --repo "$VESHELL_REPO" --title "$tag" --notes-file "$RUNNER_TEMP/notes.md"
-          else
-            gh release create "$tag" --repo "$VESHELL_REPO" --title "$tag" --generate-notes
-          fi
+          git tag "$TAG"
+          git push --quiet origin "$TAG"
+          gh release create "$TAG" --repo "$VESHELL_REPO" --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
