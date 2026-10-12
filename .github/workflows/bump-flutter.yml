@@ -1,0 +1,135 @@
+name: Bump Flutter Version
+
+# One action to move to a new Flutter release. It resolves the version's
+# provenance, drives the two engine repositories, and opens a reviewed
+# bump/flutter-v<version> pull request. Merging that PR is what triggers the
+# engine cache (#95) and, later, the release (#99).
+#
+# The prebuilt engine's sha256 and the engine-repository pin cannot exist yet at
+# this point, so Complete Flutter Bump fills them once those builds land.
+#
+# Requires BUMP_TOKEN: a fine-grained token with Actions: write on
+# free-explorers/flutter-engine-nix and free-explorers/flutter-engine.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Flutter release to move to (for example 3.50.0)
+        required: true
+        type: string
+      channel:
+        description: Flutter channel
+        required: true
+        default: stable
+        type: choice
+        options: [stable, beta, dev]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: bump-flutter
+  cancel-in-progress: false
+
+env:
+  ENGINE_NIX_REPO: free-explorers/flutter-engine-nix
+  ENGINE_REPO: free-explorers/flutter-engine
+
+jobs:
+  bump:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard the version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "error: version must be x.y.z" >&2; exit 1; }
+          current=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml","rb"))["package"]["metadata"]["flutter_version"])')
+          [[ "$current" != "$VERSION" ]] || { echo "error: already on Flutter $VERSION" >&2; exit 1; }
+          if git ls-remote --exit-code --heads origin "bump/flutter-v$VERSION" >/dev/null 2>&1; then
+            echo "error: branch bump/flutter-v$VERSION already exists" >&2; exit 1
+          fi
+          git checkout -b "bump/flutter-v$VERSION"
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+        with:
+          extra_nix_config: |
+            max-jobs = 1
+            cores = 4
+            experimental-features = nix-command flakes
+
+      - name: Resolve the engine revision
+        id: engine
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          revision=$(curl -fsSL "https://raw.githubusercontent.com/flutter/flutter/$VERSION/bin/internal/engine.version" | tr -d '\n')
+          [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo "error: bad engine revision '$revision'" >&2; exit 1; }
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+
+      - name: Drive the engine repositories
+        env:
+          GH_TOKEN: ${{ secrets.BUMP_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          REVISION: ${{ steps.engine.outputs.revision }}
+        run: |
+          set -euo pipefail
+          gh workflow run release.yml --repo "$ENGINE_NIX_REPO" --ref main -f flutter_version="$VERSION"
+          gh workflow run engine-release.yml --repo "$ENGINE_REPO" --ref main -f revision="$REVISION" -f publish=true
+
+      - name: Resolve the Nix SDK hashes
+        env:
+          VERSION: ${{ inputs.version }}
+          CHANNEL: ${{ inputs.channel }}
+          REVISION: ${{ steps.engine.outputs.revision }}
+        run: |
+          set -euo pipefail
+          dart_version=$(python3 -c 'import json,urllib.request as u;d=json.load(u.urlopen("https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json"));print(next(r["dart_sdk_version"] for r in d["releases"] if r["version"]=="'"$VERSION"'" and r["channel"]=="'"$CHANNEL"'"))')
+          nix shell nixpkgs#yq nixpkgs#jq -c python3 nix/probe-sdk-hashes.py \
+            --version "$VERSION" --engine-version "$REVISION" --dart-version "$dart_version"
+
+      - name: Resolve the CDN provenance
+        env:
+          VERSION: ${{ inputs.version }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          # engine.sha256 is filled by Complete Flutter Bump once the prebuilt
+          # engine release exists.
+          python3 nix/bump-flutter.py --version "$VERSION" --channel "$CHANNEL"
+
+      - name: Commit and open the bump pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          git config user.name "Veshell release bot"
+          git config user.email "releases@veshell.invalid"
+          git add Cargo.toml nix/flutter-sdk.json nix/flutter-tools-lock.json nix/flutter-artifacts.json
+          git commit -m "nix: bump Flutter to $VERSION"
+          git push -u origin "bump/flutter-v$VERSION"
+          cat > "$RUNNER_TEMP/body.md" <<EOF
+          Bump Flutter to **$VERSION** ($CHANNEL).
+
+          - engine revision \`${{ steps.engine.outputs.revision }}\`
+          - drives free-explorers/flutter-engine-nix and free-explorers/flutter-engine
+          - provisioning the CDN artifact hashes and the Nix SDK hashes
+
+          Merging this triggers the engine cache. The prebuilt engine sha256 and the
+          engine-repository pin are filled by Complete Flutter Bump.
+          EOF
+          gh pr create --base main --head "bump/flutter-v$VERSION" \
+            --title "Bump Flutter to $VERSION" --body-file "$RUNNER_TEMP/body.md"
