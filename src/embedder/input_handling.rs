@@ -106,9 +106,11 @@ impl<BackendData: Backend> State<BackendData> {
             },
         );
         self.register_frame();
-        // The pointer moved: a live recording on this output needs a fresh
-        // frame even when the desktop under it is otherwise unchanged.
+        // The pointer moved: a live recording and any embedded-cursor screen
+        // cast on this output need a fresh frame even when the desktop under
+        // them is otherwise unchanged.
         crate::capture::on_pointer_motion_for_recording(self);
+        crate::portal::service::on_pointer_motion(self);
 
         if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
             return;
@@ -181,8 +183,10 @@ impl<BackendData: Backend> State<BackendData> {
             },
         );
         self.register_frame();
-        // See `on_pointer_motion`: refresh a live recording's pointer.
+        // See `on_pointer_motion`: refresh live recording and embedded-cursor
+        // screen-cast pointer frames.
         crate::capture::on_pointer_motion_for_recording(self);
+        crate::portal::service::on_pointer_motion(self);
         if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
             return;
         }
