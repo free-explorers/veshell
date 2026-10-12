@@ -68,7 +68,7 @@ def main() -> int:
     parser.add_argument("--artifact-hash-universal", required=True)
     parser.add_argument("--artifact-hash-linux", required=True)
     parser.add_argument("--tools-lock-hash", required=True)
-    parser.add_argument("--engine-sha256", required=True, help="sha256 (hex) of the published engine tarball")
+    parser.add_argument("--engine-sha256", default=None, help="sha256 (hex) of the published engine tarball; omitted while the engine build is still running")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -96,8 +96,9 @@ def main() -> int:
     engine_asset = f"linux-engine-sdk-release-x86_64-{engine_revision}"
     engine = {
         "url": f"https://github.com/{ENGINE_REPO}/releases/download/{engine_asset}/{engine_asset}.tar.gz",
-        "sha256": args.engine_sha256,
     }
+    if args.engine_sha256:
+        engine["sha256"] = args.engine_sha256
 
     flutter_entry = {"channel": args.channel, "sdk": sdk, "artifacts": artifacts, "engine": engine}
     sdk_entry = {

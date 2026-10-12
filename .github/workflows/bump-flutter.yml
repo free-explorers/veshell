@@ -38,7 +38,7 @@ env:
 jobs:
   bump:
     runs-on: ubuntu-24.04
-    timeout-minutes: 400
+    timeout-minutes: 240
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -86,30 +86,6 @@ jobs:
           set -euo pipefail
           gh workflow run release.yml --repo "$ENGINE_NIX_REPO" --ref main -f flutter_version="$VERSION"
           gh workflow run engine-release.yml --repo "$ENGINE_REPO" --ref main -f mode="$MODE" -f revision="$REVISION" -f publish=true
-
-      - name: Wait for the prebuilt engine artifact
-        id: prebuilt
-        env:
-          GH_TOKEN: ${{ secrets.BUMP_TOKEN }}
-          REVISION: ${{ steps.engine.outputs.revision }}
-          MODE: ${{ env.ENGINE_MODE }}
-        run: |
-          set -euo pipefail
-          tag="linux-engine-sdk-$MODE-x86_64-$REVISION"
-          deadline=$(( $(date +%s) + 5*3600 ))
-          while (( $(date +%s) < deadline )); do
-            url=$(gh release view "$tag" --repo "$ENGINE_REPO" --json assets \
-              --jq '.assets[] | select(.name | endswith(".tar.gz.sha256")) | .url' 2>/dev/null || true)
-            if [[ -n "$url" ]]; then
-              sha=$(gh api "$url" -H "Accept: application/octet-stream" 2>/dev/null | awk '{print $1}')
-              if [[ "$sha" =~ ^[0-9a-f]{64}$ ]]; then
-                echo "sha256=$sha" >> "$GITHUB_OUTPUT"
-                exit 0
-              fi
-            fi
-            echo "waiting for $tag ..."; sleep 120
-          done
-          echo "error: timed out waiting for $tag" >&2; exit 1
 
       - name: Probe the Nix SDK hashes
         id: nix
@@ -193,21 +169,21 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
           CHANNEL: ${{ inputs.channel }}
-          ENGINE_SHA: ${{ steps.prebuilt.outputs.sha256 }}
         run: |
           set -euo pipefail
           pin=$(python3 -c 'import json,sys;d=json.load(open("nix/flutter-sdk.json"));e=d[sys.argv[1]];print(e["artifactHashes"]["universal"]["x86_64-linux"]);print(e["artifactHashes"]["linux"]["x86_64-linux"]);print(e["toolsLockHash"])' "$VERSION")
           universal=$(printf '%s\n' "$pin" | sed -n 1p)
           linux=$(printf '%s\n' "$pin" | sed -n 2p)
           tools_lock=$(printf '%s\n' "$pin" | sed -n 3p)
+          # The engine.sha256 is filled by Complete Flutter Bump once the
+          # prebuilt engine release exists.
           python3 nix/bump-flutter.py \
             --version "$VERSION" --channel "$CHANNEL" \
             --flutter-hash "${{ steps.nix.outputs.flutter_hash }}" \
             --dart-hash "${{ steps.nix.outputs.dart_hash }}" \
             --artifact-hash-universal "$universal" \
             --artifact-hash-linux "$linux" \
-            --tools-lock-hash "$tools_lock" \
-            --engine-sha256 "$ENGINE_SHA"
+            --tools-lock-hash "$tools_lock"
 
       - name: Commit and open the bump pull request
         env:
