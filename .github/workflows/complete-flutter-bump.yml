@@ -29,6 +29,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install Nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
       - name: Complete each pending bump pull request
         env:
           GH_TOKEN: ${{ github.token }}
@@ -77,7 +83,8 @@ jobs:
                 -H "Accept: application/vnd.github.raw" \
                 | python3 -c 'import json,sys;print("yes" if sys.argv[1] in json.load(sys.stdin) else "no")' "$version")
               if [[ "$has" == "yes" ]]; then
-                sha=$(curl -fsSL "https://github.com/$ENGINE_NIX_REPO/archive/$engine_rev.tar.gz" | sha256sum | awk '{print $1}')
+                # builtins.fetchTarball wants the unpacked NAR hash, not the tarball file hash.
+                sha=$(nix-prefetch-url --unpack "https://github.com/$ENGINE_NIX_REPO/archive/$engine_rev.tar.gz" | tail -1)
                 python3 - "$engine_rev" "$sha" <<'PY'
           import json, sys
           revision, sha = sys.argv[1:3]
