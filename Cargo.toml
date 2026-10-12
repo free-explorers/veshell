@@ -16,6 +16,14 @@ flutter_version = "3.47.7"
 name = "veshell"
 path = "src/embedder/main.rs"
 
+# ThinLTO over the Rust compositor: LLVM combines and optimizes across crate
+# boundaries, then links ordinary native objects. Rust LTO is independent of the
+# distributions' LTO flags, which is why the packaging recipes still turn those
+# off: they only ever reached the libspa-sys C shim, whose GCC LTO objects rustc's
+# final link cannot resolve, and they never covered the Rust code at all.
+[profile.release]
+lto = "thin"
+
 [profile.profile]
 inherits = "release"
 
