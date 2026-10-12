@@ -1,0 +1,152 @@
+name: Release
+
+# Runs on every push to main, but only acts when that push is the merge of a
+# release pull request (head branch release/v*): it generates and publishes the
+# packaging inputs, syncs the packaging manifest, triggers the distro pipeline
+# (payloads, AUR, COPR, OBS, smoke), then tags the commit and creates the product
+# release. The merged pull request body becomes the release notes.
+#
+# Requires the PACKAGING_TOKEN secret: a fine-grained token with Contents: write
+# on free-explorers/veshell-packaging.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  VESHELL_REPO: free-explorers/veshell
+  PACKAGING_REPO: free-explorers/veshell-packaging
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Identify a merged release pull request
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pr="$(gh api "repos/${{ github.repository }}/commits/$GITHUB_SHA/pulls" --jq '.[0] // empty')"
+          if [[ -z "$pr" ]]; then
+            echo "no pull request for $GITHUB_SHA; skipping" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          ref="$(printf '%s' "$pr" | jq -r '.head.ref')"
+          if [[ "$ref" != release/v* ]]; then
+            echo "pull request $ref is not a release; skipping" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          version="${ref#release/v}"
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "tag v$version already exists; skipping" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          body="$(printf '%s' "$pr" | jq -r '.body // ""')"
+          channel="$(printf '%s' "$body" | sed -n 's/.*channel=\([^ ]*\).*/\1/p' | head -1)"
+          [[ -n "$channel" ]] || channel=beta
+          printf 'run=true\nversion=%s\nchannel=%s\n' "$version" "$channel" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$body" | sed '/veshell-release:/d' > "$RUNNER_TEMP/notes.md"
+          echo "releasing v$version (channel $channel)" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Check out the packaging repository
+        if: steps.release.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGING_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone --quiet "https://x-access-token:${GH_TOKEN}@github.com/${PACKAGING_REPO}.git" packaging
+          git -C packaging config user.name "Veshell release bot"
+          git -C packaging config user.email "releases@veshell.invalid"
+
+      - name: Sync the release metadata
+        if: steps.release.outputs.run == 'true'
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          CHANNEL: ${{ steps.release.outputs.channel }}
+        run: |
+          set -euo pipefail
+          base="${VERSION%%-*}"; prerelease=""
+          [[ "$VERSION" == *-* ]] && prerelease="${VERSION#*-}"
+          args=(--version "$base" --channel "$CHANNEL" --commit "$GITHUB_SHA" --veshell-src "$GITHUB_WORKSPACE")
+          [[ -n "$prerelease" ]] && args+=(--prerelease "$prerelease")
+          python3 packaging/scripts/prepare-release.py "${args[@]}" --no-render
+
+      - name: Generate and publish the packaging inputs
+        if: steps.release.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGING_TOKEN }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          sdk_url="$(python3 -c 'import json;print(json.load(open("packaging/release.json"))["flutter"]["sdk"]["url"])')"
+          sdk_sha="$(python3 -c 'import json;print(json.load(open("packaging/release.json"))["flutter"]["sdk"]["sha256"])')"
+          curl -fsSL -o "$RUNNER_TEMP/flutter.tar.xz" "$sdk_url"
+          echo "$sdk_sha  $RUNNER_TEMP/flutter.tar.xz" | sha256sum -c -
+          tar -xJf "$RUNNER_TEMP/flutter.tar.xz" -C "$RUNNER_TEMP"
+          VESHELL_SRC="$GITHUB_WORKSPACE" \
+          VESHELL_MANIFEST="$GITHUB_WORKSPACE/packaging/release.json" \
+          VESHELL_INPUT_OUT="$GITHUB_WORKSPACE/dist" \
+          FLUTTER_SDK_DIR="$RUNNER_TEMP/flutter" \
+            bash packaging/scripts/generate-inputs.sh all
+          gh release create "packaging-inputs-v$VERSION" dist/* \
+            --repo "$PACKAGING_REPO" --prerelease --latest=false \
+            --title "packaging-inputs-v$VERSION" \
+            --notes "Generated packaging inputs (cargo vendor tree and pub cache) for Veshell $VERSION."
+
+      - name: Record the input checksums and render
+        if: steps.release.outputs.run == 'true'
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          CHANNEL: ${{ steps.release.outputs.channel }}
+        run: |
+          set -euo pipefail
+          base="${VERSION%%-*}"; prerelease=""
+          [[ "$VERSION" == *-* ]] && prerelease="${VERSION#*-}"
+          args=(--version "$base" --channel "$CHANNEL" --commit "$GITHUB_SHA" --veshell-src "$GITHUB_WORKSPACE" --inputs-dir "$GITHUB_WORKSPACE/dist")
+          [[ -n "$prerelease" ]] && args+=(--prerelease "$prerelease")
+          python3 packaging/scripts/prepare-release.py "${args[@]}"
+
+      - name: Commit the packaging manifest
+        if: steps.release.outputs.run == 'true'
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          git -C packaging add --all
+          git -C packaging commit --quiet -m "release: v$VERSION"
+          git -C packaging push --quiet origin HEAD:main
+
+      - name: Publish the packaging release (triggers the distro pipeline)
+        if: steps.release.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PACKAGING_TOKEN }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "v$VERSION" --repo "$PACKAGING_REPO" --target main \
+            --title "v$VERSION" --notes "Packaging artifacts for Veshell v$VERSION."
+
+      - name: Tag and create the product release
+        if: steps.release.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          git tag "v$VERSION"
+          git push --quiet origin "v$VERSION"
+          gh release create "v$VERSION" --repo "$VESHELL_REPO" --title "v$VERSION" --notes-file "$RUNNER_TEMP/notes.md"
