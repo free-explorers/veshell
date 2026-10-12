@@ -92,19 +92,28 @@ fn download_flutter_engine_library(
         _ => return Err("Unsupported Flutter engine target architecture".into()),
     };
 
-    // Download the archive. Defaults to meta-flutter; set VESHELL_ENGINE_REPO
-    // (for example free-explorers/veshell) to use our own source-built engine.
+    // Download the archive from our own source-built engine releases, which carry
+    // every mode for each revision the application is pinned to. Set
+    // VESHELL_ENGINE_REPO to point elsewhere, such as meta-flutter; that mirror
+    // lags behind new Flutter revisions, so it cannot be the default. Builds that
+    // supply VESHELL_ENGINE_DIR never reach this.
     let engine_repo = env::var("VESHELL_ENGINE_REPO")
-        .unwrap_or_else(|_| "meta-flutter/flutter-engine".to_owned());
+        .unwrap_or_else(|_| "free-explorers/flutter-engine".to_owned());
     let asset = format!("linux-engine-sdk-{flutter_engine_build}-{arch}-{flutter_engine_revision}");
     let url = format!("https://github.com/{engine_repo}/releases/download/{asset}/{asset}.tar.gz");
     let sha256_url = format!("{}.sha256", url);
 
     // Download the archive and its SHA256 checksum
-    let bytes = download_from_url(&url)
-        .expect("Failed to download Flutter engine archive. Try downgrading Flutter.");
-    let sha256_bytes = download_from_url(&sha256_url)
-        .expect("Failed to download Flutter engine SHA256 checksum. Try downgrading Flutter.");
+    let bytes = download_from_url(&url).unwrap_or_else(|error| {
+        panic!(
+            "Failed to download the Flutter engine for {flutter_engine_revision} from {engine_repo}: {error}\n\
+             Set VESHELL_ENGINE_REPO to choose another release source, or VESHELL_ENGINE_DIR to use \
+             an engine that is already extracted."
+        )
+    });
+    let sha256_bytes = download_from_url(&sha256_url).unwrap_or_else(|error| {
+        panic!("Failed to download the Flutter engine SHA256 checksum from {engine_repo}: {error}")
+    });
 
     // Verify the SHA256 checksum
     let sha256_sum =
