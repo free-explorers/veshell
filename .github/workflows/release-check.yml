@@ -1,0 +1,57 @@
+name: Release Check
+
+# Dry-runs the release machinery on a release pull request: the manifest sync is
+# applied in a scratch packaging checkout and the recipes are re-rendered and
+# verified, so an inconsistent version/pin combination fails before merge.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  PACKAGING_REPO: free-explorers/veshell-packaging
+
+jobs:
+  check:
+    if: startsWith(github.head_ref, 'release/v')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Read the release marker from the pull request body
+        id: marker
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          meta="$(printf '%s\n' "$BODY" | grep -oE 'veshell-release: [^>]*' | head -1 || true)"
+          if [[ -z "$meta" ]]; then
+            echo "error: no 'veshell-release:' marker in the pull request body" >&2
+            exit 1
+          fi
+          channel="$(printf '%s' "$meta" | sed -n 's/.*channel=\([^ ]*\).*/\1/p')"
+          prerelease="$(printf '%s' "$meta" | sed -n 's/.*prerelease=\([^ ]*\).*/\1/p')"
+          [[ -n "$channel" ]] || { echo "error: marker has no channel" >&2; exit 1; }
+          printf 'channel=%s\n' "$channel" >> "$GITHUB_OUTPUT"
+          printf 'prerelease=%s\n' "$prerelease" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the packaging repository
+        run: git clone --quiet "https://github.com/${PACKAGING_REPO}.git" packaging
+
+      - name: Dry-run the manifest sync and verify the recipes
+        env:
+          CHANNEL: ${{ steps.marker.outputs.channel }}
+          PRERELEASE: ${{ steps.marker.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          release="${GITHUB_HEAD_REF#release/v}"
+          base="${release%%-*}"
+          args=(--version "$base" --channel "$CHANNEL" --commit "$GITHUB_SHA" --veshell-src "$GITHUB_WORKSPACE")
+          [[ -n "$PRERELEASE" ]] && args+=(--prerelease "$PRERELEASE")
+          python3 packaging/scripts/prepare-release.py "${args[@]}" --no-render
+          python3 packaging/scripts/prepare-release.py "${args[@]}"
+          python3 packaging/scripts/render-recipes.py --check --veshell-src "$GITHUB_WORKSPACE" packaging/release.json
