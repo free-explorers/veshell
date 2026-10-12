@@ -1,10 +1,9 @@
 name: Flutter Engine Cache
 
-# Keeps the source-built Flutter engine in the project Cachix cache so nobody
-# has to compile it. The engine derivation is a function of the Flutter version
-# (Cargo.toml) and the engine pin (nix/engine-repository.json); any change to
-# them flips the store path, so the cache check below is exact — it builds only
-# when the result is genuinely missing and skips the multi-hour build otherwise.
+# Keyed on the Flutter version. When Cargo.toml's flutter_version reaches main
+# with a new value (or the engine pin changes), the source engine is built and
+# pushed to the project Cachix cache. When it is already cached, `nix build`
+# substitutes it, so no separate cache lookup is needed.
 
 on:
   push:
@@ -32,9 +31,42 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          fetch-depth: 0
           persist-credentials: false
 
+      - name: Decide whether the Flutter version changed
+        id: decide
+        run: |
+          set -euo pipefail
+          flutter_version() {
+            python3 - "$1" <<'PY'
+          import sys, tomllib
+          print(tomllib.load(open(sys.argv[1], "rb"))["package"]["metadata"]["flutter_version"])
+          PY
+          }
+          current=$(flutter_version Cargo.toml)
+          before="${{ github.event.before }}"
+          previous=""
+          if [[ -n "$before" && "$before" != 0000000000000000000000000000000000000000 ]] && git cat-file -e "$before:Cargo.toml" 2>/dev/null; then
+            git show "$before:Cargo.toml" > "$RUNNER_TEMP/before.toml"
+            previous=$(flutter_version "$RUNNER_TEMP/before.toml")
+          fi
+          engine_pin_changed=false
+          if [[ -n "$before" && "$before" != 0000000000000000000000000000000000000000 ]]; then
+            git diff --name-only "$before" HEAD | grep -qx 'nix/engine-repository.json' && engine_pin_changed=true
+          fi
+          {
+            echo "flutter_version: ${previous:-<none>} -> $current"
+            echo "engine pin changed: $engine_pin_changed"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "$current" != "$previous" || "$engine_pin_changed" == "true" ]]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Reclaim unused runner tools and require 30 GiB
+        if: steps.decide.outputs.build == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -47,6 +79,7 @@ jobs:
           (( available >= 30 * 1024 * 1024 * 1024 ))
 
       - name: Install Nix
+        if: steps.decide.outputs.build == 'true'
         uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
         with:
           extra_nix_config: |
@@ -55,29 +88,14 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Use the project cache
+        if: steps.decide.outputs.build == 'true'
         uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
           name: veshell
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      - name: Check whether the engine is already cached
-        id: cache
-        shell: bash
-        run: |
-          set -euo pipefail
-          engine=$(nix eval --raw .#engine.outPath)
-          hash=${engine#/nix/store/}
-          hash=${hash%%-*}
-          if curl -fsS "https://veshell.cachix.org/$hash.narinfo" >/dev/null; then
-            echo "Engine $engine is already cached; nothing to build." >> "$GITHUB_STEP_SUMMARY"
-            echo "hit=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Engine $engine is missing; building it." >> "$GITHUB_STEP_SUMMARY"
-            echo "hit=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Build and publish the engine and runtime
-        if: steps.cache.outputs.hit != 'true'
+        if: steps.decide.outputs.build == 'true'
         timeout-minutes: 300
         shell: bash
         run: |
