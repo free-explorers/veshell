@@ -110,8 +110,17 @@ pub struct State<BackendData: Backend + 'static> {
     pub pointer: PointerHandle<State<BackendData>>,
     pub pointer_frame_pending: bool,
     pub primary_selection_state: PrimarySelectionState,
+    /// Milliseconds a key must be held before repeating starts. Advertised to
+    /// clients (`wl_keyboard.repeat_info`) and used by the shell repeater.
     pub repeat_delay: u64,
+    /// Repeat rate in characters per second. Advertised to clients verbatim
+    /// and converted into the shell repeater's interval by
+    /// [`crate::keyboard::repeat_interval`].
     pub repeat_rate: u64,
+    /// Cached `keyboard.swapAltAndWin` setting. Read on the keyboard hot path,
+    /// so it is refreshed by [`Self::apply_veshell_settings`] instead of
+    /// re-reading and parsing `settings.json` for every key event.
+    pub swap_alt_and_win: bool,
     pub running: Arc<AtomicBool>,
     pub seat: Seat<State<BackendData>>,
     pub seat_state: SeatState<State<BackendData>>,
@@ -309,8 +318,13 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 
         let settings = settings_manager.get_settings();
 
-        let repeat_delay: u64 = 200;
-        let repeat_rate: u64 = 50;
+        // Delay before a held key starts repeating (ms), and the rate of the
+        // repeat in characters per second. Both are advertised to clients via
+        // `wl_keyboard.repeat_info`; the rate is also converted into the shell
+        // repeater's interval. The defaults (500 ms / 30 cps) are configured in
+        // `KeyboardSettings` and the shipped settings file.
+        let repeat_delay: u64 = settings.keyboard.repeat_delay_ms;
+        let repeat_rate: u64 = settings.keyboard.effective_repeat_rate();
         let keyboard = seat
             .add_keyboard(
                 XkbConfig {
@@ -378,6 +392,13 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let key_repeater = KeyRepeater::new(
             loop_handle.clone(),
             |event, data: &mut State<BackendData>| {
+                // The repeat timer can fire in the same event-loop turn as the
+                // key's release, which `cancel` cannot un-queue. Re-check that
+                // the key is still physically held so a fast tap never emits a
+                // stray repeat.
+                if !data.keyboard.pressed_keys().contains(&event.key_code) {
+                    return;
+                }
                 data.flutter_engine
                     .as_mut()
                     .unwrap()
@@ -434,6 +455,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             keyboard,
             repeat_delay,
             repeat_rate,
+            swap_alt_and_win: settings.keyboard.swap_alt_and_win,
             key_repeater,
             wayland_socket_name: Some(socket_name),
             next_surface_id: 1,
@@ -528,11 +550,14 @@ impl<BackendData: Backend + 'static> State<BackendData> {
     pub fn change_keyboard_repeat_info(&mut self, repeat_delay: u64, repeat_rate: u64) {
         self.repeat_delay = repeat_delay;
         self.repeat_rate = repeat_rate;
+        // Smithay's `change_repeat_info` takes `(rate, delay)` — the protocol
+        // order of `wl_keyboard.repeat_info` — not `(delay, rate)`.
         self.keyboard
-            .change_repeat_info(repeat_delay as i32, repeat_rate as i32);
+            .change_repeat_info(repeat_rate as i32, repeat_delay as i32);
     }
 
     pub fn apply_veshell_settings(&mut self, settings: &VeshellSettings) {
+        self.swap_alt_and_win = settings.keyboard.swap_alt_and_win;
         crate::idle::apply_idle_settings(self, &settings.idle);
         let keyboard = self.keyboard.clone();
         keyboard
@@ -544,6 +569,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 },
             )
             .unwrap();
+        self.change_keyboard_repeat_info(
+            settings.keyboard.repeat_delay_ms,
+            settings.keyboard.effective_repeat_rate(),
+        );
     }
 
     pub fn construct_surface_message(&self, surface: &WlSurface) -> SurfaceMessage {

@@ -26,6 +26,7 @@ answer. Each service specification records its exact split.
         - [FileExplorer](/specifications/file_explorer.md)
 - [WindowManager](/specifications/window_manager.md)
   - [Gaming mode](/specifications/gaming_mode.md)
+- [Keyboard](/specifications/keyboard.md)
 - [Notification](/specifications/notification.md)
 - [SystemNotification](/specifications/system_notification.md)
 - [MediaPlayer](/specifications/media_player.md)

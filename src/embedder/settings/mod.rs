@@ -23,6 +23,59 @@ type MonitorSettingsCallback<BackendData> = fn(&mut State<BackendData>, &str);
 pub struct KeyboardSettings {
     pub layout: String,
     pub swap_alt_and_win: bool,
+    /// Whether holding a key repeats it.
+    #[serde(default = "default_keyboard_repeat")]
+    pub repeat: bool,
+    /// Milliseconds a key must be held before repeating starts.
+    #[serde(
+        default = "default_keyboard_repeat_delay_ms",
+        deserialize_with = "deserialize_u64_saturating"
+    )]
+    pub repeat_delay_ms: u64,
+    /// Repeats per second while a key is held. `0` disables repeating.
+    #[serde(
+        default = "default_keyboard_repeat_rate",
+        deserialize_with = "deserialize_u64_saturating"
+    )]
+    pub repeat_rate: u64,
+}
+
+impl KeyboardSettings {
+    /// The repeat rate to advertise and run, honouring the on/off switch.
+    ///
+    /// A disabled repeat is a rate of `0` — the `wl_keyboard.repeat_info`
+    /// convention — which also turns off the shell's own repeater.
+    pub fn effective_repeat_rate(&self) -> u64 {
+        if self.repeat {
+            self.repeat_rate
+        } else {
+            0
+        }
+    }
+}
+
+/// Reads a non-negative integer, clamping negative values to `0`.
+///
+/// The settings UI's number field can produce a negative value; a raw `u64`
+/// would otherwise fail deserialization and take the whole settings load (and
+/// the compositor) down with it.
+fn deserialize_u64_saturating<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(i64::deserialize(deserializer)?.max(0) as u64)
+}
+
+fn default_keyboard_repeat() -> bool {
+    true
+}
+
+fn default_keyboard_repeat_delay_ms() -> u64 {
+    500
+}
+
+fn default_keyboard_repeat_rate() -> u64 {
+    30
 }
 
 #[derive(Serialize, Deserialize)]
@@ -512,5 +565,43 @@ mod monitor_configuration_tests {
         let decoded: MonitorConfiguration = serde_json::from_value(value).unwrap();
         assert_eq!(decoded.transform, MonitorTransform::Rotate90);
         assert_eq!(decoded.mirror_of.as_deref(), Some("DP-2"));
+    }
+}
+
+#[cfg(test)]
+mod keyboard_settings_tests {
+    use super::*;
+
+    /// A settings file written before the repeat fields existed must keep
+    /// deserializing, defaulting to repetition enabled at 500 ms / 30 cps.
+    #[test]
+    fn legacy_keyboard_settings_default_repeat_fields() {
+        let settings: KeyboardSettings =
+            serde_json::from_str(r#"{"layout":"us","swapAltAndWin":false}"#).unwrap();
+        assert!(settings.repeat);
+        assert_eq!(settings.repeat_delay_ms, 500);
+        assert_eq!(settings.repeat_rate, 30);
+        assert_eq!(settings.effective_repeat_rate(), 30);
+    }
+
+    #[test]
+    fn disabled_repeat_reports_a_zero_rate() {
+        let settings: KeyboardSettings = serde_json::from_str(
+            r#"{"layout":"us","swapAltAndWin":false,"repeat":false,"repeatRate":45}"#,
+        )
+        .unwrap();
+        // The configured rate is remembered, but the effective one is disabled.
+        assert_eq!(settings.repeat_rate, 45);
+        assert_eq!(settings.effective_repeat_rate(), 0);
+    }
+
+    #[test]
+    fn negative_repeat_values_are_clamped() {
+        let settings: KeyboardSettings = serde_json::from_str(
+            r#"{"layout":"us","swapAltAndWin":false,"repeatDelayMs":-10,"repeatRate":-1}"#,
+        )
+        .unwrap();
+        assert_eq!(settings.repeat_delay_ms, 0);
+        assert_eq!(settings.repeat_rate, 0);
     }
 }

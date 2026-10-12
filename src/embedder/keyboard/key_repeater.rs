@@ -8,6 +8,15 @@ use super::VeshellKeyEvent;
 
 type Callback<BackendData> = fn(VeshellKeyEvent, &mut State<BackendData>);
 
+/// Drives key repetition for the Flutter shell only.
+///
+/// Wayland leaves key repetition to the **client**: the compositor advertises
+/// the user's preferences through `wl_keyboard.repeat_info` and clients (GTK,
+/// GLFW, SDL, XWayland, …) repeat held keys themselves. Flutter, however, is a
+/// key consumer that does not repeat on its own, so the shell needs a
+/// compositor-side timer to get `KeyRepeatEvent`s. The repeats produced here
+/// are delivered to Flutter and deliberately **not** forwarded to the focused
+/// Wayland client, which would otherwise double every held key.
 pub struct KeyRepeater<BackendData: Backend + 'static> {
     loop_handle: LoopHandle<'static, State<BackendData>>,
     timer_token: Option<RegistrationToken>,
@@ -69,5 +78,6 @@ impl<BackendData: Backend + 'static> KeyRepeater<BackendData> {
         if let Some(token) = self.timer_token.take() {
             self.loop_handle.remove(token);
         }
+        self.repeating_event = None;
     }
 }

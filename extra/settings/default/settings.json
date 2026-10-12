@@ -5,6 +5,9 @@
     "keyboard": {
         "layout": "us(altgr-intl)",
         "swapAltAndWin": false,
+        "repeat": true,
+        "repeatDelayMs": 500,
+        "repeatRate": 30,
         "hotkeys": {
             "system": {
                 "increaseVolume": "volumeUp",

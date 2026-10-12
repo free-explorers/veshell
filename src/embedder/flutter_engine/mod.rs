@@ -152,7 +152,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         let (tx_external_texture_name, rx_external_texture_name) = channel::channel::<(u32, u32)>();
 
         let (tx_flutter_handled_key_event, rx_flutter_handled_key_event) =
-            channel::channel::<(VeshellKeyEvent, bool)>();
+            channel::channel::<(VeshellKeyEvent, bool, bool)>();
 
         let flutter_engine_channels = FlutterEngineChannels {
             tx_baton,
@@ -426,11 +426,12 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                 server_state
                     .loop_handle
                     .insert_source(rx_flutter_handled_key_event, |event, _, data| {
-                        if let Msg((veshell_event, handled)) = event {
+                        if let Msg((veshell_event, handled, repeat)) = event {
                             post_flutter_handle_key_event::<BackendData>(
                                 data,
                                 veshell_event,
                                 handled,
+                                repeat,
                             );
                         }
                     })
@@ -644,6 +645,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             | ((event.mods.logo as u32) << 26);
         let key_event_data = Box::new(FlutterKeyEventData {
             key_event: event,
+            repeat,
             tx_flutter_handled_key_event: self
                 .renderer_data
                 .channels
@@ -848,7 +850,7 @@ pub struct FlutterEngineChannels {
     tx_baton: channel::Sender<Baton>,
     tx_request_external_texture_name: channel::Sender<i64>,
     rx_external_texture_name: channel::Channel<(u32, u32)>,
-    tx_flutter_handled_key_event: channel::Sender<(VeshellKeyEvent, bool)>,
+    tx_flutter_handled_key_event: channel::Sender<(VeshellKeyEvent, bool, bool)>,
 }
 
 pub struct EmbedderChannels {
