@@ -3,12 +3,14 @@ name: Complete Flutter Bump
 # Fills the two fields a Bump Flutter Version pull request cannot know when it
 # opens, once the engine builds land: the prebuilt engine's sha256 in
 # nix/flutter-artifacts.json, and the engine-repository pin in
-# nix/engine-repository.json. Runs on a schedule and on demand, so the bump
-# never holds a runner waiting.
+# nix/engine-repository.json. The engine repositories dispatch it when their
+# builds finish, so the bump never holds a runner waiting and nothing polls.
 
 on:
-  schedule:
-    - cron: "17 */6 * * *"
+  # The engine repositories dispatch this when their builds finish, so there
+  # is no polling; workflow_dispatch is the manual escape hatch.
+  repository_dispatch:
+    types: [flutter-bump]
   workflow_dispatch:
 
 permissions:
