@@ -18,5 +18,22 @@
         "aarch64-linux": "sha256-LwGCcsvKqmuZwM3Wh3pzGtZN6Ff33eyguhN1bqC4ouw="
       }
     }
+  },
+  "3.47.7": {
+    "engineVersion": "deb287481e3ce9468f3434937ced4240a70539ca",
+    "flutterHash": "sha256-dNtmwYnSaU51BcjkGbK8i5Bo7E+2Hqvc/LatCrXTImM=",
+    "dartVersion": "3.13.5",
+    "dartHash": {
+      "x86_64-linux": "sha256-6oZLxk3zCmuL3zCy4yVQ93F9mokN6PQCk66ruST+Iys="
+    },
+    "artifactHashes": {
+      "universal": {
+        "x86_64-linux": "sha256-v+KjptM/ZxJ/xuqOrFVuibvrBmGNgiSG9w/KDG5Y7Ps="
+      },
+      "linux": {
+        "x86_64-linux": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+      }
+    },
+    "toolsLockHash": "sha256-ReTx+L9ulmPZDH6xEtszfrv0lXN8U+Y8HOnDE429+Z4="
   }
 }
