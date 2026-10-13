@@ -112,8 +112,15 @@
         "mouseAndTouchpad": {
             "type": "object",
             "properties": {
-                "naturalScrolling": {
+                "mouseNaturalScrolling": {
                     "type": "boolean"
+                },
+                "touchpadNaturalScrolling": {
+                    "type": "boolean"
+                },
+                "wheelScrollFactor": {
+                    "type": "number",
+                    "minimum": 0
                 }
             },
             "additionalProperties": false

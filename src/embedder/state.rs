@@ -121,6 +121,10 @@ pub struct State<BackendData: Backend + 'static> {
     /// so it is refreshed by [`Self::apply_veshell_settings`] instead of
     /// re-reading and parsing `settings.json` for every key event.
     pub swap_alt_and_win: bool,
+    /// Cached `mouseAndTouchpad.wheelScrollFactor`, clamped to non-negative.
+    /// Refreshed by [`Self::apply_veshell_settings`] so scroll events do not
+    /// re-read and parse `settings.json`.
+    pub wheel_scroll_factor: f64,
     pub running: Arc<AtomicBool>,
     pub seat: Seat<State<BackendData>>,
     pub seat_state: SeatState<State<BackendData>>,
@@ -281,6 +285,14 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 }
 
 impl<BackendData: Backend + 'static> DndGrabHandler for State<BackendData> {}
+
+/// The configured mouse-wheel scroll factor, clamped to non-negative.
+///
+/// `1.0` is neutral; the shell turns it into logical pixels per detent and
+/// forwards it to clients. A zero factor is allowed but stops wheel scrolling.
+fn effective_wheel_scroll_factor(settings: &VeshellSettings) -> f64 {
+    settings.mouse_and_touchpad.wheel_scroll_factor.max(0.0)
+}
 
 impl<BackendData: Backend + 'static> State<BackendData> {
     pub fn flutter_engine(&self) -> &FlutterEngine<BackendData> {
@@ -456,6 +468,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             repeat_delay,
             repeat_rate,
             swap_alt_and_win: settings.keyboard.swap_alt_and_win,
+            wheel_scroll_factor: effective_wheel_scroll_factor(&settings),
             key_repeater,
             wayland_socket_name: Some(socket_name),
             next_surface_id: 1,
@@ -558,6 +571,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 
     pub fn apply_veshell_settings(&mut self, settings: &VeshellSettings) {
         self.swap_alt_and_win = settings.keyboard.swap_alt_and_win;
+        self.wheel_scroll_factor = effective_wheel_scroll_factor(settings);
         crate::idle::apply_idle_settings(self, &settings.idle);
         let keyboard = self.keyboard.clone();
         keyboard

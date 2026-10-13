@@ -393,22 +393,15 @@ pub fn run_drm_backend() {
             let settings = data.settings_manager.get_settings();
             data.apply_veshell_settings(&settings);
             for mut device in data.input_devices.clone() {
-                let is_touchpad = device.config_tap_finger_count() > 0;
-                if is_touchpad {
+                if device.config_tap_finger_count() > 0 {
                     device
                         .config_tap_set_enabled(true)
                         .expect("Failed to enable tap");
-                    let natural_scrolling = data
-                        .settings_manager
-                        .get_settings()
-                        .mouse_and_touchpad
-                        .natural_scrolling;
-                    if natural_scrolling && device.config_scroll_has_natural_scroll() {
-                        device
-                            .config_scroll_set_natural_scroll_enabled(natural_scrolling)
-                            .expect("Failed to set natural scrolling");
-                    }
                 }
+                State::<DrmBackend>::apply_libinput_settings(
+                    &settings.mouse_and_touchpad,
+                    &mut device,
+                );
             }
         },
         |data, monitor_name| {
@@ -648,22 +641,16 @@ pub fn run_drm_backend() {
             match event {
                 InputEvent::DeviceAdded { mut device } => {
                     data.input_devices.insert(device.clone());
-                    let is_touchpad = device.config_tap_finger_count() > 0;
-                    if is_touchpad {
+                    if device.config_tap_finger_count() > 0 {
                         device
                             .config_tap_set_enabled(true)
                             .expect("Failed to enable tap");
-                        let natural_scrolling = data
-                            .settings_manager
-                            .get_settings()
-                            .mouse_and_touchpad
-                            .natural_scrolling;
-                        if natural_scrolling && device.config_scroll_has_natural_scroll() {
-                            device
-                                .config_scroll_set_natural_scroll_enabled(natural_scrolling)
-                                .expect("Failed to set natural scrolling");
-                        }
                     }
+                    let settings = data.settings_manager.get_settings();
+                    State::<DrmBackend>::apply_libinput_settings(
+                        &settings.mouse_and_touchpad,
+                        &mut device,
+                    );
                 }
                 InputEvent::DeviceRemoved { device } => {
                     data.input_devices.remove(&device);
@@ -975,6 +962,23 @@ enum DeviceAddError {
 enum OutputUpdates {
     Immediate,
     Deferred,
+}
+
+/// Whether a libinput device is a touchpad.
+///
+/// libinput has no direct "is a touchpad" query, and the tap-to-click finger
+/// count is a poor proxy — a touchpad whose hardware does not support tap
+/// reports zero and would be mistaken for a mouse. The supported scroll methods
+/// are reliable instead: touchpads always offer edge scrolling (and usually
+/// two-finger), while mice and trackpoints only ever offer on-button scrolling
+/// (`tp_scroll_get_methods` vs `evdev_scroll_get_methods` in libinput).
+fn is_touchpad(device: &input::Device) -> bool {
+    device.config_scroll_methods().iter().any(|method| {
+        matches!(
+            method,
+            input::ScrollMethod::TwoFinger | input::ScrollMethod::Edge
+        )
+    })
 }
 
 impl State<DrmBackend> {
@@ -1818,7 +1822,29 @@ impl State<DrmBackend> {
         }
     }
 
-    pub fn apply_libinput_settings(config: &MouseAndTouchpadSettings, device: &mut input::Device) {}
+    /// Applies the persisted pointing-device settings to one libinput device.
+    ///
+    /// Natural scrolling is set unconditionally (when the device supports it)
+    /// so that turning an option off actually turns it back off. libinput
+    /// inverts the reported scroll value at the source, which is what both the
+    /// shell and Wayland clients then see; there is no separate shell-side
+    /// inversion to do. Mice and touchpads have separate preferences.
+    pub fn apply_libinput_settings(config: &MouseAndTouchpadSettings, device: &mut input::Device) {
+        if !device.config_scroll_has_natural_scroll() {
+            return;
+        }
+        // Mice and touchpads have separate preferences, mirroring GNOME's two
+        // `natural-scroll` keys and libinput's own defaults (mouse off,
+        // touchpad on).
+        let natural_scrolling = if is_touchpad(device) {
+            config.touchpad_natural_scrolling
+        } else {
+            config.mouse_natural_scrolling
+        };
+        device
+            .config_scroll_set_natural_scroll_enabled(natural_scrolling)
+            .expect("Failed to set natural scrolling");
+    }
 
     fn apply_monitor_configuration_to_drm_surface(
         &mut self,

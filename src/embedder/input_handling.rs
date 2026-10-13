@@ -22,7 +22,7 @@ use crate::flutter_engine::embedder::{
 use crate::flutter_engine::view::view_id_for_output;
 use crate::flutter_engine::{view, FlutterEngine};
 use crate::focus::PointerFocusTarget;
-use crate::settings::MouseAndTouchpadSettings;
+use crate::settings::{MouseAndTouchpadSettings, DEFAULT_WHEEL_SCROLL_PIXELS_PER_DETENT};
 use crate::state::State;
 
 /// Bounding box of a set of output geometries, in global logical coordinates.
@@ -47,6 +47,57 @@ fn clamp_to_bounds(
     let max_x = (bounds.loc.x + bounds.size.w) as f64;
     let max_y = (bounds.loc.y + bounds.size.h) as f64;
     (pos.x.clamp(min_x, max_x), pos.y.clamp(min_y, max_y)).into()
+}
+
+/// Wheel detents covered by one axis of an [`AxisFrame`].
+///
+/// libinput reports wheel movement either as an angle in degrees (15 or 20
+/// degrees per detent, depending on the device) or as a v120 value (always 120
+/// across the whole 0..120 range). Preferring v120 keeps every wheel scrolling
+/// the same distance per detent; the degrees fallback assumes the common 15
+/// degree wheel.
+fn wheel_detents(degrees: f64, v120: Option<f64>) -> f64 {
+    match v120 {
+        Some(v120) if v120 != 0.0 => v120 / 120.0,
+        _ => degrees / 15.0,
+    }
+}
+
+/// Physical pixels a number of wheel detents scrolls.
+///
+/// `scroll_factor` is `mouseAndTouchpad.wheelScrollFactor`: it scales the
+/// shell's default step (`DEFAULT_WHEEL_SCROLL_PIXELS_PER_DETENT` logical
+/// pixels). Flutter divides the result by the device pixel ratio, so it is
+/// multiplied by the output `scale` here.
+fn wheel_physical_pixels(detents: f64, scroll_factor: f64, scale: f64) -> f64 {
+    detents * f64::from(DEFAULT_WHEEL_SCROLL_PIXELS_PER_DETENT) * scroll_factor * scale
+}
+
+/// Scales the wheel movement forwarded to Wayland/X11 clients by `factor`.
+///
+/// Client scroll is expressed in toolkit-relative units (`wl_pointer.axis`,
+/// where Xwayland and Wayland clients derive "clicks" from v120 = 120 per
+/// detent), so it only ever sees the factor, not the shell's pixel step. This
+/// matches KWin, Hyprland and labwc, which multiply both the axis value and the
+/// v120 value by a `scroll_factor`. Only wheel sources are touched: touchpad and
+/// continuous scrolling use the same axis field but keep their own scale. The
+/// frame is `Copy`, so the caller keeps the unscaled one for Flutter.
+fn scale_client_wheel_frame(mut frame: AxisFrame, factor: f64) -> AxisFrame {
+    if factor == 1.0
+        || !matches!(
+            frame.source,
+            Some(AxisSource::Wheel | AxisSource::WheelTilt)
+        )
+    {
+        return frame;
+    }
+    frame.axis.0 *= factor;
+    frame.axis.1 *= factor;
+    if let Some((x, y)) = frame.v120.as_mut() {
+        *x = (*x as f64 * factor).round() as i32;
+        *y = (*y as f64 * factor).round() as i32;
+    }
+    frame
 }
 
 impl<BackendData: Backend> State<BackendData> {
@@ -388,7 +439,11 @@ impl<BackendData: Backend> State<BackendData> {
         }
 
         let pointer = self.pointer.clone();
-        pointer.axis(self, frame);
+        // Client apps get the wheel factor too (see
+        // `scale_client_wheel_frame`). The unscaled `frame` is kept for Flutter
+        // below.
+        let client_frame = scale_client_wheel_frame(frame, self.wheel_scroll_factor);
+        pointer.axis(self, client_frame);
         self.register_frame();
 
         // Gaming mode already delivered the axis to the focused client; keep it
@@ -410,6 +465,18 @@ impl<BackendData: Backend> State<BackendData> {
                 );
                 return;
             };
+            let Some(scale) = self.scale_for_view(view_id) else {
+                debug!(view_id, "dropping wheel scroll: no output owns view");
+                return;
+            };
+            // Flutter receives physical pixels and scales them down itself, so
+            // the wheel detents are converted to physical pixels here: one
+            // detent is `DEFAULT_WHEEL_SCROLL_PIXELS_PER_DETENT` logical pixels
+            // scaled by `wheelScrollFactor`, i.e. that many physical pixels at
+            // `scale`.
+            let scroll_factor = self.wheel_scroll_factor;
+            let detents_x = wheel_detents(frame.axis.0, frame.v120.map(|(x, _)| x as f64));
+            let detents_y = wheel_detents(frame.axis.1, frame.v120.map(|(_, y)| y as f64));
             self.flutter_engine()
                 .send_pointer_event(FlutterPointerEvent {
                     struct_size: size_of::<FlutterPointerEvent>(),
@@ -423,12 +490,12 @@ impl<BackendData: Backend> State<BackendData> {
                         FlutterPointerPhase_kDown
                     },
                     timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
-                    x: pointer_location.x,
-                    y: pointer_location.y,
+                    x: pointer_location.x * scale,
+                    y: pointer_location.y * scale,
                     device: device_id,
                     signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
-                    scroll_delta_x: frame.axis.0 * 58.,
-                    scroll_delta_y: frame.axis.1 * 58.,
+                    scroll_delta_x: wheel_physical_pixels(detents_x, scroll_factor, scale),
+                    scroll_delta_y: wheel_physical_pixels(detents_y, scroll_factor, scale),
                     device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
                     buttons: self
                         .flutter_engine()
@@ -499,7 +566,7 @@ impl<BackendData: Backend> State<BackendData> {
                     FlutterPointerPhase_kPanZoomUpdate,
                     self.flutter_engine().trackpad_scrolling_manager.pan_x,
                     self.flutter_engine().trackpad_scrolling_manager.pan_y,
-                    1.,
+                    0.,
                     gesture_view_id,
                 );
             }
@@ -786,7 +853,7 @@ impl<BackendData: Backend> State<BackendData> {
             debug!("dropping pointer pan/zoom: pointer is not over a mapped output");
             return;
         };
-        let Some(scale) = self.scale_for_view(view_id) else {
+        let Some(view_scale) = self.scale_for_view(view_id) else {
             debug!(view_id, "dropping pointer pan/zoom: no output owns view");
             return;
         };
@@ -797,22 +864,30 @@ impl<BackendData: Backend> State<BackendData> {
             );
             return;
         };
+        // libinput reports touchpad and pinch deltas in logical units (the same
+        // space as pointer motion). Flutter divides the pan/zoom payload by the
+        // device pixel ratio, so it has to be turned into physical pixels here,
+        // exactly like the pointer position.
         self.flutter_engine()
             .send_pointer_event(FlutterPointerEvent {
                 struct_size: size_of::<FlutterPointerEvent>(),
                 phase,
                 timestamp: FlutterEngine::<BackendData>::current_time_us() as usize,
-                x: location.x,
-                y: location.y,
+                x: location.x * view_scale,
+                y: location.y * view_scale,
                 device: device_id,
                 signal_kind: FlutterPointerSignalKind_kFlutterPointerSignalKindNone,
                 scroll_delta_x: 0.0,
                 scroll_delta_y: 0.0,
                 device_kind: FlutterPointerDeviceKind_kFlutterPointerDeviceKindTrackpad,
                 buttons: 0,
-                pan_x,
-                pan_y,
-                scale,
+                pan_x: pan_x * view_scale,
+                pan_y: pan_y * view_scale,
+                // The Flutter pan/zoom `scale` is a gesture scale (1.0 means no
+                // scaling). The output scale must not be used here: Flutter
+                // would read it as a pinch. The shell does not currently track
+                // a trackpad pinch scale, so the neutral value is sent.
+                scale: 1.0,
                 rotation,
                 view_id,
                 pressure: 0.0,
@@ -882,5 +957,57 @@ mod tests {
             clamp_to_bounds((-5000.0, 100.0).into(), bounds),
             (-1920.0, 100.0).into()
         );
+    }
+
+    #[test]
+    fn wheel_detents_prefer_the_v120_value() {
+        // A regular 15 degree wheel sends 15 degrees / 120 v120 per detent.
+        assert_eq!(wheel_detents(15.0, Some(120.0)), 1.0);
+        // A 20 degree wheel turns 20 degrees per detent but is still 120 v120.
+        assert_eq!(wheel_detents(20.0, Some(120.0)), 1.0);
+        // A high-resolution wheel sends fractions of a detent.
+        assert_eq!(wheel_detents(5.0, Some(40.0)), 40.0 / 120.0);
+    }
+
+    #[test]
+    fn wheel_detents_fall_back_to_degrees() {
+        assert_eq!(wheel_detents(15.0, None), 1.0);
+        assert_eq!(wheel_detents(30.0, None), 2.0);
+        // A stop event carries neither angle nor v120 movement.
+        assert_eq!(wheel_detents(0.0, Some(0.0)), 0.0);
+    }
+
+    #[test]
+    fn wheel_step_scales_with_the_factor_and_output_scale() {
+        // Flutter divides the physical delta by the device pixel ratio, so
+        // scaling here keeps the logical distance identical on every output.
+        // 53 is the shipped step at factor 1.0; a factor scales it.
+        assert_eq!(wheel_physical_pixels(1.0, 1.0, 1.0), 53.0);
+        assert_eq!(wheel_physical_pixels(1.0, 1.0, 2.0) / 2.0, 53.0);
+        assert_eq!(wheel_physical_pixels(1.0, 2.0, 1.0), 106.0);
+    }
+
+    #[test]
+    fn scale_client_wheel_frame_scales_the_wheel_axis_and_v120() {
+        let frame = AxisFrame::new(0)
+            .source(AxisSource::Wheel)
+            .value(Axis::Vertical, 15.0)
+            .v120(Axis::Vertical, 120);
+
+        let scaled = scale_client_wheel_frame(frame, 2.0);
+
+        assert_eq!(scaled.axis.1, 30.0);
+        assert_eq!(scaled.v120, Some((0, 240)));
+    }
+
+    #[test]
+    fn scale_client_wheel_frame_leaves_other_sources_alone() {
+        let frame = AxisFrame::new(0)
+            .source(AxisSource::Finger)
+            .value(Axis::Vertical, 15.0);
+
+        let scaled = scale_client_wheel_frame(frame, 2.0);
+
+        assert_eq!(scaled.axis.1, 15.0);
     }
 }
