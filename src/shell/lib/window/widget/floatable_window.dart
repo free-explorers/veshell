@@ -14,6 +14,7 @@ import 'package:shell/meta_window/widget/meta_surface_decoration.dart';
 import 'package:shell/meta_window/widget/meta_surface_resize_handle.dart';
 import 'package:shell/platform/model/event/interactive_resize/interactive_resize.serializable.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
+import 'package:shell/shared/util/snapping.dart';
 import 'package:shell/shared/widget/container_with_positionnable_children/container_with_positionnable_children.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 
@@ -404,9 +405,19 @@ class FloatableWindow extends HookConsumerWidget {
     // being squished or covering the window behind.
     final scaleDown = isCapped && metaWindow.isFixedSized;
 
+    // Dragging and resizing accumulate raw pointer deltas, which are
+    // fractional, so `origin` leaves the whole-pixel grid the window was
+    // centred on. Snapping it only at paint time (and not in the accumulated
+    // value) keeps the drag responsive while the client's buffer keeps mapping
+    // 1:1, instead of being resampled bilinearly into a permanently soft
+    // window.
+    final renderOrigin = origin.value == null
+        ? null
+        : snapOffsetToWholePixels(origin.value!);
+
     return Positioned(
-      left: origin.value?.dx,
-      top: origin.value?.dy,
+      left: renderOrigin?.dx,
+      top: renderOrigin?.dy,
       width: size.value.width,
       height: size.value.height,
       child: scaleDown
