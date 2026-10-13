@@ -51,9 +51,16 @@ class FileExplorerView extends HookConsumerWidget {
     final entryListAsync = ref.watch(filteredEntryListProvider(screenId));
 
     useEffect(() {
-      ref
-          .read(fileExplorerStateProvider(screenId).notifier)
-          .setFilterText(searchText);
+      // The mutation is deferred: hooks effects run during build, and providers
+      // must not be modified there.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) {
+          return;
+        }
+        ref
+            .read(fileExplorerStateProvider(screenId).notifier)
+            .setFilterText(searchText);
+      });
       return null;
     }, [searchText, screenId]);
 

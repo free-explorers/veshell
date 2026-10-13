@@ -45,20 +45,28 @@ overview is driven without leaving the home row:
 | `Super+D` | open the selected entry — a folder is entered, a file/application is activated |
 | `Super+A` | go up to the parent directory (breadcrumb up) |
 | `Super+Tab` / `Super+Shift+Tab` | switch search mode: applications → files → settings |
+| `Escape` | close the overview |
 
 The search input keeps filtering while it has focus; the `Super`-modified keys
-act on the current result list. Clicking elsewhere in the overview (a result
-row, the preview) keeps the search focused, so the shortcuts keep working after
-a mouse selection. The selection clamps at the first and last entry (no wrap).
-While the overview is open these shadow the global `super+w/s/a/d`
-workspace/tileable hotkeys.
+act on the current result list. Typing focuses the first result of the new list
+once it is available — in Files mode that also opens its preview — so a search
+can be accepted with `Enter` straight away. Clicking elsewhere in the overview
+(a result row, the preview) keeps the search focused, so the shortcuts keep
+working after a mouse selection. The `Super` chords and `Escape` are handled
+above both panes, so they act whichever part of the overview holds focus (the
+search field, a content tab, a preview, or an embedded window); `Enter` stays
+with the search field so a focused client still receives it. The selection
+clamps at the first and last entry (no wrap). While the overview is open these
+shadow the global `super+w/s/a/d` workspace/tileable hotkeys.
 
 The navigation applies to all three modes: `Super+W`/`Super+S` move through the
 mode's results and `Super+D` (or `Enter`) activates them — a file opens with its
 handler, an application is launched as an ephemeral window, and a settings row
-is activated. Activating a file or application also resets the search;
-`Super+A` (parent directory) is files-only. Clicking an application selects and
-launches it immediately.
+is activated. With nothing selected, the **first** result is the one activated,
+so a search can be accepted with `Enter` without moving the selection first.
+Activating a file or application also resets the search; `Super+A` (parent
+directory) is files-only. Clicking an application selects and launches it
+immediately.
 
 In settings, the rows are walked as one visible list: an opened category's
 children come next, before the following category. `Super+D` opens or closes the
