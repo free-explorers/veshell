@@ -14,5 +14,9 @@ abstract class EphemeralWindow with _$EphemeralWindow implements Window {
     required WindowProperties properties,
     required ScreenId screenId,
     MetaWindowId? metaWindowId,
+
+    /// The launched process whose output the tile streams while it waits for a
+    /// native window to be matched.
+    int? pid,
   }) = _EphemeralWindow;
 }

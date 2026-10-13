@@ -224,6 +224,10 @@ class PersistentWindowState extends _$PersistentWindowState
 
   @override
   void removeWindow() {
+    // A tile removed while its launch has not produced a window cancels that
+    // launch (see [AppLaunch.cancelPendingLaunch]); a tile that showed a window
+    // is not "pending" and is left to close through its window.
+    ref.read(appLaunchProvider.notifier).cancelPendingLaunch(state.windowId);
     final workspaceId = ref.read(windowWorkspaceMapProvider).get(windowId);
     if (workspaceId != null) {
       ref

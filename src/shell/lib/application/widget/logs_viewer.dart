@@ -11,9 +11,14 @@ import 'package:shell/application/provider/logs_for_pid.dart';
 /// stdout/stderr follows, and a blinking block cursor sits at the very end so
 /// the placeholder reads like a session started from a terminal.
 class LogsViewer extends HookConsumerWidget {
-  const LogsViewer({required this.pid, super.key});
+  const LogsViewer({required this.pid, this.textColor, super.key});
 
   final int pid;
+
+  /// Foreground used for the transcript and the cursor. Defaults to the
+  /// surrounding theme's text/`onSurface` color; a host that paints a dark
+  /// terminal background passes a light color instead.
+  final Color? textColor;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -42,6 +47,7 @@ class LogsViewer extends HookConsumerWidget {
         (Theme.of(context).textTheme.bodyMedium ?? const TextStyle()).copyWith(
           fontFamily: 'monospace',
           height: 1.4,
+          color: textColor,
         );
 
     final lines = logs.lines.join().split('\n');
@@ -53,7 +59,7 @@ class LogsViewer extends HookConsumerWidget {
           text: '█',
           style: TextStyle(
             color: cursorVisible.value
-                ? Theme.of(context).colorScheme.onSurface
+                ? textColor ?? Theme.of(context).colorScheme.onSurface
                 : Colors.transparent,
           ),
         ),
