@@ -75,6 +75,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// How long teardown may take before the process is forced to exit.
+///
+/// A normal teardown (stopping the DRM devices, the Wayland server and the
+/// Flutter engine) finishes in milliseconds; the grace period only exists to
+/// cover a destructor that blocks.
+const SHUTDOWN_GRACE: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Arm a watchdog that force-exits the process if teardown has not finished
+/// within [`SHUTDOWN_GRACE`].
+///
+/// Called once the main loop has stopped, before the state (and its devices)
+/// is dropped. Stopping the compositor runs every `Drop`, and some of them can
+/// block indefinitely — notably `FlutterEngine::drop` →
+/// `FlutterEngineShutdown`, which joins the render thread. While the process
+/// is stuck it keeps DRM master and the seat: the VT stays black with no
+/// input, recoverable only by a hard reboot. If teardown completes the process
+/// exits before the watchdog fires; if it hangs, `_exit` closes every file
+/// descriptor, which releases DRM master and the seat so the VT comes back.
+pub fn arm_shutdown_watchdog() {
+    let _ = std::thread::Builder::new()
+        .name("shutdown-watchdog".into())
+        .spawn(|| {
+            std::thread::sleep(SHUTDOWN_GRACE);
+            tracing::error!(
+                "Compositor teardown did not finish within {:?}; forcing exit",
+                SHUTDOWN_GRACE
+            );
+            // `_exit` skips atexit handlers and destructors, but the kernel
+            // still closes every fd on exit, releasing DRM master and the
+            // seat so the VT is restored.
+            unsafe { libc::_exit(0) };
+        });
+}
+
 pub struct FlutterState<BackendData: Backend + 'static> {
     pub flutter_engine: FlutterEngine<BackendData>,
     pub mouse_button_tracker: MouseButtonTracker,

@@ -16,7 +16,7 @@ flows through to the client.
 
 | Concern | Owner |
 | --- | --- |
-| Seat xkb state, hardware events, hotkeys the compositor owns (brightness, VT switch, `Alt+Esc`, `Ctrl+Esc`) | Compositor |
+| Seat xkb state, hardware events, hotkeys the compositor owns (brightness, VT switch, `Meta+Alt+Del`, `Ctrl+Esc`) | Compositor |
 | Global shell hotkeys and their resolution | Shell (Flutter) |
 | Forwarding unconsumed key events to the focused client | Compositor |
 | Key repetition | Client, by Wayland contract; the shell gets a compositor-side copy |
