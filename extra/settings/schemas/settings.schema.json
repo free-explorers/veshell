@@ -7,6 +7,19 @@
         "$schema": {
             "type": "string"
         },
+        "environment": {
+            "type": "object",
+            "properties": {
+                "variables": {
+                    "description": "Environment variables applied to applications launched by Veshell, as a NAME to value map.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                }
+            },
+            "additionalProperties": false
+        },
         "keyboard": {
             "type": "object",
             "properties": {

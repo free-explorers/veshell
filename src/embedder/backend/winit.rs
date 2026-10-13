@@ -206,7 +206,10 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
         event_loop.handle(),
         |data: &mut State<Winit>| {
             let settings = data.settings_manager.get_settings();
-            data.apply_veshell_settings(&settings);
+            // Nested backend: the environment change flag is ignored because
+            // this is not a session compositor and must not touch the host
+            // session's systemd/D-Bus environment.
+            let _ = data.apply_veshell_settings(&settings);
         },
         |data: &mut State<Winit>, monitor_name| {
             info!("Monitor settings updated of {}", monitor_name);

@@ -76,7 +76,10 @@ use crate::keyboard::key_repeater::KeyRepeater;
 use crate::keyboard::{handle_keyboard_event, swap_left_alt_and_meta, VeshellKeyEvent};
 use crate::meta_window_state::meta_window::MetaWindowPatch;
 use crate::meta_window_state::MetaWindowState;
-use crate::settings::{MonitorConfiguration, SettingsManager, VeshellSettings};
+use crate::settings::{
+    is_valid_environment_variable_name, EnvironmentSettings, MonitorConfiguration, SettingsManager,
+    VeshellSettings, SESSION_DERIVED_ENVIRONMENT_VARIABLES,
+};
 use crate::texture_swap_chain::TextureSwapChain;
 use crate::wayland::wayland::{get_direct_subsurfaces, get_surface_id};
 use crate::wayland::xwayland::xwayland::XWaylandState;
@@ -125,6 +128,10 @@ pub struct State<BackendData: Backend + 'static> {
     /// Refreshed by [`Self::apply_veshell_settings`] so scroll events do not
     /// re-read and parse `settings.json`.
     pub wheel_scroll_factor: f64,
+    /// Names of the user's `environment.variables` currently applied to this
+    /// process's environment. Kept so a variable removed from the settings can
+    /// be unset, and so a no-op change does not trigger a session re-import.
+    pub applied_environment_variables: HashSet<String>,
     pub running: Arc<AtomicBool>,
     pub seat: Seat<State<BackendData>>,
     pub seat_state: SeatState<State<BackendData>>,
@@ -294,6 +301,80 @@ fn effective_wheel_scroll_factor(settings: &VeshellSettings) -> f64 {
     settings.mouse_and_touchpad.wheel_scroll_factor.max(0.0)
 }
 
+/// Applies the user's `environment.variables` to this process's environment.
+///
+/// Processes the compositor spawns inherit them, and the caller is expected to
+/// forward them to the session (systemd user manager + D-Bus) when this returns
+/// [`Some`]. `applied` tracks the names set by the previous call so a removed
+/// variable can be unset.
+///
+/// Returns `None` when nothing changed — a no-op change must not trigger a
+/// redundant session import — otherwise `Some(removed)`, the names that
+/// disappeared and should also be unset from the session.
+///
+/// Session-derived variables the compositor owns are ignored (see
+/// [`SESSION_DERIVED_ENVIRONMENT_VARIABLES`]), and a removed override of a
+/// built-in variable is restored to its default rather than unset. Malformed
+/// names are skipped: the shell's editor rejects them, but a hand-edited
+/// `settings.json` can still contain them.
+fn apply_environment_variables(
+    settings: &EnvironmentSettings,
+    applied: &mut HashSet<String>,
+) -> Option<Vec<String>> {
+    let mut changed = false;
+
+    for (name, value) in &settings.variables {
+        if !is_valid_environment_variable_name(name)
+            || SESSION_DERIVED_ENVIRONMENT_VARIABLES.contains(&name.as_str())
+        {
+            continue;
+        }
+        if std::env::var(name).ok().as_deref() != Some(value.as_str()) {
+            std::env::set_var(name, value);
+            changed = true;
+        }
+    }
+
+    let next: HashSet<String> = settings
+        .variable_names()
+        .filter(|name| !SESSION_DERIVED_ENVIRONMENT_VARIABLES.contains(name))
+        .map(str::to_owned)
+        .collect();
+    let removed: Vec<String> = applied.difference(&next).cloned().collect();
+    for name in &removed {
+        restore_or_unset(name);
+        changed = true;
+    }
+    *applied = next;
+
+    changed.then_some(removed)
+}
+
+/// Restores a removed user override to the compositor's built-in default, or
+/// unsets it when it is not a built-in variable.
+///
+/// Without this, removing an override of e.g. `QT_QPA_PLATFORM` would leave the
+/// compositor's children and the session without the built-in value.
+fn restore_or_unset(name: &str) {
+    match BUILTIN_ENVIRONMENT_DEFAULTS
+        .iter()
+        .find(|(key, _)| *key == name)
+    {
+        Some((_, value)) => std::env::set_var(name, value),
+        None => std::env::remove_var(name),
+    }
+}
+
+/// The built-in non-session variables [`State::new`] sets, restored when a user
+/// override is removed. `WAYLAND_DISPLAY` and `DISPLAY` are excluded: they are
+/// session-derived and never user-overridable.
+const BUILTIN_ENVIRONMENT_DEFAULTS: [(&str, &str); 4] = [
+    ("XDG_CURRENT_DESKTOP", "veshell"),
+    ("XDG_SESSION_TYPE", "wayland"),
+    ("GDK_BACKEND", "wayland"),
+    ("QT_QPA_PLATFORM", "wayland"),
+];
+
 impl<BackendData: Backend + 'static> State<BackendData> {
     pub fn flutter_engine(&self) -> &FlutterEngine<BackendData> {
         self.flutter_engine.as_ref().unwrap()
@@ -387,6 +468,13 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         std::env::set_var("GDK_BACKEND", "wayland"); // Force GTK apps to run on Wayland.
         std::env::set_var("QT_QPA_PLATFORM", "wayland"); // Force QT apps to run on Wayland.
 
+        // Apply the user's environment variables on top of the built-in ones,
+        // before the startup session import snapshots this process's
+        // environment.
+        let mut applied_environment_variables = HashSet::new();
+        let _ =
+            apply_environment_variables(&settings.environment, &mut applied_environment_variables);
+
         loop_handle
             .insert_source(
                 Generic::new(display, Interest::READ, Mode::Level),
@@ -469,6 +557,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             repeat_rate,
             swap_alt_and_win: settings.keyboard.swap_alt_and_win,
             wheel_scroll_factor: effective_wheel_scroll_factor(&settings),
+            applied_environment_variables,
             key_repeater,
             wayland_socket_name: Some(socket_name),
             next_surface_id: 1,
@@ -569,10 +658,24 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .change_repeat_info(repeat_rate as i32, repeat_delay as i32);
     }
 
-    pub fn apply_veshell_settings(&mut self, settings: &VeshellSettings) {
+    /// Applies the settings the compositor owns.
+    ///
+    /// Returns [`Some`] with the removed variable names when the user's
+    /// [`EnvironmentSettings`] changed this process's environment, so the DRM
+    /// backend can re-import it into the session's systemd user manager and
+    /// D-Bus activation environment (and unset the removed names from it).
+    /// Returns `None` when nothing changed.
+    ///
+    /// The nested (winit) backend ignores the result: it is not a session
+    /// compositor and must not touch the host session's environment.
+    pub fn apply_veshell_settings(&mut self, settings: &VeshellSettings) -> Option<Vec<String>> {
         self.swap_alt_and_win = settings.keyboard.swap_alt_and_win;
         self.wheel_scroll_factor = effective_wheel_scroll_factor(settings);
         crate::idle::apply_idle_settings(self, &settings.idle);
+        let environment_changed = apply_environment_variables(
+            &settings.environment,
+            &mut self.applied_environment_variables,
+        );
         let keyboard = self.keyboard.clone();
         keyboard
             .set_xkb_config(
@@ -587,6 +690,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             settings.keyboard.repeat_delay_ms,
             settings.keyboard.effective_repeat_rate(),
         );
+        environment_changed
     }
 
     pub fn construct_surface_message(&self, surface: &WlSurface) -> SurfaceMessage {

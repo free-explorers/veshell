@@ -391,7 +391,7 @@ pub fn run_drm_backend() {
         event_loop.handle(),
         |data: &mut State<DrmBackend>| {
             let settings = data.settings_manager.get_settings();
-            data.apply_veshell_settings(&settings);
+            let environment_changed = data.apply_veshell_settings(&settings);
             for mut device in data.input_devices.clone() {
                 if device.config_tap_finger_count() > 0 {
                     device
@@ -402,6 +402,18 @@ pub fn run_drm_backend() {
                     &settings.mouse_and_touchpad,
                     &mut device,
                 );
+            }
+            // User environment variables reach systemd services, D-Bus
+            // activation and xdg-autostart only through an explicit import;
+            // removed ones must also be unset there. The session variables are
+            // re-imported just below, so they are left to the import.
+            if let Some(removed) = environment_changed {
+                let removed: Vec<String> = removed
+                    .into_iter()
+                    .filter(|name| !SESSION_IMPORTED_VARIABLES.contains(&name.as_str()))
+                    .collect();
+                spawn_environment_unset(&removed);
+                spawn_environment_import(&imported_variable_names(&settings.environment), None);
             }
         },
         |data, monitor_name| {
@@ -829,7 +841,12 @@ pub fn run_drm_backend() {
             }
         })
         .unwrap();
-    import_environment(environment_imported);
+    // Import the compositor's environment (including the user's variables,
+    // already applied in `State::new`) plus their names, so the session's
+    // systemd user manager and D-Bus activation environment share it.
+    let imported_names =
+        imported_variable_names(&state.settings_manager.get_settings().environment);
+    spawn_environment_import(&imported_names, Some(environment_imported));
 
     while state.running.load(Ordering::SeqCst) {
         let result = event_loop.dispatch(None, &mut state);
@@ -1989,31 +2006,79 @@ fn notify_fd() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn import_environment(completed: channel::Sender<()>) {
-    let variables = [
-        "WAYLAND_DISPLAY",
-        "DISPLAY",
-        "XDG_CURRENT_DESKTOP",
-        "XDG_SESSION_TYPE",
-    ]
-    .join(" ");
+/// The built-in session variables the compositor forwards to the systemd user
+/// manager and the D-Bus activation environment, before the user's own.
+const SESSION_IMPORTED_VARIABLES: [&str; 4] = [
+    "WAYLAND_DISPLAY",
+    "DISPLAY",
+    "XDG_CURRENT_DESKTOP",
+    "XDG_SESSION_TYPE",
+];
 
-    let init_system_import = format!("systemctl --user import-environment {variables};",);
+/// The names to import: the built-in session variables plus the user's valid
+/// `environment.variables` names, so portals, xdg-autostart units and external
+/// launchers observe the same environment as applications Veshell launches.
+fn imported_variable_names(environment: &settings::EnvironmentSettings) -> Vec<String> {
+    SESSION_IMPORTED_VARIABLES
+        .iter()
+        .map(|name| (*name).to_string())
+        .chain(environment.variable_names().map(str::to_string))
+        .collect()
+}
 
-    let rv = Command::new("/bin/sh")
-        .args([
-            "-c",
-            &format!(
-                "{init_system_import}\
-                 hash dbus-update-activation-environment 2>/dev/null && \
-                 dbus-update-activation-environment {variables}"
-            ),
-        ])
+/// Unsets variables removed from the settings in the systemd user manager.
+///
+/// D-Bus activation has no portable "unset": a removed variable keeps its last
+/// value for D-Bus-activated services until the next session. The compositor's
+/// own environment and the launch environment are computed fresh from the
+/// settings, so only session-wide consumers keep the stale value.
+fn spawn_environment_unset(names: &[String]) {
+    if names.is_empty() {
+        return;
+    }
+
+    let result = Command::new("systemctl")
+        .args(["--user", "unset-environment"])
+        .args(names)
         .spawn();
-    // Spawn on the compositor thread to snapshot its current environment, but
-    // wait off-thread so the first Flutter frame is not blocked by external
-    // commands. Notify readiness only once the import has finished (or failed).
-    match rv {
+
+    match result {
+        Ok(mut child) => {
+            std::thread::spawn(move || {
+                if let Err(err) = child.wait() {
+                    warn!("error waiting for unset environment: {err:?}");
+                }
+            });
+        }
+        Err(err) => {
+            warn!("error spawning systemctl to unset environment: {err:?}");
+        }
+    }
+}
+
+/// Snapshots the named variables from the compositor's environment into the
+/// systemd user manager and the D-Bus activation environment.
+///
+/// The names are passed as positional arguments (`"$@"`), never interpolated
+/// into the script, so a hand-edited `settings.json` cannot inject shell
+/// syntax. `completed` is notified once the import has finished (or failed);
+/// the spawn itself runs on the compositor thread so it captures the current
+/// environment, but the wait happens off-thread so the first Flutter frame is
+/// not blocked by external commands.
+fn spawn_environment_import(names: &[String], completed: Option<channel::Sender<()>>) {
+    let result = Command::new("/bin/sh")
+        .arg("-c")
+        .arg(
+            "systemctl --user import-environment \"$@\"; \
+             hash dbus-update-activation-environment 2>/dev/null && \
+             dbus-update-activation-environment \"$@\"",
+        )
+        // `$0` for `sh -c`; `"$@"` expands to the variable names below.
+        .arg("sh")
+        .args(names)
+        .spawn();
+
+    match result {
         Ok(mut child) => {
             std::thread::spawn(move || {
                 match child.wait() {
@@ -2026,12 +2091,16 @@ fn import_environment(completed: channel::Sender<()>) {
                         warn!("error waiting for import environment shell: {err:?}");
                     }
                 }
-                let _ = completed.send(());
+                if let Some(completed) = completed {
+                    let _ = completed.send(());
+                }
             });
         }
         Err(err) => {
             warn!("error spawning shell to import environment: {err:?}");
-            let _ = completed.send(());
+            if let Some(completed) = completed {
+                let _ = completed.send(());
+            }
         }
     }
 }
@@ -2123,5 +2192,27 @@ mod tests {
     #[test]
     fn placement_without_outputs_is_the_origin() {
         assert_eq!(place_new_output(std::iter::empty()), (0, 0).into());
+    }
+
+    #[test]
+    fn imported_names_cover_the_session_variables_and_valid_user_variables() {
+        let environment = settings::EnvironmentSettings {
+            variables: std::collections::HashMap::from([
+                ("QT_STYLE_OVERRIDE".to_string(), "Adwaita".to_string()),
+                ("bad-name".to_string(), "nope".to_string()),
+                ("1LEADING".to_string(), "nope".to_string()),
+            ]),
+        };
+
+        let names = imported_variable_names(&environment);
+
+        for builtin in SESSION_IMPORTED_VARIABLES {
+            assert!(names.contains(&builtin.to_string()), "missing {builtin}");
+        }
+        assert!(names.contains(&"QT_STYLE_OVERRIDE".to_string()));
+        assert!(!names.contains(&"bad-name".to_string()));
+        assert!(!names.contains(&"1LEADING".to_string()));
+        // Built-ins plus exactly the one valid user variable.
+        assert_eq!(names.len(), SESSION_IMPORTED_VARIABLES.len() + 1);
     }
 }

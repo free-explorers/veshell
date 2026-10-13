@@ -14,6 +14,7 @@ import 'package:shell/settings/provider/state/monitor_setting_state.dart';
 import 'package:shell/settings/provider/util/config_directory.dart';
 import 'package:shell/settings/provider/util/configured_settings_json.dart';
 import 'package:shell/settings/provider/util/default_settings_json.dart';
+import 'package:shell/settings/widget/environment/environment_variables_editor.dart';
 import 'package:shell/settings/widget/expandable_search_result.dart';
 import 'package:shell/settings/widget/locale/system_locale_editor.dart';
 import 'package:shell/settings/widget/locale/veshell_language_editor.dart';
@@ -67,6 +68,29 @@ class SettingsProperties extends _$SettingsProperties {
                       const VeshellLanguageValue(),
                   buildEditor: (context, {required isExpanded}) =>
                       const VeshellLanguageEditor(),
+                ),
+          ),
+        },
+      ),
+      'environment': SettingGroup(
+        name: l10n.system,
+        description: null,
+        icon: MdiIcons.tune,
+        children: {
+          'variables': SettingProperty<Map<String, String>>(
+            name: l10n.environmentVariables,
+            description: l10n.environmentVariablesDescription,
+            buildSearchResult: (context, path, property) =>
+                ExpandableSearchResult<Map<String, String>>(
+                  path: path,
+                  property: property,
+                  buildValue: (context, value, {required isExpanded}) =>
+                      EnvironmentVariablesValue(path: path),
+                  buildEditor: (context, {required isExpanded}) =>
+                      EnvironmentVariablesEditor(
+                        path: path,
+                        property: property,
+                      ),
                 ),
           ),
         },
