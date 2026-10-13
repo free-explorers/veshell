@@ -2,6 +2,9 @@
     "system": {
         "language": null
     },
+    "environment": {
+        "variables": {}
+    },
     "keyboard": {
         "layout": "us(altgr-intl)",
         "swapAltAndWin": false,

@@ -8,6 +8,7 @@ use serde_json::Value;
 use smithay::output::Mode;
 use smithay::reexports::calloop::LoopHandle;
 use smithay::utils::{Logical, Physical, Point, Size, Transform};
+use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
 use tracing::info;
@@ -185,6 +186,55 @@ impl Default for IdleSettings {
     }
 }
 
+/// User-configured environment variables.
+///
+/// They are merged into the launch environment reported to the shell
+/// (`get_environment_variables`), applied to the compositor's own process
+/// environment so spawned children inherit them, and imported into the
+/// session's systemd user manager and D-Bus activation environment (so portals,
+/// xdg-autostart units and other launchers see them). The shipped default is an
+/// empty map.
+#[derive(Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvironmentSettings {
+    /// Variable names to values. Names follow `[A-Za-z_][A-Za-z0-9_]*`.
+    #[serde(default)]
+    pub variables: HashMap<String, String>,
+}
+
+/// Environment variables the compositor owns because they describe the live
+/// session: the Wayland socket and the X11 display.
+///
+/// User settings must never override them — doing so would leave every launched
+/// application unable to connect — so both the launch environment and the
+/// compositor's own process environment keep the session-derived values.
+pub const SESSION_DERIVED_ENVIRONMENT_VARIABLES: [&str; 2] = ["WAYLAND_DISPLAY", "DISPLAY"];
+
+/// Whether `name` is a portable POSIX environment variable name
+/// (`[A-Za-z_][A-Za-z0-9_]*`).
+///
+/// The shell validates names in its editor, but a hand-edited `settings.json`
+/// bypasses it, so the compositor re-checks before forwarding a name to the
+/// launch environment or to `systemd`/`dbus`.
+pub fn is_valid_environment_variable_name(name: &str) -> bool {
+    let mut characters = name.chars();
+    match characters.next() {
+        Some(first) if first == '_' || first.is_ascii_alphabetic() => {}
+        _ => return false,
+    }
+    characters.all(|character| character == '_' || character.is_ascii_alphanumeric())
+}
+
+impl EnvironmentSettings {
+    /// The valid user variable names, skipping anything malformed.
+    pub fn variable_names(&self) -> impl Iterator<Item = &str> {
+        self.variables
+            .keys()
+            .filter(|name| is_valid_environment_variable_name(name))
+            .map(String::as_str)
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VeshellSettings {
@@ -193,6 +243,8 @@ pub struct VeshellSettings {
     pub theme: ThemeSettings,
     #[serde(default)]
     pub idle: IdleSettings,
+    #[serde(default)]
+    pub environment: EnvironmentSettings,
 }
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
