@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use std::os::fd::FromRawFd;
 
 use std::path::Path;
@@ -338,6 +338,40 @@ impl DmabufHandler for State<DrmBackend> {
     }
 }
 
+/// How many times to (re)try opening and activating the primary GPU, and how
+/// long to wait between attempts.
+///
+/// A display manager starts the session compositor while the greeter's own
+/// compositor may still be releasing DRM master; 25 attempts spaced 200 ms
+/// apart wait up to five seconds for that handoff. When nothing else holds the
+/// device the first attempt succeeds, so a normal start is not delayed.
+const PRIMARY_DEVICE_ATTEMPTS: u32 = 25;
+const PRIMARY_DEVICE_RETRY_DELAY: Duration = Duration::from_millis(200);
+
+/// Opens and activates the primary GPU, retrying while another DRM master
+/// (typically the display manager's greeter) is still releasing the device.
+///
+/// Retrying the whole `device_added` call is safe: the only fallible steps that
+/// run before any state is registered are opening the device and acquiring
+/// master, so a failed attempt leaves nothing behind. A non-transient error, or
+/// the final attempt, aborts with a panic rather than leaving the user with a
+/// half-initialized compositor.
+fn acquire_primary_gpu(state: &mut State<DrmBackend>, node: DrmNode) {
+    let path = node.dev_path().unwrap();
+    for attempt in 1..=PRIMARY_DEVICE_ATTEMPTS {
+        match state.device_added(node, &path) {
+            Ok(()) => return,
+            Err(err) if err.is_transient() && attempt < PRIMARY_DEVICE_ATTEMPTS => {
+                warn!(
+                    "Primary GPU not ready ({err}); retrying in {PRIMARY_DEVICE_RETRY_DELAY:?} (attempt {attempt}/{PRIMARY_DEVICE_ATTEMPTS})"
+                );
+                std::thread::sleep(PRIMARY_DEVICE_RETRY_DELAY);
+            }
+            Err(err) => panic!("Failed to initialize the primary GPU: {err}"),
+        }
+    }
+}
+
 pub fn run_drm_backend() {
     let mut event_loop = EventLoop::try_new().unwrap();
     let display: Display<State<DrmBackend>> = Display::new().unwrap();
@@ -558,9 +592,7 @@ pub fn run_drm_backend() {
         .node_with_type(NodeType::Primary)
         .and_then(|x| x.ok())
         .unwrap();
-    state
-        .device_added(primary_node, &primary_node.dev_path().unwrap())
-        .unwrap();
+    acquire_primary_gpu(&mut state, primary_node);
 
     /*     let mut renderer = match state.backend_data.gpu_manager.single_renderer(&primary_gpu) {
         Ok(renderer) => renderer,
@@ -971,6 +1003,37 @@ enum DeviceAddError {
     DrmNode(CreateDrmNodeError),
     #[error("Failed to add device to GpuManager: {0}")]
     AddNode(egl::Error),
+}
+
+impl DeviceAddError {
+    /// Whether reopening and reactivating the device may succeed shortly.
+    ///
+    /// When a display manager hands the seat to this compositor, the greeter's
+    /// own compositor may still hold DRM master for a moment; opening the node
+    /// or activating it then fails with a permission/busy error that clears once
+    /// the greeter releases the device. The remaining variants are
+    /// configuration or hardware errors that a retry cannot fix.
+    fn is_transient(&self) -> bool {
+        match self {
+            DeviceAddError::DeviceOpen(_) => true,
+            DeviceAddError::DrmDevice(error) => is_transient_drm_error(error),
+            _ => false,
+        }
+    }
+}
+
+/// Whether a DRM error can clear on its own once the previous master releases
+/// the device. Mirrors the classification smithay uses to mark a
+/// [`SwapBuffersError::TemporaryFailure`].
+fn is_transient_drm_error(error: &DrmError) -> bool {
+    match error {
+        DrmError::DrmMasterFailed | DrmError::DeviceInactive => true,
+        DrmError::Access(access) => matches!(
+            access.source.kind(),
+            ErrorKind::PermissionDenied | ErrorKind::WouldBlock | ErrorKind::Interrupted
+        ),
+        _ => false,
+    }
 }
 
 /// Whether a connector change should publish its geometry immediately, or be
@@ -2214,5 +2277,17 @@ mod tests {
         assert!(!names.contains(&"1LEADING".to_string()));
         // Built-ins plus exactly the one valid user variable.
         assert_eq!(names.len(), SESSION_IMPORTED_VARIABLES.len() + 1);
+    }
+
+    #[test]
+    fn only_master_and_access_errors_are_retried() {
+        // A login-screen handoff can leave the previous master on the device;
+        // these clear on their own, so the primary GPU acquisition retries.
+        assert!(is_transient_drm_error(&DrmError::DrmMasterFailed));
+        assert!(is_transient_drm_error(&DrmError::DeviceInactive));
+
+        // A malformed or incompatible configuration will not fix itself.
+        assert!(!is_transient_drm_error(&DrmError::UnknownCrtc(handle(1))));
+        assert!(!DeviceAddError::GbmDevice(std::io::Error::other("nope")).is_transient());
     }
 }

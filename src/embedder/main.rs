@@ -60,19 +60,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Fix XWayland crash when too many file descriptors are open.
     let _ = rlimit::increase_nofile_limit(u64::MAX);
 
-    // Backend selection: `VESHELL_BACKEND={drm,winit}` forces a backend,
-    // otherwise a nested session (DISPLAY/WAYLAND_DISPLAY set) uses winit and
-    // a bare TTY session uses the DRM backend.
+    // Backend selection: `VESHELL_BACKEND={drm,winit}` forces a backend, a
+    // `--session` run always drives the DRM backend, and otherwise a nested
+    // session (DISPLAY/WAYLAND_DISPLAY set) uses winit while a bare TTY uses
+    // the DRM backend.
     let requested = env::var("VESHELL_BACKEND").unwrap_or_default();
+    let session = env::args().skip(1).any(|argument| argument == "--session");
     let nested = env::var("DISPLAY").is_ok() || env::var("WAYLAND_DISPLAY").is_ok();
-    match requested.as_str() {
-        "drm" => backend::drm_backend::run_drm_backend(),
-        "winit" => backend::winit::run_winit_backend()?,
-        _ if nested => backend::winit::run_winit_backend()?,
-        _ => backend::drm_backend::run_drm_backend(),
+    match select_backend(&requested, session, nested) {
+        BackendKind::Drm => backend::drm_backend::run_drm_backend(),
+        BackendKind::Winit => backend::winit::run_winit_backend()?,
     }
 
     Ok(())
+}
+
+/// The backend the process drives.
+#[derive(Debug, PartialEq, Eq)]
+enum BackendKind {
+    Drm,
+    Winit,
+}
+
+/// Resolves the backend from the explicit override, the `--session` marker and
+/// the ambient display variables.
+///
+/// `VESHELL_BACKEND=drm|winit` always wins so the backend can be forced for
+/// debugging. Otherwise a run started with `--session` is a real session and
+/// must drive DRM even when the login manager leaked `DISPLAY` or
+/// `WAYLAND_DISPLAY` into the service environment; without that marker, a
+/// nested run (either variable set) uses winit and anything else falls back to
+/// DRM.
+fn select_backend(requested: &str, session: bool, nested: bool) -> BackendKind {
+    match requested {
+        "drm" => BackendKind::Drm,
+        "winit" => BackendKind::Winit,
+        _ if session || !nested => BackendKind::Drm,
+        _ => BackendKind::Winit,
+    }
 }
 
 /// How long teardown may take before the process is forced to exit.
@@ -148,5 +173,33 @@ impl ClientData for ClientState {
 
     fn disconnected(&self, _client_id: ClientId, _reason: DisconnectReason) {
         debug!("Client disconnected {:?} {:?}", _client_id, _reason);
+    }
+}
+
+#[cfg(test)]
+mod backend_selection_tests {
+    use super::{select_backend, BackendKind};
+
+    #[test]
+    fn explicit_override_wins() {
+        assert_eq!(select_backend("drm", false, true), BackendKind::Drm);
+        assert_eq!(select_backend("winit", true, false), BackendKind::Winit);
+    }
+
+    #[test]
+    fn session_forces_drm_even_when_display_variables_are_set() {
+        // A login manager can leak DISPLAY/WAYLAND_DISPLAY into the session
+        // service; `--session` must still drive the real DRM backend.
+        assert_eq!(select_backend("", true, true), BackendKind::Drm);
+    }
+
+    #[test]
+    fn nested_run_uses_winit_without_session_or_override() {
+        assert_eq!(select_backend("", false, true), BackendKind::Winit);
+    }
+
+    #[test]
+    fn bare_run_defaults_to_drm() {
+        assert_eq!(select_backend("", false, false), BackendKind::Drm);
     }
 }
