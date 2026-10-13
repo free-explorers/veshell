@@ -834,6 +834,10 @@ pub fn run_drm_backend() {
             display_handle.flush_clients().unwrap();
         }
     }
+
+    // Teardown drops the state and its devices; bound it so a blocking
+    // destructor cannot leave the process holding DRM master and the seat.
+    crate::arm_shutdown_watchdog();
 }
 
 impl State<DrmBackend> {

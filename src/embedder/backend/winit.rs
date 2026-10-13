@@ -510,5 +510,9 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
             display_handle.flush_clients().unwrap();
         }
     }
+
+    // Teardown drops the state and its devices; bound it so a blocking
+    // destructor cannot leave the process wedged.
+    crate::arm_shutdown_watchdog();
     Ok(())
 }
