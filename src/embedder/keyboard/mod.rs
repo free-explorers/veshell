@@ -14,6 +14,7 @@ use crate::state::State;
 
 pub mod key_mapping;
 pub mod key_repeater;
+pub mod xkb_registry;
 
 #[derive(Copy, Clone)]
 pub struct VeshellKeyEvent {

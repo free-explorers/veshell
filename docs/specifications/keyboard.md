@@ -75,9 +75,12 @@ request. The compositor answers with `KeyboardHandle::with_xkb_state` →
 the modifier/group change to the focused client. The cycle follows the
 configured order and wraps from the last layout back to the first.
 
-The settings UI edits the list as one entry per layout and persists it
-comma-separated, so a single-layout configuration still deserializes and leaves
-the toggle inert (cycling always lands on the first layout).
+The settings UI picks each entry from the catalogue the compositor reports
+through `get_keyboard_layouts`, which reads libxkbregistry — the same parser
+`XkbConfig` compiles against — so the picker cannot offer a layout the seat
+would reject. Entries are persisted comma-separated; a hand-edited value still
+deserializes, and a single-layout configuration leaves the toggle inert
+(cycling always lands on the first layout).
 
 ## Invariants
 

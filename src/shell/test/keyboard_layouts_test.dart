@@ -1,11 +1,12 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/settings/model/keyboard_layout.dart';
 import 'package:shell/settings/model/setting_group.dart';
 import 'package:shell/settings/model/setting_property.dart';
+import 'package:shell/settings/provider/keyboard_layout.dart';
 import 'package:shell/settings/provider/settings_properties.dart';
 import 'package:shell/settings/provider/util/json_value_by_path.dart';
 import 'package:shell/settings/widget/keyboard/keyboard_layouts_editor.dart';
@@ -17,6 +18,16 @@ const _property = SettingProperty<String>(
   name: 'Layout',
   description: 'Keyboard layout',
 );
+
+const _catalogue = <KeyboardLayoutOption>[
+  KeyboardLayoutOption(layout: 'us', variant: '', description: 'English (US)'),
+  KeyboardLayoutOption(
+    layout: 'us',
+    variant: 'altgr-intl',
+    description: 'English (intl., with AltGr dead keys)',
+  ),
+  KeyboardLayoutOption(layout: 'ru', variant: '', description: 'Russian'),
+];
 
 /// Records what the editor writes without touching `settings.json`.
 class _FakeSettingsProperties extends SettingsProperties {
@@ -34,6 +45,7 @@ class _FakeSettingsProperties extends SettingsProperties {
 Widget _app(_FakeSettingsProperties fake, String stored) => ProviderScope(
   overrides: [
     jsonValueByPathProvider(_path).overrideWithValue(stored),
+    availableKeyboardLayoutsProvider.overrideWith((ref) async => _catalogue),
     settingsPropertiesProvider.overrideWith(() => fake),
   ],
   child: MaterialApp(
@@ -56,10 +68,6 @@ void main() {
       expect(parseKeyboardLayouts('  ,  '), isEmpty);
     });
 
-    test('keeps a single layout', () {
-      expect(parseKeyboardLayouts('us'), ['us']);
-    });
-
     test('splits a comma-separated list and trims whitespace', () {
       expect(parseKeyboardLayouts('us, ru'), ['us', 'ru']);
       expect(parseKeyboardLayouts('us,ru,'), ['us', 'ru']);
@@ -73,45 +81,57 @@ void main() {
     });
   });
 
-  testWidgets('the editor shows one field per layout and can add another', (
+  group('KeyboardLayoutOption', () {
+    test('entry combines layout and variant', () {
+      expect(_catalogue[0].entry, 'us');
+      expect(_catalogue[1].entry, 'us(altgr-intl)');
+    });
+
+    test('fromJson tolerates missing fields', () {
+      final option = KeyboardLayoutOption.fromJson(const {'layout': 'us'});
+      expect(option.layout, 'us');
+      expect(option.variant, '');
+      expect(option.iso639, isEmpty);
+    });
+  });
+
+  testWidgets('shows one picker per layout and can add another', (
     tester,
   ) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [jsonValueByPathProvider(_path).overrideWithValue('us,ru')],
-        child: const MaterialApp(
-          localizationsDelegates: shellLocalizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: Scaffold(
-            body: KeyboardLayoutsEditor(path: _path, property: _property),
-          ),
-        ),
-      ),
-    );
+    await tester.pumpWidget(_app(_FakeSettingsProperties(), 'us,ru'));
+    await tester.pumpAndSettle();
 
-    expect(find.byType(TextField), findsNWidgets(2));
+    expect(find.byType(DropdownMenu<KeyboardLayoutOption>), findsNWidgets(2));
 
-    await tester.tap(find.byIcon(MdiIcons.plus));
-    await tester.pump();
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
 
-    expect(find.byType(TextField), findsNWidgets(3));
+    expect(find.byType(DropdownMenu<KeyboardLayoutOption>), findsNWidgets(3));
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('stages edits and saves them comma-separated', (tester) async {
+  testWidgets('saves the picked layouts comma-separated', (tester) async {
     final fake = _FakeSettingsProperties();
     await tester.pumpWidget(_app(fake, 'us,ru'));
-
-    expect(find.byType(TextField), findsNWidgets(2));
-
-    await tester.tap(find.text('Add'));
-    await tester.pump();
-    await tester.enterText(find.byType(TextField).at(2), 'us(altgr-intl)');
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Save'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(fake.saved.single, (_path, 'us,ru,us(altgr-intl)'));
+    expect(fake.saved.single, (_path, 'us,ru'));
+  });
+
+  testWidgets('a stored entry outside the catalogue is preserved', (
+    tester,
+  ) async {
+    final fake = _FakeSettingsProperties();
+    await tester.pumpWidget(_app(fake, 'us(custom-variant)'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(fake.saved.single, (_path, 'us(custom-variant)'));
   });
 
   test('the shipped toggle binding parses into a logical key set', () {

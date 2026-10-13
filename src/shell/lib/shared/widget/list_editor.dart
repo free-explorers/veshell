@@ -21,6 +21,7 @@ class ListEditor extends StatefulWidget {
     required this.itemLabel,
     required this.errorMessage,
     this.isValidItem,
+    this.itemFieldBuilder,
     super.key,
   });
 
@@ -40,6 +41,16 @@ class ListEditor extends StatefulWidget {
   /// Whether a non-empty item is acceptable. Defaults to accepting any item;
   /// the editor always rejects blank and duplicate items on its own.
   final bool Function(String item)? isValidItem;
+
+  /// Optional builder for a row's field, letting callers swap the plain text
+  /// field for a picker. It receives the row's controller — the canonical value
+  /// the editor saves — and a `rebuild` callback. Defaults to a text field.
+  final Widget Function(
+    BuildContext context,
+    TextEditingController controller,
+    VoidCallback rebuild,
+  )?
+  itemFieldBuilder;
 
   @override
   State<ListEditor> createState() => _ListEditorState();
@@ -118,16 +129,22 @@ class _ListEditorState extends State<ListEditor> {
               spacing: 8,
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: entry.controller,
-                    decoration: InputDecoration(
-                      filled: true,
-                      labelText: widget.itemLabel,
-                    ),
-                    onChanged: (_) {
-                      if (_invalid) setState(() => _invalid = false);
-                    },
-                  ),
+                  child:
+                      widget.itemFieldBuilder?.call(
+                        context,
+                        entry.controller,
+                        () => setState(() {}),
+                      ) ??
+                      TextField(
+                        controller: entry.controller,
+                        decoration: InputDecoration(
+                          filled: true,
+                          labelText: widget.itemLabel,
+                        ),
+                        onChanged: (_) {
+                          if (_invalid) setState(() => _invalid = false);
+                        },
+                      ),
                 ),
                 IconButton(
                   icon: const Icon(MdiIcons.delete),

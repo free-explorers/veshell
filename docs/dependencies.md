@@ -61,6 +61,12 @@ the prepared shell and engine instead; see [building and packaging](building.md)
       <td>libinput-dev</td>
     </tr>
     <tr>
+      <td>libxkbregistry (part of libxkbcommon; backs the keyboard-layout picker)</td>
+      <td>libxkbcommon</td>
+      <td>libxkbcommon-devel</td>
+      <td>libxkbregistry-dev</td>
+    </tr>
+    <tr>
       <td>gbm</td>
       <td>libgbm</td>
       <td>mesa-libgbm-devel</td>
@@ -123,6 +129,9 @@ the prepared shell and engine instead; see [building and packaging](building.md)
   `gstreamer1.0-plugins-base`/`gstreamer1.0-plugins-good` on Debian.
 - XWayland for X11 applications and an xdg-desktop-portal frontend/fallback
   backend for portal integration.
+- libxkbregistry for the keyboard-layout picker (Debian: `libxkbregistry0`;
+  bundled with `libxkbcommon` on Arch, Fedora and Nix). The compositor also
+  needs `xkeyboard-config` at run time to compile any layout.
 
 NetworkManager and BlueZ are optional integrations for their corresponding
 shell controls. Enabling real-time audio through RTKit is recommended where

@@ -104,4 +104,28 @@ void main() {
     expect(saved, isNull);
     expect(find.text('Invalid item'), findsOneWidget);
   });
+
+  testWidgets('a custom item field builder replaces the text field', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: shellLocalizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: ListEditor(
+            initialValue: const <String>['us'],
+            itemLabel: 'Item',
+            errorMessage: 'Invalid item',
+            itemFieldBuilder: (context, controller, rebuild) =>
+                const Text('picker'),
+            onSave: (value) => saved = value,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('picker'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+  });
 }
