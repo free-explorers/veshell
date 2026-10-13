@@ -51,11 +51,26 @@ class WindowWidget extends HookConsumerWidget {
       [metaWindowId, dialogMetaWindowList],
     );
 
-    // Re-run the tile sizing effect when the displayed window's geometry
-    // changes, so a client that resizes itself away from the tile bounds is
-    // pulled back instead of leaving a desynced surface.
-    final displayedGeometry = ref.watch(
-      metaWindowStateProvider(metaWindowId).select((value) => value.geometry),
+    // Re-run the tile sizing effect when the displayed window's committed
+    // buffer changes, so a client that resizes itself away from the tile bounds
+    // is pulled back instead of leaving a desynced surface. The committed
+    // buffer -- not the xdg window geometry -- is what tells us how big the
+    // client is actually rendering: a client is not required to re-set its
+    // window geometry on resize, so the geometry can lag (or stay stale) while
+    // the buffer shrinks, which made restoring the tile count a no-op.
+    final displayedSizing = ref.watch(
+      metaWindowStateProvider(metaWindowId).select(
+        (value) => (
+          surfaceId: value.surfaceId,
+          geometry: value.geometry,
+          scaleRatio: value.scaleRatio,
+        ),
+      ),
+    );
+    final displayedBufferSize = ref.watch(
+      wlSurfaceStateProvider(displayedSizing.surfaceId).select(
+        (value) => value.texture?.size,
+      ),
     );
     // One corrective patch per observed mismatch: a client that refuses the
     // configure would otherwise be re-patched on every commit it makes.
@@ -114,39 +129,45 @@ class WindowWidget extends HookConsumerWidget {
                           );
                           final geometry = metaWindow.geometry;
                           final targetSize = constraints.biggest;
-                          // Measured even when the patch below is a no-op: a
-                          // maximized tile must always report the tile bounds
-                          // against the window's committed buffer, so a swap of
-                          // the displayed meta window is visible in the log.
-                          final committedSurfaceSize = ref
-                              .read(
-                                wlSurfaceStateProvider(metaWindow.surfaceId),
-                              )
-                              .texture
-                              ?.size;
+                          // The committed buffer is the surface's actual size,
+                          // in physical pixels: divide by the scale to compare
+                          // it with the logical tile bounds.
+                          final logicalBufferSize = displayedBufferSize == null
+                              ? null
+                              : Size(
+                                  displayedBufferSize.width /
+                                      metaWindow.scaleRatio,
+                                  displayedBufferSize.height /
+                                      metaWindow.scaleRatio,
+                                );
 
                           geometryLog.info(
                             'sizing tile id=$metaWindowId '
                             'surface=${metaWindow.surfaceId} '
                             'target=$targetSize before=${geometry?.size} '
-                            'actual=$committedSurfaceSize '
+                            'actual=$logicalBufferSize '
                             'fixed=${metaWindow.isFixedSized} '
                             'scale=${metaWindow.scaleRatio}',
                           );
 
                           // A maximized tile owns its size: re-assert the tile
-                          // bounds whenever the displayed window reports a
-                          // different size (e.g. a client that un-maximized
-                          // itself). Fixed-size windows are left alone here;
-                          // they are rendered by the fit path instead.
-                          final atTarget = geometry != null &&
-                              geometry.width == targetSize.width &&
-                              geometry.height == targetSize.height;
+                          // bounds whenever the committed buffer does not match
+                          // them (e.g. a client that un-maximized itself, or a
+                          // tile restored from a narrower visible length).
+                          // Fixed-size windows are left alone here; they are
+                          // rendered by the fit path instead.
+                          final atTarget = logicalBufferSize != null &&
+                              (logicalBufferSize.width - targetSize.width)
+                                      .abs() <
+                                  1 &&
+                              (logicalBufferSize.height - targetSize.height)
+                                      .abs() <
+                                  1;
                           if (atTarget || metaWindow.isFixedSized) {
                             return;
                           }
                           final mismatchSignature =
-                              '$metaWindowId|$targetSize|${geometry?.size}';
+                              '$metaWindowId|$targetSize|$logicalBufferSize';
                           if (lastCorrectedMismatch.value ==
                               mismatchSignature) {
                             return;
@@ -171,7 +192,12 @@ class WindowWidget extends HookConsumerWidget {
                         });
                         return null;
                       },
-                      [constraints, metaWindowId, displayedGeometry],
+                      [
+                        constraints,
+                        metaWindowId,
+                        displayedSizing,
+                        displayedBufferSize,
+                      ],
                     );
 
                     return MetaSurfaceWidget(
