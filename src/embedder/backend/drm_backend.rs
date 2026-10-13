@@ -460,6 +460,21 @@ pub fn run_drm_backend() {
                 crate::idle::on_session_paused(data);
 
                 for backend in data.backend_data.gpus.values_mut() {
+                    // Park the KMS surfaces before dropping master. A page
+                    // flip may still be in flight, and a flip left in
+                    // Smithay's `pending_frame` past the pause makes
+                    // `queue_frame` refuse to submit after the session is
+                    // re-activated (it would wait for a vblank that never
+                    // comes), wedging the output. `clear` drops the pending,
+                    // queued and next frames and disables the planes; the
+                    // first `queue_frame` after activation re-enables the
+                    // surface.
+                    for surface in backend.surfaces.values_mut() {
+                        if let Err(err) = surface.compositor.clear() {
+                            warn!("Failed to clear drm surface on session pause: {err:?}");
+                        }
+                        surface.frame_pending = false;
+                    }
                     backend.drm_device.pause();
                     backend.active_leases.clear();
                     /* if let Some(lease_global) = backend.leasing_global.as_mut() {
@@ -482,19 +497,22 @@ pub fn run_drm_backend() {
                     .iter_mut()
                     .map(|(handle, backend)| (*handle, backend))
                 {
-                    // if we do not care about flicking (caused by modesetting) we could just
-                    // pass true for disable connectors here. this would make sure our drm
-                    // device is in a known state (all connectors and planes disabled).
-                    // but for demonstration we choose a more optimistic path by leaving the
-                    // state as is and assume it will just work. If this assumption fails
-                    // we will try to reset the state when trying to queue a frame.
-                    backend
-                        .drm_device
-                        .activate(false)
-                        .expect("failed to activate drm backend");
-                    /* if let Some(lease_global) = backend.leasing_global.as_mut() {
-                        lease_global.resume::<State<DrmBackend>>();
-                    } */
+                    // Switching away made the kernel take the CRTC and
+                    // connectors over, so we must not assume our previous
+                    // configuration survived. Put the device back into a known
+                    // state: `activate(true)` disables every connector and
+                    // plane and resets each surface, and the first full commit
+                    // below re-enables them. This costs a modeset flicker on
+                    // switch-back, which is preferable to a dead output.
+                    //
+                    // A failed master re-acquisition is transient (it can race
+                    // the previous master's release), so log it and leave the
+                    // surfaces alone instead of aborting the compositor; the
+                    // next activation retries.
+                    if let Err(err) = backend.drm_device.activate(true) {
+                        error!("Failed to activate drm backend: {err:?}");
+                        continue;
+                    }
                     for surface in backend.surfaces.values_mut() {
                         if let Err(err) = surface.compositor.reset_state() {
                             warn!("Failed to reset drm surface state: {}", err);
