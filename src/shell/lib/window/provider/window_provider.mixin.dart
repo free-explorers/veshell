@@ -110,6 +110,9 @@ mixin WindowProviderMixin<T extends Window> {
   /// whole burst keeps gathering here; it is cleared at the burst settle, after
   /// which ownership follows the title (see [_finalizeLaunchBurst]).
   void addMetaWindow(MetaWindowId metaWindowId) {
+    // A native window was attributed to this tile: its launch is no longer a
+    // pending startup that closing the tile may cancel.
+    ref.read(appLaunchProvider.notifier).markProducedWindow(state.windowId);
     if (_launchOrigin) {
       _everOwnedWindow = true;
       if (!ref.read(metaWindowStateProvider(metaWindowId)).isFixedSized) {

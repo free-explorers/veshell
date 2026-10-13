@@ -115,8 +115,10 @@ The command runs through `/bin/sh -c`, so the path must be shell-quoted.
 
 ## Caveats / risks
 
-- **Single-instance app already running**: no new window appears; the ephemeral
-  window would sit empty. There is no "no surface arrived" timeout today.
+- **Single-instance app already running**: no new window appears. The ephemeral
+  window now shows the launch's execution logs and can be closed (see
+  `EphemeralWindowWidget`), but it is not dismissed automatically: there is
+  still no "no surface arrived" timeout today.
 - **No handler resolved**: fall back to today's `xdg-open` (normal window) or
   no-op + log.
 - **`LaunchConfig.arguments` is declared but unused** —
@@ -125,7 +127,8 @@ The command runs through `/bin/sh -c`, so the path must be shell-quoted.
 - **Single file only** for now; multi-selection is future scope.
 - **Quoting/security**: paths may contain spaces or quotes.
 - If the overview is dismissed on open but no window appears (single-instance
-  case), the user sees nothing.
+  case), the ephemeral window is only visible once the overview is reopened; its
+  execution logs and close button are there when it is.
 
 ## Open questions
 

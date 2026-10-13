@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/model/launch_config.serializable.dart';
 import 'package:shell/application/provider/logs_for_pid.dart';
+import 'package:shell/meta_window/provider/meta_window_state.dart';
+import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/meta_window/provider/process_info_state.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
@@ -23,6 +26,24 @@ String _windowKey(WindowId windowId) => switch (windowId) {
       PersistentWindowId(:final uuid) => uuid,
       EphemeralWindowId(:final uuid) => uuid,
     };
+
+/// A live tracked launch of one tile: the supervisor process the shell spawned
+/// and, for a systemd-managed launch, the transient unit that owns the
+/// application's cgroup.
+class _Launch {
+  _Launch({required this.process, required this.unitName});
+
+  final Process process;
+
+  /// The `systemd-run` transient unit name, or `null` for the untracked
+  /// fallback (no user manager), where the shell owns [process] directly.
+  final String? unitName;
+
+  /// Whether a native window was attributed to this tile from this launch.
+  /// Once true the launch is no longer "pending": the application is up and
+  /// closing its window is what makes it exit.
+  bool producedWindow = false;
+}
 
 /// Single launch entry point of the compositor.
 ///
@@ -48,6 +69,11 @@ String _windowKey(WindowId windowId) => switch (windowId) {
 /// pids are recycled — it is only matching evidence.
 @Riverpod(keepAlive: true)
 class AppLaunch extends _$AppLaunch {
+  /// Tracked launches by the tile that started them, so a tile that is removed
+  /// while still starting can cancel its own launch and a re-launch replaces
+  /// the previous entry.
+  final Map<WindowId, _Launch> _launches = {};
+
   @override
   void build() {}
 
@@ -55,11 +81,78 @@ class AppLaunch extends _$AppLaunch {
     LaunchConfig config, {
     required WindowId trackedWindowId,
   }) async {
-    final process = await _launchTracked(config, trackedWindowId);
+    final launch = await _launchTracked(config, trackedWindowId);
     ref
-        .read(logsForPidProvider(process.pid).notifier)
-        .setProcess(process, command: config.command);
-    return process;
+        .read(logsForPidProvider(launch.process.pid).notifier)
+        .setProcess(launch.process, command: config.command);
+    _launches[trackedWindowId] = launch;
+    // A `--wait` supervisor exits when its unit stops, so once it is gone there
+    // is nothing left to cancel. A relaunch installs a fresh entry; only clear
+    // the one this process owns.
+    unawaited(
+      launch.process.exitCode.then((_) {
+        if (identical(_launches[trackedWindowId], launch)) {
+          _launches.remove(trackedWindowId);
+        }
+      }),
+    );
+    return launch.process;
+  }
+
+  /// Marks [windowId]'s launch as having produced a native window, so removing
+  /// the tile no longer cancels it.
+  void markProducedWindow(WindowId windowId) {
+    _launches[windowId]?.producedWindow = true;
+  }
+
+  /// Cancels the launch of [windowId] if it never produced a native window.
+  ///
+  /// Called when a tile is removed. A tile that displayed a window already
+  /// handed the application off — closing that window is what makes it exit —
+  /// so only a tile still waiting on its first surface cancels its startup,
+  /// preventing a stuck launch from lingering. The unit is stopped through the
+  /// user manager (`systemctl --user stop` sends SIGTERM to the cgroup) rather
+  /// than by killing the `systemd-run` supervisor, which does not own the
+  /// application. A launch whose process is already showing a window under
+  /// another tile is left running.
+  void cancelPendingLaunch(WindowId windowId) {
+    final launch = _launches.remove(windowId);
+    if (launch == null || launch.producedWindow) {
+      return;
+    }
+    final unitName = launch.unitName;
+    if (unitName == null) {
+      launch.process.kill();
+      return;
+    }
+    if (_unitHasOwnedWindow(unitName)) {
+      return;
+    }
+    unawaited(
+      Process.run('systemctl', [
+        '--user',
+        'stop',
+        '--no-block',
+        '$unitName.service',
+      ]),
+    );
+  }
+
+  /// Whether any tile currently owns a native window from [unitName]'s cgroup.
+  ///
+  /// Guards [cancelPendingLaunch] against a launch whose window was attributed
+  /// elsewhere (e.g. provenance rejected as an unrelated application): stopping
+  /// the unit would tear down a window that is on screen.
+  bool _unitHasOwnedWindow(String unitName) {
+    final processInfo = ref.read(processInfoStateProvider.notifier);
+    for (final metaWindowId in ref.read(metaWindowWindowMapProvider).keys) {
+      final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+      final cgroup = processInfo.forPid(metaWindow.pid)?.cgroup;
+      if (cgroup != null && cgroup.contains('/$unitName')) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /// Plain exec fallback for systems without a systemd user manager: the
@@ -83,7 +176,7 @@ class AppLaunch extends _$AppLaunch {
     return Process.start('/bin/sh', ['-c', config.command]);
   }
 
-  Future<Process> _launchTracked(
+  Future<_Launch> _launchTracked(
     LaunchConfig config,
     WindowId trackedWindowId,
   ) async {
@@ -92,7 +185,7 @@ class AppLaunch extends _$AppLaunch {
     // window matching would behave exactly like the untracked fallback — so
     // launching untracked is strictly equivalent here.
     if (!_isUserSystemdAvailable()) {
-      return _launchStandard(config);
+      return _Launch(process: await _launchStandard(config), unitName: null);
     }
 
     // The user manager has its own session environment (set by whichever
@@ -147,10 +240,10 @@ class AppLaunch extends _$AppLaunch {
       ], environment: environment);
     } on ProcessException catch (error) {
       print('Tracked launch unavailable, using standard launch: $error');
-      return _launchStandard(config);
+      return _Launch(process: await _launchStandard(config), unitName: null);
     }
 
-    return process;
+    return _Launch(process: process, unitName: unitName);
   }
 
   /// Resolves a process back to the placeholder that launched it by matching
