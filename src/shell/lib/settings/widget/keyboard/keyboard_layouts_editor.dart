@@ -1,6 +1,4 @@
-import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/widget/search/settings/setting_value_editor.dart';
@@ -8,6 +6,7 @@ import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/provider/settings_properties.dart';
 import 'package:shell/settings/provider/util/json_value_by_path.dart';
 import 'package:shell/shared/widget/expandable_container.dart';
+import 'package:shell/shared/widget/list_editor.dart';
 
 /// Splits the stored comma-separated xkb layout list into its entries.
 ///
@@ -23,12 +22,31 @@ List<String> parseKeyboardLayouts(String? value) {
       .toList();
 }
 
-/// Edits `keyboard.layout` as a list of xkb layouts.
+/// Trailing summary of the `keyboard.layout` property: the configured layouts,
+/// or "Not set" when the list is empty.
+class KeyboardLayoutsValue extends ConsumerWidget {
+  const KeyboardLayoutsValue({required this.path, super.key});
+
+  final String path;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final layouts = parseKeyboardLayouts(
+      ref.watch(jsonValueByPathProvider(path)) as String?,
+    );
+    if (layouts.isEmpty) return Text(context.l10n.notSet);
+    return Text(layouts.take(2).join(', '));
+  }
+}
+
+/// The `keyboard.layout` property editor: the generic [ListEditor] wired to the
+/// settings store.
 ///
-/// The list is persisted comma-separated, the format `XkbConfig.layout` (and
+/// Each entry is one xkb layout, optionally with a variant (`us(altgr-intl)`);
+/// the list is persisted comma-separated, the format `XkbConfig.layout` (and
 /// `localectl`/`setxkbmap`) already use. The compositor compiles every entry
-/// into a single keymap, so `toggleKeyboardLayout` can cycle through them.
-class KeyboardLayoutsEditor extends HookConsumerWidget
+/// into one keymap, so `toggleKeyboardLayout` can cycle through them.
+class KeyboardLayoutsEditor extends ConsumerWidget
     implements SettingPropertyValueEditor<String> {
   const KeyboardLayoutsEditor({
     required this.path,
@@ -44,91 +62,19 @@ class KeyboardLayoutsEditor extends HookConsumerWidget
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final value = ref.watch(jsonValueByPathProvider(path)) as String?;
-    // Seed the fields once; `useMemoized` keeps the same controllers across
-    // rebuilds, and `revision` forces a rebuild when the list is mutated.
-    final controllers = useMemoized<List<TextEditingController>>(
-      () => [
-        for (final layout in parseKeyboardLayouts(value))
-          TextEditingController(text: layout),
-      ],
+    final layouts = parseKeyboardLayouts(
+      ref.watch(jsonValueByPathProvider(path)) as String?,
     );
-    final revision = useState(0);
-    void refresh() => revision.value++;
-
-    useEffect(() {
-      return () {
-        for (final controller in controllers) {
-          controller.dispose();
-        }
-      };
-    }, const []);
-
-    void addLayout() {
-      controllers.add(TextEditingController());
-      refresh();
-    }
-
-    void removeLayout(int index) {
-      controllers.removeAt(index).dispose();
-      refresh();
-    }
-
-    void save() {
-      final layouts = controllers
-          .map((controller) => controller.text.trim())
-          .where((layout) => layout.isNotEmpty)
-          .toList();
-      ref
-          .read(settingsPropertiesProvider.notifier)
-          .updateProperty(path, property.serializeValue(layouts.join(',')));
-      ExpandableContainer.of(context).toggle();
-    }
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var index = 0; index < controllers.length; index++)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              spacing: 16,
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: controllers[index],
-                    autofocus: index == controllers.length - 1,
-                    decoration: const InputDecoration(filled: true),
-                  ),
-                ),
-                IconButton(
-                  tooltip: context.l10n.delete,
-                  icon: const Icon(MdiIcons.close),
-                  onPressed: controllers.length > 1
-                      ? () => removeLayout(index)
-                      : null,
-                ),
-              ],
-            ),
-          ),
-        Row(
-          spacing: 16,
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: addLayout,
-                icon: const Icon(MdiIcons.plus),
-                label: Text(context.l10n.addLayout),
-              ),
-            ),
-            IconButton(
-              tooltip: context.l10n.apply,
-              icon: const Icon(MdiIcons.check),
-              onPressed: save,
-            ),
-          ],
-        ),
-      ],
+    return ListEditor(
+      initialValue: layouts,
+      itemLabel: context.l10n.layout,
+      errorMessage: context.l10n.keyboardLayoutInvalid,
+      onSave: (next) {
+        ref
+            .read(settingsPropertiesProvider.notifier)
+            .updateProperty(path, property.serializeValue(next.join(',')));
+        ExpandableContainer.of(context).collapse();
+      },
     );
   }
 }

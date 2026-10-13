@@ -75,7 +75,7 @@
   "keyboard": "Bàn phím",
   "layout": "Bố cục",
   "layoutDescription": "Bố cục bàn phím",
-  "addLayout": "Thêm bố cục",
+  "keyboardLayoutInvalid": "Chỉ sử dụng mỗi bố cục bàn phím một lần",
   "toggleKeyboardLayout": "Chuyển bố cục bàn phím",
   "toggleKeyboardLayoutDescription": "Chuyển đổi giữa các bố cục bàn phím đã định cấu hình",
   "swapAltAndWin": "Hoán đổi Alt và Win",

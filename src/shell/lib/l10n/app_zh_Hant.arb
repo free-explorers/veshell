@@ -75,7 +75,7 @@
   "keyboard": "鍵盤",
   "layout": "配置",
   "layoutDescription": "鍵盤配置",
-  "addLayout": "新增配置",
+  "keyboardLayoutInvalid": "每個鍵盤配置只能使用一次",
   "toggleKeyboardLayout": "切換鍵盤配置",
   "toggleKeyboardLayoutDescription": "在已設定的鍵盤配置之間切換",
   "swapAltAndWin": "交換 Alt 與 Win",

@@ -75,7 +75,7 @@
   "keyboard": "কীবোর্ড",
   "layout": "বিন্যাস",
   "layoutDescription": "কীবোর্ডের বিন্যাস",
-  "addLayout": "বিন্যাস যোগ করুন",
+  "keyboardLayoutInvalid": "প্রতিটি কীবোর্ড বিন্যাস শুধু একবার ব্যবহার করুন",
   "toggleKeyboardLayout": "কীবোর্ডের বিন্যাস বদলান",
   "toggleKeyboardLayoutDescription": "সেট করা কীবোর্ড বিন্যাসের মধ্যে বদলান",
   "swapAltAndWin": "Alt ও Win অদলবদল করুন",

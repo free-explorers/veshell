@@ -204,7 +204,7 @@ class SettingsProperties extends _$SettingsProperties {
                   path: path,
                   property: property,
                   buildValue: (context, value, {required isExpanded}) =>
-                      Text(parseKeyboardLayouts(value as String?).join(', ')),
+                      KeyboardLayoutsValue(path: path),
                   buildEditor: (context, {required isExpanded}) =>
                       KeyboardLayoutsEditor(path: path, property: property),
                 ),

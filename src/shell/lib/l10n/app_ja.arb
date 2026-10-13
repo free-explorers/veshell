@@ -75,7 +75,7 @@
   "keyboard": "キーボード",
   "layout": "レイアウト",
   "layoutDescription": "キーボードのレイアウト",
-  "addLayout": "レイアウトを追加",
+  "keyboardLayoutInvalid": "各キーボードレイアウトは一度だけ使用してください",
   "toggleKeyboardLayout": "キーボードのレイアウトを切り替える",
   "toggleKeyboardLayoutDescription": "設定済みのキーボードレイアウトを切り替える",
   "swapAltAndWin": "Alt と Win を入れ替える",

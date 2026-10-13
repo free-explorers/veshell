@@ -75,7 +75,7 @@
   "keyboard": "Papan ketik",
   "layout": "Tata letak",
   "layoutDescription": "Tata letak papan ketik",
-  "addLayout": "Tambah tata letak",
+  "keyboardLayoutInvalid": "Gunakan setiap tata letak papan ketik hanya sekali",
   "toggleKeyboardLayout": "Ganti tata letak papan ketik",
   "toggleKeyboardLayoutDescription": "Ganti di antara tata letak papan ketik yang dikonfigurasi",
   "swapAltAndWin": "Tukar Alt dan Win",

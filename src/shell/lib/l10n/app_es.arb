@@ -75,7 +75,7 @@
   "keyboard": "Teclado",
   "layout": "Distribución",
   "layoutDescription": "Distribución del teclado",
-  "addLayout": "Añadir distribución",
+  "keyboardLayoutInvalid": "Usa cada distribución de teclado solo una vez",
   "toggleKeyboardLayout": "Cambiar la distribución del teclado",
   "toggleKeyboardLayoutDescription": "Cambiar entre las distribuciones de teclado configuradas",
   "swapAltAndWin": "Intercambiar Alt y Win",

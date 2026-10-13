@@ -75,7 +75,7 @@
   "keyboard": "کی بورڈ",
   "layout": "لے آؤٹ",
   "layoutDescription": "کی بورڈ کا لے آؤٹ",
-  "addLayout": "لے آؤٹ شامل کریں",
+  "keyboardLayoutInvalid": "ہر کی بورڈ لے آؤٹ صرف ایک بار استعمال کریں",
   "toggleKeyboardLayout": "کی بورڈ کا لے آؤٹ بدلیں",
   "toggleKeyboardLayoutDescription": "کنفیگر شدہ کی بورڈ لے آؤٹ کے درمیان بدلیں",
   "swapAltAndWin": "Alt اور Win کو تبدیل کریں",

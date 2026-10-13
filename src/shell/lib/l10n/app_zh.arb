@@ -75,7 +75,7 @@
   "keyboard": "键盘",
   "layout": "布局",
   "layoutDescription": "键盘布局",
-  "addLayout": "添加布局",
+  "keyboardLayoutInvalid": "每个键盘布局只能使用一次",
   "toggleKeyboardLayout": "切换键盘布局",
   "toggleKeyboardLayoutDescription": "在已配置的键盘布局之间切换",
   "swapAltAndWin": "交换 Alt 和 Win",

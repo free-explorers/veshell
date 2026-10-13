@@ -75,7 +75,7 @@
   "keyboard": "Klawiatura",
   "layout": "Układ",
   "layoutDescription": "Układ klawiatury",
-  "addLayout": "Dodaj układ",
+  "keyboardLayoutInvalid": "Użyj każdego układu klawiatury tylko raz",
   "toggleKeyboardLayout": "Zmień układ klawiatury",
   "toggleKeyboardLayoutDescription": "Przełączaj między skonfigurowanymi układami klawiatury",
   "swapAltAndWin": "Zamień Alt i Win",

@@ -75,7 +75,7 @@
   "keyboard": "키보드",
   "layout": "배치",
   "layoutDescription": "키보드 배치",
-  "addLayout": "배치 추가",
+  "keyboardLayoutInvalid": "각 키보드 배치는 한 번만 사용하세요",
   "toggleKeyboardLayout": "키보드 배치 전환",
   "toggleKeyboardLayoutDescription": "설정된 키보드 배치 간 전환",
   "swapAltAndWin": "Alt와 Win 바꾸기",

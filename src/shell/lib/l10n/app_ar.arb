@@ -75,7 +75,7 @@
   "keyboard": "لوحة المفاتيح",
   "layout": "التخطيط",
   "layoutDescription": "تخطيط لوحة المفاتيح",
-  "addLayout": "إضافة تخطيط",
+  "keyboardLayoutInvalid": "استخدم كل تخطيط لوحة مفاتيح مرة واحدة فقط",
   "toggleKeyboardLayout": "تبديل تخطيط لوحة المفاتيح",
   "toggleKeyboardLayoutDescription": "التبديل بين تخطيطات لوحة المفاتيح المضبوطة",
   "swapAltAndWin": "تبديل Alt وWin",

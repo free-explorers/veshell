@@ -75,7 +75,7 @@
   "keyboard": "Tastatur",
   "layout": "Belegung",
   "layoutDescription": "Tastaturbelegung",
-  "addLayout": "Belegung hinzufügen",
+  "keyboardLayoutInvalid": "Verwende jede Tastaturbelegung nur einmal",
   "toggleKeyboardLayout": "Tastaturbelegung wechseln",
   "toggleKeyboardLayoutDescription": "Zwischen den konfigurierten Tastaturbelegungen wechseln",
   "swapAltAndWin": "Alt und Win vertauschen",

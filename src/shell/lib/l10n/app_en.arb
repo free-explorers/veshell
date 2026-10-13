@@ -96,7 +96,7 @@
   "keyboard": "Keyboard",
   "layout": "Layout",
   "layoutDescription": "Keyboard layout",
-  "addLayout": "Add layout",
+  "keyboardLayoutInvalid": "Use each keyboard layout only once",
   "toggleKeyboardLayout": "Switch Keyboard Layout",
   "toggleKeyboardLayoutDescription": "Switch between the configured keyboard layouts",
   "swapAltAndWin": "Swap Alt and Win",

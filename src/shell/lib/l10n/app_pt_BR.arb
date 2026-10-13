@@ -75,7 +75,7 @@
   "keyboard": "Teclado",
   "layout": "Layout",
   "layoutDescription": "Layout do teclado",
-  "addLayout": "Adicionar layout",
+  "keyboardLayoutInvalid": "Use cada layout de teclado apenas uma vez",
   "toggleKeyboardLayout": "Trocar o layout do teclado",
   "toggleKeyboardLayoutDescription": "Alternar entre os layouts de teclado configurados",
   "swapAltAndWin": "Trocar Alt e Win",
