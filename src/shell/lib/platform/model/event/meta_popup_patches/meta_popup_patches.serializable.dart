@@ -9,10 +9,7 @@ part 'meta_popup_patches.serializable.freezed.dart';
 part 'meta_popup_patches.serializable.g.dart';
 
 /// Model for MetaPopupPatchMessage
-@Freezed(
-  unionKey: 'type',
-  unionValueCase: FreezedUnionCase.pascal,
-)
+@Freezed(unionKey: 'type', unionValueCase: FreezedUnionCase.pascal)
 sealed class MetaPopupPatchMessage
     with _$MetaPopupPatchMessage
     implements PlatformMessage {

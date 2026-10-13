@@ -21,8 +21,9 @@ class Expandable extends HookConsumerWidget {
     return AnimatedCrossFade(
       firstChild: collapsed,
       secondChild: expanded,
-      crossFadeState:
-          isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+      crossFadeState: isExpanded
+          ? CrossFadeState.showSecond
+          : CrossFadeState.showFirst,
       duration: const Duration(milliseconds: 300),
       firstCurve: Curves.easeOut,
       secondCurve: Curves.easeOut,

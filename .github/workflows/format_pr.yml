@@ -1,38 +1,53 @@
-name: Flutter CI
+name: Dart format
 
+# Run once per PR (the pull_request event) and once for direct pushes to main.
+# A bare `push:` would also fire on every feature-branch push, duplicating the
+# pull_request run for the same commit.
 on:
-  push:
   pull_request:
+  push:
+    branches: [main]
 
 jobs:
-  flutter-ci:
-    name: Flutter Format Dart Code
+  dart-format:
+    name: Check Dart formatting
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # The shell's formatter output is defined by the project-pinned Flutter
+      # SDK (Cargo.toml [package.metadata] flutter_version), not by whatever
+      # Flutter happens to be current in CI. Read the pin and install the same
+      # SDK so `dart format` matches `.flutter_sdk/bin/dart` locally.
+      - name: Read pinned Flutter version
+        id: pin
+        run: |
+          version="$(sed -n 's/^flutter_version *= *"\([^"]*\)"/\1/p' Cargo.toml)"
+          if [ -z "$version" ]; then
+            echo "::error::Could not read flutter_version from Cargo.toml"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Set up Flutter environment
         uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ steps.pin.outputs.version }}
+          channel: stable
 
+      # `dart format` chooses its output from the package's language version,
+      # which it reads from `.dart_tool/package_config.json`. Without resolving
+      # dependencies it falls back to a default language version and reports
+      # drift on files that are already formatted for this package, so the
+      # check below would fail on a clean tree.
       - name: Install dependencies
         run: flutter pub get
         working-directory: src/shell
 
-      - name: Format Dart code
-        run: dart format .
+      # Fail on drift instead of silently rewriting it: the tree must already
+      # be formatted, so untracked churn cannot hide in unrelated diffs.
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed lib test
         working-directory: src/shell
-
-      - name: Commit and push formatted code
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add src/shell
-          if ! git diff --cached --quiet; then
-            git commit -m "chore: auto-format Dart code"
-          else
-            echo "No formatting changes to commit."
-          fi

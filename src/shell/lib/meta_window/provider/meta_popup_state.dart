@@ -49,11 +49,7 @@ class MetaPopupState extends _$MetaPopupState {
     if (propagate == true) {
       await ref
           .read(platformManagerProvider.notifier)
-          .request(
-            MetaPopupPatchesRequest(
-              message: patch,
-            ),
-          );
+          .request(MetaPopupPatchesRequest(message: patch));
     }
   }
 

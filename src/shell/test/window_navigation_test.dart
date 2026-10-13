@@ -67,11 +67,8 @@ class _FixedDialogState extends DialogWindowState {
   DialogWindow build(DialogWindowId windowId) => _dialog;
 }
 
-Screen _screen(String id, List<String> workspaces) => Screen(
-  screenId: id,
-  workspaceList: workspaces.lock,
-  selectedIndex: 0,
-);
+Screen _screen(String id, List<String> workspaces) =>
+    Screen(screenId: id, workspaceList: workspaces.lock, selectedIndex: 0);
 
 Workspace _workspace(String id, List<PersistentWindowId> windows) => Workspace(
   workspaceId: id,
@@ -96,9 +93,7 @@ void main() {
     container = ProviderContainer(
       overrides: [
         screenManagerProvider.overrideWithValue(
-          ScreenManagerState(
-            screenIds: {_screen1, _screen2}.lock,
-          ),
+          ScreenManagerState(screenIds: {_screen1, _screen2}.lock),
         ),
         screenStateProvider(_screen1).overrideWith(() => screen1),
         screenStateProvider(_screen2).overrideWith(() => screen2),

@@ -37,10 +37,7 @@ abstract class MouseButtonsEventMessage
 
 @freezed
 abstract class Button with _$Button {
-  factory Button({
-    required int button,
-    required bool isPressed,
-  }) = _Button;
+  factory Button({required int button, required bool isPressed}) = _Button;
 
   factory Button.fromJson(Map<String, dynamic> json) => _$ButtonFromJson(json);
 }

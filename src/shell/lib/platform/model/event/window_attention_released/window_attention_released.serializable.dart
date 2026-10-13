@@ -17,7 +17,6 @@ sealed class WindowAttentionReleasedMessage
   factory WindowAttentionReleasedMessage({required String metaWindowId}) =
       _WindowAttentionReleasedMessage;
 
-  factory WindowAttentionReleasedMessage.fromJson(
-    Map<String, dynamic> json,
-  ) => _$WindowAttentionReleasedMessageFromJson(json);
+  factory WindowAttentionReleasedMessage.fromJson(Map<String, dynamic> json) =>
+      _$WindowAttentionReleasedMessageFromJson(json);
 }

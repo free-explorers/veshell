@@ -70,8 +70,10 @@ class FocusedScreen extends _$FocusedScreen {
     // the compositor's first output (both iterate outputs in mapping order).
     // `screenIds.first` is ordered by persisted configuration, not by output,
     // and can point at another monitor.
-    final firstMonitorViewId =
-        ref.watch(connectedMonitorListProvider).firstOrNull?.viewId;
+    final firstMonitorViewId = ref
+        .watch(connectedMonitorListProvider)
+        .firstOrNull
+        ?.viewId;
     if (firstMonitorViewId != null) {
       final firstMonitorScreen = ref.watch(
         screenForViewProvider(firstMonitorViewId),

@@ -36,25 +36,22 @@ class SwipeGestureDetector extends HookConsumerWidget {
       [onSwipeEnd],
     );
 
-    useEffect(
-      () {
-        if (!enabled) {
-          return () {};
-        }
+    useEffect(() {
+      if (!enabled) {
+        return () {};
+      }
 
-        final subscription = stream.listen((event) {
-          if (event is GestureSwipeBeginEvent) {
-            onSwipeBeginCallback(event);
-          } else if (event is GestureSwipeUpdateEvent) {
-            onSwipeUpdateCallback(event);
-          } else if (event is GestureSwipeEndEvent) {
-            onSwipeEndCallback(event);
-          }
-        });
-        return subscription.cancel;
-      },
-      [enabled, onSwipeBegin, onSwipeUpdate, onSwipeEnd, stream],
-    );
+      final subscription = stream.listen((event) {
+        if (event is GestureSwipeBeginEvent) {
+          onSwipeBeginCallback(event);
+        } else if (event is GestureSwipeUpdateEvent) {
+          onSwipeUpdateCallback(event);
+        } else if (event is GestureSwipeEndEvent) {
+          onSwipeEndCallback(event);
+        }
+      });
+      return subscription.cancel;
+    }, [enabled, onSwipeBegin, onSwipeUpdate, onSwipeEnd, stream]);
     return child;
   }
 }

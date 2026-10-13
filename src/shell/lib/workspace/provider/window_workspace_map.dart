@@ -20,9 +20,10 @@ class WindowWorkspaceMap extends _$WindowWorkspaceMap {
     for (final screenId in screenList) {
       for (final workspaceId
           in ref.read(screenStateProvider(screenId)).workspaceList) {
-        for (final windowId in ref
-            .read(workspaceStateProvider(workspaceId))
-            .tileableWindowList) {
+        for (final windowId
+            in ref
+                .read(workspaceStateProvider(workspaceId))
+                .tileableWindowList) {
           state = state.add(windowId, workspaceId);
         }
       }

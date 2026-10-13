@@ -27,8 +27,9 @@ class ScreenWidget extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final screenState = ref.watch(screenStateProvider(screenId));
 
-    final screenFocusScopeNode =
-        useFocusScopeNode(debugLabel: 'ScreenFocusNode');
+    final screenFocusScopeNode = useFocusScopeNode(
+      debugLabel: 'ScreenFocusNode',
+    );
 
     return CurrentScreenId(
       screenId: screenId,
@@ -85,46 +86,55 @@ class ScreenWidget extends HookConsumerWidget {
                       actions: {
                         FocusWorkspaceAboveIntent:
                             CallbackAction<FocusWorkspaceAboveIntent>(
-                          onInvoke: (_) {
-                            final nextIndex = screenState.selectedIndex - 1;
-                            if (nextIndex >= 0) {
-                              ref
-                                  .read(screenStateProvider(screenId).notifier)
-                                  .selectWorkspace(nextIndex);
-                            }
-                            return null;
-                          },
-                        ),
+                              onInvoke: (_) {
+                                final nextIndex = screenState.selectedIndex - 1;
+                                if (nextIndex >= 0) {
+                                  ref
+                                      .read(
+                                        screenStateProvider(screenId).notifier,
+                                      )
+                                      .selectWorkspace(nextIndex);
+                                }
+                                return null;
+                              },
+                            ),
                         FocusWorkspaceBelowIntent:
                             CallbackAction<FocusWorkspaceBelowIntent>(
-                          onInvoke: (_) {
-                            final nextIndex = screenState.selectedIndex + 1;
-                            if (nextIndex < screenState.workspaceList.length) {
-                              ref
-                                  .read(screenStateProvider(screenId).notifier)
-                                  .selectWorkspace(nextIndex);
-                            }
-                            return null;
-                          },
-                        ),
+                              onInvoke: (_) {
+                                final nextIndex = screenState.selectedIndex + 1;
+                                if (nextIndex <
+                                    screenState.workspaceList.length) {
+                                  ref
+                                      .read(
+                                        screenStateProvider(screenId).notifier,
+                                      )
+                                      .selectWorkspace(nextIndex);
+                                }
+                                return null;
+                              },
+                            ),
                         ReorderWorkspaceAboveIntent:
                             CallbackAction<ReorderWorkspaceAboveIntent>(
-                          onInvoke: (_) {
-                            ref
-                                .read(screenStateProvider(screenId).notifier)
-                                .moveSelectedWorkspaceAbove();
-                            return null;
-                          },
-                        ),
+                              onInvoke: (_) {
+                                ref
+                                    .read(
+                                      screenStateProvider(screenId).notifier,
+                                    )
+                                    .moveSelectedWorkspaceAbove();
+                                return null;
+                              },
+                            ),
                         ReorderWorkspaceBelowIntent:
                             CallbackAction<ReorderWorkspaceBelowIntent>(
-                          onInvoke: (_) {
-                            ref
-                                .read(screenStateProvider(screenId).notifier)
-                                .moveSelectedWorkspaceBelow();
-                            return null;
-                          },
-                        ),
+                              onInvoke: (_) {
+                                ref
+                                    .read(
+                                      screenStateProvider(screenId).notifier,
+                                    )
+                                    .moveSelectedWorkspaceBelow();
+                                return null;
+                              },
+                            ),
                       },
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -137,7 +147,9 @@ class ScreenWidget extends HookConsumerWidget {
                               index: screenState.selectedIndex,
                               onIndexChanged: (newIndex) {
                                 ref
-                                    .read(screenStateProvider(screenId).notifier)
+                                    .read(
+                                      screenStateProvider(screenId).notifier,
+                                    )
                                     .selectWorkspace(newIndex);
                               },
                               isSwipeEnabled:
@@ -153,10 +165,7 @@ class ScreenWidget extends HookConsumerWidget {
                                   .toList(),
                             ),
                           ),
-                          const Material(
-                            elevation: 4,
-                            child: ScreenPanel(),
-                          ),
+                          const Material(elevation: 4, child: ScreenPanel()),
                         ],
                       ),
                     ),

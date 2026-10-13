@@ -42,9 +42,8 @@ List<Monitor> _twoMonitors() => [
   _monitor('HDMI-1', viewId: 2),
 ];
 
-Iterable<String> _names(ProviderContainer container) => container
-    .read(connectedMonitorListProvider)
-    .map((monitor) => monitor.name);
+Iterable<String> _names(ProviderContainer container) =>
+    container.read(connectedMonitorListProvider).map((monitor) => monitor.name);
 
 /// A container wired to a stream the test can drive, with the connected list
 /// kept alive so it observes the events.

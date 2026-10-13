@@ -3,10 +3,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 class ContainerWithPositionnableChildren extends HookConsumerWidget {
-  const ContainerWithPositionnableChildren({
-    required this.children,
-    super.key,
-  });
+  const ContainerWithPositionnableChildren({required this.children, super.key});
 
   final List<Widget> children;
   @override
@@ -53,9 +50,7 @@ class RepositionableResizeableWidget extends HookConsumerWidget {
     return Positioned.fromRect(
       rect: origin,
       child: Column(
-        children: [
-          ColoredBox(color: Colors.red, child: child),
-        ],
+        children: [ColoredBox(color: Colors.red, child: child)],
       ),
     );
   }

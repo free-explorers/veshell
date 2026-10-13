@@ -59,9 +59,7 @@ void main() {
 
     test('returns null without a busy counter or a VRAM size', () {
       expect(
-        buildGpuStats(
-          const GpuRawValues(vramUsedBytes: 1, vramTotalBytes: 2),
-        ),
+        buildGpuStats(const GpuRawValues(vramUsedBytes: 1, vramTotalBytes: 2)),
         isNull,
       );
       expect(buildGpuStats(const GpuRawValues(busyPercent: 1)), isNull);
@@ -80,46 +78,29 @@ void main() {
   group('vramUsedPercent', () {
     test('computes the share of VRAM in use', () {
       expect(
-        vramUsedPercent(
-          const GpuStats(vramUsedMb: 512, vramTotalMb: 1024),
-        ),
+        vramUsedPercent(const GpuStats(vramUsedMb: 512, vramTotalMb: 1024)),
         closeTo(50, 0.001),
       );
     });
 
     test('returns zero without a VRAM total', () {
-      expect(
-        vramUsedPercent(const GpuStats(vramUsedMb: 512)),
-        0,
-      );
+      expect(vramUsedPercent(const GpuStats(vramUsedMb: 512)), 0);
     });
   });
 
   group('intelLoadFromFrequency', () {
     test('scales between the min and max frequency', () {
-      expect(
-        intelLoadFromFrequency(current: 800, min: 300, max: 1300),
-        50,
-      );
+      expect(intelLoadFromFrequency(current: 800, min: 300, max: 1300), 50);
     });
 
     test('clamps to 0..100', () {
-      expect(
-        intelLoadFromFrequency(current: 2000, min: 300, max: 1300),
-        100,
-      );
-      expect(
-        intelLoadFromFrequency(current: 0, min: 300, max: 1300),
-        0,
-      );
+      expect(intelLoadFromFrequency(current: 2000, min: 300, max: 1300), 100);
+      expect(intelLoadFromFrequency(current: 0, min: 300, max: 1300), 0);
     });
 
     test('returns null without a usable range', () {
       expect(intelLoadFromFrequency(current: 800), isNull);
-      expect(
-        intelLoadFromFrequency(current: 800, min: 800, max: 800),
-        isNull,
-      );
+      expect(intelLoadFromFrequency(current: 800, min: 800, max: 800), isNull);
     });
   });
 
@@ -146,25 +127,19 @@ void main() {
     });
 
     test('prefers the boot VGA over a lower-numbered card', () {
-      expect(
-        selectGpuDevice(const [card0, card1])?.cardPath,
-        card1.cardPath,
-      );
+      expect(selectGpuDevice(const [card0, card1])?.cardPath, card1.cardPath);
     });
 
     test('falls back to the first card when none is the boot VGA', () {
-      expect(
-        selectGpuDevice(const [card0, card2])?.cardPath,
-        card0.cardPath,
-      );
+      expect(selectGpuDevice(const [card0, card2])?.cardPath, card0.cardPath);
     });
 
     test('honours a DRM_DEVICE card override', () {
       expect(
-        selectGpuDevice(
-          const [card0, card1],
-          devicePathOverride: '/dev/dri/card0',
-        )?.cardPath,
+        selectGpuDevice(const [
+          card0,
+          card1,
+        ], devicePathOverride: '/dev/dri/card0')?.cardPath,
         card0.cardPath,
       );
     });
@@ -182,10 +157,10 @@ void main() {
 
     test('ignores an unknown override and keeps the default choice', () {
       expect(
-        selectGpuDevice(
-          const [card0, card1],
-          devicePathOverride: '/dev/dri/renderD999',
-        )?.cardPath,
+        selectGpuDevice(const [
+          card0,
+          card1,
+        ], devicePathOverride: '/dev/dri/renderD999')?.cardPath,
         card1.cardPath,
       );
     });

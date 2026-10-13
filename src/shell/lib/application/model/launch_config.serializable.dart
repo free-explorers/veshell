@@ -19,9 +19,6 @@ abstract class LaunchConfig with _$LaunchConfig {
     var command =
         desktopEntry.entries[DesktopEntryKey.exec.string]?.value ?? '';
     command = command.replaceAll(RegExp('( %.?)'), '');
-    return LaunchConfig(
-      command: command,
-      arguments: [],
-    );
+    return LaunchConfig(command: command, arguments: []);
   }
 }

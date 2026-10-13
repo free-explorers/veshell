@@ -28,10 +28,10 @@ void main() {
 
     test('matches when any monitor in the set has the size', () {
       expect(
-        matchesOutputSize(
-          const Size(3840, 2160),
-          const [Size(1920, 1080), Size(3840, 2160)],
-        ),
+        matchesOutputSize(const Size(3840, 2160), const [
+          Size(1920, 1080),
+          Size(3840, 2160),
+        ]),
         isTrue,
       );
     });

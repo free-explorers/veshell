@@ -23,7 +23,9 @@ class ActivateSurfaceOnPointerDown extends ConsumerWidget {
     }
 
     return Listener(
-      onPointerDown: (_) => ref.read(platformManagerProvider.notifier).request(
+      onPointerDown: (_) => ref
+          .read(platformManagerProvider.notifier)
+          .request(
             ActivateWindowRequest(
               message: ActivateWindowMessage(
                 surfaceId: surfaceId,

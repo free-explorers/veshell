@@ -11,9 +11,8 @@ abstract class DestroySubsurfaceMessage
     with _$DestroySubsurfaceMessage
     implements PlatformMessage {
   /// Factory
-  factory DestroySubsurfaceMessage({
-    required SurfaceId surfaceId,
-  }) = _DestroySubsurfaceMessage;
+  factory DestroySubsurfaceMessage({required SurfaceId surfaceId}) =
+      _DestroySubsurfaceMessage;
 
   factory DestroySubsurfaceMessage.fromJson(Map<String, dynamic> json) =>
       _$DestroySubsurfaceMessageFromJson(json);

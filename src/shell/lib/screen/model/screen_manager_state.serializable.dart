@@ -7,9 +7,8 @@ part 'screen_manager_state.serializable.g.dart';
 
 @freezed
 abstract class ScreenManagerState with _$ScreenManagerState {
-  const factory ScreenManagerState({
-    required ISet<ScreenId> screenIds,
-  }) = _ScreenManagerState;
+  const factory ScreenManagerState({required ISet<ScreenId> screenIds}) =
+      _ScreenManagerState;
   factory ScreenManagerState.fromJson(Map<String, dynamic> json) =>
       _$ScreenManagerStateFromJson(json);
 }

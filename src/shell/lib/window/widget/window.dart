@@ -31,25 +31,25 @@ class WindowWidget extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final activateWindow = useCallback(
-      (bool value) {
-        final metaWindowToActivate =
-            dialogMetaWindowList.lastOrNull ?? metaWindowId;
+    final activateWindow = useCallback((bool value) {
+      final metaWindowToActivate =
+          dialogMetaWindowList.lastOrNull ?? metaWindowId;
 
-        final metaWindow =
-            ref.read(metaWindowStateProvider(metaWindowToActivate));
+      final metaWindow = ref.read(
+        metaWindowStateProvider(metaWindowToActivate),
+      );
 
-        ref.read(platformManagerProvider.notifier).request(
-              ActivateWindowRequest(
-                message: ActivateWindowMessage(
-                  surfaceId: metaWindow.surfaceId,
-                  activate: value,
-                ),
+      ref
+          .read(platformManagerProvider.notifier)
+          .request(
+            ActivateWindowRequest(
+              message: ActivateWindowMessage(
+                surfaceId: metaWindow.surfaceId,
+                activate: value,
               ),
-            );
-      },
-      [metaWindowId, dialogMetaWindowList],
-    );
+            ),
+          );
+    }, [metaWindowId, dialogMetaWindowList]);
 
     // Re-run the tile sizing effect when the displayed window's committed
     // buffer changes, so a client that resizes itself away from the tile bounds
@@ -68,9 +68,9 @@ class WindowWidget extends HookConsumerWidget {
       ),
     );
     final displayedBufferSize = ref.watch(
-      wlSurfaceStateProvider(displayedSizing.surfaceId).select(
-        (value) => value.texture?.size,
-      ),
+      wlSurfaceStateProvider(
+        displayedSizing.surfaceId,
+      ).select((value) => value.texture?.size),
     );
     // One corrective patch per observed mismatch: a client that refuses the
     // configure would otherwise be re-patched on every commit it makes. The
@@ -81,163 +81,151 @@ class WindowWidget extends HookConsumerWidget {
     // first one.
     final lastCorrectedMismatch = useRef<(String, Size, Size?)?>(null);
 
-    useEffect(
-      () {
-        if (focusNode.hasFocus) {
-          activateWindow(true);
-        }
-        return null;
-      },
-      [metaWindowId],
-    );
+    useEffect(() {
+      if (focusNode.hasFocus) {
+        activateWindow(true);
+      }
+      return null;
+    }, [metaWindowId]);
 
-    useEffect(
-      () {
-        void callback() {
-          activateWindow(focusNode.hasFocus);
-        }
+    useEffect(() {
+      void callback() {
+        activateWindow(focusNode.hasFocus);
+      }
 
-        focusNode.addListener(callback);
-        return () {
-          focusNode.removeListener(callback);
-        };
-      },
-      [focusNode],
-    );
+      focusNode.addListener(callback);
+      return () {
+        focusNode.removeListener(callback);
+      };
+    }, [focusNode]);
 
     return switch (displayMode) {
       DisplayMode.maximized ||
       DisplayMode
-            .fullscreen => // TODO: fix this, it's not working with the new wayland stack, need to find a way to get the surface id from the meta surface and then use that to get the surface from the wayland stack, or just use the meta surface directly, but that would mean we need to change the way we handle surfaces in flutte
-        Stack(
-          children: [
-            LayoutBuilder(
-              builder: (context, constraints) {
-                return HookBuilder(
-                  builder: (context) {
-                    useEffect(
-                      () {
-                        if (constraints
-                                .widthConstraints()
-                                .maxWidth
-                                .isInfinite ||
-                            constraints
-                                .heightConstraints()
-                                .maxHeight
-                                .isInfinite) {
-                          return null;
-                        }
-                        WidgetsBinding.instance
-                            .addPostFrameCallback((timeStamp) {
-                          final metaWindow = ref.read(
-                            metaWindowStateProvider(metaWindowId),
-                          );
-                          final geometry = metaWindow.geometry;
-                          final targetSize = constraints.biggest;
-                          // The committed buffer is the surface's actual size,
-                          // in physical pixels: divide by the scale to compare
-                          // it with the logical tile bounds.
-                          final logicalBufferSize = displayedBufferSize == null
-                              ? null
-                              : Size(
-                                  displayedBufferSize.width /
-                                      metaWindow.scaleRatio,
-                                  displayedBufferSize.height /
-                                      metaWindow.scaleRatio,
-                                );
-
-                          geometryLog.info(
-                            'sizing tile id=$metaWindowId '
-                            'surface=${metaWindow.surfaceId} '
-                            'target=${targetSize.width}x${targetSize.height} '
-                            'before=${geometry?.width}x${geometry?.height} '
-                            'actual='
-                            '${logicalBufferSize?.width}x'
-                            '${logicalBufferSize?.height} '
-                            'fixed=${metaWindow.isFixedSized} '
-                            'scale=${metaWindow.scaleRatio}',
-                          );
-
-                          // A maximized tile owns its size: re-assert the tile
-                          // bounds whenever the committed buffer does not match
-                          // them (e.g. a client that un-maximized itself, or a
-                          // tile restored from a narrower visible length).
-                          // Fixed-size windows are left alone here; they are
-                          // rendered by the fit path instead.
-                          final atTarget = logicalBufferSize != null &&
-                              (logicalBufferSize.width - targetSize.width)
-                                      .abs() <
-                                  1 &&
-                              (logicalBufferSize.height - targetSize.height)
-                                      .abs() <
-                                  1;
-                          if (atTarget || metaWindow.isFixedSized) {
-                            return;
-                          }
-                          final mismatchKey = (
-                            metaWindowId,
-                            targetSize,
-                            logicalBufferSize,
-                          );
-                          if (lastCorrectedMismatch.value == mismatchKey) {
-                            return;
-                          }
-                          lastCorrectedMismatch.value = mismatchKey;
-
-                          ref
-                              .read(
-                                metaWindowStateProvider(metaWindowId).notifier,
-                              )
-                              .patch(
-                                UpdateGeometry(
-                                  id: metaWindowId,
-                                  value: Rect.fromLTWH(
-                                    geometry?.left ?? 0,
-                                    geometry?.top ?? 0,
-                                    targetSize.width,
-                                    targetSize.height,
-                                  ),
-                                ),
-                              );
-                        });
+          .fullscreen => // TODO: fix this, it's not working with the new wayland stack, need to find a way to get the surface id from the meta surface and then use that to get the surface from the wayland stack, or just use the meta surface directly, but that would mean we need to change the way we handle surfaces in flutte
+      Stack(
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return HookBuilder(
+                builder: (context) {
+                  useEffect(
+                    () {
+                      if (constraints.widthConstraints().maxWidth.isInfinite ||
+                          constraints
+                              .heightConstraints()
+                              .maxHeight
+                              .isInfinite) {
                         return null;
-                      },
-                      [
-                        constraints,
-                        metaWindowId,
-                        displayedSizing,
-                        displayedBufferSize,
-                      ],
-                    );
+                      }
+                      WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
+                        final metaWindow = ref.read(
+                          metaWindowStateProvider(metaWindowId),
+                        );
+                        final geometry = metaWindow.geometry;
+                        final targetSize = constraints.biggest;
+                        // The committed buffer is the surface's actual size,
+                        // in physical pixels: divide by the scale to compare
+                        // it with the logical tile bounds.
+                        final logicalBufferSize = displayedBufferSize == null
+                            ? null
+                            : Size(
+                                displayedBufferSize.width /
+                                    metaWindow.scaleRatio,
+                                displayedBufferSize.height /
+                                    metaWindow.scaleRatio,
+                              );
 
-                    return MetaSurfaceWidget(
-                      focusNode: focusNode,
-                      metaWindowId: metaWindowId,
-                      decorated: false,
-                    );
-                  },
-                );
-              },
+                        geometryLog.info(
+                          'sizing tile id=$metaWindowId '
+                          'surface=${metaWindow.surfaceId} '
+                          'target=${targetSize.width}x${targetSize.height} '
+                          'before=${geometry?.width}x${geometry?.height} '
+                          'actual='
+                          '${logicalBufferSize?.width}x'
+                          '${logicalBufferSize?.height} '
+                          'fixed=${metaWindow.isFixedSized} '
+                          'scale=${metaWindow.scaleRatio}',
+                        );
+
+                        // A maximized tile owns its size: re-assert the tile
+                        // bounds whenever the committed buffer does not match
+                        // them (e.g. a client that un-maximized itself, or a
+                        // tile restored from a narrower visible length).
+                        // Fixed-size windows are left alone here; they are
+                        // rendered by the fit path instead.
+                        final atTarget =
+                            logicalBufferSize != null &&
+                            (logicalBufferSize.width - targetSize.width).abs() <
+                                1 &&
+                            (logicalBufferSize.height - targetSize.height)
+                                    .abs() <
+                                1;
+                        if (atTarget || metaWindow.isFixedSized) {
+                          return;
+                        }
+                        final mismatchKey = (
+                          metaWindowId,
+                          targetSize,
+                          logicalBufferSize,
+                        );
+                        if (lastCorrectedMismatch.value == mismatchKey) {
+                          return;
+                        }
+                        lastCorrectedMismatch.value = mismatchKey;
+
+                        ref
+                            .read(
+                              metaWindowStateProvider(metaWindowId).notifier,
+                            )
+                            .patch(
+                              UpdateGeometry(
+                                id: metaWindowId,
+                                value: Rect.fromLTWH(
+                                  geometry?.left ?? 0,
+                                  geometry?.top ?? 0,
+                                  targetSize.width,
+                                  targetSize.height,
+                                ),
+                              ),
+                            );
+                      });
+                      return null;
+                    },
+                    [
+                      constraints,
+                      metaWindowId,
+                      displayedSizing,
+                      displayedBufferSize,
+                    ],
+                  );
+
+                  return MetaSurfaceWidget(
+                    focusNode: focusNode,
+                    metaWindowId: metaWindowId,
+                    decorated: false,
+                  );
+                },
+              );
+            },
+          ),
+          if (dialogMetaWindowList.isNotEmpty) ...[
+            const Positioned.fill(child: ColoredBox(color: Colors.black38)),
+            WindowDialogs(
+              metaWindowIds: dialogMetaWindowList,
+              maxSizeFactor: 0.9,
             ),
-            if (dialogMetaWindowList.isNotEmpty) ...[
-              const Positioned.fill(child: ColoredBox(color: Colors.black38)),
-              WindowDialogs(
-                metaWindowIds: dialogMetaWindowList,
-                maxSizeFactor: 0.9,
-              ),
-            ],
           ],
-        ),
-      DisplayMode.game => MetaSurfaceGamingOverlay(
-          metaWindowId: metaWindowId,
-        ),
+        ],
+      ),
+      DisplayMode.game => MetaSurfaceGamingOverlay(metaWindowId: metaWindowId),
       DisplayMode.floating => ContainerWithPositionnableChildren(
-          children: [
-            FloatableWindow(metaWindowId: metaWindowId),
-            for (final dialogMetaWindowId in dialogMetaWindowList)
-              FloatableWindow(metaWindowId: dialogMetaWindowId),
-          ],
-        ),
+        children: [
+          FloatableWindow(metaWindowId: metaWindowId),
+          for (final dialogMetaWindowId in dialogMetaWindowList)
+            FloatableWindow(metaWindowId: dialogMetaWindowId),
+        ],
+      ),
     };
   }
 }

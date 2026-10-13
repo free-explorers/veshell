@@ -21,9 +21,8 @@ abstract class CloseWindowMessage
     with _$CloseWindowMessage
     implements PlatformMessage {
   /// Factory
-  factory CloseWindowMessage({
-    required MetaWindowId metaWindowId,
-  }) = _CloseWindowMessage;
+  factory CloseWindowMessage({required MetaWindowId metaWindowId}) =
+      _CloseWindowMessage;
 
   /// Creates a new [CloseWindowMessage] instance from a map.
   ///

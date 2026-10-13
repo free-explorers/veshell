@@ -10,10 +10,8 @@ abstract class GestureSwipeBeginMessage
     with _$GestureSwipeBeginMessage
     implements PlatformMessage {
   /// Factory
-  factory GestureSwipeBeginMessage({
-    required int time,
-    required int fingers,
-  }) = _GestureSwipeBeginMessage;
+  factory GestureSwipeBeginMessage({required int time, required int fingers}) =
+      _GestureSwipeBeginMessage;
 
   factory GestureSwipeBeginMessage.fromJson(Map<String, dynamic> json) =>
       _$GestureSwipeBeginMessageFromJson(json);

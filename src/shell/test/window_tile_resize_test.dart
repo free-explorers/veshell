@@ -236,9 +236,9 @@ void main() {
         await tester.pump();
         await tester.pump();
         expect(
-          _patches
-              .whereType<UpdateGeometry>()
-              .map((patch) => patch.value?.width),
+          _patches.whereType<UpdateGeometry>().map(
+            (patch) => patch.value?.width,
+          ),
           contains(_halfSize.width),
           reason: 'cycle $cycle must shrink to the half tile',
         );
@@ -249,9 +249,9 @@ void main() {
         await tester.pump();
         await tester.pump();
         expect(
-          _patches
-              .whereType<UpdateGeometry>()
-              .map((patch) => patch.value?.width),
+          _patches.whereType<UpdateGeometry>().map(
+            (patch) => patch.value?.width,
+          ),
           contains(_fullSize.width),
           reason: 'cycle $cycle must grow back to the full tile',
         );

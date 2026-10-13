@@ -11,9 +11,7 @@ part 'available_screen_list.g.dart';
 @riverpod
 ISet<ScreenId> availableScreenList(Ref ref) {
   final screenList = ref.watch(
-    screenManagerProvider.select(
-      (value) => value.screenIds,
-    ),
+    screenManagerProvider.select((value) => value.screenIds),
   );
   final monitorIds = ref.watch(activeMonitorIdsProvider);
 

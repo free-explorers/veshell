@@ -23,14 +23,13 @@ void main() {
     WorkspaceId? focusedWorkspaceId = workspace1,
     Set<PersistentWindowId> displayed = const {},
     Set<EphemeralWindowId> displayedEphemeral = const {},
-  }) =>
-      routeForWindow(
-        windowId,
-        windowWorkspaceMap: mapOf(workspaces),
-        focusedWorkspaceId: focusedWorkspaceId,
-        displayedWindowIds: displayed.lock,
-        displayedEphemeralWindowIds: displayedEphemeral.lock,
-      );
+  }) => routeForWindow(
+    windowId,
+    windowWorkspaceMap: mapOf(workspaces),
+    focusedWorkspaceId: focusedWorkspaceId,
+    displayedWindowIds: displayed.lock,
+    displayedEphemeralWindowIds: displayedEphemeral.lock,
+  );
 
   group('routeForWindow', () {
     test('no window is unresolved', () {
@@ -78,10 +77,7 @@ void main() {
     });
 
     test('ephemeral window not in the overview falls back to default', () {
-      final target = route(
-        ephemeral,
-        workspaces: {windowA: workspace1},
-      );
+      final target = route(ephemeral, workspaces: {windowA: workspace1});
 
       expect(target, isA<UnresolvedNotificationTarget>());
     });

@@ -7,11 +7,7 @@ import 'package:shell/wayland/model/wl_surface.dart';
 part 'meta_window.serializable.freezed.dart';
 part 'meta_window.serializable.g.dart';
 
-enum MetaWindowDisplayMode {
-  maximized,
-  fullscreen,
-  floating,
-}
+enum MetaWindowDisplayMode { maximized, fullscreen, floating }
 
 typedef MetaWindowId = String;
 
@@ -34,10 +30,12 @@ abstract class MetaWindow with _$MetaWindow {
     String? startupId,
     @Default(false) bool isFixedSized,
     @Default(false) bool isModal,
+
     /// Client- or shell-negotiated fullscreen state, mirrored from the
     /// compositor. A fullscreen window is treated as a top-level application
     /// surface for routing, not as a dialog.
     @Default(false) bool isFullscreen,
+
     /// Whether a live screen cast is recording this window. Resolved by the
     /// compositor (consumer pid, then app id) and rendered on the tile and its
     /// workspace; the shell never re-derives the mapping.

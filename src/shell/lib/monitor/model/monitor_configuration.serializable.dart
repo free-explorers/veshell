@@ -5,10 +5,7 @@ import 'package:shell/monitor/model/screen_configuration.serializable.dart';
 part 'monitor_configuration.serializable.freezed.dart';
 part 'monitor_configuration.serializable.g.dart';
 
-enum ScreenDisplayMode {
-  splitHorizontal,
-  splitVertical,
-}
+enum ScreenDisplayMode { splitHorizontal, splitVertical }
 
 /// Flutter-only shell layout for one monitor: its screens and split direction.
 ///

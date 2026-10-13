@@ -16,9 +16,6 @@ class NotificationList extends _$NotificationList {
         .watch(notificationManagerProvider)
         .notificationMap
         .where((_, notification) => !notification.isSynthetic)
-        .toValueIList(
-          sort: true,
-          compare: (a, b) => b.id.compareTo(a.id),
-        );
+        .toValueIList(sort: true, compare: (a, b) => b.id.compareTo(a.id));
   }
 }

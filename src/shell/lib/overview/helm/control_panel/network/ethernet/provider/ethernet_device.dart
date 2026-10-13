@@ -9,8 +9,6 @@ class EthernetDeviceState extends _$EthernetDeviceState {
   @override
   EthernetDevice build(String address) {
     final device = ref.watch(nmDeviceProvider(address));
-    return EthernetDevice(
-      nmDevice: device,
-    );
+    return EthernetDevice(nmDevice: device);
   }
 }

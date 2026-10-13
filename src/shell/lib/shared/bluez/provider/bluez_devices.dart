@@ -24,8 +24,9 @@ class BluezDevices extends _$BluezDevices {
         ref.invalidateSelf();
       });
 
-    _addressDeviceMap =
-        {for (final device in client.devices) device.address: device}.lock;
+    _addressDeviceMap = {
+      for (final device in client.devices) device.address: device,
+    }.lock;
 
     return _addressDeviceMap.keys.toISet();
   }

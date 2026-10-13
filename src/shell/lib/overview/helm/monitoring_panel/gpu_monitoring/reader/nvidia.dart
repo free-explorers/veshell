@@ -33,21 +33,14 @@ typedef _InitNative = Int32 Function();
 typedef _InitDart = int Function();
 typedef _HandleNative = Int32 Function(Uint32, Pointer<Pointer<Void>>);
 typedef _HandleDart = int Function(int, Pointer<Pointer<Void>>);
-typedef _UtilizationNative = Int32 Function(
-  Pointer<Void>,
-  Pointer<_NvmlUtilization>,
-);
-typedef _UtilizationDart = int Function(
-  Pointer<Void>,
-  Pointer<_NvmlUtilization>,
-);
+typedef _UtilizationNative =
+    Int32 Function(Pointer<Void>, Pointer<_NvmlUtilization>);
+typedef _UtilizationDart =
+    int Function(Pointer<Void>, Pointer<_NvmlUtilization>);
 typedef _MemoryNative = Int32 Function(Pointer<Void>, Pointer<_NvmlMemory>);
 typedef _MemoryDart = int Function(Pointer<Void>, Pointer<_NvmlMemory>);
-typedef _TemperatureNative = Int32 Function(
-  Pointer<Void>,
-  Uint32,
-  Pointer<Uint32>,
-);
+typedef _TemperatureNative =
+    Int32 Function(Pointer<Void>, Uint32, Pointer<Uint32>);
 typedef _TemperatureDart = int Function(Pointer<Void>, int, Pointer<Uint32>);
 typedef _ValueNative = Int32 Function(Pointer<Void>, Pointer<Uint32>);
 typedef _ValueDart = int Function(Pointer<Void>, Pointer<Uint32>);
@@ -68,15 +61,15 @@ class _Nvml {
       ),
       _utilization = library
           .lookupFunction<_UtilizationNative, _UtilizationDart>(
-        'nvmlDeviceGetUtilizationRates',
-      ),
+            'nvmlDeviceGetUtilizationRates',
+          ),
       _memory = library.lookupFunction<_MemoryNative, _MemoryDart>(
         'nvmlDeviceGetMemoryInfo',
       ),
       _temperature = library
           .lookupFunction<_TemperatureNative, _TemperatureDart>(
-        'nvmlDeviceGetTemperature',
-      ),
+            'nvmlDeviceGetTemperature',
+          ),
       _powerUsage = library.lookupFunction<_ValueNative, _ValueDart>(
         'nvmlDeviceGetPowerUsage',
       ),

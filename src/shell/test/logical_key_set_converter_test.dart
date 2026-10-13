@@ -6,12 +6,14 @@ import 'package:shell/shared/util/json_converter/logical_key_set.dart';
 void main() {
   const converter = LogicalKeySetConverter();
 
-  final superQ = LogicalKeySet.fromSet(
-    <LogicalKeyboardKey>{LogicalKeyboardKey.superKey, LogicalKeyboardKey.keyQ},
-  );
-  final fnQ = LogicalKeySet.fromSet(
-    <LogicalKeyboardKey>{LogicalKeyboardKey.fn, LogicalKeyboardKey.keyQ},
-  );
+  final superQ = LogicalKeySet.fromSet(<LogicalKeyboardKey>{
+    LogicalKeyboardKey.superKey,
+    LogicalKeyboardKey.keyQ,
+  });
+  final fnQ = LogicalKeySet.fromSet(<LogicalKeyboardKey>{
+    LogicalKeyboardKey.fn,
+    LogicalKeyboardKey.keyQ,
+  });
   final fnOnly = LogicalKeySet.fromSet(<LogicalKeyboardKey>{
     LogicalKeyboardKey.fn,
   });

@@ -29,8 +29,7 @@ sealed class ScreenCastConsentDecisionMessage
 
   factory ScreenCastConsentDecisionMessage.fromJson(
     Map<String, dynamic> json,
-  ) =>
-      _$ScreenCastConsentDecisionMessageFromJson(json);
+  ) => _$ScreenCastConsentDecisionMessageFromJson(json);
 }
 
 /// What the user decided in the consent picker.
@@ -39,5 +38,5 @@ enum ScreenCastConsentOutcome {
   approved,
 
   /// The user dropped the flow.
-  cancelled;
+  cancelled,
 }

@@ -15,12 +15,10 @@ class ContainToInputRegion extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final inputRegion = ref
-        .watch(wlSurfaceStateProvider(surfaceId).select((v) => v.inputRegion));
-
-    return CropOverflowBox(
-      rect: inputRegion,
-      child: child,
+    final inputRegion = ref.watch(
+      wlSurfaceStateProvider(surfaceId).select((v) => v.inputRegion),
     );
+
+    return CropOverflowBox(rect: inputRegion, child: child);
   }
 }

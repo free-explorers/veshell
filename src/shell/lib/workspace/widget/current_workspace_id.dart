@@ -14,8 +14,8 @@ class CurrentWorkspaceId extends InheritedWidget {
 
   /// Gets the Workspace ID from the nearest workspaceIdProvider ancestor.
   static String of(BuildContext context) {
-    final provider =
-        context.dependOnInheritedWidgetOfExactType<CurrentWorkspaceId>();
+    final provider = context
+        .dependOnInheritedWidgetOfExactType<CurrentWorkspaceId>();
     if (provider == null) {
       throw FlutterError('workspaceIdProvider not found in the widget tree');
     }

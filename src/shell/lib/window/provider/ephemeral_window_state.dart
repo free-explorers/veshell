@@ -54,7 +54,9 @@ class EphemeralWindowState extends _$EphemeralWindowState
     }
     final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
     state = state.copyWith(metaWindowId: metaWindowId, pid: metaWindow.pid);
-    ref.read(metaWindowStateProvider(metaWindowId).notifier).patch(
+    ref
+        .read(metaWindowStateProvider(metaWindowId).notifier)
+        .patch(
           MetaWindowPatchMessage.updateDisplayMode(
             id: metaWindowId,
             value: MetaWindowDisplayMode.maximized,

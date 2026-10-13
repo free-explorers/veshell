@@ -33,38 +33,43 @@ class FloatableWindow extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isDragInProgress =
-        ref.watch(metaWindowDraggingStateProvider(metaWindowId));
-    final resizeInProgress =
-        ref.watch(metaWindowResizingStateProvider(metaWindowId));
+    final isDragInProgress = ref.watch(
+      metaWindowDraggingStateProvider(metaWindowId),
+    );
+    final resizeInProgress = ref.watch(
+      metaWindowResizingStateProvider(metaWindowId),
+    );
     final metaWindow = ref.watch(metaWindowStateProvider(metaWindowId));
     // `texture` is null until the surface commits its first buffer; a null
     // check here would make a not-yet-committed dialog crash instead of
     // appearing as soon as it is ready.
     final surfaceSize = ref.watch(
-      wlSurfaceStateProvider(metaWindow.surfaceId).select(
-        (v) => v.texture?.size,
-      ),
+      wlSurfaceStateProvider(
+        metaWindow.surfaceId,
+      ).select((v) => v.texture?.size),
     );
 
-    final repositionnableControllerWidget =
-        RepositionnableControllerWidget.of(context);
+    final repositionnableControllerWidget = RepositionnableControllerWidget.of(
+      context,
+    );
     final constraints = repositionnableControllerWidget.constraints;
 
-    final decorationHeight =
-        metaWindow.needDecoration ? WindowTitleBar.height : 0.0;
+    final decorationHeight = metaWindow.needDecoration
+        ? WindowTitleBar.height
+        : 0.0;
 
     // `maxSizeFactor` below 1 caps the window to a fraction of the tile; the
     // main window and floating dialogs keep the default `1` and are untouched.
     final isCapped =
-        maxSizeFactor < 1 && constraints.biggest.width.isFinite &&
-            constraints.biggest.height.isFinite;
+        maxSizeFactor < 1 &&
+        constraints.biggest.width.isFinite &&
+        constraints.biggest.height.isFinite;
 
     // The largest box the window may occupy, decoration included.
-    final maxBoxSize = useMemoized(
-      () => constraints.biggest * maxSizeFactor,
-      [constraints, maxSizeFactor],
-    );
+    final maxBoxSize = useMemoized(() => constraints.biggest * maxSizeFactor, [
+      constraints,
+      maxSizeFactor,
+    ]);
 
     // The same cap expressed as the client's surface size: the box also holds
     // the decoration title bar. Used to configure resizable dialogs. Floored to
@@ -78,16 +83,13 @@ class FloatableWindow extends HookConsumerWidget {
     );
 
     // The size the window wants on its own, decoration included.
-    final naturalBoxSize = useMemoized(
-      () {
-        final width = metaWindow.geometry?.width ?? surfaceSize?.width ?? 0;
-        final height =
-            (metaWindow.geometry?.height ?? surfaceSize?.height ?? 0) +
-                decorationHeight;
-        return Size(width, height);
-      },
-      [metaWindow.geometry, surfaceSize, decorationHeight],
-    );
+    final naturalBoxSize = useMemoized(() {
+      final width = metaWindow.geometry?.width ?? surfaceSize?.width ?? 0;
+      final height =
+          (metaWindow.geometry?.height ?? surfaceSize?.height ?? 0) +
+          decorationHeight;
+      return Size(width, height);
+    }, [metaWindow.geometry, surfaceSize, decorationHeight]);
 
     final metaSize = useMemoized(
       () => Size(
@@ -99,13 +101,10 @@ class FloatableWindow extends HookConsumerWidget {
 
     final size = useState(metaSize);
 
-    useEffect(
-      () {
-        size.value = metaSize;
-        return null;
-      },
-      [metaSize],
-    );
+    useEffect(() {
+      size.value = metaSize;
+      return null;
+    }, [metaSize]);
 
     final origin = useState<Offset?>(
       Offset(
@@ -156,7 +155,9 @@ class FloatableWindow extends HookConsumerWidget {
             return;
           }
           unawaited(
-            ref.read(metaWindowStateProvider(metaWindowId).notifier).patch(
+            ref
+                .read(metaWindowStateProvider(metaWindowId).notifier)
+                .patch(
                   UpdateGeometry(
                     id: metaWindowId,
                     value: Rect.fromLTWH(
@@ -191,15 +192,22 @@ class FloatableWindow extends HookConsumerWidget {
     // Move effect
     useEffect(
       () {
-        final dragInProgress =
-            ref.read(metaWindowDraggingStateProvider(metaWindowId));
+        final dragInProgress = ref.read(
+          metaWindowDraggingStateProvider(metaWindowId),
+        );
         if (dragInProgress) {
           void onDragChange() {
             origin.value = (origin.value ?? Offset.zero).translate(
               repositionnableControllerWidget
-                  .dragUpdateController.value.delta.dx,
+                  .dragUpdateController
+                  .value
+                  .delta
+                  .dx,
               repositionnableControllerWidget
-                  .dragUpdateController.value.delta.dy,
+                  .dragUpdateController
+                  .value
+                  .delta
+                  .dy,
             );
           }
 
@@ -209,17 +217,21 @@ class FloatableWindow extends HookConsumerWidget {
                 .stopDragging();
           }
 
-          repositionnableControllerWidget.dragUpdateController
-              .addListener(onDragChange);
+          repositionnableControllerWidget.dragUpdateController.addListener(
+            onDragChange,
+          );
 
-          repositionnableControllerWidget.dragEndController
-              .addListener(onDragEnd);
+          repositionnableControllerWidget.dragEndController.addListener(
+            onDragEnd,
+          );
 
           return () {
-            repositionnableControllerWidget.dragUpdateController
-                .removeListener(onDragChange);
-            repositionnableControllerWidget.dragEndController
-                .removeListener(onDragEnd);
+            repositionnableControllerWidget.dragUpdateController.removeListener(
+              onDragChange,
+            );
+            repositionnableControllerWidget.dragEndController.removeListener(
+              onDragEnd,
+            );
           };
         } else {
           return null;
@@ -235,8 +247,9 @@ class FloatableWindow extends HookConsumerWidget {
     // Resize effect
     useEffect(
       () {
-        final resizeInProgress =
-            ref.read(metaWindowResizingStateProvider(metaWindowId));
+        final resizeInProgress = ref.read(
+          metaWindowResizingStateProvider(metaWindowId),
+        );
         if (resizeInProgress != null) {
           void onResizeChange() {
             var newSize = size.value;
@@ -249,96 +262,150 @@ class FloatableWindow extends HookConsumerWidget {
                   size.value.width,
                   size.value.height -
                       repositionnableControllerWidget
-                          .dragUpdateController.value.delta.dy,
+                          .dragUpdateController
+                          .value
+                          .delta
+                          .dy,
                 );
                 origin.value = Offset(
                   origin.value!.dx,
                   origin.value!.dy +
                       repositionnableControllerWidget
-                          .dragUpdateController.value.delta.dy,
+                          .dragUpdateController
+                          .value
+                          .delta
+                          .dy,
                 );
               case ResizeEdge.bottom:
                 newSize = Size(
                   size.value.width,
                   size.value.height +
                       repositionnableControllerWidget
-                          .dragUpdateController.value.delta.dy,
+                          .dragUpdateController
+                          .value
+                          .delta
+                          .dy,
                 );
               case ResizeEdge.left:
                 newSize = Size(
                   size.value.width -
                       repositionnableControllerWidget
-                          .dragUpdateController.value.delta.dx,
+                          .dragUpdateController
+                          .value
+                          .delta
+                          .dx,
                   size.value.height,
                 );
                 origin.value = Offset(
                   origin.value!.dx +
                       repositionnableControllerWidget
-                          .dragUpdateController.value.delta.dx,
+                          .dragUpdateController
+                          .value
+                          .delta
+                          .dx,
                   origin.value!.dy,
                 );
               case ResizeEdge.topLeft:
                 newSize = Size(
                   size.value.width -
                       repositionnableControllerWidget
-                          .dragUpdateController.value.delta.dx,
+                          .dragUpdateController
+                          .value
+                          .delta
+                          .dx,
                   size.value.height -
                       repositionnableControllerWidget
-                          .dragUpdateController.value.delta.dy,
+                          .dragUpdateController
+                          .value
+                          .delta
+                          .dy,
                 );
                 origin.value = Offset(
                   origin.value!.dx +
                       repositionnableControllerWidget
-                          .dragUpdateController.value.delta.dx,
+                          .dragUpdateController
+                          .value
+                          .delta
+                          .dx,
                   origin.value!.dy +
                       repositionnableControllerWidget
-                          .dragUpdateController.value.delta.dy,
+                          .dragUpdateController
+                          .value
+                          .delta
+                          .dy,
                 );
               case ResizeEdge.bottomLeft:
                 newSize = Size(
                   size.value.width -
                       repositionnableControllerWidget
-                          .dragUpdateController.value.delta.dx,
+                          .dragUpdateController
+                          .value
+                          .delta
+                          .dx,
                   size.value.height +
                       repositionnableControllerWidget
-                          .dragUpdateController.value.delta.dy,
+                          .dragUpdateController
+                          .value
+                          .delta
+                          .dy,
                 );
                 origin.value = Offset(
                   origin.value!.dx +
                       repositionnableControllerWidget
-                          .dragUpdateController.value.delta.dx,
+                          .dragUpdateController
+                          .value
+                          .delta
+                          .dx,
                   origin.value!.dy,
                 );
               case ResizeEdge.right:
                 newSize = Size(
                   size.value.width +
                       repositionnableControllerWidget
-                          .dragUpdateController.value.delta.dx,
+                          .dragUpdateController
+                          .value
+                          .delta
+                          .dx,
                   size.value.height,
                 );
               case ResizeEdge.topRight:
                 newSize = Size(
                   size.value.width +
                       repositionnableControllerWidget
-                          .dragUpdateController.value.delta.dx,
+                          .dragUpdateController
+                          .value
+                          .delta
+                          .dx,
                   size.value.height -
                       repositionnableControllerWidget
-                          .dragUpdateController.value.delta.dy,
+                          .dragUpdateController
+                          .value
+                          .delta
+                          .dy,
                 );
                 origin.value = Offset(
                   origin.value!.dx,
                   origin.value!.dy +
                       repositionnableControllerWidget
-                          .dragUpdateController.value.delta.dy,
+                          .dragUpdateController
+                          .value
+                          .delta
+                          .dy,
                 );
               case ResizeEdge.bottomRight:
                 newSize = Size(
                   size.value.width +
                       repositionnableControllerWidget
-                          .dragUpdateController.value.delta.dx,
+                          .dragUpdateController
+                          .value
+                          .delta
+                          .dx,
                   size.value.height +
                       repositionnableControllerWidget
-                          .dragUpdateController.value.delta.dy,
+                          .dragUpdateController
+                          .value
+                          .delta
+                          .dy,
                 );
             }
             size.value = Size(
@@ -346,11 +413,13 @@ class FloatableWindow extends HookConsumerWidget {
               math.max(1, newSize.height),
             );
             final currentGeometry = ref.read(
-              metaWindowStateProvider(metaWindowId).select(
-                (value) => value.geometry,
-              ),
+              metaWindowStateProvider(
+                metaWindowId,
+              ).select((value) => value.geometry),
             );
-            ref.read(metaWindowStateProvider(metaWindowId).notifier).patch(
+            ref
+                .read(metaWindowStateProvider(metaWindowId).notifier)
+                .patch(
                   UpdateGeometry(
                     id: metaWindowId,
                     value: Rect.fromLTWH(
@@ -371,15 +440,19 @@ class FloatableWindow extends HookConsumerWidget {
                 .stopResizing();
           }
 
-          repositionnableControllerWidget.dragUpdateController
-              .addListener(onResizeChange);
-          repositionnableControllerWidget.dragEndController
-              .addListener(onResizeEnd);
+          repositionnableControllerWidget.dragUpdateController.addListener(
+            onResizeChange,
+          );
+          repositionnableControllerWidget.dragEndController.addListener(
+            onResizeEnd,
+          );
           return () {
-            repositionnableControllerWidget.dragUpdateController
-                .removeListener(onResizeChange);
-            repositionnableControllerWidget.dragEndController
-                .removeListener(onResizeEnd);
+            repositionnableControllerWidget.dragUpdateController.removeListener(
+              onResizeChange,
+            );
+            repositionnableControllerWidget.dragEndController.removeListener(
+              onResizeEnd,
+            );
           };
         } else {
           return null;

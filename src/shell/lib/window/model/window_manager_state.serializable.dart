@@ -7,9 +7,8 @@ part 'window_manager_state.serializable.g.dart';
 
 @freezed
 abstract class WindowManagerState with _$WindowManagerState {
-  const factory WindowManagerState({
-    required ISet<WindowId> windows,
-  }) = _WindowManagerState;
+  const factory WindowManagerState({required ISet<WindowId> windows}) =
+      _WindowManagerState;
 
   factory WindowManagerState.fromJson(Map<String, dynamic> json) =>
       _$WindowManagerStateFromJson(json);

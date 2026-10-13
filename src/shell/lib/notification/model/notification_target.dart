@@ -83,9 +83,7 @@ class TileNotificationTarget extends NotificationTarget {
 /// in the open overview, so it must stay hidden.
 class EphemeralDisplayedNotificationTarget extends NotificationTarget {
   /// Const constructor.
-  const EphemeralDisplayedNotificationTarget({
-    required this.ephemeralWindowId,
-  });
+  const EphemeralDisplayedNotificationTarget({required this.ephemeralWindowId});
 
   /// The ephemeral window shown in the overview.
   final EphemeralWindowId ephemeralWindowId;

@@ -20,8 +20,8 @@ class WifiManager extends _$WifiManager {
     final listenToLastScan = wireless.propertiesChanged
         .firstWhere((properties) => properties.contains('LastScan'))
         .then((_) {
-      state = state.copyWith(isScanning: false);
-    });
+          state = state.copyWith(isScanning: false);
+        });
     await wireless.requestScan();
     state = state.copyWith(isScanning: true);
     await listenToLastScan;

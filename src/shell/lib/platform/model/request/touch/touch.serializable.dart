@@ -49,9 +49,7 @@ abstract class TouchMotionMessage
     with _$TouchMotionMessage
     implements PlatformMessage {
   /// Factory
-  factory TouchMotionMessage({
-    required int touchId,
-  }) = _TouchMotionMessage;
+  factory TouchMotionMessage({required int touchId}) = _TouchMotionMessage;
 
   /// Creates a new [TouchMotionMessage] instance from a map.
   ///
@@ -83,9 +81,7 @@ class TouchCancelRequest extends PlatformRequest {
 @freezed
 abstract class TouchIdMessage with _$TouchIdMessage implements PlatformMessage {
   /// Factory
-  factory TouchIdMessage({
-    required int touchId,
-  }) = _TouchIdMessage;
+  factory TouchIdMessage({required int touchId}) = _TouchIdMessage;
 
   /// Creates a new [TouchIdMessage] instance from a map.
   ///

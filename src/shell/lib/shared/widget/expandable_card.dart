@@ -5,29 +5,22 @@ const _expandedElevation = 1.0;
 const _expandedShadowPadding = 64.0;
 const _expandedEnlargePadding = 12.0;
 
-typedef ExpandableBuilder = Widget Function(
-  BuildContext context,
-  bool isExpanded,
-);
+typedef ExpandableBuilder =
+    Widget Function(BuildContext context, bool isExpanded);
 
 class ExpandableCard extends StatefulWidget {
-  const ExpandableCard({
-    required this.builder,
-    super.key,
-  });
+  const ExpandableCard({required this.builder, super.key});
 
   final ExpandableBuilder builder;
   @override
   State<ExpandableCard> createState() => ExpandableCardState();
 
   static ExpandableCardState of(BuildContext context) {
-    final scope =
-        context.dependOnInheritedWidgetOfExactType<_ExpandableCardScope>();
+    final scope = context
+        .dependOnInheritedWidgetOfExactType<_ExpandableCardScope>();
     assert(() {
       if (scope == null) {
-        throw FlutterError(
-          'No ExpandableCard found in context',
-        );
+        throw FlutterError('No ExpandableCard found in context');
       }
       return true;
     }());
@@ -66,9 +59,7 @@ class ExpandableCardState extends State<ExpandableCard> {
   void expand() {
     if (isExpanded) return;
     final currentBox = context.findRenderObject()! as RenderBox;
-    final currentCoordinates = currentBox.localToGlobal(
-      Offset.zero,
-    );
+    final currentCoordinates = currentBox.localToGlobal(Offset.zero);
 
     _expandedRoute = PageRouteBuilder<LayoutBuilder>(
       opaque: false,
@@ -102,9 +93,7 @@ class ExpandableCardState extends State<ExpandableCard> {
         isExpanded = false;
       });
     });
-    Navigator.of(context).push(
-      _expandedRoute!,
-    );
+    Navigator.of(context).push(_expandedRoute!);
     setState(() {
       isExpanded = true;
     });

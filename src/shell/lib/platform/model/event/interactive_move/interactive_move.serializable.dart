@@ -11,9 +11,8 @@ abstract class InteractiveMoveMessage
     with _$InteractiveMoveMessage
     implements PlatformMessage {
   /// Factory
-  factory InteractiveMoveMessage({
-    required MetaWindowId metaWindowId,
-  }) = _InteractiveMoveMessage;
+  factory InteractiveMoveMessage({required MetaWindowId metaWindowId}) =
+      _InteractiveMoveMessage;
 
   factory InteractiveMoveMessage.fromJson(Map<String, dynamic> json) =>
       _$InteractiveMoveMessageFromJson(json);

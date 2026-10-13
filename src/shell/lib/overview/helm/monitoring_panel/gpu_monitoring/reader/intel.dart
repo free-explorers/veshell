@@ -23,7 +23,10 @@ const _i915Min = [
 ];
 
 /// xe exposes per-tile/GT frequencies under the PCI device.
-const _xeCurrent = ['device/tile0/gt0/freq0/act_freq', 'device/tile0/gt0/freq0/cur_freq'];
+const _xeCurrent = [
+  'device/tile0/gt0/freq0/act_freq',
+  'device/tile0/gt0/freq0/cur_freq',
+];
 const _xeMax = ['device/tile0/gt0/freq0/rp0_freq'];
 const _xeMin = ['device/tile0/gt0/freq0/rpn_freq'];
 
@@ -53,8 +56,9 @@ Future<GpuStats?> readIntelGpuStats(GpuDevice device) async {
 
   return GpuStats(
     load: load ?? 0,
-    temperatureCelsius:
-        temperatureMilli == null ? null : temperatureMilli / 1000,
+    temperatureCelsius: temperatureMilli == null
+        ? null
+        : temperatureMilli / 1000,
     coreClockMhz: current,
   );
 }

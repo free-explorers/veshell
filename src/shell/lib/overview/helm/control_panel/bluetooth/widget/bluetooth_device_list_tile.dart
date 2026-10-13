@@ -5,10 +5,7 @@ import 'package:shell/overview/helm/control_panel/bluetooth/provider/bluetooth_d
 import 'package:shell/overview/helm/control_panel/bluetooth/widget/bluetooth_device_icon.dart';
 
 class BluetoothDeviceListTile extends HookConsumerWidget {
-  const BluetoothDeviceListTile(
-    this.address, {
-    super.key,
-  });
+  const BluetoothDeviceListTile(this.address, {super.key});
 
   final String address;
 
@@ -45,9 +42,7 @@ class BluetoothDeviceListTile extends HookConsumerWidget {
                           .connect,
                     ),
                   IconButton(
-                    icon: const Icon(
-                      MdiIcons.delete,
-                    ),
+                    icon: const Icon(MdiIcons.delete),
                     onPressed: () =>
                         bluezDevice.adapter.removeDevice(bluezDevice),
                   ),

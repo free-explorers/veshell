@@ -32,10 +32,7 @@ class MouseButtonTracker {
   }
 }
 
-enum MouseButtonState {
-  pressed,
-  released,
-}
+enum MouseButtonState { pressed, released }
 
 class MouseButtonEvent {
   MouseButtonEvent(this.button, this.state);

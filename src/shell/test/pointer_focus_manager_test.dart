@@ -18,17 +18,17 @@ void main() {
   setUp(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('platform', JSONMethodCodec()),
-      (call) async => null,
-    );
+          const MethodChannel('platform', JSONMethodCodec()),
+          (call) async => null,
+        );
   });
 
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('platform', JSONMethodCodec()),
-      null,
-    );
+          const MethodChannel('platform', JSONMethodCodec()),
+          null,
+        );
   });
 
   test('a held button keeps the surface under the cursor focused', () {

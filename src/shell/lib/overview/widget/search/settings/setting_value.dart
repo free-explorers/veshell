@@ -1,7 +1,5 @@
 abstract class SettingValue {
-  const SettingValue({
-    required this.path,
-  });
+  const SettingValue({required this.path});
 
   final String path;
 }

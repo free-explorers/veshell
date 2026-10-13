@@ -5,11 +5,11 @@ import 'package:shell/application/provider/localized_desktop_entries.dart';
 part 'app_drawer_desktop_entries.g.dart';
 
 @Riverpod(keepAlive: true)
-Future<Iterable<LocalizedDesktopEntry>> appDrawerDesktopEntries(
-  Ref ref,
-) async {
-  final localizedDesktopEntries =
-      await ref.watch(localizedDesktopEntriesProvider.future);
-  return localizedDesktopEntries.values
-      .where((element) => !element.desktopEntry.isHidden());
+Future<Iterable<LocalizedDesktopEntry>> appDrawerDesktopEntries(Ref ref) async {
+  final localizedDesktopEntries = await ref.watch(
+    localizedDesktopEntriesProvider.future,
+  );
+  return localizedDesktopEntries.values.where(
+    (element) => !element.desktopEntry.isHidden(),
+  );
 }

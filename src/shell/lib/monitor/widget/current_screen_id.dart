@@ -14,8 +14,8 @@ class CurrentMonitorName extends InheritedWidget {
 
   /// Gets the monitor Name from the nearest ScreenIdProvider ancestor.
   static String of(BuildContext context) {
-    final provider =
-        context.dependOnInheritedWidgetOfExactType<CurrentMonitorName>();
+    final provider = context
+        .dependOnInheritedWidgetOfExactType<CurrentMonitorName>();
     if (provider == null) {
       throw FlutterError('ScreenIdProvider not found in the widget tree');
     }

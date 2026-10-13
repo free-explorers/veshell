@@ -8,17 +8,17 @@ class RectConverter extends JsonConverter<Rect, Map<dynamic, dynamic>> {
 
   @override
   Rect fromJson(Map<dynamic, dynamic> json) => Rect.fromLTWH(
-        (json['x']! as num).toDouble(),
-        (json['y']! as num).toDouble(),
-        (json['width']! as num).toDouble(),
-        (json['height']! as num).toDouble(),
-      );
+    (json['x']! as num).toDouble(),
+    (json['y']! as num).toDouble(),
+    (json['width']! as num).toDouble(),
+    (json['height']! as num).toDouble(),
+  );
 
   @override
   Map<dynamic, dynamic> toJson(Rect object) => {
-        'x': object.left.round(),
-        'y': object.top.round(),
-        'width': object.width.round(),
-        'height': object.height.round(),
-      };
+    'x': object.left.round(),
+    'y': object.top.round(),
+    'width': object.width.round(),
+    'height': object.height.round(),
+  };
 }

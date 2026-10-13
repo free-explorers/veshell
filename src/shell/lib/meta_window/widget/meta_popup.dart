@@ -6,10 +6,7 @@ import 'package:shell/shared/util/snapping.dart';
 import 'package:shell/wayland/widget/surface.dart';
 
 class MetaPopupWidget extends HookConsumerWidget {
-  const MetaPopupWidget({
-    required this.metaPopupId,
-    super.key,
-  });
+  const MetaPopupWidget({required this.metaPopupId, super.key});
 
   final MetaPopupId metaPopupId;
 

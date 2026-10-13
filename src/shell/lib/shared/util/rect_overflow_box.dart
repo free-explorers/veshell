@@ -21,10 +21,7 @@ class CropOverflowBox extends StatelessWidget {
       child: SizedOverflowBox(
         alignment: Alignment.topLeft,
         size: rect.size + rect.topLeft,
-        child: Transform.translate(
-          offset: -rect.topLeft,
-          child: child,
-        ),
+        child: Transform.translate(offset: -rect.topLeft, child: child),
       ),
     );
   }

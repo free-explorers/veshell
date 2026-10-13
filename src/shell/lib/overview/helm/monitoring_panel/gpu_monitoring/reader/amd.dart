@@ -16,7 +16,9 @@ Future<GpuStats?> readAmdGpuStats(GpuDevice device) async {
     temperatureMilliCelsius: hwmon == null
         ? null
         : await _readInt('$hwmon/temp1_input'),
-    powerMicrowatts: hwmon == null ? null : await _readInt('$hwmon/power1_input'),
+    powerMicrowatts: hwmon == null
+        ? null
+        : await _readInt('$hwmon/power1_input'),
     coreClockHertz: hwmon == null ? null : await _readInt('$hwmon/freq1_input'),
     memoryClockHertz: hwmon == null
         ? null

@@ -445,13 +445,13 @@ mixin WindowProviderMixin<T extends Window> {
 
     // 2. A leftover spreads to an empty same-app sibling; when none is free it
     //    has no home and becomes a dialog.
-    final leftovers = _metaWindowSubscriptions.keys
-        .where((metaWindowId) => metaWindowId != _displayedMetaWindowId)
-        .toList()
-      ..sort();
+    final leftovers =
+        _metaWindowSubscriptions.keys
+            .where((metaWindowId) => metaWindowId != _displayedMetaWindowId)
+            .toList()
+          ..sort();
     for (final metaWindowId in leftovers) {
-      final appId =
-          ref.read(metaWindowStateProvider(metaWindowId)).appId ?? '';
+      final appId = ref.read(metaWindowStateProvider(metaWindowId)).appId ?? '';
       final emptySibling = ref
           .read(matchingEngineProvider.notifier)
           .findEmptySiblingForApp(appId, excludedWindowIds: taken.toList());

@@ -33,10 +33,7 @@ void main() {
       expect(info.engineNanoseconds['compute'], 34708908508);
       expect(info.memoryKib['vram'], 831820);
       expect(info.memoryKib['gtt'], 14356);
-      expect(
-        info.totalEngineNanoseconds,
-        241155189048 + 34708908508,
-      );
+      expect(info.totalEngineNanoseconds, 241155189048 + 34708908508);
     });
 
     test('falls back to drm-pdev when drm-pci-id is absent', () {

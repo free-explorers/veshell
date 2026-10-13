@@ -5,15 +5,9 @@ part 'window_id.serializable.g.dart';
 
 @freezed
 sealed class WindowId with _$WindowId {
-  const factory WindowId.dialog(
-    String uuid,
-  ) = DialogWindowId;
-  const factory WindowId.persistent(
-    String uuid,
-  ) = PersistentWindowId;
-  const factory WindowId.ephemeral(
-    String uuid,
-  ) = EphemeralWindowId;
+  const factory WindowId.dialog(String uuid) = DialogWindowId;
+  const factory WindowId.persistent(String uuid) = PersistentWindowId;
+  const factory WindowId.ephemeral(String uuid) = EphemeralWindowId;
 
   factory WindowId.fromJson(Map<String, dynamic> json) =>
       _$WindowIdFromJson(json);

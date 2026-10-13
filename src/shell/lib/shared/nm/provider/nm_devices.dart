@@ -25,8 +25,9 @@ class NmDevices extends _$NmDevices {
         ref.invalidateSelf();
       });
 
-    _addressDeviceMap =
-        {for (final device in client.devices) device.hwAddress: device}.lock;
+    _addressDeviceMap = {
+      for (final device in client.devices) device.hwAddress: device,
+    }.lock;
 
     return _addressDeviceMap.keys.toISet();
   }

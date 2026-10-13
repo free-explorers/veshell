@@ -5,9 +5,8 @@ import 'package:shell/application/provider/app_drawer.dart';
 import 'package:shell/application/widget/app_icon.dart';
 
 /// Desktop entry selected callback
-typedef DesktopEntrySelectedCallback = void Function(
-  LocalizedDesktopEntry desktopEntry,
-);
+typedef DesktopEntrySelectedCallback =
+    void Function(LocalizedDesktopEntry desktopEntry);
 
 /// Application grid
 class AppGrid extends HookConsumerWidget {
@@ -21,8 +20,9 @@ class AppGrid extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final desktopEntries =
-        ref.watch(appDrawerFilteredDesktopEntriesProvider(searchText));
+    final desktopEntries = ref.watch(
+      appDrawerFilteredDesktopEntriesProvider(searchText),
+    );
     final widgets = desktopEntries.maybeWhen(
       skipLoadingOnReload: true,
       data: (List<LocalizedDesktopEntry> desktopEntries) => desktopEntries

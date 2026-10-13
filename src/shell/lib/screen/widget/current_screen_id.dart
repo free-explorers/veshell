@@ -14,8 +14,8 @@ class CurrentScreenId extends InheritedWidget {
 
   /// Gets the screen ID from the nearest ScreenIdProvider ancestor.
   static String of(BuildContext context) {
-    final provider =
-        context.dependOnInheritedWidgetOfExactType<CurrentScreenId>();
+    final provider = context
+        .dependOnInheritedWidgetOfExactType<CurrentScreenId>();
     if (provider == null) {
       throw FlutterError('ScreenIdProvider not found in the widget tree');
     }

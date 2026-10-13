@@ -21,9 +21,8 @@ abstract class PointerFocusMessage
     with _$PointerFocusMessage
     implements PlatformMessage {
   /// Factory
-  factory PointerFocusMessage({
-    required PointerFocus? focus,
-  }) = _PointerFocusMessage;
+  factory PointerFocusMessage({required PointerFocus? focus}) =
+      _PointerFocusMessage;
 
   /// Creates a new [PointerFocusMessage] instance from a map.
   ///

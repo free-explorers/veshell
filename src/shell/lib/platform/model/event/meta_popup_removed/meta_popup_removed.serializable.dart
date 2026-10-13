@@ -10,9 +10,8 @@ sealed class MetaPopupRemovedMessage
     with _$MetaPopupRemovedMessage
     implements PlatformMessage {
   /// Factory
-  factory MetaPopupRemovedMessage({
-    required String id,
-  }) = _MetaPopupRemovedMessage;
+  factory MetaPopupRemovedMessage({required String id}) =
+      _MetaPopupRemovedMessage;
 
   factory MetaPopupRemovedMessage.fromJson(Map<String, dynamic> json) =>
       _$MetaPopupRemovedMessageFromJson(json);

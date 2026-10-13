@@ -232,9 +232,10 @@ class WorkspaceListButton extends HookConsumerWidget {
     return NotificationArea(
       channel: workspaceNotificationChannel(workspaceId),
       child: ShellDragTarget<PersistentWindowTileable>(
-        onWillAcceptWithDetails: (details) =>
-            !ref.read(workspaceStateProvider(workspaceId))
-                .tileableWindowList.contains(details.data.windowId),
+        onWillAcceptWithDetails: (details) => !ref
+            .read(workspaceStateProvider(workspaceId))
+            .tileableWindowList
+            .contains(details.data.windowId),
         onAcceptWithDetails: (details) {
           ref
               .read(workspaceStateProvider(workspaceId).notifier)

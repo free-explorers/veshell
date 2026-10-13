@@ -6,7 +6,5 @@ part 'config_directory.g.dart';
 
 @riverpod
 Directory configDirectory(Ref ref) {
-  return Directory(
-    Platform.environment['VESHELL_CONFIG_DIR']!,
-  );
+  return Directory(Platform.environment['VESHELL_CONFIG_DIR']!);
 }

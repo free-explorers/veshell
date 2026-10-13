@@ -32,8 +32,9 @@ class ViewInputListener extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final pointerFocusManager = ref.read(pointerFocusManagerProvider.notifier);
 
-    final inputRegion = ref
-        .watch(wlSurfaceStateProvider(surfaceId).select((v) => v.inputRegion));
+    final inputRegion = ref.watch(
+      wlSurfaceStateProvider(surfaceId).select((v) => v.inputRegion),
+    );
 
     // `localToGlobal` is relative to this monitor's Flutter view, but the
     // compositor expects the surface origin in global compositor space to
@@ -60,9 +61,7 @@ class ViewInputListener extends HookConsumerWidget {
         key: globalKey,
         clipBehavior: Clip.none,
         children: [
-          IgnorePointer(
-            child: child,
-          ),
+          IgnorePointer(child: child),
           Positioned.fromRect(
             rect: inputRegion,
             child: ArenaListener(
@@ -72,20 +71,20 @@ class ViewInputListener extends HookConsumerWidget {
               },
               onPointerMove:
                   (PointerMoveEvent event, GestureDisposition? disposition) {
-                if (disposition == GestureDisposition.rejected) {
-                  return;
-                }
-                _onPointerMove(ref, event, globalOffsetForSurface());
-                return null;
-              },
+                    if (disposition == GestureDisposition.rejected) {
+                      return;
+                    }
+                    _onPointerMove(ref, event, globalOffsetForSurface());
+                    return null;
+                  },
               onPointerUp:
                   (PointerUpEvent event, GestureDisposition? disposition) {
-                if (disposition == GestureDisposition.rejected) {
-                  return null;
-                }
-                _onPointerUp(ref, event);
-                return GestureDisposition.accepted;
-              },
+                    if (disposition == GestureDisposition.rejected) {
+                      return null;
+                    }
+                    _onPointerUp(ref, event);
+                    return GestureDisposition.accepted;
+                  },
               onPointerCancel: (_, __) {
                 return GestureDisposition.rejected;
               },
@@ -130,7 +129,9 @@ class ViewInputListener extends HookConsumerWidget {
       await _sendMouseButtonsToPlatform(ref, event.buttons);
       ref.read(pointerFocusManagerProvider.notifier).startPotentialDrag();
     } else if (event.kind == PointerDeviceKind.touch) {
-      await ref.read(platformManagerProvider.notifier).request(
+      await ref
+          .read(platformManagerProvider.notifier)
+          .request(
             TouchDownRequest(
               message: TouchDownMessage(
                 surfaceId: surfaceId,
@@ -152,11 +153,11 @@ class ViewInputListener extends HookConsumerWidget {
       await _sendMouseButtonsToPlatform(ref, event.buttons);
       _pointerMoved(ref, globalOffset);
     } else if (event.kind == PointerDeviceKind.touch) {
-      await ref.read(platformManagerProvider.notifier).request(
+      await ref
+          .read(platformManagerProvider.notifier)
+          .request(
             TouchMotionRequest(
-              message: TouchMotionMessage(
-                touchId: event.pointer,
-              ),
+              message: TouchMotionMessage(touchId: event.pointer),
             ),
           );
     }
@@ -167,7 +168,9 @@ class ViewInputListener extends HookConsumerWidget {
       await _sendMouseButtonsToPlatform(ref, event.buttons);
       ref.read(pointerFocusManagerProvider.notifier).stopPotentialDrag();
     } else if (event.kind == PointerDeviceKind.touch) {
-      await ref.read(platformManagerProvider.notifier).request(
+      await ref
+          .read(platformManagerProvider.notifier)
+          .request(
             TouchUpRequest(message: TouchIdMessage(touchId: event.pointer)),
           );
     }
@@ -181,7 +184,9 @@ class ViewInputListener extends HookConsumerWidget {
       await _sendMouseButtonsToPlatform(ref, 0);
       ref.read(pointerFocusManagerProvider.notifier).stopPotentialDrag();
     } else if (lastPointerEvent.kind == PointerDeviceKind.touch) {
-      await ref.read(platformManagerProvider.notifier).request(
+      await ref
+          .read(platformManagerProvider.notifier)
+          .request(
             TouchCancelRequest(
               message: TouchIdMessage(touchId: lastPointerEvent.pointer),
             ),
@@ -190,8 +195,9 @@ class ViewInputListener extends HookConsumerWidget {
   }
 
   Future<void> _sendMouseButtonsToPlatform(WidgetRef ref, int buttons) async {
-    final events =
-        ref.read(mouseButtonTrackerProvider).trackButtonState(buttons);
+    final events = ref
+        .read(mouseButtonTrackerProvider)
+        .trackButtonState(buttons);
 
     if (events.isNotEmpty) {
       await _mouseButtonsEvent(ref, events);
@@ -202,7 +208,9 @@ class ViewInputListener extends HookConsumerWidget {
     WidgetRef ref,
     List<MouseButtonEvent> events,
   ) {
-    return ref.read(platformManagerProvider.notifier).request(
+    return ref
+        .read(platformManagerProvider.notifier)
+        .request(
           MouseButtonsEventRequest(
             message: MouseButtonsEventMessage(
               surfaceId: surfaceId,
@@ -221,7 +229,9 @@ class ViewInputListener extends HookConsumerWidget {
   }
 
   void _pointerMoved(WidgetRef ref, Offset globalOffset) {
-    return ref.read(pointerFocusManagerProvider.notifier).hoverSurface(
+    return ref
+        .read(pointerFocusManagerProvider.notifier)
+        .hoverSurface(
           PointerFocus(surfaceId: surfaceId, globalOffset: globalOffset),
         );
   }

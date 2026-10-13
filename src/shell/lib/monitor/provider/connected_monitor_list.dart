@@ -14,13 +14,11 @@ part 'connected_monitor_list.g.dart';
 class ConnectedMonitorList extends _$ConnectedMonitorList {
   @override
   List<Monitor> build() {
-    ref.watch(platformManagerProvider).listen(
-      (next) {
-        if (next case final MonitorLayoutChangedEvent event) {
-          state = event.message.monitors;
-        }
-      },
-    );
+    ref.watch(platformManagerProvider).listen((next) {
+      if (next case final MonitorLayoutChangedEvent event) {
+        state = event.message.monitors;
+      }
+    });
     return [];
   }
 }

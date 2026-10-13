@@ -12,9 +12,13 @@ class DefaultSettingsJson extends _$DefaultSettingsJson {
   Map<String, dynamic> build() {
     final defaultConfigDirectory = ref.watch(defaultConfigDirectoryProvider);
 
-    final defaultSettingsJson = jsonDecode(
-      File('${defaultConfigDirectory.path}/settings.json').readAsStringSync(),
-    ) as Map<String, dynamic>;
+    final defaultSettingsJson =
+        jsonDecode(
+              File(
+                '${defaultConfigDirectory.path}/settings.json',
+              ).readAsStringSync(),
+            )
+            as Map<String, dynamic>;
 
     return defaultSettingsJson;
   }
