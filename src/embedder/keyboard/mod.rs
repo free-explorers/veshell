@@ -456,9 +456,9 @@ fn handle_embedder_hotkeys<BackendData: Backend + 'static>(
         return true;
     }
 
-    // Exiting the compositor (Meta+Alt+Escape; deliberately awkward so it is
+    // Exiting the compositor (Meta+Alt+Delete; deliberately awkward so it is
     // not hit by accident).
-    if event.keysym == Keysym::Escape && event.mods.alt && event.mods.logo {
+    if event.keysym == Keysym::Delete && event.mods.alt && event.mods.logo {
         data.running.store(false, Ordering::SeqCst);
         return true;
     }
