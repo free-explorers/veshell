@@ -5,9 +5,10 @@ import 'package:shell/l10n/l10n.dart';
 /// A reusable editor for a `Map<String, String>` laid out as key/value rows.
 ///
 /// Edits are staged locally and committed once through [onSave], so a
-/// half-typed key never reaches the caller. A fully blank row is skipped, and a
-/// duplicate key — or one rejected by [isValidKey] — blocks the save with
-/// [errorMessage] shown inline.
+/// half-typed key never reaches the caller. The editor always shows at least
+/// one row ready to fill — even when [initialValue] is empty — and a fully
+/// blank row is skipped on save. A duplicate key — or one rejected by
+/// [isValidKey] — blocks the save with [errorMessage] shown inline.
 ///
 /// The fixed action labels come from the shell catalog; the caller supplies the
 /// field labels and the validation message, so the same widget can back any
@@ -58,6 +59,11 @@ class _KeyValueMapEditorState extends State<KeyValueMapEditor> {
       for (final entry in widget.initialValue.entries)
         _KeyValueEntry(key: entry.key, value: entry.value),
     ];
+    // Nothing to edit yet: leave a row ready to fill so the user can start
+    // typing without pressing "Add" first.
+    if (_entries.isEmpty) {
+      _entries.add(_KeyValueEntry());
+    }
   }
 
   @override
@@ -79,6 +85,10 @@ class _KeyValueMapEditorState extends State<KeyValueMapEditor> {
     setState(() {
       _entries.remove(entry);
       entry.dispose();
+      // Never leave an empty editor: keep a row ready to fill.
+      if (_entries.isEmpty) {
+        _entries.add(_KeyValueEntry());
+      }
       _invalid = false;
     });
   }

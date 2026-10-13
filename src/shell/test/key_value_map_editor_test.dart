@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/shared/widget/key_value_map_editor.dart';
@@ -43,11 +44,26 @@ void main() {
     expect(saved, {'EXISTING': '1', 'QT_STYLE_OVERRIDE': 'Adwaita'});
   });
 
+  testWidgets('an empty map starts with a row ready to fill', (tester) async {
+    await tester.pumpWidget(app(const <String, String>{}));
+
+    expect(find.byType(TextField), findsNWidgets(2));
+  });
+
+  testWidgets('removing the last row leaves a row ready to fill', (
+    tester,
+  ) async {
+    await tester.pumpWidget(app({'ONLY': '1'}));
+
+    await tester.tap(find.byIcon(MdiIcons.delete).first);
+    await tester.pump();
+
+    expect(find.byType(TextField), findsNWidgets(2));
+  });
+
   testWidgets('a blank row is skipped', (tester) async {
     await tester.pumpWidget(app(const <String, String>{}));
 
-    await tester.tap(find.text('Add'));
-    await tester.pump();
     await tester.tap(find.text('Save'));
     await tester.pump();
 
