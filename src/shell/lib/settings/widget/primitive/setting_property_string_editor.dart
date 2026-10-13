@@ -26,10 +26,9 @@ class SettingPropertyStringEditor extends HookConsumerWidget
     final val = ref.watch(jsonValueByPathProvider(path)) as String;
     final controller = useTextEditingController(text: val);
     void updateValue(String newValue) {
-      ref.read(settingsPropertiesProvider.notifier).updateProperty(
-            path,
-            property.serializeValue(newValue),
-          );
+      ref
+          .read(settingsPropertiesProvider.notifier)
+          .updateProperty(path, property.serializeValue(newValue));
       ExpandableContainer.of(context).toggle();
     }
 
@@ -40,9 +39,7 @@ class SettingPropertyStringEditor extends HookConsumerWidget
           child: TextField(
             controller: controller,
             autofocus: true,
-            decoration: const InputDecoration(
-              filled: true,
-            ),
+            decoration: const InputDecoration(filled: true),
             onSubmitted: updateValue,
           ),
         ),

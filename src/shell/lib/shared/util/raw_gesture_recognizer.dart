@@ -9,11 +9,11 @@ class RawGestureRecognizer extends GestureRecognizer {
 
   GestureDisposition? Function(PointerDownEvent)? onPointerDown;
   GestureDisposition? Function(PointerMoveEvent, GestureDisposition?)?
-      onPointerMove;
+  onPointerMove;
   GestureDisposition? Function(PointerUpEvent, GestureDisposition?)?
-      onPointerUp;
+  onPointerUp;
   GestureDisposition? Function(PointerCancelEvent, GestureDisposition?)?
-      onPointerCancel;
+  onPointerCancel;
   void Function(PointerEvent)? onWin;
   void Function(PointerEvent)? onLose;
 
@@ -24,8 +24,11 @@ class RawGestureRecognizer extends GestureRecognizer {
     assert(_pointers != null);
     assert(!_pointers!.containsKey(event.pointer));
 
-    GestureBinding.instance.pointerRouter
-        .addRoute(event.pointer, _handleEvent, event.transform);
+    GestureBinding.instance.pointerRouter.addRoute(
+      event.pointer,
+      _handleEvent,
+      event.transform,
+    );
     final entry = GestureBinding.instance.gestureArena.add(event.pointer, this);
     final pointerData = _PointerData(entry, event);
     _pointers![event.pointer] = pointerData;
@@ -133,8 +136,8 @@ class RawGestureRecognizer extends GestureRecognizer {
   @override
   void dispose() {
     _pointers!.keys.toList().forEach(
-          (int pointer) => _removeState(pointer, GestureDisposition.rejected),
-        );
+      (int pointer) => _removeState(pointer, GestureDisposition.rejected),
+    );
     assert(_pointers!.isEmpty);
     _pointers = null;
     super.dispose();

@@ -49,12 +49,13 @@ class _ThresholdDraggable<T extends Object> extends Draggable<T> {
     GestureMultiDragStartCallback onStart,
   ) {
     return _ThresholdMultiDragGestureRecognizer(
-      threshold: threshold,
-      allowedButtonsFilter: allowedButtonsFilter,
-    )..onStart = (position) {
-      final drag = onStart(position);
-      return drag == null ? null : _CancelAwareDrag(drag, onPointerCancel);
-    };
+        threshold: threshold,
+        allowedButtonsFilter: allowedButtonsFilter,
+      )
+      ..onStart = (position) {
+        final drag = onStart(position);
+        return drag == null ? null : _CancelAwareDrag(drag, onPointerCancel);
+      };
   }
 }
 
@@ -223,6 +224,7 @@ class _CrossReorderableListState<T extends Object>
     _session?.dispose();
     super.dispose();
   }
+
   @override
   void initState() {
     super.initState();
@@ -321,8 +323,11 @@ class _CrossReorderableListState<T extends Object>
                                   data,
                                   ConstrainedBox(
                                     constraints: constraints,
-                                    child: widget.feedbackBuilder
-                                            ?.call(context, data) ??
+                                    child:
+                                        widget.feedbackBuilder?.call(
+                                          context,
+                                          data,
+                                        ) ??
                                         item,
                                   ),
                                 );
@@ -354,8 +359,11 @@ class _CrossReorderableListState<T extends Object>
                                   color: Colors.white.withAlpha(25),
                                 ),
                                 constraints: constraints,
-                                child: widget.feedbackBuilder
-                                        ?.call(context, data) ??
+                                child:
+                                    widget.feedbackBuilder?.call(
+                                      context,
+                                      data,
+                                    ) ??
                                     item,
                               ),
                               child: Opacity(
@@ -391,12 +399,7 @@ class _CrossReorderableListState<T extends Object>
     final data = localDataList[index];
     final previousTarget = Expanded(
       child: ShellDragTarget<T>(
-        builder: (
-          context,
-          candidateData,
-          rejectedData,
-        ) =>
-            Container(),
+        builder: (context, candidateData, rejectedData) => Container(),
         onWillAcceptWithDetails: (dragData) {
           if (!_sameItem(dragData.data, data) &&
               (index == 0 ||
@@ -415,12 +418,7 @@ class _CrossReorderableListState<T extends Object>
     );
     final nextTarget = Expanded(
       child: ShellDragTarget<T>(
-        builder: (
-          context,
-          candidateData,
-          rejectedData,
-        ) =>
-            Container(),
+        builder: (context, candidateData, rejectedData) => Container(),
         onWillAcceptWithDetails: (dragData) {
           if (!_sameItem(dragData.data, data) &&
               index < localDataList.length - 1 &&
@@ -440,18 +438,8 @@ class _CrossReorderableListState<T extends Object>
 
     return Positioned.fill(
       child: widget.scrollDirection == Axis.vertical
-          ? Column(
-              children: [
-                previousTarget,
-                nextTarget,
-              ],
-            )
-          : Row(
-              children: [
-                previousTarget,
-                nextTarget,
-              ],
-            ),
+          ? Column(children: [previousTarget, nextTarget])
+          : Row(children: [previousTarget, nextTarget]),
     );
   }
 

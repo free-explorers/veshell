@@ -34,13 +34,11 @@ class SurfaceWidget extends ConsumerWidget {
             child: Consumer(
               builder: (BuildContext context, WidgetRef ref, Widget? child) {
                 final textureId = ref.watch(
-                  wlSurfaceStateProvider(surfaceId).select(
-                    (v) => v.texture!.id,
-                  ),
+                  wlSurfaceStateProvider(
+                    surfaceId,
+                  ).select((v) => v.texture!.id),
                 );
-                return Texture(
-                  textureId: textureId,
-                );
+                return Texture(textureId: textureId);
               },
             ),
           ),
@@ -78,20 +76,12 @@ class _Subsurfaces extends ConsumerWidget {
           (id) =>
               ref.watch(subsurfaceStateProvider(id).select((ss) => ss.mapped)),
         )
-        .map(
-          (id) => SubsurfaceWidget(
-            surfaceId: id,
-            scaleRatio: scaleRatio,
-          ),
-        )
+        .map((id) => SubsurfaceWidget(surfaceId: id, scaleRatio: scaleRatio))
         .toList();
 
     return subsurfaces.isEmpty
         ? const SizedBox.shrink()
-        : Stack(
-            clipBehavior: Clip.none,
-            children: subsurfaces,
-          );
+        : Stack(clipBehavior: Clip.none, children: subsurfaces);
   }
 }
 

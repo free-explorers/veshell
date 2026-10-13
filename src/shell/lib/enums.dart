@@ -2,13 +2,7 @@ import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
 
-enum Edges {
-  none,
-  top,
-  bottom,
-  left,
-  right,
-}
+enum Edges { none, top, bottom, left, right }
 
 extension EdgesExt on Edges {
   int get id {

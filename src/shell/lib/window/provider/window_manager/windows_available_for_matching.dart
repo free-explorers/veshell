@@ -15,11 +15,13 @@ List<WindowId> windowsAvailableForMatching(Ref ref) {
   final monitorList = ref.watch(connectedMonitorListProvider);
   final windowList = <WindowId>[];
   for (final monitor in monitorList) {
-    final monitorConfiguration =
-        ref.watch(monitorConfigurationStateProvider(monitor.name));
+    final monitorConfiguration = ref.watch(
+      monitorConfigurationStateProvider(monitor.name),
+    );
     for (final screenConfiguration in monitorConfiguration.screenList) {
-      final screen =
-          ref.watch(screenStateProvider(screenConfiguration.screenId));
+      final screen = ref.watch(
+        screenStateProvider(screenConfiguration.screenId),
+      );
       for (final workspaceId in screen.workspaceList) {
         final workspace = ref.watch(workspaceStateProvider(workspaceId));
         for (final windowId in workspace.tileableWindowList) {
@@ -29,8 +31,10 @@ List<WindowId> windowsAvailableForMatching(Ref ref) {
     }
   }
 
-  final ephemeralWindowList =
-      ref.watch(windowManagerProvider).windows.whereType<EphemeralWindowId>();
+  final ephemeralWindowList = ref
+      .watch(windowManagerProvider)
+      .windows
+      .whereType<EphemeralWindowId>();
 
   windowList.addAll(ephemeralWindowList);
 

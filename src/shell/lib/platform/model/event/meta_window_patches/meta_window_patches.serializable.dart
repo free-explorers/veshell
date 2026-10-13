@@ -9,10 +9,7 @@ part 'meta_window_patches.serializable.freezed.dart';
 part 'meta_window_patches.serializable.g.dart';
 
 /// Model for MetaWindowPatchMessage
-@Freezed(
-  unionKey: 'type',
-  unionValueCase: FreezedUnionCase.pascal,
-)
+@Freezed(unionKey: 'type', unionValueCase: FreezedUnionCase.pascal)
 sealed class MetaWindowPatchMessage
     with _$MetaWindowPatchMessage
     implements PlatformMessage {

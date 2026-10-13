@@ -23,10 +23,7 @@ class WithResizeHandles extends StatelessWidget {
     return DeferredPointerHandler(
       child: Stack(
         clipBehavior: Clip.none,
-        children: [
-          ..._buildResizeHandles(),
-          child,
-        ],
+        children: [..._buildResizeHandles(), child],
       ),
     );
   }
@@ -35,101 +32,77 @@ class WithResizeHandles extends StatelessWidget {
     return ResizeEdge.values.whereNot((e) => e == ResizeEdge.none).map((e) {
       return switch (e) {
         ResizeEdge.topLeft => Positioned(
-            top: -borderWidth,
-            left: -borderWidth,
-            child: SizedBox(
-              width: cornerWidth,
-              height: cornerWidth,
-              child: ResizeHandle(
-                metaWindowId: metaWindowId,
-                resizeEdge: e,
-              ),
-            ),
+          top: -borderWidth,
+          left: -borderWidth,
+          child: SizedBox(
+            width: cornerWidth,
+            height: cornerWidth,
+            child: ResizeHandle(metaWindowId: metaWindowId, resizeEdge: e),
           ),
+        ),
         ResizeEdge.top => Positioned(
-            top: -borderWidth,
-            left: cornerWidth - borderWidth,
-            right: cornerWidth - borderWidth,
-            child: SizedBox(
-              height: borderWidth,
-              child: ResizeHandle(
-                metaWindowId: metaWindowId,
-                resizeEdge: e,
-              ),
-            ),
+          top: -borderWidth,
+          left: cornerWidth - borderWidth,
+          right: cornerWidth - borderWidth,
+          child: SizedBox(
+            height: borderWidth,
+            child: ResizeHandle(metaWindowId: metaWindowId, resizeEdge: e),
           ),
+        ),
         ResizeEdge.topRight => Positioned(
-            top: -borderWidth,
-            right: -borderWidth,
-            child: SizedBox(
-              width: cornerWidth,
-              height: cornerWidth,
-              child: ResizeHandle(
-                metaWindowId: metaWindowId,
-                resizeEdge: e,
-              ),
-            ),
+          top: -borderWidth,
+          right: -borderWidth,
+          child: SizedBox(
+            width: cornerWidth,
+            height: cornerWidth,
+            child: ResizeHandle(metaWindowId: metaWindowId, resizeEdge: e),
           ),
+        ),
         ResizeEdge.right => Positioned(
-            top: cornerWidth - borderWidth,
-            right: -borderWidth,
-            bottom: cornerWidth - borderWidth,
-            child: SizedBox(
-              width: borderWidth,
-              child: ResizeHandle(
-                metaWindowId: metaWindowId,
-                resizeEdge: e,
-              ),
-            ),
+          top: cornerWidth - borderWidth,
+          right: -borderWidth,
+          bottom: cornerWidth - borderWidth,
+          child: SizedBox(
+            width: borderWidth,
+            child: ResizeHandle(metaWindowId: metaWindowId, resizeEdge: e),
           ),
+        ),
         ResizeEdge.bottomRight => Positioned(
-            bottom: -borderWidth,
-            right: -borderWidth,
-            child: SizedBox(
-              width: cornerWidth,
-              height: cornerWidth,
-              child: ResizeHandle(
-                metaWindowId: metaWindowId,
-                resizeEdge: e,
-              ),
-            ),
+          bottom: -borderWidth,
+          right: -borderWidth,
+          child: SizedBox(
+            width: cornerWidth,
+            height: cornerWidth,
+            child: ResizeHandle(metaWindowId: metaWindowId, resizeEdge: e),
           ),
+        ),
         ResizeEdge.bottom => Positioned(
-            bottom: -borderWidth,
-            left: cornerWidth - borderWidth,
-            right: cornerWidth - borderWidth,
-            child: SizedBox(
-              height: borderWidth,
-              child: ResizeHandle(
-                metaWindowId: metaWindowId,
-                resizeEdge: e,
-              ),
-            ),
+          bottom: -borderWidth,
+          left: cornerWidth - borderWidth,
+          right: cornerWidth - borderWidth,
+          child: SizedBox(
+            height: borderWidth,
+            child: ResizeHandle(metaWindowId: metaWindowId, resizeEdge: e),
           ),
+        ),
         ResizeEdge.bottomLeft => Positioned(
-            bottom: -borderWidth,
-            left: -borderWidth,
-            child: SizedBox(
-              width: cornerWidth,
-              height: cornerWidth,
-              child: ResizeHandle(
-                metaWindowId: metaWindowId,
-                resizeEdge: e,
-              ),
-            ),
+          bottom: -borderWidth,
+          left: -borderWidth,
+          child: SizedBox(
+            width: cornerWidth,
+            height: cornerWidth,
+            child: ResizeHandle(metaWindowId: metaWindowId, resizeEdge: e),
           ),
+        ),
         ResizeEdge.left => Positioned(
-            top: cornerWidth - borderWidth,
-            left: -borderWidth,
-            bottom: cornerWidth - borderWidth,
-            child: SizedBox(
-              width: borderWidth,
-              child: ResizeHandle(
-                metaWindowId: metaWindowId,
-                resizeEdge: e,
-              ),
-            ),
+          top: cornerWidth - borderWidth,
+          left: -borderWidth,
+          bottom: cornerWidth - borderWidth,
+          child: SizedBox(
+            width: borderWidth,
+            child: ResizeHandle(metaWindowId: metaWindowId, resizeEdge: e),
           ),
+        ),
 
         // This case must be filtered out
         ResizeEdge.none => throw UnimplementedError(),

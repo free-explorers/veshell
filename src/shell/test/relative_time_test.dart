@@ -4,11 +4,8 @@ import 'package:shell/shared/util/relative_time.dart';
 void main() {
   final now = DateTime.utc(2026, 9, 29, 12);
 
-  String at(Duration age) => formatRelativeTime(
-        now.subtract(age),
-        localeName: 'en_US',
-        now: now,
-      );
+  String at(Duration age) =>
+      formatRelativeTime(now.subtract(age), localeName: 'en_US', now: now);
 
   group('formatRelativeTime', () {
     test('reads Now under a minute', () {

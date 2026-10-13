@@ -6,10 +6,7 @@ import 'package:shell/overview/helm/control_panel/network/wifi/widget/access_poi
 import 'package:shell/shared/nm/provider/nm_device.dart';
 
 class WifiControlIcon extends ConsumerWidget {
-  const WifiControlIcon(
-    this.address, {
-    super.key,
-  });
+  const WifiControlIcon(this.address, {super.key});
   final String address;
 
   @override

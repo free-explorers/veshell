@@ -10,8 +10,6 @@ class PulseSourceByName extends _$PulseSourceByName {
   @override
   PulseAudioSource? build(String sourceName) {
     final sourceList = ref.watch(pulseSourceListProvider).requireValue;
-    return sourceList.firstWhereOrNull(
-      (element) => element.name == sourceName,
-    );
+    return sourceList.firstWhereOrNull((element) => element.name == sourceName);
   }
 }

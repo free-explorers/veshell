@@ -12,9 +12,8 @@ sealed class ScreenCastStopMessage
     with _$ScreenCastStopMessage
     implements PlatformMessage {
   /// Factory
-  factory ScreenCastStopMessage({
-    required String sessionHandle,
-  }) = _ScreenCastStopMessage;
+  factory ScreenCastStopMessage({required String sessionHandle}) =
+      _ScreenCastStopMessage;
 
   factory ScreenCastStopMessage.fromJson(Map<String, dynamic> json) =>
       _$ScreenCastStopMessageFromJson(json);

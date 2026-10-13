@@ -11,10 +11,7 @@ import 'package:shell/shared/nm/provider/nm_client.dart';
 import 'package:shell/shared/nm/provider/nm_device.dart';
 
 class ConfiguredAccessPoint extends HookConsumerWidget {
-  const ConfiguredAccessPoint({
-    required this.address,
-    super.key,
-  });
+  const ConfiguredAccessPoint({required this.address, super.key});
 
   final String address;
 
@@ -53,20 +50,22 @@ class ConfiguredAccesPointTile extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = useFuture(accessPoint.settingsConnection!.getSettings());
 
-    final isSelected =
-        accessPoint.accessPoints.contains(device.wireless!.activeAccessPoint);
+    final isSelected = accessPoint.accessPoints.contains(
+      device.wireless!.activeAccessPoint,
+    );
 
     return ListTile(
       leading: isSelected
           ? const Icon(MdiIcons.check)
           : AccessPointIcon(accessPoint: accessPoint.bestAccessPoint!),
-      title: AccessPointLabel(
-        accessPoint: accessPoint.bestAccessPoint!,
-      ),
+      title: AccessPointLabel(accessPoint: accessPoint.bestAccessPoint!),
       onTap: isSelected
           ? null
           : () {
-              ref.read(nmClientProvider).value!.activateConnection(
+              ref
+                  .read(nmClientProvider)
+                  .value!
+                  .activateConnection(
                     device: device,
                     connection: accessPoint.settingsConnection,
                   );

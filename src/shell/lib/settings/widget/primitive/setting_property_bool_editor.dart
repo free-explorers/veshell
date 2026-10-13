@@ -22,10 +22,9 @@ class SettingPropertyBoolEditor extends HookConsumerWidget
   Widget build(BuildContext context, WidgetRef ref) {
     final val = ref.watch(jsonValueByPathProvider(path)) as bool;
     void updateValue(bool newValue) {
-      ref.read(settingsPropertiesProvider.notifier).updateProperty(
-            path,
-            property.serializeValue(newValue),
-          );
+      ref
+          .read(settingsPropertiesProvider.notifier)
+          .updateProperty(path, property.serializeValue(newValue));
     }
 
     return SwitchListTile(

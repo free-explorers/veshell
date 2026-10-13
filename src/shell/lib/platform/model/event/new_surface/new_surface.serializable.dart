@@ -11,9 +11,8 @@ sealed class NewSurfaceMessage
     with _$NewSurfaceMessage
     implements PlatformMessage {
   /// Factory
-  factory NewSurfaceMessage({
-    required SurfaceId surfaceId,
-  }) = _NewSurfaceMessage;
+  factory NewSurfaceMessage({required SurfaceId surfaceId}) =
+      _NewSurfaceMessage;
 
   factory NewSurfaceMessage.fromJson(Map<String, dynamic> json) =>
       _$NewSurfaceMessageFromJson(json);

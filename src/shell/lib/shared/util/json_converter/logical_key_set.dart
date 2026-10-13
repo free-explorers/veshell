@@ -10,9 +10,7 @@ class LogicalKeySetConverter implements JsonConverter<LogicalKeySet, String> {
   @override
   LogicalKeySet fromJson(String json) {
     final keysString = json.split('+');
-    final keys = keysString.map(
-      (e) => stringToKeyMap[e],
-    );
+    final keys = keysString.map((e) => stringToKeyMap[e]);
     if (keys.contains(null)) {
       throw Exception('Invalid key in hotkey: $json');
     }
@@ -22,9 +20,7 @@ class LogicalKeySetConverter implements JsonConverter<LogicalKeySet, String> {
   @override
   String toJson(LogicalKeySet object) {
     // Keys without a known name are dropped instead of serialized as `null`.
-    final keys = object.keys.map(
-      (e) => keyToStringMap[e],
-    ).whereType<String>();
+    final keys = object.keys.map((e) => keyToStringMap[e]).whereType<String>();
     return keys.join('+');
   }
 }

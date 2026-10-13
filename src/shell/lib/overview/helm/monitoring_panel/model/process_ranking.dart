@@ -9,13 +9,12 @@ List<MapEntry<int, double>> rankProcesses(
   IMap<int, double> percentages, {
   double minPercent = 0.01,
 }) {
-  final entries = percentages.entries
-      .where((entry) => entry.value >= minPercent)
-      .toList()
-    ..sort(
-      (a, b) => b.value == a.value
-          ? b.key.compareTo(a.key)
-          : b.value.compareTo(a.value),
-    );
+  final entries =
+      percentages.entries.where((entry) => entry.value >= minPercent).toList()
+        ..sort(
+          (a, b) => b.value == a.value
+              ? b.key.compareTo(a.key)
+              : b.value.compareTo(a.value),
+        );
   return entries;
 }

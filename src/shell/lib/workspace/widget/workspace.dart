@@ -53,22 +53,21 @@ class WorkspaceWidget extends HookConsumerWidget {
     // no-ops while the workspace we leave loses focus, parking focus on the
     // root scope where the screen shortcuts no longer fire. Request focus
     // explicitly every time this workspace becomes selected instead.
-    useEffect(
-      () {
-        if (workspaceCanFocus) {
-          workspaceFocusScopeNode.requestFocus();
-        }
-        return null;
-      },
-      [workspaceCanFocus],
-    );
+    useEffect(() {
+      if (workspaceCanFocus) {
+        workspaceFocusScopeNode.requestFocus();
+      }
+      return null;
+    }, [workspaceCanFocus]);
 
     final appLauncher = PersistentApplicationSelector(
-      isSelected: workspaceState.selectedIndex ==
+      isSelected:
+          workspaceState.selectedIndex ==
           workspaceState.tileableWindowList.length,
       onSelect: (entry) {
-        final newWindowId =
-            windowManager.createPersistentWindowForDesktopEntry(entry);
+        final newWindowId = windowManager.createPersistentWindowForDesktopEntry(
+          entry,
+        );
 
         ref
             .read(workspaceStateProvider(workspaceId).notifier)
@@ -115,8 +114,7 @@ class WorkspaceWidget extends HookConsumerWidget {
               return null;
             },
           ),
-          ReorderLeftTileableIntent:
-              CallbackAction<ReorderLeftTileableIntent>(
+          ReorderLeftTileableIntent: CallbackAction<ReorderLeftTileableIntent>(
             onInvoke: (_) {
               ref
                   .read(workspaceStateProvider(workspaceId).notifier)
@@ -126,13 +124,13 @@ class WorkspaceWidget extends HookConsumerWidget {
           ),
           ReorderRightTileableIntent:
               CallbackAction<ReorderRightTileableIntent>(
-            onInvoke: (_) {
-              ref
-                  .read(workspaceStateProvider(workspaceId).notifier)
-                  .moveSelectedWindowRight();
-              return null;
-            },
-          ),
+                onInvoke: (_) {
+                  ref
+                      .read(workspaceStateProvider(workspaceId).notifier)
+                      .moveSelectedWindowRight();
+                  return null;
+                },
+              ),
           CloseTileableIntent: CallbackAction<CloseTileableIntent>(
             onInvoke: (_) {
               final tileable = tileableList[workspaceState.selectedIndex];
@@ -181,9 +179,7 @@ class WorkspaceWidget extends HookConsumerWidget {
                     visibleLength: workspaceState.visibleLength,
                     onVisibleLengthChange: (value) {
                       ref
-                          .read(
-                            workspaceStateProvider(workspaceId).notifier,
-                          )
+                          .read(workspaceStateProvider(workspaceId).notifier)
                           .setVisibleLength(value);
                     },
                   ),
@@ -194,12 +190,11 @@ class WorkspaceWidget extends HookConsumerWidget {
                     visible: workspaceState.visibleLength,
                     onIndexChanged: (nextIndex) {
                       ref
-                          .read(
-                            workspaceStateProvider(workspaceId).notifier,
-                          )
+                          .read(workspaceStateProvider(workspaceId).notifier)
                           .setSelectedIndex(nextIndex);
                     },
-                    isSwipeEnabled: CurrentScreenId.of(context) ==
+                    isSwipeEnabled:
+                        CurrentScreenId.of(context) ==
                             ref.watch(focusedScreenProvider) &&
                         isSelected,
                     children: tileableList,

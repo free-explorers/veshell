@@ -48,20 +48,17 @@ void main() {
   });
 
   test('the payload carries exactly the nine fields Rust serializes', () {
-    expect(
-      _payload().keys.toSet(),
-      {
-        'name',
-        'description',
-        'physicalProperties',
-        'scale',
-        'location',
-        'currentMode',
-        'preferredMode',
-        'modes',
-        'viewId',
-      },
-    );
+    expect(_payload().keys.toSet(), {
+      'name',
+      'description',
+      'physicalProperties',
+      'scale',
+      'location',
+      'currentMode',
+      'preferredMode',
+      'modes',
+      'viewId',
+    });
   });
 
   test('null modes stay nullable across the round-trip', () {

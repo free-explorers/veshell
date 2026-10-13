@@ -19,20 +19,18 @@ class PersistentApplicationSelector extends Tileable {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final focusNode =
-        useFocusScopeNode(debugLabel: 'PersistentApplicationSelector');
-    useEffect(
-      () {
-        focusNode.canRequestFocus = isSelected;
-
-        if (isSelected) {
-          focusNode.requestFocus();
-          focusLog.info('PersistentApplicationSelector requesting focus');
-        }
-        return null;
-      },
-      [isSelected],
+    final focusNode = useFocusScopeNode(
+      debugLabel: 'PersistentApplicationSelector',
     );
+    useEffect(() {
+      focusNode.canRequestFocus = isSelected;
+
+      if (isSelected) {
+        focusNode.requestFocus();
+        focusLog.info('PersistentApplicationSelector requesting focus');
+      }
+      return null;
+    }, [isSelected]);
     return FocusScope(
       node: focusNode,
       onFocusChange: (value) {
@@ -40,23 +38,16 @@ class PersistentApplicationSelector extends Tileable {
       },
       child: ColoredBox(
         color: Theme.of(context).colorScheme.surfaceContainerLowest,
-        child: AppDrawer(
-          onSelect: onSelect,
-        ),
+        child: AppDrawer(onSelect: onSelect),
       ),
     );
   }
 
   @override
-  Widget buildPanelWidget(
-    BuildContext context,
-    WidgetRef removeSurface,
-  ) {
+  Widget buildPanelWidget(BuildContext context, WidgetRef removeSurface) {
     return const Padding(
       padding: EdgeInsets.symmetric(horizontal: 12),
-      child: Icon(
-        MdiIcons.plus,
-      ),
+      child: Icon(MdiIcons.plus),
     );
   }
 

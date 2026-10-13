@@ -49,9 +49,8 @@ void main() {
   });
 
   test('adding a screen marks the configuration initialized', () {
-    final notifier = notifierFor(
-      _configuration([]),
-    )..addNewScreenConfiguration('a');
+    final notifier = notifierFor(_configuration([]))
+      ..addNewScreenConfiguration('a');
 
     expect(notifier.isInitialized, isTrue);
     expect(notifier.state.screenList, hasLength(1));
@@ -71,18 +70,16 @@ void main() {
   });
 
   test('removing a screen removes only the requested id', () {
-    final notifier = notifierFor(
-      _configuration([_screen('a'), _screen('b')]),
-    )..removeScreenConfiguration('a');
+    final notifier = notifierFor(_configuration([_screen('a'), _screen('b')]))
+      ..removeScreenConfiguration('a');
 
     expect(notifier.state.screenList, hasLength(1));
     expect(notifier.state.screenList.single.screenId, 'b');
   });
 
   test('removing an unknown screen is a no-op', () {
-    final notifier = notifierFor(
-      _configuration([_screen('a'), _screen('b')]),
-    )..removeScreenConfiguration('ghost');
+    final notifier = notifierFor(_configuration([_screen('a'), _screen('b')]))
+      ..removeScreenConfiguration('ghost');
 
     expect(notifier.state.screenList, hasLength(2));
   });
@@ -92,14 +89,11 @@ void main() {
       _configuration([_screen('a', flex: 70), _screen('b', flex: 30)]),
     )..replaceScreenIdByScreenId('a', 'c');
 
-    expect(
-      notifier.state.screenList.map((screen) => screen.screenId),
-      ['c', 'b'],
-    );
-    expect(
-      notifier.state.screenList.map((screen) => screen.flex),
-      [70, 30],
-    );
+    expect(notifier.state.screenList.map((screen) => screen.screenId), [
+      'c',
+      'b',
+    ]);
+    expect(notifier.state.screenList.map((screen) => screen.flex), [70, 30]);
   });
 
   test('swapping two screen ids exchanges them', () {
@@ -107,26 +101,18 @@ void main() {
       _configuration([_screen('a', flex: 70), _screen('b', flex: 30)]),
     )..swapScreenIds('a', 'b');
 
-    expect(
-      notifier.state.screenList.map((screen) => screen.screenId),
-      ['b', 'a'],
-    );
-    expect(
-      notifier.state.screenList.map((screen) => screen.flex),
-      [70, 30],
-    );
+    expect(notifier.state.screenList.map((screen) => screen.screenId), [
+      'b',
+      'a',
+    ]);
+    expect(notifier.state.screenList.map((screen) => screen.flex), [70, 30]);
   });
 
   test('updating the flex of one screen leaves the others untouched', () {
-    final notifier = notifierFor(
-      _configuration([_screen('a'), _screen('b')]),
-    );
+    final notifier = notifierFor(_configuration([_screen('a'), _screen('b')]));
 
     notifier.updateFlexForConfiguration(notifier.state.screenList.first, 80);
 
-    expect(
-      notifier.state.screenList.map((screen) => screen.flex),
-      [80, 50],
-    );
+    expect(notifier.state.screenList.map((screen) => screen.flex), [80, 50]);
   });
 }

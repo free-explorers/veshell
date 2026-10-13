@@ -26,7 +26,12 @@ version-free; every versionable fact is anchored in a project file.
 1. `cargo check` — covers Rust compilation and the whole Dart side (see
    above).
 2. `cargo test` — the test suites include the portal session-bus harness.
-3. `cargo fmt` — format before committing.
+3. `cargo fmt` — format Rust before committing.
+4. `dart format` — from `src/shell/`, format Dart before committing:
+   `../../.flutter_sdk/bin/dart format lib test`. The **pinned** SDK's
+   formatter defines the style, and CI enforces it
+   (`--set-exit-if-changed`); a `dart` from the generic `PATH` may format
+   differently, so never use one for the shell.
 
 ## Diagnosing Dart-side problems directly
 

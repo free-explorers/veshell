@@ -7,19 +7,12 @@ part 'wl_surface.freezed.dart';
 typedef TextureId = int;
 typedef SurfaceId = int;
 
-enum SurfaceRole {
-  xdgToplevel,
-  xdgPopup,
-  subsurface,
-  x11Surface,
-}
+enum SurfaceRole { xdgToplevel, xdgPopup, subsurface, x11Surface }
 
 @freezed
 abstract class SurfaceTexture with _$SurfaceTexture {
-  const factory SurfaceTexture({
-    required TextureId id,
-    required Size size,
-  }) = _SurfaceTexture;
+  const factory SurfaceTexture({required TextureId id, required Size size}) =
+      _SurfaceTexture;
 }
 
 @freezed

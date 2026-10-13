@@ -21,13 +21,11 @@ part 'pointer_focus.manager.g.dart';
 class PointerFocusManager extends _$PointerFocusManager {
   @override
   PointerFocus? build() {
-    listenSelf(
-      (previous, next) {
-        if (previous != next) {
-          _notifyWayland();
-        }
-      },
-    );
+    listenSelf((previous, next) {
+      if (previous != next) {
+        _notifyWayland();
+      }
+    });
     return null;
   }
 
@@ -79,16 +77,15 @@ class PointerFocusManager extends _$PointerFocusManager {
   }
 
   void _scheduleExitEvent() {
-    _pointerExitTimer = Timer(
-      Duration.zero,
-      () {
-        state = null;
-      },
-    );
+    _pointerExitTimer = Timer(Duration.zero, () {
+      state = null;
+    });
   }
 
   void _notifyWayland() {
-    ref.read(platformManagerProvider.notifier).request(
+    ref
+        .read(platformManagerProvider.notifier)
+        .request(
           PointerFocusRequest(message: PointerFocusMessage(focus: state)),
         );
   }

@@ -139,18 +139,19 @@ IList<Notification> unreadNotificationsForWorkspace(
   final notifications = ref.watch(notificationManagerProvider).notificationMap;
   final routes = ref.watch(notificationRoutesProvider);
   final openMetaWindows = ref.watch(metaWindowManagerProvider);
-  final unread = notifications.values
-      .where((notification) => !notification.isRead)
-      .where(
-        (notification) => isNotificationLive(notification, openMetaWindows),
-      )
-      .where((notification) {
-        final route = routes[notification.id];
-        return route is WorkspaceNotificationTarget &&
-            route.workspaceId == workspaceId;
-      })
-      .toList()
-    ..sort((a, b) => b.id.compareTo(a.id));
+  final unread =
+      notifications.values
+          .where((notification) => !notification.isRead)
+          .where(
+            (notification) => isNotificationLive(notification, openMetaWindows),
+          )
+          .where((notification) {
+            final route = routes[notification.id];
+            return route is WorkspaceNotificationTarget &&
+                route.workspaceId == workspaceId;
+          })
+          .toList()
+        ..sort((a, b) => b.id.compareTo(a.id));
   return unread.lock;
 }
 

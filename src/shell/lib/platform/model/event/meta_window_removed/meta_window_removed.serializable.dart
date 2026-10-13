@@ -10,9 +10,8 @@ sealed class MetaWindowRemovedMessage
     with _$MetaWindowRemovedMessage
     implements PlatformMessage {
   /// Factory
-  factory MetaWindowRemovedMessage({
-    required String id,
-  }) = _MetaWindowRemovedMessage;
+  factory MetaWindowRemovedMessage({required String id}) =
+      _MetaWindowRemovedMessage;
 
   factory MetaWindowRemovedMessage.fromJson(Map<String, dynamic> json) =>
       _$MetaWindowRemovedMessageFromJson(json);

@@ -25,10 +25,11 @@ class ExpandableSearchResult<T> extends HookConsumerWidget
     BuildContext context,
     dynamic value, {
     required bool isExpanded,
-  }) buildValue;
+  })
+  buildValue;
 
   final Widget Function(BuildContext context, {required bool isExpanded})
-      buildEditor;
+  buildEditor;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -50,9 +51,7 @@ class ExpandableSearchResult<T> extends HookConsumerWidget
         return Card(
           color: isExpanded ? null : Colors.transparent,
           margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(0),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(0)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [

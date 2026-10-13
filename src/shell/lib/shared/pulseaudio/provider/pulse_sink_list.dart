@@ -10,9 +10,7 @@ class PulseSinkList extends _$PulseSinkList {
   final _sinkNameMapByIndex = <int, String>{};
   @override
   Future<List<PulseAudioSink>> build() async {
-    final client = await ref.watch(
-      pulseClientProvider.future,
-    );
+    final client = await ref.watch(pulseClientProvider.future);
     client.onSinkChanged.listen((sink) {
       _sinkMapByName[sink.name] = sink;
       state = AsyncValue.data(_sinkMapByName.values.toList());

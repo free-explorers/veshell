@@ -9,8 +9,9 @@ Future<List<LocalizedDesktopEntry>> appDrawerFilteredDesktopEntries(
   Ref ref,
   String filter,
 ) async {
-  final desktopEntries =
-      await ref.watch(appDrawerDesktopEntriesProvider.future);
+  final desktopEntries = await ref.watch(
+    appDrawerDesktopEntriesProvider.future,
+  );
 
   final filtered = <LocalizedDesktopEntry>[];
   final desktopEntriesSet = Set<LocalizedDesktopEntry>.from(desktopEntries);
@@ -24,8 +25,7 @@ Future<List<LocalizedDesktopEntry>> appDrawerFilteredDesktopEntries(
   final nameMatched = desktopEntriesSet.where((d) {
     final name = d.entries[DesktopEntryKey.name.string]!.toLowerCase();
     return name.startsWith(filter);
-  }).toList()
-    ..sort(byNames);
+  }).toList()..sort(byNames);
 
   filtered.addAll(nameMatched);
   desktopEntriesSet.removeAll(nameMatched);
@@ -34,15 +34,14 @@ Future<List<LocalizedDesktopEntry>> appDrawerFilteredDesktopEntries(
     final name = d.entries[DesktopEntryKey.name.string]!.toLowerCase();
     final nameParts = name.split(' ');
     return nameParts.any((part) => part.startsWith(filter));
-  }).toList()
-    ..sort(byNames);
+  }).toList()..sort(byNames);
 
   filtered.addAll(namePartsMatched);
   desktopEntriesSet.removeAll(namePartsMatched);
 
   final keywordsMatched = desktopEntriesSet.where((d) {
-    final keywords =
-        d.entries[DesktopEntryKey.keywords.string]?.getStringList();
+    final keywords = d.entries[DesktopEntryKey.keywords.string]
+        ?.getStringList();
     if (keywords == null) {
       return false;
     }
@@ -50,8 +49,7 @@ Future<List<LocalizedDesktopEntry>> appDrawerFilteredDesktopEntries(
       kw.toLowerCase();
     }
     return keywords.any((kw) => kw.startsWith(filter));
-  }).toList()
-    ..sort(byNames);
+  }).toList()..sort(byNames);
 
   filtered.addAll(keywordsMatched);
 

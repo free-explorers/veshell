@@ -16,9 +16,7 @@ class ConnectionPerSsid extends _$ConnectionPerSsid {
     final device = ref.watch(nmDeviceProvider(deviceAddress));
 
     device.propertiesChanged
-        .where(
-          (event) => event.contains('availableConnections'),
-        )
+        .where((event) => event.contains('availableConnections'))
         .listen((_) => ref.invalidateSelf());
 
     final mapConnectionPerSsid = <String, NetworkManagerSettingsConnection>{};
@@ -26,8 +24,7 @@ class ConnectionPerSsid extends _$ConnectionPerSsid {
     for (final connection in device.availableConnections) {
       final settings = await connection.getSettings();
       final ssid = utf8.decode(
-        (settings['802-11-wireless']!['ssid']! as DBusArray)
-            .children
+        (settings['802-11-wireless']!['ssid']! as DBusArray).children
             .map((e) => (e as DBusByte).value)
             .toList(),
       );

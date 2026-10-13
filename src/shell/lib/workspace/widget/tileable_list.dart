@@ -30,20 +30,15 @@ class TileableListView extends HookConsumerWidget {
       [tileableList],
     );
 
-    final offsetMap = useState(
-      IMap<GlobalKey, Offset>(),
-    );
-    useEffect(
-      () {
-        animationController.animateTo(
-          workspaceState.selectedIndex.toDouble(),
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
-        );
-        return null;
-      },
-      [workspaceState.selectedIndex],
-    );
+    final offsetMap = useState(IMap<GlobalKey, Offset>());
+    useEffect(() {
+      animationController.animateTo(
+        workspaceState.selectedIndex.toDouble(),
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+      );
+      return null;
+    }, [workspaceState.selectedIndex]);
 
     final listKey = useMemoized(GlobalKey.new);
 
@@ -64,11 +59,11 @@ class TileableListView extends HookConsumerWidget {
           return SizedBox(
             height: double.infinity,
             child: InkWell(
-              onTap: index < 0 ? null : () => ref
-                  .read(workspaceStateProvider(workspaceId).notifier)
-                  .setSelectedIndex(
-                    index,
-                  ),
+              onTap: index < 0
+                  ? null
+                  : () => ref
+                        .read(workspaceStateProvider(workspaceId).notifier)
+                        .setSelectedIndex(index),
               onLongPress: menuController.open,
               onSecondaryTap: menuController.open,
               child: MenuAnchor(
@@ -121,9 +116,9 @@ class TileableListView extends HookConsumerWidget {
             builder: (context, constraints) {
               // call with delay to prevent FlutterError (setState() or markNeedsBuild() called during build.
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                final renderBox = tileableKeyList[index]
-                    .currentContext!
-                    .findRenderObject()! as RenderBox;
+                final renderBox =
+                    tileableKeyList[index].currentContext!.findRenderObject()!
+                        as RenderBox;
                 final offset = renderBox.localToGlobal(Offset.zero);
                 if (offset != offsetMap.value[tileableKeyList[index]]) {
                   offsetMap.value = offsetMap.value.add(
@@ -146,8 +141,9 @@ class TileableListView extends HookConsumerWidget {
             final addedTileableList = updatedTileableList
                 .whereType<PersistentWindowTileable>()
                 .where(
-                  (element) => !workspaceState.tileableWindowList
-                      .contains(element.windowId),
+                  (element) => !workspaceState.tileableWindowList.contains(
+                    element.windowId,
+                  ),
                 )
                 .toList();
             for (final tileable in addedTileableList) {
@@ -208,10 +204,7 @@ class TileableIndicator extends Decoration {
 }
 
 class _TileableIndicatorPainter extends BoxPainter {
-  _TileableIndicatorPainter(
-    this.decoration,
-    super.onChanged,
-  );
+  _TileableIndicatorPainter(this.decoration, super.onChanged);
 
   final TileableIndicator decoration;
 
@@ -287,10 +280,14 @@ class TileableIndicatorPainter extends CustomPainter {
     final value = controller.view.value;
     final ltr = index > value;
 
-    final from = (ltr ? value.floor() : value.ceil())
-        .clamp(0, length); // ignore_clamp_double_lint
-    final to = (ltr ? from + 1 : from - 1)
-        .clamp(0, length); // ignore_clamp_double_lint
+    final from = (ltr ? value.floor() : value.ceil()).clamp(
+      0,
+      length,
+    ); // ignore_clamp_double_lint
+    final to = (ltr ? from + 1 : from - 1).clamp(
+      0,
+      length,
+    ); // ignore_clamp_double_lint
 
     // from
     final fromKey = tileableKeyList[from];
@@ -300,7 +297,8 @@ class TileableIndicatorPainter extends CustomPainter {
     } catch (e) {
       fromBox = null;
     }
-    final fromRelativeOffset = (offsetMap.get(fromKey) ??
+    final fromRelativeOffset =
+        (offsetMap.get(fromKey) ??
             fromBox?.localToGlobal(Offset.zero) ??
             Offset.zero) -
         listOffset;
@@ -319,7 +317,8 @@ class TileableIndicatorPainter extends CustomPainter {
     } catch (e) {
       toBox = null;
     }
-    final toRelativeOffset = (offsetMap.get(toKey) ??
+    final toRelativeOffset =
+        (offsetMap.get(toKey) ??
             toBox?.localToGlobal(Offset.zero) ??
             Offset.zero) -
         listOffset;
@@ -333,9 +332,7 @@ class TileableIndicatorPainter extends CustomPainter {
     _currentRect = Rect.lerp(fromRect, toRect, (value - from).abs());
     assert(_currentRect != null);
 
-    final configuration = ImageConfiguration(
-      size: _currentRect!.size,
-    );
+    final configuration = ImageConfiguration(size: _currentRect!.size);
 
     _painter!.paint(canvas, _currentRect!.topLeft, configuration);
   }

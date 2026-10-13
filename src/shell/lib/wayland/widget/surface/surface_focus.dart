@@ -3,11 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 class SurfaceFocus extends HookConsumerWidget {
-  const SurfaceFocus({
-    required this.child,
-    this.focusNode,
-    super.key,
-  });
+  const SurfaceFocus({required this.child, this.focusNode, super.key});
   final FocusNode? focusNode;
 
   final Widget child;
@@ -66,10 +62,7 @@ class SurfaceFocus extends HookConsumerWidget {
         actions: {
           DisableDefaultShortcutsIntent: DisableDefaultShortcutsAction(),
         },
-        child: Focus(
-          focusNode: focusNode,
-          child: child,
-        ),
+        child: Focus(focusNode: focusNode, child: child),
       ),
     );
   }

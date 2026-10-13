@@ -27,10 +27,9 @@ class SettingPropertyColorEditor extends HookConsumerWidget
     final updatedBy = useState<String?>(null);
 
     void updateValue(Color newValue) {
-      ref.read(settingsPropertiesProvider.notifier).updateProperty(
-            path,
-            property.serializeValue(newValue),
-          );
+      ref
+          .read(settingsPropertiesProvider.notifier)
+          .updateProperty(path, property.serializeValue(newValue));
     }
 
     return Row(
@@ -56,24 +55,25 @@ class SettingPropertyColorEditor extends HookConsumerWidget
           children: [
             Row(
               spacing: 8,
-              children: [
-                const Color(0xFF006888),
-                const Color(0xFFB71C1C),
-                const Color(0xFF2E7D32),
-                const Color(0xFFC51162),
-                const Color(0xFFD8DEE9),
-              ]
-                  .map(
-                    (Color color) => ColorIndicator(
-                      color: color,
-                      onSelect: () {
-                        updateValue(color);
-                        updatedBy.value = 'indicator';
-                      },
-                      isSelected: initialValue == color,
-                    ),
-                  )
-                  .toList(),
+              children:
+                  [
+                        const Color(0xFF006888),
+                        const Color(0xFFB71C1C),
+                        const Color(0xFF2E7D32),
+                        const Color(0xFFC51162),
+                        const Color(0xFFD8DEE9),
+                      ]
+                      .map(
+                        (Color color) => ColorIndicator(
+                          color: color,
+                          onSelect: () {
+                            updateValue(color);
+                            updatedBy.value = 'indicator';
+                          },
+                          isSelected: initialValue == color,
+                        ),
+                      )
+                      .toList(),
             ),
             ColorCodeField(
               color: initialValue,

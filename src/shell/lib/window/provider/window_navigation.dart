@@ -60,8 +60,9 @@ void _revealDialog(Ref ref, DialogWindowId windowId) {
 
 void _revealPersistent(Ref ref, PersistentWindowId windowId) {
   final workspaceId = _workspaceForWindow(ref, windowId);
-  final screenId =
-      workspaceId == null ? null : _screenForWorkspace(ref, workspaceId);
+  final screenId = workspaceId == null
+      ? null
+      : _screenForWorkspace(ref, workspaceId);
   if (workspaceId == null || screenId == null) {
     // The tile is not placed on any screen: nothing to navigate, but a live
     // meta window can still be activated.
@@ -155,18 +156,15 @@ ScreenId? _screenForWorkspace(Ref ref, WorkspaceId workspaceId) {
 /// displayed by [windowId], when the window is still alive.
 void _activate(Ref ref, WindowId windowId) {
   final metaWindowId = switch (windowId) {
-    PersistentWindowId() =>
-      _readOrNull<PersistentWindow>(
-        () => ref.read(persistentWindowStateProvider(windowId)),
-      )?.metaWindowId,
-    EphemeralWindowId() =>
-      _readOrNull<EphemeralWindow>(
-        () => ref.read(ephemeralWindowStateProvider(windowId)),
-      )?.metaWindowId,
-    DialogWindowId() =>
-      _readOrNull<DialogWindow>(
-        () => ref.read(dialogWindowStateProvider(windowId)),
-      )?.metaWindowId,
+    PersistentWindowId() => _readOrNull<PersistentWindow>(
+      () => ref.read(persistentWindowStateProvider(windowId)),
+    )?.metaWindowId,
+    EphemeralWindowId() => _readOrNull<EphemeralWindow>(
+      () => ref.read(ephemeralWindowStateProvider(windowId)),
+    )?.metaWindowId,
+    DialogWindowId() => _readOrNull<DialogWindow>(
+      () => ref.read(dialogWindowStateProvider(windowId)),
+    )?.metaWindowId,
   };
   if (metaWindowId == null) {
     navigationLog.info('No live meta window for $windowId; not activating');
@@ -182,7 +180,9 @@ void _activate(Ref ref, WindowId windowId) {
     'Activating meta window $metaWindowId (surface ${metaWindow.surfaceId})',
   );
   unawaited(
-    ref.read(platformManagerProvider.notifier).request(
+    ref
+        .read(platformManagerProvider.notifier)
+        .request(
           ActivateWindowRequest(
             message: ActivateWindowMessage(
               surfaceId: metaWindow.surfaceId,

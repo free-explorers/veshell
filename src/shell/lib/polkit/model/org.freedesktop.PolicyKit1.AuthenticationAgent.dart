@@ -99,8 +99,8 @@ class OrgFreedesktopPolicyKit1AuthenticationAgent extends DBusObject {
           methodCall.values[1].asString(),
           methodCall.values[2].asString(),
           methodCall.values[3].asDict().map(
-                (key, value) => MapEntry(key.asString(), value.asString()),
-              ),
+            (key, value) => MapEntry(key.asString(), value.asString()),
+          ),
           methodCall.values[4].asString(),
           methodCall.values[5]
               .asArray()

@@ -10,15 +10,11 @@ class PulseSourceList extends _$PulseSourceList {
   final _sourceNameMapByIndex = <int, String>{};
 
   List<PulseAudioSource> get filteredList => _sourceMapByName.values
-      .where(
-        (element) => !element.name.contains('.monitor'),
-      )
+      .where((element) => !element.name.contains('.monitor'))
       .toList();
   @override
   Future<List<PulseAudioSource>> build() async {
-    final client = await ref.watch(
-      pulseClientProvider.future,
-    );
+    final client = await ref.watch(pulseClientProvider.future);
     client.onSourceChanged.listen((source) {
       _sourceMapByName[source.name] = source;
       state = AsyncValue.data(filteredList);

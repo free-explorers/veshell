@@ -26,7 +26,9 @@ class SettingPropertyDoubleEditor extends HookConsumerWidget
     final val = ref.watch(jsonValueByPathProvider(path)) as double;
     final controller = useTextEditingController(text: val.toString());
     void updateValue(String newValue) {
-      ref.read(settingsPropertiesProvider.notifier).updateProperty(
+      ref
+          .read(settingsPropertiesProvider.notifier)
+          .updateProperty(
             path,
             property.serializeValue(double.parse(newValue)),
           );
@@ -40,9 +42,7 @@ class SettingPropertyDoubleEditor extends HookConsumerWidget
           child: TextField(
             controller: controller,
             autofocus: true,
-            decoration: const InputDecoration(
-              filled: true,
-            ),
+            decoration: const InputDecoration(filled: true),
             onSubmitted: updateValue,
           ),
         ),

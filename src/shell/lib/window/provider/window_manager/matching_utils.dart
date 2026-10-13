@@ -104,15 +104,17 @@ int titleMatchingCost(String? storedTitle, String? windowTitle) {
     return _titleMismatchCost;
   }
   final overlap = _longestCommonSubstringLength(stored, window);
-  final shortest =
-      stored.length < window.length ? stored.length : window.length;
+  final shortest = stored.length < window.length
+      ? stored.length
+      : window.length;
   if (shortest < 8 || overlap < 4) {
     return _titleMismatchCost;
   }
   final coverage = overlap / shortest;
-  return (_titleMismatchCost * (1 - coverage))
-      .round()
-      .clamp(1, _titleMismatchCost);
+  return (_titleMismatchCost * (1 - coverage)).round().clamp(
+    1,
+    _titleMismatchCost,
+  );
 }
 
 /// After a meta window has been associated with an MsWindow, we allow this association to change
@@ -242,13 +244,13 @@ class MatchingCost {
   int get total => windowClass + title + startupId + pid + waiting;
 
   Map<String, Object?> toJson() => {
-        'windowClass': windowClass,
-        'title': title,
-        'startupId': startupId,
-        'pid': pid,
-        'waiting': waiting,
-        'total': total,
-      };
+    'windowClass': windowClass,
+    'title': title,
+    'startupId': startupId,
+    'pid': pid,
+    'waiting': waiting,
+    'total': total,
+  };
 
   @override
   String toString() => 'MatchingCost(total: $total)';

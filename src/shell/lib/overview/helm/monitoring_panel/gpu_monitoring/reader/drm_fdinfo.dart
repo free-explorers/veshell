@@ -95,10 +95,9 @@ DrmFdInfo? parseDrmFdInfo(String contents) {
 }
 
 int? _parseLeadingInt(String value) {
-  final first = value.split(RegExp(r'\s+')).firstWhere(
-    (part) => part.isNotEmpty,
-    orElse: () => '',
-  );
+  final first = value
+      .split(RegExp(r'\s+'))
+      .firstWhere((part) => part.isNotEmpty, orElse: () => '');
   return int.tryParse(first);
 }
 

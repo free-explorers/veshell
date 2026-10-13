@@ -228,9 +228,7 @@ class PlatformEventRecorder extends _$PlatformEventRecorder {
   Map<String, Object?> _sessionHeader(PersistentWindowId targetWindowId) {
     final target = ref.read(persistentWindowStateProvider(targetWindowId));
     final appId = target.properties.appId;
-    final tiles = <Map<String, Object?>>[
-      _tileSummary(target, isTarget: true),
-    ];
+    final tiles = <Map<String, Object?>>[_tileSummary(target, isTarget: true)];
     for (final windowId in _peerWindowIds(targetWindowId)) {
       try {
         final window = ref.read(persistentWindowStateProvider(windowId));

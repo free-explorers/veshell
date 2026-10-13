@@ -6,7 +6,5 @@ part 'default_config_directory.g.dart';
 
 @riverpod
 Directory defaultConfigDirectory(Ref ref) {
-  return Directory(
-    Platform.environment['VESHELL_DEFAULT_CONFIG_DIR']!,
-  );
+  return Directory(Platform.environment['VESHELL_DEFAULT_CONFIG_DIR']!);
 }

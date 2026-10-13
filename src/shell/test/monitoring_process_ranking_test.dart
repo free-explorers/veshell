@@ -17,9 +17,7 @@ void main() {
     });
 
     test('orders by value, then by pid', () {
-      final ranked = rankProcesses(
-        <int, double>{1: 5, 2: 5, 3: 9}.lock,
-      );
+      final ranked = rankProcesses(<int, double>{1: 5, 2: 5, 3: 9}.lock);
 
       expect(ranked.map((entry) => entry.key), [3, 2, 1]);
       expect(ranked.map((entry) => entry.value), [9, 5, 5]);

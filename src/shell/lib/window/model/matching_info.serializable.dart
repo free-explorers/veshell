@@ -26,12 +26,12 @@ abstract class MatchingInfo with _$MatchingInfo {
       );
 
   factory MatchingInfo.fromMetaWindow(MetaWindow metaWindow) => MatchingInfo(
-        appId: metaWindow.appId ?? '',
-        title: metaWindow.title,
-        windowClass: metaWindow.windowClass,
-        startupId: metaWindow.startupId,
-        pid: metaWindow.pid,
-      );
+    appId: metaWindow.appId ?? '',
+    title: metaWindow.title,
+    windowClass: metaWindow.windowClass,
+    startupId: metaWindow.startupId,
+    pid: metaWindow.pid,
+  );
 
   factory MatchingInfo.fromJson(Map<String, dynamic> json) =>
       _$MatchingInfoFromJson(json);

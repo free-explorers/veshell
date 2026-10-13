@@ -25,9 +25,7 @@ sealed class ScreenshotPromptDecisionMessage
     required ScreenshotPromptDecisionOutcome outcome,
   }) = _ScreenshotPromptDecisionMessage;
 
-  factory ScreenshotPromptDecisionMessage.fromJson(
-    Map<String, dynamic> json,
-  ) =>
+  factory ScreenshotPromptDecisionMessage.fromJson(Map<String, dynamic> json) =>
       _$ScreenshotPromptDecisionMessageFromJson(json);
 }
 
@@ -37,5 +35,5 @@ enum ScreenshotPromptDecisionOutcome {
   approved,
 
   /// The user dropped the flow.
-  cancelled;
+  cancelled,
 }

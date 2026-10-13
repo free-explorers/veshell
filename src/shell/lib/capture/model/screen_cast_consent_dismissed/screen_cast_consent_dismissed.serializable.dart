@@ -14,12 +14,10 @@ sealed class ScreenCastConsentDismissedMessage
     with _$ScreenCastConsentDismissedMessage
     implements PlatformMessage {
   /// Factory
-  factory ScreenCastConsentDismissedMessage({
-    required int consentToken,
-  }) = _ScreenCastConsentDismissedMessage;
+  factory ScreenCastConsentDismissedMessage({required int consentToken}) =
+      _ScreenCastConsentDismissedMessage;
 
   factory ScreenCastConsentDismissedMessage.fromJson(
     Map<String, dynamic> json,
-  ) =>
-      _$ScreenCastConsentDismissedMessageFromJson(json);
+  ) => _$ScreenCastConsentDismissedMessageFromJson(json);
 }

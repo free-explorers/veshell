@@ -61,13 +61,10 @@ class SlidingContainer extends HookConsumerWidget {
           }
         }
 
-        useEffect(
-          () {
-            scrollToIndex(index);
-            return null;
-          },
-          [index, children],
-        );
+        useEffect(() {
+          scrollToIndex(index);
+          return null;
+        }, [index, children]);
         return SwipeGestureDetector(
           enabled: isSwipeEnabled,
           onSwipeUpdate: (event) {
@@ -77,16 +74,17 @@ class SlidingContainer extends HookConsumerWidget {
             // Determine the direction of the swipe (horizontal or vertical
             final eventDirection =
                 event.message.deltaX.abs() > event.message.deltaY.abs()
-                    ? Axis.horizontal
-                    : Axis.vertical;
+                ? Axis.horizontal
+                : Axis.vertical;
 
             if (eventDirection != direction) {
               return;
             }
             if (!swipeInProgress.value) {
               swipeInProgress.value = true;
-              swipeVelocityTracker.value =
-                  VelocityTracker.withKind(PointerDeviceKind.trackpad);
+              swipeVelocityTracker.value = VelocityTracker.withKind(
+                PointerDeviceKind.trackpad,
+              );
               cumulatedSwipeDelta.value = 0;
             }
 
@@ -98,9 +96,7 @@ class SlidingContainer extends HookConsumerWidget {
                 pageController.position as ScrollPositionWithSingleContext;
             position.pointerScroll(delta);
             swipeVelocityTracker.value?.addPosition(
-              Duration(
-                milliseconds: event.message.time,
-              ),
+              Duration(milliseconds: event.message.time),
               direction == Axis.horizontal
                   ? Offset(cumulatedSwipeDelta.value, 0)
                   : Offset(0, cumulatedSwipeDelta.value),
@@ -111,15 +107,15 @@ class SlidingContainer extends HookConsumerWidget {
               swipeInProgress.value = false;
               final velocity = direction == Axis.horizontal
                   ? swipeVelocityTracker.value
-                          ?.getVelocity()
-                          .pixelsPerSecond
-                          .dx ??
-                      0
+                            ?.getVelocity()
+                            .pixelsPerSecond
+                            .dx ??
+                        0
                   : swipeVelocityTracker.value
-                          ?.getVelocity()
-                          .pixelsPerSecond
-                          .dy ??
-                      0;
+                            ?.getVelocity()
+                            .pixelsPerSecond
+                            .dy ??
+                        0;
               swipeVelocityTracker.value = null;
               final target = pageController.offset;
               final viewportDimension =

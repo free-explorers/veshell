@@ -22,10 +22,10 @@ String _launchUnitPrefix(WindowId trackedWindowId) =>
     'veshell-launch-${_windowKey(trackedWindowId)}-';
 
 String _windowKey(WindowId windowId) => switch (windowId) {
-      DialogWindowId(:final uuid) => uuid,
-      PersistentWindowId(:final uuid) => uuid,
-      EphemeralWindowId(:final uuid) => uuid,
-    };
+  DialogWindowId(:final uuid) => uuid,
+  PersistentWindowId(:final uuid) => uuid,
+  EphemeralWindowId(:final uuid) => uuid,
+};
 
 /// A live tracked launch of one tile: the supervisor process the shell spawned
 /// and, for a systemd-managed launch, the transient unit that owns the
@@ -261,8 +261,10 @@ class AppLaunch extends _$AppLaunch {
   /// (e.g. applications re-homing into `app-*.scope`). Null simply means "no
   /// attribution available" — the caller keeps its ordinary matching result.
   WindowId? windowForPid(int pid) {
-    final cgroupPath =
-        ref.read(processInfoStateProvider.notifier).forPid(pid)?.cgroup;
+    final cgroupPath = ref
+        .read(processInfoStateProvider.notifier)
+        .forPid(pid)
+        ?.cgroup;
     if (cgroupPath == null) return null;
 
     for (final windowId in ref.read(windowManagerProvider).windows) {

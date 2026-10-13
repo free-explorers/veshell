@@ -18,10 +18,7 @@ class SubsurfaceWidget extends StatelessWidget {
       surfaceId: surfaceId,
       child: Consumer(
         builder: (BuildContext context, WidgetRef ref, Widget? child) {
-          return SurfaceWidget(
-            surfaceId: surfaceId,
-            scaleRatio: scaleRatio,
-          );
+          return SurfaceWidget(surfaceId: surfaceId, scaleRatio: scaleRatio);
         },
       ),
     );
@@ -29,10 +26,7 @@ class SubsurfaceWidget extends StatelessWidget {
 }
 
 class _Positioner extends ConsumerWidget {
-  const _Positioner({
-    required this.surfaceId,
-    required this.child,
-  });
+  const _Positioner({required this.surfaceId, required this.child});
   final SurfaceId surfaceId;
   final Widget child;
 
@@ -42,10 +36,6 @@ class _Positioner extends ConsumerWidget {
       subsurfaceStateProvider(surfaceId).select((v) => v.position),
     );
 
-    return Positioned(
-      left: position.dx,
-      top: position.dy,
-      child: child,
-    );
+    return Positioned(left: position.dx, top: position.dy, child: child);
   }
 }

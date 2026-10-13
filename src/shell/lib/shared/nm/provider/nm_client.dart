@@ -4,9 +4,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'nm_client.g.dart';
 
 @riverpod
-Future<NetworkManagerClient> NmClient(
-  Ref ref,
-) async {
+Future<NetworkManagerClient> NmClient(Ref ref) async {
   final client = NetworkManagerClient();
 
   await client.connect();

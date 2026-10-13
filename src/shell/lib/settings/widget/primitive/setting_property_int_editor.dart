@@ -23,10 +23,9 @@ class SettingPropertyIntEditor extends HookConsumerWidget
   Widget build(BuildContext context, WidgetRef ref) {
     final val = ref.watch(jsonValueByPathProvider(path)) as int;
     void updateValue(int newValue) {
-      ref.read(settingsPropertiesProvider.notifier).updateProperty(
-            path,
-            property.serializeValue(newValue),
-          );
+      ref
+          .read(settingsPropertiesProvider.notifier)
+          .updateProperty(path, property.serializeValue(newValue));
     }
 
     return ListTile(

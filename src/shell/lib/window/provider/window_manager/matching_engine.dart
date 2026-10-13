@@ -236,10 +236,10 @@ class MatchingEngine extends _$MatchingEngine {
   /// Deterministic ordering key used only to break exact ties between
   /// candidates. It never overrides a better match.
   String _stableWindowKey(WindowId windowId) => switch (windowId) {
-        PersistentWindowId() => 'p:${windowId.uuid}',
-        EphemeralWindowId() => 'e:${windowId.uuid}',
-        DialogWindowId() => 'd:${windowId.uuid}',
-      };
+    PersistentWindowId() => 'p:${windowId.uuid}',
+    EphemeralWindowId() => 'e:${windowId.uuid}',
+    DialogWindowId() => 'd:${windowId.uuid}',
+  };
 
   /// [windowMatchingCost] of each candidate against the same native window, in
   /// order. Shared by every matcher so the cost model has a single call site.
@@ -247,13 +247,13 @@ class MatchingEngine extends _$MatchingEngine {
     MatchingInfo metaWindowMatchInfo,
     List<WindowId> candidates,
   ) => [
-        for (final windowId in candidates)
-          windowMatchingCost(
-            metaWindowMatchInfo,
-            _getWindowMatchingInfo(windowId),
-            _getWindowState(windowId),
-          ),
-      ];
+    for (final windowId in candidates)
+      windowMatchingCost(
+        metaWindowMatchInfo,
+        _getWindowMatchingInfo(windowId),
+        _getWindowState(windowId),
+      ),
+  ];
 
   /// Index of the least-cost candidate in [candidates] given [costs].
   ///
@@ -267,9 +267,9 @@ class MatchingEngine extends _$MatchingEngine {
       final betterCost = costs[i].total < costs[bestIndex].total;
       final tiedButStable =
           costs[i].total == costs[bestIndex].total &&
-          _stableWindowKey(candidates[i]).compareTo(
-                _stableWindowKey(candidates[bestIndex]),
-              ) <
+          _stableWindowKey(
+                candidates[i],
+              ).compareTo(_stableWindowKey(candidates[bestIndex])) <
               0;
       if (betterCost || tiedButStable) {
         bestIndex = i;
@@ -291,9 +291,9 @@ class MatchingEngine extends _$MatchingEngine {
   }) {
     final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
     final metaWindowMatchInfo = MatchingInfo.fromMetaWindow(metaWindow);
-    final candidates = ref
-        .read(windowsAvailableForMatchingProvider)
-        .where((windowId) {
+    final candidates = ref.read(windowsAvailableForMatchingProvider).where((
+      windowId,
+    ) {
       if (excludedWindowIds.contains(windowId)) return false;
       if (windowId is DialogWindowId) return false;
       return _getWindowState(windowId).properties.appId ==
@@ -576,14 +576,16 @@ class MatchingEngine extends _$MatchingEngine {
 
   /// Whether [windowId] is a tile currently gathering a launch burst.
   bool _isGatheringLaunch(WindowId windowId) => switch (windowId) {
-        EphemeralWindowId() => ref
-            .read(ephemeralWindowStateProvider(windowId).notifier)
-            .isGatheringLaunch,
-        PersistentWindowId() => ref
-            .read(persistentWindowStateProvider(windowId).notifier)
-            .isGatheringLaunch,
-        DialogWindowId() => false,
-      };
+    EphemeralWindowId() =>
+      ref
+          .read(ephemeralWindowStateProvider(windowId).notifier)
+          .isGatheringLaunch,
+    PersistentWindowId() =>
+      ref
+          .read(persistentWindowStateProvider(windowId).notifier)
+          .isGatheringLaunch,
+    DialogWindowId() => false,
+  };
 
   /// Returns the persistent window owning the tracked launch of the given
   /// native window, if provenance is known and the window is still an eligible

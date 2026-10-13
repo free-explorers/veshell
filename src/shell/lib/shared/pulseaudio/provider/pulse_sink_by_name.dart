@@ -10,8 +10,6 @@ class PulseSinkByName extends _$PulseSinkByName {
   @override
   PulseAudioSink? build(String sinkName) {
     final sinkList = ref.watch(pulseSinkListProvider).requireValue;
-    return sinkList.firstWhereOrNull(
-      (element) => element.name == sinkName,
-    );
+    return sinkList.firstWhereOrNull((element) => element.name == sinkName);
   }
 }

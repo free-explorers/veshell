@@ -27,9 +27,7 @@ class MetaSurfaceWidget extends HookConsumerWidget {
   final bool decorated;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final metaWindow = ref.watch(
-      metaWindowStateProvider(metaWindowId),
-    );
+    final metaWindow = ref.watch(metaWindowStateProvider(metaWindowId));
 
     final surfaceId = ref.watch(
       metaWindowStateProvider(metaWindowId).select((value) => value.surfaceId),
@@ -64,47 +62,43 @@ class MetaSurfaceWidget extends HookConsumerWidget {
             committedSurfaceSize.height / metaWindow.scaleRatio,
           );
     final lastSizingSignature = useRef<String?>(null);
-    final sizingSignature = '$targetSize|$logicalSize|'
+    final sizingSignature =
+        '$targetSize|$logicalSize|'
         '${metaWindow.isFixedSized}|${metaWindow.scaleRatio}';
-    useEffect(
-      () {
-        if (lastSizingSignature.value == sizingSignature) {
-          return null;
-        }
-        lastSizingSignature.value = sizingSignature;
-        final matches = targetSize != null &&
-            logicalSize != null &&
-            (targetSize.width - logicalSize.width).abs() < 1 &&
-            (targetSize.height - logicalSize.height).abs() < 1;
-        geometryLog.info(
-          'sizing surface id=$metaWindowId surface=$surfaceId '
-          'target=$targetSize actual=$logicalSize '
-          'fixed=${metaWindow.isFixedSized} '
-          'scale=${metaWindow.scaleRatio} match=$matches',
-        );
+    useEffect(() {
+      if (lastSizingSignature.value == sizingSignature) {
         return null;
-      },
-      [sizingSignature],
-    );
-    useEffect(
-      () {
-        if (ref.read(metaWindowStateProvider(metaWindowId)).currentOutput !=
-            currentMonitor) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            ref
-                .read(metaWindowStateProvider(metaWindowId).notifier)
-                .patch(
-                  MetaWindowPatchMessage.updateCurrentOutput(
-                    id: metaWindowId,
-                    value: currentMonitor,
-                  ),
-                );
-          });
-        }
-        return null;
-      },
-      [currentMonitor],
-    );
+      }
+      lastSizingSignature.value = sizingSignature;
+      final matches =
+          targetSize != null &&
+          logicalSize != null &&
+          (targetSize.width - logicalSize.width).abs() < 1 &&
+          (targetSize.height - logicalSize.height).abs() < 1;
+      geometryLog.info(
+        'sizing surface id=$metaWindowId surface=$surfaceId '
+        'target=$targetSize actual=$logicalSize '
+        'fixed=${metaWindow.isFixedSized} '
+        'scale=${metaWindow.scaleRatio} match=$matches',
+      );
+      return null;
+    }, [sizingSignature]);
+    useEffect(() {
+      if (ref.read(metaWindowStateProvider(metaWindowId)).currentOutput !=
+          currentMonitor) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref
+              .read(metaWindowStateProvider(metaWindowId).notifier)
+              .patch(
+                MetaWindowPatchMessage.updateCurrentOutput(
+                  id: metaWindowId,
+                  value: currentMonitor,
+                ),
+              );
+        });
+      }
+      return null;
+    }, [currentMonitor]);
     return Center(
       child: SurfaceFocus(
         focusNode: focusNode,

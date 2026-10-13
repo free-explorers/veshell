@@ -20,19 +20,15 @@ void main() {
   });
 
   test('round-trips transform and mirrorOf', () {
-    final setting = MonitorSetting.fromJson(_legacyPayload()).copyWith(
-      transform: MonitorTransform.flipped90,
-      mirrorOf: 'DP-2',
-    );
+    final setting = MonitorSetting.fromJson(
+      _legacyPayload(),
+    ).copyWith(transform: MonitorTransform.flipped90, mirrorOf: 'DP-2');
 
     final json = setting.toJson();
 
     expect(json['transform'], 'flipped90');
     expect(json['mirrorOf'], 'DP-2');
-    expect(
-      MonitorSetting.fromJson(json).transform,
-      MonitorTransform.flipped90,
-    );
+    expect(MonitorSetting.fromJson(json).transform, MonitorTransform.flipped90);
     expect(MonitorSetting.fromJson(json).mirrorOf, 'DP-2');
   });
 

@@ -9,9 +9,7 @@ import 'package:shell/screen/widget/workspace_list.dart';
 import 'package:shell/theme//provider/theme.dart';
 
 class ScreenPanel extends HookConsumerWidget implements PreferredSizeWidget {
-  const ScreenPanel({
-    super.key,
-  });
+  const ScreenPanel({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
