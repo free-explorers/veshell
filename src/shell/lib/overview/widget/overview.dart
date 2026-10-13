@@ -6,6 +6,7 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/overview/widget/overview_content.dart';
+import 'package:shell/overview/widget/overview_shortcuts.dart';
 import 'package:shell/overview/widget/search/search_engine.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/shared/widget/clock.dart';
@@ -70,68 +71,70 @@ class OverviewWidget extends HookConsumerWidget {
           final focusScopeNode = useFocusScopeNode(
             debugLabel: 'OverviewFocusNode',
           );
-          return FocusScope(
-            node: focusScopeNode,
-            autofocus: true,
-            child: Stack(
-              alignment: Alignment.topCenter,
-              children: [
-                Row(
-                  children: [
-                    IconButton(
-                      onPressed: () => ref
-                          .read(overviewStateProvider(screenId).notifier)
-                          .toggle(),
-                      icon: const Icon(MdiIcons.close),
-                      style: IconButton.styleFrom(
-                        shape: const RoundedRectangleBorder(),
-                        minimumSize: const Size.square(panelSize),
-                      ),
-                    ),
-                  ],
-                ),
-                const Positioned(top: 12, child: ClockWidget()),
-                Padding(
-                  padding: const EdgeInsets.only(
-                    left: 64,
-                    right: 64,
-                    bottom: 64,
-                    top: 96,
-                  ),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final availableWidth = max<double>(
-                        0,
-                        constraints.maxWidth - _overviewGap,
-                      );
-                      // Snap the split to whole logical pixels. The content
-                      // pane hosts live Wayland surfaces, and a fractional
-                      // origin makes Flutter sample their external textures
-                      // bilinearly (an "always blurry" window), while the
-                      // workspace tiles land on whole pixels.
-                      final searchWidth = min(
-                        max(
-                          _minSearchEngineWidth,
-                          availableWidth *
-                              _searchEngineFlex /
-                              (_searchEngineFlex + _overviewContentFlex),
+          return OverviewShortcuts(
+            child: FocusScope(
+              node: focusScopeNode,
+              autofocus: true,
+              child: Stack(
+                alignment: Alignment.topCenter,
+                children: [
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => ref
+                            .read(overviewStateProvider(screenId).notifier)
+                            .toggle(),
+                        icon: const Icon(MdiIcons.close),
+                        style: IconButton.styleFrom(
+                          shape: const RoundedRectangleBorder(),
+                          minimumSize: const Size.square(panelSize),
                         ),
-                        availableWidth,
-                      ).roundToDouble();
-                      return Row(
-                        children: [
-                          SizedBox(
-                            width: searchWidth,
-                            child: const SearchEngine(),
-                          ),
-                          const SizedBox(width: _overviewGap),
-                          const Expanded(child: OverviewContentPane()),
-                        ],
-                      );
-                    },
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                  const Positioned(top: 12, child: ClockWidget()),
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      left: 64,
+                      right: 64,
+                      bottom: 64,
+                      top: 96,
+                    ),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final availableWidth = max<double>(
+                          0,
+                          constraints.maxWidth - _overviewGap,
+                        );
+                        // Snap the split to whole logical pixels. The content
+                        // pane hosts live Wayland surfaces, and a fractional
+                        // origin makes Flutter sample their external textures
+                        // bilinearly (an "always blurry" window), while the
+                        // workspace tiles land on whole pixels.
+                        final searchWidth = min(
+                          max(
+                            _minSearchEngineWidth,
+                            availableWidth *
+                                _searchEngineFlex /
+                                (_searchEngineFlex + _overviewContentFlex),
+                          ),
+                          availableWidth,
+                        ).roundToDouble();
+                        return Row(
+                          children: [
+                            SizedBox(
+                              width: searchWidth,
+                              child: const SearchEngine(),
+                            ),
+                            const SizedBox(width: _overviewGap),
+                            const Expanded(child: OverviewContentPane()),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         },

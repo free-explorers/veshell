@@ -1,6 +1,7 @@
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/application/provider/app_drawer.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/app_drawer/app_grid.dart';
 
@@ -11,6 +12,20 @@ class AppDrawer extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final searchTextState = useState('');
+    final desktopEntries = ref.watch(
+      appDrawerFilteredDesktopEntriesProvider(searchTextState.value),
+    );
+
+    // `Enter` in the search box launches the first matching application, so a
+    // search can be accepted without reaching for the mouse.
+    void launchFirstEntry() {
+      final entries = desktopEntries.value;
+      if (entries == null || entries.isEmpty) {
+        return;
+      }
+      onSelect(entries.first);
+    }
+
     return Padding(
       padding: const EdgeInsets.all(48),
       child: Column(
@@ -20,6 +35,7 @@ class AppDrawer extends HookConsumerWidget {
             onSearchTextChange: (searchText) {
               searchTextState.value = searchText;
             },
+            onSubmitted: launchFirstEntry,
           ),
           const SizedBox(height: 24),
           Expanded(
@@ -37,9 +53,13 @@ class AppDrawer extends HookConsumerWidget {
 }
 
 class _AppDrawerTextField extends HookConsumerWidget {
-  const _AppDrawerTextField({required this.onSearchTextChange});
+  const _AppDrawerTextField({
+    required this.onSearchTextChange,
+    required this.onSubmitted,
+  });
 
   final void Function(String searchText) onSearchTextChange;
+  final VoidCallback onSubmitted;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -63,6 +83,7 @@ class _AppDrawerTextField extends HookConsumerWidget {
       controller: searchController,
       focusNode: searchFocusNode,
       autofocus: true,
+      onSubmitted: (_) => onSubmitted(),
       decoration: InputDecoration(
         prefixIcon: const Padding(
           padding: EdgeInsets.fromLTRB(16, 0, 16, 0),

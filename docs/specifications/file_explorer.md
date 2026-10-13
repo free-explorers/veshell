@@ -70,7 +70,8 @@ providers can be keyed by it and equality works.
   `selectedIndex`, an index into the active mode's result list. The pane is
   presentational — it receives `selectedIndex` and click/keyboard callbacks —
   and `OverviewContent` maps the index back to the file path for the preview.
-  A change to the filter or the search mode clears the selection.
+  A change to the filter focuses the first entry (opening its preview); a
+  change of the search mode clears the selection.
 
 ## Navigation and selection
 
@@ -91,7 +92,8 @@ providers can be keyed by it and equality works.
   entry** once the new listing loads, so the preview and the keyboard are ready
   to move on immediately (an empty directory selects nothing).
 - Activating an entry with `Super+D`/`Enter` also clears the filter, so the new
-  directory is shown unfiltered.
+  directory is shown unfiltered. With nothing selected, the first entry is the
+  one activated.
 - The initial directory is `$HOME`.
 - Symlinked directories are listed as directories and followed.
 - A path that is missing, not a directory or unreadable puts the pane in an

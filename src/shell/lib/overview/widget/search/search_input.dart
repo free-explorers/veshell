@@ -20,8 +20,9 @@ class SearchInput extends StatelessWidget {
       autofocus: true,
       // Keep the keyboard focus on the search field when the user clicks
       // anywhere else in the overview (a file row, the preview, a mode
-      // button). The default would unfocus it, and the Super-based shortcuts
-      // only fire while focus is inside their subtree.
+      // button), so typing continues without an extra click. The overview
+      // shortcuts no longer depend on this: they are handled above the search
+      // engine.
       onTapOutside: (_) {},
       style: Theme.of(context).textTheme.titleLarge,
       decoration: InputDecoration(

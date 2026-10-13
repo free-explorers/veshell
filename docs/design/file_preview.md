@@ -166,7 +166,10 @@ to the parent directory, and `Super+Tab`/`Super+Shift+Tab` to switch search
 modes. Implementation notes:
 
 - The shortcuts are declared **locally in the overview subtree** with a
-  `Shortcuts` widget, so they win over the global `VeshellShortcutManager`
+  `Shortcuts` widget — `OverviewShortcuts`
+  (`lib/overview/widget/overview_shortcuts.dart`), which sits above both the
+  search engine and the content pane so the `Super` chords and `Escape` act
+  whatever holds focus — so they win over the global `VeshellShortcutManager`
   (`lib/shortcut_manager/widget/shortcut_manager.dart`) and are not forwarded to
   clients. While the overview is open they intentionally shadow the global
   `super+w/s/a/d` workspace/tileable hotkeys
