@@ -27,6 +27,7 @@ mod resize_window;
 mod screen_cast_consent_decision;
 mod screen_cast_stop;
 mod screenshot_prompt_decision;
+mod switch_keyboard_layout;
 
 use self::activate_window::activate_window;
 use self::adjust_brightness::adjust_brightness;
@@ -40,6 +41,7 @@ use self::on_shell_ready::on_shell_ready;
 use self::pointer_exit::pointer_exit;
 use self::pointer_focus::pointer_focus;
 use self::resize_window::resize_window;
+use self::switch_keyboard_layout::switch_keyboard_layout;
 
 pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
     event: Event<(
@@ -58,6 +60,7 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             "resize_window" => resize_window(method_call, result, data),
             "close_window" => close_window(method_call, result, data),
             "adjust_brightness" => adjust_brightness(method_call, result, data),
+            "switch_keyboard_layout" => switch_keyboard_layout(method_call, result, data),
             "get_monitor_layout" => get_monitor_layout(method_call, result, data),
             "get_environment_variables" => get_environment_variables(method_call, result, data),
             "meta_window_patches" => meta_window_patches(method_call, result, data),

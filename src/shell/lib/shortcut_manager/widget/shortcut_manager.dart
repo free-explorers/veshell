@@ -6,6 +6,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/notification/provider/system_notification_manager.dart';
 import 'package:shell/platform/model/request/adjust_brightness/adjust_brightness.serializable.dart';
+import 'package:shell/platform/model/request/switch_keyboard_layout/switch_keyboard_layout.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/mpris/provider/mpris_manager.dart';
 import 'package:shell/shared/pulseaudio/provider/default_sink.dart';
@@ -122,6 +123,16 @@ class VeshellShortcutManager extends HookConsumerWidget {
                       message: AdjustBrightnessMessage(delta: -0.05),
                     ),
                   );
+              return null;
+            },
+          ),
+          // The compositor owns the seat's xkb state; the shell only asks it to
+          // advance to the next layout compiled from `keyboard.layout`.
+          ToggleKeyboardLayout: CallbackAction<ToggleKeyboardLayout>(
+            onInvoke: (_) {
+              ref
+                  .read(platformManagerProvider.notifier)
+                  .request(const SwitchKeyboardLayoutRequest());
               return null;
             },
           ),

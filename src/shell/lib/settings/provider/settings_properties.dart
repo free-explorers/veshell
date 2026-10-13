@@ -16,6 +16,7 @@ import 'package:shell/settings/provider/util/configured_settings_json.dart';
 import 'package:shell/settings/provider/util/default_settings_json.dart';
 import 'package:shell/settings/widget/environment/environment_variables_editor.dart';
 import 'package:shell/settings/widget/expandable_search_result.dart';
+import 'package:shell/settings/widget/keyboard/keyboard_layouts_editor.dart';
 import 'package:shell/settings/widget/locale/system_locale_editor.dart';
 import 'package:shell/settings/widget/locale/veshell_language_editor.dart';
 import 'package:shell/settings/widget/monitor/monitor_mirror_editor.dart';
@@ -198,6 +199,15 @@ class SettingsProperties extends _$SettingsProperties {
           'layout': SettingProperty<String>(
             name: l10n.layout,
             description: l10n.layoutDescription,
+            buildSearchResult: (context, path, property) =>
+                ExpandableSearchResult<String>(
+                  path: path,
+                  property: property,
+                  buildValue: (context, value, {required isExpanded}) =>
+                      Text(parseKeyboardLayouts(value as String?).join(', ')),
+                  buildEditor: (context, {required isExpanded}) =>
+                      KeyboardLayoutsEditor(path: path, property: property),
+                ),
           ),
           'swapAltAndWin': SettingProperty<bool>(
             name: l10n.swapAltAndWin,
@@ -242,6 +252,11 @@ class SettingsProperties extends _$SettingsProperties {
               'system.decreaseBrightness': SettingProperty<LogicalKeySet>(
                 name: l10n.decreaseBrightness,
                 description: l10n.decreaseBrightnessDescription,
+                converter: const LogicalKeySetConverter(),
+              ),
+              'system.toggleKeyboardLayout': SettingProperty<LogicalKeySet>(
+                name: l10n.toggleKeyboardLayout,
+                description: l10n.toggleKeyboardLayoutDescription,
                 converter: const LogicalKeySetConverter(),
               ),
               'media.playPause': SettingProperty<LogicalKeySet>(

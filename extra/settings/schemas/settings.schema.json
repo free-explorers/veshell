@@ -60,6 +60,9 @@
                                 },
                                 "decreaseBrightness": {
                                     "type": "string"
+                                },
+                                "toggleKeyboardLayout": {
+                                    "type": "string"
                                 }
                             }
                         },
