@@ -40,20 +40,28 @@ class OverviewWidget extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final screenId = CurrentScreenId.of(context);
 
+    final isDisplayed = ref.watch(
+      overviewStateProvider(screenId).select((state) => state.isDisplayed),
+    );
+
     final animationController = useAnimationController(
       duration: const Duration(milliseconds: 200),
     );
 
-    ref.listen(
-      overviewStateProvider(screenId).select((state) => state.isDisplayed),
-      (previous, next) {
-        if (next) {
-          animationController.forward();
-        } else {
-          animationController.reverse();
-        }
-      },
-    );
+    // Drive the overlay from the current value, not only from changes, so it
+    // stays in step with `OverviewBlurTarget` (which uses the same watch
+    // recipe). `ref.listen` alone never fires for a value that is already set
+    // when the widget mounts, so a subtree recreated while the overview is
+    // displayed (e.g. a monitor reconnecting across a suspend) would leave the
+    // screen blurred by the blur target with no overlay to see or close.
+    useEffect(() {
+      if (isDisplayed) {
+        animationController.forward();
+      } else {
+        animationController.reverse();
+      }
+      return null;
+    }, [isDisplayed]);
 
     return AnimatedBuilder(
       animation: animationController,
