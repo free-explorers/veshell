@@ -99,33 +99,13 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Refresh the Nix cargoHash
-        # The version bump rewrites the vendored Cargo.lock, which the vendor
-        # tree carries, so the hash moves with every release.
-        env:
-          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           file=nix/dependencies.nix
           cp "$file" "$file.orig"
           sed -i 's|cargoHash = "sha256-[^"]*"|cargoHash = lib.fakeHash|' "$file"
           log="$(mktemp)"
-          # Read the hash from the package's own derivation rather than
-          # rebuilding it: fetchCargoVendor is fed pname/version by
-          # buildRustPackage and names the vendor tree <pname>-<version>, so
-          # realising that input alone reaches the mismatch without building
-          # the Flutter SDK, the shell bundle or the compositor. Falling back to
-          # the whole package keeps this correct if that naming ever changes.
-          drv="$(nix eval --raw .#default.drvPath)"
-          mapfile -t vendor < <(nix derivation show "$drv" \
-            | jq -r '.[].inputDrvs | keys[]' \
-            | grep -E "/veshell-${VERSION}\.drv$" || true)
-          if [[ ${#vendor[@]} -eq 1 ]]; then
-            printf 'probing %s\n' "$(basename "${vendor[0]}")"
-            nix build "${vendor[0]}" --no-link >"$log" 2>&1 || true
-          else
-            echo "note: could not identify the cargo vendor derivation; building .#default" >&2
-            nix build .#default --no-link --max-jobs 1 >"$log" 2>&1 || true
-          fi
+          nix build .#default --no-link --max-jobs 1 >"$log" 2>&1 || true
           got="$(grep -oE 'got: +sha256-[A-Za-z0-9+/=]+' "$log" | head -1 | awk '{print $2}')"
           if [[ -z "$got" ]]; then
             echo "error: could not determine the cargoHash; build output follows" >&2
