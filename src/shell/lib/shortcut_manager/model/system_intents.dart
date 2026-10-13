@@ -29,3 +29,9 @@ class DecreaseBrightness extends Intent {
   ///
   const DecreaseBrightness();
 }
+
+/// An intent to toggle the active keyboard layout
+class ToggleKeyboardLayout extends Intent {
+  ///
+  const ToggleKeyboardLayout();
+}

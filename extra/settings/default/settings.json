@@ -17,7 +17,8 @@
                 "decreaseVolume": "volumeDown",
                 "muteVolume": "volumeMute",
                 "increaseBrightness": "brightnessUp",
-                "decreaseBrightness": "brightnessDown"
+                "decreaseBrightness": "brightnessDown",
+                "toggleKeyboardLayout": "super+space"
             },
             "media": {
                 "playPause": "mediaPlayPause",

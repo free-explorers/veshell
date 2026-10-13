@@ -59,6 +59,29 @@ Disabling `repeat` is advertised as a rate of `0`, which turns off both client
 repetition (through `repeat_info`) and the shell repeater. A settings change
 re-applies both through `apply_veshell_settings`.
 
+## Layouts
+
+The seat's keymap can carry several layouts at once. `keyboard.layout` is a
+comma-separated xkb list (`us(altgr-intl),ru`); each entry may name a variant in
+parentheses. The compositor compiles the whole list into a single keymap through
+`XkbConfig::layout`, both at seat creation and whenever
+`apply_veshell_settings` re-runs.
+
+Switching is a shell-owned global hotkey, like the others. The shipped default
+binds `system.toggleKeyboardLayout` to `Super+Space`; pressing it runs the
+`ToggleKeyboardLayout` intent, which sends the `switch_keyboard_layout` platform
+request. The compositor answers with `KeyboardHandle::with_xkb_state` →
+`XkbContext::cycle_next_layout`, advancing the active xkb group and broadcasting
+the modifier/group change to the focused client. The cycle follows the
+configured order and wraps from the last layout back to the first.
+
+The settings UI picks each entry from the catalogue the compositor reports
+through `get_keyboard_layouts`, which reads libxkbregistry — the same parser
+`XkbConfig` compiles against — so the picker cannot offer a layout the seat
+would reject. Entries are persisted comma-separated; a hand-edited value still
+deserializes, and a single-layout configuration leaves the toggle inert
+(cycling always lands on the first layout).
+
 ## Invariants
 
 - Every physical key event is offered to Flutter before any client sees it.

@@ -67,6 +67,25 @@ class PlatformManager extends _$PlatformManager {
         if (entry.value is String) entry.key as String: entry.value as String,
     };
   }
+
+  /// Fetch the keyboard layouts and variants the compositor can compile, read
+  /// from libxkbregistry. Each entry has `layout`, `variant`, `brief`,
+  /// `description`, `iso639` and `iso3166`.
+  Future<List<Map<String, dynamic>>> fetchKeyboardLayouts() async {
+    const channel = MethodChannel('platform', JSONMethodCodec());
+    final response = await channel.invokeMapMethod<dynamic, dynamic>(
+      'get_keyboard_layouts',
+      const <String, dynamic>{},
+    );
+    final layouts = response?['layouts'];
+    if (layouts is! List) {
+      return const [];
+    }
+    return [
+      for (final layout in layouts)
+        if (layout is Map) layout.cast<String, dynamic>(),
+    ];
+  }
 }
 
 /// base class for a wayland interaction
