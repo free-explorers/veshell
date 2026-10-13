@@ -13,3 +13,20 @@ double snapToWholePixel(double value) => value.roundToDouble();
 /// [snapToWholePixel] applied to an [Offset].
 Offset snapOffsetToWholePixels(Offset offset) =>
     Offset(snapToWholePixel(offset.dx), snapToWholePixel(offset.dy));
+
+/// Snaps a scroll viewport to a whole number of `count` whole-pixel pages.
+///
+/// Each page is `extent / count` wide; when that is fractional every page
+/// after the first starts off the logical pixel grid. Returning the viewport
+/// rounded down to `count` whole-pixel pages keeps every page origin integral,
+/// at the cost of at most `count - 1` unused pixels at the trailing edge.
+///
+/// An unbounded [extent], or one smaller than a single pixel per page, is
+/// returned unchanged so the caller behaves as it did without snapping.
+double snapPageViewport(double extent, int count) {
+  if (!extent.isFinite || count <= 0) {
+    return extent;
+  }
+  final pageDimension = (extent / count).floorToDouble();
+  return pageDimension >= 1 ? pageDimension * count : extent;
+}

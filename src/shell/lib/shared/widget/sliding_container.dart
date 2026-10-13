@@ -3,6 +3,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/platform/widget/swipe_gesture_detector.dart';
+import 'package:shell/shared/util/snapping.dart';
 
 const swipeVelocityThreshold = 800;
 
@@ -138,16 +139,44 @@ class SlidingContainer extends HookConsumerWidget {
               }
             }
           },
-          child: PageView.builder(
-            controller: pageController,
-            scrollDirection: direction,
-            itemCount: children.length,
-            itemBuilder: (context, index) {
-              return children[index];
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // Snap the page viewport to a whole number of whole-pixel pages.
+              // A live Wayland surface is an external Flutter `Texture` sampled
+              // bilinearly (`FilterQuality.low`), so a fractional page origin
+              // softens every window on it. `viewport / visible` is fractional
+              // whenever the viewport is not divisible by the visible count
+              // (e.g. `2464 / 3`), which put the second and later tiles off the
+              // pixel grid. Keeping the viewport a whole multiple of the page
+              // leaves at most `visible - 1` pixels unused at the trailing
+              // edge; the scroll math reads the controller's viewport, so it
+              // follows the snapped extent automatically.
+              final isHorizontal = direction == Axis.horizontal;
+              final mainAxisExtent = isHorizontal
+                  ? constraints.maxWidth
+                  : constraints.maxHeight;
+              final pageViewport = snapPageViewport(mainAxisExtent, visible);
+              return Align(
+                alignment: isHorizontal
+                    ? Alignment.centerLeft
+                    : Alignment.topCenter,
+                child: SizedBox(
+                  width: isHorizontal ? pageViewport : constraints.maxWidth,
+                  height: isHorizontal ? constraints.maxHeight : pageViewport,
+                  child: PageView.builder(
+                    controller: pageController,
+                    scrollDirection: direction,
+                    itemCount: children.length,
+                    itemBuilder: (context, index) {
+                      return children[index];
+                    },
+                    physics: const NeverScrollableScrollPhysics(),
+                    pageSnapping: false,
+                    padEnds: false,
+                  ),
+                ),
+              );
             },
-            physics: const NeverScrollableScrollPhysics(),
-            pageSnapping: false,
-            padEnds: false,
           ),
         );
       },
