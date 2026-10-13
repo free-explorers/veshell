@@ -294,9 +294,17 @@ class SettingsProperties extends _$SettingsProperties {
         description: null,
         icon: MdiIcons.mouse,
         children: {
-          'naturalScrolling': SettingProperty<bool>(
-            name: l10n.naturalScrolling,
-            description: l10n.naturalScrollingDescription,
+          'mouseNaturalScrolling': SettingProperty<bool>(
+            name: l10n.mouseNaturalScrolling,
+            description: l10n.mouseNaturalScrollingDescription,
+          ),
+          'touchpadNaturalScrolling': SettingProperty<bool>(
+            name: l10n.touchpadNaturalScrolling,
+            description: l10n.touchpadNaturalScrollingDescription,
+          ),
+          'wheelScrollFactor': SettingProperty<double>(
+            name: l10n.wheelScrollFactor,
+            description: l10n.wheelScrollFactorDescription,
           ),
         },
       ),

@@ -82,7 +82,40 @@ fn default_keyboard_repeat_rate() -> u64 {
 #[serde(rename_all = "camelCase")]
 
 pub struct MouseAndTouchpadSettings {
-    pub natural_scrolling: bool,
+    /// Reverse the scroll direction on mice.
+    ///
+    /// Defaults off, matching libinput, GNOME, Windows and KDE: a mouse wheel
+    /// scrolls content in the traditional direction.
+    #[serde(default)]
+    pub mouse_natural_scrolling: bool,
+    /// Reverse the two-finger scroll direction on touchpads.
+    ///
+    /// Defaults on, matching GNOME and libinput's Apple-touchpad default.
+    #[serde(default = "default_touchpad_natural_scrolling")]
+    pub touchpad_natural_scrolling: bool,
+    /// Multiplier applied to the mouse wheel's scroll distance. `1.0` is the
+    /// neutral default.
+    ///
+    /// The shell turns it into `DEFAULT_WHEEL_SCROLL_PIXELS_PER_DETENT` logical
+    /// pixels per detent and forwards the same factor to client apps (whose
+    /// scroll units are toolkit-relative, so only a factor can reach them).
+    /// This mirrors the `scroll_factor` knobs in KWin, Hyprland and labwc.
+    #[serde(default = "default_wheel_scroll_factor")]
+    pub wheel_scroll_factor: f64,
+}
+
+fn default_touchpad_natural_scrolling() -> bool {
+    true
+}
+
+/// Shipped default for the shell's wheel step, in logical pixels per detent.
+///
+/// 53 is GTK+'s wheel step (copied by Chromium's X11 code and Flutter's GTK
+/// embedder). `mouseAndTouchpad.wheelScrollFactor` scales it.
+pub const DEFAULT_WHEEL_SCROLL_PIXELS_PER_DETENT: u32 = 53;
+
+fn default_wheel_scroll_factor() -> f64 {
+    1.0
 }
 
 #[derive(Serialize, Deserialize)]
@@ -603,5 +636,34 @@ mod keyboard_settings_tests {
         .unwrap();
         assert_eq!(settings.repeat_delay_ms, 0);
         assert_eq!(settings.repeat_rate, 0);
+    }
+}
+
+#[cfg(test)]
+mod mouse_and_touchpad_settings_tests {
+    use super::*;
+
+    /// A settings file written before the split kept a single
+    /// `naturalScrolling` flag. It is dropped when merged with the shipped
+    /// defaults, and the per-device split falls back to mouse off / touchpad on.
+    #[test]
+    fn legacy_natural_scrolling_key_falls_back_to_the_split_defaults() {
+        let settings: MouseAndTouchpadSettings =
+            serde_json::from_str(r#"{"naturalScrolling":true}"#).unwrap();
+
+        assert!(!settings.mouse_natural_scrolling);
+        assert!(settings.touchpad_natural_scrolling);
+        assert_eq!(settings.wheel_scroll_factor, 1.0);
+    }
+
+    #[test]
+    fn wheel_scroll_factor_defaults_to_one_and_reads_custom_values() {
+        let defaulted: MouseAndTouchpadSettings =
+            serde_json::from_str(r#"{"mouseNaturalScrolling":false}"#).unwrap();
+        assert_eq!(defaulted.wheel_scroll_factor, 1.0);
+
+        let custom: MouseAndTouchpadSettings =
+            serde_json::from_str(r#"{"wheelScrollFactor":1.5}"#).unwrap();
+        assert_eq!(custom.wheel_scroll_factor, 1.5);
     }
 }
