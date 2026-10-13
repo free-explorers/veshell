@@ -73,8 +73,13 @@ class WindowWidget extends HookConsumerWidget {
       ),
     );
     // One corrective patch per observed mismatch: a client that refuses the
-    // configure would otherwise be re-patched on every commit it makes.
-    final lastCorrectedMismatch = useRef<String?>(null);
+    // configure would otherwise be re-patched on every commit it makes. The
+    // key is a value type, compared field by field: a string key built from
+    // `Size` interpolation is not reliable in release builds (there `Size`
+    // stringifies to a constant `Instance of 'Size'`), which made every
+    // mismatch look alike and suppressed all corrective patches after the
+    // first one.
+    final lastCorrectedMismatch = useRef<(String, Size, Size?)?>(null);
 
     useEffect(
       () {
@@ -144,8 +149,11 @@ class WindowWidget extends HookConsumerWidget {
                           geometryLog.info(
                             'sizing tile id=$metaWindowId '
                             'surface=${metaWindow.surfaceId} '
-                            'target=$targetSize before=${geometry?.size} '
-                            'actual=$logicalBufferSize '
+                            'target=${targetSize.width}x${targetSize.height} '
+                            'before=${geometry?.width}x${geometry?.height} '
+                            'actual='
+                            '${logicalBufferSize?.width}x'
+                            '${logicalBufferSize?.height} '
                             'fixed=${metaWindow.isFixedSized} '
                             'scale=${metaWindow.scaleRatio}',
                           );
@@ -166,13 +174,15 @@ class WindowWidget extends HookConsumerWidget {
                           if (atTarget || metaWindow.isFixedSized) {
                             return;
                           }
-                          final mismatchSignature =
-                              '$metaWindowId|$targetSize|$logicalBufferSize';
-                          if (lastCorrectedMismatch.value ==
-                              mismatchSignature) {
+                          final mismatchKey = (
+                            metaWindowId,
+                            targetSize,
+                            logicalBufferSize,
+                          );
+                          if (lastCorrectedMismatch.value == mismatchKey) {
                             return;
                           }
-                          lastCorrectedMismatch.value = mismatchSignature;
+                          lastCorrectedMismatch.value = mismatchKey;
 
                           ref
                               .read(

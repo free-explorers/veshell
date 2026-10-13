@@ -170,4 +170,92 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'every tile-count change re-asserts the size, not just the first one',
+    (tester) async {
+      final events = StreamController<PlatformEvent>.broadcast();
+      addTearDown(events.close);
+      tester.view
+        ..devicePixelRatio = 1.0
+        ..physicalSize = const Size(1000, 800);
+      addTearDown(tester.view.reset);
+
+      final visible = ValueNotifier<int>(1);
+      addTearDown(visible.dispose);
+      final focusNode = FocusNode();
+      addTearDown(focusNode.dispose);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            platformManagerProvider.overrideWithValue(events.stream),
+            metaWindowStateProvider(
+              _windowId,
+            ).overrideWith(_FakeMetaWindowState.new),
+            wlSurfaceStateProvider(
+              _surfaceId,
+            ).overrideWith(_FakeSurfaceState.new),
+          ],
+          child: MaterialApp(
+            home: CurrentMonitorName(
+              name: 'M1',
+              child: ValueListenableBuilder<int>(
+                valueListenable: visible,
+                builder: (context, visibleCount, _) => Center(
+                  child: SizedBox(
+                    width: 1000,
+                    height: 800,
+                    child: SlidingContainer(
+                      index: 0,
+                      visible: visibleCount,
+                      children: [
+                        WindowWidget(
+                          metaWindowId: _windowId,
+                          focusNode: focusNode,
+                        ),
+                        const SizedBox(),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // A guard that locks after the first correction (for instance one keyed
+      // on a stringified `Size`, which is not reliable in release builds) would
+      // let later cycles leave the window at the previous tile's size.
+      for (var cycle = 0; cycle < 2; cycle++) {
+        _patches.clear();
+        _surfaceState!.setBuffer(_fullSize);
+        visible.value = 2;
+        await tester.pump();
+        await tester.pump();
+        expect(
+          _patches
+              .whereType<UpdateGeometry>()
+              .map((patch) => patch.value?.width),
+          contains(_halfSize.width),
+          reason: 'cycle $cycle must shrink to the half tile',
+        );
+
+        _patches.clear();
+        _surfaceState!.setBuffer(_halfSize);
+        visible.value = 1;
+        await tester.pump();
+        await tester.pump();
+        expect(
+          _patches
+              .whereType<UpdateGeometry>()
+              .map((patch) => patch.value?.width),
+          contains(_fullSize.width),
+          reason: 'cycle $cycle must grow back to the full tile',
+        );
+      }
+    },
+  );
 }
