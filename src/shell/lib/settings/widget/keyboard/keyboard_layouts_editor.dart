@@ -109,18 +109,18 @@ class _KeyboardLayoutField extends StatelessWidget {
       // leave the selection empty, so saving an untouched row preserves it.
       initialSelection: selected,
       hintText: selected == null && current.isNotEmpty ? current : null,
-      label: Text(context.l10n.layout),
       enableFilter: true,
       requestFocusOnTap: true,
       expandedInsets: EdgeInsets.zero,
       menuHeight: 320,
+      inputDecorationTheme: const InputDecorationTheme(filled: true),
       // The description is shown, but filtering also matches the xkb entry, so
       // typing `ru` finds Russian as well as typing its name.
       dropdownMenuEntries: [
         for (final option in options)
           DropdownMenuEntry<KeyboardLayoutOption>(
             value: option,
-            label: '${option.description} (${option.entry})',
+            label: option.description,
             labelWidget: Text(option.description),
           ),
       ],
