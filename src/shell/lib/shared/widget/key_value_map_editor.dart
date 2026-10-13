@@ -159,6 +159,7 @@ class _KeyValueMapEditorState extends State<KeyValueMapEditor> {
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ),
+        const SizedBox(height: 8),
         Row(
           spacing: 8,
           children: [
