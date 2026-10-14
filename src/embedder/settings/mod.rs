@@ -24,6 +24,9 @@ type MonitorSettingsCallback<BackendData> = fn(&mut State<BackendData>, &str);
 pub struct KeyboardSettings {
     pub layout: String,
     pub swap_alt_and_win: bool,
+    /// What the Caps Lock key does, implemented as an xkb option.
+    #[serde(default, deserialize_with = "deserialize_caps_lock_behavior")]
+    pub caps_lock: CapsLockBehavior,
     /// Whether holding a key repeats it.
     #[serde(default = "default_keyboard_repeat")]
     pub repeat: bool,
@@ -53,6 +56,56 @@ impl KeyboardSettings {
             0
         }
     }
+}
+
+/// What the Caps Lock key does.
+///
+/// Unlike [`KeyboardSettings::swap_alt_and_win`] — an event-level keycode swap —
+/// this is applied through an xkb *option* on the seat keymap, so the remap is
+/// one-way and reaches both the shell and forwarded clients.
+#[derive(Serialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum CapsLockBehavior {
+    /// Caps Lock keeps its normal behavior.
+    #[default]
+    Default,
+    /// Caps Lock acts as an additional Control (`ctrl:nocaps`).
+    Control,
+    /// Caps Lock acts as Escape (`caps:escape`).
+    Escape,
+    /// Caps Lock and Escape are swapped (`caps:swapescape`).
+    Swapescape,
+    /// Caps Lock is disabled (`caps:none`).
+    Disabled,
+}
+
+impl CapsLockBehavior {
+    /// The xkb option that implements this behavior, or `None` for the default.
+    pub fn xkb_option(self) -> Option<&'static str> {
+        match self {
+            Self::Default => None,
+            Self::Control => Some("ctrl:nocaps"),
+            Self::Escape => Some("caps:escape"),
+            Self::Swapescape => Some("caps:swapescape"),
+            Self::Disabled => Some("caps:none"),
+        }
+    }
+}
+
+/// Reads a [`CapsLockBehavior`], falling back to the default for an unknown
+/// value so a hand-edited `settings.json` cannot take the settings load down.
+fn deserialize_caps_lock_behavior<'de, D>(deserializer: D) -> Result<CapsLockBehavior, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+    Ok(match value.as_str() {
+        "control" => CapsLockBehavior::Control,
+        "escape" => CapsLockBehavior::Escape,
+        "swapescape" => CapsLockBehavior::Swapescape,
+        "disabled" => CapsLockBehavior::Disabled,
+        _ => CapsLockBehavior::Default,
+    })
 }
 
 /// Reads a non-negative integer, clamping negative values to `0`.
@@ -688,6 +741,46 @@ mod keyboard_settings_tests {
         .unwrap();
         assert_eq!(settings.repeat_delay_ms, 0);
         assert_eq!(settings.repeat_rate, 0);
+    }
+
+    /// A settings file written before the field existed keeps deserializing.
+    #[test]
+    fn caps_lock_defaults_when_missing() {
+        let settings: KeyboardSettings =
+            serde_json::from_str(r#"{"layout":"us","swapAltAndWin":false}"#).unwrap();
+        assert_eq!(settings.caps_lock, CapsLockBehavior::Default);
+        assert_eq!(settings.caps_lock.xkb_option(), None);
+    }
+
+    #[test]
+    fn caps_lock_reads_each_behavior() {
+        for (value, behavior, option) in [
+            ("default", CapsLockBehavior::Default, None),
+            ("control", CapsLockBehavior::Control, Some("ctrl:nocaps")),
+            ("escape", CapsLockBehavior::Escape, Some("caps:escape")),
+            (
+                "swapescape",
+                CapsLockBehavior::Swapescape,
+                Some("caps:swapescape"),
+            ),
+            ("disabled", CapsLockBehavior::Disabled, Some("caps:none")),
+        ] {
+            let settings: KeyboardSettings = serde_json::from_str(&format!(
+                r#"{{"layout":"us","swapAltAndWin":false,"capsLock":"{value}"}}"#
+            ))
+            .unwrap();
+            assert_eq!(settings.caps_lock, behavior);
+            assert_eq!(settings.caps_lock.xkb_option(), option);
+        }
+    }
+
+    #[test]
+    fn unknown_caps_lock_falls_back_to_the_default() {
+        let settings: KeyboardSettings = serde_json::from_str(
+            r#"{"layout":"us","swapAltAndWin":false,"capsLock":"nonsense"}"#,
+        )
+        .unwrap();
+        assert_eq!(settings.caps_lock, CapsLockBehavior::Default);
     }
 }
 

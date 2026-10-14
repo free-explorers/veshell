@@ -422,6 +422,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .add_keyboard(
                 XkbConfig {
                     layout: &settings.keyboard.layout,
+                    // Caps Lock remapping is an xkb option (see `CapsLockBehavior`).
+                    options: settings.keyboard.caps_lock.xkb_option().map(str::to_owned),
                     ..XkbConfig::default()
                 },
                 repeat_delay as i32,
@@ -682,6 +684,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 self,
                 XkbConfig {
                     layout: &settings.keyboard.layout.clone(),
+                    options: settings.keyboard.caps_lock.xkb_option().map(str::to_owned),
                     ..XkbConfig::default()
                 },
             )

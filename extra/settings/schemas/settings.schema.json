@@ -38,6 +38,16 @@
                 "swapAltAndWin": {
                     "type": "boolean"
                 },
+                "capsLock": {
+                    "type": "string",
+                    "enum": [
+                        "default",
+                        "control",
+                        "escape",
+                        "swapescape",
+                        "disabled"
+                    ]
+                },
                 "repeat": {
                     "type": "boolean"
                 },
