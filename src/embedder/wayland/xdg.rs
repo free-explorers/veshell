@@ -35,7 +35,6 @@ pub mod xdg {
 
     use crate::{
         flutter_engine::wayland_messages::MyPoint,
-        focus::KeyboardFocusTarget,
         meta_window_state::{
             meta_popup::{self, MetaPopup, MetaPopupPatch},
             meta_resize_edge::MetaResizeEdge,
@@ -597,18 +596,17 @@ pub mod xdg {
 
             let activated_surface_id = get_surface_id(&surface);
 
-            let focused_surface = match self.keyboard.current_focus() {
-                Some(KeyboardFocusTarget::WlSurface(focused)) => Some(focused),
-                _ => None,
-            };
-
-            // Prefer the surface the requesting client declared; fall back to
-            // the currently keyboard-focused surface, which for a freshly
-            // opened child is the window the user acted on.
-            let requesting_surface = token_data
-                .surface
-                .clone()
-                .or_else(|| focused_surface.clone());
+            // Only the opener the requesting client actually declared. The
+            // previous fallback to the keyboard-focused surface made
+            // `activatedBy` mean "whatever was focused" for programmatic
+            // windows (e.g. a browser restoring its session), so the shell
+            // attached them as dialogs of an unrelated tile. A token with no
+            // declared opener now records no relation and the window is matched
+            // normally. If that turns out to drop useful same-application
+            // hints, scope a fallback to the focused surface of the *same*
+            // application instead of using it unconditionally (see
+            // docs/specifications/matching_algorithm.md, "Dialog routing").
+            let requesting_surface = token_data.surface.clone();
 
             let requesting_meta_window_id = requesting_surface.and_then(|requesting| {
                 let requesting_surface_id = get_surface_id(&requesting);
