@@ -91,14 +91,27 @@ class OverviewShortcuts extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final screenId = CurrentScreenId.of(context);
 
+    // `SingleActivator(meta: true)` only matches `meta`/`metaLeft`/`metaRight`,
+    // not the `superKey` the engine reports for the Super key. Build the chord
+    // from the key set and cover both spellings, like the global hotkeys do.
+    final shortcuts = <ShortcutActivator, Intent>{};
+    for (final modifier in const [
+      LogicalKeyboardKey.superKey,
+      LogicalKeyboardKey.meta,
+    ]) {
+      shortcuts[LogicalKeySet.fromSet({modifier, LogicalKeyboardKey.tab})] =
+          const CycleIntent(forward: true);
+      shortcuts[LogicalKeySet.fromSet({
+        modifier,
+        LogicalKeyboardKey.shift,
+        LogicalKeyboardKey.tab,
+      })] = const CycleIntent(
+        forward: false,
+      );
+    }
+
     return Shortcuts(
-      shortcuts: const {
-        SingleActivator(LogicalKeyboardKey.tab, meta: true): CycleIntent(
-          forward: true,
-        ),
-        SingleActivator(LogicalKeyboardKey.tab, meta: true, shift: true):
-            CycleIntent(forward: false),
-      },
+      shortcuts: shortcuts,
       child: Actions(
         actions: {
           // Fallback for focus that is neither in the search pane nor in the

@@ -5,6 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/app_drawer.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/overview/model/search_mode.dart';
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/overview/widget/overview_shortcuts.dart';
 import 'package:shell/overview/widget/search/search_engine.dart';
@@ -162,6 +163,33 @@ void main() {
     // Handing the keyboard to the list paints the focused row.
     await pressSuperS();
     expect(rowMaterial().color, isNot(Colors.transparent));
+  });
+
+  testWidgets('Super+Tab cycles the search mode', (tester) async {
+    final container = await pumpAppMode(tester);
+
+    SearchMode mode() =>
+        container.read(overviewStateProvider(screenId)).searchMode;
+    expect(mode(), SearchMode.application);
+
+    Future<void> press(LogicalKeyboardKey key, {bool shift = false}) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      if (shift) {
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      }
+      await tester.sendKeyEvent(key);
+      if (shift) {
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      }
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pump();
+    }
+
+    await press(LogicalKeyboardKey.tab);
+    expect(mode(), SearchMode.file);
+
+    await press(LogicalKeyboardKey.tab, shift: true);
+    expect(mode(), SearchMode.application);
   });
 
   testWidgets('typing focuses the first result', (tester) async {
