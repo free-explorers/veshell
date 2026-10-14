@@ -33,7 +33,8 @@ class NavigateIntent extends Intent {
 }
 
 /// Moves the currently selected item in [direction] within the current
-/// context (reordering workspaces or tileables).
+/// context: horizontally the selected tileable is reordered in its workspace;
+/// vertically the selected tileable is sent to the workspace above/below.
 class MoveIntent extends Intent {
   ///
   const MoveIntent(this.direction);

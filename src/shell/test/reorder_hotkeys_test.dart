@@ -28,6 +28,27 @@ class _FakeWorkspaceState extends WorkspaceState {
   Workspace build(WorkspaceId workspaceId) => _workspace;
 }
 
+/// A workspace that records `insertWindow` instead of mutating state, so a
+/// cross-workspace move can be asserted without the async category lookup.
+class _RecordingWorkspaceState extends WorkspaceState {
+  _RecordingWorkspaceState({required this.workspace, required this.calls});
+
+  final Workspace workspace;
+  final List<(PersistentWindowId, int, bool)> calls;
+
+  @override
+  Workspace build(WorkspaceId workspaceId) => workspace;
+
+  @override
+  Future<void> insertWindow(
+    PersistentWindowId windowId,
+    int index, {
+    bool selectWindow = false,
+  }) async {
+    calls.add((windowId, index, selectWindow));
+  }
+}
+
 Screen _screenWith(List<String> workspaces, {int selectedIndex = 0}) => Screen(
   screenId: _screen,
   workspaceList: workspaces.lock,
@@ -225,6 +246,92 @@ void main() {
         't2',
       ]);
       expect(current().selectedIndex, 2);
+    });
+  });
+
+  group('moving a tileable between workspaces', () {
+    late List<(PersistentWindowId, int, bool)> calls;
+
+    ProviderContainer setUpScreen({
+      required int selectedWorkspace,
+      required int selectedWindow,
+      int windowCount = 2,
+    }) {
+      calls = [];
+      final container = ProviderContainer(
+        overrides: [
+          screenStateProvider(_screen).overrideWith(
+            () => _FakeScreenState(
+              _screenWith([
+                'ws-a',
+                'ws-b',
+                'ws-c',
+              ], selectedIndex: selectedWorkspace),
+            ),
+          ),
+          workspaceStateProvider('ws-a').overrideWith(
+            () => _RecordingWorkspaceState(
+              workspace: _workspaceWith(
+                ['t1', 't2'].take(windowCount).toList(),
+                selectedIndex: selectedWindow,
+              ),
+              calls: calls,
+            ),
+          ),
+          workspaceStateProvider('ws-b').overrideWith(
+            () => _RecordingWorkspaceState(
+              workspace: _workspaceWith(['b1'], selectedIndex: 0),
+              calls: calls,
+            ),
+          ),
+          workspaceStateProvider('ws-c').overrideWith(
+            () => _RecordingWorkspaceState(
+              workspace: _workspaceWith([], selectedIndex: 0),
+              calls: calls,
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      return container;
+    }
+
+    ScreenState notifier(ProviderContainer container) =>
+        container.read(screenStateProvider(_screen).notifier);
+
+    test('sends the selected window to the workspace below', () {
+      final container = setUpScreen(selectedWorkspace: 0, selectedWindow: 1);
+
+      notifier(container).moveSelectedTileableToWorkspace(1);
+
+      // Appended after ws-b's existing tile and selected there.
+      expect(calls, [(PersistentWindowId.new('t2'), 1, true)]);
+    });
+
+    test('sends the selected window to the workspace above', () {
+      // ws-b's first tile, appended after ws-a's two tiles.
+      final container = setUpScreen(selectedWorkspace: 1, selectedWindow: 0);
+
+      notifier(container).moveSelectedTileableToWorkspace(-1);
+
+      expect(calls, [(PersistentWindowId.new('b1'), 2, true)]);
+    });
+
+    test('does nothing at the edge of the workspace list', () {
+      final container = setUpScreen(selectedWorkspace: 0, selectedWindow: 0);
+
+      notifier(container).moveSelectedTileableToWorkspace(-1);
+
+      expect(calls, isEmpty);
+    });
+
+    test('does nothing when the application launcher is selected', () {
+      // Two windows, so index 2 is the launcher slot.
+      final container = setUpScreen(selectedWorkspace: 0, selectedWindow: 2);
+
+      notifier(container).moveSelectedTileableToWorkspace(1);
+
+      expect(calls, isEmpty);
     });
   });
 }

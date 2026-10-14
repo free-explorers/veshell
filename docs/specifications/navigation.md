@@ -56,7 +56,7 @@ handlers run, because a resolved intent is dispatched from
 
 | Context | `NavigateIntent` | `MoveIntent` | `ActivateIntent` | `DismissIntent` | `CloseIntent` | `CycleIntent` |
 | --- | --- | --- | --- | --- | --- | --- |
-| **Screen** | up/down select the workspace | up/down reorder the workspace | — | — | — | — |
+| **Screen** | up/down select the workspace | up/down send the selected tile to the workspace above/below | — | — | — | — |
 | **Workspace** | left/right select the tileable; up/down forwarded to the screen | left/right reorder the tileable; up/down forwarded | — | — | close the focused tileable | — |
 | **Search field** (`SearchEngine`) | down hands the keyboard to the result list; left/right move across the panes | — | activate the current result | — | — | — |
 | **Result list** (applications / files) | up/down move the roving selection cursor; up on the first row returns to the field; left/right move across the panes | — | activate the selected row | — | — | — |
@@ -123,7 +123,7 @@ Shipped defaults:
 | `Super+S` / `Super+Down` | Navigate down |
 | `Super+A` / `Super+Left` | Navigate left |
 | `Super+D` / `Super+Right` | Navigate right |
-| `Super+Shift+W/S/A/D` (+ arrows) | Move in that direction |
+| `Super+Shift+W/S/A/D` (+ arrows) | left/right reorder the tileable; up/down send it to the workspace above/below |
 | `Enter` / `Numpad Enter` | Activate |
 | `Super+Q` | Close |
 | `Super+Tab` / `Super+Shift+Tab` | Cycle the overview search mode |

@@ -113,6 +113,10 @@ class ScreenWidget extends HookConsumerWidget {
                             return null;
                           },
                         ),
+                        // Vertically, a move sends the selected tile to the
+                        // workspace above/below; horizontal reordering is
+                        // owned by the workspace itself (its handler is
+                        // closer to focus and delegates up here).
                         MoveIntent: CallbackAction<MoveIntent>(
                           onInvoke: (intent) {
                             final notifier = ref.read(
@@ -120,14 +124,12 @@ class ScreenWidget extends HookConsumerWidget {
                             );
                             switch (intent.direction) {
                               case NavigationDirection.up:
-                                notifier.moveSelectedWorkspaceAbove();
+                                notifier.moveSelectedTileableToWorkspace(-1);
                               case NavigationDirection.down:
-                                notifier.moveSelectedWorkspaceBelow();
+                                notifier.moveSelectedTileableToWorkspace(1);
                               case NavigationDirection.left:
                               case NavigationDirection.right:
-                                if (context.mounted) {
-                                  Actions.maybeInvoke(context, intent);
-                                }
+                                break;
                             }
                             return null;
                           },
