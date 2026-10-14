@@ -55,6 +55,21 @@ const _maxLaunchReopenAttempts = 1;
 /// title that exactly matches the helper, smaller than `INF_COST`.
 const _fixedSizeDisplayPenalty = 100;
 
+/// Trailing quiet time after the last window change before a launch burst
+/// settles.
+///
+/// Burst detection is purely temporal: every window the gather receives
+/// re-arms this timer, and when it finally fires ownership is decided by title
+/// and the tile stops gathering. It must cover applications that map their
+/// startup windows slightly apart — a browser restoring its session maps its
+/// windows over a few hundred milliseconds — otherwise the late window is seen
+/// as a *further opening* after the settle and attaches as a dialog of
+/// whatever relation it carries (see `MAX_WINDOW_REASSOCIATION_TIME_MS` and the
+/// matching algorithm spec). It stays well below
+/// [MAX_SPLASH_GATHER_TIME_MS], the fixed-size deferral bound, so a genuinely
+/// fixed-size final surface still settles as the tile's own window.
+const _settleDebounce = Duration(milliseconds: 150);
+
 mixin WindowProviderMixin<T extends Window> {
   T get state;
   set state(T value);
@@ -145,10 +160,7 @@ mixin WindowProviderMixin<T extends Window> {
     _recomputeDisplayedMetaWindow();
 
     if (_launchOrigin || _metaWindowSubscriptions.length > 1) {
-      _debouncedTimer = Timer(
-        const Duration(milliseconds: 100),
-        _onSettleTimer,
-      );
+      _debouncedTimer = Timer(_settleDebounce, _onSettleTimer);
     }
   }
 
@@ -159,10 +171,7 @@ mixin WindowProviderMixin<T extends Window> {
   void _onSettleTimer() {
     if (_launchOrigin) {
       if (_shouldDeferSettleForFixedSize()) {
-        _debouncedTimer = Timer(
-          const Duration(milliseconds: 100),
-          _onSettleTimer,
-        );
+        _debouncedTimer = Timer(_settleDebounce, _onSettleTimer);
         return;
       }
       _finalizeLaunchBurst();
