@@ -58,6 +58,20 @@ class FileExplorerState extends _$FileExplorerState {
     state = state.copyWith(pendingSelectedPath: null);
   }
 
+  /// Jumps to [path] for the portal file chooser, optionally pre-selecting
+  /// [selected] once the listing loads.
+  ///
+  /// Unlike [openDirectory] it never selects the first entry: a chooser that
+  /// opens on a requested folder shows no surprise selection.
+  void setInitialLocation(DirectoryPath path, {DirectoryPath? selected}) {
+    state = state.copyWith(
+      path: path,
+      filterText: '',
+      pendingSelectedPath: selected,
+      pendingSelectFirst: false,
+    );
+  }
+
   /// Clears the pending "select first entry" flag once the view has applied it.
   void clearPendingSelectFirst() {
     if (!state.pendingSelectFirst) {

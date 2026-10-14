@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/capture/provider/screen_cast_consent.dart';
 import 'package:shell/capture/provider/screen_cast_indicator.dart';
 import 'package:shell/capture/provider/screenshot_prompt.dart';
+import 'package:shell/file_chooser/provider/file_chooser_request.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/provider/meta_window_manager.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
@@ -213,7 +214,8 @@ class _EagerInitialization extends ConsumerWidget {
       ..watch(screenCastConsentProvider)
       ..watch(screenCastIndicatorProvider)
       ..watch(screenCastRecordingTargetsProvider)
-      ..watch(screenshotPromptProvider);
+      ..watch(screenshotPromptProvider)
+      ..watch(fileChooserRequestProvider);
 
     return InitializationStatus(
       asyncValue: const AsyncData(true),

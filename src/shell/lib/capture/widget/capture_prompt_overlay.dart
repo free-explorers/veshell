@@ -6,15 +6,17 @@ import 'package:shell/capture/provider/screenshot_prompt.dart';
 import 'package:shell/capture/widget/screen_cast_consent.dart';
 import 'package:shell/capture/widget/screen_cast_indicator_bar.dart';
 import 'package:shell/capture/widget/screenshot_prompt.dart';
+import 'package:shell/file_chooser/provider/file_chooser_request.dart';
+import 'package:shell/file_chooser/widget/file_chooser_dialog.dart';
 import 'package:shell/monitor/provider/focused_monitor.dart';
 
-/// Mounts the portal consent picker, screenshot prompt, and persistent cast
-/// indicator above a monitor's Navigator.
+/// Mounts the portal consent picker, screenshot prompt, file chooser, and
+/// persistent cast indicator above a monitor's Navigator.
 ///
 /// Drawn in `MaterialApp.builder`, so a pushed route can never cover them.
-/// The picker and prompt stay frozen on the monitor that was focused when
-/// the flow opened: moving focus mid-flow must not teleport the dialog.
-/// The cast indicator is persistent and shown on every monitor.
+/// The trusted dialogs stay frozen on the monitor that was focused when the
+/// flow opened: moving focus mid-flow must not teleport them. The cast
+/// indicator is persistent and shown on every monitor.
 class CapturePromptOverlay extends HookConsumerWidget {
   const CapturePromptOverlay({required this.monitorName, super.key});
 
@@ -24,7 +26,9 @@ class CapturePromptOverlay extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final consent = ref.watch(screenCastConsentProvider);
     final prompt = ref.watch(screenshotPromptProvider);
-    final token = consent?.consentToken ?? prompt?.consentToken;
+    final chooser = ref.watch(fileChooserRequestProvider);
+    final token =
+        consent?.consentToken ?? prompt?.consentToken ?? chooser?.consentToken;
 
     // Freeze the target monitor for the current flow token.
     final frozenToken = useRef<int?>(null);
@@ -56,6 +60,7 @@ class CapturePromptOverlay extends HookConsumerWidget {
           if (isPromptTarget) ...[
             const ScreenCastConsentHost(),
             const ScreenshotPromptHost(),
+            const FileChooserHost(),
           ],
         ],
       ),

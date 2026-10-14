@@ -10,6 +10,7 @@ use crate::state::State;
 pub(crate) mod activate_window;
 mod adjust_brightness;
 mod close_window;
+mod file_chooser_decision;
 mod get_environment_variables;
 mod get_keyboard_layouts;
 mod get_monitor_layout;
@@ -82,6 +83,9 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
                     result,
                     data,
                 )
+            }
+            "file_chooser_decision" => {
+                self::file_chooser_decision::file_chooser_decision(method_call, result, data)
             }
             "screen_cast_stop" => {
                 self::screen_cast_stop::screen_cast_stop(method_call, result, data)

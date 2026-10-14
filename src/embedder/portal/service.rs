@@ -10,9 +10,9 @@ use serde_json::json;
 use zbus::zvariant::OwnedObjectPath;
 
 use super::{
-    caller_is_frontend, encode_restore_data, make_reply_pair, Caller, CursorModes, PortalCall,
-    PortalReply, ReplyLink, ScreenCastConstraints, SourceTypes, RESPONSE_CANCELLED,
-    RESPONSE_FAILED, RESPONSE_OK,
+    caller_is_frontend, encode_restore_data, make_reply_pair, Caller, CursorModes, FileChooserKind,
+    FileChooserOptions, PortalCall, PortalDict, PortalReply, ReplyLink, ScreenCastConstraints,
+    SourceTypes, RESPONSE_CANCELLED, RESPONSE_FAILED, RESPONSE_OK,
 };
 
 pub use super::FrontendOwner;
@@ -133,6 +133,10 @@ pub struct PortalLedger {
     /// have no CaptureSession behind them: the ledger itself owns the
     /// prompt-and-capture lifecycle.
     pub screenshots: HashMap<OwnedObjectPath, ScreenshotEntry>,
+    /// In-flight FileChooser portal requests (OpenFile/SaveFile/SaveFiles).
+    /// Like the screenshot flows these have no session: the ledger owns the
+    /// dialog's lifecycle and the reply until the shell answers.
+    pub file_choosers: HashMap<OwnedObjectPath, FileChooserEntry>,
     pub frontend: Option<FrontendOwner>,
     pub next_consent_token: u64,
     /// Transient restore grants (Chromium 105+ stream restoration, spec
@@ -140,6 +144,16 @@ pub struct PortalLedger {
     /// that approved a source; every use revalidates owner and source
     /// liveness, and frontend loss/restart clears the whole map.
     pub restores: HashMap<String, RestoreGrant>,
+}
+
+/// One pending FileChooser dialog: the shell's answer completes
+/// [`FileChooserEntry::reply`] with the selected `file://` URI(s).
+#[derive(Debug)]
+pub struct FileChooserEntry {
+    pub consent_token: u64,
+    pub app_name: String,
+    pub kind: FileChooserKind,
+    pub reply: ReplyLink,
 }
 
 /// An approved source remembered for stream restoration: Chrome's second
@@ -201,6 +215,17 @@ pub enum PortalUiEvent {
         request_handle: OwnedObjectPath,
         app_name: String,
         kind: CaptureKind,
+        consent_token: u64,
+    },
+    /// Opens the trusted file chooser (OpenFile/SaveFile/SaveFiles). The
+    /// decision returns through its own platform-channel callback with the
+    /// unguessable token attached.
+    OpenFileChooser {
+        request_handle: OwnedObjectPath,
+        app_name: String,
+        title: String,
+        kind: FileChooserKind,
+        options: FileChooserOptions,
         consent_token: u64,
     },
 }
@@ -355,6 +380,16 @@ pub fn frontend_owner_changed(
         unexport_request(actions, handle);
     }
     ledger.screenshots.clear();
+    for (_handle, entry) in ledger.file_choosers.iter() {
+        entry.reply.clone().send(cancelled());
+        ui.push(PortalUiEvent::DismissPicker {
+            consent_token: entry.consent_token,
+        });
+    }
+    for handle in ledger.file_choosers.keys().cloned().collect::<Vec<_>>() {
+        unexport_request(actions, handle);
+    }
+    ledger.file_choosers.clear();
     let closed_sessions: Vec<OwnedObjectPath> = ledger.sessions.keys().cloned().collect();
     for session_handle in closed_sessions {
         // A session denied its Start reply before removal never completes:
@@ -812,6 +847,40 @@ fn perform_ui_event<BackendData: crate::backend::Backend + 'static>(
                     None,
                 );
         }
+        PortalUiEvent::OpenFileChooser {
+            request_handle,
+            app_name,
+            title,
+            kind,
+            options,
+            consent_token,
+        } => {
+            // The shell receives the already-decoded options: it never
+            // parses D-Bus types, and the unguessable token binds the
+            // answer back to this exact request.
+            state
+                .flutter_engine_mut()
+                .platform_method_channel
+                .invoke_method(
+                    "file_chooser_request",
+                    Some(Box::new(json!({
+                        "requestHandle": request_handle.as_str(),
+                        "consentToken": consent_token,
+                        "appName": app_name,
+                        "title": title,
+                        "mode": kind,
+                        "multiple": options.multiple,
+                        "directory": options.directory,
+                        "acceptLabel": options.accept_label,
+                        "currentFolder": options.current_folder,
+                        "currentFile": options.current_file,
+                        "currentName": options.current_name,
+                        "files": options.files,
+                        "filters": options.filters,
+                    }))),
+                    None,
+                );
+        }
         PortalUiEvent::DismissPicker { consent_token } => {
             state
                 .flutter_engine_mut()
@@ -1125,6 +1194,65 @@ pub fn handle_screenshot_prompt_decision<BackendData: crate::backend::Backend + 
         return;
     }
     begin_portal_capture(state, &handle, kind, consent_token);
+}
+
+/// Applies the trusted file chooser's decision: the unguessable token binds
+/// the reply, and an approval answers with the selected `file://` URI(s).
+/// Cancelled, stale, or malformed selections complete response 1 and the
+/// exported Request object is removed.
+pub fn handle_file_chooser_decision<BackendData: crate::backend::Backend + 'static>(
+    state: &mut crate::state::State<BackendData>,
+    consent_token: u64,
+    outcome: ConsentOutcome,
+    uris: Vec<String>,
+) {
+    let Some(runtime) = state.portal_state.runtime.as_mut() else {
+        tracing::debug!("File chooser decision without a portal backend");
+        return;
+    };
+    let Some((handle, entry)) = take_file_chooser(&mut runtime.ledger, consent_token) else {
+        tracing::debug!("File chooser decision matched no live request");
+        return;
+    };
+    tracing::debug!(kind = ?entry.kind, app = %entry.app_name, "File chooser answered");
+    let reply = match outcome {
+        ConsentOutcome::Approved => match file_chooser_results(&uris) {
+            Some(results) => PortalReply::new(RESPONSE_OK, results),
+            // An approval with no usable selection can answer nothing: the
+            // call completes failed rather than with an empty result set.
+            None => failed("no valid file selection"),
+        },
+        ConsentOutcome::Cancelled => cancelled(),
+    };
+    entry.reply.send(reply);
+    let _ = runtime.objects.send(PortalAction::UnexportRequest(handle));
+}
+
+/// Removes the pending file chooser matching `consent_token`, if any.
+fn take_file_chooser(
+    ledger: &mut PortalLedger,
+    consent_token: u64,
+) -> Option<(OwnedObjectPath, FileChooserEntry)> {
+    let handle = ledger
+        .file_choosers
+        .iter()
+        .find(|(_, entry)| entry.consent_token == consent_token)
+        .map(|(handle, _)| handle.clone())?;
+    let entry = ledger.file_choosers.remove(&handle)?;
+    Some((handle, entry))
+}
+
+/// Builds the FileChooser result dictionary from the shell's selection. The
+/// portal contract requires `file://` URIs; anything else (or an empty list)
+/// is rejected rather than forwarded.
+fn file_chooser_results(uris: &[String]) -> Option<PortalDict> {
+    if uris.is_empty() || uris.iter().any(|uri| !uri.starts_with("file://")) {
+        return None;
+    }
+    let encoded = OwnedValue::try_from(zbus::zvariant::Value::from(uris.to_vec())).ok()?;
+    let mut results = PortalDict::new();
+    results.insert("uris".to_string(), encoded);
+    Some(results)
 }
 
 /// Ledger side of one screenshot prompt decision: takes the consent out
@@ -2465,6 +2593,53 @@ fn open_screenshot_request(
     reply.send(response);
 }
 
+/// Opens a FileChooser portal request (OpenFile/SaveFile/SaveFiles):
+/// validates the request handle, exports the Request object, mints the
+/// trusted-dialog token, and defers the method's reply to the shell's
+/// answer. These are not session flows: the entries live in the ledger's
+/// `file_choosers` map and answer directly.
+fn open_file_chooser_request(
+    ledger: &mut PortalLedger,
+    actions: &mut Vec<PortalAction>,
+    ui: &mut Vec<PortalUiEvent>,
+    handle: OwnedObjectPath,
+    app_id: String,
+    title: String,
+    kind: FileChooserKind,
+    options: FileChooserOptions,
+    reply: ReplyLink,
+) {
+    let response = if !valid_request_path(handle.as_str()) {
+        failed("invalid request handle")
+    } else if ledger.file_choosers.contains_key(&handle) {
+        failed("request already exists")
+    } else {
+        let consent_token = ledger.consent_token();
+        tracing::info!(?kind, app = %app_id, "Opening the file chooser");
+        ledger.file_choosers.insert(
+            handle.clone(),
+            FileChooserEntry {
+                consent_token,
+                app_name: app_id.clone(),
+                kind,
+                reply,
+            },
+        );
+        actions.push(PortalAction::ExportRequest(handle.clone()));
+        ui.push(PortalUiEvent::OpenFileChooser {
+            request_handle: handle,
+            app_name: app_id,
+            title,
+            kind,
+            options,
+            consent_token,
+        });
+        // The reply link sits in the ledger until the decision arrives.
+        return;
+    };
+    reply.send(response);
+}
+
 /// Applies one bridged backend call: mutates the ledger, queues
 /// object-level actions, and completes the awaiting zbus handler through
 /// the call's own reply link.
@@ -2486,6 +2661,7 @@ pub fn apply_portal_call(
         | PortalCall::Start { .. }
         | PortalCall::Screenshot { .. }
         | PortalCall::PickColor { .. }
+        | PortalCall::FileChooser { .. }
         | PortalCall::RequestClose { .. }) => {
             if !caller_is_frontend(call.call_identity().as_ref(), ledger.frontend.as_ref()) {
                 call.reply().send(unauthorized());
@@ -2789,6 +2965,19 @@ pub fn apply_portal_call(
                         reply,
                     );
                 }
+                PortalCall::FileChooser {
+                    kind,
+                    handle,
+                    app_id,
+                    title,
+                    options,
+                    reply,
+                    ..
+                } => {
+                    open_file_chooser_request(
+                        ledger, actions, ui, handle, app_id, title, kind, options, reply,
+                    );
+                }
                 PortalCall::RequestClose { handle, reply, .. } => {
                     if handle.as_str().contains("/session/") {
                         // A session that closes while its picker is open dismisses
@@ -2823,6 +3012,15 @@ pub fn apply_portal_call(
                         }
                         unexport_request(actions, handle.clone());
                         write(reply, PortalReply::ok());
+                    } else if let Some(chooser) = ledger.file_choosers.remove(&handle) {
+                        // A closed file chooser completes cancelled and the
+                        // shell dismisses any open dialog for the same token.
+                        chooser.reply.send(cancelled());
+                        ui.push(PortalUiEvent::DismissPicker {
+                            consent_token: chooser.consent_token,
+                        });
+                        unexport_request(actions, handle.clone());
+                        write(reply, PortalReply::ok());
                     } else {
                         write(reply, failed("no such pending request"));
                     }
@@ -2855,6 +3053,7 @@ impl PortalCall {
             | PortalCall::Start { caller, .. }
             | PortalCall::Screenshot { caller, .. }
             | PortalCall::PickColor { caller, .. }
+            | PortalCall::FileChooser { caller, .. }
             | PortalCall::RequestClose { caller, .. } => caller.clone(),
             // An ownership event carries no caller identity.
             PortalCall::FrontendOwnerChanged { .. } => None,
@@ -2868,6 +3067,7 @@ impl PortalCall {
             | PortalCall::Start { reply, .. }
             | PortalCall::Screenshot { reply, .. }
             | PortalCall::PickColor { reply, .. }
+            | PortalCall::FileChooser { reply, .. }
             | PortalCall::RequestClose { reply, .. } => reply.clone(),
             // The ownership event carries no reply.
             PortalCall::FrontendOwnerChanged { .. } => {
@@ -4660,5 +4860,74 @@ mod tests {
         let mut ui = Vec::new();
         apply_portal_call(ledger, request, &mut actions, &mut ui);
         (actions, ui)
+    }
+
+    // FileChooser portal flows (OpenFile/SaveFile/SaveFiles): opening exports
+    // a Request object and opens the trusted dialog; closing the request
+    // cancels the flow and removes the ledger entry.
+    #[test]
+    fn file_chooser_open_exports_and_close_cancels() {
+        let (mut ledger, _) = ledger_with_frontend();
+        let (link, pending) = make_reply_pair();
+        let mut actions = Vec::new();
+        let mut ui = Vec::new();
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::FileChooser {
+                kind: FileChooserKind::Save,
+                handle: handle(),
+                app_id: "Brave".into(),
+                parent_window: String::new(),
+                title: "Save as".into(),
+                options: FileChooserOptions::default(),
+                caller: Some(Caller(":1.9".into())),
+                reply: link,
+            },
+            &mut actions,
+            &mut ui,
+        );
+        assert!(ledger.file_choosers.contains_key(&handle()));
+        assert!(matches!(
+            actions.as_slice(),
+            [PortalAction::ExportRequest(_)]
+        ));
+        assert!(matches!(
+            ui.as_slice(),
+            [PortalUiEvent::OpenFileChooser { .. }]
+        ));
+
+        let (close_link, close_pending) = make_reply_pair();
+        let mut close_actions = Vec::new();
+        let mut close_ui = Vec::new();
+        apply_portal_call(
+            &mut ledger,
+            PortalCall::RequestClose {
+                handle: handle(),
+                caller: Some(Caller(":1.9".into())),
+                reply: close_link,
+            },
+            &mut close_actions,
+            &mut close_ui,
+        );
+        assert!(ledger.file_choosers.is_empty());
+        assert_eq!(
+            pending.recv_blocking().unwrap().response,
+            RESPONSE_CANCELLED
+        );
+        assert_eq!(close_pending.recv_blocking().unwrap().response, RESPONSE_OK);
+        assert!(matches!(
+            close_ui.as_slice(),
+            [PortalUiEvent::DismissPicker { .. }]
+        ));
+    }
+
+    #[test]
+    fn file_chooser_results_require_file_uris() {
+        assert!(file_chooser_results(&[]).is_none());
+        assert!(file_chooser_results(&["/tmp/a".to_string()]).is_none());
+        let results = file_chooser_results(&["file:///tmp/a".to_string()]).expect("file uris");
+        let uris: Vec<String> =
+            Vec::try_from(results.get("uris").expect("uris key").clone()).expect("uris array");
+        assert_eq!(uris, vec!["file:///tmp/a"]);
     }
 }
