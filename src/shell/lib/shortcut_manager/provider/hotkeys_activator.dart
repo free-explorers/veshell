@@ -3,12 +3,18 @@ import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/settings/provider/state/hotkeys_setting.dart';
 import 'package:shell/shortcut_manager/model/media_intents.dart';
+import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 import 'package:shell/shortcut_manager/model/screen_shortcuts.dart';
 import 'package:shell/shortcut_manager/model/system_intents.dart';
-import 'package:shell/workspace/model/workspace_shortcuts.dart';
 
 part 'hotkeys_activator.g.dart';
 
+/// A bindable shell action.
+///
+/// The [actionId] is the settings key (`keyboard.hotkeys.<actionId>`) and the
+/// stable identifier of the action. Directional, activate and dismiss actions
+/// resolve to Flutter's own intents, so a binding drives the framework focus
+/// system; contexts that are still index-based override the same intent.
 enum HotkeysAction {
   increaseVolume('system.increaseVolume'),
   decreaseVolume('system.decreaseVolume'),
@@ -20,15 +26,16 @@ enum HotkeysAction {
   mediaNext('media.next'),
   mediaPrevious('media.previous'),
   mediaStop('media.stop'),
-  focusWorkspaceAbove('screen.focusWorkspaceAbove'),
-  focusWorkspaceBelow('screen.focusWorkspaceBelow'),
-  reorderWorkspaceAbove('screen.reorderWorkspaceAbove'),
-  reorderWorkspaceBelow('screen.reorderWorkspaceBelow'),
-  focusLeftTileable('workspace.focusLeftTileable'),
-  focusRightTileable('workspace.focusRightTileable'),
-  reorderLeftTileable('workspace.reorderLeftTileable'),
-  reorderRightTileable('workspace.reorderRightTileable'),
-  closeTileable('workspace.closeTileable');
+  navigateUp('navigation.up'),
+  navigateDown('navigation.down'),
+  navigateLeft('navigation.left'),
+  navigateRight('navigation.right'),
+  moveUp('navigation.moveUp'),
+  moveDown('navigation.moveDown'),
+  moveLeft('navigation.moveLeft'),
+  moveRight('navigation.moveRight'),
+  activate('navigation.activate'),
+  close('navigation.close');
 
   const HotkeysAction(this.actionId);
   final String actionId;
@@ -45,15 +52,18 @@ Intent getActionIntent(HotkeysAction action) => switch (action) {
   HotkeysAction.mediaNext => const MediaNextIntent(),
   HotkeysAction.mediaPrevious => const MediaPreviousIntent(),
   HotkeysAction.mediaStop => const MediaStopIntent(),
-  HotkeysAction.focusWorkspaceAbove => const FocusWorkspaceAboveIntent(),
-  HotkeysAction.focusWorkspaceBelow => const FocusWorkspaceBelowIntent(),
-  HotkeysAction.reorderWorkspaceAbove => const ReorderWorkspaceAboveIntent(),
-  HotkeysAction.reorderWorkspaceBelow => const ReorderWorkspaceBelowIntent(),
-  HotkeysAction.focusLeftTileable => const FocusLeftTileableIntent(),
-  HotkeysAction.focusRightTileable => const FocusRightTileableIntent(),
-  HotkeysAction.reorderLeftTileable => const ReorderLeftTileableIntent(),
-  HotkeysAction.reorderRightTileable => const ReorderRightTileableIntent(),
-  HotkeysAction.closeTileable => const CloseTileableIntent(),
+  HotkeysAction.navigateUp => const NavigateIntent(NavigationDirection.up),
+  HotkeysAction.navigateDown => const NavigateIntent(NavigationDirection.down),
+  HotkeysAction.navigateLeft => const NavigateIntent(NavigationDirection.left),
+  HotkeysAction.navigateRight => const NavigateIntent(
+    NavigationDirection.right,
+  ),
+  HotkeysAction.moveUp => const MoveIntent(NavigationDirection.up),
+  HotkeysAction.moveDown => const MoveIntent(NavigationDirection.down),
+  HotkeysAction.moveLeft => const MoveIntent(NavigationDirection.left),
+  HotkeysAction.moveRight => const MoveIntent(NavigationDirection.right),
+  HotkeysAction.activate => const ActivateIntent(),
+  HotkeysAction.close => const CloseIntent(),
 };
 
 @riverpod
@@ -64,15 +74,19 @@ class HotkeysActivator extends _$HotkeysActivator {
 
     final map = <ShortcutActivator, Intent>{};
 
-    // For each action we check if there is a configured hotkeys recognized
-    // fallback to the default one if missing
+    // Every action may carry several bindings; each one points at the same
+    // intent. `LogicalKeySet.fromSet({})` matches every key event, so empty
+    // bindings are skipped.
     for (final action in HotkeysAction.values) {
       final intent = getActionIntent(action);
-      final activator = hotkeysSettings[action.actionId];
-      // `LogicalKeySet.fromSet({})` matches every key event, so guard against
-      // empty bindings as well as missing ones.
-      if (activator == null || activator.keys.isEmpty) continue;
-      map[activator] = intent;
+      final activators =
+          hotkeysSettings[action.actionId] ?? const <LogicalKeySet>[];
+      for (final activator in activators) {
+        if (activator.keys.isEmpty) {
+          continue;
+        }
+        map[activator] = intent;
+      }
     }
 
     // Some keyboards report the play/pause button as `XF86AudioPlay` (or
@@ -85,14 +99,15 @@ class HotkeysActivator extends _$HotkeysActivator {
       LogicalKeyboardKey.mediaPlay,
       LogicalKeyboardKey.mediaPause,
     };
-    final playPauseActivator =
-        hotkeysSettings[HotkeysAction.mediaPlayPause.actionId];
-    if (playPauseActivator != null &&
-        playPauseActivator.keys.length == 1 &&
-        playPauseKeys.contains(playPauseActivator.keys.single)) {
-      final playPauseIntent = getActionIntent(HotkeysAction.mediaPlayPause);
-      for (final key in playPauseKeys) {
-        map[LogicalKeySet.fromSet({key})] = playPauseIntent;
+    final playPauseIntent = getActionIntent(HotkeysAction.mediaPlayPause);
+    for (final activator
+        in hotkeysSettings[HotkeysAction.mediaPlayPause.actionId] ??
+            const <LogicalKeySet>[]) {
+      if (activator.keys.length == 1 &&
+          playPauseKeys.contains(activator.keys.single)) {
+        for (final key in playPauseKeys) {
+          map[LogicalKeySet.fromSet({key})] = playPauseIntent;
+        }
       }
     }
 

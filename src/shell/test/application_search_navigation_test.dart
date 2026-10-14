@@ -9,6 +9,9 @@ import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/overview/widget/overview_shortcuts.dart';
 import 'package:shell/overview/widget/search/search_engine.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
+import 'package:shell/shortcut_manager/model/navigation_intents.dart';
+import 'package:shell/shortcut_manager/provider/hotkeys_activator.dart';
+import 'package:shell/shortcut_manager/widget/shortcut_manager.dart';
 
 void main() {
   const screenId = 'test';
@@ -38,12 +41,27 @@ void main() {
     List<String> filteredTexts = const [''],
   }) async {
     final entryList = appEntries();
+    // The overview no longer declares its own navigation bindings: the global
+    // manager resolves the `navigation.*` bindings to `NavigateIntent`, which
+    // the overview translates to framework focus traversal over the focusable
+    // result rows.
+    final navigation = <ShortcutActivator, Intent>{
+      LogicalKeySet.fromSet({LogicalKeyboardKey.meta, LogicalKeyboardKey.keyW}):
+          const NavigateIntent(NavigationDirection.up),
+      LogicalKeySet.fromSet({LogicalKeyboardKey.meta, LogicalKeyboardKey.keyS}):
+          const NavigateIntent(NavigationDirection.down),
+      LogicalKeySet.fromSet({LogicalKeyboardKey.meta, LogicalKeyboardKey.keyA}):
+          const NavigateIntent(NavigationDirection.left),
+      LogicalKeySet.fromSet({LogicalKeyboardKey.meta, LogicalKeyboardKey.keyD}):
+          const NavigateIntent(NavigationDirection.right),
+    };
     final container = ProviderContainer(
       overrides: [
         for (final text in filteredTexts)
           appDrawerFilteredDesktopEntriesProvider(
             text,
           ).overrideWith((ref) async => entryList),
+        hotkeysActivatorProvider.overrideWithValue(navigation),
       ],
     );
     addTearDown(container.dispose);
@@ -56,7 +74,9 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           home: CurrentScreenId(
             screenId: screenId,
-            child: Scaffold(body: OverviewShortcuts(child: SearchEngine())),
+            child: VeshellShortcutManager(
+              child: Scaffold(body: OverviewShortcuts(child: SearchEngine())),
+            ),
           ),
         ),
       ),
@@ -88,6 +108,32 @@ void main() {
     // Clamps at the last entry instead of wrapping.
     await pressSuperS();
     expect(selected(), 1);
+  });
+
+  testWidgets('the list is per-row focus and Super+Up returns to the field', (
+    tester,
+  ) async {
+    await pumpAppMode(tester);
+
+    TextField field() => tester.widget<TextField>(find.byType(TextField));
+    expect(field().focusNode?.hasFocus, isTrue);
+
+    Future<void> press(LogicalKeyboardKey key) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pump();
+    }
+
+    // Handing the keyboard to the list moves focus off the search field and
+    // onto a row.
+    await press(LogicalKeyboardKey.keyS);
+    expect(field().focusNode?.hasFocus, isFalse);
+    expect(FocusManager.instance.primaryFocus, isNotNull);
+
+    // On the first row, up returns the keyboard to the field.
+    await press(LogicalKeyboardKey.keyW);
+    expect(field().focusNode?.hasFocus, isTrue);
   });
 
   testWidgets('typing focuses the first result', (tester) async {

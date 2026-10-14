@@ -3,11 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/screen_state.dart';
-import 'package:shell/shortcut_manager/model/screen_shortcuts.dart';
+import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 import 'package:shell/shortcut_manager/provider/hotkeys_activator.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/workspace/model/workspace.serializable.dart';
-import 'package:shell/workspace/model/workspace_shortcuts.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 
 const _screen = 'screen-1';
@@ -44,43 +43,32 @@ Workspace _workspaceWith(List<String> windows, {int selectedIndex = 0}) =>
     );
 
 void main() {
-  group('reorder hotkeys are wired', () {
+  group('move hotkeys are wired', () {
     test('action ids match the settings keys', () {
-      expect(
-        HotkeysAction.reorderWorkspaceAbove.actionId,
-        'screen.reorderWorkspaceAbove',
-      );
-      expect(
-        HotkeysAction.reorderWorkspaceBelow.actionId,
-        'screen.reorderWorkspaceBelow',
-      );
-      expect(
-        HotkeysAction.reorderLeftTileable.actionId,
-        'workspace.reorderLeftTileable',
-      );
-      expect(
-        HotkeysAction.reorderRightTileable.actionId,
-        'workspace.reorderRightTileable',
-      );
+      expect(HotkeysAction.moveUp.actionId, 'navigation.moveUp');
+      expect(HotkeysAction.moveDown.actionId, 'navigation.moveDown');
+      expect(HotkeysAction.moveLeft.actionId, 'navigation.moveLeft');
+      expect(HotkeysAction.moveRight.actionId, 'navigation.moveRight');
     });
 
-    test('action ids map to the reorder intents', () {
-      expect(
-        getActionIntent(HotkeysAction.reorderWorkspaceAbove),
-        isA<ReorderWorkspaceAboveIntent>(),
-      );
-      expect(
-        getActionIntent(HotkeysAction.reorderWorkspaceBelow),
-        isA<ReorderWorkspaceBelowIntent>(),
-      );
-      expect(
-        getActionIntent(HotkeysAction.reorderLeftTileable),
-        isA<ReorderLeftTileableIntent>(),
-      );
-      expect(
-        getActionIntent(HotkeysAction.reorderRightTileable),
-        isA<ReorderRightTileableIntent>(),
-      );
+    test('action ids map to the directional move intents', () {
+      final directions = {
+        HotkeysAction.moveUp: NavigationDirection.up,
+        HotkeysAction.moveDown: NavigationDirection.down,
+        HotkeysAction.moveLeft: NavigationDirection.left,
+        HotkeysAction.moveRight: NavigationDirection.right,
+      };
+      for (final MapEntry(key: action, value: direction)
+          in directions.entries) {
+        expect(
+          getActionIntent(action),
+          isA<MoveIntent>().having(
+            (intent) => intent.direction,
+            'direction',
+            direction,
+          ),
+        );
+      }
     });
   });
 

@@ -55,4 +55,32 @@ void main() {
       expect(converter.toJson(fnOnly), '');
     });
   });
+
+  group('LogicalKeySetListConverter', () {
+    const list = LogicalKeySetListConverter();
+
+    test('reads the legacy single-string form as a one-element list', () {
+      expect(list.fromJson('super+q'), [superQ]);
+    });
+
+    test('reads the array form and drops unusable entries', () {
+      expect(list.fromJson(['super+q', 'null', 42, '']), [superQ]);
+    });
+
+    test('a missing or empty value is an empty list', () {
+      expect(list.fromJson(null), isEmpty);
+      expect(list.fromJson(const <Object?>[]), isEmpty);
+      expect(list.fromJson(42), isEmpty);
+    });
+
+    test('serializes as an array and skips unnamed chords', () {
+      final serialized = list.toJson([fnQ, superQ])! as List;
+      expect(serialized, hasLength(2));
+      // `fn` has no name and is dropped, leaving `q`.
+      expect(serialized[0], 'q');
+      // Key order within a chord is not significant.
+      expect(list.fromJson(serialized[1]), [superQ]);
+      expect(list.toJson([fnOnly]), isEmpty);
+    });
+  });
 }

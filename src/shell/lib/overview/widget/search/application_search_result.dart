@@ -4,12 +4,20 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/app_drawer.dart';
 import 'package:shell/application/widget/app_icon.dart';
+import 'package:shell/overview/widget/overview_shortcuts.dart';
+import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 
 /// Height of one application row; fixed so the selection can be scrolled into
 /// view by index.
 const applicationRowHeight = 72.0;
 
 /// List of applications for the given searchText, navigable by selection index.
+///
+/// Each row owns a focus node ([OverviewResultFocus.rowNode]) and the selection
+/// index is a roving cursor over them: moving the cursor moves the keyboard
+/// focus onto the row, so assistive technology follows the selection, the
+/// highlight stays in step, and activation (`ActivateIntent`, i.e. `Enter`)
+/// acts on the selected row.
 class ApplicationSearchResult extends HookConsumerWidget {
   ///
   const ApplicationSearchResult({
@@ -17,12 +25,14 @@ class ApplicationSearchResult extends HookConsumerWidget {
     this.selectedIndex,
     this.onSelect,
     this.onActivate,
+    this.resultFocus,
     super.key,
   });
   final String searchText;
   final int? selectedIndex;
   final ValueChanged<int>? onSelect;
   final ValueChanged<int>? onActivate;
+  final OverviewResultFocus? resultFocus;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -31,8 +41,9 @@ class ApplicationSearchResult extends HookConsumerWidget {
     );
     final scrollController = useScrollController();
 
-    // A single click selects and launches the application right away.
+    // A single click selects, focuses the row and launches the application.
     void handleTap(int index) {
+      resultFocus?.moveTo(index);
       onSelect?.call(index);
       onActivate?.call(index);
     }
@@ -56,21 +67,73 @@ class ApplicationSearchResult extends HookConsumerWidget {
     }, [selectedIndex]);
 
     return desktopEntries.when(
-      data: (entryList) => ListView.builder(
-        controller: scrollController,
-        itemExtent: applicationRowHeight,
-        itemCount: entryList.length,
-        itemBuilder: (context, index) {
-          final entry = entryList[index];
-          return _ApplicationRow(
-            entry: entry,
-            isSelected: index == selectedIndex,
-            onTap: (onSelect == null && onActivate == null)
-                ? null
-                : () => handleTap(index),
-          );
-        },
-      ),
+      data: (entryList) {
+        final focus = resultFocus;
+        final list = ListView.builder(
+          controller: scrollController,
+          itemExtent: applicationRowHeight,
+          itemCount: entryList.length,
+          itemBuilder: (context, index) {
+            final entry = entryList[index];
+            return _ApplicationRow(
+              entry: entry,
+              isSelected: index == selectedIndex,
+              focusNode: focus?.rowNode(index),
+              onFocus: (focus == null || onSelect == null)
+                  ? null
+                  : () => onSelect!(index),
+              onTap: (onSelect == null && onActivate == null)
+                  ? null
+                  : () => handleTap(index),
+            );
+          },
+        );
+
+        if (focus == null) {
+          return list;
+        }
+
+        return Actions(
+          actions: {
+            NavigateIntent: CallbackAction<NavigateIntent>(
+              onInvoke: (intent) {
+                switch (intent.direction) {
+                  case NavigationDirection.up:
+                    final index = selectedIndex;
+                    if (index == null || index <= 0) {
+                      focus.focusSearch();
+                    } else {
+                      onSelect?.call(index - 1);
+                      focus.moveTo(index - 1);
+                    }
+                  case NavigationDirection.down:
+                    final index = selectedIndex;
+                    final next = index == null ? 0 : index + 1;
+                    if (next < entryList.length) {
+                      onSelect?.call(next);
+                      focus.moveTo(next);
+                    }
+                  case NavigationDirection.left:
+                  case NavigationDirection.right:
+                    primaryFocus?.focusInDirection(
+                      intent.direction == NavigationDirection.left
+                          ? TraversalDirection.left
+                          : TraversalDirection.right,
+                    );
+                }
+                return null;
+              },
+            ),
+            ActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (_) {
+                onActivate?.call(selectedIndex ?? 0);
+                return null;
+              },
+            ),
+          },
+          child: list,
+        );
+      },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, stackTrace) => Center(child: Text('$error')),
     );
@@ -81,20 +144,44 @@ class _ApplicationRow extends StatelessWidget {
   const _ApplicationRow({
     required this.entry,
     required this.isSelected,
+    this.focusNode,
+    this.onFocus,
     this.onTap,
   });
 
   final LocalizedDesktopEntry entry;
   final bool isSelected;
+  final FocusNode? focusNode;
+  final VoidCallback? onFocus;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    final focus = focusNode;
+    final row = _buildRow(context);
+    if (focus == null) {
+      return row;
+    }
+    return Focus(
+      focusNode: focus,
+      onFocusChange: (hasFocus) {
+        if (hasFocus) {
+          onFocus?.call();
+        }
+      },
+      child: row,
+    );
+  }
+
+  Widget _buildRow(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Material(
       color: isSelected ? colorScheme.primaryContainer : Colors.transparent,
       child: InkWell(
         onTap: onTap,
+        // The row's `Focus` node owns keyboard focus; the ink response only
+        // provides the pointer affordance and its action.
+        canRequestFocus: false,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(

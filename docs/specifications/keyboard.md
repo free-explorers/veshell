@@ -82,6 +82,22 @@ would reject. Entries are persisted comma-separated; a hand-edited value still
 deserializes, and a single-layout configuration leaves the toggle inert
 (cycling always lands on the first layout).
 
+## Global hotkeys
+
+`keyboard.hotkeys` maps each action id to a **list** of key chords, so one action
+can be reached from several keys (`Super+W` *and* `Super+Up`). The shell parses
+it into `Map<String actionId, List<LogicalKeySet>>` and flattens it into the
+`Shortcuts` activator map; a legacy single-string binding is read as a
+one-element list, and an empty or malformed entry is skipped rather than
+becoming an activator (an empty `LogicalKeySet` matches every key).
+
+The action set is split between system/media actions and the contextual
+navigation actions (`navigation.up/down/left/right`, `navigation.move*`,
+`navigation.activate`, `navigation.close`). A resolved intent is dispatched from
+the focused context upwards, so the same binding means different things in
+different contexts; that model, its contexts and its defaults are specified in
+[Navigation and actions](navigation.md).
+
 ## Invariants
 
 - Every physical key event is offered to Flutter before any client sees it.

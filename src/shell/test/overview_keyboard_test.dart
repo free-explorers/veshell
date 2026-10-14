@@ -16,9 +16,31 @@ import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/overview/widget/overview_shortcuts.dart';
 import 'package:shell/overview/widget/search/search_engine.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
+import 'package:shell/shortcut_manager/model/navigation_intents.dart';
+import 'package:shell/shortcut_manager/provider/hotkeys_activator.dart';
+import 'package:shell/shortcut_manager/widget/shortcut_manager.dart';
 
 void main() {
   const screenId = 'test';
+
+  // The global manager resolves the `navigation.*` bindings to the shell
+  // `NavigateIntent` (which the overview translates to framework focus
+  // traversal); the tests stand in that manager with the shipped defaults
+  // (using `meta` because the test harness reports `metaLeft` rather than
+  // `superKey`).
+  final navigation = <ShortcutActivator, Intent>{
+    LogicalKeySet.fromSet({LogicalKeyboardKey.meta, LogicalKeyboardKey.keyW}):
+        const NavigateIntent(NavigationDirection.up),
+    LogicalKeySet.fromSet({LogicalKeyboardKey.meta, LogicalKeyboardKey.keyS}):
+        const NavigateIntent(NavigationDirection.down),
+    LogicalKeySet.fromSet({LogicalKeyboardKey.meta, LogicalKeyboardKey.keyA}):
+        const NavigateIntent(NavigationDirection.left),
+    LogicalKeySet.fromSet({LogicalKeyboardKey.meta, LogicalKeyboardKey.keyD}):
+        const NavigateIntent(NavigationDirection.right),
+    const SingleActivator(LogicalKeyboardKey.enter): const ActivateIntent(),
+    const SingleActivator(LogicalKeyboardKey.numpadEnter):
+        const ActivateIntent(),
+  };
 
   DirectoryPath homePath() =>
       DirectoryPath(Platform.environment['HOME'] ?? '/');
@@ -43,9 +65,16 @@ void main() {
     DirectoryPath home,
     List<FileEntry> entryList,
   ) async {
+    final parent = home.parent;
     final container = ProviderContainer(
       overrides: [
         directoryListingProvider(home).overrideWith((ref) async => entryList),
+        // Navigation up in the tests stays deterministic.
+        if (parent != null)
+          directoryListingProvider(
+            parent,
+          ).overrideWith((ref) async => <FileEntry>[]),
+        hotkeysActivatorProvider.overrideWithValue(navigation),
       ],
     );
     addTearDown(container.dispose);
@@ -61,7 +90,9 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           home: CurrentScreenId(
             screenId: screenId,
-            child: Scaffold(body: OverviewShortcuts(child: SearchEngine())),
+            child: VeshellShortcutManager(
+              child: Scaffold(body: OverviewShortcuts(child: SearchEngine())),
+            ),
           ),
         ),
       ),
@@ -123,9 +154,16 @@ void main() {
   ) async {
     final home = homePath();
     final entryList = twoFiles(home);
+    final parent = home.parent;
     final container = ProviderContainer(
       overrides: [
         directoryListingProvider(home).overrideWith((ref) async => entryList),
+        // Navigation up in the tests stays deterministic.
+        if (parent != null)
+          directoryListingProvider(
+            parent,
+          ).overrideWith((ref) async => <FileEntry>[]),
+        hotkeysActivatorProvider.overrideWithValue(navigation),
       ],
     );
     addTearDown(container.dispose);
@@ -146,13 +184,15 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           home: CurrentScreenId(
             screenId: screenId,
-            child: Scaffold(
-              body: OverviewShortcuts(
-                child: Column(
-                  children: [
-                    Focus(focusNode: otherFocus, child: const SizedBox()),
-                    const Expanded(child: SearchEngine()),
-                  ],
+            child: VeshellShortcutManager(
+              child: Scaffold(
+                body: OverviewShortcuts(
+                  child: Column(
+                    children: [
+                      Focus(focusNode: otherFocus, child: const SizedBox()),
+                      const Expanded(child: SearchEngine()),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -168,6 +208,29 @@ void main() {
 
     await pressSuperS(tester);
     expect(container.read(overviewStateProvider(screenId)).selectedIndex, 0);
+  });
+
+  testWidgets('Backspace goes to the parent directory in Files mode', (
+    tester,
+  ) async {
+    final home = homePath();
+    final container = await pumpFileMode(tester, home, twoFiles(home));
+
+    DirectoryPath current() =>
+        container.read(fileExplorerStateProvider(screenId)).path;
+    expect(current(), home);
+
+    // The shortcut is bound inside the file pane: move the keyboard into the
+    // list first, so the search field keeps Backspace for editing.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pumpAndSettle();
+
+    expect(current(), home.parent);
   });
 
   testWidgets('Escape closes the overview', (tester) async {
@@ -210,6 +273,7 @@ void main() {
         directoryListingProvider(
           child,
         ).overrideWith((ref) async => <FileEntry>[]),
+        hotkeysActivatorProvider.overrideWithValue(navigation),
       ],
     );
     addTearDown(container.dispose);
@@ -225,7 +289,9 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           home: CurrentScreenId(
             screenId: screenId,
-            child: Scaffold(body: OverviewShortcuts(child: SearchEngine())),
+            child: VeshellShortcutManager(
+              child: Scaffold(body: OverviewShortcuts(child: SearchEngine())),
+            ),
           ),
         ),
       ),

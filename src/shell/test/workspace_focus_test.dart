@@ -13,6 +13,7 @@ import 'package:shell/screen/model/screen_manager_state.serializable.dart';
 import 'package:shell/screen/provider/screen_for_view.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
+import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/model/window_manager_state.serializable.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
@@ -161,6 +162,73 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(_focusIsInSearchField(), isTrue);
+  });
+
+  testWidgets('a workspace forwards navigation it does not own upwards', (
+    tester,
+  ) async {
+    final forwarded = <NavigationDirection>[];
+
+    final container = ProviderContainer(
+      overrides: [
+        screenManagerProvider.overrideWithValue(
+          ScreenManagerState(screenIds: {_screen}.lock),
+        ),
+        monitorByViewIdProvider(1).overrideWithValue('M'),
+        screenForViewProvider(1).overrideWithValue(_screen),
+        windowManagerProvider.overrideWith(_FakeWindowManager.new),
+        workspaceStateProvider(
+          _workspace,
+        ).overrideWith(_FakeWorkspaceState.new),
+        appDrawerFilteredDesktopEntriesProvider(
+          '',
+        ).overrideWith((ref) async => <LocalizedDesktopEntry>[]),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(platformFocusedViewIdProvider.notifier).set(1);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: CurrentScreenId(
+            screenId: _screen,
+            child: Scaffold(
+              body: Actions(
+                // Stands in for the enclosing screen, which owns the vertical
+                // axis.
+                actions: {
+                  NavigateIntent: CallbackAction<NavigateIntent>(
+                    onInvoke: (intent) {
+                      forwarded.add(intent.direction);
+                      return null;
+                    },
+                  ),
+                },
+                child: const WorkspaceWidget(
+                  workspaceId: _workspace,
+                  isSelected: true,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final context = FocusManager.instance.primaryFocus!.context!;
+    Actions.invoke(context, const NavigateIntent(NavigationDirection.up));
+    Actions.invoke(context, const NavigateIntent(NavigationDirection.down));
+    expect(forwarded, [NavigationDirection.up, NavigationDirection.down]);
+
+    // Horizontal navigation belongs to the workspace and must not be forwarded.
+    Actions.invoke(context, const NavigateIntent(NavigationDirection.left));
+    Actions.invoke(context, const NavigateIntent(NavigationDirection.right));
+    expect(forwarded, [NavigationDirection.up, NavigationDirection.down]);
   });
 
   testWidgets('only the compositor-focused screen grabs workspace focus', (

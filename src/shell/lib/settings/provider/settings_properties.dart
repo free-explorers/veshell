@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:collection/collection.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -229,100 +230,109 @@ class SettingsProperties extends _$SettingsProperties {
             name: l10n.hotkeys,
             description: l10n.hotkeysDescription,
             children: {
-              'system.increaseVolume': SettingProperty<LogicalKeySet>(
+              'system.increaseVolume': SettingProperty<List<LogicalKeySet>>(
                 name: l10n.increaseVolume,
                 description: l10n.increaseVolumeDescription,
-                converter: const LogicalKeySetConverter(),
+                converter: const LogicalKeySetListConverter(),
               ),
-              'system.decreaseVolume': SettingProperty<LogicalKeySet>(
+              'system.decreaseVolume': SettingProperty<List<LogicalKeySet>>(
                 name: l10n.decreaseVolume,
                 description: l10n.decreaseVolumeDescription,
-                converter: const LogicalKeySetConverter(),
+                converter: const LogicalKeySetListConverter(),
               ),
-              'system.muteVolume': SettingProperty<LogicalKeySet>(
+              'system.muteVolume': SettingProperty<List<LogicalKeySet>>(
                 name: l10n.muteVolume,
                 description: l10n.muteVolumeDescription,
-                converter: const LogicalKeySetConverter(),
+                converter: const LogicalKeySetListConverter(),
               ),
-              'system.increaseBrightness': SettingProperty<LogicalKeySet>(
+              'system.increaseBrightness': SettingProperty<List<LogicalKeySet>>(
                 name: l10n.increaseBrightness,
                 description: l10n.increaseBrightnessDescription,
-                converter: const LogicalKeySetConverter(),
+                converter: const LogicalKeySetListConverter(),
               ),
-              'system.decreaseBrightness': SettingProperty<LogicalKeySet>(
+              'system.decreaseBrightness': SettingProperty<List<LogicalKeySet>>(
                 name: l10n.decreaseBrightness,
                 description: l10n.decreaseBrightnessDescription,
-                converter: const LogicalKeySetConverter(),
+                converter: const LogicalKeySetListConverter(),
               ),
-              'system.toggleKeyboardLayout': SettingProperty<LogicalKeySet>(
-                name: l10n.toggleKeyboardLayout,
-                description: l10n.toggleKeyboardLayoutDescription,
-                converter: const LogicalKeySetConverter(),
-              ),
-              'media.playPause': SettingProperty<LogicalKeySet>(
+              'system.toggleKeyboardLayout':
+                  SettingProperty<List<LogicalKeySet>>(
+                    name: l10n.toggleKeyboardLayout,
+                    description: l10n.toggleKeyboardLayoutDescription,
+                    converter: const LogicalKeySetListConverter(),
+                  ),
+              'media.playPause': SettingProperty<List<LogicalKeySet>>(
                 name: l10n.playPauseMedia,
                 description: l10n.playPauseMediaDescription,
-                converter: const LogicalKeySetConverter(),
+                converter: const LogicalKeySetListConverter(),
               ),
-              'media.next': SettingProperty<LogicalKeySet>(
+              'media.next': SettingProperty<List<LogicalKeySet>>(
                 name: l10n.nextTrack,
                 description: l10n.nextTrackDescription,
-                converter: const LogicalKeySetConverter(),
+                converter: const LogicalKeySetListConverter(),
               ),
-              'media.previous': SettingProperty<LogicalKeySet>(
+              'media.previous': SettingProperty<List<LogicalKeySet>>(
                 name: l10n.previousTrack,
                 description: l10n.previousTrackDescription,
-                converter: const LogicalKeySetConverter(),
+                converter: const LogicalKeySetListConverter(),
               ),
-              'media.stop': SettingProperty<LogicalKeySet>(
+              'media.stop': SettingProperty<List<LogicalKeySet>>(
                 name: l10n.stopMedia,
                 description: l10n.stopMediaDescription,
-                converter: const LogicalKeySetConverter(),
+                converter: const LogicalKeySetListConverter(),
               ),
-              'screen.focusWorkspaceAbove': SettingProperty<LogicalKeySet>(
-                name: l10n.focusWorkspaceAbove,
-                description: l10n.focusWorkspaceAboveDescription,
-                converter: const LogicalKeySetConverter(),
+              // Navigation is contextual: the same direction drives the
+              // workspace selection at the screen, the tileable selection in a
+              // workspace and the result list in the overview.
+              'navigation.up': SettingProperty<List<LogicalKeySet>>(
+                name: l10n.navigateUp,
+                description: l10n.navigateUpDescription,
+                converter: const LogicalKeySetListConverter(),
               ),
-              'screen.focusWorkspaceBelow': SettingProperty<LogicalKeySet>(
-                name: l10n.focusWorkspaceBelow,
-                description: l10n.focusWorkspaceBelowDescription,
-                converter: const LogicalKeySetConverter(),
+              'navigation.down': SettingProperty<List<LogicalKeySet>>(
+                name: l10n.navigateDown,
+                description: l10n.navigateDownDescription,
+                converter: const LogicalKeySetListConverter(),
               ),
-              'screen.reorderWorkspaceAbove': SettingProperty<LogicalKeySet>(
-                name: l10n.moveWorkspaceUp,
-                description: l10n.moveWorkspaceUpDescription,
-                converter: const LogicalKeySetConverter(),
+              'navigation.left': SettingProperty<List<LogicalKeySet>>(
+                name: l10n.navigateLeft,
+                description: l10n.navigateLeftDescription,
+                converter: const LogicalKeySetListConverter(),
               ),
-              'screen.reorderWorkspaceBelow': SettingProperty<LogicalKeySet>(
-                name: l10n.moveWorkspaceDown,
-                description: l10n.moveWorkspaceDownDescription,
-                converter: const LogicalKeySetConverter(),
+              'navigation.right': SettingProperty<List<LogicalKeySet>>(
+                name: l10n.navigateRight,
+                description: l10n.navigateRightDescription,
+                converter: const LogicalKeySetListConverter(),
               ),
-              'workspace.focusLeftTileable': SettingProperty<LogicalKeySet>(
-                name: l10n.focusLeftTileable,
-                description: l10n.focusLeftTileableDescription,
-                converter: const LogicalKeySetConverter(),
+              'navigation.moveUp': SettingProperty<List<LogicalKeySet>>(
+                name: l10n.moveUp,
+                description: l10n.moveUpDescription,
+                converter: const LogicalKeySetListConverter(),
               ),
-              'workspace.focusRightTileable': SettingProperty<LogicalKeySet>(
-                name: l10n.focusRightTileable,
-                description: l10n.focusRightTileableDescription,
-                converter: const LogicalKeySetConverter(),
+              'navigation.moveDown': SettingProperty<List<LogicalKeySet>>(
+                name: l10n.moveDown,
+                description: l10n.moveDownDescription,
+                converter: const LogicalKeySetListConverter(),
               ),
-              'workspace.reorderLeftTileable': SettingProperty<LogicalKeySet>(
-                name: l10n.moveTileableLeft,
-                description: l10n.moveTileableLeftDescription,
-                converter: const LogicalKeySetConverter(),
+              'navigation.moveLeft': SettingProperty<List<LogicalKeySet>>(
+                name: l10n.moveLeft,
+                description: l10n.moveLeftDescription,
+                converter: const LogicalKeySetListConverter(),
               ),
-              'workspace.reorderRightTileable': SettingProperty<LogicalKeySet>(
-                name: l10n.moveTileableRight,
-                description: l10n.moveTileableRightDescription,
-                converter: const LogicalKeySetConverter(),
+              'navigation.moveRight': SettingProperty<List<LogicalKeySet>>(
+                name: l10n.moveRight,
+                description: l10n.moveRightDescription,
+                converter: const LogicalKeySetListConverter(),
               ),
-              'workspace.closeTileable': SettingProperty<LogicalKeySet>(
+              'navigation.activate': SettingProperty<List<LogicalKeySet>>(
+                name: l10n.activate,
+                description: l10n.activateDescription,
+                converter: const LogicalKeySetListConverter(),
+              ),
+              'navigation.close': SettingProperty<List<LogicalKeySet>>(
                 name: l10n.closeTileable,
                 description: l10n.closeTileableDescription,
-                converter: const LogicalKeySetConverter(),
+                converter: const LogicalKeySetListConverter(),
               ),
             },
           ),
@@ -444,7 +454,13 @@ class SettingsProperties extends _$SettingsProperties {
     final lastKey = parts.last;
     final defaultValue = defaultCurrentMap[lastKey];
 
-    if (newValue == null || newValue == defaultValue) {
+    // A list-valued setting is compared structurally: `==` on a `List` is
+    // identity, so an unchanged list would otherwise be written as a redundant
+    // override.
+    final isDefault =
+        newValue == null ||
+        const DeepCollectionEquality().equals(newValue, defaultValue);
+    if (isDefault) {
       currentMap.remove(lastKey);
     } else {
       currentMap[lastKey] = newValue;

@@ -13,31 +13,30 @@
         "repeatRate": 30,
         "hotkeys": {
             "system": {
-                "increaseVolume": "volumeUp",
-                "decreaseVolume": "volumeDown",
-                "muteVolume": "volumeMute",
-                "increaseBrightness": "brightnessUp",
-                "decreaseBrightness": "brightnessDown",
-                "toggleKeyboardLayout": "super+space"
+                "increaseVolume": ["volumeUp"],
+                "decreaseVolume": ["volumeDown"],
+                "muteVolume": ["volumeMute"],
+                "increaseBrightness": ["brightnessUp"],
+                "decreaseBrightness": ["brightnessDown"],
+                "toggleKeyboardLayout": ["super+space"]
             },
             "media": {
-                "playPause": "mediaPlayPause",
-                "next": "mediaTrackNext",
-                "previous": "mediaTrackPrevious",
-                "stop": "mediaStop"
+                "playPause": ["mediaPlayPause"],
+                "next": ["mediaTrackNext"],
+                "previous": ["mediaTrackPrevious"],
+                "stop": ["mediaStop"]
             },
-            "screen": {
-                "focusWorkspaceAbove": "super+w",
-                "focusWorkspaceBelow": "super+s",
-                "reorderWorkspaceAbove": "super+shift+w",
-                "reorderWorkspaceBelow": "super+shift+s"
-            },
-            "workspace": {
-                "focusLeftTileable": "super+a",
-                "focusRightTileable": "super+d",
-                "reorderLeftTileable": "super+shift+a",
-                "reorderRightTileable": "super+shift+d",
-                "closeTileable": "super+q"
+            "navigation": {
+                "up": ["super+w", "super+arrowUp"],
+                "down": ["super+s", "super+arrowDown"],
+                "left": ["super+a", "super+arrowLeft"],
+                "right": ["super+d", "super+arrowRight"],
+                "moveUp": ["super+shift+w", "super+shift+arrowUp"],
+                "moveDown": ["super+shift+s", "super+shift+arrowDown"],
+                "moveLeft": ["super+shift+a", "super+shift+arrowLeft"],
+                "moveRight": ["super+shift+d", "super+shift+arrowRight"],
+                "activate": ["enter", "numpadEnter"],
+                "close": ["super+q"]
             }
         }
     },

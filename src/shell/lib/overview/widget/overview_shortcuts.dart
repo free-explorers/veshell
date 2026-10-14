@@ -17,23 +17,71 @@ import 'package:shell/settings/model/setting_search.dart';
 import 'package:shell/settings/provider/settings_expanded_groups.dart';
 import 'package:shell/settings/provider/settings_properties.dart';
 import 'package:shell/shared/util/selection.dart';
+import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 
-/// Both spellings of the Super modifier: the engine reports `superKey` on some
-/// setups and `metaLeft`/`metaRight` (matching the generic `meta`) on others.
-const List<LogicalKeyboardKey> _superModifierList = [
-  LogicalKeyboardKey.superKey,
-  LogicalKeyboardKey.meta,
-];
+/// Focus handles shared between the overview's search field and its result
+/// rows.
+///
+/// The overview behaves like a combobox: the search field keeps the keyboard
+/// while filtering, and `Super+Down` (or a click) hands it to the result list;
+/// `Super+Up` on the first row hands it back. Each row owns a `FocusNode`
+/// (roving tab index), so assistive technology and the focus system see the
+/// selected row rather than one opaque list.
+class OverviewResultFocus {
+  OverviewResultFocus({required this.searchNode});
 
-/// The overview-level keyboard handler.
+  /// The search text field's node.
+  final FocusNode searchNode;
+
+  final Map<int, FocusNode> _rowNodes = <int, FocusNode>{};
+
+  /// The focus node of the row at [index], created on first use.
+  FocusNode rowNode(int index) => _rowNodes.putIfAbsent(
+    index,
+    () => FocusNode(debugLabel: 'OverviewRow$index'),
+  );
+
+  /// Whether any result row currently holds the keyboard focus.
+  bool get hasRowFocus => _rowNodes.values.any((node) => node.hasFocus);
+
+  /// Moves the keyboard focus to the row at [index].
+  ///
+  /// A row outside the built `ListView` window has no attached focus node yet,
+  /// so the request is retried once after the scroll-into-view effect has built
+  /// it. The retry only runs while a row still holds focus, so it never steals
+  /// the keyboard back after the user moved on.
+  void moveTo(int index) {
+    rowNode(index).requestFocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (hasRowFocus && !rowNode(index).hasFocus) {
+        rowNode(index).requestFocus();
+      }
+    });
+  }
+
+  /// Returns the keyboard focus to the search field.
+  void focusSearch() => searchNode.requestFocus();
+
+  /// Disposes the row nodes. The search node is owned by its widget.
+  void dispose() {
+    for (final node in _rowNodes.values) {
+      node.dispose();
+    }
+    _rowNodes.clear();
+  }
+}
+
+/// The overview-level intent handlers.
 ///
-/// Placed above both the search engine and the content pane so its `Super`
-/// chords and `Escape` act no matter which part of the overview holds focus
-/// (the search field, a content tab, a preview, or an embedded window).
+/// It binds the standard intents to the overview's data, so the global
+/// `navigate.*` bindings mean "work through the result list" here instead of
+/// "work through workspaces/tileables". Placed above both the search engine and
+/// the content pane so the directions act no matter which part of the overview
+/// holds focus.
 ///
-/// Plain-key bindings that must stay with the search field (`Enter`) are *not*
-/// here: a focused client surface forwards unmodified keys like `Enter` to the
-/// client, so they stay local to `SearchEngine`.
+/// `Escape` resolves through the framework's `DismissIntent` binding (already
+/// installed by `MaterialApp`), so a dialog or menu opened above the overview
+/// wins; this action hides the overview only when nothing closer consumes it.
 class OverviewShortcuts extends HookConsumerWidget {
   const OverviewShortcuts({required this.child, super.key});
 
@@ -43,55 +91,52 @@ class OverviewShortcuts extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final screenId = CurrentScreenId.of(context);
 
-    // Super-modified shortcuts, mirroring the global workspace/tileable
-    // hotkeys: while the overview is open they act on the result list.
-    final bindings = <ShortcutActivator, VoidCallback>{};
-    void addSuperBinding(
-      LogicalKeyboardKey key,
-      VoidCallback callback, {
-      bool shift = false,
-    }) {
-      for (final modifier in _superModifierList) {
-        bindings[LogicalKeySet.fromSet({
-              modifier,
-              key,
-              if (shift) LogicalKeyboardKey.shift,
-            })] =
-            callback;
-      }
-    }
-
-    addSuperBinding(
-      LogicalKeyboardKey.keyW,
-      () => moveOverviewSelection(ref, screenId, -1),
+    return Shortcuts(
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.tab, meta: true): CycleIntent(
+          forward: true,
+        ),
+        SingleActivator(LogicalKeyboardKey.tab, meta: true, shift: true):
+            CycleIntent(forward: false),
+      },
+      child: Actions(
+        actions: {
+          // Fallback for focus that is neither in the search pane nor in the
+          // content pane: the vertical pair moves the result cursor and the
+          // horizontal pair moves focus. It deliberately does not double as
+          // "go to parent" / "activate" — those read as surprising on a
+          // direction key.
+          NavigateIntent: CallbackAction<NavigateIntent>(
+            onInvoke: (intent) {
+              switch (intent.direction) {
+                case NavigationDirection.up:
+                  moveOverviewSelection(ref, screenId, -1);
+                case NavigationDirection.down:
+                  moveOverviewSelection(ref, screenId, 1);
+                case NavigationDirection.left:
+                  primaryFocus?.focusInDirection(TraversalDirection.left);
+                case NavigationDirection.right:
+                  primaryFocus?.focusInDirection(TraversalDirection.right);
+              }
+              return null;
+            },
+          ),
+          DismissIntent: CallbackAction<DismissIntent>(
+            onInvoke: (_) {
+              ref.read(overviewStateProvider(screenId).notifier).hide();
+              return null;
+            },
+          ),
+          CycleIntent: CallbackAction<CycleIntent>(
+            onInvoke: (intent) {
+              cycleOverviewSearchMode(ref, screenId, intent.forward ? 1 : -1);
+              return null;
+            },
+          ),
+        },
+        child: child,
+      ),
     );
-    addSuperBinding(
-      LogicalKeyboardKey.keyS,
-      () => moveOverviewSelection(ref, screenId, 1),
-    );
-    addSuperBinding(
-      LogicalKeyboardKey.keyD,
-      () => activateOverviewSelection(ref, screenId),
-    );
-    addSuperBinding(
-      LogicalKeyboardKey.keyA,
-      () => goToOverviewParent(ref, screenId),
-    );
-    addSuperBinding(
-      LogicalKeyboardKey.tab,
-      () => cycleOverviewSearchMode(ref, screenId, 1),
-    );
-    addSuperBinding(
-      LogicalKeyboardKey.tab,
-      () => cycleOverviewSearchMode(ref, screenId, -1),
-      shift: true,
-    );
-    // Escape dismisses the overview, like the close button — but it never
-    // opens it, so it uses `hide` rather than `toggle`.
-    bindings[const SingleActivator(LogicalKeyboardKey.escape)] = () =>
-        ref.read(overviewStateProvider(screenId).notifier).hide();
-
-    return CallbackShortcuts(bindings: bindings, child: child);
   }
 }
 

@@ -4,7 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/settings/model/setting_definition.dart';
 import 'package:shell/settings/widget/expandable_search_result.dart';
-import 'package:shell/settings/widget/keyboard/setting_property_hotkey_editor.dart';
+import 'package:shell/settings/widget/keyboard/setting_property_hotkeys_editor.dart';
 import 'package:shell/settings/widget/primitive/setting_property_bool_editor.dart';
 import 'package:shell/settings/widget/primitive/setting_property_color_editor.dart';
 import 'package:shell/settings/widget/primitive/setting_property_double_editor.dart';
@@ -101,30 +101,36 @@ Widget defaultBuildSearchResult<T>(
             property: property as SettingProperty<Color>,
           ),
     ),
-    SettingProperty<LogicalKeySet>() => buildHotkeySearchResult(
+    SettingProperty<List<LogicalKeySet>>() => buildHotkeysSearchResult(
       path,
-      property as SettingProperty<LogicalKeySet>,
+      property as SettingProperty<List<LogicalKeySet>>,
     ),
     SettingProperty<T>() => throw UnimplementedError(),
   };
 }
 
-Widget buildHotkeySearchResult(
+Widget buildHotkeysSearchResult(
   String path,
-  SettingProperty<LogicalKeySet> property,
+  SettingProperty<List<LogicalKeySet>> property,
 ) {
-  return ExpandableSearchResult<LogicalKeySet>(
+  return ExpandableSearchResult<List<LogicalKeySet>>(
     path: path,
     property: property,
     buildValue: (context, value, {required isExpanded}) {
-      final hotkey = property.tryCastValue(value);
-      if (hotkey == null) {
+      final hotkeyList = property.tryCastValue(value) ?? const [];
+      if (hotkeyList.isEmpty) {
         return Text(context.l10n.notSet);
       }
-      return HotkeyViewer(hotkey: hotkey);
+      return Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          for (final hotkey in hotkeyList) HotkeyViewer(hotkey: hotkey),
+        ],
+      );
     },
     buildEditor: (context, {required isExpanded}) =>
-        SettingPropertyHotkeyEditor(
+        SettingPropertyHotkeysEditor(
           path: path,
           property: property,
           onChanged: (_) {},
