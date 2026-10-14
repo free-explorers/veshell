@@ -98,6 +98,28 @@ the focused context upwards, so the same binding means different things in
 different contexts; that model, its contexts and its defaults are specified in
 [Navigation and actions](navigation.md).
 
+## Caps Lock
+
+`keyboard.capsLock` remaps the Caps Lock key through an xkb **option** on the
+seat keymap — not a shell-side key rewrite, unlike `keyboard.swapAltAndWin`
+(which swaps the left Meta and Alt keycodes on the event path):
+
+| Value | xkb option | Effect |
+| --- | --- | --- |
+| `default` | — | Caps Lock keeps its normal behavior |
+| `control` | `ctrl:nocaps` | Caps Lock acts as an additional Control (Emacs) |
+| `escape` | `caps:escape` | Caps Lock acts as Escape (Vim) |
+| `swapescape` | `caps:swapescape` | Caps Lock and Escape are swapped |
+| `disabled` | `caps:none` | Caps Lock is disabled |
+
+The option is passed as `XkbConfig::options` both when the seat is created and
+whenever `apply_veshell_settings` re-runs, so the shell and forwarded clients
+share one keymap and therefore the same remap. An unknown value in a hand-edited
+`settings.json` falls back to `default` instead of failing the settings load.
+
+Because it replaces `XKB_DEFAULT_OPTIONS`, the option list is owned by the shell
+(same as `keyboard.layout` overriding `XKB_DEFAULT_LAYOUT`).
+
 ## Invariants
 
 - Every physical key event is offered to Flutter before any client sees it.

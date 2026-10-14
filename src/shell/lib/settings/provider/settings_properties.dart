@@ -18,6 +18,7 @@ import 'package:shell/settings/provider/util/default_settings_json.dart';
 import 'package:shell/settings/widget/environment/environment_variables_editor.dart';
 import 'package:shell/settings/widget/expandable_search_result.dart';
 import 'package:shell/settings/widget/keyboard/keyboard_layouts_editor.dart';
+import 'package:shell/settings/widget/keyboard/setting_property_caps_lock_editor.dart';
 import 'package:shell/settings/widget/locale/system_locale_editor.dart';
 import 'package:shell/settings/widget/locale/veshell_language_editor.dart';
 import 'package:shell/settings/widget/monitor/monitor_mirror_editor.dart';
@@ -213,6 +214,22 @@ class SettingsProperties extends _$SettingsProperties {
           'swapAltAndWin': SettingProperty<bool>(
             name: l10n.swapAltAndWin,
             description: l10n.swapAltAndWinDescription,
+          ),
+          'capsLock': SettingProperty<String>(
+            name: l10n.capsLock,
+            description: l10n.capsLockDescription,
+            buildSearchResult: (context, path, property) =>
+                ExpandableSearchResult<String>(
+                  path: path,
+                  property: property,
+                  buildValue: (context, value, {required isExpanded}) =>
+                      CapsLockValue(path: path),
+                  buildEditor: (context, {required isExpanded}) =>
+                      SettingPropertyCapsLockEditor(
+                        path: path,
+                        property: property,
+                      ),
+                ),
           ),
           'repeat': SettingProperty<bool>(
             name: l10n.keyRepeat,

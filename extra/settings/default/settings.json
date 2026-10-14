@@ -8,6 +8,7 @@
     "keyboard": {
         "layout": "us(altgr-intl)",
         "swapAltAndWin": false,
+        "capsLock": "default",
         "repeat": true,
         "repeatDelayMs": 500,
         "repeatRate": 30,
