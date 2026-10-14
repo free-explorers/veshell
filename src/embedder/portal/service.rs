@@ -223,6 +223,7 @@ pub enum PortalUiEvent {
     OpenFileChooser {
         request_handle: OwnedObjectPath,
         app_name: String,
+        parent_window: String,
         title: String,
         kind: FileChooserKind,
         options: FileChooserOptions,
@@ -850,6 +851,7 @@ fn perform_ui_event<BackendData: crate::backend::Backend + 'static>(
         PortalUiEvent::OpenFileChooser {
             request_handle,
             app_name,
+            parent_window,
             title,
             kind,
             options,
@@ -857,20 +859,22 @@ fn perform_ui_event<BackendData: crate::backend::Backend + 'static>(
         } => {
             // The shell receives the already-decoded options: it never
             // parses D-Bus types, and the unguessable token binds the
-            // answer back to this exact request. The requesting app's
-            // monitor (when it resolves to a live window) lets the shell
-            // open the dialog above the requester instead of wherever the
-            // focus happens to be.
-            let monitor_name = state
-                .meta_window_state
-                .requester_meta_window_for(&app_name)
-                .and_then(|id| {
-                    state
-                        .meta_window_state
-                        .meta_windows
-                        .get(&id)
-                        .and_then(|window| window.current_output.clone())
-                });
+            // answer back to this exact request.
+            //
+            // The requesting window is resolved here so the shell can attach
+            // the dialog to it: the portal `parent_window` names the surface
+            // the app exported (Wayland `wayland:<handle>` or X11 `x11:<id>`),
+            // and falls back to the app's most recently focused window. Its
+            // monitor lets the overlay fall back correctly when the window has
+            // no shell container.
+            let meta_window_id = requester_meta_window_id(state, &app_name, &parent_window);
+            let monitor_name = meta_window_id.as_ref().and_then(|id| {
+                state
+                    .meta_window_state
+                    .meta_windows
+                    .get(id)
+                    .and_then(|window| window.current_output.clone())
+            });
             state
                 .flutter_engine_mut()
                 .platform_method_channel
@@ -882,6 +886,7 @@ fn perform_ui_event<BackendData: crate::backend::Backend + 'static>(
                         "appName": app_name,
                         "title": title,
                         "mode": kind,
+                        "metaWindowId": meta_window_id,
                         "monitorName": monitor_name,
                         "multiple": options.multiple,
                         "directory": options.directory,
@@ -1267,6 +1272,41 @@ fn file_chooser_results(uris: &[String]) -> Option<PortalDict> {
     let mut results = PortalDict::new();
     results.insert("uris".to_string(), encoded);
     Some(results)
+}
+
+/// The MetaWindow a FileChooser request originates from.
+///
+/// The portal `parent_window` names the surface the requesting app exported: a
+/// Wayland `wayland:<handle>` resolved through the xdg-foreign exporter, or an
+/// X11 `x11:<id>` resolved through the XWayland map. When it names no known
+/// surface (an app that exported nothing) the app's most recently focused
+/// window is used instead.
+fn requester_meta_window_id<BackendData: crate::backend::Backend + 'static>(
+    state: &crate::state::State<BackendData>,
+    app_id: &str,
+    parent_window: &str,
+) -> Option<String> {
+    let surface_id = if let Some(handle) = parent_window.strip_prefix("wayland:") {
+        state.xdg_foreign_state.surface_id(handle)
+    } else if let Some(hex) = parent_window.strip_prefix("x11:") {
+        u32::from_str_radix(hex, 16)
+            .ok()
+            .and_then(|window| state.x11_surface_per_x11_window.get(&window))
+            .and_then(|surface| surface.wl_surface())
+            .map(|surface| crate::wayland::wayland::get_surface_id(&surface))
+    } else {
+        None
+    };
+    if let Some(surface_id) = surface_id {
+        if let Some(id) = state
+            .meta_window_state
+            .meta_window_id_per_surface_id
+            .get(&surface_id)
+        {
+            return Some(id.clone());
+        }
+    }
+    state.meta_window_state.requester_meta_window_for(app_id)
 }
 
 /// Ledger side of one screenshot prompt decision: takes the consent out
@@ -2618,6 +2658,7 @@ fn open_file_chooser_request(
     ui: &mut Vec<PortalUiEvent>,
     handle: OwnedObjectPath,
     app_id: String,
+    parent_window: String,
     title: String,
     kind: FileChooserKind,
     options: FileChooserOptions,
@@ -2643,6 +2684,7 @@ fn open_file_chooser_request(
         ui.push(PortalUiEvent::OpenFileChooser {
             request_handle: handle,
             app_name: app_id,
+            parent_window,
             title,
             kind,
             options,
@@ -2983,13 +3025,23 @@ pub fn apply_portal_call(
                     kind,
                     handle,
                     app_id,
+                    parent_window,
                     title,
                     options,
                     reply,
                     ..
                 } => {
                     open_file_chooser_request(
-                        ledger, actions, ui, handle, app_id, title, kind, options, reply,
+                        ledger,
+                        actions,
+                        ui,
+                        handle,
+                        app_id,
+                        parent_window,
+                        title,
+                        kind,
+                        options,
+                        reply,
                     );
                 }
                 PortalCall::RequestClose { handle, reply, .. } => {

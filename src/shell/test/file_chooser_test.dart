@@ -4,11 +4,14 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/capture/widget/capture_prompt_overlay.dart';
 import 'package:shell/file_chooser/model/file_chooser_request/file_chooser_request.serializable.dart';
+import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
 import 'package:shell/file_chooser/provider/file_chooser_request.dart';
 import 'package:shell/file_chooser/widget/file_chooser_dialog.dart';
 import 'package:shell/file_explorer/model/file_entry.dart';
 import 'package:shell/file_explorer/provider/directory_listing.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/meta_window/provider/meta_window_window_map.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -68,6 +71,28 @@ void main() {
         focusedMonitorName: 'DP-1',
       ),
       'DP-1',
+    );
+  });
+
+  test('a request resolves to its owning window container', () {
+    const owner = WindowId.persistent('tile-1');
+    final request = _saveRequest().copyWith(metaWindowId: 'mw-1');
+    final container = ProviderContainer(
+      overrides: [
+        fileChooserRequestProvider.overrideWith(
+          () => _FakeFileChooserRequest(request),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(metaWindowWindowMapProvider.notifier).set('mw-1', owner);
+
+    expect(container.read(fileChooserForWindowProvider(owner)), request);
+    expect(
+      container.read(
+        fileChooserForWindowProvider(const WindowId.persistent('other')),
+      ),
+      isNull,
     );
   });
 

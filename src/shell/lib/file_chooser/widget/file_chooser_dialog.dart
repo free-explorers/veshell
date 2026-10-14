@@ -13,7 +13,9 @@ import 'package:shell/file_explorer/provider/file_explorer_state.dart';
 import 'package:shell/file_explorer/provider/filtered_entry_list.dart';
 import 'package:shell/file_explorer/widget/file_explorer_view.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
 
 /// Riverpod key the portal chooser uses for the (otherwise overview-owned)
 /// file explorer providers: its own key keeps the chooser's browsing state
@@ -284,8 +286,45 @@ class FileChooserDialog extends HookConsumerWidget {
   }
 }
 
-/// Mounts the file chooser into the shell tree: mounted per monitor, it only
-/// builds surface where a request is actually open.
+/// The chooser drawn as a modal over its host: a scrim plus the dialog card.
+///
+/// Used both inside the owning window container (the requester's tile) and as
+/// the monitor overlay fallback when the request has no window container.
+class FileChooserModal extends StatelessWidget {
+  /// constructor
+  const FileChooserModal({required this.request, super.key});
+
+  /// The request being answered.
+  final FileChooserRequestMessage request;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const ColoredBox(color: Colors.black38),
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            // Keying by consent token resets the browse state when a new
+            // request replaces the current one.
+            child: FileChooserDialog(
+              key: ValueKey(request.consentToken),
+              request: request,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Mounts the file chooser into the shell tree.
+///
+/// A request whose requester resolves to a window container is rendered there
+/// (inside the tile, like a native dialog); this host only draws the monitor
+/// overlay fallback for a request with no container — an unknown requester, or
+/// an owner kind that renders no chooser.
 class FileChooserHost extends ConsumerWidget {
   /// constructor
   const FileChooserHost({super.key});
@@ -296,19 +335,14 @@ class FileChooserHost extends ConsumerWidget {
     if (request == null) {
       return const SizedBox.shrink();
     }
-    // The flow owns every input while it is open: the chooser is the only
-    // thing that reacts until a decision is delivered.
-    return Center(
-      child: ColoredBox(
-        color: Colors.black.withValues(alpha: 0.4),
-        // Keying by consent token resets the browse state when a new
-        // request replaces the current one.
-        child: FileChooserDialog(
-          key: ValueKey(request.consentToken),
-          request: request,
-        ),
-      ),
-    );
+    final metaWindowId = request.metaWindowId;
+    final owner = metaWindowId == null
+        ? null
+        : ref.watch(metaWindowWindowMapProvider)[metaWindowId];
+    if (owner is PersistentWindowId || owner is EphemeralWindowId) {
+      return const SizedBox.shrink();
+    }
+    return FileChooserModal(request: request);
   }
 }
 

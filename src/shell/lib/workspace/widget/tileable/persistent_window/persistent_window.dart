@@ -7,6 +7,8 @@ import 'package:shell/application/provider/logs_for_pid.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/capture/provider/recording_workspaces.dart';
 import 'package:shell/capture/provider/screen_cast_indicator.dart';
+import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
+import 'package:shell/file_chooser/widget/file_chooser_dialog.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
@@ -82,62 +84,74 @@ class PersistentWindowTileable extends Tileable {
         )
         .toList();
     final metaWindowId = window.metaWindowId;
+    final fileChooser = ref.watch(fileChooserForWindowProvider(windowId));
 
     return ClipRect(
-      child: Listener(
-        onPointerDown: (event) {
-          final currentWorkspaceId = CurrentWorkspaceId.of(context);
-          ref
-              .read(workspaceStateProvider(currentWorkspaceId).notifier)
-              .selectWindow(windowId);
-        },
-        child: FocusScope(
-          node: persistentFocusNode,
-          autofocus: true,
-          onFocusChange: (value) {
-            // In game mode the overlay never builds `primaryFocusNode`, so it
-            // is detached. Re-autofocusing it here would reparent it and make
-            // the defunct node the primary focus again, which breaks the
-            // shell's hotkeys while the pause overlay is shown.
-            if (value && window.displayMode != DisplayMode.game) {
-              persistentFocusNode.autofocus(primaryFocusNode);
-            }
-          },
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            child: metaWindowId != null
-                ? WindowWidget(
-                    metaWindowId: metaWindowId,
-                    focusNode: primaryFocusNode,
-                    displayMode: window.displayMode,
-                    dialogMetaWindowList: dialogMetaWindowIds,
-                  )
-                : dialogMetaWindowIds.isNotEmpty
-                // A tile whose only windows are popups still renders them,
-                // over an empty background, instead of hiding them behind
-                // its placeholder.
-                ? WindowDialogs(
-                    metaWindowIds: dialogMetaWindowIds,
-                    maxSizeFactor: switch (window.displayMode) {
-                      DisplayMode.maximized || DisplayMode.fullscreen => 0.9,
-                      _ => 1,
-                    },
-                  )
-                : WindowPlaceholder(
-                    isSelected: isSelected,
-                    focusNode: primaryFocusNode,
-                    window: window,
-                    onLaunch: () {
-                      primaryFocusNode.requestFocus();
-                      return ref
-                          .read(
-                            persistentWindowStateProvider(windowId).notifier,
-                          )
-                          .launchSelf();
-                    },
-                  ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Listener(
+            onPointerDown: (event) {
+              final currentWorkspaceId = CurrentWorkspaceId.of(context);
+              ref
+                  .read(workspaceStateProvider(currentWorkspaceId).notifier)
+                  .selectWindow(windowId);
+            },
+            child: FocusScope(
+              node: persistentFocusNode,
+              autofocus: true,
+              onFocusChange: (value) {
+                // In game mode the overlay never builds `primaryFocusNode`,
+                // so it is detached. Re-autofocusing it here would reparent
+                // it and make the defunct node the primary focus again, which
+                // breaks the shell's hotkeys while the pause overlay shows.
+                if (value && window.displayMode != DisplayMode.game) {
+                  persistentFocusNode.autofocus(primaryFocusNode);
+                }
+              },
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: metaWindowId != null
+                    ? WindowWidget(
+                        metaWindowId: metaWindowId,
+                        focusNode: primaryFocusNode,
+                        displayMode: window.displayMode,
+                        dialogMetaWindowList: dialogMetaWindowIds,
+                      )
+                    : dialogMetaWindowIds.isNotEmpty
+                    // A tile whose only windows are popups still renders them,
+                    // over an empty background, instead of hiding them behind
+                    // its placeholder.
+                    ? WindowDialogs(
+                        metaWindowIds: dialogMetaWindowIds,
+                        maxSizeFactor: switch (window.displayMode) {
+                          DisplayMode.maximized ||
+                          DisplayMode.fullscreen => 0.9,
+                          _ => 1,
+                        },
+                      )
+                    : WindowPlaceholder(
+                        isSelected: isSelected,
+                        focusNode: primaryFocusNode,
+                        window: window,
+                        onLaunch: () {
+                          primaryFocusNode.requestFocus();
+                          return ref
+                              .read(
+                                persistentWindowStateProvider(
+                                  windowId,
+                                ).notifier,
+                              )
+                              .launchSelf();
+                        },
+                      ),
+              ),
+            ),
           ),
-        ),
+          // The trusted file chooser renders inside the window container,
+          // attached to the window that asked for it (like a native dialog).
+          if (fileChooser != null) FileChooserModal(request: fileChooser),
+        ],
       ),
     );
   }
