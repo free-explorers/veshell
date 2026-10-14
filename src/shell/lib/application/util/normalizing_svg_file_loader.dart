@@ -5,13 +5,17 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shell/application/util/svg_css_inliner.dart';
 
-/// An [SvgLoader] that reads [file], inlines its embedded CSS, and then hands
-/// the result to the usual `vector_graphics` compiler and cache.
+/// An [SvgLoader] that reads [file], inlines its embedded CSS, normalizes the
+/// resulting document, and then hands it to the usual `vector_graphics`
+/// compiler and cache.
 ///
 /// `SvgPicture.file` uses [SvgFileLoader], which feeds the raw document to a
 /// parser that ignores `<style>` elements and `class` selectors. This loader
 /// runs [inlineSvgCss] first, so stylesheet-styled icons - the Code - OSS icon
-/// among them - keep their fills instead of rendering as a black square.
+/// among them - keep their fills instead of rendering as a black square. It
+/// then runs [normalizeSvgFontWeight], so a weight the compiler rejects (such
+/// as a `596` from a variable font) is snapped to one it accepts instead of
+/// throwing and leaving the icon blank.
 ///
 /// The (small) file read happens on the caller's isolate; the SVG parse and
 /// tessellation still run in flutter_svg's isolate through the inherited
@@ -27,7 +31,9 @@ class NormalizingSvgFileLoader extends SvgLoader<String> {
   @override
   Future<String?> prepareMessage(BuildContext? context) async {
     final bytes = await file.readAsBytes();
-    return inlineSvgCss(utf8.decode(bytes, allowMalformed: true));
+    return normalizeSvgFontWeight(
+      inlineSvgCss(utf8.decode(bytes, allowMalformed: true)),
+    );
   }
 
   @override

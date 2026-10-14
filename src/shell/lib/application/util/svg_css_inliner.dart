@@ -42,6 +42,29 @@ String inlineSvgCss(String svg) {
   );
 }
 
+/// Snaps a `font-weight` the renderer cannot parse to the nearest one it can.
+///
+/// `vector_graphics_compiler` only accepts `normal`, `bold` and the round
+/// hundreds (`100`...`900`), while CSS Fonts 4 allows any number from `1` to
+/// `1000`. A stylesheet weight such as `596` therefore throws `StateError`
+/// while the document is compiled, and the whole image fails to render
+/// (`Bad state: Invalid "font-weight": 596`). Non-variable fonts resolve such
+/// a weight to the closest available one anyway, so rounding to the nearest
+/// hundred makes the same choice and keeps the document compilable.
+///
+/// Both presentation attributes and inline `style` declarations are covered;
+/// values the renderer already understands - and anything that is not a
+/// number - are left untouched.
+String normalizeSvgFontWeight(String svg) {
+  if (!svg.contains('font-weight')) {
+    return svg;
+  }
+  return svg.replaceAllMapped(
+    _markup,
+    (match) => _rewriteFontWeightTag(match.group(0)!),
+  );
+}
+
 final _xmlComment = RegExp('<!--.*?-->', dotAll: true);
 
 final _styleElement = RegExp(
@@ -246,6 +269,87 @@ String _rewriteTag(String tag, List<_CssRule> rules) {
   }
   buffer.write('>');
   return buffer.toString();
+}
+
+String _rewriteFontWeightTag(String tag) {
+  if (tag.startsWith('</') || tag.startsWith('<!') || tag.startsWith('<?')) {
+    return tag;
+  }
+  final nameMatch = _tagName.firstMatch(tag);
+  if (nameMatch == null) {
+    return tag;
+  }
+  final name = nameMatch.group(1)!;
+  final attributes = _parseAttributes(tag);
+
+  var changed = false;
+  final buffer = StringBuffer('<$name');
+  for (final attribute in attributes) {
+    final normalized = _normalizedFontWeightAttribute(attribute);
+    if (normalized == null) {
+      buffer.write(' ${attribute.name}=${attribute.rawValue}');
+    } else {
+      buffer.write(' ${attribute.name}=$normalized');
+      changed = true;
+    }
+  }
+
+  if (!changed) {
+    return tag;
+  }
+  if (tag.trimRight().endsWith('/>')) {
+    buffer.write('/');
+  }
+  buffer.write('>');
+  return buffer.toString();
+}
+
+/// The rewritten, quoted value of [attribute] when it carries a `font-weight`
+/// the renderer cannot parse, or `null` to keep it exactly as it was.
+String? _normalizedFontWeightAttribute(_Attribute attribute) {
+  if (attribute.name == 'font-weight') {
+    final normalized = _nearestFontWeight(_unquote(attribute.rawValue));
+    return normalized == null ? null : '"$normalized"';
+  }
+  if (attribute.name == 'style') {
+    final normalized = _normalizeFontWeightStyle(_unquote(attribute.rawValue));
+    return normalized == null
+        ? null
+        : '"${normalized.replaceAll('"', '&quot;')}"';
+  }
+  return null;
+}
+
+/// Rewrites the `font-weight` declarations of an inline style, or returns
+/// `null` when none of them need changing.
+String? _normalizeFontWeightStyle(String style) {
+  var changed = false;
+  final declarations = <String>[];
+  for (final declaration in _parseDeclarations(style)) {
+    var value = declaration.value;
+    if (declaration.property == 'font-weight') {
+      final normalized = _nearestFontWeight(value);
+      if (normalized != null) {
+        value = normalized;
+        changed = true;
+      }
+    }
+    declarations.add('${declaration.property}:$value');
+  }
+  return changed ? declarations.join(';') : null;
+}
+
+/// The nearest hundred the renderer accepts for a numeric [value], or `null`
+/// when the value is already supported or is not a number.
+String? _nearestFontWeight(String value) {
+  final trimmed = value.trim();
+  final numeric = double.tryParse(trimmed);
+  if (numeric == null || !numeric.isFinite) {
+    return null;
+  }
+  final rounded = (numeric.clamp(100, 900) / 100).round() * 100;
+  final normalized = '$rounded';
+  return normalized == trimmed ? null : normalized;
 }
 
 List<_Attribute> _parseAttributes(String tag) {
