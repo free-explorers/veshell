@@ -63,7 +63,7 @@ Signals, in order of reliability / fallback:
 1. Client-declared `parent` (`xdg_toplevel.set_parent`, X11 transient) — authoritative, makes the window a dialog of the parent's tile.
 2. `xdg_wm_dialog_v1` hint (`Dialog`/`Modal`) — authoritative.
 3. Window shape — `min == max` on both axes (fixed-size) **with a resolvable owner relation** strongly suggests a dialog.
-4. `activatedBy` (`xdg_activation_v1`) — an "opened from" relation, not a dialog marker on its own: it only says the window was opened from another. During a launch burst it is an owner hint (it picks the owner when the window is a dialog for other reasons); once the burst has settled it does route an otherwise regular toplevel as a dialog of the window it was opened from. See [Dialog routing](#dialog-routing).
+4. `activatedBy` (`xdg_activation_v1`) — an "opened from" relation, not a dialog marker on its own: it only says the window was opened from another. Only the opener the requesting client **declared** is recorded; a token that declares no surface records no relation (see [Dialog routing](#dialog-routing)). During a launch burst it is an owner hint (it picks the owner when the window is a dialog for other reasons); once the burst has settled it does route an otherwise regular toplevel as a dialog of the window it was opened from.
 5. Process grouping — same `pid` / `app-*.scope` as the owner.
 6. Tracked launch provenance — the helper inherits the launch cgroup.
 7. Fallback — attach as a dialog to the best-matching tile rather than a standalone tile.
@@ -89,7 +89,16 @@ None of these signals is authoritative on its own, and every one may be absent, 
   - Notes: declares the owning toplevel and marks the window as a dialog of that owner's tile. Many toolkits (Electron) never set it. Kept strictly separate from `activatedBy`.
 - **Activated by (`activatedBy`)** — only when the client uses the protocol; high reliability as an "opened from" hint, none as a dialog signal.
   - Source: `xdg_activation_v1` token (`surface`, `serial`).
-  - Notes: the surface whose activation opened this window, often its owner. Used only to pick a dialog's owner, never to turn a regular toplevel into a dialog. Recorded independently of `parent`, so a window can have both. Not universal.
+  - Notes: the surface the requesting client **declared** as the opener of this window, often its owner. Used only to pick a dialog's owner, never to turn a regular toplevel into a dialog. Recorded independently of `parent`, so a window can have both. Not universal.
+  - The compositor records it only from the token's declared `surface`; when a
+    client requests activation without declaring one, **no** relation is
+    recorded. It used to fall back to the keyboard-focused surface, but for
+    programmatic windows (a browser restoring its session) that meant "whatever
+    was focused", misattributing the window as a dialog of an unrelated tile.
+    If dropping the fallback proves to lose useful same-application hints, the
+    fix is to scope the fallback to the focused surface of the *same*
+    application, not to restore it unconditionally (see
+    [Dialog routing](#dialog-routing)).
 - **Dialog hint** — only when the client uses the protocol; authoritative when present.
   - Source: `xdg_wm_dialog_v1` (`Dialog`/`Modal`).
   - Notes: distinguishes dialogs and modals from regular windows. Used by e.g. GTK, not by Electron.
@@ -259,6 +268,16 @@ make the real window a further opening: while the only gathered window is
 fixed-size the burst is still gathering (bounded), so the relation on the real
 window stays an owner hint and the real window is matched onto the tile. The
 helper then becomes the leftover that is turned into a dialog at the settle.
+
+The `activatedBy` relation only ever carries the opener the client **declared**
+(the `xdg_activation_v1` token `surface`). The compositor no longer falls back
+to the keyboard-focused surface when a token declares none: for programmatic
+windows that meant "whatever was focused", which attached a window as a dialog
+of an unrelated tile (a browser restoring its session next to another focused
+application). Such a window now carries no relation and is matched normally. If
+this proves to lose useful same-application hints, the fallback should be
+reinstated scoped to the focused surface of the **same** application rather
+than unconditionally.
 
 A window that is **fullscreen-like** is never turned into a dialog by a
 relation. It is fullscreen (`Fullscreen` state / `_NET_WM_STATE_FULLSCREEN`) or

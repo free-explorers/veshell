@@ -44,8 +44,9 @@ pub enum MetaWindowPatch {
         id: String,
         value: Option<String>,
     },
-    /// `xdg_activation_v1` "opened from" relation: the surface whose activation
-    /// opened this window. Only an owner hint, never a dialog trigger on its own.
+    /// `xdg_activation_v1` "opened from" relation: the surface the requesting
+    /// client declared as the opener. Only an owner hint, never a dialog
+    /// trigger on its own; a token that declares no surface records none.
     UpdateActivatedBy {
         id: String,
         value: Option<String>,
@@ -133,9 +134,11 @@ pub struct MetaWindow {
     pub surface_id: u64,
     /// Client-declared parent (`xdg_toplevel.set_parent`, X11 transient).
     pub parent: Option<String>,
-    /// `xdg_activation_v1` requester: the window this one was opened from. An
-    /// owner hint only; unlike [`MetaWindow::parent`] it never makes the window
-    /// a dialog by itself.
+    /// `xdg_activation_v1` requester: the window this one was opened from, as
+    /// declared by the requesting client. An owner hint only; unlike
+    /// [`MetaWindow::parent`] it never makes the window a dialog by itself. A
+    /// token that declares no requesting surface records no relation (the
+    /// compositor does not guess a focused window).
     pub activated_by: Option<String>,
     pub mapped: bool,
     pub display_mode: Option<DisplayMode>,
