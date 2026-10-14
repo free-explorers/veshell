@@ -46,6 +46,13 @@ class Helm extends StatelessWidget {
   }
 }
 
+/// One Helm column as its own focus-traversal region.
+///
+/// `Tab` walks the column's controls and the directional keys cross to the
+/// neighbouring column by geometry, so the dashboard is navigable as three
+/// predictable regions instead of one flat focus soup.
+Widget _column(Widget child) => FocusTraversalGroup(child: child);
+
 class _ThreeColumnLayout extends StatelessWidget {
   const _ThreeColumnLayout();
 
@@ -54,20 +61,24 @@ class _ThreeColumnLayout extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: PanelColumn(
-            footer: const SessionControls(),
-            sections: [
-              mediaPlayerSection,
-              _card(const AudioControl()),
-              networkSection,
-              _card(const BluetoothControl()),
-            ],
+          child: _column(
+            PanelColumn(
+              footer: const SessionControls(),
+              sections: [
+                mediaPlayerSection,
+                _card(const AudioControl()),
+                networkSection,
+                _card(const BluetoothControl()),
+              ],
+            ),
           ),
         ),
         const SizedBox(width: panelGap),
-        const Expanded(child: PanelColumn(sections: [monitoringSection])),
+        Expanded(
+          child: _column(const PanelColumn(sections: [monitoringSection])),
+        ),
         const SizedBox(width: panelGap),
-        const Expanded(child: NotificationPanel()),
+        Expanded(child: _column(const NotificationPanel())),
       ],
     );
   }
@@ -81,19 +92,21 @@ class _MergedLayout extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: PanelColumn(
-            footer: const SessionControls(),
-            sections: [
-              mediaPlayerSection,
-              _card(const AudioControl()),
-              networkSection,
-              _card(const BluetoothControl()),
-              monitoringSection,
-            ],
+          child: _column(
+            PanelColumn(
+              footer: const SessionControls(),
+              sections: [
+                mediaPlayerSection,
+                _card(const AudioControl()),
+                networkSection,
+                _card(const BluetoothControl()),
+                monitoringSection,
+              ],
+            ),
           ),
         ),
         const SizedBox(width: panelGap),
-        const Expanded(child: NotificationPanel()),
+        Expanded(child: _column(const NotificationPanel())),
       ],
     );
   }
@@ -145,16 +158,18 @@ class _TabbedLayout extends ConsumerWidget {
           Expanded(
             child: TabBarView(
               children: [
-                PanelColumn(
-                  sections: [
-                    mediaPlayerSection,
-                    _card(const AudioControl()),
-                    networkSection,
-                    _card(const BluetoothControl()),
-                    monitoringSection,
-                  ],
+                _column(
+                  PanelColumn(
+                    sections: [
+                      mediaPlayerSection,
+                      _card(const AudioControl()),
+                      networkSection,
+                      _card(const BluetoothControl()),
+                      monitoringSection,
+                    ],
+                  ),
                 ),
-                const NotificationPanel(),
+                _column(const NotificationPanel()),
               ],
             ),
           ),

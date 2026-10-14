@@ -50,6 +50,7 @@ Map<String, LogicalKeyboardKey> stringToKeyMap = {
   'f11': LogicalKeyboardKey.f11,
   'f12': LogicalKeyboardKey.f12,
   'enter': LogicalKeyboardKey.enter,
+  'numpadEnter': LogicalKeyboardKey.numpadEnter,
   'tab': LogicalKeyboardKey.tab,
   'backspace': LogicalKeyboardKey.backspace,
   'delete': LogicalKeyboardKey.delete,

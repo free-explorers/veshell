@@ -24,3 +24,43 @@ class LogicalKeySetConverter implements JsonConverter<LogicalKeySet, String> {
     return keys.join('+');
   }
 }
+
+/// A list of hotkeys bound to one action.
+///
+/// Accepts both the current array form (`["super+w", "super+up"]`) and the
+/// legacy single-string form (`"super+w"`) so a hand-edited or older
+/// `settings.json` keeps working. Malformed entries are dropped rather than
+/// failing the whole settings load — the same policy as the single converter.
+class LogicalKeySetListConverter
+    implements JsonConverter<List<LogicalKeySet>, Object?> {
+  const LogicalKeySetListConverter();
+
+  static const _single = LogicalKeySetConverter();
+
+  @override
+  List<LogicalKeySet> fromJson(Object? json) {
+    final values = switch (json) {
+      final String single => <Object?>[single],
+      final List<Object?> list => list,
+      _ => const <Object?>[],
+    };
+    final result = <LogicalKeySet>[];
+    for (final value in values) {
+      if (value is! String || value.isEmpty) {
+        continue;
+      }
+      try {
+        result.add(_single.fromJson(value));
+      } on Object catch (_) {
+        // Skip the malformed entry instead of dropping the whole action.
+      }
+    }
+    return result;
+  }
+
+  @override
+  Object? toJson(List<LogicalKeySet> object) => object
+      .map(_single.toJson)
+      .where((binding) => binding.isNotEmpty)
+      .toList();
+}

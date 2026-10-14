@@ -6,6 +6,7 @@ import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/overview/widget/overview_content_body.dart';
 import 'package:shell/overview/widget/overview_content_tab.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
+import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 
 /// The overview's content region: a tab panel selecting the displayed content
 /// and the content body below it.
@@ -20,32 +21,50 @@ class OverviewContentPane extends HookConsumerWidget {
 
     final node = useFocusNode();
 
-    return Material(
-      borderRadius: BorderRadius.circular(38),
-      color: Theme.of(context).colorScheme.surface.withAlpha(200),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            const _OverviewContentPanel(),
-            const SizedBox(height: 16),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                switchInCurve: Curves.easeOut,
-                switchOutCurve: Curves.easeIn,
-                layoutBuilder: (currentChild, previousChildren) => Stack(
-                  fit: StackFit.expand,
-                  children: [...previousChildren, ?currentChild],
-                ),
-                child: OverviewContentBody(
-                  key: ValueKey(selectedContent.contentId),
-                  content: selectedContent,
-                  windowFocusNode: node,
+    // Directional navigation inside the content pane (the Helm's controls, a
+    // preview, an embedded window) uses the framework's directional focus:
+    // the pane is made of focusable Material widgets, so traversal walks them.
+    return Actions(
+      actions: {
+        NavigateIntent: CallbackAction<NavigateIntent>(
+          onInvoke: (intent) {
+            primaryFocus?.focusInDirection(switch (intent.direction) {
+              NavigationDirection.up => TraversalDirection.up,
+              NavigationDirection.down => TraversalDirection.down,
+              NavigationDirection.left => TraversalDirection.left,
+              NavigationDirection.right => TraversalDirection.right,
+            });
+            return null;
+          },
+        ),
+      },
+      child: Material(
+        borderRadius: BorderRadius.circular(38),
+        color: Theme.of(context).colorScheme.surface.withAlpha(200),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              const _OverviewContentPanel(),
+              const SizedBox(height: 16),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeIn,
+                  layoutBuilder: (currentChild, previousChildren) => Stack(
+                    fit: StackFit.expand,
+                    children: [...previousChildren, ?currentChild],
+                  ),
+                  child: OverviewContentBody(
+                    key: ValueKey(selectedContent.contentId),
+                    content: selectedContent,
+                    windowFocusNode: node,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

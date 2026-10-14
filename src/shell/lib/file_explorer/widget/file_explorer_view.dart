@@ -1,4 +1,5 @@
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
@@ -10,7 +11,10 @@ import 'package:shell/file_explorer/provider/file_explorer_state.dart';
 import 'package:shell/file_explorer/provider/filtered_entry_list.dart';
 import 'package:shell/file_explorer/widget/file_entry_icon.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/overview/widget/overview_shortcuts.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
+import 'package:shell/shared/widget/focus_highlight.dart';
+import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 
 /// Height of one file explorer row; fixed so the selection can be scrolled into
 /// view by index.
@@ -30,6 +34,7 @@ class FileExplorerView extends HookConsumerWidget {
     this.onActivate,
     this.onOpenDirectory,
     this.onOpenParent,
+    this.resultFocus,
     super.key,
   });
 
@@ -43,6 +48,7 @@ class FileExplorerView extends HookConsumerWidget {
   final ValueChanged<int>? onActivate;
   final ValueChanged<DirectoryPath>? onOpenDirectory;
   final VoidCallback? onOpenParent;
+  final OverviewResultFocus? resultFocus;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -111,33 +117,57 @@ class FileExplorerView extends HookConsumerWidget {
       return null;
     }, [pendingSelectFirst, entryListValue]);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _BreadcrumbBar(
-          path: fileExplorer.path,
-          onOpenDirectory: onOpenDirectory,
-          onOpenParent: onOpenParent,
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: entryListAsync.when(
-            data: (entryList) => entryList.isEmpty
-                ? _EmptyDirectory(
-                    isFiltered: fileExplorer.filterText.isNotEmpty,
-                  )
-                : _FileEntryList(
-                    entryList: entryList,
-                    selectedIndex: selectedIndex,
-                    onSelect: onSelect,
-                    onActivate: onActivate,
-                  ),
-            error: (error, stackTrace) =>
-                _DirectoryError(path: fileExplorer.path, error: error),
-            loading: () => const Center(child: CircularProgressIndicator()),
+    // `Backspace` goes up to the parent directory (the file-manager
+    // convention). It is bound inside the file pane, not above the search
+    // field, so the field keeps `Backspace` for editing text.
+    return Shortcuts(
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.backspace): ParentIntent(),
+      },
+      child: Actions(
+        actions: {
+          ParentIntent: CallbackAction<ParentIntent>(
+            onInvoke: (_) {
+              onOpenParent?.call();
+              return null;
+            },
           ),
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // The breadcrumb is clicked, never reached by directional focus:
+            // keeping it out of the focus order lets `down` from the search
+            // field land on the first file instead of the breadcrumb.
+            ExcludeFocus(
+              child: _BreadcrumbBar(
+                path: fileExplorer.path,
+                onOpenDirectory: onOpenDirectory,
+                onOpenParent: onOpenParent,
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: entryListAsync.when(
+                data: (entryList) => entryList.isEmpty
+                    ? _EmptyDirectory(
+                        isFiltered: fileExplorer.filterText.isNotEmpty,
+                      )
+                    : _FileEntryList(
+                        entryList: entryList,
+                        selectedIndex: selectedIndex,
+                        onSelect: onSelect,
+                        onActivate: onActivate,
+                        resultFocus: resultFocus,
+                      ),
+                error: (error, stackTrace) =>
+                    _DirectoryError(path: fileExplorer.path, error: error),
+                loading: () => const Center(child: CircularProgressIndicator()),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -254,12 +284,14 @@ class _FileEntryList extends HookConsumerWidget {
     this.selectedIndex,
     this.onSelect,
     this.onActivate,
+    this.resultFocus,
   });
 
   final List<FileEntry> entryList;
   final int? selectedIndex;
   final ValueChanged<int>? onSelect;
   final ValueChanged<int>? onActivate;
+  final OverviewResultFocus? resultFocus;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -270,6 +302,7 @@ class _FileEntryList extends HookConsumerWidget {
     final lastTap = useRef<(int, DateTime)?>(null);
 
     void handleTap(int index) {
+      resultFocus?.moveTo(index);
       final now = DateTime.now();
       final previous = lastTap.value;
       if (previous != null &&
@@ -301,7 +334,8 @@ class _FileEntryList extends HookConsumerWidget {
       return null;
     }, [selectedIndex]);
 
-    return ListView.builder(
+    final focus = resultFocus;
+    final list = ListView.builder(
       controller: scrollController,
       itemExtent: fileEntryRowHeight,
       itemCount: entryList.length,
@@ -310,11 +344,60 @@ class _FileEntryList extends HookConsumerWidget {
         return _FileEntryRow(
           entry: entry,
           isSelected: index == selectedIndex,
+          focusNode: focus?.rowNode(index),
+          onFocus: (focus == null || onSelect == null)
+              ? null
+              : () => onSelect!(index),
           onTap: (onSelect == null && onActivate == null)
               ? null
               : () => handleTap(index),
         );
       },
+    );
+
+    if (focus == null) {
+      return list;
+    }
+
+    return Actions(
+      actions: {
+        NavigateIntent: CallbackAction<NavigateIntent>(
+          onInvoke: (intent) {
+            switch (intent.direction) {
+              case NavigationDirection.up:
+                final index = selectedIndex;
+                if (index == null || index <= 0) {
+                  focus.focusSearch();
+                } else {
+                  onSelect?.call(index - 1);
+                  focus.moveTo(index - 1);
+                }
+              case NavigationDirection.down:
+                final index = selectedIndex;
+                final next = index == null ? 0 : index + 1;
+                if (next < entryList.length) {
+                  onSelect?.call(next);
+                  focus.moveTo(next);
+                }
+              case NavigationDirection.left:
+              case NavigationDirection.right:
+                primaryFocus?.focusInDirection(
+                  intent.direction == NavigationDirection.left
+                      ? TraversalDirection.left
+                      : TraversalDirection.right,
+                );
+            }
+            return null;
+          },
+        ),
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            onActivate?.call(selectedIndex ?? 0);
+            return null;
+          },
+        ),
+      },
+      child: list,
     );
   }
 }
@@ -323,20 +406,45 @@ class _FileEntryRow extends StatelessWidget {
   const _FileEntryRow({
     required this.entry,
     required this.isSelected,
+    this.focusNode,
+    this.onFocus,
     this.onTap,
   });
 
   final FileEntry entry;
   final bool isSelected;
+  final FocusNode? focusNode;
+  final VoidCallback? onFocus;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    return FocusHighlight(
+      focusNode: focusNode,
+      onFocusChange: (hasFocus) {
+        if (hasFocus) {
+          onFocus?.call();
+        }
+      },
+      // The fill follows the focus, so navigating the keyboard out of the list
+      // clears the last row instead of leaving it painted. Rows without a focus
+      // node (no roving list) keep the selection fill.
+      builder: (context, hasFocus) => _buildRow(
+        context,
+        highlighted: focusNode == null ? isSelected : hasFocus,
+      ),
+    );
+  }
+
+  Widget _buildRow(BuildContext context, {required bool highlighted}) {
     final colorScheme = Theme.of(context).colorScheme;
     return Material(
-      color: isSelected ? colorScheme.primaryContainer : Colors.transparent,
+      color: highlighted ? colorScheme.primaryContainer : Colors.transparent,
       child: InkWell(
         onTap: onTap,
+        // The row's `Focus` node owns keyboard focus; the ink response only
+        // provides the pointer affordance and its action.
+        canRequestFocus: false,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(

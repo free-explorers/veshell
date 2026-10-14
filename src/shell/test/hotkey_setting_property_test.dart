@@ -10,19 +10,21 @@ import 'package:shell/shared/widget/hotkey_viewer.dart';
 void main() {
   const path = 'keyboard.hotkeys.system.increaseVolume';
 
-  testWidgets('a hotkey SettingProperty renders without throwing', (
+  testWidgets('a hotkey list SettingProperty renders without throwing', (
     tester,
   ) async {
-    const property = SettingProperty<LogicalKeySet>(
+    const property = SettingProperty<List<LogicalKeySet>>(
       name: 'Increase Volume',
       description: 'Increase the volume',
-      converter: LogicalKeySetConverter(),
+      converter: LogicalKeySetListConverter(),
     );
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          jsonValueByPathProvider(path).overrideWithValue('ctrl+alt+m'),
+          jsonValueByPathProvider(
+            path,
+          ).overrideWithValue(['ctrl+alt+m', 'volumeUp']),
         ],
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -35,16 +37,16 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
-    expect(find.byType(HotkeyViewer), findsOneWidget);
+    expect(find.byType(HotkeyViewer), findsNWidgets(2));
   });
 
   testWidgets('a malformed stored hotkey renders without throwing', (
     tester,
   ) async {
-    const property = SettingProperty<LogicalKeySet>(
+    const property = SettingProperty<List<LogicalKeySet>>(
       name: 'Play/Pause Media',
       description: 'Toggle playback of the active media player',
-      converter: LogicalKeySetConverter(),
+      converter: LogicalKeySetListConverter(),
     );
 
     await tester.pumpWidget(

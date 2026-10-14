@@ -37,39 +37,52 @@ browser replacing the former placeholder.
 
 Veshell favours left-hand shortcuts. While the overview is open, navigation
 reuses the `Super`+WASD family already used for workspaces and tiles, so the
-overview is driven without leaving the home row:
+overview is driven without leaving the home row. The bindings are the global
+[`navigation.*`](navigation.md) ones; the overview context gives them their
+meaning here, so there is no separate overview binding table:
 
 | Key | Action |
 |---|---|
 | `Super+W` / `Super+S` | move the selection up / down in the current result list |
-| `Super+D` | open the selected entry — a folder is entered, a file/application is activated |
-| `Super+A` | go up to the parent directory (breadcrumb up) |
+| `Super+A` / `Super+D` | move the keyboard focus left / right between the search pane and the content pane |
+| `Enter` | activate the current result — the first one when nothing is selected |
+| `Backspace` | go up to the parent directory (Files) |
 | `Super+Tab` / `Super+Shift+Tab` | switch search mode: applications → files → settings |
 | `Escape` | close the overview |
 
 The search input keeps filtering while it has focus; the `Super`-modified keys
 act on the current result list. Typing focuses the first result of the new list
 once it is available — in Files mode that also opens its preview — so a search
-can be accepted with `Enter` straight away. Clicking elsewhere in the overview
-(a result row, the preview) keeps the search focused, so the shortcuts keep
-working after a mouse selection. The `Super` chords and `Escape` are handled
+can be accepted with `Enter` straight away. Clicking a result row focuses that
+row; clicking the preview or the content pane leaves the search field focused.
+The `Super` chords and `Escape` are handled
 above both panes, so they act whichever part of the overview holds focus (the
-search field, a content tab, a preview, or an embedded window); `Enter` stays
-with the search field so a focused client still receives it. The selection
-clamps at the first and last entry (no wrap). While the overview is open these
-shadow the global `super+w/s/a/d` workspace/tileable hotkeys.
+search field, a content tab, a preview, or an embedded window); `Enter` is
+registered only by the search pane, so a focused client surface — which is not a
+descendant of it — still receives it. The selection clamps at the first and
+last entry (no wrap). Because the overview handles the standard navigation
+intents, these are the same global `super+w/s/a/d` bindings, not shadowing
+copies (see [Navigation and actions](navigation.md)).
+
+The overview is a combobox: the search field keeps the keyboard while typing
+and `Super+Down` (or a click) hands it to the result list; `Super+Up` on the
+first result hands it back. The content pane — including the Helm — is made of
+focusable Material widgets, so `Super+Left`/`Super+Right` move the keyboard
+between the panes and the same direction keys then walk the Helm's controls,
+switches and notification list. Focus drives the semantic focus, so the
+selection is what assistive technology follows.
 
 The navigation applies to all three modes: `Super+W`/`Super+S` move through the
-mode's results and `Super+D` (or `Enter`) activates them — a file opens with its
-handler, an application is launched as an ephemeral window, and a settings row
-is activated. With nothing selected, the **first** result is the one activated,
-so a search can be accepted with `Enter` without moving the selection first.
-Activating a file or application also resets the search; `Super+A` (parent
-directory) is files-only. Clicking an application selects and launches it
+mode's results and `Enter` activates them — a file opens with its handler, an
+application is launched as an ephemeral window, and a settings row is activated.
+With nothing selected, the **first** result is the one activated, so a search
+can be accepted with `Enter` without moving the selection first. Activating a
+file or application also resets the search. `Backspace` goes up to the parent
+directory (Files only). Clicking an application selects and launches it
 immediately.
 
 In settings, the rows are walked as one visible list: an opened category's
-children come next, before the following category. `Super+D` opens or closes the
+children come next, before the following category. `Enter` opens or closes the
 selected category; leaf settings have nothing to activate.
 
 ## Properties

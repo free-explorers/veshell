@@ -5,9 +5,9 @@ import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
+import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
-import 'package:shell/workspace/model/workspace_shortcuts.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/current_workspace_id.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/persistent_application_launcher.dart';
@@ -92,46 +92,54 @@ class WorkspaceWidget extends HookConsumerWidget {
       workspaceId: workspaceId,
       child: Actions(
         actions: {
-          FocusLeftTileableIntent: CallbackAction<FocusLeftTileableIntent>(
-            onInvoke: (_) {
-              final nextIndex = workspaceState.selectedIndex - 1;
-              if (nextIndex >= 0) {
-                ref
-                    .read(workspaceStateProvider(workspaceId).notifier)
-                    .setSelectedIndex(nextIndex);
+          // The workspace owns the horizontal axis: tileables are laid out in
+          // a row. Vertical navigation belongs to the enclosing screen (its
+          // workspaces), so it is forwarded upwards.
+          NavigateIntent: CallbackAction<NavigateIntent>(
+            onInvoke: (intent) {
+              final notifier = ref.read(
+                workspaceStateProvider(workspaceId).notifier,
+              );
+              switch (intent.direction) {
+                case NavigationDirection.left:
+                  final nextIndex = workspaceState.selectedIndex - 1;
+                  if (nextIndex >= 0) {
+                    notifier.setSelectedIndex(nextIndex);
+                  }
+                case NavigationDirection.right:
+                  final nextIndex = workspaceState.selectedIndex + 1;
+                  if (nextIndex < tileableList.length) {
+                    notifier.setSelectedIndex(nextIndex);
+                  }
+                case NavigationDirection.up:
+                case NavigationDirection.down:
+                  if (context.mounted) {
+                    Actions.maybeInvoke(context, intent);
+                  }
               }
               return null;
             },
           ),
-          FocusRightTileableIntent: CallbackAction<FocusRightTileableIntent>(
-            onInvoke: (_) {
-              final nextIndex = workspaceState.selectedIndex + 1;
-              if (nextIndex < tileableList.length) {
-                ref
-                    .read(workspaceStateProvider(workspaceId).notifier)
-                    .setSelectedIndex(nextIndex);
+          MoveIntent: CallbackAction<MoveIntent>(
+            onInvoke: (intent) {
+              final notifier = ref.read(
+                workspaceStateProvider(workspaceId).notifier,
+              );
+              switch (intent.direction) {
+                case NavigationDirection.left:
+                  notifier.moveSelectedWindowLeft();
+                case NavigationDirection.right:
+                  notifier.moveSelectedWindowRight();
+                case NavigationDirection.up:
+                case NavigationDirection.down:
+                  if (context.mounted) {
+                    Actions.maybeInvoke(context, intent);
+                  }
               }
               return null;
             },
           ),
-          ReorderLeftTileableIntent: CallbackAction<ReorderLeftTileableIntent>(
-            onInvoke: (_) {
-              ref
-                  .read(workspaceStateProvider(workspaceId).notifier)
-                  .moveSelectedWindowLeft();
-              return null;
-            },
-          ),
-          ReorderRightTileableIntent:
-              CallbackAction<ReorderRightTileableIntent>(
-                onInvoke: (_) {
-                  ref
-                      .read(workspaceStateProvider(workspaceId).notifier)
-                      .moveSelectedWindowRight();
-                  return null;
-                },
-              ),
-          CloseTileableIntent: CallbackAction<CloseTileableIntent>(
+          CloseIntent: CallbackAction<CloseIntent>(
             onInvoke: (_) {
               final tileable = tileableList[workspaceState.selectedIndex];
               if (tileable is PersistentWindowTileable) {

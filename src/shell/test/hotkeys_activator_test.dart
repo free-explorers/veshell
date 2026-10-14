@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/settings/provider/state/hotkeys_setting.dart';
 import 'package:shell/shortcut_manager/model/media_intents.dart';
+import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 import 'package:shell/shortcut_manager/provider/hotkeys_activator.dart';
 
 void main() {
@@ -20,9 +21,9 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         hotkeysSettingProvider.overrideWithValue({
-          HotkeysAction.mediaPlayPause.actionId: single(
-            LogicalKeyboardKey.mediaPlay,
-          ),
+          HotkeysAction.mediaPlayPause.actionId: [
+            single(LogicalKeyboardKey.mediaPlay),
+          ],
         }),
       ],
     );
@@ -48,7 +49,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         hotkeysSettingProvider.overrideWithValue({
-          HotkeysAction.mediaPlayPause.actionId: custom,
+          HotkeysAction.mediaPlayPause.actionId: [custom],
         }),
       ],
     );
@@ -59,6 +60,34 @@ void main() {
     expect(activators[custom], isA<MediaPlayPauseIntent>());
     for (final key in playPauseFamily) {
       expect(activators.containsKey(single(key)), isFalse);
+    }
+  });
+
+  test('every binding of an action resolves to the same intent', () {
+    final wasd = single(LogicalKeyboardKey.keyW);
+    final arrow = single(LogicalKeyboardKey.arrowUp);
+
+    final container = ProviderContainer(
+      overrides: [
+        hotkeysSettingProvider.overrideWithValue({
+          HotkeysAction.navigateUp.actionId: [wasd, arrow],
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final activators = container.read(hotkeysActivatorProvider);
+
+    for (final activator in [wasd, arrow]) {
+      final intent = activators[activator];
+      expect(
+        intent,
+        isA<NavigateIntent>().having(
+          (intent) => intent.direction,
+          'direction',
+          NavigationDirection.up,
+        ),
+      );
     }
   });
 }

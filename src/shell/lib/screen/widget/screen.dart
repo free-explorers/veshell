@@ -14,6 +14,7 @@ import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/screen/widget/screen_panel.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
+import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 import 'package:shell/shortcut_manager/model/screen_shortcuts.dart';
 import 'package:shell/workspace/widget/workspace.dart';
 
@@ -84,57 +85,55 @@ class ScreenWidget extends HookConsumerWidget {
                   child: Overlay.wrap(
                     child: Actions(
                       actions: {
-                        FocusWorkspaceAboveIntent:
-                            CallbackAction<FocusWorkspaceAboveIntent>(
-                              onInvoke: (_) {
+                        // The screen owns the vertical axis: workspaces are
+                        // stacked per screen. Horizontal navigation is owned
+                        // by the focused workspace, whose handler sits closer
+                        // to focus, so the screen leaves it alone.
+                        NavigateIntent: CallbackAction<NavigateIntent>(
+                          onInvoke: (intent) {
+                            final notifier = ref.read(
+                              screenStateProvider(screenId).notifier,
+                            );
+                            switch (intent.direction) {
+                              case NavigationDirection.up:
                                 final nextIndex = screenState.selectedIndex - 1;
                                 if (nextIndex >= 0) {
-                                  ref
-                                      .read(
-                                        screenStateProvider(screenId).notifier,
-                                      )
-                                      .selectWorkspace(nextIndex);
+                                  notifier.selectWorkspace(nextIndex);
                                 }
-                                return null;
-                              },
-                            ),
-                        FocusWorkspaceBelowIntent:
-                            CallbackAction<FocusWorkspaceBelowIntent>(
-                              onInvoke: (_) {
+                              case NavigationDirection.down:
                                 final nextIndex = screenState.selectedIndex + 1;
                                 if (nextIndex <
                                     screenState.workspaceList.length) {
-                                  ref
-                                      .read(
-                                        screenStateProvider(screenId).notifier,
-                                      )
-                                      .selectWorkspace(nextIndex);
+                                  notifier.selectWorkspace(nextIndex);
                                 }
-                                return null;
-                              },
-                            ),
-                        ReorderWorkspaceAboveIntent:
-                            CallbackAction<ReorderWorkspaceAboveIntent>(
-                              onInvoke: (_) {
-                                ref
-                                    .read(
-                                      screenStateProvider(screenId).notifier,
-                                    )
-                                    .moveSelectedWorkspaceAbove();
-                                return null;
-                              },
-                            ),
-                        ReorderWorkspaceBelowIntent:
-                            CallbackAction<ReorderWorkspaceBelowIntent>(
-                              onInvoke: (_) {
-                                ref
-                                    .read(
-                                      screenStateProvider(screenId).notifier,
-                                    )
-                                    .moveSelectedWorkspaceBelow();
-                                return null;
-                              },
-                            ),
+                              case NavigationDirection.left:
+                              case NavigationDirection.right:
+                                break;
+                            }
+                            return null;
+                          },
+                        ),
+                        // Vertically, a move sends the selected tile to the
+                        // workspace above/below; horizontal reordering is
+                        // owned by the workspace itself (its handler is
+                        // closer to focus and delegates up here).
+                        MoveIntent: CallbackAction<MoveIntent>(
+                          onInvoke: (intent) {
+                            final notifier = ref.read(
+                              screenStateProvider(screenId).notifier,
+                            );
+                            switch (intent.direction) {
+                              case NavigationDirection.up:
+                                notifier.moveSelectedTileableToWorkspace(-1);
+                              case NavigationDirection.down:
+                                notifier.moveSelectedTileableToWorkspace(1);
+                              case NavigationDirection.left:
+                              case NavigationDirection.right:
+                                break;
+                            }
+                            return null;
+                          },
+                        ),
                       },
                       child: Row(
                         mainAxisSize: MainAxisSize.min,

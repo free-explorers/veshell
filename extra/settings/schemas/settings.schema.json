@@ -3,6 +3,15 @@
     "title": "Veshell Settings",
     "description": "System settings",
     "type": "object",
+    "$defs": {
+        "hotkeyList": {
+            "description": "One or more key chords bound to the same action.",
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        }
+    },
     "properties": {
         "$schema": {
             "type": "string"
@@ -47,22 +56,22 @@
                             "type": "object",
                             "properties": {
                                 "increaseVolume": {
-                                    "type": "string"
+                                    "$ref": "#/$defs/hotkeyList"
                                 },
                                 "decreaseVolume": {
-                                    "type": "string"
+                                    "$ref": "#/$defs/hotkeyList"
                                 },
                                 "muteVolume": {
-                                    "type": "string"
+                                    "$ref": "#/$defs/hotkeyList"
                                 },
                                 "increaseBrightness": {
-                                    "type": "string"
+                                    "$ref": "#/$defs/hotkeyList"
                                 },
                                 "decreaseBrightness": {
-                                    "type": "string"
+                                    "$ref": "#/$defs/hotkeyList"
                                 },
                                 "toggleKeyboardLayout": {
-                                    "type": "string"
+                                    "$ref": "#/$defs/hotkeyList"
                                 }
                             }
                         },
@@ -70,53 +79,51 @@
                             "type": "object",
                             "properties": {
                                 "playPause": {
-                                    "type": "string"
+                                    "$ref": "#/$defs/hotkeyList"
                                 },
                                 "next": {
-                                    "type": "string"
+                                    "$ref": "#/$defs/hotkeyList"
                                 },
                                 "previous": {
-                                    "type": "string"
+                                    "$ref": "#/$defs/hotkeyList"
                                 },
                                 "stop": {
-                                    "type": "string"
+                                    "$ref": "#/$defs/hotkeyList"
                                 }
                             }
                         },
-                        "screen": {
+                        "navigation": {
                             "type": "object",
                             "properties": {
-                                "focusWorkspaceAbove": {
-                                    "type": "string"
+                                "up": {
+                                    "$ref": "#/$defs/hotkeyList"
                                 },
-                                "focusWorkspaceBelow": {
-                                    "type": "string"
+                                "down": {
+                                    "$ref": "#/$defs/hotkeyList"
                                 },
-                                "reorderWorkspaceAbove": {
-                                    "type": "string"
+                                "left": {
+                                    "$ref": "#/$defs/hotkeyList"
                                 },
-                                "reorderWorkspaceBelow": {
-                                    "type": "string"
-                                }
-                            }
-                        },
-                        "workspace": {
-                            "type": "object",
-                            "properties": {
-                                "focusLeftTileable": {
-                                    "type": "string"
+                                "right": {
+                                    "$ref": "#/$defs/hotkeyList"
                                 },
-                                "focusRightTileable": {
-                                    "type": "string"
+                                "moveUp": {
+                                    "$ref": "#/$defs/hotkeyList"
                                 },
-                                "reorderLeftTileable": {
-                                    "type": "string"
+                                "moveDown": {
+                                    "$ref": "#/$defs/hotkeyList"
                                 },
-                                "reorderRightTileable": {
-                                    "type": "string"
+                                "moveLeft": {
+                                    "$ref": "#/$defs/hotkeyList"
                                 },
-                                "closeTileable": {
-                                    "type": "string"
+                                "moveRight": {
+                                    "$ref": "#/$defs/hotkeyList"
+                                },
+                                "activate": {
+                                    "$ref": "#/$defs/hotkeyList"
+                                },
+                                "close": {
+                                    "$ref": "#/$defs/hotkeyList"
                                 }
                             }
                         }

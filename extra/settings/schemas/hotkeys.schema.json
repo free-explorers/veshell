@@ -1,78 +1,95 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "title": "Hotkeys",
-    "description": "A list of action and hotkeys associated",
+    "description": "A map of actions to the list of key chords bound to them",
     "type": "object",
+    "$defs": {
+        "hotkeyList": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        }
+    },
     "properties": {
         "$schema": {
             "type": "string"
         },
-        "system.increaseVolume": {
-            "type": "string"
+        "system": {
+            "type": "object",
+            "properties": {
+                "increaseVolume": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "decreaseVolume": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "muteVolume": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "increaseBrightness": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "decreaseBrightness": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "toggleKeyboardLayout": {
+                    "$ref": "#/$defs/hotkeyList"
+                }
+            }
         },
-        "system.decreaseVolume": {
-            "type": "string"
+        "media": {
+            "type": "object",
+            "properties": {
+                "playPause": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "next": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "previous": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "stop": {
+                    "$ref": "#/$defs/hotkeyList"
+                }
+            }
         },
-        "system.muteVolume": {
-            "type": "string"
-        },
-        "media.playPause": {
-            "type": "string"
-        },
-        "media.next": {
-            "type": "string"
-        },
-        "media.previous": {
-            "type": "string"
-        },
-        "media.stop": {
-            "type": "string"
-        },
-        "screen.focusWorkspaceAbove": {
-            "type": "string"
-        },
-        "screen.focusWorkspaceBelow": {
-            "type": "string"
-        },
-        "screen.reorderWorkspaceAbove": {
-            "type": "string"
-        },
-        "screen.reorderWorkspaceBelow": {
-            "type": "string"
-        },
-        "workspace.focusLeftTileable": {
-            "type": "string"
-        },
-        "workspace.focusRightTileable": {
-            "type": "string"
-        },
-        "workspace.reorderLeftTileable": {
-            "type": "string"
-        },
-        "workspace.reorderRightTileable": {
-            "type": "string"
-        },
-        "workspace.closeTileable": {
-            "type": "string"
+        "navigation": {
+            "type": "object",
+            "properties": {
+                "up": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "down": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "left": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "right": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "moveUp": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "moveDown": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "moveLeft": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "moveRight": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "activate": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "close": {
+                    "$ref": "#/$defs/hotkeyList"
+                }
+            }
         }
     },
-    "required": [
-        "system.increaseVolume",
-        "system.decreaseVolume",
-        "system.muteVolume",
-        "media.playPause",
-        "media.next",
-        "media.previous",
-        "media.stop",
-        "screen.focusWorkspaceAbove",
-        "screen.focusWorkspaceBelow",
-        "screen.reorderWorkspaceAbove",
-        "screen.reorderWorkspaceBelow",
-        "workspace.focusLeftTileable",
-        "workspace.focusRightTileable",
-        "workspace.reorderLeftTileable",
-        "workspace.reorderRightTileable",
-        "workspace.closeTileable"
-    ],
     "additionalProperties": false
 }
