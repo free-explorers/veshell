@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 import 'package:shell/file_chooser/model/file_chooser_request/file_chooser_request.serializable.dart';
@@ -177,28 +178,32 @@ class FileChooserDialog extends HookConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(title, style: theme.textTheme.titleLarge),
-                    if (request.appName.isNotEmpty)
-                      Text(
-                        request.appName,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(title, style: theme.textTheme.titleLarge),
+                              if (request.appName.isNotEmpty)
+                                Text(
+                                  request.appName,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
+                        IconButton(
+                          tooltip: context.l10n.close,
+                          onPressed: chooser.cancel,
+                          icon: const Icon(MdiIcons.close),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 12),
-                    if (request.mode == FileChooserMode.save) ...[
-                      TextField(
-                        controller: nameController,
-                        autofocus: true,
-                        onChanged: (value) => nameText.value = value,
-                        decoration: InputDecoration(
-                          labelText: context.l10n.fileName,
-                          border: const OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
                     if (request.mode == FileChooserMode.open) ...[
                       if (request.filters.isNotEmpty) ...[
                         DropdownButtonFormField<int?>(
@@ -262,13 +267,23 @@ class FileChooserDialog extends HookConsumerWidget {
                     ),
                     const SizedBox(height: 12),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        OutlinedButton(
-                          onPressed: chooser.cancel,
-                          child: Text(context.l10n.cancel),
-                        ),
-                        const SizedBox(width: 12),
+                        if (request.mode == FileChooserMode.save) ...[
+                          Expanded(
+                            child: TextField(
+                              controller: nameController,
+                              autofocus: true,
+                              onChanged: (value) => nameText.value = value,
+                              decoration: InputDecoration(
+                                labelText: context.l10n.fileName,
+                                border: const OutlineInputBorder(),
+                                isDense: true,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                        ] else
+                          const Spacer(),
                         FilledButton(
                           onPressed: acceptEnabled ? accept : null,
                           child: Text(acceptLabel),

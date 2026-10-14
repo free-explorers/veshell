@@ -168,6 +168,38 @@ void main() {
     expect(arguments['outcome'], 'approved');
     expect(arguments['uris'], ['file:///home/user/report.pdf']);
   });
+
+  testWidgets('the top-right close button cancels the request', (tester) async {
+    final calls = _recordPlatformCalls(tester);
+    final request = _saveRequest();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          fileChooserRequestProvider.overrideWith(
+            () => _FakeFileChooserRequest(request),
+          ),
+          directoryListingProvider.overrideWith(
+            (ref, path) async => const <FileEntry>[],
+          ),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: shellLocalizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(body: FileChooserDialog(request: request)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+
+    expect(calls.single.method, 'file_chooser_decision');
+    final arguments = calls.single.arguments as Map;
+    expect(arguments['outcome'], 'cancelled');
+    expect(arguments['uris'], isEmpty);
+  });
 }
 
 FileChooserRequestMessage _saveRequest() => FileChooserRequestMessage(
