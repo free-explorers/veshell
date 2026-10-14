@@ -55,6 +55,7 @@ sealed class FileChooserRequestMessage
     required bool directory,
     required List<String> files,
     required List<FileChooserFilterMessage> filters,
+    String? monitorName,
     String? acceptLabel,
     String? currentFolder,
     String? currentFile,

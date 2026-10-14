@@ -857,7 +857,20 @@ fn perform_ui_event<BackendData: crate::backend::Backend + 'static>(
         } => {
             // The shell receives the already-decoded options: it never
             // parses D-Bus types, and the unguessable token binds the
-            // answer back to this exact request.
+            // answer back to this exact request. The requesting app's
+            // monitor (when it resolves to a live window) lets the shell
+            // open the dialog above the requester instead of wherever the
+            // focus happens to be.
+            let monitor_name = state
+                .meta_window_state
+                .requester_meta_window_for(&app_name)
+                .and_then(|id| {
+                    state
+                        .meta_window_state
+                        .meta_windows
+                        .get(&id)
+                        .and_then(|window| window.current_output.clone())
+                });
             state
                 .flutter_engine_mut()
                 .platform_method_channel
@@ -869,6 +882,7 @@ fn perform_ui_event<BackendData: crate::backend::Backend + 'static>(
                         "appName": app_name,
                         "title": title,
                         "mode": kind,
+                        "monitorName": monitor_name,
                         "multiple": options.multiple,
                         "directory": options.directory,
                         "acceptLabel": options.accept_label,

@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/capture/widget/capture_prompt_overlay.dart';
 import 'package:shell/file_chooser/model/file_chooser_request/file_chooser_request.serializable.dart';
 import 'package:shell/file_chooser/provider/file_chooser_request.dart';
 import 'package:shell/file_chooser/widget/file_chooser_dialog.dart';
@@ -41,6 +42,35 @@ void main() {
     expect(message.filters.single.patterns.single.pattern, '*.pdf');
   });
 
+  test('the dialog opens on the requester monitor when it is connected', () {
+    expect(
+      trustedDialogMonitorName(
+        requesterMonitorName: 'DP-2',
+        connectedMonitorNameList: const ['DP-1', 'DP-2'],
+        focusedMonitorName: 'DP-1',
+      ),
+      'DP-2',
+    );
+    // No resolved requester: fall back to the focused monitor.
+    expect(
+      trustedDialogMonitorName(
+        requesterMonitorName: null,
+        connectedMonitorNameList: const ['DP-1', 'DP-2'],
+        focusedMonitorName: 'DP-1',
+      ),
+      'DP-1',
+    );
+    // Requester monitor unplugged since the request: fall back too.
+    expect(
+      trustedDialogMonitorName(
+        requesterMonitorName: 'HDMI-1',
+        connectedMonitorNameList: const ['DP-1'],
+        focusedMonitorName: 'DP-1',
+      ),
+      'DP-1',
+    );
+  });
+
   testWidgets('the provider answers the compositor with the decision', (
     tester,
   ) async {
@@ -48,8 +78,9 @@ void main() {
 
     final container = ProviderContainer();
     addTearDown(container.dispose);
-    container.listen(fileChooserRequestProvider, (_, _) {});
-    container.read(fileChooserRequestProvider);
+    container
+      ..listen(fileChooserRequestProvider, (_, _) {})
+      ..read(fileChooserRequestProvider);
 
     // Deliver the compositor's incoming method call through the real
     // PlatformManager's channel handler.
