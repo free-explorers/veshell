@@ -763,14 +763,22 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let role = with_states(surface, |surface_data| surface_data.role);
         match role {
             Some(compositor::SUBSURFACE_ROLE) => {
-                let subsurface_message = Self::construct_subsurface_role_message(surface);
-                Some(SurfaceRole::Subsurface(subsurface_message))
+                Self::construct_subsurface_role_message(surface).map(SurfaceRole::Subsurface)
             }
             _ => None,
         }
     }
 
-    pub fn construct_subsurface_role_message(surface: &WlSurface) -> SubsurfaceMessage {
+    /// Builds the role message for a `wl_subsurface`, or `None` when the
+    /// surface no longer has a parent.
+    ///
+    /// Smithay keeps the `subsurface` role on a `wl_surface` after its
+    /// `wl_subsurface` is destroyed (it only clears the parent link), so a
+    /// surface can report `SUBSURFACE_ROLE` while `get_parent` returns `None`.
+    /// That state is reachable from a client commit or a shell reload, and
+    /// panicking here would abort the whole compositor, since Wayland request
+    /// dispatch cannot unwind. Treat such a surface as roleless instead.
+    pub fn construct_subsurface_role_message(surface: &WlSurface) -> Option<SubsurfaceMessage> {
         // `wl_subsurface.set_position` modifies double-buffered state of the
         // *parent* surface, so it takes effect on the parent's commit even when
         // the child is desynchronized and never committed itself. Smithay only
@@ -785,10 +793,12 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 .location
         });
 
-        SubsurfaceMessage {
+        let parent = get_parent(surface)?;
+
+        Some(SubsurfaceMessage {
             position: location.into(),
-            parent: get_surface_id(&get_parent(surface).unwrap()),
-        }
+            parent: get_surface_id(&parent),
+        })
     }
 
     pub fn get_output_by_name(&self, name: &str) -> Option<&Output> {

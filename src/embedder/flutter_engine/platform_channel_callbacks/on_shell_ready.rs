@@ -38,9 +38,11 @@ pub fn on_shell_ready<BackendData: Backend + 'static>(
 
     for surface_id in subsurfaces.keys() {
         if let Some(wl_surface) = surfaces.get(surface_id) {
-            let subsurface_message = State::<BackendData>::construct_subsurface_role_message(
+            let Some(subsurface_message) = State::<BackendData>::construct_subsurface_role_message(
                 wl_surface.clone().borrow(),
-            );
+            ) else {
+                continue;
+            };
             let platform_method_channel: &mut crate::flutter_engine::platform_channels::method_channel::MethodChannel<serde_json::Value> = &mut data.flutter_engine_mut().platform_method_channel;
 
             platform_method_channel.invoke_method(
