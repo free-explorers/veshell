@@ -9,15 +9,14 @@ part 'meta_window_dragging_state.g.dart';
 class MetaWindowDraggingState extends _$MetaWindowDraggingState {
   @override
   bool build(MetaWindowId metaWindowId) {
-    ref.watch(platformManagerProvider).listen((next) {
+    final subscription = ref.watch(platformManagerProvider).listen((next) {
       if (next case final InteractiveMoveEvent event) {
-        {
-          if (event.message.metaWindowId == metaWindowId) {
-            state = true;
-          }
+        if (event.message.metaWindowId == metaWindowId) {
+          state = true;
         }
       }
     });
+    ref.onDispose(subscription.cancel);
     return false;
   }
 

@@ -15,11 +15,12 @@ part 'monitor_layout_received.g.dart';
 class MonitorLayoutReceived extends _$MonitorLayoutReceived {
   @override
   bool build() {
-    ref.watch(platformManagerProvider).listen((event) {
+    final subscription = ref.watch(platformManagerProvider).listen((event) {
       if (event is MonitorLayoutChangedEvent) {
         state = true;
       }
     });
+    ref.onDispose(subscription.cancel);
     return false;
   }
 }

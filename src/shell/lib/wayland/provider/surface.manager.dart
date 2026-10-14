@@ -24,7 +24,7 @@ class SurfaceManager extends _$SurfaceManager {
   SurfaceManagerState build() {
     print('SurfaceManager build');
 
-    ref.watch(platformManagerProvider).listen((next) {
+    final subscription = ref.watch(platformManagerProvider).listen((next) {
       switch (next) {
         case final NewSurfaceEvent event:
           _newSurface(event.message);
@@ -40,6 +40,7 @@ class SurfaceManager extends _$SurfaceManager {
           break;
       }
     });
+    ref.onDispose(subscription.cancel);
     return SurfaceManagerState(wlSurfaces: ISet(), subSurfaces: ISet());
   }
 

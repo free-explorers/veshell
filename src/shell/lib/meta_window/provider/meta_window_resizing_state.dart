@@ -10,15 +10,14 @@ part 'meta_window_resizing_state.g.dart';
 class MetaWindowResizingState extends _$MetaWindowResizingState {
   @override
   ResizeEdge? build(MetaWindowId metaWindowId) {
-    ref.watch(platformManagerProvider).listen((next) {
+    final subscription = ref.watch(platformManagerProvider).listen((next) {
       if (next case final InteractiveResizeEvent event) {
-        {
-          if (event.message.metaWindowId == metaWindowId) {
-            state = event.message.edge;
-          }
+        if (event.message.metaWindowId == metaWindowId) {
+          state = event.message.edge;
         }
       }
     });
+    ref.onDispose(subscription.cancel);
     return null;
   }
 

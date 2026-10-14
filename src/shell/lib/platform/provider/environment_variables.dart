@@ -9,11 +9,12 @@ part 'environment_variables.g.dart';
 class EnvironmentVariables extends _$EnvironmentVariables {
   @override
   IMap<String, String> build() {
-    ref.watch(platformManagerProvider).listen((next) {
+    final subscription = ref.watch(platformManagerProvider).listen((next) {
       if (next case final SetEnvironmentVariablesEvent event) {
         _set(event.message.environmentVariables);
       }
     });
+    ref.onDispose(subscription.cancel);
 
     return IMap();
   }
