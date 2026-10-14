@@ -228,13 +228,16 @@ All of these are observed on the live surfaces and, where meaningful, mirrored o
    window, a sibling whose match cost is strictly lower (principally a stored
    title match; provenance/process-sibling recovery also counts) wins it,
    strongest first, destinations deduped; a taken destination falls through to
-   the next best. Equal cost keeps the window where it is. Within a tile that
-   owns several windows, the displayed one is chosen by the same identity cost
-   plus a penalty for fixed-size windows: the application's real (resizable)
-   window wins over a transient fixed-size helper such as Discord's updater,
-   which is then the leftover to turn into a dialog. That penalty orders
-   windows only inside the tile; the matcher and the sibling comparison stay
-   on the unpenalised cost.
+   the next best. Equal cost keeps the window where it is. The gather `waiting`
+   bonus is excluded from this comparison: it only decides where a burst is
+   *collected*, never settled ownership, so a sibling that is itself still
+   gathering cannot outrank the tile that has just settled and make the window
+   bounce from one settling tile to the next. Within a tile that owns several
+   windows, the displayed one is chosen by the same identity cost plus a penalty
+   for fixed-size windows: the application's real (resizable) window wins over a
+   transient fixed-size helper such as Discord's updater, which is then the
+   leftover to turn into a dialog. That penalty orders windows only inside the
+   tile; the matcher and the sibling comparison stay on the unpenalised cost.
 4. **Spread leftovers.** A window left without a better home is moved to an
    empty same-app sibling if one exists, instead of becoming a dialog.
 5. **Dialog only when no sibling is free.** A leftover that finds no empty
