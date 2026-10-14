@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/notification/model/notification_close_reason.dart';
 import 'package:shell/notification/model/notification_target.dart';
@@ -22,6 +24,7 @@ part 'notification_read_tracker.g.dart';
 bool notificationReadTracker(Ref ref) {
   ref.listen(notificationRoutesProvider, (previous, next) {
     final manager = ref.read(notificationManagerProvider);
+    final seenIds = <int>[];
     for (final entry in next.entries) {
       final notification = manager.notificationMap[entry.key];
       if (notification == null || notification.isRead) {
@@ -41,19 +44,34 @@ bool notificationReadTracker(Ref ref) {
         WorkspaceNotificationTarget() ||
         UnresolvedNotificationTarget() => false,
       };
-      if (!seen) {
-        continue;
+      if (seen) {
+        seenIds.add(notification.id);
       }
-      // Close (idempotently) and mark read. A notification already closed by
-      // expiry still needs its dot cleared here.
-      ref
-          .read(notificationManagerProvider.notifier)
-          .closeNotification(
-            notification.id,
-            reason: NotificationCloseReason.dismissed,
-            markRead: true,
-          );
     }
+    if (seenIds.isEmpty) {
+      return;
+    }
+    // Defer the writes out of the routes flush. Closing mutates the manager,
+    // which the routing provider watches, so doing it synchronously while the
+    // routes are being rebuilt invalidates them again within the same frame.
+    // Riverpod then throws "Tried to rebuild notificationRoutesProvider
+    // multiple times in the same frame" and can leave the routing providers in
+    // an error state that later readers trip over.
+    scheduleMicrotask(() {
+      if (!ref.mounted) {
+        return;
+      }
+      final notifier = ref.read(notificationManagerProvider.notifier);
+      for (final id in seenIds) {
+        // Close (idempotently) and mark read. A notification already closed by
+        // expiry still needs its dot cleared here.
+        notifier.closeNotification(
+          id,
+          reason: NotificationCloseReason.dismissed,
+          markRead: true,
+        );
+      }
+    });
   });
   return true;
 }
