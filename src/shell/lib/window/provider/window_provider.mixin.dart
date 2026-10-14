@@ -406,25 +406,36 @@ mixin WindowProviderMixin<T extends Window> {
     //    available destination after every move so a taken one falls through to
     //    the next best.
     final remaining = owned.toSet();
+    final engine = ref.read(matchingEngineProvider.notifier);
     while (remaining.isNotEmpty) {
       final plans = <(MetaWindowId, WindowId, MatchingCost)>[];
       for (final metaWindowId in remaining) {
-        final (other, otherCost) = ref
-            .read(matchingEngineProvider.notifier)
-            .findBestOrdinarySiblingFor(
-              metaWindowId,
-              excludedWindowIds: taken.toList(),
-            );
+        final (other, otherCost) = engine.findBestOrdinarySiblingFor(
+          metaWindowId,
+          excludedWindowIds: taken.toList(),
+        );
         if (other == null || otherCost == null) {
           continue;
         }
         final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+        // Identity only: the gather `waiting` bonus is excluded so a sibling
+        // that is still gathering cannot outrank this just-settled tile.
         final ownerCost = windowMatchingCost(
           MatchingInfo.fromMetaWindow(metaWindow),
           getMatchingInfo(),
           state,
+          includeWaiting: false,
         );
         if (otherCost.total < ownerCost.total) {
+          matchingLog.info(
+            'Sibling move: ${metaWindow.id} '
+            '(app="${metaWindow.appId}", pid=${metaWindow.pid}, '
+            'title="${metaWindow.title}") '
+            '${state.windowId} -> $other '
+            'owner=$ownerCost sibling=$otherCost '
+            '(owner title="${getMatchingInfo().title}", '
+            'sibling title="${engine.matchingInfoFor(other).title}")',
+          );
           plans.add((metaWindowId, other, otherCost));
         }
       }

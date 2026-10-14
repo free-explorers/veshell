@@ -245,13 +245,15 @@ class MatchingEngine extends _$MatchingEngine {
   /// order. Shared by every matcher so the cost model has a single call site.
   List<MatchingCost> _matchingCosts(
     MatchingInfo metaWindowMatchInfo,
-    List<WindowId> candidates,
-  ) => [
+    List<WindowId> candidates, {
+    bool includeWaiting = true,
+  }) => [
     for (final windowId in candidates)
       windowMatchingCost(
         metaWindowMatchInfo,
         _getWindowMatchingInfo(windowId),
         _getWindowState(windowId),
+        includeWaiting: includeWaiting,
       ),
   ];
 
@@ -285,6 +287,11 @@ class MatchingEngine extends _$MatchingEngine {
   /// windows point at each other), so letting it drive the redistribution move
   /// decisions would make them oscillate; the redistribution compares identity
   /// cost only, and a strictly lower cost wins.
+  ///
+  /// The gather `waiting` bonus is excluded too ([windowMatchingCost] with
+  /// `includeWaiting: false`): it is a dispatch-time signal, and a sibling that
+  /// is merely still gathering must not outrank the tile that has just settled
+  /// — that would make the window bounce from one settling tile to the next.
   (WindowId?, MatchingCost?) findBestOrdinarySiblingFor(
     MetaWindowId metaWindowId, {
     List<WindowId> excludedWindowIds = const [],
@@ -302,10 +309,18 @@ class MatchingEngine extends _$MatchingEngine {
     if (candidates.isEmpty) {
       return (null, null);
     }
-    final costs = _matchingCosts(metaWindowMatchInfo, candidates);
+    final costs = _matchingCosts(
+      metaWindowMatchInfo,
+      candidates,
+      includeWaiting: false,
+    );
     final bestIndex = _bestMatchingIndex(candidates, costs);
     return (candidates[bestIndex], costs[bestIndex]);
   }
+
+  /// Matching identity stored for [windowId], for telemetry only.
+  MatchingInfo matchingInfoFor(WindowId windowId) =>
+      _getWindowMatchingInfo(windowId);
 
   /// The first same-app tile that owns no native window, in the stable
   /// candidate order. Used to spread leftover windows over empty placeholders

@@ -167,7 +167,9 @@ const MAX_SPLASH_GATHER_TIME_MS = 2000;
 ///   launch burst is collected onto the clicked tile, which then dispatches
 ///   the windows whose title matches a sibling better. It is cleared at the
 ///   burst settle and is never a reason to *keep* a window the tile does not
-///   fit.
+///   fit. Ranking *settled* ownership (the sibling redistribution) passes
+///   `includeWaiting: false`, so a sibling that is merely still gathering
+///   cannot outrank the tile that just settled and make the window ping-pong.
 /// - `pid` matches are almost useless as evidence (the placeholder records
 ///   its launcher's pid; multi-process applications report a different one),
 ///   hence the negligible 1.
@@ -183,8 +185,9 @@ const MAX_SPLASH_GATHER_TIME_MS = 2000;
 MatchingCost windowMatchingCost(
   MatchingInfo metaWindowMatchInfo,
   MatchingInfo windowMatchInfo,
-  Window window,
-) {
+  Window window, {
+  bool includeWaiting = true,
+}) {
   // The wmClass *must* match if specified
   final windowClass = matchingCost(
     windowMatchInfo.windowClass,
@@ -203,15 +206,24 @@ MatchingCost windowMatchingCost(
     1,
   );
   final pid = matchingCost(windowMatchInfo.pid, metaWindowMatchInfo.pid, 1, 1);
-  final waiting = windowMatchInfo.waitingForAppSince != null
-      ? 100 -
-            (DateTime.now()
-                        .difference(windowMatchInfo.waitingForAppSince!)
-                        .inMilliseconds
-                        .clamp(0, 1000) /
-                    100)
-                .round() // Clamp the difference to be between 0 and 1000 milliseconds
-      : 200;
+  // The waiting bonus is a *gather* signal: while a clicked placeholder is
+  // still collecting its launch burst it outranks settled tiles so the burst
+  // lands on the clicked tile first. Ranking already-settled ownership (the
+  // sibling redistribution) passes `includeWaiting: false` instead, so a
+  // sibling that is itself still gathering cannot outrank the tile that just
+  // settled and make the window move back and forth.
+  final int waiting;
+  if (!includeWaiting) {
+    waiting = 0;
+  } else if (windowMatchInfo.waitingForAppSince != null) {
+    final elapsedMs = DateTime.now()
+        .difference(windowMatchInfo.waitingForAppSince!)
+        .inMilliseconds;
+    // Clamp the difference to be between 0 and 1000 milliseconds.
+    waiting = 100 - (elapsedMs.clamp(0, 1000) / 100).round();
+  } else {
+    waiting = 200;
+  }
 
   return MatchingCost(
     windowClass: windowClass,
@@ -253,5 +265,7 @@ class MatchingCost {
   };
 
   @override
-  String toString() => 'MatchingCost(total: $total)';
+  String toString() =>
+      'MatchingCost(class: $windowClass, title: $title, '
+      'startup: $startupId, pid: $pid, waiting: $waiting, total: $total)';
 }
