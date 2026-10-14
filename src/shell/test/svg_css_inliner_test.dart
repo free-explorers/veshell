@@ -107,6 +107,58 @@ void main() {
     });
   });
 
+  group('normalizeSvgFontWeight', () {
+    test('rounds a presentation attribute to the nearest hundred', () {
+      const svg = '<svg><text font-weight="596">x</text></svg>';
+      expect(
+        normalizeSvgFontWeight(svg),
+        '<svg><text font-weight="600">x</text></svg>',
+      );
+    });
+
+    test('rounds a font-weight inside an inline style', () {
+      const svg =
+          '<svg><text style="font-size:12px;font-weight:596">x</text></svg>';
+      expect(
+        normalizeSvgFontWeight(svg),
+        '<svg><text style="font-size:12px;font-weight:600">x</text></svg>',
+      );
+    });
+
+    test('leaves an already-supported weight untouched', () {
+      const svg =
+          '<svg><text font-weight="600" style="font-weight:400">x</text></svg>';
+      expect(normalizeSvgFontWeight(svg), svg);
+    });
+
+    test('leaves keywords the renderer understands untouched', () {
+      const svg =
+          '<svg><text font-weight="normal" style="font-weight:bold">x</text></svg>';
+      expect(normalizeSvgFontWeight(svg), svg);
+    });
+
+    test('clamps weights outside the supported range', () {
+      expect(
+        normalizeSvgFontWeight('<svg><text font-weight="1000"/></svg>'),
+        '<svg><text font-weight="900"/></svg>',
+      );
+      expect(
+        normalizeSvgFontWeight('<svg><text font-weight="50"/></svg>'),
+        '<svg><text font-weight="100"/></svg>',
+      );
+    });
+
+    test('leaves a value that is not a number untouched', () {
+      const svg = '<svg><text font-weight="bolder"/></svg>';
+      expect(normalizeSvgFontWeight(svg), svg);
+    });
+
+    test('leaves an SVG without a font-weight untouched', () {
+      const svg = '<svg><path fill="red"/></svg>';
+      expect(normalizeSvgFontWeight(svg), svg);
+    });
+  });
+
   group('NormalizingSvgFileLoader', () {
     test('compiles the code-oss icon through vector_graphics', () async {
       const svg = '''
@@ -127,6 +179,47 @@ void main() {
       addTearDown(info.picture.dispose);
       expect(info.size.width, greaterThan(0));
     });
+
+    test(
+      'compiles an icon whose stylesheet weight the parser rejects',
+      () async {
+        // `vector_graphics_compiler` throws on any weight that is not a round
+        // hundred, so a `596` from a variable font used to abort the render.
+        const svg = '''
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
+<style>.a{fill:#000;font-weight:596}</style>
+<path class="a" d="M0 0h10v10H0z"/>
+</svg>''';
+        final directory = await Directory.systemTemp.createTemp('svg-inliner');
+        addTearDown(() => directory.delete(recursive: true));
+        final file = File('${directory.path}/weight.svg')
+          ..writeAsStringSync(svg);
+
+        final info = await vg.loadPicture(NormalizingSvgFileLoader(file), null);
+        addTearDown(info.picture.dispose);
+        expect(info.size.width, greaterThan(0));
+      },
+    );
+
+    test(
+      'compiles an icon whose attribute weight the parser rejects',
+      () async {
+        // No stylesheet, so this also covers the path where `inlineSvgCss`
+        // returns the document untouched.
+        const svg = '''
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">
+<path fill="#000" font-weight="596" d="M0 0h10v10H0z"/>
+</svg>''';
+        final directory = await Directory.systemTemp.createTemp('svg-inliner');
+        addTearDown(() => directory.delete(recursive: true));
+        final file = File('${directory.path}/weight.svg')
+          ..writeAsStringSync(svg);
+
+        final info = await vg.loadPicture(NormalizingSvgFileLoader(file), null);
+        addTearDown(info.picture.dispose);
+        expect(info.size.width, greaterThan(0));
+      },
+    );
 
     test('compares equal for the same file and differs by path', () {
       final first = NormalizingSvgFileLoader(File('/tmp/a.svg'));
