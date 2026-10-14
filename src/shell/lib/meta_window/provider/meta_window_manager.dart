@@ -43,7 +43,8 @@ class MetaWindowManager extends _$MetaWindowManager {
 
   @override
   ISet<MetaWindowId> build() {
-    ref.watch(platformManagerProvider).listen((next) {
+    final platformEvents = ref.watch(platformManagerProvider);
+    final platformSubscription = platformEvents.listen((next) {
       if (next case final MetaWindowCreatedEvent event) {
         onNewMetaWindow(event);
       }
@@ -92,6 +93,7 @@ class MetaWindowManager extends _$MetaWindowManager {
         onMetaPopupRemoved(event.message.id);
       }
     });
+    ref.onDispose(platformSubscription.cancel);
 
     return <MetaWindowId>{}.lock;
   }
