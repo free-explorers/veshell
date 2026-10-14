@@ -84,9 +84,10 @@ by keyboard **and** assistive technology:
   `Super+Up` on the first result hands it back. A click focuses the clicked row
   too, so the pointer and the keyboard agree on the selection.
 - Each result row owns a `FocusNode` (roving tab index): the selection cursor
-  and the focus move together, so a screen reader follows the selection and the
-  highlight stays in step, while activation (`ActivateIntent`, i.e. `Enter`)
-  acts on the focused row.
+  and the focus move together, so a screen reader follows the selection, while
+  activation (`ActivateIntent`, i.e. `Enter`) acts on the focused row. The row's
+  fill is a *focus* effect, not a persistent selection tint: moving the keyboard
+  to the content pane clears it, so leaving the list is visible.
 - The content pane is made of focusable Material widgets (the Helm's buttons,
   switches, sliders, list tiles, notification list). Directional navigation
   there delegates to `FocusNode.focusInDirection`, so the framework walks the

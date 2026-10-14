@@ -136,6 +136,34 @@ void main() {
     expect(field().focusNode?.hasFocus, isTrue);
   });
 
+  testWidgets('the row highlight follows the keyboard focus', (tester) async {
+    final container = await pumpAppMode(tester, filteredTexts: const ['', 'a']);
+
+    Future<void> pressSuperS() async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pump();
+    }
+
+    Material rowMaterial() => tester.widget<Material>(
+      find
+          .ancestor(of: find.text('Alpha'), matching: find.byType(Material))
+          .first,
+    );
+
+    // Typing selects the first result while the search field keeps the
+    // keyboard: the row is selected but not painted.
+    await tester.enterText(find.byType(TextField), 'a');
+    await tester.pumpAndSettle();
+    expect(container.read(overviewStateProvider(screenId)).selectedIndex, 0);
+    expect(rowMaterial().color, Colors.transparent);
+
+    // Handing the keyboard to the list paints the focused row.
+    await pressSuperS();
+    expect(rowMaterial().color, isNot(Colors.transparent));
+  });
+
   testWidgets('typing focuses the first result', (tester) async {
     final container = await pumpAppMode(tester, filteredTexts: const ['', 'a']);
 

@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/app_drawer.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/overview/widget/overview_shortcuts.dart';
+import 'package:shell/shared/widget/focus_highlight.dart';
 import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 
 /// Height of one application row; fixed so the selection can be scrolled into
@@ -157,26 +158,27 @@ class _ApplicationRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final focus = focusNode;
-    final row = _buildRow(context);
-    if (focus == null) {
-      return row;
-    }
-    return Focus(
-      focusNode: focus,
+    return FocusHighlight(
+      focusNode: focusNode,
       onFocusChange: (hasFocus) {
         if (hasFocus) {
           onFocus?.call();
         }
       },
-      child: row,
+      // The fill follows the focus, so navigating the keyboard out of the list
+      // clears the last row instead of leaving it painted. Rows without a focus
+      // node (no roving list) keep the selection fill.
+      builder: (context, hasFocus) => _buildRow(
+        context,
+        highlighted: focusNode == null ? isSelected : hasFocus,
+      ),
     );
   }
 
-  Widget _buildRow(BuildContext context) {
+  Widget _buildRow(BuildContext context, {required bool highlighted}) {
     final colorScheme = Theme.of(context).colorScheme;
     return Material(
-      color: isSelected ? colorScheme.primaryContainer : Colors.transparent,
+      color: highlighted ? colorScheme.primaryContainer : Colors.transparent,
       child: InkWell(
         onTap: onTap,
         // The row's `Focus` node owns keyboard focus; the ink response only
