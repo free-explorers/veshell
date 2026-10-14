@@ -221,11 +221,11 @@ class ScreenState extends _$ScreenState {
   /// Moves the selected workspace's selected tileable to the workspace [delta]
   /// slots away (`-1` is the workspace above, `+1` the one below).
   ///
-  /// The tile is appended to the destination and selected there; the source
-  /// workspace stays selected (now with one fewer tile). The application
-  /// launcher slot is not a window and is left alone, and a move at the edge
-  /// of the workspace list is a no-op. The destination's `insertWindow` owns
-  /// the transfer, including removal from the source.
+  /// The tile is appended to the destination and selected there, and the screen
+  /// navigates to the destination so the tile is followed as it moves. The
+  /// application launcher slot is not a window and is left alone, and a move at
+  /// the edge of the workspace list is a no-op. The destination's
+  /// `insertWindow` owns the transfer, including removal from the source.
   void moveSelectedTileableToWorkspace(int delta) {
     final targetIndex = state.selectedIndex + delta;
     if (targetIndex < 0 || targetIndex >= state.workspaceList.length) {
@@ -251,6 +251,8 @@ class ScreenState extends _$ScreenState {
           .read(workspaceStateProvider(targetWorkspaceId).notifier)
           .insertWindow(windowId, targetLength, selectWindow: true),
     );
+    // Follow the tile: navigate to the workspace it moved to.
+    selectWorkspace(targetIndex);
   }
 
   void setCustomLabel(String? label) {

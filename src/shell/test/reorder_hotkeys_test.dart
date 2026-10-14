@@ -299,22 +299,28 @@ void main() {
     ScreenState notifier(ProviderContainer container) =>
         container.read(screenStateProvider(_screen).notifier);
 
-    test('sends the selected window to the workspace below', () {
+    int selectedWorkspace(ProviderContainer container) =>
+        container.read(screenStateProvider(_screen)).selectedIndex;
+
+    test('sends the selected window to the workspace below and follows it', () {
       final container = setUpScreen(selectedWorkspace: 0, selectedWindow: 1);
 
       notifier(container).moveSelectedTileableToWorkspace(1);
 
       // Appended after ws-b's existing tile and selected there.
       expect(calls, [(PersistentWindowId.new('t2'), 1, true)]);
+      // The screen navigates to the destination so the tile is followed.
+      expect(selectedWorkspace(container), 1);
     });
 
-    test('sends the selected window to the workspace above', () {
+    test('sends the selected window to the workspace above and follows it', () {
       // ws-b's first tile, appended after ws-a's two tiles.
       final container = setUpScreen(selectedWorkspace: 1, selectedWindow: 0);
 
       notifier(container).moveSelectedTileableToWorkspace(-1);
 
       expect(calls, [(PersistentWindowId.new('b1'), 2, true)]);
+      expect(selectedWorkspace(container), 0);
     });
 
     test('does nothing at the edge of the workspace list', () {
@@ -323,6 +329,7 @@ void main() {
       notifier(container).moveSelectedTileableToWorkspace(-1);
 
       expect(calls, isEmpty);
+      expect(selectedWorkspace(container), 0);
     });
 
     test('does nothing when the application launcher is selected', () {
@@ -332,6 +339,7 @@ void main() {
       notifier(container).moveSelectedTileableToWorkspace(1);
 
       expect(calls, isEmpty);
+      expect(selectedWorkspace(container), 0);
     });
   });
 }
