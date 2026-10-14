@@ -40,6 +40,7 @@ in
         default = [ "gtk" ];
         "org.freedesktop.impl.portal.ScreenCast" = [ "veshell" ];
         "org.freedesktop.impl.portal.Screenshot" = [ "veshell" ];
+        "org.freedesktop.impl.portal.FileChooser" = [ "veshell" ];
       };
     };
   };

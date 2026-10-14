@@ -5,6 +5,7 @@ import 'package:shell/capture/model/screen_cast_consent_dismissed/screen_cast_co
 import 'package:shell/capture/model/screen_cast_recording/screen_cast_recording.serializable.dart';
 import 'package:shell/capture/model/screen_cast_stopped/screen_cast_stopped.serializable.dart';
 import 'package:shell/capture/model/screenshot_prompt/screenshot_prompt.serializable.dart';
+import 'package:shell/file_chooser/model/file_chooser_request/file_chooser_request.serializable.dart';
 import 'package:shell/notification/model/notification_close_requested/notification_close_requested.serializable.dart';
 import 'package:shell/notification/model/notification_received/notification_received.serializable.dart';
 import 'package:shell/platform/model/event/brightness_changed/brightness_changed.serializable.dart';
@@ -172,6 +173,14 @@ sealed class PlatformEvent with _$PlatformEvent implements PlatformInteraction {
     required String method,
     required ScreenshotPromptMessage message,
   }) = ScreenshotPromptEvent;
+
+  /// File chooser portal request, sent by the compositor when a sandboxed
+  /// app asks the trusted shell to open or save files. The shell answers
+  /// with `file_chooser_decision`.
+  const factory PlatformEvent.fileChooserRequest({
+    required String method,
+    required FileChooserRequestMessage message,
+  }) = FileChooserRequestEvent;
 
   /// Screen cast delivery began: the persistent indicator appears.
   const factory PlatformEvent.screenCastActive({

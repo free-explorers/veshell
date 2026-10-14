@@ -1,5 +1,6 @@
 pub mod fractionnal_scale;
 pub mod xdg;
+pub mod xdg_foreign;
 pub mod xwayland;
 
 pub mod wayland {

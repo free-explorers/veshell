@@ -13,8 +13,9 @@ use zbus::zvariant::{ObjectPath, OwnedObjectPath, OwnedValue};
 
 use super::service::{FrontendOwner, PortalAction, PortalLedger};
 use super::{
-    CallReceiver, PortalCall, BACKEND_NAME, DESKTOP_PATH, FRONTEND_NAME, REQUEST_SESSION_VERSION,
-    RESPONSE_FAILED, RESPONSE_OK, SCREENCAST_INTERFACE, SESSION_INTERFACE,
+    CallReceiver, FileChooserKind, PortalCall, PortalReply, BACKEND_NAME, DESKTOP_PATH,
+    FILECHOOSER_INTERFACE, FRONTEND_NAME, REQUEST_SESSION_VERSION, RESPONSE_FAILED, RESPONSE_OK,
+    SCREENCAST_INTERFACE, SESSION_INTERFACE,
 };
 
 pub(crate) struct BusGuard {
@@ -362,4 +363,120 @@ fn backend_rejects_unauthenticated_callers() {
     consumer.join().expect("consumer thread");
     drop(service);
     drop(bus_guard);
+}
+
+/// The FileChooser contract end to end: `SaveFile` reaches the loop, registers
+/// a pending dialog, and the shell's selected `file://` URI comes back as the
+/// method's result.
+#[test]
+fn backend_serves_file_chooser_through_the_loop() {
+    let (bus_guard, address) = start_private_session_bus();
+
+    let running = Arc::new(AtomicBool::new(true));
+    let (service, calls_for_bridge, call_receiver) =
+        zbus::block_on(super::build_backend_connection(&address)).expect("backend connection");
+
+    let frontend = zbus::blocking::connection::Builder::address(address.as_str())
+        .expect("frontend builder")
+        .name(FRONTEND_NAME)
+        .expect("frontend name")
+        .build()
+        .expect("frontend connection");
+    let frontend_owner = zbus::blocking::fdo::DBusProxy::new(&frontend)
+        .expect("driver proxy")
+        .get_name_owner(zbus::names::BusName::try_from(FRONTEND_NAME).expect("well-known name"))
+        .expect("frontend owner probe");
+    let ledger = Arc::new(Mutex::new(PortalLedger {
+        frontend: Some(FrontendOwner(frontend_owner.to_string())),
+        ..Default::default()
+    }));
+    let consumer = drain_portal_calls(
+        service.clone(),
+        calls_for_bridge.clone(),
+        call_receiver,
+        ledger.clone(),
+        running.clone(),
+    );
+
+    let handle_path = OwnedObjectPath::try_from(TEST_HANDLE).expect("test handle");
+    let caller_frontend = frontend.clone();
+    let caller = std::thread::spawn(move || {
+        file_chooser_call(
+            &caller_frontend,
+            "SaveFile",
+            TEST_HANDLE,
+            "app",
+            "Save as",
+            Default::default(),
+        )
+    });
+
+    // The loop registers the pending dialog asynchronously; give it a bounded
+    // grace to converge (harness mechanics, not contract).
+    let mut kind = None;
+    for _ in 0..200 {
+        if let Some(entry) = ledger.lock().unwrap().file_choosers.get(&handle_path) {
+            kind = Some(entry.kind);
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(kind, Some(FileChooserKind::Save));
+
+    let entry = ledger
+        .lock()
+        .unwrap()
+        .file_choosers
+        .remove(&handle_path)
+        .expect("pending file chooser");
+    let mut results = HashMap::new();
+    results.insert(
+        "uris".to_string(),
+        OwnedValue::try_from(zbus::zvariant::Value::from(vec![
+            "file:///tmp/report.pdf".to_string()
+        ]))
+        .expect("uris value"),
+    );
+    entry.reply.send(PortalReply::new(RESPONSE_OK, results));
+
+    let (response, results) = caller.join().expect("caller thread");
+    assert_eq!(response, RESPONSE_OK);
+    let uris: Vec<String> =
+        Vec::try_from(results.get("uris").expect("uris key").clone()).expect("uris array");
+    assert_eq!(uris, vec!["file:///tmp/report.pdf"]);
+
+    running.store(false, Ordering::SeqCst);
+    consumer.join().expect("consumer thread");
+    drop(service);
+    drop(bus_guard);
+}
+
+/// Calls one FileChooser method on the backend and decodes its reply.
+fn file_chooser_call(
+    connection: &zbus::blocking::Connection,
+    method: &'static str,
+    handle: &'static str,
+    app: &'static str,
+    title: &'static str,
+    options: HashMap<String, OwnedValue>,
+) -> (u32, HashMap<String, OwnedValue>) {
+    let message = connection
+        .call_method(
+            Some(BACKEND_NAME),
+            DESKTOP_PATH,
+            Some(FILECHOOSER_INTERFACE),
+            method,
+            &(
+                OwnedObjectPath::try_from(handle).expect("test handle"),
+                app,
+                "",
+                title,
+                options,
+            ),
+        )
+        .expect("backend call must resolve");
+    message
+        .body()
+        .deserialize::<(u32, HashMap<String, OwnedValue>)>()
+        .expect("backend response body")
 }

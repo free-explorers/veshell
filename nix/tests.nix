@@ -37,6 +37,7 @@ assert enabled.security.wrappers.polkit-agent-helper-1.setuid;
 assert enabled.services.pipewire.enable;
 assert enabled.services.pipewire.pulse.enable;
 assert enabled.xdg.portal.config.veshell."org.freedesktop.impl.portal.ScreenCast" == "veshell";
+assert enabled.xdg.portal.config.veshell."org.freedesktop.impl.portal.FileChooser" == "veshell";
 assert enabled.xdg.portal.config.veshell.default == "gtk";
 assert !(builtins.elem mockPackage disabled.environment.systemPackages);
 assert !(builtins.elem mockPackage disabled.services.displayManager.sessionPackages);

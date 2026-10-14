@@ -43,6 +43,7 @@ pub const DESKTOP_PATH: &str = "/org/freedesktop/portal/desktop";
 
 pub const SCREENCAST_INTERFACE: &str = "org.freedesktop.impl.portal.ScreenCast";
 pub const SCREENSHOT_INTERFACE: &str = "org.freedesktop.impl.portal.Screenshot";
+pub const FILECHOOSER_INTERFACE: &str = "org.freedesktop.impl.portal.FileChooser";
 pub const REQUEST_INTERFACE: &str = "org.freedesktop.impl.portal.Request";
 pub const SESSION_INTERFACE: &str = "org.freedesktop.impl.portal.Session";
 
@@ -59,6 +60,9 @@ pub const RESTORE_DATA_VERSION: u32 = 1;
 /// Screenshot backend contract version advertised by Veshell: version 3
 /// carries the `Target` and the `AvailableTargets` property.
 pub const SCREENSHOT_BACKEND_VERSION: u32 = 3;
+/// FileChooser backend contract version advertised by Veshell: version 3
+/// carries the `directory` option and the `SaveFiles` method.
+pub const FILECHOOSER_BACKEND_VERSION: u32 = 3;
 /// Request/Session object version of the contracts we implement.
 pub const REQUEST_SESSION_VERSION: u32 = 2;
 
@@ -214,6 +218,20 @@ pub enum PortalCall {
         app_id: String,
         parent_window: String,
         options: PortalDict,
+        caller: Option<Caller>,
+        reply: ReplyLink,
+    },
+    /// A portal file-chooser request (OpenFile/SaveFile/SaveFiles): the
+    /// trusted shell renders its own file explorer and answers with the
+    /// chosen `file://` URI(s). Not a session flow: the request lives in
+    /// the ledger's file-chooser map and completes directly.
+    FileChooser {
+        kind: FileChooserKind,
+        handle: OwnedObjectPath,
+        app_id: String,
+        parent_window: String,
+        title: String,
+        options: FileChooserOptions,
         caller: Option<Caller>,
         reply: ReplyLink,
     },
@@ -387,6 +405,125 @@ pub fn parse_screen_cast_constraints(
     }
 
     Ok(constraints)
+}
+
+/// Which FileChooser method opened a request. The trusted shell uses it to
+/// choose the dialog mode (browse to open vs. name to save).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FileChooserKind {
+    Open,
+    Save,
+    SaveFiles,
+}
+
+/// One user-visible filter offered by a FileChooser request: a name and the
+/// glob/MIME patterns that belong to it.
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileChooserFilter {
+    pub name: String,
+    pub patterns: Vec<FileChooserPattern>,
+}
+
+/// One pattern inside a [FileChooserFilter]: `kind` is the portal filter type
+/// (0 = glob, 1 = MIME type).
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileChooserPattern {
+    pub kind: u32,
+    pub pattern: String,
+}
+
+/// Validated FileChooser request options, forwarded to the shell as JSON.
+/// Defaults follow the portal contract: single selection, files not
+/// directories, no filters, no suggestions.
+#[derive(Clone, Debug, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileChooserOptions {
+    pub multiple: bool,
+    pub directory: bool,
+    pub accept_label: Option<String>,
+    pub current_folder: Option<String>,
+    pub current_file: Option<String>,
+    pub current_name: Option<String>,
+    /// `SaveFiles` file names (`files`, `aay`), already decoded.
+    pub files: Vec<String>,
+    pub filters: Vec<FileChooserFilter>,
+}
+
+/// Decodes one `ay` option value: the byte array is a NUL-terminated path in
+/// the filesystem encoding. Assumes UTF-8, matching the rest of the shell's
+/// path handling; an empty or unreadable value degrades to `None`.
+fn lookup_path(options: &PortalDict, key: &str) -> Option<String> {
+    let value = options.get(key)?.clone();
+    let bytes = Vec::<u8>::try_from(value).ok()?;
+    let trimmed = bytes.split(|byte| *byte == 0).next().unwrap_or(&bytes);
+    (!trimmed.is_empty()).then(|| String::from_utf8_lossy(trimmed).into_owned())
+}
+
+/// Decodes the `filters` option (`a(sa(us))`) into typed filters.
+fn lookup_filters(options: &PortalDict) -> Vec<FileChooserFilter> {
+    let Some(value) = options.get("filters").cloned() else {
+        return Vec::new();
+    };
+    let Ok(parsed) = Vec::<(String, Vec<(u32, String)>)>::try_from(value) else {
+        return Vec::new();
+    };
+    parsed
+        .into_iter()
+        .map(|(name, patterns)| FileChooserFilter {
+            name,
+            patterns: patterns
+                .into_iter()
+                .map(|(kind, pattern)| FileChooserPattern { kind, pattern })
+                .collect(),
+        })
+        .collect()
+}
+
+/// Decodes the `files` option (`aay`) into decoded file names.
+fn lookup_file_names(options: &PortalDict) -> Vec<String> {
+    let Some(value) = options.get("files").cloned() else {
+        return Vec::new();
+    };
+    let Ok(parsed) = Vec::<Vec<u8>>::try_from(value) else {
+        return Vec::new();
+    };
+    parsed
+        .into_iter()
+        .filter_map(|bytes| {
+            let trimmed = bytes.split(|byte| *byte == 0).next().unwrap_or(&bytes);
+            (!trimmed.is_empty()).then(|| String::from_utf8_lossy(trimmed).into_owned())
+        })
+        .collect()
+}
+
+/// Validates and defaults the FileChooser option dictionary. As with the
+/// other contracts an `Err` must surface as response code 2, never panic: a
+/// buggy or hostile frontend must not crash the compositor.
+pub fn parse_file_chooser_options(
+    options: &PortalDict,
+    kind: FileChooserKind,
+) -> Result<FileChooserOptions, String> {
+    let mut parsed = FileChooserOptions {
+        multiple: lookup_bool(options, "multiple").unwrap_or(false),
+        directory: lookup_bool(options, "directory").unwrap_or(false),
+        accept_label: lookup_string(options, "accept_label"),
+        current_folder: lookup_path(options, "current_folder"),
+        current_file: lookup_path(options, "current_file"),
+        current_name: lookup_string(options, "current_name"),
+        files: Vec::new(),
+        filters: lookup_filters(options),
+    };
+    if kind == FileChooserKind::SaveFiles {
+        parsed.files = lookup_file_names(options);
+        if parsed.files.is_empty() {
+            return Err("SaveFiles carries no file names".to_string());
+        }
+        parsed.directory = true;
+    }
+    Ok(parsed)
 }
 
 struct ScreenCastBackend {
@@ -626,6 +763,127 @@ impl ScreenshotBackend {
     }
 }
 
+/// The FileChooser backend: `OpenFile`, `SaveFile` and `SaveFiles` per the
+/// version-3 contract. Each method blocks until the trusted shell answers the
+/// dialog, exactly like the ScreenCast/Screenshot methods wait for their
+/// flows.
+struct FileChooserBackend {
+    calls: calloop::channel::Sender<PortalCall>,
+}
+
+#[interface(name = "org.freedesktop.impl.portal.FileChooser")]
+impl FileChooserBackend {
+    #[zbus(property, name = "version")]
+    fn version(&self) -> u32 {
+        FILECHOOSER_BACKEND_VERSION
+    }
+
+    async fn open_file(
+        &self,
+        #[zbus(header)] header: Header<'_>,
+        handle: ObjectPath<'_>,
+        app_id: String,
+        parent_window: String,
+        title: String,
+        options: PortalDict,
+    ) -> zbus::fdo::Result<(u32, PortalDict)> {
+        dispatch_file_chooser(
+            &self.calls,
+            header,
+            handle,
+            app_id,
+            parent_window,
+            title,
+            options,
+            FileChooserKind::Open,
+        )
+        .await
+    }
+
+    async fn save_file(
+        &self,
+        #[zbus(header)] header: Header<'_>,
+        handle: ObjectPath<'_>,
+        app_id: String,
+        parent_window: String,
+        title: String,
+        options: PortalDict,
+    ) -> zbus::fdo::Result<(u32, PortalDict)> {
+        dispatch_file_chooser(
+            &self.calls,
+            header,
+            handle,
+            app_id,
+            parent_window,
+            title,
+            options,
+            FileChooserKind::Save,
+        )
+        .await
+    }
+
+    async fn save_files(
+        &self,
+        #[zbus(header)] header: Header<'_>,
+        handle: ObjectPath<'_>,
+        app_id: String,
+        parent_window: String,
+        title: String,
+        options: PortalDict,
+    ) -> zbus::fdo::Result<(u32, PortalDict)> {
+        dispatch_file_chooser(
+            &self.calls,
+            header,
+            handle,
+            app_id,
+            parent_window,
+            title,
+            options,
+            FileChooserKind::SaveFiles,
+        )
+        .await
+    }
+}
+
+/// Parses the options, hands the validated request to the event loop, and
+/// waits for the shell's answer. Bad options answer response code 2 without
+/// touching the ledger.
+#[allow(clippy::too_many_arguments)]
+async fn dispatch_file_chooser(
+    calls: &calloop::channel::Sender<PortalCall>,
+    header: Header<'_>,
+    handle: ObjectPath<'_>,
+    app_id: String,
+    parent_window: String,
+    title: String,
+    options: PortalDict,
+    kind: FileChooserKind,
+) -> zbus::fdo::Result<(u32, PortalDict)> {
+    let parsed = match parse_file_chooser_options(&options, kind) {
+        Ok(parsed) => parsed,
+        Err(message) => {
+            tracing::debug!(message, "Rejecting FileChooser options");
+            return Ok((RESPONSE_FAILED, PortalDict::new()));
+        }
+    };
+    let handle = OwnedObjectPath::from(handle);
+    let caller = header.sender().map(|sender| Caller(sender.to_string()));
+    let (reply, pending) = make_reply_pair();
+    calls
+        .send(PortalCall::FileChooser {
+            kind,
+            handle,
+            app_id,
+            parent_window,
+            title,
+            options: parsed,
+            caller,
+            reply,
+        })
+        .map_err(|_| stopped_error())?;
+    wait_reply(pending).await
+}
+
 /// Backend `Request` object for one pending response: `Close` travels
 /// through the same bridge so the loop can invalidate the matching late
 /// reply instead of publishing a node for a cancelled request.
@@ -832,6 +1090,12 @@ async fn build_backend_connection_on_session() -> zbus::Result<(
                 calls: calls.clone(),
             },
         )?
+        .serve_at(
+            DESKTOP_PATH,
+            FileChooserBackend {
+                calls: calls.clone(),
+            },
+        )?
         .build()
         .await?;
     Ok((connection, calls, receiver))
@@ -916,6 +1180,7 @@ pub async fn build_backend_connection(
         .name(BACKEND_NAME)?
         .serve_at(DESKTOP_PATH, ScreenCastBackend { calls: tx.clone() })?
         .serve_at(DESKTOP_PATH, ScreenshotBackend { calls: tx.clone() })?
+        .serve_at(DESKTOP_PATH, FileChooserBackend { calls: tx.clone() })?
         .build()
         .await?;
     Ok((connection, tx, rx))
@@ -1122,6 +1387,124 @@ mod unit_tests {
             SourceTypes::MONITOR,
         )
         .is_err());
+    }
+
+    fn nul_terminated(path: &str) -> OwnedValue {
+        let mut bytes = path.as_bytes().to_vec();
+        bytes.push(0);
+        owned(bytes)
+    }
+
+    /// Wraps a typed value into the `OwnedValue` an option dictionary holds.
+    fn owned<T>(value: T) -> OwnedValue
+    where
+        zbus::zvariant::Value<'static>: From<T>,
+    {
+        OwnedValue::try_from(zbus::zvariant::Value::from(value)).expect("owned value")
+    }
+
+    #[test]
+    fn file_chooser_defaults_to_single_file_open() {
+        let parsed = parse_file_chooser_options(&PortalDict::new(), FileChooserKind::Open)
+            .expect("defaults are valid");
+        assert!(!parsed.multiple);
+        assert!(!parsed.directory);
+        assert_eq!(parsed.accept_label, None);
+        assert_eq!(parsed.current_folder, None);
+        assert_eq!(parsed.current_file, None);
+        assert_eq!(parsed.current_name, None);
+        assert!(parsed.files.is_empty());
+        assert!(parsed.filters.is_empty());
+    }
+
+    #[test]
+    fn file_chooser_decodes_paths_and_filters() {
+        let filter = owned(vec![(
+            "Images".to_string(),
+            vec![(0u32, "*.png".to_string()), (1u32, "image/*".to_string())],
+        )]);
+        let parsed = parse_file_chooser_options(
+            &options(&[
+                ("multiple", OwnedValue::from(true)),
+                ("directory", OwnedValue::from(true)),
+                (
+                    "accept_label",
+                    OwnedValue::from(zbus::zvariant::Str::from("Pick")),
+                ),
+                ("current_folder", nul_terminated("/home/user/Pictures")),
+                ("current_file", nul_terminated("/home/user/Pictures/a.png")),
+                (
+                    "current_name",
+                    OwnedValue::from(zbus::zvariant::Str::from("holiday.png")),
+                ),
+                ("filters", filter),
+            ]),
+            FileChooserKind::Open,
+        )
+        .expect("valid options");
+        assert!(parsed.multiple);
+        assert!(parsed.directory);
+        assert_eq!(parsed.accept_label.as_deref(), Some("Pick"));
+        assert_eq!(
+            parsed.current_folder.as_deref(),
+            Some("/home/user/Pictures")
+        );
+        assert_eq!(
+            parsed.current_file.as_deref(),
+            Some("/home/user/Pictures/a.png")
+        );
+        assert_eq!(parsed.current_name.as_deref(), Some("holiday.png"));
+        assert_eq!(parsed.filters.len(), 1);
+        assert_eq!(parsed.filters[0].name, "Images");
+        assert_eq!(parsed.filters[0].patterns.len(), 2);
+        assert_eq!(parsed.filters[0].patterns[1].kind, 1);
+        assert_eq!(parsed.filters[0].patterns[1].pattern, "image/*");
+    }
+
+    #[test]
+    fn save_files_requires_names_and_selects_a_directory() {
+        let missing = parse_file_chooser_options(&PortalDict::new(), FileChooserKind::SaveFiles);
+        assert!(missing.is_err());
+
+        let files = owned(vec![b"one.txt".to_vec(), b"two.txt".to_vec()]);
+        let parsed =
+            parse_file_chooser_options(&options(&[("files", files)]), FileChooserKind::SaveFiles)
+                .expect("names present");
+        assert_eq!(parsed.files, vec!["one.txt", "two.txt"]);
+        assert!(parsed.directory);
+    }
+
+    // The platform-channel contract with the shell: the kind and the option
+    // field names are camelCase so the generated Dart model decodes them.
+    #[test]
+    fn file_chooser_kind_serializes_camel_case() {
+        assert_eq!(serde_json::to_value(FileChooserKind::Open).unwrap(), "open");
+        assert_eq!(serde_json::to_value(FileChooserKind::Save).unwrap(), "save");
+        assert_eq!(
+            serde_json::to_value(FileChooserKind::SaveFiles).unwrap(),
+            "saveFiles"
+        );
+    }
+
+    #[test]
+    fn file_chooser_options_serialize_to_the_shell_contract() {
+        let parsed = parse_file_chooser_options(
+            &options(&[
+                ("multiple", OwnedValue::from(true)),
+                (
+                    "current_name",
+                    OwnedValue::from(zbus::zvariant::Str::from("a.txt")),
+                ),
+            ]),
+            FileChooserKind::Save,
+        )
+        .expect("valid options");
+        let value = serde_json::to_value(&parsed).expect("serializes");
+        assert_eq!(value["multiple"], serde_json::Value::Bool(true));
+        assert_eq!(value["directory"], serde_json::Value::Bool(false));
+        assert_eq!(value["currentName"], serde_json::Value::from("a.txt"));
+        assert!(value["filters"].is_array());
+        assert!(value["files"].is_array());
     }
 }
 

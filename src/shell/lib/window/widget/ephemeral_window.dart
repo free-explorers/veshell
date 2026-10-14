@@ -1,6 +1,8 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/widget/logs_viewer.dart';
+import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
+import 'package:shell/file_chooser/widget/file_chooser_dialog.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
@@ -24,16 +26,27 @@ class EphemeralWindowWidget extends HookConsumerWidget {
     final window = ref.watch(ephemeralWindowStateProvider(windowId));
 
     final metaWindowId = window.metaWindowId;
+    final fileChooser = ref.watch(fileChooserForWindowProvider(windowId));
     if (metaWindowId != null) {
-      return WindowWidget(
-        metaWindowId: metaWindowId,
-        focusNode: focusNode,
-        dialogMetaWindowList: ref
-            .watch(dialogSetForWindowProvider(window.windowId))
-            .map((element) {
-              return ref.read(dialogWindowStateProvider(element)).metaWindowId;
-            })
-            .toList(),
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          WindowWidget(
+            metaWindowId: metaWindowId,
+            focusNode: focusNode,
+            dialogMetaWindowList: ref
+                .watch(dialogSetForWindowProvider(window.windowId))
+                .map((element) {
+                  return ref
+                      .read(dialogWindowStateProvider(element))
+                      .metaWindowId;
+                })
+                .toList(),
+          ),
+          // The trusted file chooser renders inside the window container,
+          // attached to the window that asked for it (like a native dialog).
+          if (fileChooser != null) FileChooserModal(request: fileChooser),
+        ],
       );
     }
 

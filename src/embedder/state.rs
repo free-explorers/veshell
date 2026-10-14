@@ -149,6 +149,9 @@ pub struct State<BackendData: Backend + 'static> {
     pub x11_surface_per_wl_surface: HashMap<WlSurface, X11Surface>,
     pub x11_surface_per_x11_window: HashMap<X11Window, X11Surface>,
     pub xdg_activation_state: XdgActivationState,
+    /// Exported `xdg-foreign` handles (portal `parent_window` resolution):
+    /// each handle maps to the surface that exported it.
+    pub xdg_foreign_state: crate::wayland::xdg_foreign::XdgForeignState,
     /// Activation tokens minted for invoked notification actions, mapping the
     /// token to the meta window the action belongs to. When a client turns one
     /// of these into an `xdg_activation_v1` request, the window is focused —
@@ -513,6 +516,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let xdg_decoration_state = XdgDecorationState::new::<Self>(&display_handle);
         let xdg_dialog_state = XdgDialogState::new::<Self>(&display_handle);
         let xdg_activation_state = XdgActivationState::new::<Self>(&display_handle);
+        crate::wayland::xdg_foreign::XdgForeignState::register::<BackendData>(&display_handle);
         let fractional_scale_manager_state =
             FractionalScaleManagerState::new::<Self>(&display_handle);
         let capture_state = crate::capture::CaptureState::new::<BackendData>(&loop_handle);
@@ -573,6 +577,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             xdg_popups: HashMap::new(),
             xdg_dialog_state,
             xdg_activation_state,
+            xdg_foreign_state: crate::wayland::xdg_foreign::XdgForeignState::new(),
             notification_activation_tokens: HashMap::new(),
             meta_window_state: MetaWindowState::new(),
             x11_surfaces: HashMap::new(),

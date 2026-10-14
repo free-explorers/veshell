@@ -141,6 +141,16 @@ impl MetaWindowState {
         None
     }
 
+    /// The MetaWindow an external dialog request (for example the FileChooser
+    /// portal) should be shown above: the requesting app's most recently
+    /// focused window, or any matching window when the app was never focused.
+    ///
+    /// Returns `None` when the identity maps to no window, so the shell falls
+    /// back to the focused monitor rather than guessing.
+    pub fn requester_meta_window_for(&self, app_id: &str) -> Option<String> {
+        self.recording_meta_window_for(app_id, None, None)
+    }
+
     /// Windows whose `current_output` is the given output.
     ///
     /// Output identity is the connector name (`Output::name()`, also
