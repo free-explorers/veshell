@@ -329,6 +329,10 @@ class MetaWindowManager extends _$MetaWindowManager {
             : 'activation',
       ),
     );
+    // The tile that briefly matched the window only existed to show it: detach
+    // the window and dispose the tile when the matcher created it, so the
+    // reroute does not leave a stray empty placeholder. The dialog created just
+    // after becomes the sole owner.
     (switch (currentOwner) {
               PersistentWindowId() => ref.read(
                 persistentWindowStateProvider(currentOwner).notifier,
@@ -341,7 +345,7 @@ class MetaWindowManager extends _$MetaWindowManager {
               ),
             }
             as WindowProviderMixin)
-        .removeMetaWindow(id, shouldNotify: false);
+        .detachForReroute(id);
     _createDialog(id, rootOwner);
   }
 
