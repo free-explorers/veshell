@@ -1,3 +1,4 @@
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/widget/logs_viewer.dart';
@@ -27,6 +28,22 @@ class EphemeralWindowWidget extends HookConsumerWidget {
 
     final metaWindowId = window.metaWindowId;
     final fileChooser = ref.watch(fileChooserForWindowProvider(windowId));
+
+    // While the launch has no surface, the window owns a placeholder focus
+    // target; once the surface exists, the keyboard goes to the surface node.
+    // Handing the keyboard over is what makes the reported bug go away: the
+    // surface wraps itself in `SurfaceFocus`, which lets `Enter`/`Space`/
+    // `Escape` and the direction keys fall through to the client, while the
+    // placeholder has no actions at all, so those keys are not consumed by the
+    // overview's search pane either. Without the hand-off the search pane keeps
+    // the Flutter focus and its `ActivateIntent` fires, launching another
+    // instance instead of reaching the focused client.
+    final waitingFocusNode = useFocusNode(debugLabel: 'EphemeralWindowWaiting');
+    useEffect(() {
+      (metaWindowId == null ? waitingFocusNode : focusNode).requestFocus();
+      return null;
+    }, [metaWindowId]);
+
     if (metaWindowId != null) {
       return Stack(
         fit: StackFit.expand,
@@ -54,11 +71,14 @@ class EphemeralWindowWidget extends HookConsumerWidget {
     // single-instance app that only raises its existing window, a launch that
     // fails). Show the execution logs in a dark terminal container so the tile
     // is never a blank, unclosable card while it waits for its surface.
-    return _EphemeralLaunchView(
-      pid: window.pid,
-      onClose: () => ref
-          .read(ephemeralWindowStateProvider(windowId).notifier)
-          .closeWindow(),
+    return Focus(
+      focusNode: waitingFocusNode,
+      child: _EphemeralLaunchView(
+        pid: window.pid,
+        onClose: () => ref
+            .read(ephemeralWindowStateProvider(windowId).notifier)
+            .closeWindow(),
+      ),
     );
   }
 }

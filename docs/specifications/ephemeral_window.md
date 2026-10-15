@@ -23,7 +23,11 @@ by `EphemeralWindowWidget`.
   only raises an existing window, or a failed launch — stays readable here
   instead of becoming a blank card.
 - **Opened** — once a meta window is attributed, `EphemeralWindowWidget` renders
-  it (`WindowWidget`) maximized.
+  it (`WindowWidget`) maximized and hands it the keyboard: focus moves to the
+  window's surface node, so keys the client handles (`Enter`, `Space`, `Escape`,
+  `Tab`, directions) fall through to it instead of being consumed by the
+  overview's search pane. While the surface has not been matched yet, the
+  placeholder holds the keyboard for the same reason.
 - **Closed** — closing the native window removes the window. Closing while no
   native window is owned (the waiting case above) removes the window directly
   and cancels its pending launch (`systemctl --user stop` on the tracked

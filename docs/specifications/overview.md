@@ -72,6 +72,14 @@ between the panes and the same direction keys then walk the Helm's controls,
 switches and notification list. Focus drives the semantic focus, so the
 selection is what assistive technology follows.
 
+A displayed ephemeral window owns the keyboard: launching an application hands
+focus to its surface as soon as it is mapped (the launch placeholder holds it
+until then). The surface's `SurfaceFocus` lets `Enter`, `Space`, `Escape`, `Tab`
+and the direction keys fall through to the client, so they act in the
+application instead of the overview — without that hand-off the search pane
+keeps the Flutter focus and `Enter` would launch another instance. Use the
+`Super` chords to move the keyboard back to the search pane to keep launching.
+
 The navigation applies to all three modes: `Super+W`/`Super+S` move through the
 mode's results and `Enter` activates them — a file opens with its handler, an
 application is launched as an ephemeral window, and a settings row is activated.
