@@ -6,7 +6,6 @@ import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/overview/widget/overview_content_body.dart';
 import 'package:shell/overview/widget/overview_content_tab.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
-import 'package:shell/shared/widget/frosted_surface.dart';
 import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 
 /// The overview's content region: a tab panel selecting the displayed content
@@ -53,36 +52,32 @@ class OverviewContentPane extends HookConsumerWidget {
           },
         ),
       },
-      child: FrostedSurface(
+      child: Material(
         borderRadius: BorderRadius.circular(38),
-        tint: frostedGlassTint(Theme.of(context).colorScheme),
-        noise: true,
-        child: Material(
-          type: MaterialType.transparency,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                _OverviewContentPanel(onSelect: selectContent),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
-                    switchInCurve: Curves.easeOut,
-                    switchOutCurve: Curves.easeIn,
-                    layoutBuilder: (currentChild, previousChildren) => Stack(
-                      fit: StackFit.expand,
-                      children: [...previousChildren, ?currentChild],
-                    ),
-                    child: OverviewContentBody(
-                      key: ValueKey(selectedContent.contentId),
-                      content: selectedContent,
-                      windowFocusNode: node,
-                    ),
+        color: Theme.of(context).colorScheme.surface.withAlpha(200),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              _OverviewContentPanel(onSelect: selectContent),
+              const SizedBox(height: 16),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeIn,
+                  layoutBuilder: (currentChild, previousChildren) => Stack(
+                    fit: StackFit.expand,
+                    children: [...previousChildren, ?currentChild],
+                  ),
+                  child: OverviewContentBody(
+                    key: ValueKey(selectedContent.contentId),
+                    content: selectedContent,
+                    windowFocusNode: node,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
