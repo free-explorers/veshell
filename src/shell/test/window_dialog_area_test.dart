@@ -2,6 +2,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/l10n/l10n.dart';
@@ -100,6 +101,9 @@ void main() {
 
     // One pill per dialog, and the newest is the default selection.
     expect(find.byType(PanelTab), findsNWidgets(2));
+    // The per-dialog actions live in the pills themselves.
+    expect(find.byIcon(MdiIcons.openInNew), findsNWidgets(2));
+    expect(find.byIcon(MdiIcons.close), findsNWidgets(2));
     expect(
       container.read(selectedDialogMetaWindowForWindowProvider(_parent)),
       'meta-b',
@@ -109,7 +113,7 @@ void main() {
     expect(find.byType(WindowWidget), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    await tester.tap(find.byType(PanelTab).first);
+    await tester.tap(find.text('Alpha'));
     await tester.pumpAndSettle();
 
     expect(

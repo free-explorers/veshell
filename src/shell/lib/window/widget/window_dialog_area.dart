@@ -16,8 +16,6 @@ import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/platform/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/widget/panel_tab.dart';
-import 'package:shell/shared/widget/square_icon_button.dart';
-import 'package:shell/theme/provider/theme.dart';
 import 'package:shell/window/model/dialog_area_entry.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
@@ -31,6 +29,14 @@ import 'package:shell/window/widget/window.dart';
 /// wraps the layer to blur — a sibling overlay cannot apply it — and the panel
 /// itself draws sharp above it.
 const dialogAreaBlurSigma = 16.0;
+
+/// Fraction of a tile's shortest side left as a frosted margin around the
+/// dialog panel.
+///
+/// A ratio rather than a fixed inset, so the margin shrinks with a small tile
+/// (where a fixed value swallows the panel) and stays proportionate on a
+/// large one.
+const _panelMarginFactor = 0.06;
 
 /// The dialog area of a tile: the native dialogs attached to [parentWindowId]
 /// (plus the trusted file chooser) presented as a tabbed panel over the tile,
@@ -233,57 +239,41 @@ class _DialogPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      // A margin through which the blurred window stays visible: the panel is
-      // a portion of the tile, like the overview's content pane.
-      padding: const EdgeInsets.all(24),
-      child: Material(
-        color: theme.colorScheme.surface.withAlpha(200),
-        borderRadius: BorderRadius.circular(surfaceRadius),
-        clipBehavior: Clip.antiAlias,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              // The chrome is click-only: keeping it out of the focus order
-              // leaves the tile's own focus node in charge, so selecting a tab
-              // does not deactivate the dialog it selects. The body is left
-              // focusable for the chooser's own autofocus.
-              ExcludeFocus(
-                child: _DialogTabBar(
-                  entries: entries,
-                  selected: selected,
-                  chooser: chooser,
-                  onSelect: onSelect,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // A proportional margin through which the blurred window stays
+        // visible: the panel is a portion of the tile, like the overview's
+        // content pane, but a ratio keeps the margin from swallowing a small
+        // tile the way a fixed inset does.
+        final margin = constraints.biggest.shortestSide * _panelMarginFactor;
+        return Padding(
+          padding: EdgeInsets.all(margin),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                // The chrome is click-only: keeping it out of the focus order
+                // leaves the tile's own focus node in charge, so selecting a
+                // tab (or pressing one of its actions) does not deactivate the
+                // dialog it acts on. The body is left focusable for the
+                // chooser's own autofocus.
+                ExcludeFocus(
+                  child: _DialogTabBar(
+                    entries: entries,
+                    selected: selected,
+                    chooser: chooser,
+                    onSelect: onSelect,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Positioned.fill(
-                      child: _DialogBody(selected: selected, chooser: chooser),
-                    ),
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      bottom: 0,
-                      child: ExcludeFocus(
-                        child: _DialogActionStrip(
-                          entry: selected,
-                          chooser: chooser,
-                        ),
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 16),
+                Expanded(
+                  child: _DialogBody(selected: selected, chooser: chooser),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -349,7 +339,7 @@ class _DialogTab extends ConsumerWidget {
         ref,
         dialogWindowId,
       ),
-      FileChooserEntry() => _chooserTab(context),
+      FileChooserEntry() => _chooserTab(context, ref),
     };
   }
 
@@ -367,10 +357,33 @@ class _DialogTab extends ConsumerWidget {
       label: dialog.properties.title ?? context.l10n.unknown,
       isSelected: isSelected,
       onTap: onTap,
+      trailingBuilder: (foregroundColor) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _PillActionButton(
+            color: foregroundColor,
+            tooltip: context.l10n.extractToNewTile,
+            icon: MdiIcons.openInNew,
+            onPressed: () => unawaited(
+              ref
+                  .read(dialogWindowStateProvider(dialogWindowId).notifier)
+                  .extractToTile(),
+            ),
+          ),
+          _PillActionButton(
+            color: foregroundColor,
+            tooltip: context.l10n.close,
+            icon: MdiIcons.close,
+            onPressed: () => ref
+                .read(metaWindowStateProvider(dialog.metaWindowId).notifier)
+                .requestToClose(),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _chooserTab(BuildContext context) {
+  Widget _chooserTab(BuildContext context, WidgetRef ref) {
     final chooser = this.chooser;
     return PanelTab(
       icon: const Padding(
@@ -382,6 +395,43 @@ class _DialogTab extends ConsumerWidget {
           : context.l10n.openFile,
       isSelected: isSelected,
       onTap: onTap,
+      trailingBuilder: (foregroundColor) => _PillActionButton(
+        color: foregroundColor,
+        tooltip: context.l10n.close,
+        icon: MdiIcons.close,
+        onPressed: () => ref.read(fileChooserRequestProvider.notifier).cancel(),
+      ),
+    );
+  }
+}
+
+/// A compact action inside a dialog pill: extract or close for a dialog,
+/// cancel for the chooser.
+///
+/// Tinted with the pill's foreground so it reads on both the selected (filled)
+/// and unselected pills. The pill's `InkWell` still handles taps outside the
+/// icons, so an action never also selects the tab.
+class _PillActionButton extends StatelessWidget {
+  const _PillActionButton({
+    required this.color,
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final Color color;
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      color: color,
+      visualDensity: VisualDensity.compact,
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: Icon(icon, size: 16),
     );
   }
 }
@@ -442,66 +492,6 @@ class _DialogWindowBody extends HookConsumerWidget {
       metaWindowId: dialog.metaWindowId,
       focusNode: focusNode,
     );
-  }
-}
-
-/// The actions dedicated to the selected entry, floating over the right edge
-/// of the body: extract and close for a dialog, close (cancel) for the
-/// chooser.
-class _DialogActionStrip extends ConsumerWidget {
-  const _DialogActionStrip({required this.entry, required this.chooser});
-
-  final DialogAreaEntry entry;
-  final FileChooserRequestMessage? chooser;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
-      children: switch (entry) {
-        FileChooserEntry() => [
-          SquareIconButton(
-            tooltip: context.l10n.close,
-            icon: const Icon(MdiIcons.close),
-            onSelected: () =>
-                ref.read(fileChooserRequestProvider.notifier).cancel(),
-          ),
-        ],
-        DialogWindowEntry(:final dialogWindowId) => _dialogActions(
-          context,
-          ref,
-          dialogWindowId,
-        ),
-      },
-    );
-  }
-
-  List<Widget> _dialogActions(
-    BuildContext context,
-    WidgetRef ref,
-    DialogWindowId dialogWindowId,
-  ) {
-    final dialog = ref.watch(dialogWindowStateProvider(dialogWindowId));
-    return [
-      SquareIconButton(
-        tooltip: context.l10n.extractToNewTile,
-        icon: const Icon(MdiIcons.openInNew),
-        onSelected: () => unawaited(
-          ref
-              .read(dialogWindowStateProvider(dialogWindowId).notifier)
-              .extractToTile(),
-        ),
-      ),
-      const SizedBox(height: 12),
-      SquareIconButton(
-        tooltip: context.l10n.close,
-        icon: const Icon(MdiIcons.close),
-        onSelected: () => ref
-            .read(metaWindowStateProvider(dialog.metaWindowId).notifier)
-            .requestToClose(),
-      ),
-    ];
   }
 }
 
