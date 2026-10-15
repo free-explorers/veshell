@@ -212,13 +212,14 @@ class _DialogAreaBackdrop extends HookWidget {
       animation: animationController,
       builder: (context, child) {
         final progress = blurAnimation.value / dialogAreaBlurSigma;
+        final scheme = Theme.of(context).colorScheme;
         return FrostedSurface(
           blurSigma: blurAnimation.value,
           // Blur alone reads as "out of focus"; lifting the vibrancy and
           // veiling the window with a little black is what makes it glass and
           // keeps the dialog reading as the foreground.
           saturation: 1 + 0.25 * progress,
-          tint: Colors.black.withAlpha((70 * progress).round()),
+          tint: scheme.scrim.withAlpha((70 * progress).round()),
           tintOverContent: true,
           // The tile is not a card: no frame and no sheen at its edges.
           borderColor: Colors.transparent,

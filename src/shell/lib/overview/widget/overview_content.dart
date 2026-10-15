@@ -55,7 +55,7 @@ class OverviewContentPane extends HookConsumerWidget {
       },
       child: FrostedSurface(
         borderRadius: BorderRadius.circular(38),
-        tint: Theme.of(context).colorScheme.surface.withAlpha(200),
+        tint: frostedGlassTint(Theme.of(context).colorScheme),
         noise: true,
         child: Material(
           type: MaterialType.transparency,

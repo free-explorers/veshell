@@ -3,6 +3,24 @@ import 'dart:ui' as ui;
 
 import 'package:material_ui/material_ui.dart';
 
+/// How much of the theme's `primary` hue the default glass wash
+/// ([frostedGlassTint]) carries, out of 255.
+///
+/// Dial `0` (a pure surface tone) up to `24` to taste. It stays low because the
+/// theme uses the `fidelity` seed variant, which keeps the seed's chroma, so a
+/// larger alpha reads as painted colour rather than glass.
+const glassTintPrimaryAlpha = 16;
+
+/// The default glass wash: a whisper of the primary hue blended over the
+/// scheme's high surface container, kept translucent.
+///
+/// Derived from scheme roles (never a hand-picked colour) so it flips with the
+/// brightness on its own.
+Color frostedGlassTint(ColorScheme scheme) => Color.alphaBlend(
+  scheme.primary.withAlpha(glassTintPrimaryAlpha),
+  scheme.surfaceContainerHigh.withAlpha(200),
+);
+
 /// A frosted-glass surface: [child] can be blurred and its saturation lifted,
 /// then a translucent wash, a hairline frame, a top sheen and (optionally) a
 /// fine grain are drawn as the glass itself.
