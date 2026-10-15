@@ -11,14 +11,13 @@ import 'package:material_ui/material_ui.dart';
 /// larger alpha reads as painted colour rather than glass.
 const glassTintPrimaryAlpha = 16;
 
-/// The default glass wash: a whisper of the primary hue blended over the
-/// scheme's high surface container, kept translucent.
-///
-/// Derived from scheme roles (never a hand-picked colour) so it flips with the
-/// brightness on its own.
+/// The default glass wash: a whisper of the primary hue over a bright base, so
+/// the wash *lifts* the blurred backdrop (and its contrast with the content
+/// pane) instead of darkening it. Derived from the scheme's primary, over
+/// white to keep the original brightening.
 Color frostedGlassTint(ColorScheme scheme) => Color.alphaBlend(
   scheme.primary.withAlpha(glassTintPrimaryAlpha),
-  scheme.surfaceContainerHigh.withAlpha(200),
+  Colors.white,
 );
 
 /// A frosted-glass surface: [child] can be blurred and its saturation lifted,
@@ -45,6 +44,7 @@ class FrostedSurface extends StatelessWidget {
     this.borderColor,
     this.highlight = true,
     this.noise = false,
+    this.absorbPointers = false,
     super.key,
   });
 
@@ -75,6 +75,15 @@ class FrostedSurface extends StatelessWidget {
   /// Adds a fine grain that breaks up banding in the wash.
   final bool noise;
 
+  /// Whether the glass should absorb pointers that its content does not.
+  ///
+  /// Default `false`: the glass is decorative and must not take a pointer — a
+  /// fully transparent wash is still a hit-test-opaque `ColoredBox`, and above
+  /// the content it would make the whole area unclickable. Set `true` for a
+  /// full-screen backdrop `tintOverContent: false` surface that must swallow
+  /// clicks falling outside its content (the overview background).
+  final bool absorbPointers;
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -100,18 +109,20 @@ class FrostedSurface extends StatelessWidget {
       );
     }
 
-    // The glass is decorative and must never absorb a pointer: a fully
-    // transparent veil (alpha 0) is still a hit-test-opaque `ColoredBox`, and
-    // sitting above the content it would make the whole frosted area
-    // unclickable.
-    final glass = IgnorePointer(
-      child: _GlassLayer(
-        tint: tint,
-        frame: frame,
-        highlight: highlight,
-        noise: noise,
-      ),
+    Widget glass = _GlassLayer(
+      tint: tint,
+      frame: frame,
+      highlight: highlight,
+      noise: noise,
     );
+    // The glass is decorative by default and must not absorb a pointer: a
+    // fully transparent veil (alpha 0) is still a hit-test-opaque `ColoredBox`,
+    // and above the content it would make the whole frosted area unclickable.
+    // A backdrop opts in with [absorbPointers] when it must swallow clicks that
+    // land outside its content.
+    if (!absorbPointers) {
+      glass = IgnorePointer(child: glass);
+    }
 
     final stack = Stack(
       fit: StackFit.passthrough,

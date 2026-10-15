@@ -48,4 +48,39 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('absorbPointers swallows taps the content does not take', (
+    tester,
+  ) async {
+    var behind = 0;
+    Widget build({required bool absorb}) => MaterialApp(
+      home: Stack(
+        children: [
+          // A full-bleed target painted behind the frost.
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => behind++,
+            child: const SizedBox.expand(),
+          ),
+          FrostedSurface(
+            tint: Colors.black26,
+            absorbPointers: absorb,
+            child: const Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(width: 40, height: 40),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(build(absorb: true));
+    await tester.tapAt(const Offset(300, 300));
+    expect(behind, 0, reason: 'the backdrop absorbs the click');
+
+    behind = 0;
+    await tester.pumpWidget(build(absorb: false));
+    await tester.tapAt(const Offset(300, 300));
+    expect(behind, 1, reason: 'without absorption the click falls through');
+  });
 }

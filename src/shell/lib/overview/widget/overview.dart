@@ -193,14 +193,16 @@ class _OverviewScrim extends HookWidget {
     );
 
     return FrostedSurface(
-      // The overview background: a theme-tinted glass wash over the blurred
-      // screen, carrying the shell's hue instead of a flat white.
+      // The overview background: a bright, theme-hued wash over the blurred
+      // screen. It must absorb the clicks that fall between the panes, or they
+      // reach the desktop behind the overview.
       tint: frostedGlassTint(Theme.of(context).colorScheme).withAlpha(
         (255 * (overviewBlurSigma * tintAnimation.value) / 100).round(),
       ),
       noise: true,
       borderColor: Colors.transparent,
       highlight: false,
+      absorbPointers: true,
       child: Opacity(opacity: opacityAnimation.value, child: child),
     );
   }
