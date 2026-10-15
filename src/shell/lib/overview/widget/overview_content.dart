@@ -19,7 +19,21 @@ class OverviewContentPane extends HookConsumerWidget {
       overviewStateProvider(screenId).select((state) => state.selectedContent),
     );
 
-    final node = useFocusNode();
+    final node = useFocusNode(debugLabel: 'OverviewWindowFocus');
+
+    // Selecting a window's tab hands it the keyboard. `selectContent` is a
+    // no-op when that window is already the displayed content (the common
+    // re-click): nothing remounts, so the window widget's own focus hand-off
+    // never runs and the keyboard would stay where it was (e.g. the search
+    // field), where `Enter` would launch another instance.
+    void selectContent(OverviewContent content) {
+      ref
+          .read(overviewStateProvider(screenId).notifier)
+          .selectContent(content.contentId);
+      if (content is WindowOverviewContent) {
+        node.requestFocus();
+      }
+    }
 
     // Directional navigation inside the content pane (the Helm's controls, a
     // preview, an embedded window) uses the framework's directional focus:
@@ -45,7 +59,7 @@ class OverviewContentPane extends HookConsumerWidget {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              const _OverviewContentPanel(),
+              _OverviewContentPanel(onSelect: selectContent),
               const SizedBox(height: 16),
               Expanded(
                 child: AnimatedSwitcher(
@@ -72,7 +86,12 @@ class OverviewContentPane extends HookConsumerWidget {
 }
 
 class _OverviewContentPanel extends HookConsumerWidget {
-  const _OverviewContentPanel();
+  const _OverviewContentPanel({required this.onSelect});
+
+  /// Selects a content; the pane uses it to also hand a selected window the
+  /// keyboard.
+  final ValueChanged<OverviewContent> onSelect;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final screenId = CurrentScreenId.of(context);
@@ -106,7 +125,7 @@ class _OverviewContentPanel extends HookConsumerWidget {
               OverviewContentTab(
                 content: content,
                 isSelected: content.contentId == selectedContentId,
-                onSelect: () => notifier.selectContent(content.contentId),
+                onSelect: () => onSelect(content),
                 onClose: () => notifier.closeContent(content.contentId),
               ),
             ],

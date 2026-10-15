@@ -140,7 +140,12 @@ focused context's ancestry**. The `ActivateIntent` handler is therefore
 registered only by the search pane (`SearchEngine`) and the result lists, so
 `Enter` acts there but is ignored — and forwarded to the focused client —
 everywhere else, and never steals `Enter` from a focused client surface or an
-unrelated text field. `DismissIntent` is registered by the overview, so
+unrelated text field. A client surface that owns the keyboard (`SurfaceFocus`)
+shadows activation, dismissal and traversal keys with an action that does not
+consume them, so they fall through to the client; the overview hands the
+keyboard to an ephemeral window's surface when it is displayed, so `Enter`
+reaches the application rather than the search pane that launched it.
+`DismissIntent` is registered by the overview, so
 `Escape` hides it, but a dialog or menu opened above it consumes the key first.
 `Super+Tab` is registered above both overview panes, so it keeps acting no
 matter which part of the overview holds focus.

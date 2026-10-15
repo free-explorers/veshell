@@ -1,3 +1,4 @@
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/widget/logs_viewer.dart';
@@ -27,38 +28,67 @@ class EphemeralWindowWidget extends HookConsumerWidget {
 
     final metaWindowId = window.metaWindowId;
     final fileChooser = ref.watch(fileChooserForWindowProvider(windowId));
-    if (metaWindowId != null) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          WindowWidget(
-            metaWindowId: metaWindowId,
-            focusNode: focusNode,
-            dialogMetaWindowList: ref
-                .watch(dialogSetForWindowProvider(window.windowId))
-                .map((element) {
-                  return ref
-                      .read(dialogWindowStateProvider(element))
-                      .metaWindowId;
-                })
-                .toList(),
-          ),
-          // The trusted file chooser renders inside the window container,
-          // attached to the window that asked for it (like a native dialog).
-          if (fileChooser != null) FileChooserModal(request: fileChooser),
-        ],
-      );
-    }
 
-    // No native window yet: an ephemeral launch may never produce one (a
-    // single-instance app that only raises its existing window, a launch that
-    // fails). Show the execution logs in a dark terminal container so the tile
-    // is never a blank, unclosable card while it waits for its surface.
-    return _EphemeralLaunchView(
-      pid: window.pid,
-      onClose: () => ref
-          .read(ephemeralWindowStateProvider(windowId).notifier)
-          .closeWindow(),
+    // While the launch has no surface, the window owns a placeholder focus
+    // target; once the surface exists, the keyboard goes to the surface node.
+    // Handing the keyboard over is what makes the reported bug go away: the
+    // surface wraps itself in `SurfaceFocus`, which lets `Enter`/`Space`/
+    // `Escape` and the direction keys fall through to the client, while the
+    // placeholder has no actions at all, so those keys are not consumed by the
+    // overview's search pane either. Without the hand-off the search pane keeps
+    // the Flutter focus and its `ActivateIntent` fires, launching another
+    // instance instead of reaching the focused client.
+    final waitingFocusNode = useFocusNode(debugLabel: 'EphemeralWindowWaiting');
+    final activeFocusNode = metaWindowId == null ? waitingFocusNode : focusNode;
+    useEffect(() {
+      activeFocusNode.requestFocus();
+      return null;
+    }, [metaWindowId]);
+
+    final content = metaWindowId != null
+        ? Stack(
+            fit: StackFit.expand,
+            children: [
+              WindowWidget(
+                metaWindowId: metaWindowId,
+                focusNode: focusNode,
+                dialogMetaWindowList: ref
+                    .watch(dialogSetForWindowProvider(window.windowId))
+                    .map((element) {
+                      return ref
+                          .read(dialogWindowStateProvider(element))
+                          .metaWindowId;
+                    })
+                    .toList(),
+              ),
+              // The trusted file chooser renders inside the window container,
+              // attached to the window that asked for it (native-dialog like).
+              if (fileChooser != null) FileChooserModal(request: fileChooser),
+            ],
+          )
+        : Focus(
+            // No native window yet: an ephemeral launch may never produce one
+            // (a single-instance app that only raises its existing window, a
+            // launch that fails). Show the execution logs in a dark terminal
+            // container so the tile is never a blank, unclosable card while it
+            // waits for its surface.
+            focusNode: waitingFocusNode,
+            child: _EphemeralLaunchView(
+              pid: window.pid,
+              onClose: () => ref
+                  .read(ephemeralWindowStateProvider(windowId).notifier)
+                  .closeWindow(),
+            ),
+          );
+
+    // Clicking into the window hands it the keyboard as well. The compositor
+    // already activates the client on pointer down
+    // (`ActivateSurfaceOnPointerDown`); this keeps the Flutter focus in step,
+    // so a click after the launch is what `Enter`/`Space` follow.
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) => activeFocusNode.requestFocus(),
+      child: content,
     );
   }
 }
