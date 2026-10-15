@@ -16,7 +16,6 @@ import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/platform/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/widget/panel_tab.dart';
-import 'package:shell/theme/provider/theme.dart';
 import 'package:shell/window/model/dialog_area_entry.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
@@ -355,6 +354,20 @@ class _DialogTab extends ConsumerWidget {
     DialogWindowId dialogWindowId,
   ) {
     final dialog = ref.watch(dialogWindowStateProvider(dialogWindowId));
+
+    // Extract is offered only for a regular top-level window attached as a
+    // dialog, never for a real dialog: a modal one, or one declaring a parent
+    // (a portal chooser, an About box). A dialog whose meta window is gone is
+    // treated the same as a genuine dialog and gets no extract.
+    var canExtract = false;
+    try {
+      canExtract = isExtractableDialog(
+        ref.watch(metaWindowStateProvider(dialog.metaWindowId)),
+      );
+    } on Object {
+      canExtract = false;
+    }
+
     return PanelTab(
       icon: Padding(
         padding: const EdgeInsets.all(4),
@@ -366,16 +379,17 @@ class _DialogTab extends ConsumerWidget {
       trailingBuilder: (foregroundColor) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _PillActionButton(
-            color: foregroundColor,
-            tooltip: context.l10n.extractToNewTile,
-            icon: MdiIcons.openInNew,
-            onPressed: () => unawaited(
-              ref
-                  .read(dialogWindowStateProvider(dialogWindowId).notifier)
-                  .extractToTile(),
+          if (canExtract)
+            _PillActionButton(
+              color: foregroundColor,
+              tooltip: context.l10n.extractToNewTile,
+              icon: MdiIcons.openInNew,
+              onPressed: () => unawaited(
+                ref
+                    .read(dialogWindowStateProvider(dialogWindowId).notifier)
+                    .extractToTile(),
+              ),
             ),
-          ),
           _PillActionButton(
             color: foregroundColor,
             tooltip: context.l10n.close,
@@ -519,7 +533,7 @@ class _DialogWindowBody extends HookConsumerWidget {
           // corner radius over the frosted tile. `ClipRRect` does not change
           // the size or origin the whole-pixel contract above relies on.
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(surfaceRadius),
+            borderRadius: BorderRadius.circular(8),
             child: window,
           ),
         );

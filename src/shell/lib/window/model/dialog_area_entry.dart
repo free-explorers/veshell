@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart' show immutable;
+import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 
 /// One entry shown in a tile's dialog area: a native dialog attached to the
@@ -59,3 +60,14 @@ final class FileChooserEntry extends DialogAreaEntry {
   @override
   String toString() => 'FileChooserEntry()';
 }
+
+/// Whether the native window behind a dialog may be extracted to its own tile.
+///
+/// Only a regular top-level window qualifies. A window that declares a client
+/// parent (`xdg_toplevel.set_parent`, X11 transient) or is modal is a genuine
+/// dialog — a portal chooser, an About box — and promoting it to a tile makes
+/// no sense. This is what keeps **Extract to new tile** off real modal and
+/// portal dialogs while it stays available for a top-level window that merely
+/// attached to the tile as a dialog.
+bool isExtractableDialog(MetaWindow metaWindow) =>
+    metaWindow.parent == null && !metaWindow.isModal;

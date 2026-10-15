@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/window/model/dialog_area_entry.dart';
 import 'package:shell/window/model/dialog_window.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
@@ -91,5 +92,31 @@ void main() {
     remove(_dialogA);
 
     expect(activationTarget(), 'meta-b');
+  });
+
+  group('isExtractableDialog', () {
+    MetaWindow metaWindow({String? parent, bool isModal = false}) => MetaWindow(
+      id: 'meta',
+      pid: 1,
+      mapped: true,
+      surfaceId: 1,
+      needDecoration: false,
+      gameModeActivated: false,
+      scaleRatio: 1,
+      parent: parent,
+      isModal: isModal,
+    );
+
+    test('a regular top-level window is extractable', () {
+      expect(isExtractableDialog(metaWindow()), isTrue);
+    });
+
+    test('a modal dialog is not extractable', () {
+      expect(isExtractableDialog(metaWindow(isModal: true)), isFalse);
+    });
+
+    test('a dialog declaring a parent is not extractable', () {
+      expect(isExtractableDialog(metaWindow(parent: 'owner')), isFalse);
+    });
   });
 }

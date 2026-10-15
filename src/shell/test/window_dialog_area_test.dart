@@ -101,9 +101,10 @@ void main() {
 
     // One pill per dialog, and the newest is the default selection.
     expect(find.byType(PanelTab), findsNWidgets(2));
-    // The per-dialog actions live in the pills themselves.
-    expect(find.byIcon(MdiIcons.openInNew), findsNWidgets(2));
+    // The close action lives in every pill. These dialogs' meta windows are
+    // untracked, so neither counts as a regular toplevel and no extract shows.
     expect(find.byIcon(MdiIcons.close), findsNWidgets(2));
+    expect(find.byIcon(MdiIcons.openInNew), findsNothing);
     expect(
       container.read(selectedDialogMetaWindowForWindowProvider(_parent)),
       'meta-b',
