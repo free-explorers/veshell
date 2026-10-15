@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:material_ui/material_ui.dart';
@@ -19,14 +20,30 @@ const frostedWashAlpha = 20;
 /// larger alpha reads as painted colour rather than glass.
 const glassTintPrimaryAlpha = 16;
 
-/// The default glass wash: a whisper of the primary hue over a bright base, so
-/// the wash *lifts* the blurred backdrop (and its contrast with the content
-/// pane) instead of darkening it. Derived from the scheme's primary, over
-/// white to keep the original brightening.
+/// The default glass wash: a whisper of the primary hue over a base that
+/// *raises* contrast with the backdrop — white on a dark scheme (lift the dim
+/// desktop) and black on a light one (settle the bright desktop). A wash that
+/// always brightened washed out light mode.
 Color frostedGlassTint(ColorScheme scheme) => Color.alphaBlend(
   scheme.primary.withAlpha(glassTintPrimaryAlpha),
-  Colors.white,
+  scheme.brightness == Brightness.dark ? Colors.white : Colors.black,
 );
+
+/// Relative weight of the blur: sigma grows with the frosted region, so a small
+/// tile and a large screen read as equally frosted. A fixed sigma blurs a small
+/// region proportionally harder.
+const _frostSigmaFactor = 0.02;
+
+/// Sigma floor: even a tiny region should read as frosted.
+const _frostSigmaMin = 8.0;
+
+/// Sigma ceiling: past this the blur only costs raster time.
+const _frostSigmaMax = 28.0;
+
+/// Blur sigma to use for a frosted region of [size], clamped so a tiny region
+/// is still frosted and a huge one does not blow up the raster cost.
+double frostSigmaFor(Size size) => (size.shortestSide * _frostSigmaFactor)
+    .clamp(_frostSigmaMin, _frostSigmaMax);
 
 /// A frosted-glass surface: [child] can be blurred and its saturation lifted,
 /// then a translucent wash, a hairline frame, a top sheen and (optionally) a
@@ -171,11 +188,17 @@ class _GlassLayer extends StatelessWidget {
         if (highlight)
           const DecoratedBox(
             decoration: BoxDecoration(
-              // A faint sheen from the top edge; sells the pane of glass.
+              // A diagonal sheen, brightest at the top-left corner: a light
+              // source grazing the glass, rather than a flat vertical fade.
               gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0x14FFFFFF), Color(0x00FFFFFF)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                stops: [0, 0.4, 1],
+                colors: [
+                  Color(0x26FFFFFF),
+                  Color(0x00FFFFFF),
+                  Color(0x0DFFFFFF),
+                ],
               ),
             ),
           ),
@@ -206,30 +229,83 @@ ColorFilter saturationFilter(double amount) {
 
 /// A sparse, deterministic grain: enough to break the banding a flat wash
 /// shows on a gradient, light enough not to read as texture.
+///
+/// The grain is baked once into a small tileable image (synchronously, so no
+/// async frame is needed) and painted as a repeated shader: one tiled draw
+/// instead of a per-paint loop of thousands of rects.
 class _NoisePainter extends CustomPainter {
   const _NoisePainter();
+
+  static const _extent = 64;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) {
       return;
     }
+    final grain = _grain();
+    if (grain == null) {
+      return;
+    }
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..shader = ui.ImageShader(
+          grain,
+          ui.TileMode.repeated,
+          ui.TileMode.repeated,
+          Float64List.fromList(const <double>[
+            1, 0, 0, 0, //
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1,
+          ]),
+          // Nearest-neighbour keeps the grain crisp instead of smearing it.
+          filterQuality: FilterQuality.none,
+        ),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_NoisePainter oldDelegate) => false;
+}
+
+ui.Image? _grainCache;
+bool _grainFailed = false;
+
+/// The baked grain image, or `null` if the rasterizer refused it (kept
+/// deliberately silent: grain is a nicety, not worth failing a frame for).
+ui.Image? _grain() {
+  final cached = _grainCache;
+  if (cached != null || _grainFailed) {
+    return cached;
+  }
+  try {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
     final random = math.Random(7);
     final paint = Paint()..color = const Color(0x0AFFFFFF);
-    final count = (size.width * size.height / 350).clamp(0, 4000).toInt();
-    for (var i = 0; i < count; i++) {
+    for (var i = 0; i < _NoisePainter._extent * 8; i++) {
       canvas.drawRect(
         Rect.fromLTWH(
-          random.nextDouble() * size.width,
-          random.nextDouble() * size.height,
+          random.nextDouble() * _NoisePainter._extent,
+          random.nextDouble() * _NoisePainter._extent,
           1,
           1,
         ),
         paint,
       );
     }
+    final picture = recorder.endRecording();
+    final image = picture.toImageSync(
+      _NoisePainter._extent,
+      _NoisePainter._extent,
+    );
+    picture.dispose();
+    _grainCache = image;
+    return image;
+  } on Object {
+    _grainFailed = true;
+    return null;
   }
-
-  @override
-  bool shouldRepaint(_NoisePainter oldDelegate) => false;
 }

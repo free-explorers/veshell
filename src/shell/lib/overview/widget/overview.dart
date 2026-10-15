@@ -23,12 +23,6 @@ const _overviewGap = 16.0;
 const _searchEngineFlex = 2;
 const _overviewContentFlex = 5;
 
-/// Blur applied to the rest of the screen while the overview is open.
-///
-/// Applied to the rest of the screen by `OverviewBlurTarget`; the scrim below
-/// reuses it so the white wash follows the same curve it always did.
-const overviewBlurSigma = 16.0;
-
 /// The overview overlay: search, clock and content panes.
 ///
 /// The rest of the screen behind it is blurred by `OverviewBlurTarget`; this

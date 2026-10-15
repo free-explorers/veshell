@@ -2,7 +2,6 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/overview/provider/overview_state.dart';
-import 'package:shell/overview/widget/overview.dart' show overviewBlurSigma;
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/shared/widget/frosted_surface.dart';
 
@@ -49,31 +48,36 @@ class OverviewBlurTarget extends HookConsumerWidget {
       return null;
     }, [isDisplayed]);
 
-    final blurAnimation = useMemoized(
-      () => Tween<double>(begin: 0, end: overviewBlurSigma).animate(
-        CurvedAnimation(
-          parent: animationController,
-          curve: const Interval(0, 0.6, curve: Curves.easeInOut),
-        ),
+    final progressAnimation = useMemoized(
+      () => CurvedAnimation(
+        parent: animationController,
+        curve: const Interval(0, 0.6, curve: Curves.easeInOut),
       ),
       [animationController],
     );
 
-    return AnimatedBuilder(
-      animation: animationController,
-      builder: (context, child) {
-        final progress = blurAnimation.value / overviewBlurSigma;
-        return FrostedSurface(
-          blurSigma: blurAnimation.value,
-          // A blurred background should read as glass, not merely out of
-          // focus: lift its vibrancy a touch while the overview opens.
-          saturation: 1 + 0.2 * progress,
-          borderColor: Colors.transparent,
-          highlight: false,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Sigma grows with the screen so the frost is consistent across output
+        // sizes.
+        final maxSigma = frostSigmaFor(constraints.biggest);
+        return AnimatedBuilder(
+          animation: animationController,
+          builder: (context, child) {
+            final progress = progressAnimation.value;
+            return FrostedSurface(
+              blurSigma: maxSigma * progress,
+              // A blurred background should read as glass, not merely out of
+              // focus: lift its vibrancy a touch while the overview opens.
+              saturation: 1 + 0.2 * progress,
+              borderColor: Colors.transparent,
+              highlight: false,
+              child: child,
+            );
+          },
           child: child,
         );
       },
-      child: child,
     );
   }
 }

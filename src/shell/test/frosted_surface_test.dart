@@ -83,4 +83,26 @@ void main() {
     await tester.tapAt(const Offset(300, 300));
     expect(behind, 1, reason: 'without absorption the click falls through');
   });
+
+  test('frost sigma scales with the region and clamps', () {
+    expect(frostSigmaFor(const Size(400, 400)), 8.0);
+    expect(frostSigmaFor(const Size(800, 800)), 16.0);
+    expect(frostSigmaFor(const Size(2000, 2000)), 28.0);
+  });
+
+  test('the wash lifts a dark scheme and settles a light one', () {
+    final dark = ColorScheme.fromSeed(
+      seedColor: Colors.red,
+      brightness: Brightness.dark,
+    );
+    final light = ColorScheme.fromSeed(
+      seedColor: Colors.red,
+      brightness: Brightness.light,
+    );
+
+    expect(
+      frostedGlassTint(dark).computeLuminance(),
+      greaterThan(frostedGlassTint(light).computeLuminance()),
+    );
+  });
 }

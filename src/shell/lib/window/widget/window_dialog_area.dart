@@ -23,13 +23,6 @@ import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/selected_dialog_for_window.dart';
 import 'package:shell/window/widget/window.dart';
 
-/// Blur applied to the tile behind its open dialog area.
-///
-/// Mirrors the overview's recipe (`OverviewBlurTarget`): an `ImageFiltered`
-/// wraps the layer to blur — a sibling overlay cannot apply it — and the panel
-/// itself draws sharp above it.
-const dialogAreaBlurSigma = 16.0;
-
 /// Fraction of a tile's shortest side left as a frosted margin around the
 /// dialog panel.
 ///
@@ -198,39 +191,44 @@ class _DialogAreaBackdrop extends HookWidget {
       return null;
     }, [blurred]);
 
-    final blurAnimation = useMemoized(
-      () => Tween<double>(begin: 0, end: dialogAreaBlurSigma).animate(
-        CurvedAnimation(
-          parent: animationController,
-          curve: const Interval(0, 0.6, curve: Curves.easeInOut),
-        ),
+    final progressAnimation = useMemoized(
+      () => CurvedAnimation(
+        parent: animationController,
+        curve: const Interval(0, 0.6, curve: Curves.easeInOut),
       ),
       [animationController],
     );
 
-    return AnimatedBuilder(
-      animation: animationController,
-      builder: (context, child) {
-        final progress = blurAnimation.value / dialogAreaBlurSigma;
-        final scheme = Theme.of(context).colorScheme;
-        return FrostedSurface(
-          blurSigma: blurAnimation.value,
-          // Match the overview's frost: blur plus a bright, theme-hued wash.
-          // A dark veil over a dark window (a terminal) just stayed black; a
-          // bright wash lifts the window behind the dialog and keeps the panel
-          // reading as the foreground.
-          saturation: 1 + 0.20 * progress,
-          tint: frostedGlassTint(
-            scheme,
-          ).withAlpha((frostedWashAlpha * progress).round()),
-          tintOverContent: true,
-          // The tile is not a card: no frame and no sheen at its edges.
-          borderColor: Colors.transparent,
-          highlight: false,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Sigma grows with the region so a small tile is not over-blurred.
+        final maxSigma = frostSigmaFor(constraints.biggest);
+        return AnimatedBuilder(
+          animation: animationController,
+          builder: (context, child) {
+            final progress = progressAnimation.value;
+            final scheme = Theme.of(context).colorScheme;
+            return FrostedSurface(
+              blurSigma: maxSigma * progress,
+              // Match the overview's frost: blur plus a theme-hued wash. A dark
+              // veil over a dark window (a terminal) just stayed black; a wash
+              // that raises contrast lifts the window behind the dialog and
+              // keeps the panel reading as the foreground.
+              saturation: 1 + 0.20 * progress,
+              tint: frostedGlassTint(
+                scheme,
+              ).withAlpha((frostedWashAlpha * progress).round()),
+              tintOverContent: true,
+              // The tile is not a card: no frame and no sheen at its edges.
+              borderColor: Colors.transparent,
+              highlight: false,
+              noise: true,
+              child: child,
+            );
+          },
           child: child,
         );
       },
-      child: child,
     );
   }
 }
