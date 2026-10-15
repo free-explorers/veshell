@@ -538,14 +538,6 @@ mixin WindowProviderMixin<T extends Window> {
     ref.read(metaWindowWindowMapProvider.notifier).unset(metaWindowId);
     if (shouldNotify) {
       _onMetaWindowsChanges();
-    } else {
-      // The caller is re-homing the window (a silent move, or a reroute into a
-      // dialog) and does not want the settle timer re-armed. Still drop the
-      // window from the *displayed* set: keeping it would leave this tile
-      // rendering a window it no longer owns — shown twice while the new owner
-      // holds it, then blank (reading the destroyed MetaWindowState) once that
-      // owner closes it.
-      _recomputeDisplayedMetaWindow();
     }
   }
 
@@ -560,12 +552,17 @@ mixin WindowProviderMixin<T extends Window> {
   /// Detaches [metaWindowId] because a late relation is re-routing it into a
   /// dialog of another tile.
   ///
-  /// Drops it from this tile's displayed set, and disposes this tile when the
-  /// matcher created it for that window and it now owns nothing: the reroute
-  /// must not leave an empty placeholder the user never asked for. A tile the
-  /// user created, or one that still owns another window, is left in place.
+  /// Unlike a silent move, the tile stays behind: drop the window from its
+  /// *displayed* set — keeping it would leave this tile rendering a window it
+  /// no longer owns, shown twice while the new owner holds it and then blank
+  /// (reading the destroyed MetaWindowState) once that owner closes it — and
+  /// dispose the tile when the matcher created it for that window and it now
+  /// owns nothing, so the reroute does not strand a placeholder the user never
+  /// asked for. A tile the user created, or one that still owns another window,
+  /// is left in place.
   void detachForReroute(MetaWindowId metaWindowId) {
     removeMetaWindow(metaWindowId, shouldNotify: false);
+    _recomputeDisplayedMetaWindow();
     if (_autoCreatedForMatching && _metaWindowSubscriptions.isEmpty) {
       removeWindow();
     }
