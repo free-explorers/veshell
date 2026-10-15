@@ -122,4 +122,49 @@ void main() {
       const DialogWindowEntry(_dialogA),
     );
   });
+
+  testWidgets('the tile content stays tappable with no dialog open', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        platformManagerProvider.overrideWithValue(
+          const Stream<PlatformEvent>.empty(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    var taps = 0;
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: SizedBox(
+              width: 400,
+              height: 300,
+              child: WindowDialogArea(
+                parentWindowId: _parent,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => taps++,
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byType(WindowDialogArea));
+    await tester.pump();
+
+    expect(taps, 1);
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -82,11 +82,17 @@ class FrostedSurface extends StatelessWidget {
       );
     }
 
-    final glass = _GlassLayer(
-      tint: tint,
-      frame: frame,
-      highlight: highlight,
-      noise: noise,
+    // The glass is decorative and must never absorb a pointer: a fully
+    // transparent veil (alpha 0) is still a hit-test-opaque `ColoredBox`, and
+    // sitting above the content it would make the whole frosted area
+    // unclickable.
+    final glass = IgnorePointer(
+      child: _GlassLayer(
+        tint: tint,
+        frame: frame,
+        highlight: highlight,
+        noise: noise,
+      ),
     );
 
     final stack = Stack(
