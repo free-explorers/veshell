@@ -35,9 +35,12 @@ class WindowWidget extends HookConsumerWidget {
       final metaWindowToActivate =
           dialogMetaWindowList.lastOrNull ?? metaWindowId;
 
-      final metaWindow = ref.read(
-        metaWindowStateProvider(metaWindowToActivate),
-      );
+      // The callback can outlive the window (focus change, leftover effect);
+      // reading a destroyed MetaWindowState throws by design.
+      final metaWindow = _readMetaWindow(ref, metaWindowToActivate);
+      if (metaWindow == null) {
+        return;
+      }
 
       ref
           .read(platformManagerProvider.notifier)
@@ -51,6 +54,15 @@ class WindowWidget extends HookConsumerWidget {
           );
     }, [metaWindowId, dialogMetaWindowList]);
 
+    // `metaWindowStateProvider` throws by design until its window is created
+    // and after it is destroyed. A tile can briefly outlive the window it
+    // points at — a mis-route or a teardown race — and letting that read throw
+    // replaces the whole tile, close affordances included, with the error
+    // widget: the blank, unclosable tile. Read it defensively and render
+    // nothing until the tile re-points (its owner clears `metaWindowId`) or is
+    // removed. The dependency is still registered, so the tile recovers if the
+    // window reappears under the same id.
+
     // Re-run the tile sizing effect when the displayed window's committed
     // buffer changes, so a client that resizes itself away from the tile bounds
     // is pulled back instead of leaving a desynced surface. The committed
@@ -58,20 +70,27 @@ class WindowWidget extends HookConsumerWidget {
     // client is actually rendering: a client is not required to re-set its
     // window geometry on resize, so the geometry can lag (or stay stale) while
     // the buffer shrinks, which made restoring the tile count a no-op.
-    final displayedSizing = ref.watch(
-      metaWindowStateProvider(metaWindowId).select(
-        (value) => (
-          surfaceId: value.surfaceId,
-          geometry: value.geometry,
-          scaleRatio: value.scaleRatio,
+    ({int surfaceId, Rect? geometry, double scaleRatio})? displayedSizing;
+    try {
+      displayedSizing = ref.watch(
+        metaWindowStateProvider(metaWindowId).select(
+          (value) => (
+            surfaceId: value.surfaceId,
+            geometry: value.geometry,
+            scaleRatio: value.scaleRatio,
+          ),
         ),
-      ),
-    );
-    final displayedBufferSize = ref.watch(
-      wlSurfaceStateProvider(
-        displayedSizing.surfaceId,
-      ).select((value) => value.texture?.size),
-    );
+      );
+    } on Object {
+      displayedSizing = null;
+    }
+    final displayedBufferSize = displayedSizing == null
+        ? null
+        : ref.watch(
+            wlSurfaceStateProvider(
+              displayedSizing.surfaceId,
+            ).select((value) => value.texture?.size),
+          );
     // One corrective patch per observed mismatch: a client that refuses the
     // configure would otherwise be re-patched on every commit it makes. The
     // key is a value type, compared field by field: a string key built from
@@ -99,6 +118,12 @@ class WindowWidget extends HookConsumerWidget {
       };
     }, [focusNode]);
 
+    if (displayedSizing == null) {
+      // The native window is gone. Its owner clears `metaWindowId` on the next
+      // frame; until then render nothing rather than the error widget.
+      return const SizedBox.shrink();
+    }
+
     return switch (displayMode) {
       DisplayMode.maximized ||
       DisplayMode
@@ -119,9 +144,12 @@ class WindowWidget extends HookConsumerWidget {
                         return null;
                       }
                       WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-                        final metaWindow = ref.read(
-                          metaWindowStateProvider(metaWindowId),
-                        );
+                        // The window may have closed between the frame and this
+                        // callback; reading its destroyed state throws.
+                        final metaWindow = _readMetaWindow(ref, metaWindowId);
+                        if (metaWindow == null) {
+                          return;
+                        }
                         final geometry = metaWindow.geometry;
                         final targetSize = constraints.biggest;
                         // The committed buffer is the surface's actual size,
@@ -227,5 +255,20 @@ class WindowWidget extends HookConsumerWidget {
         ],
       ),
     };
+  }
+}
+
+/// Reads the state of [metaWindowId], or `null` when the shell no longer tracks
+/// that window.
+///
+/// [metaWindowStateProvider] throws by design until its window is created and
+/// after it is destroyed. A tile can briefly outlive the window it points at
+/// (a mis-route or a teardown race), so any read that could run after the
+/// window is gone goes through here instead of crashing the caller.
+MetaWindow? _readMetaWindow(WidgetRef ref, MetaWindowId metaWindowId) {
+  try {
+    return ref.read(metaWindowStateProvider(metaWindowId));
+  } on Object {
+    return null;
   }
 }
