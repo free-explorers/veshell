@@ -245,7 +245,12 @@ class _DialogPanel extends StatelessWidget {
         // visible: the panel is a portion of the tile, like the overview's
         // content pane, but a ratio keeps the margin from swallowing a small
         // tile the way a fixed inset does.
-        final margin = constraints.biggest.shortestSide * _panelMarginFactor;
+        //
+        // Snapped to whole logical pixels: the body hosts a live Wayland
+        // surface, and a decimal origin makes Flutter sample its external
+        // texture bilinearly (an "always blurry" window).
+        final margin = (constraints.biggest.shortestSide * _panelMarginFactor)
+            .roundToDouble();
         return Padding(
           padding: EdgeInsets.all(margin),
           child: Padding(
@@ -488,9 +493,29 @@ class _DialogWindowBody extends HookConsumerWidget {
     final focusNode = useFocusNode(debugLabel: 'DialogSurface $dialogWindowId')
       ..canRequestFocus = false;
 
-    return WindowWidget(
+    final window = WindowWidget(
       metaWindowId: dialog.metaWindowId,
       focusNode: focusNode,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Host the live surface at a whole-pixel size, pinned to the top-left
+        // so its origin stays whole. A decimal size or origin makes Flutter
+        // sample the external texture bilinearly (the same "always blurry"
+        // trap the overview's split and the floating window's origin avoid).
+        // The sub-pixel remainder is harmless; the blur is not.
+        final width = constraints.maxWidth;
+        final height = constraints.maxHeight;
+        if (!width.isFinite || !height.isFinite) {
+          return window;
+        }
+        return SizedBox(
+          width: width.floorToDouble(),
+          height: height.floorToDouble(),
+          child: window,
+        );
+      },
     );
   }
 }
