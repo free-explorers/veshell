@@ -81,6 +81,10 @@ mixin WindowProviderMixin<T extends Window> {
 
   MetaWindowId? _displayedMetaWindowId;
 
+  /// Whether the matcher created this tile for a single native window rather
+  /// than the user (see [markAutoCreatedForMatching]). Runtime-only.
+  bool _autoCreatedForMatching = false;
+
   late MatchingInfo _matchingInfo;
 
   Timer? _debouncedTimer;
@@ -542,6 +546,28 @@ mixin WindowProviderMixin<T extends Window> {
       // holds it, then blank (reading the destroyed MetaWindowState) once that
       // owner closes it.
       _recomputeDisplayedMetaWindow();
+    }
+  }
+
+  /// Marks this tile as created by the matcher for a native window instead of
+  /// by the user (a launcher placeholder). Such a tile only exists to show that
+  /// window, so it can be disposed when the window is re-homed before the tile
+  /// is ever used.
+  void markAutoCreatedForMatching() {
+    _autoCreatedForMatching = true;
+  }
+
+  /// Detaches [metaWindowId] because a late relation is re-routing it into a
+  /// dialog of another tile.
+  ///
+  /// Drops it from this tile's displayed set, and disposes this tile when the
+  /// matcher created it for that window and it now owns nothing: the reroute
+  /// must not leave an empty placeholder the user never asked for. A tile the
+  /// user created, or one that still owns another window, is left in place.
+  void detachForReroute(MetaWindowId metaWindowId) {
+    removeMetaWindow(metaWindowId, shouldNotify: false);
+    if (_autoCreatedForMatching && _metaWindowSubscriptions.isEmpty) {
+      removeWindow();
     }
   }
 

@@ -133,9 +133,12 @@ class WindowManager extends _$WindowManager {
       displayMode: displayMode ?? DisplayMode.maximized,
     );
 
-    ref
-        .read(persistentWindowStateProvider(windowId).notifier)
-        .initialize(persistentWindow);
+    // The matcher chose this tile for the native window; if a late relation
+    // re-routes the window into a dialog, this now-empty tile is disposable
+    // (see `detachForReroute`).
+    ref.read(persistentWindowStateProvider(windowId).notifier)
+      ..initialize(persistentWindow)
+      ..markAutoCreatedForMatching();
 
     state = state.copyWith(windows: state.windows.add(windowId));
 

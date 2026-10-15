@@ -268,9 +268,11 @@ native window is never nested under another dialog. A parent, modal or activatio
 hint that arrives after mapping re-routes the already-matched window while it is
 still inside its settle window. Re-routing detaches the window from the tile
 that had matched it first, which drops it from that tile's displayed set: a
-native window is never rendered by two shell windows at once, and the previous
-tile falls back to its placeholder instead of holding a surface it no longer
-owns. A splash or updater that maps first does not
+native window is never rendered by two shell windows at once. The previous tile
+falls back to its placeholder, and when the matcher had created it for that very
+window and it owns nothing else, the tile is disposed instead of being left as a
+stray empty placeholder the user never asked for. A splash or updater that maps
+first does not
 make the real window a further opening: while the only gathered window is
 fixed-size the burst is still gathering (bounded), so the relation on the real
 window stays an owner hint and the real window is matched onto the tile. The
