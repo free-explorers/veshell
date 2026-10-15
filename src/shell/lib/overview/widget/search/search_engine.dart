@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
@@ -103,141 +104,157 @@ class SearchEngine extends HookConsumerWidget {
 
     final overviewNotifier = ref.read(overviewStateProvider(screenId).notifier);
 
-    return Actions(
-      actions: {
-        // Activation while the search field (not a result row) has focus: the
-        // framework's `ActivateIntent`, reached through the global
-        // `navigation.activate` binding or the framework `Enter` binding.
-        // Registering it here — and not above the whole overview — keeps
-        // `Enter` with the search field: a focused client surface is not a
-        // descendant of the search pane, so no action is found and the key is
-        // forwarded to the client as before.
-        ActivateIntent: CallbackAction<ActivateIntent>(
-          onInvoke: (_) {
-            activateOverviewSelection(ref, screenId);
-            return null;
-          },
-        ),
-        // While the search field (or any other part of the engine but the
-        // result list) has focus. The result list registers its own handler
-        // closer to focus once the keyboard is handed to it.
-        NavigateIntent: CallbackAction<NavigateIntent>(
-          onInvoke: (intent) {
-            final direction = switch (intent.direction) {
-              NavigationDirection.up => TraversalDirection.up,
-              NavigationDirection.down => TraversalDirection.down,
-              NavigationDirection.left => TraversalDirection.left,
-              NavigationDirection.right => TraversalDirection.right,
-            };
-            // The settings tree is made of focusable `ListTile`s, so it uses
-            // plain directional traversal.
-            if (searchMode == SearchMode.settings) {
-              primaryFocus?.focusInDirection(direction);
-              return null;
-            }
-            // The result lists are a combobox: `down` hands the keyboard to
-            // the list, other directions move across the panes.
-            switch (intent.direction) {
-              case NavigationDirection.down:
-                final index = selectedIndex ?? 0;
-                overviewNotifier.selectIndex(index);
-                resultFocus.moveTo(index);
-              case NavigationDirection.up:
-              case NavigationDirection.left:
-              case NavigationDirection.right:
-                primaryFocus?.focusInDirection(direction);
-            }
-            return null;
-          },
-        ),
+    return Shortcuts(
+      // Bind `Enter` close to the search pane. `MaterialApp` installs
+      // `DefaultTextEditingShortcuts` above this pane, and it maps `Enter` to a
+      // do-nothing intent that the focused `EditableText` handles, stopping the
+      // key before the global `navigation.activate` binding (which lives in
+      // `VeshellShortcutManager`, above `MaterialApp`) or the framework default
+      // can reach it. Without this local binding, `Enter` after a search is
+      // swallowed and nothing is activated. `Space` is deliberately left alone:
+      // it must keep typing a space in the search field.
+      shortcuts: const <ShortcutActivator, Intent>{
+        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.numpadEnter): ActivateIntent(),
       },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(38),
-          color: Theme.of(context).colorScheme.surface.withAlpha(200),
-        ),
-        child: Column(
-          children: [
-            SearchInput(
-              searchController: searchController,
-              searchFocusNode: searchFocusNode,
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: Row(
-                children: [
-                  // The mode switcher is clicked or reached with `Super+Tab`,
-                  // never by directional focus: keeping it out of the focus
-                  // order lets `down` from the search field land on the first
-                  // result instead of a mode button.
-                  ExcludeFocus(
-                    child: Column(
-                      children: [
-                        SearchModeButton(
-                          icon: const Icon(MdiIcons.playBox),
-                          onSelected: () => overviewNotifier.setSearchMode(
-                            SearchMode.application,
-                          ),
-                          isSelected: searchMode == SearchMode.application,
-                        ),
-                        const SizedBox(height: 16),
-                        SearchModeButton(
-                          icon: const Icon(MdiIcons.file),
-                          onSelected: () =>
-                              overviewNotifier.setSearchMode(SearchMode.file),
-                          isSelected: searchMode == SearchMode.file,
-                        ),
-                        const SizedBox(height: 16),
-                        SearchModeButton(
-                          icon: const Icon(MdiIcons.cog),
-                          onSelected: () => overviewNotifier.setSearchMode(
-                            SearchMode.settings,
-                          ),
-                          isSelected: searchMode == SearchMode.settings,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Card(
-                      clipBehavior: Clip.antiAlias,
-                      child: switch (searchMode) {
-                        SearchMode.application => ApplicationSearchResult(
-                          searchText: searchText,
-                          selectedIndex: selectedIndex,
-                          resultFocus: resultFocus,
-                          onSelect: overviewNotifier.selectIndex,
-                          onActivate: (index) => activateOverviewApplicationAt(
-                            ref,
-                            screenId,
-                            index,
-                          ),
-                        ),
-                        SearchMode.file => FileExplorerView(
-                          searchText: searchText,
-                          selectedIndex: selectedIndex,
-                          resultFocus: resultFocus,
-                          onSelect: overviewNotifier.selectIndex,
-                          onActivate: (index) => unawaited(
-                            activateFileIndex(ref, screenId, index),
-                          ),
-                          onOpenDirectory: (path) =>
-                              openOverviewBreadcrumb(ref, screenId, path),
-                          onOpenParent: () => goToOverviewParent(ref, screenId),
-                        ),
-                        SearchMode.settings => SettingsSearchResult(
-                          searchText: searchText,
-                          selectedIndex: selectedIndex,
-                        ),
-                      },
-                    ),
-                  ),
-                ],
+      child: Actions(
+        actions: {
+          // Activation while the search field (not a result row) has focus: the
+          // framework's `ActivateIntent`, reached through the local `Enter`
+          // binding above or the global `navigation.activate` one.
+          // Registering it here — and not above the whole overview — keeps
+          // `Enter` with the search field: a focused client surface is not a
+          // descendant of the search pane, so no action is found and the key is
+          // forwarded to the client as before.
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              activateOverviewSelection(ref, screenId);
+              return null;
+            },
+          ),
+          // While the search field (or any other part of the engine but the
+          // result list) has focus. The result list registers its own handler
+          // closer to focus once the keyboard is handed to it.
+          NavigateIntent: CallbackAction<NavigateIntent>(
+            onInvoke: (intent) {
+              final direction = switch (intent.direction) {
+                NavigationDirection.up => TraversalDirection.up,
+                NavigationDirection.down => TraversalDirection.down,
+                NavigationDirection.left => TraversalDirection.left,
+                NavigationDirection.right => TraversalDirection.right,
+              };
+              // The settings tree is made of focusable `ListTile`s, so it uses
+              // plain directional traversal.
+              if (searchMode == SearchMode.settings) {
+                primaryFocus?.focusInDirection(direction);
+                return null;
+              }
+              // The result lists are a combobox: `down` hands the keyboard to
+              // the list, other directions move across the panes.
+              switch (intent.direction) {
+                case NavigationDirection.down:
+                  final index = selectedIndex ?? 0;
+                  overviewNotifier.selectIndex(index);
+                  resultFocus.moveTo(index);
+                case NavigationDirection.up:
+                case NavigationDirection.left:
+                case NavigationDirection.right:
+                  primaryFocus?.focusInDirection(direction);
+              }
+              return null;
+            },
+          ),
+        },
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(38),
+            color: Theme.of(context).colorScheme.surface.withAlpha(200),
+          ),
+          child: Column(
+            children: [
+              SearchInput(
+                searchController: searchController,
+                searchFocusNode: searchFocusNode,
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              Expanded(
+                child: Row(
+                  children: [
+                    // The mode switcher is clicked or reached with `Super+Tab`,
+                    // never by directional focus: keeping it out of the focus
+                    // order lets `down` from the search field land on the first
+                    // result instead of a mode button.
+                    ExcludeFocus(
+                      child: Column(
+                        children: [
+                          SearchModeButton(
+                            icon: const Icon(MdiIcons.playBox),
+                            onSelected: () => overviewNotifier.setSearchMode(
+                              SearchMode.application,
+                            ),
+                            isSelected: searchMode == SearchMode.application,
+                          ),
+                          const SizedBox(height: 16),
+                          SearchModeButton(
+                            icon: const Icon(MdiIcons.file),
+                            onSelected: () =>
+                                overviewNotifier.setSearchMode(SearchMode.file),
+                            isSelected: searchMode == SearchMode.file,
+                          ),
+                          const SizedBox(height: 16),
+                          SearchModeButton(
+                            icon: const Icon(MdiIcons.cog),
+                            onSelected: () => overviewNotifier.setSearchMode(
+                              SearchMode.settings,
+                            ),
+                            isSelected: searchMode == SearchMode.settings,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Card(
+                        clipBehavior: Clip.antiAlias,
+                        child: switch (searchMode) {
+                          SearchMode.application => ApplicationSearchResult(
+                            searchText: searchText,
+                            selectedIndex: selectedIndex,
+                            resultFocus: resultFocus,
+                            onSelect: overviewNotifier.selectIndex,
+                            onActivate: (index) =>
+                                activateOverviewApplicationAt(
+                                  ref,
+                                  screenId,
+                                  index,
+                                ),
+                          ),
+                          SearchMode.file => FileExplorerView(
+                            searchText: searchText,
+                            selectedIndex: selectedIndex,
+                            resultFocus: resultFocus,
+                            onSelect: overviewNotifier.selectIndex,
+                            onActivate: (index) => unawaited(
+                              activateFileIndex(ref, screenId, index),
+                            ),
+                            onOpenDirectory: (path) =>
+                                openOverviewBreadcrumb(ref, screenId, path),
+                            onOpenParent: () =>
+                                goToOverviewParent(ref, screenId),
+                          ),
+                          SearchMode.settings => SettingsSearchResult(
+                            searchText: searchText,
+                            selectedIndex: selectedIndex,
+                          ),
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
