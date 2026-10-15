@@ -208,22 +208,31 @@ class _DialogAreaBackdrop extends HookWidget {
           builder: (context, child) {
             final progress = progressAnimation.value;
             final scheme = Theme.of(context).colorScheme;
-            return FrostedSurface(
-              blurSigma: maxSigma * progress,
-              // Match the overview's frost: blur plus a theme-hued wash. A dark
-              // veil over a dark window (a terminal) just stayed black; a wash
-              // that raises contrast lifts the window behind the dialog and
-              // keeps the panel reading as the foreground.
-              saturation: 1 + 0.20 * progress,
-              tint: frostedGlassTint(
-                scheme,
-              ).withAlpha((frostedWashAlpha * progress).round()),
-              tintOverContent: true,
-              // The tile is not a card: no frame and no sheen at its edges.
-              borderColor: Colors.transparent,
-              highlight: false,
-              noise: true,
-              child: child,
+            // Cache the frosted result: while the panel is interacted with or
+            // animated, the blur is reused instead of recomputed, as long as
+            // the window behind it is not itself repainting.
+            return RepaintBoundary(
+              child: FrostedSurface(
+                blurSigma: maxSigma * progress,
+                // Match the overview's frost: blur plus a theme-hued wash. A
+                // dark veil over a dark window (a terminal) just stayed black;
+                // a wash that raises contrast lifts the window behind the
+                // dialog and keeps the panel reading as the foreground.
+                saturation: 1 + 0.20 * progress,
+                // No wash while closed: without a dialog there is nothing to
+                // frost, and the glass must not keep painting over the window.
+                tint: progress > 0
+                    ? frostedGlassTint(
+                        scheme,
+                      ).withAlpha((frostedWashAlpha * progress).round())
+                    : null,
+                tintOverContent: true,
+                // The tile is not a card: no frame, no sheen, no grain over the
+                // window itself.
+                frame: false,
+                highlight: false,
+                child: child,
+              ),
             );
           },
           child: child,

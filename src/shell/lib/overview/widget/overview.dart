@@ -194,7 +194,7 @@ class _OverviewScrim extends HookWidget {
         Theme.of(context).colorScheme,
       ).withAlpha((frostedWashAlpha * tintAnimation.value).round()),
       noise: true,
-      borderColor: Colors.transparent,
+      frame: false,
       highlight: false,
       absorbPointers: true,
       child: Opacity(opacity: opacityAnimation.value, child: child),

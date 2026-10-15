@@ -67,6 +67,7 @@ class FrostedSurface extends StatelessWidget {
     this.tint,
     this.tintOverContent = false,
     this.borderColor,
+    this.frame = true,
     this.highlight = true,
     this.noise = false,
     this.absorbPointers = false,
@@ -91,8 +92,13 @@ class FrostedSurface extends StatelessWidget {
   /// Draws the glass above [child] instead of behind it.
   final bool tintOverContent;
 
-  /// Hairline frame colour; defaults to a faint outline variant.
+  /// Hairline frame colour; defaults to a faint outline variant. Ignored when
+  /// [frame] is false.
   final Color? borderColor;
+
+  /// Whether to draw the hairline frame at all. A tile backdrop is not a card
+  /// and leaves it off.
+  final bool frame;
 
   /// Adds a soft top-to-bottom sheen.
   final bool highlight;
@@ -112,7 +118,9 @@ class FrostedSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final frame = borderColor ?? colorScheme.outlineVariant.withAlpha(70);
+    final frameColor = frame
+        ? (borderColor ?? colorScheme.outlineVariant.withAlpha(70))
+        : null;
 
     var content = child;
     if (content != null && blurSigma > 0.01) {
@@ -134,27 +142,34 @@ class FrostedSurface extends StatelessWidget {
       );
     }
 
-    Widget glass = _GlassLayer(
-      tint: tint,
-      frame: frame,
-      highlight: highlight,
-      noise: noise,
-    );
-    // The glass is decorative by default and must not absorb a pointer: a
-    // fully transparent veil (alpha 0) is still a hit-test-opaque `ColoredBox`,
-    // and above the content it would make the whole frosted area unclickable.
-    // A backdrop opts in with [absorbPointers] when it must swallow clicks that
-    // land outside its content.
-    if (!absorbPointers) {
-      glass = IgnorePointer(child: glass);
+    // Only paint the glass when there is something to paint: a closed dialog
+    // passes `tint: null` and must not keep drawing a grain over its window.
+    final hasGlass = tint != null || highlight || noise || frameColor != null;
+    Widget? glass;
+    if (hasGlass) {
+      Widget layer = _GlassLayer(
+        tint: tint,
+        frame: frameColor,
+        highlight: highlight,
+        noise: noise,
+      );
+      // The glass is decorative by default and must not absorb a pointer: a
+      // fully transparent veil (alpha 0) is still a hit-test-opaque
+      // `ColoredBox`, and above the content it would make the whole frosted
+      // area unclickable. A backdrop opts in with [absorbPointers] when it must
+      // swallow clicks that land outside its content.
+      if (!absorbPointers) {
+        layer = IgnorePointer(child: layer);
+      }
+      glass = layer;
     }
 
     final stack = Stack(
       fit: StackFit.passthrough,
       children: [
-        if (!tintOverContent) Positioned.fill(child: glass),
+        if (!tintOverContent && glass != null) Positioned.fill(child: glass),
         ?content,
-        if (tintOverContent) Positioned.fill(child: glass),
+        if (tintOverContent && glass != null) Positioned.fill(child: glass),
       ],
     );
 
@@ -175,7 +190,7 @@ class _GlassLayer extends StatelessWidget {
   });
 
   final Color? tint;
-  final Color frame;
+  final Color? frame;
   final bool highlight;
   final bool noise;
 
@@ -202,11 +217,12 @@ class _GlassLayer extends StatelessWidget {
               ),
             ),
           ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border.fromBorderSide(BorderSide(color: frame)),
+        if (frame != null)
+          DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border.fromBorderSide(BorderSide(color: frame!)),
+            ),
           ),
-        ),
         if (noise) const CustomPaint(painter: _NoisePainter()),
       ],
     );
@@ -285,11 +301,15 @@ ui.Image? _grain() {
     final canvas = Canvas(recorder);
     final random = math.Random(7);
     final paint = Paint()..color = const Color(0x0AFFFFFF);
-    for (var i = 0; i < _NoisePainter._extent * 8; i++) {
+    // Match the density the per-paint version had (~1 dot per 350px²): the
+    // grain should break banding, not read as texture.
+    const extent = _NoisePainter._extent;
+    final dots = (extent * extent / 350).round();
+    for (var i = 0; i < dots; i++) {
       canvas.drawRect(
         Rect.fromLTWH(
-          random.nextDouble() * _NoisePainter._extent,
-          random.nextDouble() * _NoisePainter._extent,
+          random.nextDouble() * extent,
+          random.nextDouble() * extent,
           1,
           1,
         ),

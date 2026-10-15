@@ -65,14 +65,19 @@ class OverviewBlurTarget extends HookConsumerWidget {
           animation: animationController,
           builder: (context, child) {
             final progress = progressAnimation.value;
-            return FrostedSurface(
-              blurSigma: maxSigma * progress,
-              // A blurred background should read as glass, not merely out of
-              // focus: lift its vibrancy a touch while the overview opens.
-              saturation: 1 + 0.2 * progress,
-              borderColor: Colors.transparent,
-              highlight: false,
-              child: child,
+            // Cache the frosted screen: while the overview is interacted with,
+            // the blur is reused instead of recomputed, as long as the desktop
+            // behind it is not itself repainting.
+            return RepaintBoundary(
+              child: FrostedSurface(
+                blurSigma: maxSigma * progress,
+                // A blurred background should read as glass, not merely out of
+                // focus: lift its vibrancy a touch while the overview opens.
+                saturation: 1 + 0.2 * progress,
+                frame: false,
+                highlight: false,
+                child: child,
+              ),
             );
           },
           child: child,
