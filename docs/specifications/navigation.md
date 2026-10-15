@@ -140,7 +140,12 @@ focused context's ancestry**. The `ActivateIntent` handler is therefore
 registered only by the search pane (`SearchEngine`) and the result lists, so
 `Enter` acts there but is ignored — and forwarded to the focused client —
 everywhere else, and never steals `Enter` from a focused client surface or an
-unrelated text field. A client surface that owns the keyboard (`SurfaceFocus`)
+unrelated text field. The search pane also binds `Enter` to `ActivateIntent`
+locally: `MaterialApp` installs `DefaultTextEditingShortcuts` above it, which
+maps `Enter` to a do-nothing intent the focused `EditableText` handles, and that
+would stop the key before the global `navigation.activate` binding (which lives
+in `VeshellShortcutManager`, above `MaterialApp`) or the framework default. A
+client surface that owns the keyboard (`SurfaceFocus`)
 shadows activation, dismissal and traversal keys with an action that does not
 consume them, so they fall through to the client; the overview hands the
 keyboard to an ephemeral window's surface when it is displayed, so `Enter`

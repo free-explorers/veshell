@@ -59,11 +59,13 @@ row; clicking the preview or the content pane leaves the search field focused.
 The `Super` chords and `Escape` are handled
 above both panes, so they act whichever part of the overview holds focus (the
 search field, a content tab, a preview, or an embedded window); `Enter` is
-registered only by the search pane, so a focused client surface — which is not a
-descendant of it — still receives it. The selection clamps at the first and
-last entry (no wrap). Because the overview handles the standard navigation
-intents, these are the same global `super+w/s/a/d` bindings, not shadowing
-copies (see [Navigation and actions](navigation.md)).
+bound and registered only by the search pane, so a focused client surface —
+which is not a descendant of it — still receives it, and Flutter's
+text-editing shortcuts cannot swallow `Enter` while the search field is focused.
+The selection clamps at the first and last entry (no wrap). Because the overview
+handles the standard navigation intents, these are the same global
+`super+w/s/a/d` bindings, not shadowing copies (see
+[Navigation and actions](navigation.md)).
 
 The overview is a combobox: the search field keeps the keyboard while typing
 and `Super+Down` (or a click) hands it to the result list; `Super+Up` on the
