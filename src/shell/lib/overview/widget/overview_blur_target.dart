@@ -1,11 +1,10 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/overview/widget/overview.dart' show overviewBlurSigma;
 import 'package:shell/screen/model/screen.serializable.dart';
+import 'package:shell/shared/widget/frosted_surface.dart';
 
 /// The part of a screen that the overview blurs while it is open.
 ///
@@ -62,14 +61,18 @@ class OverviewBlurTarget extends HookConsumerWidget {
 
     return AnimatedBuilder(
       animation: animationController,
-      builder: (context, child) => ImageFiltered(
-        enabled: blurAnimation.value > 0.01,
-        imageFilter: ImageFilter.blur(
-          sigmaX: blurAnimation.value,
-          sigmaY: blurAnimation.value,
-        ),
-        child: child,
-      ),
+      builder: (context, child) {
+        final progress = blurAnimation.value / overviewBlurSigma;
+        return FrostedSurface(
+          blurSigma: blurAnimation.value,
+          // A blurred background should read as glass, not merely out of
+          // focus: lift its vibrancy a touch while the overview opens.
+          saturation: 1 + 0.2 * progress,
+          borderColor: Colors.transparent,
+          highlight: false,
+          child: child,
+        );
+      },
       child: child,
     );
   }

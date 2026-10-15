@@ -10,6 +10,7 @@ import 'package:shell/overview/widget/overview_shortcuts.dart';
 import 'package:shell/overview/widget/search/search_engine.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/shared/widget/clock.dart';
+import 'package:shell/shared/widget/frosted_surface.dart';
 import 'package:shell/theme//provider/theme.dart';
 
 /// Minimum width the search engine is allowed to shrink to.
@@ -156,7 +157,7 @@ class OverviewWidget extends HookConsumerWidget {
 ///
 /// This used to be an `AnimatedBlurBackground` wrapping the whole overview in a
 /// `BackdropFilter`; the blur now lives on the rest of the screen
-/// (`OverviewBlurTarget`), so this only tints and fades.
+/// (`OverviewBlurTarget`), so this only frosts (tint + grain) and fades.
 class _OverviewScrim extends HookWidget {
   const _OverviewScrim({
     required this.animationController,
@@ -191,10 +192,15 @@ class _OverviewScrim extends HookWidget {
       [animationController],
     );
 
-    return ColoredBox(
-      color: Colors.white.withAlpha(
+    return FrostedSurface(
+      // The overview background: a theme-tinted glass wash over the blurred
+      // screen, carrying the shell's hue instead of a flat white.
+      tint: frostedGlassTint(Theme.of(context).colorScheme).withAlpha(
         (255 * (overviewBlurSigma * tintAnimation.value) / 100).round(),
       ),
+      noise: true,
+      borderColor: Colors.transparent,
+      highlight: false,
       child: Opacity(opacity: opacityAnimation.value, child: child),
     );
   }
