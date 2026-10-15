@@ -30,14 +30,6 @@ import 'package:shell/window/widget/window.dart';
 /// itself draws sharp above it.
 const dialogAreaBlurSigma = 16.0;
 
-/// Peak alpha of the dialog backdrop's frost wash.
-///
-/// The wash sits directly over the window behind the dialog (unlike the
-/// overview's, which is behind the panes), so it reads stronger at the same
-/// alpha. Kept near the overview's ~41 so a dark window is lifted without being
-/// washed out.
-const dialogAreaWashAlpha = 20;
-
 /// Fraction of a tile's shortest side left as a frosted margin around the
 /// dialog panel.
 ///
@@ -230,7 +222,7 @@ class _DialogAreaBackdrop extends HookWidget {
           saturation: 1 + 0.20 * progress,
           tint: frostedGlassTint(
             scheme,
-          ).withAlpha((dialogAreaWashAlpha * progress).round()),
+          ).withAlpha((frostedWashAlpha * progress).round()),
           tintOverContent: true,
           // The tile is not a card: no frame and no sheen at its edges.
           borderColor: Colors.transparent,

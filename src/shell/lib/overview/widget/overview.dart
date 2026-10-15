@@ -196,9 +196,9 @@ class _OverviewScrim extends HookWidget {
       // The overview background: a bright, theme-hued wash over the blurred
       // screen. It must absorb the clicks that fall between the panes, or they
       // reach the desktop behind the overview.
-      tint: frostedGlassTint(Theme.of(context).colorScheme).withAlpha(
-        (255 * (overviewBlurSigma * tintAnimation.value) / 100).round(),
-      ),
+      tint: frostedGlassTint(
+        Theme.of(context).colorScheme,
+      ).withAlpha((frostedWashAlpha * tintAnimation.value).round()),
       noise: true,
       borderColor: Colors.transparent,
       highlight: false,

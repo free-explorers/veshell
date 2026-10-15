@@ -3,6 +3,14 @@ import 'dart:ui' as ui;
 
 import 'package:material_ui/material_ui.dart';
 
+/// Peak alpha of the frost wash over a live backdrop, shared by the dialog
+/// area and the overview background so both read at the same strength.
+///
+/// The layers differ — the dialog washes the window directly, the overview's
+/// wash sits behind the panes — so their visible weight is not identical; split
+/// this into per-surface constants if they need to diverge.
+const frostedWashAlpha = 20;
+
 /// How much of the theme's `primary` hue the default glass wash
 /// ([frostedGlassTint]) carries, out of 255.
 ///
