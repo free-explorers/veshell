@@ -193,7 +193,6 @@ class _OverviewScrim extends HookWidget {
       tint: frostedGlassTint(
         Theme.of(context).colorScheme,
       ).withAlpha((frostedWashAlpha * tintAnimation.value).round()),
-      noise: true,
       frame: false,
       highlight: false,
       absorbPointers: true,

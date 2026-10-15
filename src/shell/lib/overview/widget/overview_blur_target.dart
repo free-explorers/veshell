@@ -74,6 +74,10 @@ class OverviewBlurTarget extends HookConsumerWidget {
                 // A blurred background should read as glass, not merely out of
                 // focus: lift its vibrancy a touch while the overview opens.
                 saturation: 1 + 0.2 * progress,
+                // Grain rides the blur (it only paints once blurred), so it
+                // lives here rather than on the scrim, which does not blur.
+                noise: true,
+                tintOverContent: true,
                 frame: false,
                 highlight: false,
                 child: child,

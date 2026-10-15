@@ -45,6 +45,10 @@ const _frostSigmaMax = 28.0;
 double frostSigmaFor(Size size) => (size.shortestSide * _frostSigmaFactor)
     .clamp(_frostSigmaMin, _frostSigmaMax);
 
+/// Sigma below which the grain is left off: over a sharp image noise just reads
+/// as a dirty screen, so grain only belongs on a blurred surface.
+const _noiseMinSigma = 1.0;
+
 /// A frosted-glass surface: [child] can be blurred and its saturation lifted,
 /// then a translucent wash, a hairline frame, a top sheen and (optionally) a
 /// fine grain are drawn as the glass itself.
@@ -144,14 +148,17 @@ class FrostedSurface extends StatelessWidget {
 
     // Only paint the glass when there is something to paint: a closed dialog
     // passes `tint: null` and must not keep drawing a grain over its window.
-    final hasGlass = tint != null || highlight || noise || frameColor != null;
+    // The grain drops out too unless the surface is actually blurred.
+    final showNoise = noise && blurSigma > _noiseMinSigma;
+    final hasGlass =
+        tint != null || highlight || showNoise || frameColor != null;
     Widget? glass;
     if (hasGlass) {
       Widget layer = _GlassLayer(
         tint: tint,
         frame: frameColor,
         highlight: highlight,
-        noise: noise,
+        noise: showNoise,
       );
       // The glass is decorative by default and must not absorb a pointer: a
       // fully transparent veil (alpha 0) is still a hit-test-opaque
