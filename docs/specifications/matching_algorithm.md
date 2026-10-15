@@ -266,7 +266,11 @@ sibling, falling back to the ordinary best candidate only for an authoritative
 hint. Owner resolution always walks dialog chains up to the owning tile, so a
 native window is never nested under another dialog. A parent, modal or activation
 hint that arrives after mapping re-routes the already-matched window while it is
-still inside its settle window. A splash or updater that maps first does not
+still inside its settle window. Re-routing detaches the window from the tile
+that had matched it first, which drops it from that tile's displayed set: a
+native window is never rendered by two shell windows at once, and the previous
+tile falls back to its placeholder instead of holding a surface it no longer
+owns. A splash or updater that maps first does not
 make the real window a further opening: while the only gathered window is
 fixed-size the burst is still gathering (bounded), so the relation on the real
 window stays an owner hint and the real window is matched onto the tile. The

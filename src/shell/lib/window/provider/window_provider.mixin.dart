@@ -534,6 +534,14 @@ mixin WindowProviderMixin<T extends Window> {
     ref.read(metaWindowWindowMapProvider.notifier).unset(metaWindowId);
     if (shouldNotify) {
       _onMetaWindowsChanges();
+    } else {
+      // The caller is re-homing the window (a silent move, or a reroute into a
+      // dialog) and does not want the settle timer re-armed. Still drop the
+      // window from the *displayed* set: keeping it would leave this tile
+      // rendering a window it no longer owns — shown twice while the new owner
+      // holds it, then blank (reading the destroyed MetaWindowState) once that
+      // owner closes it.
+      _recomputeDisplayedMetaWindow();
     }
   }
 
