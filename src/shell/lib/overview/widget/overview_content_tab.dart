@@ -7,6 +7,7 @@ import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/file_explorer/widget/file_entry_icon.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/model/overview_content.dart';
+import 'package:shell/shared/widget/panel_tab.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
 
@@ -34,7 +35,7 @@ class OverviewContentTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return switch (content) {
-      HelmOverviewContent() => _OverviewPanelTab(
+      HelmOverviewContent() => PanelTab(
         icon: const Icon(MdiIcons.shipWheel),
         label: context.l10n.helm,
         isSelected: isSelected,
@@ -45,7 +46,7 @@ class OverviewContentTab extends StatelessWidget {
         isSelected: isSelected,
         onTap: onSelect,
       ),
-      PreviewOverviewContent(:final entry) => _OverviewPanelTab(
+      PreviewOverviewContent(:final entry) => PanelTab(
         icon: Icon(iconForFileEntry(entry)),
         label: entry.name,
         isSelected: isSelected,
@@ -78,7 +79,7 @@ class _WindowContentTab extends ConsumerWidget {
         window.properties.title ??
         context.l10n.unknown;
 
-    return _OverviewPanelTab(
+    return PanelTab(
       icon: Padding(
         padding: const EdgeInsets.all(4),
         child: AppIconById(id: appId),
@@ -111,69 +112,6 @@ class _CloseButton extends StatelessWidget {
       visualDensity: VisualDensity.compact,
       onPressed: onPressed,
       icon: const Icon(MdiIcons.close, size: 16),
-    );
-  }
-}
-
-/// A pill-shaped tab of the overview content panel: an icon, a label and an
-/// optional trailing action. Only the selected tab is tinted, and the
-/// foreground is handed to [trailingBuilder] so the trailing action matches.
-class _OverviewPanelTab extends StatelessWidget {
-  const _OverviewPanelTab({
-    required this.icon,
-    required this.label,
-    required this.isSelected,
-    this.onTap,
-    this.trailingBuilder,
-  });
-
-  final Widget icon;
-  final String label;
-  final bool isSelected;
-  final VoidCallback? onTap;
-  final Widget Function(Color foregroundColor)? trailingBuilder;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final foregroundColor = isSelected
-        ? colorScheme.onPrimaryContainer
-        : colorScheme.onSurface;
-
-    return Material(
-      borderRadius: BorderRadius.circular(24),
-      color: isSelected
-          ? colorScheme.primaryContainer
-          : colorScheme.surfaceContainerLow,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox.square(dimension: 32, child: icon),
-              const SizedBox(width: 8),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 160),
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelLarge,
-                ),
-              ),
-              if (trailingBuilder != null) ...[
-                const SizedBox(width: 4),
-                trailingBuilder!(foregroundColor),
-              ],
-              const SizedBox(width: 4),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

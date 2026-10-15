@@ -71,7 +71,7 @@ class DialogWindowState extends _$DialogWindowState
           .patch(
             MetaWindowPatchMessage.updateDisplayMode(
               id: state.metaWindowId,
-              value: MetaWindowDisplayMode.floating,
+              value: MetaWindowDisplayMode.maximized,
             ),
           );
     }

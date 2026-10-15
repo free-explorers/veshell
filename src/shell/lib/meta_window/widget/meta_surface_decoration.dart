@@ -1,14 +1,8 @@
-import 'dart:async';
-
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/provider/meta_window_dragging_state.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
-import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
-import 'package:shell/window/model/window_id.serializable.dart';
-import 'package:shell/window/provider/dialog_window_state.dart';
 
 class MetaSurfaceDecoration extends HookConsumerWidget {
   const MetaSurfaceDecoration({
@@ -69,12 +63,6 @@ class WindowTitleBar extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final metaWindow = ref.watch(metaWindowStateProvider(metaWindowId));
-    final ownerWindowId = ref.watch(
-      metaWindowWindowMapProvider.select((value) => value[metaWindowId]),
-    );
-    final ownerDialogWindowId = ownerWindowId is DialogWindowId
-        ? ownerWindowId
-        : null;
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onPanStart: (details) {
@@ -95,26 +83,6 @@ class WindowTitleBar extends HookConsumerWidget {
                 style: const TextStyle(color: Colors.white),
               ),
               const Spacer(),
-              if (ownerDialogWindowId != null)
-                IconButton(
-                  tooltip: context.l10n.extractToNewTile,
-                  onPressed: () {
-                    unawaited(
-                      ref
-                          .read(
-                            dialogWindowStateProvider(
-                              ownerDialogWindowId,
-                            ).notifier,
-                          )
-                          .extractToTile(),
-                    );
-                  },
-                  icon: Icon(
-                    Icons.open_in_new,
-                    color: Theme.of(context).colorScheme.onSurface,
-                    size: 16,
-                  ),
-                ),
               InkWell(
                 onTap: () {
                   ref

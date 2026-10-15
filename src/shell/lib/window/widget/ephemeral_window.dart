@@ -2,13 +2,11 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/widget/logs_viewer.dart';
-import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
-import 'package:shell/file_chooser/widget/file_chooser_dialog.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
-import 'package:shell/window/provider/dialog_set_for_window.dart';
-import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
+import 'package:shell/window/provider/selected_dialog_for_window.dart';
 import 'package:shell/window/widget/window.dart';
+import 'package:shell/window/widget/window_dialog_area.dart';
 
 /// Tileable Window that persist when closed
 class EphemeralWindowWidget extends HookConsumerWidget {
@@ -27,7 +25,6 @@ class EphemeralWindowWidget extends HookConsumerWidget {
     final window = ref.watch(ephemeralWindowStateProvider(windowId));
 
     final metaWindowId = window.metaWindowId;
-    final fileChooser = ref.watch(fileChooserForWindowProvider(windowId));
 
     // While the launch has no surface, the window owns a placeholder focus
     // target; once the surface exists, the keyboard goes to the surface node.
@@ -46,25 +43,15 @@ class EphemeralWindowWidget extends HookConsumerWidget {
     }, [metaWindowId]);
 
     final content = metaWindowId != null
-        ? Stack(
-            fit: StackFit.expand,
-            children: [
-              WindowWidget(
-                metaWindowId: metaWindowId,
-                focusNode: focusNode,
-                dialogMetaWindowList: ref
-                    .watch(dialogSetForWindowProvider(window.windowId))
-                    .map((element) {
-                      return ref
-                          .read(dialogWindowStateProvider(element))
-                          .metaWindowId;
-                    })
-                    .toList(),
+        ? WindowDialogArea(
+            parentWindowId: windowId,
+            child: WindowWidget(
+              metaWindowId: metaWindowId,
+              focusNode: focusNode,
+              activationTarget: ref.watch(
+                selectedDialogMetaWindowForWindowProvider(windowId),
               ),
-              // The trusted file chooser renders inside the window container,
-              // attached to the window that asked for it (native-dialog like).
-              if (fileChooser != null) FileChooserModal(request: fileChooser),
-            ],
+            ),
           )
         : Focus(
             // No native window yet: an ephemeral launch may never produce one

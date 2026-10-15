@@ -7,16 +7,13 @@ import 'package:shell/application/provider/logs_for_pid.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/capture/provider/recording_workspaces.dart';
 import 'package:shell/capture/provider/screen_cast_indicator.dart';
-import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
-import 'package:shell/file_chooser/widget/file_chooser_dialog.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
-import 'package:shell/window/provider/dialog_set_for_window.dart';
-import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
+import 'package:shell/window/provider/selected_dialog_for_window.dart';
 import 'package:shell/window/widget/window.dart';
-import 'package:shell/window/widget/window_dialogs.dart';
+import 'package:shell/window/widget/window_dialog_area.dart';
 import 'package:shell/window/widget/window_placeholder.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/current_workspace_id.dart';
@@ -76,15 +73,13 @@ class PersistentWindowTileable extends Tileable {
       return null;
     }, [isSelected, window.displayMode]);
 
-    final dialogMetaWindowIds = ref
-        .watch(dialogSetForWindowProvider(windowId))
-        .map(
-          (dialogWindowId) =>
-              ref.read(dialogWindowStateProvider(dialogWindowId)).metaWindowId,
-        )
-        .toList();
     final metaWindowId = window.metaWindowId;
-    final fileChooser = ref.watch(fileChooserForWindowProvider(windowId));
+
+    // With a dialog open, the tile's focus node drives the selected dialog
+    // rather than the window behind it; game mode ignores dialogs entirely.
+    final selectedDialogMetaWindow = window.displayMode == DisplayMode.game
+        ? null
+        : ref.watch(selectedDialogMetaWindowForWindowProvider(windowId));
 
     return ClipRect(
       child: Stack(
@@ -109,48 +104,41 @@ class PersistentWindowTileable extends Tileable {
                   persistentFocusNode.autofocus(primaryFocusNode);
                 }
               },
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: metaWindowId != null
-                    ? WindowWidget(
-                        metaWindowId: metaWindowId,
-                        focusNode: primaryFocusNode,
-                        displayMode: window.displayMode,
-                        dialogMetaWindowList: dialogMetaWindowIds,
-                      )
-                    : dialogMetaWindowIds.isNotEmpty
-                    // A tile whose only windows are popups still renders them,
-                    // over an empty background, instead of hiding them behind
-                    // its placeholder.
-                    ? WindowDialogs(
-                        metaWindowIds: dialogMetaWindowIds,
-                        maxSizeFactor: switch (window.displayMode) {
-                          DisplayMode.maximized ||
-                          DisplayMode.fullscreen => 0.9,
-                          _ => 1,
-                        },
-                      )
-                    : WindowPlaceholder(
-                        isSelected: isSelected,
-                        focusNode: primaryFocusNode,
-                        window: window,
-                        onLaunch: () {
-                          primaryFocusNode.requestFocus();
-                          return ref
-                              .read(
-                                persistentWindowStateProvider(
-                                  windowId,
-                                ).notifier,
-                              )
-                              .launchSelf();
-                        },
-                      ),
+              // The dialog area owns the tile's dialogs and the trusted file
+              // chooser: it presents them as a tabbed panel over a blurred
+              // tile and keeps the selection. Native dialogs stay out of the
+              // area in game mode (the overlay must not be covered).
+              child: WindowDialogArea(
+                parentWindowId: windowId,
+                dialogsEnabled: window.displayMode != DisplayMode.game,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: metaWindowId != null
+                      ? WindowWidget(
+                          metaWindowId: metaWindowId,
+                          focusNode: primaryFocusNode,
+                          displayMode: window.displayMode,
+                          activationTarget: selectedDialogMetaWindow,
+                        )
+                      : WindowPlaceholder(
+                          isSelected: isSelected,
+                          focusNode: primaryFocusNode,
+                          window: window,
+                          onLaunch: () {
+                            primaryFocusNode.requestFocus();
+                            return ref
+                                .read(
+                                  persistentWindowStateProvider(
+                                    windowId,
+                                  ).notifier,
+                                )
+                                .launchSelf();
+                          },
+                        ),
+                ),
               ),
             ),
           ),
-          // The trusted file chooser renders inside the window container,
-          // attached to the window that asked for it (like a native dialog).
-          if (fileChooser != null) FileChooserModal(request: fileChooser),
         ],
       ),
     );

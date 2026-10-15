@@ -1,0 +1,524 @@
+import 'dart:async';
+import 'dart:ui' show ImageFilter;
+
+import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:shell/application/widget/app_icon.dart';
+import 'package:shell/file_chooser/model/file_chooser_request/file_chooser_request.serializable.dart';
+import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
+import 'package:shell/file_chooser/provider/file_chooser_request.dart';
+import 'package:shell/file_chooser/widget/file_chooser_dialog.dart';
+import 'package:shell/l10n/l10n.dart';
+import 'package:shell/meta_window/model/meta_window.serializable.dart';
+import 'package:shell/meta_window/provider/meta_window_state.dart';
+import 'package:shell/platform/model/request/activate_window/activate_window.serializable.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
+import 'package:shell/shared/widget/panel_tab.dart';
+import 'package:shell/shared/widget/square_icon_button.dart';
+import 'package:shell/theme/provider/theme.dart';
+import 'package:shell/window/model/dialog_area_entry.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
+import 'package:shell/window/provider/dialog_set_for_window.dart';
+import 'package:shell/window/provider/dialog_window_state.dart';
+import 'package:shell/window/provider/selected_dialog_for_window.dart';
+import 'package:shell/window/widget/window.dart';
+
+/// Blur applied to the tile behind its open dialog area.
+///
+/// Mirrors the overview's recipe (`OverviewBlurTarget`): an `ImageFiltered`
+/// wraps the layer to blur — a sibling overlay cannot apply it — and the panel
+/// itself draws sharp above it.
+const dialogAreaBlurSigma = 16.0;
+
+/// The dialog area of a tile: the native dialogs attached to [parentWindowId]
+/// (plus the trusted file chooser) presented as a tabbed panel over the tile,
+/// whose content is blurred while the area is open.
+///
+/// Tiled instead of floated: only the selected entry is shown, filling the
+/// panel's body, and the entries are navigated through the tab bar. The
+/// selection lives in `selectedDialogForWindowProvider` so it survives the
+/// panel remounting and is independent per tile.
+class WindowDialogArea extends HookConsumerWidget {
+  const WindowDialogArea({
+    required this.parentWindowId,
+    required this.child,
+    this.dialogsEnabled = true,
+    super.key,
+  });
+
+  /// The tile that owns the dialogs and the chooser; dialogs are matched to it
+  /// and the selection is kept per tile.
+  final WindowId parentWindowId;
+
+  /// The tile's normal content, shown blurred behind the panel.
+  final Widget child;
+
+  /// When false the native dialogs are left out of the area (game mode still
+  /// ignores them); the chooser is unaffected.
+  final bool dialogsEnabled;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dialogIds = ref.watch(dialogSetForWindowProvider(parentWindowId));
+    final chooser = ref.watch(fileChooserForWindowProvider(parentWindowId));
+
+    final entries = <DialogAreaEntry>[
+      if (dialogsEnabled)
+        for (final dialogId in dialogIds) DialogWindowEntry(dialogId),
+      if (chooser != null) const FileChooserEntry(),
+    ];
+
+    // A dialog that just opened, or a chooser that just arrived, takes the
+    // selection: like the old floating stack, the newest window is the active
+    // one. `ref.listen` (not a build-time write) keeps the notifier update
+    // safe. A user's explicit tab pick is overridden by a new dialog, which is
+    // the expected "a dialog just opened" behaviour.
+    final selectionNotifier = ref.read(
+      selectedDialogForWindowProvider(parentWindowId).notifier,
+    );
+    ref
+      ..listen(dialogSetForWindowProvider(parentWindowId), (previous, next) {
+        if (!dialogsEnabled || next.isEmpty) {
+          return;
+        }
+        if (previous == null || next.length > previous.length) {
+          selectionNotifier.select(DialogWindowEntry(next.last));
+        }
+      })
+      ..listen(fileChooserForWindowProvider(parentWindowId), (previous, next) {
+        if (next != null && next.consentToken != previous?.consentToken) {
+          selectionNotifier.select(const FileChooserEntry());
+        }
+      });
+
+    final stored = ref.watch(selectedDialogForWindowProvider(parentWindowId));
+    final selected = _resolveSelection(stored, entries);
+    final isOpen = selected != null;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _DialogAreaBackdrop(
+          blurred: isOpen,
+          // The frosted backdrop is not interactive: clicks belong to the
+          // panel, not to the window behind it.
+          child: IgnorePointer(ignoring: isOpen, child: child),
+        ),
+        if (selected != null)
+          _DialogPanel(
+            entries: entries,
+            selected: selected,
+            chooser: chooser,
+            onSelect: (entry) {
+              selectionNotifier.select(entry);
+              _activateEntry(ref, entry);
+            },
+          ),
+      ],
+    );
+  }
+
+  /// The stored selection when it still exists, otherwise the newest entry.
+  static DialogAreaEntry? _resolveSelection(
+    DialogAreaEntry? stored,
+    List<DialogAreaEntry> entries,
+  ) {
+    if (entries.isEmpty) {
+      return null;
+    }
+    if (stored != null) {
+      for (final entry in entries) {
+        if (entry.id == stored.id) {
+          return entry;
+        }
+      }
+    }
+    return entries.last;
+  }
+
+  /// Hands the keyboard to the newly selected entry. A dialog is activated on
+  /// the compositor, like a click into its surface would; the chooser drives
+  /// its own focus, and a re-click of the current tab must still re-activate.
+  void _activateEntry(WidgetRef ref, DialogAreaEntry entry) {
+    if (entry is! DialogWindowEntry) {
+      return;
+    }
+    final metaWindowId = _readDialogMetaWindowId(ref, entry.dialogWindowId);
+    if (metaWindowId == null) {
+      return;
+    }
+    final metaWindow = _readMetaWindow(ref, metaWindowId);
+    if (metaWindow == null) {
+      return;
+    }
+    unawaited(
+      ref
+          .read(platformManagerProvider.notifier)
+          .request(
+            ActivateWindowRequest(
+              message: ActivateWindowMessage(
+                surfaceId: metaWindow.surfaceId,
+                activate: true,
+              ),
+            ),
+          ),
+    );
+  }
+}
+
+/// The blurred tile layer. Animates the blur in while the area is open, using
+/// the overview's curve, and leaves the tile untouched when it is not.
+class _DialogAreaBackdrop extends HookWidget {
+  const _DialogAreaBackdrop({required this.blurred, required this.child});
+
+  final bool blurred;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final animationController = useAnimationController(
+      duration: const Duration(milliseconds: 200),
+    );
+
+    useEffect(() {
+      if (blurred) {
+        animationController.forward();
+      } else {
+        animationController.reverse();
+      }
+      return null;
+    }, [blurred]);
+
+    final blurAnimation = useMemoized(
+      () => Tween<double>(begin: 0, end: dialogAreaBlurSigma).animate(
+        CurvedAnimation(
+          parent: animationController,
+          curve: const Interval(0, 0.6, curve: Curves.easeInOut),
+        ),
+      ),
+      [animationController],
+    );
+
+    return AnimatedBuilder(
+      animation: animationController,
+      builder: (context, child) => ImageFiltered(
+        enabled: blurAnimation.value > 0.01,
+        imageFilter: ImageFilter.blur(
+          sigmaX: blurAnimation.value,
+          sigmaY: blurAnimation.value,
+        ),
+        child: child,
+      ),
+      child: child,
+    );
+  }
+}
+
+/// The panel itself: a tab bar and the selected entry, with the actions for
+/// that entry floating on the right.
+class _DialogPanel extends StatelessWidget {
+  const _DialogPanel({
+    required this.entries,
+    required this.selected,
+    required this.chooser,
+    required this.onSelect,
+  });
+
+  final List<DialogAreaEntry> entries;
+  final DialogAreaEntry selected;
+  final FileChooserRequestMessage? chooser;
+  final ValueChanged<DialogAreaEntry> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      // A margin through which the blurred window stays visible: the panel is
+      // a portion of the tile, like the overview's content pane.
+      padding: const EdgeInsets.all(24),
+      child: Material(
+        color: theme.colorScheme.surface.withAlpha(200),
+        borderRadius: BorderRadius.circular(surfaceRadius),
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              // The chrome is click-only: keeping it out of the focus order
+              // leaves the tile's own focus node in charge, so selecting a tab
+              // does not deactivate the dialog it selects. The body is left
+              // focusable for the chooser's own autofocus.
+              ExcludeFocus(
+                child: _DialogTabBar(
+                  entries: entries,
+                  selected: selected,
+                  chooser: chooser,
+                  onSelect: onSelect,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Positioned.fill(
+                      child: _DialogBody(selected: selected, chooser: chooser),
+                    ),
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      bottom: 0,
+                      child: ExcludeFocus(
+                        child: _DialogActionStrip(
+                          entry: selected,
+                          chooser: chooser,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The row of dialog tabs, mirroring the overview content panel: horizontally
+/// scrollable pills, only the selected one tinted.
+class _DialogTabBar extends StatelessWidget {
+  const _DialogTabBar({
+    required this.entries,
+    required this.selected,
+    required this.chooser,
+    required this.onSelect,
+  });
+
+  final List<DialogAreaEntry> entries;
+  final DialogAreaEntry selected;
+  final FileChooserRequestMessage? chooser;
+  final ValueChanged<DialogAreaEntry> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final (index, entry) in entries.indexed) ...[
+              if (index > 0) const SizedBox(width: 8),
+              _DialogTab(
+                entry: entry,
+                chooser: chooser,
+                isSelected: entry.id == selected.id,
+                onTap: () => onSelect(entry),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DialogTab extends ConsumerWidget {
+  const _DialogTab({
+    required this.entry,
+    required this.chooser,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final DialogAreaEntry entry;
+  final FileChooserRequestMessage? chooser;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return switch (entry) {
+      DialogWindowEntry(:final dialogWindowId) => _dialogTab(
+        context,
+        ref,
+        dialogWindowId,
+      ),
+      FileChooserEntry() => _chooserTab(context),
+    };
+  }
+
+  Widget _dialogTab(
+    BuildContext context,
+    WidgetRef ref,
+    DialogWindowId dialogWindowId,
+  ) {
+    final dialog = ref.watch(dialogWindowStateProvider(dialogWindowId));
+    return PanelTab(
+      icon: Padding(
+        padding: const EdgeInsets.all(4),
+        child: AppIconById(id: dialog.properties.appId),
+      ),
+      label: dialog.properties.title ?? context.l10n.unknown,
+      isSelected: isSelected,
+      onTap: onTap,
+    );
+  }
+
+  Widget _chooserTab(BuildContext context) {
+    final chooser = this.chooser;
+    return PanelTab(
+      icon: const Padding(
+        padding: EdgeInsets.all(4),
+        child: Icon(MdiIcons.folderOpen),
+      ),
+      label: chooser != null && chooser.title.isNotEmpty
+          ? chooser.title
+          : context.l10n.openFile,
+      isSelected: isSelected,
+      onTap: onTap,
+    );
+  }
+}
+
+/// The selected entry's body: the dialog's surface filling the region, or the
+/// trusted chooser.
+class _DialogBody extends StatelessWidget {
+  const _DialogBody({required this.selected, required this.chooser});
+
+  final DialogAreaEntry selected;
+  final FileChooserRequestMessage? chooser;
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (selected) {
+      DialogWindowEntry(:final dialogWindowId) => _DialogWindowBody(
+        key: ValueKey(dialogWindowId.uuid),
+        dialogWindowId: dialogWindowId,
+      ),
+      FileChooserEntry() =>
+        chooser == null
+            ? const SizedBox.shrink()
+            : Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  // Keying by the request resets the browse state when a new
+                  // request replaces the current one.
+                  child: FileChooserDialog(
+                    key: ValueKey(chooser!.consentToken),
+                    request: chooser!,
+                  ),
+                ),
+              ),
+    };
+  }
+}
+
+/// Renders a dialog's native surface filled into the region, reusing the
+/// maximized tile path (undecorated, geometry re-asserted to the bounds).
+class _DialogWindowBody extends HookConsumerWidget {
+  const _DialogWindowBody({required this.dialogWindowId, super.key});
+
+  final DialogWindowId dialogWindowId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dialog = ref.watch(dialogWindowStateProvider(dialogWindowId));
+
+    // The dialog's surface must not hold the Flutter focus: the tile's single
+    // focus node drives activation (see `WindowWidget.activationTarget`), and
+    // two nodes fighting over it would activate one window and deactivate the
+    // other. The node only exists because `MetaSurfaceWidget` expects one, and
+    // keeping it non-focusable means the tile's node always wins.
+    final focusNode = useFocusNode(debugLabel: 'DialogSurface $dialogWindowId')
+      ..canRequestFocus = false;
+
+    return WindowWidget(
+      metaWindowId: dialog.metaWindowId,
+      focusNode: focusNode,
+    );
+  }
+}
+
+/// The actions dedicated to the selected entry, floating over the right edge
+/// of the body: extract and close for a dialog, close (cancel) for the
+/// chooser.
+class _DialogActionStrip extends ConsumerWidget {
+  const _DialogActionStrip({required this.entry, required this.chooser});
+
+  final DialogAreaEntry entry;
+  final FileChooserRequestMessage? chooser;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: switch (entry) {
+        FileChooserEntry() => [
+          SquareIconButton(
+            tooltip: context.l10n.close,
+            icon: const Icon(MdiIcons.close),
+            onSelected: () =>
+                ref.read(fileChooserRequestProvider.notifier).cancel(),
+          ),
+        ],
+        DialogWindowEntry(:final dialogWindowId) => _dialogActions(
+          context,
+          ref,
+          dialogWindowId,
+        ),
+      },
+    );
+  }
+
+  List<Widget> _dialogActions(
+    BuildContext context,
+    WidgetRef ref,
+    DialogWindowId dialogWindowId,
+  ) {
+    final dialog = ref.watch(dialogWindowStateProvider(dialogWindowId));
+    return [
+      SquareIconButton(
+        tooltip: context.l10n.extractToNewTile,
+        icon: const Icon(MdiIcons.openInNew),
+        onSelected: () => unawaited(
+          ref
+              .read(dialogWindowStateProvider(dialogWindowId).notifier)
+              .extractToTile(),
+        ),
+      ),
+      const SizedBox(height: 12),
+      SquareIconButton(
+        tooltip: context.l10n.close,
+        icon: const Icon(MdiIcons.close),
+        onSelected: () => ref
+            .read(metaWindowStateProvider(dialog.metaWindowId).notifier)
+            .requestToClose(),
+      ),
+    ];
+  }
+}
+
+/// A dialog's meta window id, or `null` when the dialog is no longer tracked.
+MetaWindowId? _readDialogMetaWindowId(WidgetRef ref, DialogWindowId windowId) {
+  try {
+    return ref.read(dialogWindowStateProvider(windowId)).metaWindowId;
+  } on Object {
+    return null;
+  }
+}
+
+/// Reads a meta window, or `null` when it is gone.
+MetaWindow? _readMetaWindow(WidgetRef ref, MetaWindowId metaWindowId) {
+  try {
+    return ref.read(metaWindowStateProvider(metaWindowId));
+  } on Object {
+    return null;
+  }
+}
