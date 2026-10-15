@@ -15,6 +15,7 @@ import 'package:shell/overview/widget/search/search_input.dart';
 import 'package:shell/overview/widget/search/settings/settings_search_result.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/shared/util/logger.dart';
+import 'package:shell/shared/widget/frosted_surface.dart';
 import 'package:shell/shared/widget/square_icon_button.dart';
 import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 
@@ -165,95 +166,97 @@ class SearchEngine extends HookConsumerWidget {
             },
           ),
         },
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(38),
-            color: Theme.of(context).colorScheme.surface.withAlpha(200),
-          ),
-          child: Column(
-            children: [
-              SearchInput(
-                searchController: searchController,
-                searchFocusNode: searchFocusNode,
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: Row(
-                  children: [
-                    // The mode switcher is clicked or reached with `Super+Tab`,
-                    // never by directional focus: keeping it out of the focus
-                    // order lets `down` from the search field land on the first
-                    // result instead of a mode button.
-                    ExcludeFocus(
-                      child: Column(
-                        children: [
-                          SquareIconButton(
-                            icon: const Icon(MdiIcons.playBox),
-                            onSelected: () => overviewNotifier.setSearchMode(
-                              SearchMode.application,
-                            ),
-                            isSelected: searchMode == SearchMode.application,
-                          ),
-                          const SizedBox(height: 16),
-                          SquareIconButton(
-                            icon: const Icon(MdiIcons.file),
-                            onSelected: () =>
-                                overviewNotifier.setSearchMode(SearchMode.file),
-                            isSelected: searchMode == SearchMode.file,
-                          ),
-                          const SizedBox(height: 16),
-                          SquareIconButton(
-                            icon: const Icon(MdiIcons.cog),
-                            onSelected: () => overviewNotifier.setSearchMode(
-                              SearchMode.settings,
-                            ),
-                            isSelected: searchMode == SearchMode.settings,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Card(
-                        clipBehavior: Clip.antiAlias,
-                        child: switch (searchMode) {
-                          SearchMode.application => ApplicationSearchResult(
-                            searchText: searchText,
-                            selectedIndex: selectedIndex,
-                            resultFocus: resultFocus,
-                            onSelect: overviewNotifier.selectIndex,
-                            onActivate: (index) =>
-                                activateOverviewApplicationAt(
-                                  ref,
-                                  screenId,
-                                  index,
-                                ),
-                          ),
-                          SearchMode.file => FileExplorerView(
-                            searchText: searchText,
-                            selectedIndex: selectedIndex,
-                            resultFocus: resultFocus,
-                            onSelect: overviewNotifier.selectIndex,
-                            onActivate: (index) => unawaited(
-                              activateFileIndex(ref, screenId, index),
-                            ),
-                            onOpenDirectory: (path) =>
-                                openOverviewBreadcrumb(ref, screenId, path),
-                            onOpenParent: () =>
-                                goToOverviewParent(ref, screenId),
-                          ),
-                          SearchMode.settings => SettingsSearchResult(
-                            searchText: searchText,
-                            selectedIndex: selectedIndex,
-                          ),
-                        },
-                      ),
-                    ),
-                  ],
+        child: FrostedSurface(
+          borderRadius: BorderRadius.circular(38),
+          tint: Theme.of(context).colorScheme.surface.withAlpha(200),
+          noise: true,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                SearchInput(
+                  searchController: searchController,
+                  searchFocusNode: searchFocusNode,
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+                Expanded(
+                  child: Row(
+                    children: [
+                      // The mode switcher is clicked or reached with
+                      // `Super+Tab`, never by directional focus: keeping it out
+                      // of the focus order lets `down` from the search field
+                      // land on the first result instead of a mode button.
+                      ExcludeFocus(
+                        child: Column(
+                          children: [
+                            SquareIconButton(
+                              icon: const Icon(MdiIcons.playBox),
+                              onSelected: () => overviewNotifier.setSearchMode(
+                                SearchMode.application,
+                              ),
+                              isSelected: searchMode == SearchMode.application,
+                            ),
+                            const SizedBox(height: 16),
+                            SquareIconButton(
+                              icon: const Icon(MdiIcons.file),
+                              onSelected: () => overviewNotifier.setSearchMode(
+                                SearchMode.file,
+                              ),
+                              isSelected: searchMode == SearchMode.file,
+                            ),
+                            const SizedBox(height: 16),
+                            SquareIconButton(
+                              icon: const Icon(MdiIcons.cog),
+                              onSelected: () => overviewNotifier.setSearchMode(
+                                SearchMode.settings,
+                              ),
+                              isSelected: searchMode == SearchMode.settings,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Card(
+                          clipBehavior: Clip.antiAlias,
+                          child: switch (searchMode) {
+                            SearchMode.application => ApplicationSearchResult(
+                              searchText: searchText,
+                              selectedIndex: selectedIndex,
+                              resultFocus: resultFocus,
+                              onSelect: overviewNotifier.selectIndex,
+                              onActivate: (index) =>
+                                  activateOverviewApplicationAt(
+                                    ref,
+                                    screenId,
+                                    index,
+                                  ),
+                            ),
+                            SearchMode.file => FileExplorerView(
+                              searchText: searchText,
+                              selectedIndex: selectedIndex,
+                              resultFocus: resultFocus,
+                              onSelect: overviewNotifier.selectIndex,
+                              onActivate: (index) => unawaited(
+                                activateFileIndex(ref, screenId, index),
+                              ),
+                              onOpenDirectory: (path) =>
+                                  openOverviewBreadcrumb(ref, screenId, path),
+                              onOpenParent: () =>
+                                  goToOverviewParent(ref, screenId),
+                            ),
+                            SearchMode.settings => SettingsSearchResult(
+                              searchText: searchText,
+                              selectedIndex: selectedIndex,
+                            ),
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -15,6 +14,7 @@ import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/platform/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
+import 'package:shell/shared/widget/frosted_surface.dart';
 import 'package:shell/shared/widget/panel_tab.dart';
 import 'package:shell/window/model/dialog_area_entry.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
@@ -174,8 +174,9 @@ class WindowDialogArea extends HookConsumerWidget {
   }
 }
 
-/// The blurred tile layer. Animates the blur in while the area is open, using
-/// the overview's curve, and leaves the tile untouched when it is not.
+/// The frosted tile layer. Animates the blur, vibrancy and dimming veil in
+/// while the area is open, using the overview's curve, and leaves the tile
+/// untouched when it is not.
 class _DialogAreaBackdrop extends HookWidget {
   const _DialogAreaBackdrop({required this.blurred, required this.child});
 
@@ -209,21 +210,28 @@ class _DialogAreaBackdrop extends HookWidget {
 
     return AnimatedBuilder(
       animation: animationController,
-      builder: (context, child) => ImageFiltered(
-        enabled: blurAnimation.value > 0.01,
-        imageFilter: ImageFilter.blur(
-          sigmaX: blurAnimation.value,
-          sigmaY: blurAnimation.value,
-        ),
-        child: child,
-      ),
+      builder: (context, child) {
+        final progress = blurAnimation.value / dialogAreaBlurSigma;
+        return FrostedSurface(
+          blurSigma: blurAnimation.value,
+          // Blur alone reads as "out of focus"; lifting the vibrancy and
+          // veiling the window with a little black is what makes it glass and
+          // keeps the dialog reading as the foreground.
+          saturation: 1 + 0.25 * progress,
+          tint: Colors.black.withAlpha((70 * progress).round()),
+          tintOverContent: true,
+          // The tile is not a card: no frame and no sheen at its edges.
+          borderColor: Colors.transparent,
+          highlight: false,
+          child: child,
+        );
+      },
       child: child,
     );
   }
 }
 
-/// The panel itself: a tab bar and the selected entry, with the actions for
-/// that entry floating on the right.
+/// The panel itself: a tab bar and the selected entry.
 class _DialogPanel extends StatelessWidget {
   const _DialogPanel({
     required this.entries,
