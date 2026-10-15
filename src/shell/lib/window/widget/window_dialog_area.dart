@@ -227,10 +227,12 @@ class _DialogAreaBackdrop extends HookWidget {
                       ).withAlpha((frostedWashAlpha * progress).round())
                     : null,
                 tintOverContent: true,
-                // The tile is not a card: no frame, no sheen, no grain over the
-                // window itself.
+                // The tile is not a card: no frame and no sheen at its edges.
+                // The grain matches the overview; it only paints while a dialog
+                // is open, since the wash is `null` when closed.
                 frame: false,
                 highlight: false,
+                noise: true,
                 child: child,
               ),
             );
