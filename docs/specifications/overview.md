@@ -14,8 +14,9 @@ displayed content and `Overview.selectedContent` resolves it (falling back to
 the Helm when stale). Opening the overview keeps the current selection and
 `show(windowId)` opens it to a specific window (used when bringing a window into
 view). Each tab shows its icon and a label — `Helm`, the window's application
-name, or the file name. The content cross-fades when the selection changes, and
-only the selected button is tinted — unselected buttons use a low surface.
+name, or the file name. Selecting a window's tab displays it and hands it the
+keyboard. The content cross-fades when the selection changes, and only the
+selected button is tinted — unselected buttons use a low surface.
 
 Selecting a file in the Files mode opens or reuses a **preview tab** and
 displays it:
@@ -74,11 +75,12 @@ selection is what assistive technology follows.
 
 A displayed ephemeral window owns the keyboard: launching an application hands
 focus to its surface as soon as it is mapped (the launch placeholder holds it
-until then). The surface's `SurfaceFocus` lets `Enter`, `Space`, `Escape`, `Tab`
-and the direction keys fall through to the client, so they act in the
-application instead of the overview — without that hand-off the search pane
-keeps the Flutter focus and `Enter` would launch another instance. Use the
-`Super` chords to move the keyboard back to the search pane to keep launching.
+until then), and clicking the window or selecting its panel tab hands it back.
+The surface's `SurfaceFocus` lets `Enter`, `Space`, `Escape`, `Tab` and the
+direction keys fall through to the client, so they act in the application
+instead of the overview — without the hand-off the search pane keeps the Flutter
+focus and `Enter` would launch another instance. Use the `Super` chords to move
+the keyboard back to the search pane to keep launching.
 
 The navigation applies to all three modes: `Super+W`/`Super+S` move through the
 mode's results and `Enter` activates them — a file opens with its handler, an
