@@ -16,6 +16,7 @@ import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/platform/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/widget/panel_tab.dart';
+import 'package:shell/theme/provider/theme.dart';
 import 'package:shell/window/model/dialog_area_entry.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
@@ -513,7 +514,14 @@ class _DialogWindowBody extends HookConsumerWidget {
         return SizedBox(
           width: width.floorToDouble(),
           height: height.floorToDouble(),
-          child: window,
+          // The panel used to clip its body when it still drew a Material;
+          // round the surface itself now so the dialog keeps the shell's
+          // corner radius over the frosted tile. `ClipRRect` does not change
+          // the size or origin the whole-pixel contract above relies on.
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(surfaceRadius),
+            child: window,
+          ),
         );
       },
     );
