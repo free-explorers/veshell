@@ -10,6 +10,7 @@ import 'package:shell/overview/widget/overview_shortcuts.dart';
 import 'package:shell/overview/widget/search/search_engine.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/shared/widget/clock.dart';
+import 'package:shell/shared/widget/frosted_surface.dart';
 import 'package:shell/theme//provider/theme.dart';
 
 /// Minimum width the search engine is allowed to shrink to.
@@ -21,12 +22,6 @@ const _overviewGap = 16.0;
 /// Flex weights keeping the search engine / overview content split at 2:5.
 const _searchEngineFlex = 2;
 const _overviewContentFlex = 5;
-
-/// Blur applied to the rest of the screen while the overview is open.
-///
-/// Applied to the rest of the screen by `OverviewBlurTarget`; the scrim below
-/// reuses it so the white wash follows the same curve it always did.
-const overviewBlurSigma = 16.0;
 
 /// The overview overlay: search, clock and content panes.
 ///
@@ -44,9 +39,9 @@ class OverviewWidget extends HookConsumerWidget {
       overviewStateProvider(screenId).select((state) => state.isDisplayed),
     );
 
-    final animationController = useAnimationController(
-      duration: const Duration(milliseconds: 200),
-    );
+    // Same duration as `OverviewBlurTarget`, so the wash and the blur it sits
+    // on stay in step.
+    final animationController = useAnimationController(duration: frostDuration);
 
     // Drive the overlay from the current value, not only from changes, so it
     // stays in step with `OverviewBlurTarget` (which uses the same watch
@@ -62,6 +57,14 @@ class OverviewWidget extends HookConsumerWidget {
       }
       return null;
     }, [isDisplayed]);
+
+    // Matching that: a subtree mounted while the overview is displayed comes up
+    // fully present instead of fading in over a screen that is already blurred.
+    final settled = useRef(false);
+    if (!settled.value) {
+      settled.value = true;
+      animationController.value = isDisplayed ? 1 : 0;
+    }
 
     return AnimatedBuilder(
       animation: animationController,
@@ -156,7 +159,7 @@ class OverviewWidget extends HookConsumerWidget {
 ///
 /// This used to be an `AnimatedBlurBackground` wrapping the whole overview in a
 /// `BackdropFilter`; the blur now lives on the rest of the screen
-/// (`OverviewBlurTarget`), so this only tints and fades.
+/// (`OverviewBlurTarget`), so this only frosts (tint + grain) and fades.
 class _OverviewScrim extends HookWidget {
   const _OverviewScrim({
     required this.animationController,
@@ -171,6 +174,13 @@ class _OverviewScrim extends HookWidget {
   Widget build(BuildContext context) {
     // Mirror the old tint curve: it derived the white-wash alpha from the
     // animated blur sigma (0..16), so keep the same 0..16*255/100 ramp.
+    //
+    // The two `Interval`s are a deliberate stagger, not dead time: the wash
+    // comes first on the way in and leaves last on the way out, with the panes
+    // opposite it. Each interval's clamped end sits behind the other layer's
+    // motion, so neither is visible as a hold — unlike the dialog backdrop,
+    // which has nothing else animating over it and therefore runs its frost
+    // ramp unstretched (see `frostDuration`).
     final tintAnimation = useMemoized(
       () => Tween<double>(begin: 0, end: 1).animate(
         CurvedAnimation(
@@ -191,10 +201,16 @@ class _OverviewScrim extends HookWidget {
       [animationController],
     );
 
-    return ColoredBox(
-      color: Colors.white.withAlpha(
-        (255 * (overviewBlurSigma * tintAnimation.value) / 100).round(),
-      ),
+    return FrostedSurface(
+      // The overview background: a bright, theme-hued wash over the blurred
+      // screen. It must absorb the clicks that fall between the panes, or they
+      // reach the desktop behind the overview.
+      tint: frostedGlassTint(
+        Theme.of(context).colorScheme,
+      ).withAlpha((frostedWashAlpha * tintAnimation.value).round()),
+      frame: false,
+      highlight: false,
+      absorbPointers: true,
       child: Opacity(opacity: opacityAnimation.value, child: child),
     );
   }

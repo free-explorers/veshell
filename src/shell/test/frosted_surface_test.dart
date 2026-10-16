@@ -1,0 +1,144 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:shell/shared/widget/frosted_surface.dart';
+
+void main() {
+  testWidgets('renders its child under the full frosted stack', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 200,
+            height: 100,
+            child: FrostedSurface(
+              blurSigma: 8,
+              saturation: 1.3,
+              tint: Colors.black26,
+              tintOverContent: true,
+              noise: true,
+              child: Text('content'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // The blur, saturation, veil, frame and grain must all build and lay out
+    // without an exception, with the child still on top.
+    expect(find.text('content'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tint behind content leaves it untouched', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: FrostedSurface(
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+              tint: Colors.black26,
+              child: SizedBox(width: 120, height: 60),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('absorbPointers swallows taps the content does not take', (
+    tester,
+  ) async {
+    var behind = 0;
+    Widget build({required bool absorb}) => MaterialApp(
+      home: Stack(
+        children: [
+          // A full-bleed target painted behind the frost.
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => behind++,
+            child: const SizedBox.expand(),
+          ),
+          FrostedSurface(
+            tint: Colors.black26,
+            absorbPointers: absorb,
+            child: const Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(width: 40, height: 40),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(build(absorb: true));
+    await tester.tapAt(const Offset(300, 300));
+    expect(behind, 0, reason: 'the backdrop absorbs the click');
+
+    behind = 0;
+    await tester.pumpWidget(build(absorb: false));
+    await tester.tapAt(const Offset(300, 300));
+    expect(behind, 1, reason: 'without absorption the click falls through');
+  });
+
+  test('frost sigma scales with the region and clamps', () {
+    expect(frostSigmaFor(const Size(400, 400)), 8.0);
+    expect(frostSigmaFor(const Size(800, 800)), 16.0);
+    expect(frostSigmaFor(const Size(2000, 2000)), 28.0);
+  });
+
+  testWidgets('the grain follows noiseOpacity instead of popping', (
+    tester,
+  ) async {
+    Future<void> pump(double noiseOpacity) => tester.pumpWidget(
+      MaterialApp(
+        home: FrostedSurface(
+          blurSigma: 12,
+          tint: Colors.black26,
+          tintOverContent: true,
+          noise: true,
+          noiseOpacity: noiseOpacity,
+          child: const SizedBox(width: 40, height: 40),
+        ),
+      ),
+    );
+    Finder inFrost(Type type) => find.descendant(
+      of: find.byType(FrostedSurface),
+      matching: find.byType(type),
+    );
+
+    // Faded out: no grain at all.
+    await pump(0);
+    expect(inFrost(CustomPaint), findsNothing);
+
+    // Mid-ramp: the grain rides an `Opacity` layer, so it fades with the wash
+    // rather than switching on the instant the blur crosses its floor.
+    await pump(0.5);
+    expect(inFrost(CustomPaint), findsOneWidget);
+    expect(inFrost(Opacity), findsOneWidget);
+
+    // Settled: painted directly, without the extra layer.
+    await pump(1);
+    expect(inFrost(CustomPaint), findsOneWidget);
+    expect(inFrost(Opacity), findsNothing);
+  });
+
+  test('the wash lifts a dark scheme and settles a light one', () {
+    final dark = ColorScheme.fromSeed(
+      seedColor: Colors.red,
+      brightness: Brightness.dark,
+    );
+    final light = ColorScheme.fromSeed(
+      seedColor: Colors.red,
+      brightness: Brightness.light,
+    );
+
+    expect(
+      frostedGlassTint(dark).computeLuminance(),
+      greaterThan(frostedGlassTint(light).computeLuminance()),
+    );
+  });
+}

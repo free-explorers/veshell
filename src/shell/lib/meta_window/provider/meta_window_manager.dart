@@ -226,6 +226,22 @@ class MetaWindowManager extends _$MetaWindowManager {
         );
         return;
       }
+      // A settled relation onto a tile that owns no window is not a dialog:
+      // there is no displayed surface for it to belong to, so the window is the
+      // application's own window coming back to its now-empty tile. Sweet Home
+      // 3D maps a transient "win0" window that the launch burst settles on,
+      // closes it, then opens the real window; turning that into a dialog would
+      // bury the app's main window in its own tile's dialog area. A fixed-size
+      // splash stays a dialog (see `relationAttachesToOwnerAsWindow`).
+      if (engine.relationAttachesToOwnerAsWindow(id, rootOwner)) {
+        _recordRouting(
+          metaWindow,
+          branch: 'relationEmptyOwner',
+          owner: rootOwner,
+        );
+        engine.attachMetaWindowTo(rootOwner, id);
+        return;
+      }
       _recordRouting(metaWindow, branch: 'relation', owner: rootOwner);
       _createDialog(id, rootOwner);
       return;

@@ -1,14 +1,8 @@
-import 'dart:async';
-
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/provider/meta_window_dragging_state.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
-import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
-import 'package:shell/window/model/window_id.serializable.dart';
-import 'package:shell/window/provider/dialog_window_state.dart';
 
 class MetaSurfaceDecoration extends HookConsumerWidget {
   const MetaSurfaceDecoration({
@@ -41,12 +35,7 @@ class MetaSurfaceDecoration extends HookConsumerWidget {
     }
     return Container(
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 10, spreadRadius: 5),
-        ],
-      ),
+      decoration: windowFrameDecoration,
       width: metaWindow.geometry?.width ?? surfaceSize.width,
       height: height,
       child: Column(
@@ -55,6 +44,42 @@ class MetaSurfaceDecoration extends HookConsumerWidget {
           Flexible(child: child),
         ],
       ),
+    );
+  }
+}
+
+/// The shell's window frame: a rounded, clipped box with a drop shadow.
+///
+/// Shared by [MetaSurfaceDecoration] (server-side decoration, title bar
+/// included) and [ServerSideFrame] (the bare frame around a floating dialog)
+/// so every shell-drawn window edge reads the same.
+const windowFrameDecoration = BoxDecoration(
+  borderRadius: BorderRadius.all(Radius.circular(10)),
+  boxShadow: [
+    BoxShadow(color: Colors.black26, blurRadius: 10, spreadRadius: 5),
+  ],
+);
+
+/// A bare shell frame for a floating dialog: rounded corners and a drop shadow,
+/// without the title bar [MetaSurfaceDecoration] adds for a client that asked
+/// for server-side decoration.
+///
+/// A modal or fixed-size dialog floats over the dimmed tile (`WindowDialogs`),
+/// and a client that draws no decoration of its own would otherwise read as a
+/// flat rectangle pasted on the dim. It is only drawn around a bare surface: a
+/// client that carries its own decoration in its surface buffer keeps it (see
+/// `FloatableWindow.frame`).
+class ServerSideFrame extends StatelessWidget {
+  const ServerSideFrame({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: windowFrameDecoration,
+      child: child,
     );
   }
 }
@@ -69,12 +94,6 @@ class WindowTitleBar extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final metaWindow = ref.watch(metaWindowStateProvider(metaWindowId));
-    final ownerWindowId = ref.watch(
-      metaWindowWindowMapProvider.select((value) => value[metaWindowId]),
-    );
-    final ownerDialogWindowId = ownerWindowId is DialogWindowId
-        ? ownerWindowId
-        : null;
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onPanStart: (details) {
@@ -95,26 +114,6 @@ class WindowTitleBar extends HookConsumerWidget {
                 style: const TextStyle(color: Colors.white),
               ),
               const Spacer(),
-              if (ownerDialogWindowId != null)
-                IconButton(
-                  tooltip: context.l10n.extractToNewTile,
-                  onPressed: () {
-                    unawaited(
-                      ref
-                          .read(
-                            dialogWindowStateProvider(
-                              ownerDialogWindowId,
-                            ).notifier,
-                          )
-                          .extractToTile(),
-                    );
-                  },
-                  icon: Icon(
-                    Icons.open_in_new,
-                    color: Theme.of(context).colorScheme.onSurface,
-                    size: 16,
-                  ),
-                ),
               InkWell(
                 onTap: () {
                   ref

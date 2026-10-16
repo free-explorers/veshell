@@ -298,21 +298,43 @@ a window is instead [extracted to a tile](#extract-to-tile). The client-declared
 still a dialog, and a late activation hint never pulls a fullscreen-like window
 back into its opener's tile.
 
-A tile renders its dialogs whether or not it currently has a main window
-(`WindowDialogs`, shared with `WindowWidget`): when the only windows an
-application opened so far are dialog-like (for example an updater or a splash
-that reports a fixed size before the real window appears) they are shown as
-floating surfaces over the empty tile, rather than hidden behind its
-placeholder. On a maximized or fullscreen tile the dialogs are capped at 90%
-of the tile's biggest size: a dialog bigger than the cap and resizable is
-configured down to it, while a fixed-size one is scaled down uniformly. A
-dialog already smaller than the cap is left alone, so a manual resize survives.
-Either way a margin is left through which the window behind stays visible.
+A tile renders its dialogs through a **dialog area** (`WindowDialogArea`) that
+wraps the tile's content, whether or not it has a main window: when the only
+windows an application opened so far are dialog-like (for example an updater or
+a splash that reports a fixed size before the real window appears) they are
+shown over the tile rather than hidden behind its placeholder.
+
+Most dialogs are tiled, not floated: a tab bar lists them (in creation order)
+plus the trusted file chooser, and the selected entry fills a panel that
+overlays the tile. The tile behind the panel is blurred (`ImageFiltered`, the
+overview's recipe) and stops receiving pointer events; the panel is a portion of
+the tile, leaving a margin through which the blurred window stays visible.
+Actions for the selected entry — **extract** and **close** for a dialog,
+**cancel** for the chooser — float on the right of the panel, so a
+client-side-decorated dialog has an extract affordance even though it draws no
+shell titlebar.
+
+A **modal or fixed-size** dialog is the exception: it keeps the tile's previous
+floating presentation — a dim scrim over the tile with the dialog drawn at its
+natural size — because stretching a fixed-size surface to fill the panel
+distorts it, and neither kind is ever a candidate for extraction, so the tabbed
+area adds nothing. Such a dialog is not a tab; it floats above the panel, with a
+shell frame (rounded corners and a drop shadow) when the client brings no
+decoration of its own.
+
+The selection is kept per tile (`SelectedDialogForWindow`); a dialog that just
+opened, or a chooser that just arrived, takes the selection, and a vanished
+selection falls back to the newest remaining entry. The tile's single focus
+node drives activation of the selected dialog
+(`WindowWidget.activationTarget`), so switching to the tile sends the keyboard
+to the dialog, not to the window behind it; a floating modal or fixed-size
+dialog, being on top, keeps the keyboard over a selected tab. Game mode keeps
+ignoring dialogs; the chooser still shows.
 
 ### Extract to tile
 
 A native window can leave its owner tile and become (or join) a tile. This is
-the path behind the dialog titlebar's **Extract to new tile** button and behind
+the path behind the dialog area's **Extract to new tile** action and behind
 the automatic fullscreen-like exception in [Dialog routing](#dialog-routing).
 
 Extraction matches the window against the **empty** persistent placeholders of

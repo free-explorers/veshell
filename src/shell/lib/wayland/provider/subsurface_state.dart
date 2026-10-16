@@ -66,6 +66,14 @@ class SubsurfaceState extends _$SubsurfaceState {
 
   void commit({required Offset position}) {
     state = state.copyWith(committed: true, position: position);
+    // `committed` is half of the mapping predicate, so a commit can flip
+    // `mapped` with no texture change at all. That is exactly what happens
+    // when a surface is re-bound as the subsurface of a new parent while
+    // still showing the same buffer: Firefox reuses its menu panel surface
+    // for every xdg_popup, so the reopen commits the identical texture and
+    // the texture listener never fires. Recompute here or the reopened popup
+    // stays unmapped and renders blank.
+    _checkIfMapped();
   }
 
   void dispose() {

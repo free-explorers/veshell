@@ -22,6 +22,7 @@ class FloatableWindow extends HookConsumerWidget {
   const FloatableWindow({
     required this.metaWindowId,
     this.maxSizeFactor = 1,
+    this.frame = false,
     super.key,
   });
   final MetaWindowId metaWindowId;
@@ -30,6 +31,17 @@ class FloatableWindow extends HookConsumerWidget {
   /// dialog from filling a maximized tile entirely and hiding the window
   /// behind it.
   final double maxSizeFactor;
+
+  /// Draws a shell frame (rounded corners + drop shadow) around the surface,
+  /// but only when the surface draws no decoration of its own.
+  ///
+  /// Set for the modal and fixed-size dialogs of a tile's floating stack so a
+  /// bare one reads as a card over the dimmed tile; the floating main window
+  /// keeps its bare surface. The frame is skipped for a client that asked for
+  /// server-side decoration ([MetaSurfaceDecoration] already draws one) and for
+  /// one that decorates itself (its decoration lives in the surface buffer,
+  /// outside the window geometry, and must not be cropped).
+  final bool frame;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -81,6 +93,33 @@ class FloatableWindow extends HookConsumerWidget {
       ),
       [maxBoxSize, decorationHeight],
     );
+
+    // The surface's own size (its buffer, CSD margins included), in logical
+    // pixels: `geometry` is logical, the texture size is not.
+    final logicalSurfaceSize = useMemoized(() {
+      final size = surfaceSize;
+      if (size == null) {
+        return null;
+      }
+      final ratio = metaWindow.scaleRatio;
+      return Size(size.width / ratio, size.height / ratio);
+    }, [surfaceSize, metaWindow.scaleRatio]);
+
+    // Whether the client decorates itself: a client-side-decorated surface
+    // draws its shadow and rounded corners *outside* the window geometry, so
+    // its buffer is bigger than the geometry it reported. Such a surface must
+    // be drawn as-is — clipping it to the geometry slices that decoration off,
+    // and a shell frame over it would double the shadow.
+    final hasClientDecoration = useMemoized(() {
+      final geometry = metaWindow.geometry;
+      final surface = logicalSurfaceSize;
+      if (geometry == null || surface == null) {
+        return false;
+      }
+      const tolerance = 1.0;
+      return surface.width > geometry.width + tolerance ||
+          surface.height > geometry.height + tolerance;
+    }, [metaWindow.geometry, logicalSurfaceSize]);
 
     // The size the window wants on its own, decoration included.
     final naturalBoxSize = useMemoized(() {
@@ -465,12 +504,22 @@ class FloatableWindow extends HookConsumerWidget {
       ],
     );
 
+    final surface = MetaSurfaceWidget(
+      metaWindowId: metaWindowId,
+      decorated: metaWindow.needDecoration,
+    );
+
     final window = WithResizeHandles(
       metaWindowId: metaWindowId,
-      child: MetaSurfaceWidget(
-        metaWindowId: metaWindowId,
-        decorated: metaWindow.needDecoration,
-      ),
+      // A floating dialog that draws no decoration of its own gets a bare frame
+      // so it reads as a card over the dimmed tile. A client that asked for
+      // server-side decoration already carries `MetaSurfaceDecoration` (title
+      // bar included), and one that draws its own decoration carries it in its
+      // surface buffer: framing either would only double the shadow, and
+      // clipping the latter would crop the decoration off.
+      child: frame && !metaWindow.needDecoration && !hasClientDecoration
+          ? ServerSideFrame(child: surface)
+          : surface,
     );
 
     // A fixed-size dialog cannot be resized through a configure. When it is

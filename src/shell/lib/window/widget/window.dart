@@ -13,28 +13,33 @@ import 'package:shell/shared/widget/container_with_positionnable_children/contai
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/widget/floatable_window.dart';
-import 'package:shell/window/widget/window_dialogs.dart';
 
 class WindowWidget extends HookConsumerWidget {
   const WindowWidget({
     required this.metaWindowId,
     required this.focusNode,
     this.displayMode = DisplayMode.maximized,
-    this.dialogMetaWindowList = const [],
+    this.activationTarget,
     super.key,
   });
 
   final MetaWindowId metaWindowId;
   final DisplayMode displayMode;
-  final List<MetaWindowId> dialogMetaWindowList;
   final FocusNode focusNode;
+
+  /// The window this widget activates when [focusNode] holds the keyboard,
+  /// instead of [metaWindowId] itself.
+  ///
+  /// A tile backed by a dialog area passes the selected dialog: the tile's one
+  /// focus node keeps driving activation, and the topmost dialog — not the
+  /// window behind it — receives the keyboard, exactly like the old floating
+  /// stack raised the newest dialog.
+  final MetaWindowId? activationTarget;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final metaWindowToActivate = activationTarget ?? metaWindowId;
     final activateWindow = useCallback((bool value) {
-      final metaWindowToActivate =
-          dialogMetaWindowList.lastOrNull ?? metaWindowId;
-
       // The callback can outlive the window (focus change, leftover effect);
       // reading a destroyed MetaWindowState throws by design.
       final metaWindow = _readMetaWindow(ref, metaWindowToActivate);
@@ -52,7 +57,7 @@ class WindowWidget extends HookConsumerWidget {
               ),
             ),
           );
-    }, [metaWindowId, dialogMetaWindowList]);
+    }, [metaWindowToActivate]);
 
     // `metaWindowStateProvider` throws by design until its window is created
     // and after it is destroyed. A tile can briefly outlive the window it
@@ -105,7 +110,7 @@ class WindowWidget extends HookConsumerWidget {
         activateWindow(true);
       }
       return null;
-    }, [metaWindowId]);
+    }, [metaWindowId, activationTarget]);
 
     useEffect(() {
       void callback() {
@@ -116,7 +121,7 @@ class WindowWidget extends HookConsumerWidget {
       return () {
         focusNode.removeListener(callback);
       };
-    }, [focusNode]);
+    }, [focusNode, activateWindow]);
 
     if (displayedSizing == null) {
       // The native window is gone. Its owner clears `metaWindowId` on the next
@@ -237,22 +242,11 @@ class WindowWidget extends HookConsumerWidget {
               );
             },
           ),
-          if (dialogMetaWindowList.isNotEmpty) ...[
-            const Positioned.fill(child: ColoredBox(color: Colors.black38)),
-            WindowDialogs(
-              metaWindowIds: dialogMetaWindowList,
-              maxSizeFactor: 0.9,
-            ),
-          ],
         ],
       ),
       DisplayMode.game => MetaSurfaceGamingOverlay(metaWindowId: metaWindowId),
       DisplayMode.floating => ContainerWithPositionnableChildren(
-        children: [
-          FloatableWindow(metaWindowId: metaWindowId),
-          for (final dialogMetaWindowId in dialogMetaWindowList)
-            FloatableWindow(metaWindowId: dialogMetaWindowId),
-        ],
+        children: [FloatableWindow(metaWindowId: metaWindowId)],
       ),
     };
   }

@@ -15,8 +15,8 @@ import 'package:shell/overview/widget/search/search_input.dart';
 import 'package:shell/overview/widget/search/settings/settings_search_result.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/shared/util/logger.dart';
+import 'package:shell/shared/widget/square_icon_button.dart';
 import 'package:shell/shortcut_manager/model/navigation_intents.dart';
-import 'package:shell/theme/provider/theme.dart';
 
 class SearchEngine extends HookConsumerWidget {
   const SearchEngine({super.key});
@@ -181,14 +181,14 @@ class SearchEngine extends HookConsumerWidget {
               Expanded(
                 child: Row(
                   children: [
-                    // The mode switcher is clicked or reached with `Super+Tab`,
-                    // never by directional focus: keeping it out of the focus
-                    // order lets `down` from the search field land on the first
-                    // result instead of a mode button.
+                    // The mode switcher is clicked or reached with
+                    // `Super+Tab`, never by directional focus: keeping it out
+                    // of the focus order lets `down` from the search field
+                    // land on the first result instead of a mode button.
                     ExcludeFocus(
                       child: Column(
                         children: [
-                          SearchModeButton(
+                          SquareIconButton(
                             icon: const Icon(MdiIcons.playBox),
                             onSelected: () => overviewNotifier.setSearchMode(
                               SearchMode.application,
@@ -196,14 +196,14 @@ class SearchEngine extends HookConsumerWidget {
                             isSelected: searchMode == SearchMode.application,
                           ),
                           const SizedBox(height: 16),
-                          SearchModeButton(
+                          SquareIconButton(
                             icon: const Icon(MdiIcons.file),
                             onSelected: () =>
                                 overviewNotifier.setSearchMode(SearchMode.file),
                             isSelected: searchMode == SearchMode.file,
                           ),
                           const SizedBox(height: 16),
-                          SearchModeButton(
+                          SquareIconButton(
                             icon: const Icon(MdiIcons.cog),
                             onSelected: () => overviewNotifier.setSearchMode(
                               SearchMode.settings,
@@ -258,41 +258,5 @@ class SearchEngine extends HookConsumerWidget {
         ),
       ),
     );
-  }
-}
-
-class SearchModeButton extends StatelessWidget {
-  const SearchModeButton({
-    required this.icon,
-    required this.onSelected,
-    this.isSelected = false,
-    super.key,
-  });
-
-  final bool isSelected;
-  final Widget icon;
-  final void Function()? onSelected;
-  @override
-  Widget build(BuildContext context) {
-    var buttonType = IconButton.new;
-    var style = IconButton.styleFrom(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(surfaceRadius),
-      ),
-      padding: const EdgeInsets.all(12),
-      iconSize: 28,
-    );
-    if (isSelected) {
-      buttonType = IconButton.filled;
-      style = style.copyWith(
-        backgroundColor: WidgetStateProperty.all(
-          Theme.of(context).colorScheme.primaryContainer,
-        ),
-        foregroundColor: WidgetStateProperty.all(
-          Theme.of(context).colorScheme.onPrimaryContainer,
-        ),
-      );
-    }
-    return buttonType(onPressed: onSelected, icon: icon, style: style);
   }
 }
