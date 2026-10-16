@@ -113,6 +113,18 @@ class MatchingDecision {
     'metaWindowId': metaWindowId,
   });
 
+  /// A tile's sole extractable dialog promoted to its displayed window after
+  /// the window it was showing left.
+  factory MatchingDecision.promote({
+    required String windowId,
+    required String dialogWindowId,
+    required String metaWindowId,
+  }) => MatchingDecision._('promote', {
+    'windowId': windowId,
+    'dialogWindowId': dialogWindowId,
+    'metaWindowId': metaWindowId,
+  });
+
   /// The end of a launch gather (`settled`) or an automatic reopen.
   factory MatchingDecision.burst({
     required String windowId,

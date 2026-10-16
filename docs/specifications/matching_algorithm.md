@@ -304,6 +304,18 @@ windows an application opened so far are dialog-like (for example an updater or
 a splash that reports a fixed size before the real window appears) they are
 shown over the tile rather than hidden behind its placeholder.
 
+A tile that **loses the window it displayed** and is left owning exactly one
+dialog that is a **regular toplevel** (`isExtractableDialog`: no client parent,
+not modal, not fixed-size) promotes it back to being the tile's displayed
+window — the dialog is detached from the dialog set and attached to the tile,
+which then adopts its identity. This is the recovery for an application whose
+transient first window the launch settled on (Sweet Home 3D's resizable
+`win0`): the real window can attach as a dialog of that tile microseconds
+before the transient closes, and without the promotion the tile would show
+nothing and bury the application's main window in its own dialog area. A
+genuine dialog — modal, client-parented or fixed-size — is never promoted: it
+stays in the dialog area, shown over the tile's placeholder.
+
 Most dialogs are tiled, not floated: a tab bar lists them (in creation order)
 plus the trusted file chooser, and the selected entry fills a panel that
 overlays the tile. The tile behind the panel is blurred (`ImageFiltered`, the

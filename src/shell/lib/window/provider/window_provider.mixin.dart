@@ -239,10 +239,20 @@ mixin WindowProviderMixin<T extends Window> {
     }
 
     if (newDisplayedMetaWindowId != _displayedMetaWindowId) {
+      final hadDisplayedWindow = _displayedMetaWindowId != null;
       _displayedMetaWindowId = newDisplayedMetaWindowId;
       print('new displayed meta window: $_displayedMetaWindowId');
       _recordDisplayDecision(_displayedMetaWindowId);
       onCurrentlyDisplayedMetaWindowChanged(_displayedMetaWindowId);
+      if (hadDisplayedWindow && newDisplayedMetaWindowId == null) {
+        // The window the tile was showing has left. If the tile now owns no
+        // window and a single extractable dialog, that dialog is the
+        // application's real window mistakenly attached as a dialog (Sweet
+        // Home 3D). Promote it instead of leaving the tile empty. Deferred: the
+        // promotion attaches a window back to this tile and would re-enter the
+        // display recomputation.
+        unawaited(_promoteSoleDialogWhenIdle());
+      }
     }
 
     // A settled single-window tile adopts the displayed window's identity even
@@ -256,6 +266,23 @@ mixin WindowProviderMixin<T extends Window> {
         ref.read(metaWindowStateProvider(displayedMetaWindowId)),
       );
     }
+  }
+
+  /// Promotes a sole extractable dialog to this tile once the tile has no
+  /// displayed window left (see
+  /// [WindowManager.promoteSoleExtractableDialogForTile]).
+  ///
+  /// Deferred by a microtask so the promotion's `addMetaWindow` does not
+  /// re-enter the display recomputation that scheduled it. Re-checks the tile
+  /// is still empty and mounted before promoting.
+  Future<void> _promoteSoleDialogWhenIdle() async {
+    await Future<void>.delayed(Duration.zero);
+    if (!ref.mounted || _metaWindowSubscriptions.isNotEmpty) {
+      return;
+    }
+    ref
+        .read(windowManagerProvider.notifier)
+        .promoteSoleExtractableDialogForTile(state.windowId);
   }
 
   /// Display-selection cost for one owned native window.
