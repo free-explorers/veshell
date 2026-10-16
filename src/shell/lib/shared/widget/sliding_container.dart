@@ -13,7 +13,9 @@ class SlidingContainer extends HookConsumerWidget {
     required this.index,
     this.direction = Axis.horizontal,
     this.visible = 1,
+    this.firstVisibleIndex,
     this.onIndexChanged,
+    this.onFirstVisibleIndexChanged,
     this.isSwipeEnabled = true,
     super.key,
   });
@@ -23,10 +25,25 @@ class SlidingContainer extends HookConsumerWidget {
   final int visible;
   final bool isSwipeEnabled;
   final void Function(int newIndex)? onIndexChanged;
+
+  /// The leading (leftmost/topmost) tile to restore when the container is
+  /// created. Falls back to [index] when omitted, which anchors the selected
+  /// tile at the leading edge.
+  final int? firstVisibleIndex;
+
+  /// Called after the frame whenever the leading tile shown by the container
+  /// settles on a new index, so callers can persist it and restore the exact
+  /// same view when the container is rebuilt.
+  final void Function(int newFirstVisibleIndex)? onFirstVisibleIndexChanged;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Resolve the leading tile up front: the effect below runs during the build
+    // that mounts the `PageView`, before it has a scroll position, so it cannot
+    // perform the initial scroll. If the selected tile falls outside the
+    // restored view, shift the view just enough to include it.
+    final initialPage = _resolveInitialPage();
     final pageController = usePageController(
-      initialPage: index,
+      initialPage: initialPage,
       viewportFraction: 1.0 / visible,
       keys: [visible],
     );
@@ -34,6 +51,22 @@ class SlidingContainer extends HookConsumerWidget {
     final swipeInProgress = useState(false);
     final cumulatedSwipeDelta = useState<double>(0);
     final swipeVelocityTracker = useState<VelocityTracker?>(null);
+    final reportedFirstVisibleIndex = useRef<int?>(null);
+
+    void reportFirstVisibleIndex(int newFirstVisibleIndex) {
+      final clamped = newFirstVisibleIndex.clamp(0, children.length - 1);
+      if (reportedFirstVisibleIndex.value == clamped) {
+        return;
+      }
+      reportedFirstVisibleIndex.value = clamped;
+      // Reporting runs from a build-time effect, so notify after the frame;
+      // mutating the caller's state mid-build is not allowed.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
+        onFirstVisibleIndexChanged?.call(clamped);
+      });
+    }
+
     return HookBuilder(
       builder: (context) {
         void scrollToIndex(int indexToScrollTo) {
@@ -52,6 +85,11 @@ class SlidingContainer extends HookConsumerWidget {
           } else if (indexToScrollTo > visibleRangeEnd) {
             offset = pageDimension * (indexToScrollTo - visible + 1);
           }
+          reportFirstVisibleIndex(
+            offset == null
+                ? firstPageInView.round()
+                : (offset / pageDimension).round(),
+          );
           if (offset != null) {
             pageController.animateTo(
               offset,
@@ -62,7 +100,13 @@ class SlidingContainer extends HookConsumerWidget {
         }
 
         useEffect(() {
-          scrollToIndex(index);
+          if (pageController.hasClients) {
+            scrollToIndex(index);
+          } else {
+            // The mounting build has no scroll position yet; the initial page
+            // already encodes the restored view, so persist that.
+            reportFirstVisibleIndex(initialPage);
+          }
           return null;
         }, [index, children]);
         return SwipeGestureDetector(
@@ -177,5 +221,28 @@ class SlidingContainer extends HookConsumerWidget {
         );
       },
     );
+  }
+
+  /// The leading tile the container should start on.
+  ///
+  /// Prefers [firstVisibleIndex] (the restored view) and, when [index] would
+  /// fall outside it, shifts by the minimal amount needed to bring the selected
+  /// tile back into view. With no restored view it falls back to anchoring the
+  /// selected tile at the leading edge, which preserves the previous behavior.
+  int _resolveInitialPage() {
+    if (children.isEmpty) {
+      return 0;
+    }
+    final maxLeading = (children.length - visible).clamp(
+      0,
+      children.length - 1,
+    );
+    var leading = (firstVisibleIndex ?? index).clamp(0, maxLeading);
+    if (index < leading) {
+      leading = index;
+    } else if (index > leading + visible - 1) {
+      leading = index - visible + 1;
+    }
+    return leading.clamp(0, maxLeading);
   }
 }

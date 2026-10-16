@@ -196,10 +196,16 @@ class WorkspaceWidget extends HookConsumerWidget {
                   child: SlidingContainer(
                     index: workspaceState.selectedIndex,
                     visible: workspaceState.visibleLength,
+                    firstVisibleIndex: workspaceState.firstVisibleIndex,
                     onIndexChanged: (nextIndex) {
                       ref
                           .read(workspaceStateProvider(workspaceId).notifier)
                           .setSelectedIndex(nextIndex);
+                    },
+                    onFirstVisibleIndexChanged: (firstVisibleIndex) {
+                      ref
+                          .read(workspaceStateProvider(workspaceId).notifier)
+                          .setFirstVisibleIndex(firstVisibleIndex);
                     },
                     isSwipeEnabled:
                         CurrentScreenId.of(context) ==

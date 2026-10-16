@@ -237,6 +237,18 @@ class WorkspaceState extends _$WorkspaceState {
     state = state.copyWith(selectedIndex: index);
   }
 
+  /// Records the leading (leftmost/topmost) tile currently shown by the
+  /// workspace's sliding container.
+  ///
+  /// The container is rebuilt from scratch when its workspace scrolls off the
+  /// screen's page view, which drops its scroll offset. Persisting the leading
+  /// index lets the container restore the exact window it was showing instead
+  /// of anchoring the selected tile at the leading edge on every remount.
+  void setFirstVisibleIndex(int index) {
+    if (index == state.firstVisibleIndex) return;
+    state = state.copyWith(firstVisibleIndex: index);
+  }
+
   void setVisibleLength(int length) {
     state = state.copyWith(visibleLength: length);
   }

@@ -42,6 +42,47 @@ Future<Size> _pageViewSize(
   return tester.getSize(find.byType(PageView));
 }
 
+/// Renders a [SlidingContainer] and returns the page it settled on, i.e. the
+/// index of the leading (leftmost) tile it shows.
+Future<double?> _leadingPage(
+  WidgetTester tester, {
+  required double width,
+  required int visible,
+  required int index,
+  int? firstVisibleIndex,
+  void Function(int newFirstVisibleIndex)? onFirstVisibleIndexChanged,
+}) async {
+  final events = StreamController<PlatformEvent>.broadcast();
+  addTearDown(events.close);
+  tester.view
+    ..devicePixelRatio = 1.0
+    ..physicalSize = Size(width, 600);
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [platformManagerProvider.overrideWithValue(events.stream)],
+      child: MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: width,
+            height: 100,
+            child: SlidingContainer(
+              direction: Axis.horizontal,
+              index: index,
+              visible: visible,
+              firstVisibleIndex: firstVisibleIndex,
+              onFirstVisibleIndexChanged: onFirstVisibleIndexChanged,
+              children: const [SizedBox(), SizedBox(), SizedBox(), SizedBox()],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return tester.widget<PageView>(find.byType(PageView)).controller?.page;
+}
+
 void main() {
   testWidgets(
     'a viewport not divisible by the visible tiles snaps to whole pages',
@@ -62,4 +103,40 @@ void main() {
     final size = await _pageViewSize(tester, width: 2464, visible: 1);
     expect(size.width, 2464);
   });
+
+  testWidgets(
+    'restores the leading tile instead of anchoring the selected one',
+    (tester) async {
+      // A workspace with two windows and the launcher selected tile 2 leaves
+      // the view on tiles [0, 1]. Rebuilding the container (e.g. after a round
+      // trip through another workspace) must keep that view rather than start
+      // the selected tile at the leading edge.
+      final page = await _leadingPage(
+        tester,
+        width: 400,
+        visible: 2,
+        index: 1,
+        firstVisibleIndex: 0,
+      );
+      expect(page, 0);
+    },
+  );
+
+  testWidgets(
+    'scrolls a selected tile outside the restored view back into view',
+    (tester) async {
+      final reported = <int>[];
+      final page = await _leadingPage(
+        tester,
+        width: 400,
+        visible: 2,
+        index: 2,
+        firstVisibleIndex: 0,
+        onFirstVisibleIndexChanged: reported.add,
+      );
+      // Selecting the launcher shows the previous window plus the launcher.
+      expect(page, 1);
+      expect(reported.last, 1);
+    },
+  );
 }
