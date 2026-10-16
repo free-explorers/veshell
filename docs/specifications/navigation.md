@@ -133,6 +133,17 @@ Shipped defaults:
 `Escape` and `Super+Tab` are overview-only intents and stay local to the
 overview; the rest are global settings.
 
+The shell's `Shortcuts` manager sits **inside** each monitor's `MaterialApp`
+(`MonitorWidget`), below `DefaultTextEditingShortcuts` and the default
+`WidgetsApp` shortcuts. That placement matters: those framework shortcuts bind
+the plain arrow keys (`SingleActivator(arrowDown)` and friends), and
+`SingleActivator` only checks control/shift/alt/meta — it ignores the Super key
+— so a `Super+Arrow` chord matches them too. Above the `MaterialApp`, the shell
+would lose such a chord to the focused text field (the launcher search
+autofocuses) or to the framework's focus traversal. Inside it, the shell's
+bindings are closer to focus and win, while ordinary typing (the bare arrow
+keys included) still flows through.
+
 ### Plain keys stay safe
 
 A chord is only consumed when an **enabled action for its intent exists in the
@@ -141,15 +152,16 @@ registered only by the search pane (`SearchEngine`) and the result lists, so
 `Enter` acts there but is ignored — and forwarded to the focused client —
 everywhere else, and never steals `Enter` from a focused client surface or an
 unrelated text field. The search pane also binds `Enter` to `ActivateIntent`
-locally: `MaterialApp` installs `DefaultTextEditingShortcuts` above it, which
-maps `Enter` to a do-nothing intent the focused `EditableText` handles, and that
-would stop the key before the global `navigation.activate` binding (which lives
-in `VeshellShortcutManager`, above `MaterialApp`) or the framework default. A
+locally, so it keeps `Enter` even when a default text-editing binding sits
+between it and the shell's `navigation.activate` binding. A
 client surface that owns the keyboard (`SurfaceFocus`)
 shadows activation, dismissal and traversal keys with an action that does not
-consume them, so they fall through to the client; the overview hands the
-keyboard to an ephemeral window's surface when it is displayed, so `Enter`
-reaches the application rather than the search pane that launched it.
+consume them, so they fall through to the client; its shadowing bindings use
+exact `LogicalKeySet`s (not `SingleActivator`) so they match only the bare key
+and let a `Super+Arrow` chord reach the shell's manager above them. The
+overview hands the keyboard to an ephemeral window's surface when it is
+displayed, so `Enter` reaches the application rather than the search pane that
+launched it.
 `DismissIntent` is registered by the overview, so
 `Escape` hides it, but a dialog or menu opened above it consumes the key first.
 `Super+Tab` is registered above both overview panes, so it keeps acting no
@@ -172,6 +184,9 @@ matter which part of the overview holds focus.
   becoming an activator.
 - A binding is only consumed where a handler for its intent is in the focused
   context's ancestry; otherwise the chord falls through to the focused client.
+- The shell's shortcut manager sits closer to focus than the framework's default
+  shortcuts, so a Super-modified chord is never shadowed by a framework
+  `SingleActivator` that ignores the Super key.
 - Renamed navigation action ids fall back to their pre-standardisation key so a
   user's existing override is not dropped.
 - The result list's selection cursor and the framework focus stay in step:
