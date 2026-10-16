@@ -6,12 +6,18 @@ import 'package:shell/l10n/l10n.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/app_drawer/app_grid.dart';
 
 class AppDrawer extends HookConsumerWidget {
-  const AppDrawer({required this.onSelect, this.isSelected = false, super.key});
+  const AppDrawer({
+    required this.onSelect,
+    required this.searchFocusNode,
+    super.key,
+  });
   final DesktopEntrySelectedCallback onSelect;
 
-  /// Whether the launcher is the workspace's selected tile. While selected, the
-  /// search field must hold focus so typing filters the grid.
-  final bool isSelected;
+  /// The launcher tile's search node.
+  ///
+  /// The tile owns the keyboard policy — it focuses this node from its scope's
+  /// focus event — so the field never asks for the focus itself.
+  final FocusNode searchFocusNode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -36,7 +42,7 @@ class AppDrawer extends HookConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _AppDrawerTextField(
-            isSelected: isSelected,
+            searchFocusNode: searchFocusNode,
             onSearchTextChange: (searchText) {
               searchTextState.value = searchText;
             },
@@ -59,19 +65,18 @@ class AppDrawer extends HookConsumerWidget {
 
 class _AppDrawerTextField extends HookConsumerWidget {
   const _AppDrawerTextField({
-    required this.isSelected,
+    required this.searchFocusNode,
     required this.onSearchTextChange,
     required this.onSubmitted,
   });
 
-  final bool isSelected;
+  final FocusNode searchFocusNode;
   final void Function(String searchText) onSearchTextChange;
   final VoidCallback onSubmitted;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final searchController = useTextEditingController();
-    final searchFocusNode = useFocusNode();
     final onListener = useMemoized(
       () => () {
         onSearchTextChange(searchController.text);
@@ -85,17 +90,6 @@ class _AppDrawerTextField extends HookConsumerWidget {
         searchController.removeListener(onListener);
       };
     }, [searchController]);
-
-    // `TextField.autofocus` only fires once per element lifetime. The launcher
-    // stays mounted while it is on screen, so re-selecting it (its tile was
-    // already visible) would leave the search field unfocused. Focus it
-    // explicitly whenever the launcher becomes the selected tile instead.
-    useEffect(() {
-      if (isSelected) {
-        searchFocusNode.requestFocus();
-      }
-      return null;
-    }, [isSelected]);
 
     return TextField(
       controller: searchController,

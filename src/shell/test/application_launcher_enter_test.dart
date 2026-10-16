@@ -36,6 +36,8 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
+    final searchFocusNode = FocusNode();
+    addTearDown(searchFocusNode.dispose);
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -43,7 +45,12 @@ void main() {
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: Scaffold(body: AppDrawer(onSelect: launched.add)),
+          home: Scaffold(
+            body: AppDrawer(
+              onSelect: launched.add,
+              searchFocusNode: searchFocusNode,
+            ),
+          ),
         ),
       ),
     );
