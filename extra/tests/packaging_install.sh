@@ -59,7 +59,10 @@ for prefix in /usr '/opt/veshell prefix&pipe|' '/opt/percent%quote"back\ dollar$
     fi
     grep -Fx "ExecStart=\"$service_prefix/bin/veshell\" --session" "$root/lib/systemd/user/veshell.service"
     grep -Fx "ExecStop=\"$service_prefix/bin/veshell-session-stop\"" "$root/lib/systemd/user/veshell.service"
-    grep -Fx "Exec=\"$desktop_prefix/bin/veshell-session\"" "$root/share/wayland-sessions/veshell.desktop"
+    grep -Fx "Exec=$desktop_prefix/bin/veshell-session" "$root/share/wayland-sessions/veshell.desktop"
+    # SDDM/plasmalogin run `exec $@` on the raw Exec field, so a quoted path
+    # becomes a relative one; guard against reintroducing the quotes.
+    if grep -F 'Exec="' "$root/share/wayland-sessions/veshell.desktop"; then exit 1; fi
     if grep -F "$tmp/root" "$root/lib/systemd/user/veshell.service"; then exit 1; fi
     if grep -F "$tmp/root" "$root/share/wayland-sessions/veshell.desktop"; then exit 1; fi
 done
@@ -70,7 +73,7 @@ run package "DESTDIR=$tmp/custom" BINDIR=/custom/bin LIBDIR=/custom/lib SHAREDIR
 test -f "$tmp/custom/custom/units/veshell.service"
 test -f "$tmp/custom/custom/portals/portals/veshell.portal"
 test -f "$tmp/custom/custom/lib/libplugin.so.1"
-grep -Fx 'Exec="/custom/bin/veshell-session"' "$tmp/custom/custom/sessions/veshell.desktop"
+grep -Fx 'Exec=/custom/bin/veshell-session' "$tmp/custom/custom/sessions/veshell.desktop"
 
 # No bundle engine may overwrite a separately supplied runtime symlink.
 ln -s "$fixture/engine.so" "$tmp/custom/custom/lib/libflutter_engine.so.runtime"
