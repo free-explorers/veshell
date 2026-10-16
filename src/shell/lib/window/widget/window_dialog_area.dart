@@ -22,6 +22,7 @@ import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/selected_dialog_for_window.dart';
 import 'package:shell/window/widget/window.dart';
+import 'package:shell/window/widget/window_dialogs.dart';
 
 /// Fraction of a tile's shortest side left as a frosted margin around the
 /// dialog panel.
@@ -68,9 +69,24 @@ class WindowDialogArea extends HookConsumerWidget {
     final dialogIds = ref.watch(dialogSetForWindowProvider(parentWindowId));
     final chooser = ref.watch(fileChooserForWindowProvider(parentWindowId));
 
+    // Split the dialogs by presentation. A modal or fixed-size surface is not
+    // tiled: it keeps the previous floating presentation (see
+    // `isFloatingDialog`), drawn at its natural size over a dimmed tile.
+    final areaDialogIds = <DialogWindowId>[];
+    final floatingMetaWindowIds = <MetaWindowId>[];
+    if (dialogsEnabled) {
+      for (final dialogId in dialogIds) {
+        final metaWindow = _readDialogMetaWindow(ref, dialogId);
+        if (metaWindow != null && isFloatingDialog(metaWindow)) {
+          floatingMetaWindowIds.add(metaWindow.id);
+        } else {
+          areaDialogIds.add(dialogId);
+        }
+      }
+    }
+
     final entries = <DialogAreaEntry>[
-      if (dialogsEnabled)
-        for (final dialogId in dialogIds) DialogWindowEntry(dialogId),
+      for (final dialogId in areaDialogIds) DialogWindowEntry(dialogId),
       if (chooser != null) const FileChooserEntry(),
     ];
 
@@ -78,7 +94,8 @@ class WindowDialogArea extends HookConsumerWidget {
     // selection: like the old floating stack, the newest window is the active
     // one. `ref.listen` (not a build-time write) keeps the notifier update
     // safe. A user's explicit tab pick is overridden by a new dialog, which is
-    // the expected "a dialog just opened" behaviour.
+    // the expected "a dialog just opened" behaviour. A floating dialog is not a
+    // tab, so `_resolveSelection` simply ignores its entry.
     final selectionNotifier = ref.read(
       selectedDialogForWindowProvider(parentWindowId).notifier,
     );
@@ -120,6 +137,16 @@ class WindowDialogArea extends HookConsumerWidget {
               _activateEntry(ref, entry);
             },
           ),
+        // A modal or fixed-size dialog stays on top of everything, exactly as
+        // it did before the dialog area existed: the tile dims and the dialog
+        // floats at its own size.
+        if (floatingMetaWindowIds.isNotEmpty) ...[
+          const Positioned.fill(child: ColoredBox(color: Colors.black38)),
+          WindowDialogs(
+            metaWindowIds: floatingMetaWindowIds,
+            maxSizeFactor: 0.9,
+          ),
+        ],
       ],
     );
   }
@@ -571,6 +598,23 @@ class _DialogWindowBody extends HookConsumerWidget {
         );
       },
     );
+  }
+}
+
+/// Reads a dialog's meta window during a build, or `null` when the dialog (or
+/// its meta window) is not tracked yet. Both providers throw by design until
+/// their state exists, which is why this is watched defensively.
+MetaWindow? _readDialogMetaWindow(
+  WidgetRef ref,
+  DialogWindowId dialogWindowId,
+) {
+  try {
+    final metaWindowId = ref
+        .watch(dialogWindowStateProvider(dialogWindowId))
+        .metaWindowId;
+    return ref.watch(metaWindowStateProvider(metaWindowId));
+  } on Object {
+    return null;
   }
 }
 

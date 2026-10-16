@@ -6,9 +6,15 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/meta_window/model/meta_window.serializable.dart';
+import 'package:shell/meta_window/provider/meta_window_state.dart';
+import 'package:shell/monitor/widget/current_screen_id.dart';
+import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/widget/panel_tab.dart';
+import 'package:shell/wayland/model/wl_surface.dart';
+import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/window/model/dialog_area_entry.dart';
 import 'package:shell/window/model/dialog_window.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
@@ -18,10 +24,13 @@ import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/selected_dialog_for_window.dart';
 import 'package:shell/window/widget/window.dart';
 import 'package:shell/window/widget/window_dialog_area.dart';
+import 'package:shell/window/widget/window_dialogs.dart';
 
 const _parent = PersistentWindowId('parent');
 const _dialogA = DialogWindowId('a');
 const _dialogB = DialogWindowId('b');
+const _modalMetaWindowId = 'meta-b';
+const _modalSurfaceId = 7;
 
 class _FixedDialogSet extends DialogSetForWindow {
   _FixedDialogSet(this._ids);
@@ -52,6 +61,47 @@ DialogWindow _dialog(DialogWindowId id, String metaWindowId, String title) =>
       metaWindowId: metaWindowId,
       parentWindowId: _parent,
     );
+
+/// A tracked meta window for a floating dialog, with a no-op `patch` so the
+/// surface's post-frame output patch does not reach the platform.
+class _FixedMetaWindowState extends MetaWindowState {
+  _FixedMetaWindowState(this._metaWindow);
+  final MetaWindow _metaWindow;
+
+  @override
+  MetaWindow build(String id) => _metaWindow;
+
+  @override
+  Future<void> patch(
+    MetaWindowPatchMessage patch, {
+    bool propagate = true,
+  }) async {}
+}
+
+/// The dialog surface's committed buffer, so `FloatableWindow` has a size.
+class _FixedSurfaceState extends WlSurfaceState {
+  @override
+  WlSurface build(int surfaceId) => WlSurface(
+    surfaceId: surfaceId,
+    role: SurfaceRole.xdgToplevel,
+    texture: const SurfaceTexture(id: 1, size: Size(320, 240)),
+    scale: 1,
+    subsurfacesBelow: IList(),
+    subsurfacesAbove: IList(),
+    inputRegion: Rect.zero,
+  );
+}
+
+MetaWindow _modalMetaWindow() => const MetaWindow(
+  id: _modalMetaWindowId,
+  pid: 1,
+  mapped: true,
+  surfaceId: _modalSurfaceId,
+  needDecoration: false,
+  gameModeActivated: false,
+  scaleRatio: 1,
+  isModal: true,
+);
 
 void main() {
   testWidgets('the dialog area lists every dialog and selects the newest', (
@@ -165,6 +215,71 @@ void main() {
     await tester.pump();
 
     expect(taps, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a modal dialog floats instead of taking a tab', (tester) async {
+    final container = ProviderContainer(
+      overrides: [
+        platformManagerProvider.overrideWithValue(
+          const Stream<PlatformEvent>.empty(),
+        ),
+        dialogSetForWindowProvider(
+          _parent,
+        ).overrideWith(() => _FixedDialogSet([_dialogA, _dialogB])),
+        dialogWindowStateProvider(_dialogA).overrideWith(
+          () => _FixedDialogState(_dialog(_dialogA, 'meta-a', 'Alpha')),
+        ),
+        dialogWindowStateProvider(_dialogB).overrideWith(
+          () =>
+              _FixedDialogState(_dialog(_dialogB, _modalMetaWindowId, 'Beta')),
+        ),
+        metaWindowStateProvider(
+          _modalMetaWindowId,
+        ).overrideWith(() => _FixedMetaWindowState(_modalMetaWindow())),
+        wlSurfaceStateProvider(
+          _modalSurfaceId,
+        ).overrideWith(_FixedSurfaceState.new),
+        localizedDesktopEntryForIdProvider(
+          'org.example.App',
+        ).overrideWith(_NoDesktopEntry.new),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: CurrentMonitorName(
+              name: 'M1',
+              child: SizedBox(
+                width: 1000,
+                height: 800,
+                child: WindowDialogArea(
+                  parentWindowId: _parent,
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Only the regular dialog is a tab; the modal floats over the tile.
+    expect(find.widgetWithText(PanelTab, 'Alpha'), findsOneWidget);
+    expect(find.widgetWithText(PanelTab, 'Beta'), findsNothing);
+    expect(find.byType(WindowDialogs), findsOneWidget);
+    // The floating modal keeps the keyboard over the tabbed dialog.
+    expect(
+      container.read(selectedDialogMetaWindowForWindowProvider(_parent)),
+      _modalMetaWindowId,
+    );
     expect(tester.takeException(), isNull);
   });
 }

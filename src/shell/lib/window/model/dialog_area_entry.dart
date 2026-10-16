@@ -64,10 +64,24 @@ final class FileChooserEntry extends DialogAreaEntry {
 /// Whether the native window behind a dialog may be extracted to its own tile.
 ///
 /// Only a regular top-level window qualifies. A window that declares a client
-/// parent (`xdg_toplevel.set_parent`, X11 transient) or is modal is a genuine
-/// dialog — a portal chooser, an About box — and promoting it to a tile makes
-/// no sense. This is what keeps **Extract to new tile** off real modal and
-/// portal dialogs while it stays available for a top-level window that merely
-/// attached to the tile as a dialog.
+/// parent (`xdg_toplevel.set_parent`, X11 transient), is modal, or is fixed-size
+/// is a genuine dialog — a portal chooser, an About box — and promoting it to a
+/// tile makes no sense; a fixed-size window is also rendered by the floating
+/// path, not the tabbed area. This is what keeps **Extract to new tile** off
+/// real modal, portal and fixed-size dialogs while it stays available for a
+/// top-level window that merely attached to the tile as a dialog.
 bool isExtractableDialog(MetaWindow metaWindow) =>
-    metaWindow.parent == null && !metaWindow.isModal;
+    metaWindow.parent == null &&
+    !metaWindow.isModal &&
+    !metaWindow.isFixedSized;
+
+/// Whether a dialog's native window keeps the tile's previous, floating
+/// presentation instead of the tabbed dialog area.
+///
+/// A modal or fixed-size surface is drawn at its natural size: stretching it to
+/// fill the tile — what the area's `maximized` geometry does — distorts a
+/// fixed-size client and wastes the space for a modal one. Neither is ever a
+/// candidate for extraction, so the tabbed area adds nothing, and such a dialog
+/// floats over a dimmed tile exactly as it did before the area existed.
+bool isFloatingDialog(MetaWindow metaWindow) =>
+    metaWindow.isModal || metaWindow.isFixedSized;

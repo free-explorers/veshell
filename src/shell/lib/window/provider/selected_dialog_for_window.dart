@@ -1,5 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
+import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/window/model/dialog_area_entry.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
@@ -24,19 +25,27 @@ class SelectedDialogForWindow extends _$SelectedDialogForWindow {
   }
 }
 
-/// The meta window of the native dialog currently selected in [parentId]'s
-/// dialog area, or `null` when none is (no dialog, or the chooser is selected).
+/// The meta window a tile should activate: the dialog its single focus node
+/// hands the keyboard to, or `null` when no client should be activated (no
+/// dialog, or the chooser is selected).
 ///
-/// A tile points its single focus node at this through
-/// `WindowWidget.activationTarget`: focusing the tile then activates the
-/// selected dialog instead of the window behind it. The chooser is a shell
-/// surface, so it activates no client.
+/// A modal or fixed-size dialog floats over the tile and sits above everything
+/// (see `isFloatingDialog`), so it keeps the keyboard even when a tabbed-area
+/// dialog is the one selected; the newest such dialog wins, being on top of the
+/// others. Otherwise the selected tab's dialog is activated, defaulting to the
+/// newest dialog, which is what the old floating stack always raised.
 @riverpod
 MetaWindowId? selectedDialogMetaWindowForWindow(Ref ref, WindowId parentId) {
   final dialogIds = ref.watch(dialogSetForWindowProvider(parentId));
   if (dialogIds.isEmpty) {
     return null;
   }
+
+  final floating = _newestFloatingMetaWindowId(ref, dialogIds);
+  if (floating != null) {
+    return floating;
+  }
+
   final stored = ref.watch(selectedDialogForWindowProvider(parentId));
   if (stored is FileChooserEntry) {
     return null;
@@ -55,4 +64,25 @@ MetaWindowId? selectedDialogMetaWindowForWindow(Ref ref, WindowId parentId) {
   } on Object {
     return null;
   }
+}
+
+/// The meta window of the newest floating dialog in [dialogIds], or `null` when
+/// none of them floats.
+MetaWindowId? _newestFloatingMetaWindowId(
+  Ref ref,
+  Iterable<DialogWindowId> dialogIds,
+) {
+  for (final dialogWindowId in dialogIds.toList().reversed) {
+    try {
+      final metaWindowId = ref
+          .watch(dialogWindowStateProvider(dialogWindowId))
+          .metaWindowId;
+      if (isFloatingDialog(ref.watch(metaWindowStateProvider(metaWindowId)))) {
+        return metaWindowId;
+      }
+    } on Object {
+      continue;
+    }
+  }
+  return null;
 }
