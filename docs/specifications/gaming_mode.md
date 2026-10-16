@@ -25,9 +25,10 @@ configure.
 1. The shell sets `displayMode = game`.
 2. The overlay resizes the window to the monitor's **logical** size (physical
    mode ÷ fractional scale), then patches `fullscreen`. It does **not**
-   activate: the tile stays paused, with the dim and the instructions over the
-   game, so entering or navigating to a game tile never grabs the input.
-3. Clicking resumes: the dim fades while a fullscreen route zooms the surface
+   activate: the tile stays paused, with the game frosted (the same
+   `FrostedSurface` the overview and the dialog area use) and the instructions
+   over it, so entering or navigating to a game tile never grabs the input.
+3. Clicking resumes: the frost lifts while a fullscreen route zooms the surface
    in.
 4. When the route's own transition completes, the shell patches
    `UpdateGameModeActivated(true)`. Activation is tied to the route, not to the
@@ -38,7 +39,7 @@ configure.
    pointer motion, buttons and axis to it.
 6. `Ctrl+Esc` clears the flag. The compositor replays a release for every key
    the client was still holding (the `Ctrl` of the chord included) before the
-   grab is dropped, then the shell pops the route and the dim fades back in.
+   grab is dropped, then the shell pops the route and the frost fades back in.
 7. A game that closes itself leaves gaming mode through the same exit: the
    window removal deactivates the mode before the window is dropped, so the
    compositor releases the pointer focus it set on entry and the shell pops the

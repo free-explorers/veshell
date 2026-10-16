@@ -9,6 +9,7 @@ import 'package:shell/meta_window/widget/meta_surface.dart';
 import 'package:shell/monitor/provider/monitor_placement.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
+import 'package:shell/shared/widget/frosted_surface.dart';
 import 'package:uuid/uuid.dart';
 
 class MetaSurfaceGamingOverlay extends HookConsumerWidget {
@@ -26,6 +27,21 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
     // The route currently zoomed in, if any. Owning it here makes a second tap
     // during the flight a no-op instead of stacking routes.
     final zoomRoute = useRef<Route<void>?>(null);
+
+    // The pause dim is a frost: the game blurs behind the instructions instead
+    // of being covered by a flat scrim, matching the overview background and
+    // the dialog area. Runs on the same 300ms as the instructions' fade.
+    final frostController = useAnimationController(
+      duration: const Duration(milliseconds: 300),
+    );
+    useEffect(() {
+      if (paused) {
+        frostController.forward();
+      } else {
+        frostController.reverse();
+      }
+      return null;
+    }, [paused]);
 
     final monitorName = CurrentMonitorName.of(context);
 
@@ -115,26 +131,63 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
     return Stack(
       children: [
         Positioned.fill(
-          child: Hero(
-            tag: heroUuid,
-            child: _SizedSurface(
-              size: surfaceSize,
-              // While the native render owns the output the shell must not draw
-              // the game: a placeholder keeps the surface out of Flutter (no
-              // duplicate rasterization, and the surface state stops driving
-              // Flutter frames).
-              child: metaWindowState.gameModeActivated
-                  ? const SizedBox.expand()
-                  : MetaSurfaceWidget(
-                      metaWindowId: metaWindowId,
-                      decorated: false,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // Sigma grows with the region, like every other frost.
+              final maxSigma = frostSigmaFor(constraints.biggest);
+              return AnimatedBuilder(
+                animation: frostController,
+                builder: (context, child) {
+                  final progress = frostController.value;
+                  final scheme = Theme.of(context).colorScheme;
+                  // Cache the frosted game: while the instructions are up, the
+                  // blur is reused instead of recomputed, as long as the game
+                  // behind it is not itself repainting.
+                  return RepaintBoundary(
+                    child: FrostedSurface(
+                      blurSigma: maxSigma * progress,
+                      // A blurred game should read as glass, like the overview
+                      // backdrop it echoes.
+                      saturation: 1 + 0.20 * progress,
+                      // No glass while running: without a pause there is
+                      // nothing to frost, and the surface must stay crisp.
+                      tint: progress > 0
+                          ? frostedGlassTint(
+                              scheme,
+                            ).withAlpha((frostedWashAlpha * progress).round())
+                          : null,
+                      tintOverContent: true,
+                      // The tile is not a card: no frame and no sheen at its
+                      // edges.
+                      frame: false,
+                      highlight: false,
+                      noise: true,
+                      child: child,
                     ),
-            ),
+                  );
+                },
+                child: Hero(
+                  tag: heroUuid,
+                  child: _SizedSurface(
+                    size: surfaceSize,
+                    // While the native render owns the output the shell must not
+                    // draw the game: a placeholder keeps the surface out of
+                    // Flutter (no duplicate rasterization, and the surface state
+                    // stops driving Flutter frames).
+                    child: metaWindowState.gameModeActivated
+                        ? const SizedBox.expand()
+                        : MetaSurfaceWidget(
+                            metaWindowId: metaWindowId,
+                            decorated: false,
+                          ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
-        // The scrim (dim + instructions) fades with the zoom: opacity follows
-        // the paused/running state, so starting a game lifts the dim while the
-        // hero flies, and pausing brings it back.
+        // The instructions fade over the frost: starting a game lifts both
+        // while the hero flies, and pausing brings them back.
         Positioned.fill(
           child: IgnorePointer(
             ignoring: !paused,
@@ -142,54 +195,55 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
               opacity: paused ? 1 : 0,
               duration: const Duration(milliseconds: 300),
               child: GestureDetector(
+                // The frost replaced the scrim's box, so the whole tile must
+                // stay tappable: an opaque detector restores the hit area the
+                // dim used to provide.
+                behavior: HitTestBehavior.opaque,
                 onTap: zoomToGamingMode,
-                child: ColoredBox(
-                  color: Colors.black38,
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: const BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.all(Radius.circular(12)),
-                      ),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 360),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              context.l10n.gamingPaused,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 32,
-                                fontWeight: FontWeight.w600,
-                              ),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: const BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
+                    ),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 360),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            context.l10n.gamingPaused,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontWeight: FontWeight.w600,
                             ),
-                            const SizedBox(height: 12),
-                            Text(
-                              context.l10n.gamingModeDescription,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 14,
-                                height: 1.4,
-                              ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            context.l10n.gamingModeDescription,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                              height: 1.4,
                             ),
-                            const SizedBox(height: 20),
-                            Text(
-                              context.l10n.clickToEnter,
-                              style: const TextStyle(color: Colors.white),
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            context.l10n.clickToEnter,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            context.l10n.exitGamingHint,
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 12,
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              context.l10n.exitGamingHint,
-                              style: const TextStyle(
-                                color: Colors.white54,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
