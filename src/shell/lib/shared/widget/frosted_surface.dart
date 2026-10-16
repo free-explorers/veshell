@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/rendering.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// Peak alpha of the frost wash over a live backdrop, shared by the dialog
@@ -151,8 +152,22 @@ class FrostedSurface extends StatelessWidget {
         : null;
 
     var content = child;
-    if (content != null && blurSigma > 0.01) {
+    if (content != null) {
+      // The filters stay in the tree at all times; only what they *do* changes.
+      //
+      // Inserting or dropping a wrapper around [child] re-inflates everything
+      // below it, and the frosted subtree is not a leaf: the overview frosts
+      // the whole screen (workspaces, tiles and their live surface widgets),
+      // the dialog backdrop a whole tile, the pause frost a running game. A
+      // remount there drops their state — and re-runs their focus hand-offs,
+      // which steals the keyboard back from whatever the frost was opened for
+      // (the overview's search field lost it to the workspace behind it).
+      //
+      // `ImageFiltered.enabled` is Flutter's way of switching a filter off
+      // without touching the tree; the saturation needs the same shape, hence
+      // `_SaturationFiltered`.
       content = ImageFiltered(
+        enabled: blurSigma > 0.01,
         // Clamp the kernel to the layer's bounds so blurring does not pull
         // transparent edges inward (a halo around the frosted area).
         imageFilter: ui.ImageFilter.blur(
@@ -160,13 +175,7 @@ class FrostedSurface extends StatelessWidget {
           sigmaY: blurSigma,
           tileMode: ui.TileMode.clamp,
         ),
-        child: content,
-      );
-    }
-    if (content != null && saturation != 1) {
-      content = ColorFiltered(
-        colorFilter: saturationFilter(saturation),
-        child: content,
+        child: _SaturationFiltered(saturation: saturation, child: content),
       );
     }
 
@@ -210,6 +219,77 @@ class FrostedSurface extends StatelessWidget {
       return stack;
     }
     return ClipRRect(borderRadius: borderRadius, child: stack);
+  }
+}
+
+/// Applies the frost's vibrancy without touching the element tree.
+///
+/// `ColorFiltered` cannot be dropped and re-inserted around the content as the
+/// frost ramps (see [FrostedSurface.build]), so the filter is applied by a
+/// render object of its own: the widget is always in the tree and only the
+/// filter it paints changes. At a neutral saturation it is a plain proxy box —
+/// no layer, no compositing.
+///
+/// `ImageFiltered` does the same for the blur through its `enabled` flag; this
+/// is that shape for a colour filter.
+class _SaturationFiltered extends SingleChildRenderObjectWidget {
+  const _SaturationFiltered({required this.saturation, required super.child});
+
+  final double saturation;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderSaturationFiltered(saturation);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant _RenderSaturationFiltered renderObject,
+  ) {
+    renderObject.saturation = saturation;
+  }
+}
+
+class _RenderSaturationFiltered extends RenderProxyBox {
+  _RenderSaturationFiltered(this._saturation);
+
+  double _saturation;
+  double get saturation => _saturation;
+  set saturation(double value) {
+    if (value == _saturation) {
+      return;
+    }
+    final wasFiltered = _filtered;
+    _saturation = value;
+    if (wasFiltered != _filtered) {
+      // The layer only exists while the vibrancy is lifted, so the parent's
+      // compositing bits change with it.
+      markNeedsCompositingBitsUpdate();
+    }
+    markNeedsPaint();
+  }
+
+  bool get _filtered => _saturation != 1;
+
+  @override
+  bool get alwaysNeedsCompositing => child != null && _filtered;
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (!_filtered) {
+      super.paint(context, offset);
+      return;
+    }
+    // Through the framework's `layer` (a ref-counted handle) rather than a
+    // field of our own: it keeps the filter layer alive for reuse, where a raw
+    // reference would hold one the framework is free to dispose, and reusing a
+    // disposed layer asserts.
+    layer = context.pushColorFilter(
+      offset,
+      saturationFilter(_saturation),
+      super.paint,
+      oldLayer: layer as ColorFilterLayer?,
+    );
   }
 }
 
