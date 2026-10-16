@@ -163,135 +163,132 @@ class FileChooserDialog extends HookConsumerWidget {
 
     return Card(
       color: theme.colorScheme.surfaceContainer,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720, maxHeight: 620),
-        child: CurrentScreenId(
-          screenId: screenId,
-          child: CallbackShortcuts(
-            bindings: {
-              const SingleActivator(LogicalKeyboardKey.escape): chooser.cancel,
-            },
-            child: Focus(
-              autofocus: true,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(title, style: theme.textTheme.titleLarge),
-                              if (request.appName.isNotEmpty)
-                                Text(
-                                  request.appName,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                  ),
+      child: CurrentScreenId(
+        screenId: screenId,
+        child: CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.escape): chooser.cancel,
+          },
+          child: Focus(
+            autofocus: true,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(title, style: theme.textTheme.titleLarge),
+                            if (request.appName.isNotEmpty)
+                              Text(
+                                request.appName,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
                                 ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: context.l10n.close,
-                          onPressed: chooser.cancel,
-                          icon: const Icon(MdiIcons.close),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    if (request.mode == FileChooserMode.open) ...[
-                      if (request.filters.isNotEmpty) ...[
-                        DropdownButtonFormField<int?>(
-                          initialValue: selectedFilter.value,
-                          decoration: InputDecoration(
-                            labelText: context.l10n.fileType,
-                            border: const OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                          items: [
-                            DropdownMenuItem<int?>(
-                              child: Text(context.l10n.allFiles),
-                            ),
-                            for (var i = 0; i < request.filters.length; i++)
-                              DropdownMenuItem<int?>(
-                                value: i,
-                                child: Text(request.filters[i].name),
                               ),
                           ],
-                          onChanged: (index) {
-                            selectedFilter.value = index;
-                            final query = index == null
-                                ? ''
-                                : _searchForFilter(request.filters[index]);
-                            searchText.value = query;
-                            searchController.text = query;
-                          },
                         ),
-                        const SizedBox(height: 8),
-                      ],
-                      TextField(
-                        controller: searchController,
-                        onChanged: (value) => searchText.value = value,
+                      ),
+                      IconButton(
+                        tooltip: context.l10n.close,
+                        onPressed: chooser.cancel,
+                        icon: const Icon(MdiIcons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (request.mode == FileChooserMode.open) ...[
+                    if (request.filters.isNotEmpty) ...[
+                      DropdownButtonFormField<int?>(
+                        initialValue: selectedFilter.value,
                         decoration: InputDecoration(
-                          labelText: context.l10n.search,
+                          labelText: context.l10n.fileType,
                           border: const OutlineInputBorder(),
                           isDense: true,
                         ),
+                        items: [
+                          DropdownMenuItem<int?>(
+                            child: Text(context.l10n.allFiles),
+                          ),
+                          for (var i = 0; i < request.filters.length; i++)
+                            DropdownMenuItem<int?>(
+                              value: i,
+                              child: Text(request.filters[i].name),
+                            ),
+                        ],
+                        onChanged: (index) {
+                          selectedFilter.value = index;
+                          final query = index == null
+                              ? ''
+                              : _searchForFilter(request.filters[index]);
+                          searchText.value = query;
+                          searchController.text = query;
+                        },
                       ),
                       const SizedBox(height: 8),
                     ],
-                    if (request.mode == FileChooserMode.saveFiles &&
-                        request.files.isNotEmpty) ...[
-                      Text(
-                        request.files.join(', '),
-                        style: theme.textTheme.bodySmall,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                    Expanded(
-                      child: FileExplorerView(
-                        searchText: searchText.value,
-                        selectedIndex: selectedIndex.value,
-                        onSelect: select,
-                        onActivate: activate,
-                        onOpenDirectory: notifier.openBreadcrumb,
-                        onOpenParent: notifier.openParentDirectory,
+                    TextField(
+                      controller: searchController,
+                      onChanged: (value) => searchText.value = value,
+                      decoration: InputDecoration(
+                        labelText: context.l10n.search,
+                        border: const OutlineInputBorder(),
+                        isDense: true,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        if (request.mode == FileChooserMode.save) ...[
-                          Expanded(
-                            child: TextField(
-                              controller: nameController,
-                              autofocus: true,
-                              onChanged: (value) => nameText.value = value,
-                              decoration: InputDecoration(
-                                labelText: context.l10n.fileName,
-                                border: const OutlineInputBorder(),
-                                isDense: true,
-                              ),
+                    const SizedBox(height: 8),
+                  ],
+                  if (request.mode == FileChooserMode.saveFiles &&
+                      request.files.isNotEmpty) ...[
+                    Text(
+                      request.files.join(', '),
+                      style: theme.textTheme.bodySmall,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  Expanded(
+                    child: FileExplorerView(
+                      searchText: searchText.value,
+                      selectedIndex: selectedIndex.value,
+                      onSelect: select,
+                      onActivate: activate,
+                      onOpenDirectory: notifier.openBreadcrumb,
+                      onOpenParent: notifier.openParentDirectory,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      if (request.mode == FileChooserMode.save) ...[
+                        Expanded(
+                          child: TextField(
+                            controller: nameController,
+                            autofocus: true,
+                            onChanged: (value) => nameText.value = value,
+                            decoration: InputDecoration(
+                              labelText: context.l10n.fileName,
+                              border: const OutlineInputBorder(),
+                              isDense: true,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                        ] else
-                          const Spacer(),
-                        FilledButton(
-                          onPressed: acceptEnabled ? accept : null,
-                          child: Text(acceptLabel),
                         ),
-                      ],
-                    ),
-                  ],
-                ),
+                        const SizedBox(width: 12),
+                      ] else
+                        const Spacer(),
+                      FilledButton(
+                        onPressed: acceptEnabled ? accept : null,
+                        child: Text(acceptLabel),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ),
@@ -321,11 +318,16 @@ class FileChooserModal extends StatelessWidget {
         Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            // Keying by consent token resets the browse state when a new
-            // request replaces the current one.
-            child: FileChooserDialog(
-              key: ValueKey(request.consentToken),
-              request: request,
+            // The monitor fallback floats free, so it keeps a bounded size;
+            // inside a window container the dialog fills its area instead.
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 720, maxHeight: 620),
+              // Keying by consent token resets the browse state when a new
+              // request replaces the current one.
+              child: FileChooserDialog(
+                key: ValueKey(request.consentToken),
+                request: request,
+              ),
             ),
           ),
         ),

@@ -512,16 +512,10 @@ class _DialogBody extends StatelessWidget {
       FileChooserEntry() =>
         chooser == null
             ? const SizedBox.shrink()
-            : Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  // Keying by the request resets the browse state when a new
-                  // request replaces the current one.
-                  child: FileChooserDialog(
-                    key: ValueKey(chooser!.consentToken),
-                    request: chooser!,
-                  ),
-                ),
+            // The portal chooser fills the body, like a native dialog does.
+            : FileChooserDialog(
+                key: ValueKey(chooser!.consentToken),
+                request: chooser!,
               ),
     };
   }
