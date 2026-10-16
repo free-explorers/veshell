@@ -12,8 +12,10 @@ import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/shared/provider/persistent_storage_state.dart';
+import 'package:shell/window/model/dialog_area_entry.dart';
 import 'package:shell/window/model/dialog_window.dart';
 import 'package:shell/window/model/ephemeral_window.dart';
+import 'package:shell/window/model/matching_decision.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/model/window_manager_state.serializable.dart';
@@ -22,6 +24,7 @@ import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
+import 'package:shell/window/provider/window_manager/matching_decision_recorder.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:uuid/uuid.dart';
 
@@ -192,6 +195,74 @@ class WindowManager extends _$WindowManager {
 
     ref.read(dialogSetForWindowProvider(parentWindowId).notifier).add(windowId);
     return windowId;
+  }
+
+  /// Promotes the tile's sole dialog to its displayed window.
+  ///
+  /// Called when a tile loses the native window it displayed. If the tile is
+  /// left owning exactly one dialog and that dialog is a regular toplevel (see
+  /// [isExtractableDialog]), the dialog is the application's real window that
+  /// was mistakenly attached as a dialog — Sweet Home 3D maps a transient
+  /// "win0", the launch settles, then the real window opens just before the
+  /// transient closes. Promoting it keeps the window visible in its own tile
+  /// instead of burying it in the dialog area of a tile that shows nothing.
+  ///
+  /// A genuine dialog (modal, client-parented or fixed-size) is never promoted:
+  /// it stays in the dialog area, shown over the tile's placeholder.
+  void promoteSoleExtractableDialogForTile(WindowId tile) {
+    if (tile is DialogWindowId) {
+      return;
+    }
+    final dialogIds = ref.read(dialogSetForWindowProvider(tile));
+    if (dialogIds.length != 1) {
+      return;
+    }
+    final dialogId = dialogIds.first;
+    final MetaWindowId metaWindowId;
+    final MetaWindow metaWindow;
+    try {
+      metaWindowId = ref.read(dialogWindowStateProvider(dialogId)).metaWindowId;
+      metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+    } on Object {
+      // The dialog or its window is already gone; nothing to promote.
+      return;
+    }
+    if (!isExtractableDialog(metaWindow)) {
+      return;
+    }
+
+    _log.info(
+      'Promoting sole dialog $dialogId (meta window $metaWindowId) to tile '
+      '$tile: its displayed window left and the dialog is a regular toplevel',
+    );
+    recordMatchingDecision(
+      ref,
+      () => MatchingDecision.promote(
+        windowId: windowIdKey(tile),
+        dialogWindowId: dialogId.uuid,
+        metaWindowId: metaWindowId,
+      ),
+    );
+
+    // Detach the native window from the dialog silently (no rebroadcast may
+    // route it back), then drop the now-empty dialog and hand the window to the
+    // tile. The tile's display selection shows it and adopts its identity.
+    ref.read(dialogWindowStateProvider(dialogId).notifier)
+      ..removeMetaWindow(metaWindowId, shouldNotify: false)
+      ..removeWindow();
+
+    switch (tile) {
+      case PersistentWindowId():
+        ref
+            .read(persistentWindowStateProvider(tile).notifier)
+            .addMetaWindow(metaWindowId);
+      case EphemeralWindowId():
+        ref
+            .read(ephemeralWindowStateProvider(tile).notifier)
+            .addMetaWindow(metaWindowId);
+      case DialogWindowId():
+        break;
+    }
   }
 
   void removeWindow(WindowId windowId) {
