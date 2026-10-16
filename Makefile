@@ -76,10 +76,16 @@ install: check-config
 	install -Dm755 $(call quote,$(ASSETS_DIR)/veshell-session) $(call quote,$(DESTDIR)$(BINDIR)/veshell-session)
 	install -Dm755 $(call quote,$(ASSETS_DIR)/veshell-session-stop) $(call quote,$(DESTDIR)$(BINDIR)/veshell-session-stop)
 	install -Dm644 $(call quote,$(ASSETS_DIR)/veshell.desktop) $(call quote,$(DESTDIR)$(SESSIONDIR)/veshell.desktop)
+	# The Exec value is intentionally left unquoted. SDDM, and its Plasma
+	# Login Manager successor plasmalogin, hand the raw Exec field to the
+	# wayland-session script, which runs `exec $@`: quoting the path makes it
+	# a relative path and the session dies with status 127. GDM parses the
+	# field per the desktop-entry spec either way, and no install prefix (nor
+	# a Nix store path) contains a space.
 	# Exec argument escaping precedes desktop-entry string escaping.
 	@bindir=$$(printf '%s' $(call quote,$(BINDIR)) | sed 's/[\\"$$`]/\\&/g; s/\\/\\\\/g; s/%/%%/g'); \
 	bindir=$$(printf '%s' "$$bindir" | sed 's/[\\&|]/\\&/g'); \
-	sed "s|^Exec=veshell-session$$|Exec=\"$$bindir/veshell-session\"|" $(call quote,$(ASSETS_DIR)/veshell.desktop) > $(call quote,$(DESTDIR)$(SESSIONDIR)/veshell.desktop)
+	sed "s|^Exec=veshell-session$$|Exec=$$bindir/veshell-session|" $(call quote,$(ASSETS_DIR)/veshell.desktop) > $(call quote,$(DESTDIR)$(SESSIONDIR)/veshell.desktop)
 	install -Dm644 $(call quote,$(ASSETS_DIR)/veshell-portals.conf) $(call quote,$(DESTDIR)$(PORTALDIR)/veshell-portals.conf)
 	install -Dm644 $(call quote,$(ASSETS_DIR)/veshell.portal) $(call quote,$(DESTDIR)$(PORTALDIR)/portals/veshell.portal)
 	install -Dm644 $(call quote,$(SERVICE_OUTPUT)) $(call quote,$(DESTDIR)$(SYSTEMD_USER_DIR)/veshell.service)
