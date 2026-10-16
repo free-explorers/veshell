@@ -31,6 +31,11 @@ import 'package:shell/window/widget/window.dart';
 /// large one.
 const _panelMarginFactor = 0.06;
 
+/// Height of the dialog tab bar, taken from `PanelTab`'s layout: a 40px action
+/// button plus 8px of vertical padding on each side. Pre-computed rather than
+/// measured so the content centring lands right on the first frame.
+const _dialogTabBarHeight = 56.0;
+
 /// The dialog area of a tile: the native dialogs attached to [parentWindowId]
 /// (plus the trusted file chooser) presented as a tabbed panel over the tile,
 /// whose content is blurred while the area is open.
@@ -249,7 +254,7 @@ class _DialogAreaBackdrop extends HookWidget {
 /// The tab bar is a header, so it would push the body off-centre by its own
 /// height. The top margin is reduced by that height instead, so the *content*
 /// (the dialog) stays centred in the tile.
-class _DialogPanel extends HookWidget {
+class _DialogPanel extends StatelessWidget {
   const _DialogPanel({
     required this.entries,
     required this.selected,
@@ -264,28 +269,6 @@ class _DialogPanel extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tabsKey = useMemoized(GlobalKey.new);
-    // The tab bar's height is intrinsic (theme, text scale), so measure it
-    // rather than hard-coding it. Null until the first layout, when the margin
-    // stays symmetric for a single frame.
-    final tabsHeight = useState<double?>(null);
-
-    useEffect(() {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!context.mounted) {
-          return;
-        }
-        final box = tabsKey.currentContext?.findRenderObject();
-        if (box is RenderBox && box.hasSize) {
-          final height = box.size.height;
-          if (height != tabsHeight.value) {
-            tabsHeight.value = height;
-          }
-        }
-      });
-      return null;
-    });
-
     return LayoutBuilder(
       builder: (context, constraints) {
         // A proportional margin through which the blurred window stays
@@ -300,10 +283,7 @@ class _DialogPanel extends HookWidget {
             .roundToDouble();
         // Subtract the tab bar's height from the top margin so the body — the
         // dialog itself — is what ends up centred, never past the tile edge.
-        final measuredTabs = tabsHeight.value;
-        final top = measuredTabs == null
-            ? margin
-            : (margin - measuredTabs).clamp(0.0, double.infinity);
+        final top = (margin - _dialogTabBarHeight).clamp(0.0, double.infinity);
         return Padding(
           padding: EdgeInsets.only(
             top: top,
@@ -321,14 +301,11 @@ class _DialogPanel extends HookWidget {
                 // dialog it acts on. The body is left focusable for the
                 // chooser's own autofocus.
                 ExcludeFocus(
-                  child: KeyedSubtree(
-                    key: tabsKey,
-                    child: _DialogTabBar(
-                      entries: entries,
-                      selected: selected,
-                      chooser: chooser,
-                      onSelect: onSelect,
-                    ),
+                  child: _DialogTabBar(
+                    entries: entries,
+                    selected: selected,
+                    chooser: chooser,
+                    onSelect: onSelect,
                   ),
                 ),
                 const SizedBox(height: 16),
