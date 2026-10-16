@@ -8,6 +8,7 @@ import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
+import 'package:shell/meta_window/widget/meta_surface_decoration.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
@@ -275,6 +276,8 @@ void main() {
     expect(find.widgetWithText(PanelTab, 'Alpha'), findsOneWidget);
     expect(find.widgetWithText(PanelTab, 'Beta'), findsNothing);
     expect(find.byType(WindowDialogs), findsOneWidget);
+    // The floating dialog carries the shell frame (rounded + shadow).
+    expect(find.byType(ServerSideFrame), findsOneWidget);
     // The floating modal keeps the keyboard over the tabbed dialog.
     expect(
       container.read(selectedDialogMetaWindowForWindowProvider(_parent)),

@@ -318,7 +318,9 @@ A **modal or fixed-size** dialog is the exception: it keeps the tile's previous
 floating presentation — a dim scrim over the tile with the dialog drawn at its
 natural size — because stretching a fixed-size surface to fill the panel
 distorts it, and neither kind is ever a candidate for extraction, so the tabbed
-area adds nothing. Such a dialog is not a tab; it floats above the panel.
+area adds nothing. Such a dialog is not a tab; it floats above the panel, with a
+shell frame (rounded corners and a drop shadow) when the client brings no
+decoration of its own.
 
 The selection is kept per tile (`SelectedDialogForWindow`); a dialog that just
 opened, or a chooser that just arrived, takes the selection, and a vanished

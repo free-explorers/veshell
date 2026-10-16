@@ -33,6 +33,9 @@ class WindowDialogs extends StatelessWidget {
           FloatableWindow(
             metaWindowId: metaWindowId,
             maxSizeFactor: maxSizeFactor,
+            // Modal and fixed-size dialogs get the shell frame, so one with no
+            // decoration of its own does not read as a flat rectangle.
+            frame: true,
           ),
       ],
     );

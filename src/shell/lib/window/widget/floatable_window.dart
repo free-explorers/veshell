@@ -22,6 +22,7 @@ class FloatableWindow extends HookConsumerWidget {
   const FloatableWindow({
     required this.metaWindowId,
     this.maxSizeFactor = 1,
+    this.frame = false,
     super.key,
   });
   final MetaWindowId metaWindowId;
@@ -30,6 +31,15 @@ class FloatableWindow extends HookConsumerWidget {
   /// dialog from filling a maximized tile entirely and hiding the window
   /// behind it.
   final double maxSizeFactor;
+
+  /// Draws a shell frame (rounded corners + drop shadow) around the surface
+  /// when the client draws none of its own.
+  ///
+  /// Set for the modal and fixed-size dialogs of a tile's floating stack so
+  /// they read as cards over the dimmed tile; the floating main window keeps
+  /// its bare surface. A client that asked for server-side decoration already
+  /// carries [MetaSurfaceDecoration], so the frame is skipped for it.
+  final bool frame;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -465,12 +475,20 @@ class FloatableWindow extends HookConsumerWidget {
       ],
     );
 
+    final surface = MetaSurfaceWidget(
+      metaWindowId: metaWindowId,
+      decorated: metaWindow.needDecoration,
+    );
+
     final window = WithResizeHandles(
       metaWindowId: metaWindowId,
-      child: MetaSurfaceWidget(
-        metaWindowId: metaWindowId,
-        decorated: metaWindow.needDecoration,
-      ),
+      // A floating dialog that draws no shell decoration of its own gets a bare
+      // frame so it reads as a card over the dimmed tile; a client that asked
+      // for server-side decoration already carries one (title bar included),
+      // and would only double the shadow.
+      child: frame && !metaWindow.needDecoration
+          ? ServerSideFrame(child: surface)
+          : surface,
     );
 
     // A fixed-size dialog cannot be resized through a configure. When it is
