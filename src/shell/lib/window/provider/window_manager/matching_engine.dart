@@ -514,6 +514,66 @@ class MatchingEngine extends _$MatchingEngine {
     return findBestWindowCandidateForMetaWindow(metaWindowId).$1;
   }
 
+  /// Whether the root tile that ultimately owns [windowId] currently owns no
+  /// native window (its displayed-window slot is empty).
+  ///
+  /// Mirrors the "empty placeholder" notion used by [findEmptySiblingForApp]
+  /// and [findBestEmptyPlaceholderFor]: a tile whose displayed window is null.
+  bool ownerTileOwnsNoWindow(WindowId windowId) {
+    final root = rootTileFor(windowId);
+    return switch (root) {
+      PersistentWindowId() =>
+        ref.read(persistentWindowStateProvider(root)).metaWindowId == null,
+      EphemeralWindowId() =>
+        ref.read(ephemeralWindowStateProvider(root)).metaWindowId == null,
+      DialogWindowId() => false,
+    };
+  }
+
+  /// Whether a window carrying an owner relation should attach to its owner
+  /// tile as one of its native windows instead of becoming a dialog of it.
+  ///
+  /// True for a settled, non-fixed-size window whose owner tile owns no native
+  /// window: there is no displayed surface for a dialog to belong to, so the
+  /// window is the application's own window returning to its now-empty tile.
+  /// This covers applications that map a transient first window the launch
+  /// burst settles on, close it, then open the real window — Sweet Home 3D's
+  /// "win0" — where the real window would otherwise be buried in the empty
+  /// tile's dialog area as a dialog of a window that no longer exists.
+  ///
+  /// A fixed-size window (a splash/updater) is never attached this way: the
+  /// dialog area is exactly where such a window belongs while its tile has no
+  /// real window yet.
+  bool relationAttachesToOwnerAsWindow(
+    MetaWindowId metaWindowId,
+    WindowId ownerTile,
+  ) {
+    if (ref.read(metaWindowStateProvider(metaWindowId)).isFixedSized) {
+      return false;
+    }
+    return ownerTileOwnsNoWindow(ownerTile);
+  }
+
+  /// Attaches [metaWindowId] to [windowId] as one of its native windows.
+  ///
+  /// The caller has already chosen the destination (unlike [addMetaWindow],
+  /// which runs ordinary matching). A [DialogWindowId] cannot own a displayed
+  /// window, so it is ignored.
+  void attachMetaWindowTo(WindowId windowId, MetaWindowId metaWindowId) {
+    switch (windowId) {
+      case PersistentWindowId():
+        ref
+            .read(persistentWindowStateProvider(windowId).notifier)
+            .addMetaWindow(metaWindowId);
+      case EphemeralWindowId():
+        ref
+            .read(ephemeralWindowStateProvider(windowId).notifier)
+            .addMetaWindow(metaWindowId);
+      case DialogWindowId():
+        break;
+    }
+  }
+
   /// Whether the launch burst that produced [metaWindowId] is still gathering,
   /// so the window must go through ordinary matching instead of attaching as a
   /// dialog of the window it was opened from.
