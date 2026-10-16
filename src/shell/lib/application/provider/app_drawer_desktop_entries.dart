@@ -1,5 +1,6 @@
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/application/model/desktop_entry_visibility.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 
 part 'app_drawer_desktop_entries.g.dart';
@@ -10,6 +11,7 @@ Future<Iterable<LocalizedDesktopEntry>> appDrawerDesktopEntries(Ref ref) async {
     localizedDesktopEntriesProvider.future,
   );
   return localizedDesktopEntries.values.where(
-    (element) => !element.desktopEntry.isHidden(),
+    (element) =>
+        !element.desktopEntry.isHidden() && shownInCurrentDesktop(element),
   );
 }
