@@ -90,6 +90,42 @@ void main() {
     expect(frostSigmaFor(const Size(2000, 2000)), 28.0);
   });
 
+  testWidgets('the grain follows noiseOpacity instead of popping', (
+    tester,
+  ) async {
+    Future<void> pump(double noiseOpacity) => tester.pumpWidget(
+      MaterialApp(
+        home: FrostedSurface(
+          blurSigma: 12,
+          tint: Colors.black26,
+          tintOverContent: true,
+          noise: true,
+          noiseOpacity: noiseOpacity,
+          child: const SizedBox(width: 40, height: 40),
+        ),
+      ),
+    );
+    Finder inFrost(Type type) => find.descendant(
+      of: find.byType(FrostedSurface),
+      matching: find.byType(type),
+    );
+
+    // Faded out: no grain at all.
+    await pump(0);
+    expect(inFrost(CustomPaint), findsNothing);
+
+    // Mid-ramp: the grain rides an `Opacity` layer, so it fades with the wash
+    // rather than switching on the instant the blur crosses its floor.
+    await pump(0.5);
+    expect(inFrost(CustomPaint), findsOneWidget);
+    expect(inFrost(Opacity), findsOneWidget);
+
+    // Settled: painted directly, without the extra layer.
+    await pump(1);
+    expect(inFrost(CustomPaint), findsOneWidget);
+    expect(inFrost(Opacity), findsNothing);
+  });
+
   test('the wash lifts a dark scheme and settles a light one', () {
     final dark = ColorScheme.fromSeed(
       seedColor: Colors.red,

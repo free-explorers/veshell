@@ -39,9 +39,9 @@ class OverviewWidget extends HookConsumerWidget {
       overviewStateProvider(screenId).select((state) => state.isDisplayed),
     );
 
-    final animationController = useAnimationController(
-      duration: const Duration(milliseconds: 200),
-    );
+    // Same duration as `OverviewBlurTarget`, so the wash and the blur it sits
+    // on stay in step.
+    final animationController = useAnimationController(duration: frostDuration);
 
     // Drive the overlay from the current value, not only from changes, so it
     // stays in step with `OverviewBlurTarget` (which uses the same watch
@@ -57,6 +57,14 @@ class OverviewWidget extends HookConsumerWidget {
       }
       return null;
     }, [isDisplayed]);
+
+    // Matching that: a subtree mounted while the overview is displayed comes up
+    // fully present instead of fading in over a screen that is already blurred.
+    final settled = useRef(false);
+    if (!settled.value) {
+      settled.value = true;
+      animationController.value = isDisplayed ? 1 : 0;
+    }
 
     return AnimatedBuilder(
       animation: animationController,
@@ -166,6 +174,13 @@ class _OverviewScrim extends HookWidget {
   Widget build(BuildContext context) {
     // Mirror the old tint curve: it derived the white-wash alpha from the
     // animated blur sigma (0..16), so keep the same 0..16*255/100 ramp.
+    //
+    // The two `Interval`s are a deliberate stagger, not dead time: the wash
+    // comes first on the way in and leaves last on the way out, with the panes
+    // opposite it. Each interval's clamped end sits behind the other layer's
+    // motion, so neither is visible as a hold — unlike the dialog backdrop,
+    // which has nothing else animating over it and therefore runs its frost
+    // ramp unstretched (see `frostDuration`).
     final tintAnimation = useMemoized(
       () => Tween<double>(begin: 0, end: 1).animate(
         CurvedAnimation(

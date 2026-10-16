@@ -34,6 +34,21 @@ Color frostedGlassTint(ColorScheme scheme) => Color.alphaBlend(
 /// region proportionally harder.
 const _frostSigmaFactor = 0.02;
 
+/// Duration of a frost transition, shared by the frosted surfaces (the dialog
+/// backdrop, the overview background and scrim, the gaming pause frost).
+///
+/// Short and *fully used*: the dialog backdrop used to run a 200ms controller
+/// through an `Interval(0, 0.6)`, so the motion really took 120ms while the
+/// remaining 80ms only kept rasterizing blurred frames — and on the way out the
+/// clamped interval held the frost at full for 80ms before it started to lift,
+/// leaving a frozen tile behind an already vanished panel.
+const frostDuration = Duration(milliseconds: 160);
+
+/// Curve for a frost ramp. Symmetric, so it needs no `reverseCurve`: with no
+/// `Interval` clamping the ends, forward and reverse both start moving on the
+/// first frame.
+const Curve frostCurve = Curves.easeInOut;
+
 /// Sigma floor: even a tiny region should read as frosted.
 const _frostSigmaMin = 8.0;
 
@@ -74,6 +89,7 @@ class FrostedSurface extends StatelessWidget {
     this.frame = true,
     this.highlight = true,
     this.noise = false,
+    this.noiseOpacity = 1,
     this.absorbPointers = false,
     super.key,
   });
@@ -109,6 +125,14 @@ class FrostedSurface extends StatelessWidget {
 
   /// Adds a fine grain that breaks up banding in the wash.
   final bool noise;
+
+  /// How strongly the grain paints, `0`..`1`.
+  ///
+  /// A caller animating the frost should ramp this with the blur, so the grain
+  /// fades in with the wash instead of switching on the instant the blur
+  /// crosses [_noiseMinSigma] — a few percent into the ramp, which read as a
+  /// pop inside an otherwise smooth transition.
+  final double noiseOpacity;
 
   /// Whether the glass should absorb pointers that its content does not.
   ///
@@ -148,8 +172,9 @@ class FrostedSurface extends StatelessWidget {
 
     // Only paint the glass when there is something to paint: a closed dialog
     // passes `tint: null` and must not keep drawing a grain over its window.
-    // The grain drops out too unless the surface is actually blurred.
-    final showNoise = noise && blurSigma > _noiseMinSigma;
+    // The grain drops out too unless the surface is actually blurred, and is
+    // faded by [noiseOpacity] while the frost ramps.
+    final showNoise = noise && noiseOpacity > 0 && blurSigma > _noiseMinSigma;
     final hasGlass =
         tint != null || highlight || showNoise || frameColor != null;
     Widget? glass;
@@ -159,6 +184,7 @@ class FrostedSurface extends StatelessWidget {
         frame: frameColor,
         highlight: highlight,
         noise: showNoise,
+        noiseOpacity: noiseOpacity,
       );
       // The glass is decorative by default and must not absorb a pointer: a
       // fully transparent veil (alpha 0) is still a hit-test-opaque
@@ -194,12 +220,14 @@ class _GlassLayer extends StatelessWidget {
     required this.frame,
     required this.highlight,
     required this.noise,
+    required this.noiseOpacity,
   });
 
   final Color? tint;
   final Color? frame;
   final bool highlight;
   final bool noise;
+  final double noiseOpacity;
 
   @override
   Widget build(BuildContext context) {
@@ -230,11 +258,23 @@ class _GlassLayer extends StatelessWidget {
               border: Border.fromBorderSide(BorderSide(color: frame!)),
             ),
           ),
-        if (noise) const CustomPaint(painter: _NoisePainter()),
+        if (noise) _grainLayer(noiseOpacity),
       ],
     );
   }
 }
+
+/// The grain layer, faded by [opacity].
+///
+/// The grain is a baked image, so its alpha cannot be modulated by the
+/// painter's colour: a partial opacity needs a layer, and is skipped entirely
+/// once the frost has settled.
+Widget _grainLayer(double opacity) => opacity >= 1
+    ? const CustomPaint(painter: _NoisePainter())
+    : Opacity(
+        opacity: opacity,
+        child: const CustomPaint(painter: _NoisePainter()),
+      );
 
 /// A saturation matrix filter. `amount` of `1` is identity, `> 1` boosts.
 ColorFilter saturationFilter(double amount) {

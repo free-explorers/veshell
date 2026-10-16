@@ -13,6 +13,7 @@ import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
+import 'package:shell/shared/widget/frosted_surface.dart';
 import 'package:shell/shared/widget/panel_tab.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
@@ -113,6 +114,7 @@ MetaWindow _modalMetaWindow() => const MetaWindow(
 Future<ProviderContainer> _pumpModalDialogArea(
   WidgetTester tester, {
   required Size surfaceSize,
+  bool settle = true,
 }) async {
   final container = ProviderContainer(
     overrides: [
@@ -141,31 +143,34 @@ Future<ProviderContainer> _pumpModalDialogArea(
   );
   addTearDown(container.dispose);
 
-  await tester.pumpWidget(
-    UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(
-          body: CurrentMonitorName(
-            name: 'M1',
-            child: SizedBox(
-              width: 1000,
-              height: 800,
-              child: WindowDialogArea(
-                parentWindowId: _parent,
-                child: const SizedBox.expand(),
-              ),
-            ),
+  await tester.pumpWidget(_areaApp(container));
+  if (settle) {
+    await tester.pumpAndSettle();
+  }
+  return container;
+}
+
+/// The dialog area under test, sized like a maximized tile.
+Widget _areaApp(ProviderContainer container) => UncontrolledProviderScope(
+  container: container,
+  child: MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: Scaffold(
+      body: CurrentMonitorName(
+        name: 'M1',
+        child: SizedBox(
+          width: 1000,
+          height: 800,
+          child: WindowDialogArea(
+            parentWindowId: _parent,
+            child: const SizedBox.expand(),
           ),
         ),
       ),
     ),
-  );
-  await tester.pumpAndSettle();
-  return container;
-}
+  ),
+);
 
 void main() {
   testWidgets('the dialog area lists every dialog and selects the newest', (
@@ -313,5 +318,67 @@ void main() {
     expect(find.byType(WindowDialogs), findsOneWidget);
     expect(find.byType(ServerSideFrame), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a dialog open at mount is frosted on the first frame', (
+    tester,
+  ) async {
+    // No settle: a tile built while a dialog is already open must come up
+    // frosted, not blur in from nothing.
+    await _pumpModalDialogArea(
+      tester,
+      surfaceSize: const Size(320, 240),
+      settle: false,
+    );
+
+    expect(
+      tester.widget<FrostedSurface>(find.byType(FrostedSurface)).blurSigma,
+      greaterThan(0),
+    );
+    expect(find.widgetWithText(PanelTab, 'Alpha'), findsOneWidget);
+  });
+
+  testWidgets('closing keeps the panel mounted while the frost fades out', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        platformManagerProvider.overrideWithValue(
+          const Stream<PlatformEvent>.empty(),
+        ),
+        dialogWindowStateProvider(_dialogA).overrideWith(
+          () => _FixedDialogState(_dialog(_dialogA, 'meta-a', 'Alpha')),
+        ),
+        localizedDesktopEntryForIdProvider(
+          'org.example.App',
+        ).overrideWith(_NoDesktopEntry.new),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(dialogSetForWindowProvider(_parent).notifier).add(_dialogA);
+
+    await tester.pumpWidget(_areaApp(container));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(PanelTab, 'Alpha'), findsOneWidget);
+
+    container
+        .read(dialogSetForWindowProvider(_parent).notifier)
+        .remove(_dialogA);
+    // One frame into the close: the panel is still mounted, fading with the
+    // backdrop, so the tile is never left frosted over an empty panel.
+    await tester.pump();
+    expect(find.widgetWithText(PanelTab, 'Alpha'), findsOneWidget);
+    expect(
+      tester.widget<FrostedSurface>(find.byType(FrostedSurface)).blurSigma,
+      greaterThan(0),
+    );
+
+    // Once the ramp finishes, both are gone.
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(PanelTab, 'Alpha'), findsNothing);
+    expect(
+      tester.widget<FrostedSurface>(find.byType(FrostedSurface)).blurSigma,
+      0,
+    );
   });
 }

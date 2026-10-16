@@ -118,24 +118,90 @@ class WindowDialogArea extends HookConsumerWidget {
     final selected = _resolveSelection(stored, entries);
     final isOpen = selected != null;
 
+    // One controller for the whole area: the backdrop's frost and the panel's
+    // fade run together, so closing can no longer leave a frosted tile behind a
+    // panel that already vanished. Fully used and symmetric (`frostCurve`), so
+    // both directions start moving on the first frame.
+    final frostController = useAnimationController(duration: frostDuration);
+    final frostAnimation = useMemoized(
+      () => CurvedAnimation(parent: frostController, curve: frostCurve),
+      [frostController],
+    );
+    useEffect(() {
+      if (isOpen) {
+        frostController.forward();
+      } else {
+        frostController.reverse();
+      }
+      return null;
+    }, [isOpen]);
+
+    // A tile built while a dialog is already open (a workspace switch, a
+    // monitor reconnect) must appear frosted rather than fade in: only a later
+    // change of `isOpen` animates. The controller is still at its initial value
+    // during this first build, so set it before anything listens.
+    final settled = useRef(false);
+    if (!settled.value) {
+      settled.value = true;
+      frostController.value = isOpen ? 1 : 0;
+    }
+
+    // The panel leaves with the frost: keep the last open state rendered (and
+    // fading) until the backdrop has finished clearing, instead of unmounting
+    // it the frame the dialog closes.
+    final panelState =
+        useRef<
+          ({
+            List<DialogAreaEntry> entries,
+            DialogAreaEntry selected,
+            FileChooserRequestMessage? chooser,
+          })?
+        >(null);
+    if (selected != null) {
+      panelState.value = (
+        entries: entries,
+        selected: selected,
+        chooser: chooser,
+      );
+    }
+    final panel = panelState.value;
+
     return Stack(
       fit: StackFit.expand,
       children: [
         _DialogAreaBackdrop(
-          blurred: isOpen,
+          animation: frostAnimation,
           // The frosted backdrop is not interactive: clicks belong to the
           // panel, not to the window behind it.
           child: IgnorePointer(ignoring: isOpen, child: child),
         ),
-        if (selected != null)
-          _DialogPanel(
-            entries: entries,
-            selected: selected,
-            chooser: chooser,
-            onSelect: (entry) {
-              selectionNotifier.select(entry);
-              _activateEntry(ref, entry);
+        if (panel != null)
+          AnimatedBuilder(
+            animation: frostAnimation,
+            builder: (context, child) {
+              final progress = frostAnimation.value;
+              if (progress <= 0) {
+                // Fully closed: unmount the body so its surface is torn down.
+                return const SizedBox.shrink();
+              }
+              return IgnorePointer(
+                // A panel on its way out must not take clicks for a dialog that
+                // is already closed.
+                ignoring: !isOpen,
+                // Fade only: scaling the panel would resample the live Wayland
+                // surface it hosts (the whole-pixel contract).
+                child: Opacity(opacity: progress, child: child),
+              );
             },
+            child: _DialogPanel(
+              entries: panel.entries,
+              selected: panel.selected,
+              chooser: panel.chooser,
+              onSelect: (entry) {
+                selectionNotifier.select(entry);
+                _activateEntry(ref, entry);
+              },
+            ),
           ),
         // A modal or fixed-size dialog stays on top of everything, exactly as
         // it did before the dialog area existed: the tile dims and the dialog
@@ -199,46 +265,24 @@ class WindowDialogArea extends HookConsumerWidget {
   }
 }
 
-/// The frosted tile layer. Animates the blur, vibrancy and dimming veil in
-/// while the area is open, using the overview's curve, and leaves the tile
-/// untouched when it is not.
-class _DialogAreaBackdrop extends HookWidget {
-  const _DialogAreaBackdrop({required this.blurred, required this.child});
+/// The frosted tile layer. Renders the blur, vibrancy and wash from the area's
+/// frost [animation], and leaves the tile untouched when it is at zero.
+class _DialogAreaBackdrop extends StatelessWidget {
+  const _DialogAreaBackdrop({required this.animation, required this.child});
 
-  final bool blurred;
+  final Animation<double> animation;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final animationController = useAnimationController(
-      duration: const Duration(milliseconds: 200),
-    );
-
-    useEffect(() {
-      if (blurred) {
-        animationController.forward();
-      } else {
-        animationController.reverse();
-      }
-      return null;
-    }, [blurred]);
-
-    final progressAnimation = useMemoized(
-      () => CurvedAnimation(
-        parent: animationController,
-        curve: const Interval(0, 0.6, curve: Curves.easeInOut),
-      ),
-      [animationController],
-    );
-
     return LayoutBuilder(
       builder: (context, constraints) {
         // Sigma grows with the region so a small tile is not over-blurred.
         final maxSigma = frostSigmaFor(constraints.biggest);
         return AnimatedBuilder(
-          animation: animationController,
+          animation: animation,
           builder: (context, child) {
-            final progress = progressAnimation.value;
+            final progress = animation.value;
             final scheme = Theme.of(context).colorScheme;
             // Cache the frosted result: while the panel is interacted with or
             // animated, the blur is reused instead of recomputed, as long as
@@ -260,11 +304,12 @@ class _DialogAreaBackdrop extends HookWidget {
                     : null,
                 tintOverContent: true,
                 // The tile is not a card: no frame and no sheen at its edges.
-                // The grain matches the overview; it only paints while a dialog
-                // is open, since the wash is `null` when closed.
+                // The grain rides the ramp (it only paints once blurred) so it
+                // fades with the wash instead of popping in.
                 frame: false,
                 highlight: false,
                 noise: true,
+                noiseOpacity: progress,
                 child: child,
               ),
             );

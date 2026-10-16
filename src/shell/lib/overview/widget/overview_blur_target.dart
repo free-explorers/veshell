@@ -35,9 +35,7 @@ class OverviewBlurTarget extends HookConsumerWidget {
       overviewStateProvider(screenId).select((state) => state.isDisplayed),
     );
 
-    final animationController = useAnimationController(
-      duration: const Duration(milliseconds: 200),
-    );
+    final animationController = useAnimationController(duration: frostDuration);
 
     useEffect(() {
       if (isDisplayed) {
@@ -48,11 +46,17 @@ class OverviewBlurTarget extends HookConsumerWidget {
       return null;
     }, [isDisplayed]);
 
+    // A screen subtree rebuilt while the overview is displayed (a monitor
+    // reconnect across a suspend, say) must come back already frosted rather
+    // than blurring in from nothing.
+    final settled = useRef(false);
+    if (!settled.value) {
+      settled.value = true;
+      animationController.value = isDisplayed ? 1 : 0;
+    }
+
     final progressAnimation = useMemoized(
-      () => CurvedAnimation(
-        parent: animationController,
-        curve: const Interval(0, 0.6, curve: Curves.easeInOut),
-      ),
+      () => CurvedAnimation(parent: animationController, curve: frostCurve),
       [animationController],
     );
 
@@ -74,9 +78,10 @@ class OverviewBlurTarget extends HookConsumerWidget {
                 // A blurred background should read as glass, not merely out of
                 // focus: lift its vibrancy a touch while the overview opens.
                 saturation: 1 + 0.2 * progress,
-                // Grain rides the blur (it only paints once blurred), so it
-                // lives here rather than on the scrim, which does not blur.
+                // Grain rides the blur (it only paints once blurred) and fades
+                // with the ramp, so it lives here rather than on the scrim.
                 noise: true,
+                noiseOpacity: progress,
                 tintOverContent: true,
                 frame: false,
                 highlight: false,

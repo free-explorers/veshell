@@ -30,9 +30,15 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
 
     // The pause dim is a frost: the game blurs behind the instructions instead
     // of being covered by a flat scrim, matching the overview background and
-    // the dialog area. Runs on the same 300ms as the instructions' fade.
+    // the dialog area. Same 300ms as the zoom route it starts with, but eased:
+    // a linear blur ramp reads mechanical, since sigma changes are perceptually
+    // front-loaded.
     final frostController = useAnimationController(
       duration: const Duration(milliseconds: 300),
+    );
+    final frostAnimation = useMemoized(
+      () => CurvedAnimation(parent: frostController, curve: frostCurve),
+      [frostController],
     );
     useEffect(() {
       if (paused) {
@@ -42,6 +48,15 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
       }
       return null;
     }, [paused]);
+
+    // A tile built with the game already paused comes up frosted, in step with
+    // the instructions (an `AnimatedOpacity` starts at its target on mount)
+    // rather than blurring in underneath them.
+    final settled = useRef(false);
+    if (!settled.value) {
+      settled.value = true;
+      frostController.value = paused ? 1 : 0;
+    }
 
     final monitorName = CurrentMonitorName.of(context);
 
@@ -136,9 +151,9 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
               // Sigma grows with the region, like every other frost.
               final maxSigma = frostSigmaFor(constraints.biggest);
               return AnimatedBuilder(
-                animation: frostController,
+                animation: frostAnimation,
                 builder: (context, child) {
-                  final progress = frostController.value;
+                  final progress = frostAnimation.value;
                   final scheme = Theme.of(context).colorScheme;
                   // Cache the frosted game: while the instructions are up, the
                   // blur is reused instead of recomputed, as long as the game
@@ -158,10 +173,12 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
                           : null,
                       tintOverContent: true,
                       // The tile is not a card: no frame and no sheen at its
-                      // edges.
+                      // edges. The grain rides the ramp so it fades with the
+                      // wash instead of popping in.
                       frame: false,
                       highlight: false,
                       noise: true,
+                      noiseOpacity: progress,
                       child: child,
                     ),
                   );
@@ -170,10 +187,10 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
                   tag: heroUuid,
                   child: _SizedSurface(
                     size: surfaceSize,
-                    // While the native render owns the output the shell must not
-                    // draw the game: a placeholder keeps the surface out of
-                    // Flutter (no duplicate rasterization, and the surface state
-                    // stops driving Flutter frames).
+                    // While the native render owns the output the shell must
+                    // not draw the game: a placeholder keeps the surface out of
+                    // Flutter (no duplicate rasterization, and the surface
+                    // state stops driving Flutter frames).
                     child: metaWindowState.gameModeActivated
                         ? const SizedBox.expand()
                         : MetaSurfaceWidget(
@@ -194,6 +211,7 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
             child: AnimatedOpacity(
               opacity: paused ? 1 : 0,
               duration: const Duration(milliseconds: 300),
+              curve: frostCurve,
               child: GestureDetector(
                 // The frost replaced the scrim's box, so the whole tile must
                 // stay tappable: an opaque detector restores the hit area the
