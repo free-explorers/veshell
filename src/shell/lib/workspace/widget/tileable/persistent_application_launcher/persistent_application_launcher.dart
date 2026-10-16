@@ -38,7 +38,7 @@ class PersistentApplicationSelector extends Tileable {
       },
       child: ColoredBox(
         color: Theme.of(context).colorScheme.surfaceContainerLowest,
-        child: AppDrawer(onSelect: onSelect),
+        child: AppDrawer(onSelect: onSelect, isSelected: isSelected),
       ),
     );
   }

@@ -13,6 +13,7 @@ abstract class Workspace with _$Workspace {
     required IList<PersistentWindowId> tileableWindowList,
     required int selectedIndex,
     required int visibleLength,
+    @Default(0) int firstVisibleIndex,
     WorkspaceCategory? category,
     WorkspaceCategory? forcedCategory,
   }) = _Workspace;
