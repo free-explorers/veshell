@@ -6,8 +6,12 @@ import 'package:shell/l10n/l10n.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/app_drawer/app_grid.dart';
 
 class AppDrawer extends HookConsumerWidget {
-  const AppDrawer({required this.onSelect, super.key});
+  const AppDrawer({required this.onSelect, this.isSelected = false, super.key});
   final DesktopEntrySelectedCallback onSelect;
+
+  /// Whether the launcher is the workspace's selected tile. While selected, the
+  /// search field must hold focus so typing filters the grid.
+  final bool isSelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -32,6 +36,7 @@ class AppDrawer extends HookConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _AppDrawerTextField(
+            isSelected: isSelected,
             onSearchTextChange: (searchText) {
               searchTextState.value = searchText;
             },
@@ -54,10 +59,12 @@ class AppDrawer extends HookConsumerWidget {
 
 class _AppDrawerTextField extends HookConsumerWidget {
   const _AppDrawerTextField({
+    required this.isSelected,
     required this.onSearchTextChange,
     required this.onSubmitted,
   });
 
+  final bool isSelected;
   final void Function(String searchText) onSearchTextChange;
   final VoidCallback onSubmitted;
 
@@ -79,10 +86,20 @@ class _AppDrawerTextField extends HookConsumerWidget {
       };
     }, [searchController]);
 
+    // `TextField.autofocus` only fires once per element lifetime. The launcher
+    // stays mounted while it is on screen, so re-selecting it (its tile was
+    // already visible) would leave the search field unfocused. Focus it
+    // explicitly whenever the launcher becomes the selected tile instead.
+    useEffect(() {
+      if (isSelected) {
+        searchFocusNode.requestFocus();
+      }
+      return null;
+    }, [isSelected]);
+
     return TextField(
       controller: searchController,
       focusNode: searchFocusNode,
-      autofocus: true,
       onSubmitted: (_) => onSubmitted(),
       decoration: InputDecoration(
         prefixIcon: const Padding(
