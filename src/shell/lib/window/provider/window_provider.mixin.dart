@@ -65,10 +65,16 @@ const _fixedSizeDisplayPenalty = 100;
 /// windows over a few hundred milliseconds — otherwise the late window is seen
 /// as a *further opening* after the settle and attaches as a dialog of
 /// whatever relation it carries (see `MAX_WINDOW_REASSOCIATION_TIME_MS` and the
-/// matching algorithm spec). It stays well below
-/// [MAX_SPLASH_GATHER_TIME_MS], the fixed-size deferral bound, so a genuinely
-/// fixed-size final surface still settles as the tile's own window.
-const _settleDebounce = Duration(milliseconds: 150);
+/// matching algorithm spec). Firefox in particular maps its restored windows
+/// ~190–270 ms apart, so the previous 150 ms (and the 100 ms before it) settled
+/// between them and sent the 2nd/3rd window into the dialog area of the first;
+/// 500 ms covers that stagger with headroom. Longer also lets the windows'
+/// titles settle, so the by-title redistribution matches each window to its own
+/// placeholder instead of falling back to spreading over empty siblings. It
+/// stays well below [MAX_SPLASH_GATHER_TIME_MS], the fixed-size deferral bound,
+/// so a genuinely fixed-size final surface still settles as the tile's own
+/// window.
+const _settleDebounce = Duration(milliseconds: 500);
 
 mixin WindowProviderMixin<T extends Window> {
   T get state;
@@ -168,7 +174,7 @@ mixin WindowProviderMixin<T extends Window> {
     }
   }
 
-  /// Fires after the 100 ms settle debounce. A launch origin finalizes its
+  /// Fires after the [_settleDebounce]. A launch origin finalizes its
   /// gather, unless the only windows it has produced so far are fixed-size and
   /// the splash deferral budget is not exhausted yet, in which case the timer
   /// is re-armed. A non-origin tile with an overflow redistributes.

@@ -214,8 +214,14 @@ All of these are observed on the live surfaces and, where meaningful, mirrored o
 1. **Launch and gather.** The user launches a tile. Its waiting bonus stays
    armed for the whole burst, so every native window of the burst attaches to
    the clicked tile first.
-2. **Settle.** After the burst's last change (short debounce) titles are final;
-   no dispatch decision is taken before that. This is what removes the need for
+2. **Settle.** After the burst's last change (a short debounce, currently
+   500 ms) titles are final; no dispatch decision is taken before that. The
+   debounce must outlast the gap an application leaves between its startup
+   windows — a browser restoring a session maps them over a few hundred
+   milliseconds, Firefox at ~190–270 ms — otherwise the late window is seen as
+   a *further opening* and attaches as a dialog of the first. A longer quiet
+   also gives titles time to leave their generic startup value before the
+   by-title decision. This is what removes the need for
    any later re-association. The settle is deferred while the only window the
    gather has produced is fixed-size (a splash or updater) and no resizable
    window has arrived yet: applications map their transient helper first and
