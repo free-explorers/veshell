@@ -16,6 +16,7 @@ import 'package:shell/monitor/widget/empty_monitor.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/screen/widget/screen.dart';
 import 'package:shell/settings/widget/monitor_setting_change_confirmation_overlay.dart';
+import 'package:shell/shortcut_manager/widget/shortcut_manager.dart';
 import 'package:shell/shared/widget/multi_view_drag.dart';
 import 'package:shell/theme/provider/theme.dart';
 
@@ -49,15 +50,26 @@ class MonitorWidget extends HookConsumerWidget {
       themeMode: ThemeMode.dark,
       // The consent picker and screenshot prompt are drawn above the
       // Navigator, frozen on the monitor focused when the flow opened.
-      builder: (context, child) => Stack(
-        fit: StackFit.expand,
-        children: [
-          child ?? const SizedBox.shrink(),
-          CapturePromptOverlay(monitorName: monitorName),
-          // Display-setting confirmation sits above everything, including the
-          // capture prompts, so a pending rollback can never be hidden.
-          const MonitorSettingChangeConfirmationOverlay(),
-        ],
+      //
+      // The shortcut manager sits *inside* the `MaterialApp`, wrapping the
+      // Navigator. `MaterialApp` installs `DefaultTextEditingShortcuts` and the
+      // default `WidgetsApp` shortcuts above the Navigator, and their plain-key
+      // `SingleActivator`s (arrow keys, Space, Tab, Enter, Escape) ignore the
+      // Super key, so they would otherwise consume a `Super+Arrow` (or
+      // `Super+Space`) chord before the shell's own bindings — built from exact
+      // `LogicalKeySet`s — ever see it. Below them, the manager is closer to
+      // focus and wins the chord, while ordinary typing still flows through.
+      builder: (context, child) => VeshellShortcutManager(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            child ?? const SizedBox.shrink(),
+            CapturePromptOverlay(monitorName: monitorName),
+            // Display-setting confirmation sits above everything, including
+            // the capture prompts, so a pending rollback can never be hidden.
+            const MonitorSettingChangeConfirmationOverlay(),
+          ],
+        ),
       ),
       home: Material(
         child: initializationStatus.when(

@@ -106,20 +106,21 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    // Mirrors the real tree: `VeshellShortcutManager` wraps `MaterialApp`
-    // (see `main.dart`), so it sits above Flutter's
-    // `DefaultTextEditingShortcuts`.
+    // Mirrors the real tree: `VeshellShortcutManager` lives inside the
+    // `MaterialApp` (see `MonitorWidget`), below Flutter's
+    // `DefaultTextEditingShortcuts`. The overview's search pane also binds
+    // `Enter` locally, so activation works either way.
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const VeshellShortcutManager(
-          child: MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: CurrentScreenId(
-              screenId: screenId,
-              child: Scaffold(body: OverviewShortcuts(child: SearchEngine())),
-            ),
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) =>
+              VeshellShortcutManager(child: child ?? const SizedBox.shrink()),
+          home: const CurrentScreenId(
+            screenId: screenId,
+            child: Scaffold(body: OverviewShortcuts(child: SearchEngine())),
           ),
         ),
       ),

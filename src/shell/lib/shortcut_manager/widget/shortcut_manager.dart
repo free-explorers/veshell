@@ -24,7 +24,6 @@ class VeshellShortcutManager extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final hotkeysActivator = ref.watch(hotkeysActivatorProvider);
-    print(hotkeysActivator);
     final manager = useMemoized(
       () => _ShortcutManager(shortcuts: hotkeysActivator),
       [hotkeysActivator],

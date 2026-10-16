@@ -35,7 +35,6 @@ import 'package:shell/shared/pulseaudio/provider/pulse_server_info.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_sink_list.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_source_list.dart';
 import 'package:shell/shared/util/logger.dart';
-import 'package:shell/shortcut_manager/widget/shortcut_manager.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/window/provider/window_manager/matching_engine.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
@@ -140,9 +139,10 @@ class _VeshellState extends ConsumerState<Veshell> with WidgetsBindingObserver {
           .map(
             (view) => View(
               view: view,
-              child: VeshellShortcutManager(
-                child: MonitorWidget(viewId: view.viewId),
-              ),
+              // `MonitorWidget` owns the shortcut manager: it lives inside the
+              // monitor's `MaterialApp` so the shell's chords beat the
+              // framework's default shortcuts (see `MonitorWidget`).
+              child: MonitorWidget(viewId: view.viewId),
             ),
           )
           .toList(),

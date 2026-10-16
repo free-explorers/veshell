@@ -14,34 +14,42 @@ class SurfaceFocus extends HookConsumerWidget {
       // https://github.com/flutter/flutter/blob/73e78fd97c44a88fc164b683e8779293ebe85e95/packages/flutter/lib/src/widgets/app.dart#L1234
 
       shortcuts: {
-        // Activation
-        const SingleActivator(LogicalKeyboardKey.enter):
+        // Activation.
+        //
+        // The bare keys use `LogicalKeySet` (an exact chord) rather than
+        // `SingleActivator`: the latter only checks control/shift/alt/meta, so
+        // it also matches while the Super key is held. That would swallow a
+        // `Super+Arrow` (or `Super+Space`) chord here — closer to focus than
+        // the shell's shortcut manager — and forward it to the client instead
+        // of letting the shell navigate. `LogicalKeySet({key})` only matches
+        // the key on its own, so Super-modified chords pass through.
+        LogicalKeySet.fromSet({LogicalKeyboardKey.enter}):
             DisableDefaultShortcutsIntent(),
-        const SingleActivator(LogicalKeyboardKey.numpadEnter):
+        LogicalKeySet.fromSet({LogicalKeyboardKey.numpadEnter}):
             DisableDefaultShortcutsIntent(),
-        const SingleActivator(LogicalKeyboardKey.space):
+        LogicalKeySet.fromSet({LogicalKeyboardKey.space}):
             DisableDefaultShortcutsIntent(),
-        const SingleActivator(LogicalKeyboardKey.gameButtonA):
+        LogicalKeySet.fromSet({LogicalKeyboardKey.gameButtonA}):
             DisableDefaultShortcutsIntent(),
-        const SingleActivator(LogicalKeyboardKey.select):
+        LogicalKeySet.fromSet({LogicalKeyboardKey.select}):
             DisableDefaultShortcutsIntent(),
 
         // Dismissal
-        const SingleActivator(LogicalKeyboardKey.escape):
+        LogicalKeySet.fromSet({LogicalKeyboardKey.escape}):
             DisableDefaultShortcutsIntent(),
 
         // Keyboard traversal.
-        const SingleActivator(LogicalKeyboardKey.tab):
+        LogicalKeySet.fromSet({LogicalKeyboardKey.tab}):
             DisableDefaultShortcutsIntent(),
         const SingleActivator(LogicalKeyboardKey.tab, shift: true):
             DisableDefaultShortcutsIntent(),
-        const SingleActivator(LogicalKeyboardKey.arrowLeft):
+        LogicalKeySet.fromSet({LogicalKeyboardKey.arrowLeft}):
             DisableDefaultShortcutsIntent(),
-        const SingleActivator(LogicalKeyboardKey.arrowRight):
+        LogicalKeySet.fromSet({LogicalKeyboardKey.arrowRight}):
             DisableDefaultShortcutsIntent(),
-        const SingleActivator(LogicalKeyboardKey.arrowDown):
+        LogicalKeySet.fromSet({LogicalKeyboardKey.arrowDown}):
             DisableDefaultShortcutsIntent(),
-        const SingleActivator(LogicalKeyboardKey.arrowUp):
+        LogicalKeySet.fromSet({LogicalKeyboardKey.arrowUp}):
             DisableDefaultShortcutsIntent(),
 
         // Scrolling
