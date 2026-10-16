@@ -90,6 +90,65 @@ void main() {
     expect(frostSigmaFor(const Size(2000, 2000)), 28.0);
   });
 
+  testWidgets('ramping the frost keeps the frosted subtree alive', (
+    tester,
+  ) async {
+    // The frost ramps on every overview open, dialog open and game pause. The
+    // filters must not be inserted or dropped around the content as it does:
+    // that re-inflates everything below the frost — its state, hooks and focus
+    // nodes — which is how the overview's search field used to lose the
+    // keyboard to the workspace that was remounted behind it.
+    var mounts = 0;
+    Future<void> pump({
+      double blurSigma = 0,
+      double saturation = 1,
+      Color? tint,
+      bool noise = false,
+      double noiseOpacity = 0,
+    }) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: FrostedSurface(
+            blurSigma: blurSigma,
+            saturation: saturation,
+            tint: tint,
+            noise: noise,
+            noiseOpacity: noiseOpacity,
+            child: _MountCounter(onMount: () => mounts++),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    await pump();
+    expect(mounts, 1);
+
+    // Ramping every property a caller animates must reuse the element.
+    await pump(blurSigma: 16);
+    await pump(blurSigma: 16, saturation: 1.2);
+    await pump(blurSigma: 16, saturation: 1.2, tint: Colors.black26);
+    await pump(
+      blurSigma: 16,
+      saturation: 1.2,
+      tint: Colors.black26,
+      noise: true,
+      noiseOpacity: 0.5,
+    );
+    await pump(
+      blurSigma: 16,
+      saturation: 1.2,
+      tint: Colors.black26,
+      noise: true,
+      noiseOpacity: 1,
+    );
+    expect(mounts, 1, reason: 'the frost must not remount what it frosts');
+
+    // And back down: closing ramps the same properties to zero.
+    await pump();
+    expect(mounts, 1, reason: 'nor when it clears');
+  });
+
   testWidgets('the grain follows noiseOpacity instead of popping', (
     tester,
   ) async {
@@ -141,4 +200,26 @@ void main() {
       greaterThan(frostedGlassTint(light).computeLuminance()),
     );
   });
+}
+
+/// Counts how often it is mounted, so a test can assert the frost does not
+/// re-inflate the subtree it frosts.
+class _MountCounter extends StatefulWidget {
+  const _MountCounter({required this.onMount});
+
+  final void Function() onMount;
+
+  @override
+  State<_MountCounter> createState() => _MountCounterState();
+}
+
+class _MountCounterState extends State<_MountCounter> {
+  @override
+  void initState() {
+    super.initState();
+    widget.onMount();
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox();
 }
