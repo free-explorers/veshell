@@ -81,11 +81,14 @@ class _FixedMetaWindowState extends MetaWindowState {
 
 /// The dialog surface's committed buffer, so `FloatableWindow` has a size.
 class _FixedSurfaceState extends WlSurfaceState {
+  _FixedSurfaceState(this._size);
+  final Size _size;
+
   @override
   WlSurface build(int surfaceId) => WlSurface(
     surfaceId: surfaceId,
     role: SurfaceRole.xdgToplevel,
-    texture: const SurfaceTexture(id: 1, size: Size(320, 240)),
+    texture: SurfaceTexture(id: 1, size: _size),
     scale: 1,
     subsurfacesBelow: IList(),
     subsurfacesAbove: IList(),
@@ -102,7 +105,67 @@ MetaWindow _modalMetaWindow() => const MetaWindow(
   gameModeActivated: false,
   scaleRatio: 1,
   isModal: true,
+  geometry: Rect.fromLTWH(0, 0, 320, 240),
 );
+
+/// Pumps the dialog area with a modal dialog (`Beta`) whose surface buffer is
+/// [surfaceSize] over a `320x240` window geometry.
+Future<ProviderContainer> _pumpModalDialogArea(
+  WidgetTester tester, {
+  required Size surfaceSize,
+}) async {
+  final container = ProviderContainer(
+    overrides: [
+      platformManagerProvider.overrideWithValue(
+        const Stream<PlatformEvent>.empty(),
+      ),
+      dialogSetForWindowProvider(
+        _parent,
+      ).overrideWith(() => _FixedDialogSet([_dialogA, _dialogB])),
+      dialogWindowStateProvider(_dialogA).overrideWith(
+        () => _FixedDialogState(_dialog(_dialogA, 'meta-a', 'Alpha')),
+      ),
+      dialogWindowStateProvider(_dialogB).overrideWith(
+        () => _FixedDialogState(_dialog(_dialogB, _modalMetaWindowId, 'Beta')),
+      ),
+      metaWindowStateProvider(
+        _modalMetaWindowId,
+      ).overrideWith(() => _FixedMetaWindowState(_modalMetaWindow())),
+      wlSurfaceStateProvider(
+        _modalSurfaceId,
+      ).overrideWith(() => _FixedSurfaceState(surfaceSize)),
+      localizedDesktopEntryForIdProvider(
+        'org.example.App',
+      ).overrideWith(_NoDesktopEntry.new),
+    ],
+  );
+  addTearDown(container.dispose);
+
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: CurrentMonitorName(
+            name: 'M1',
+            child: SizedBox(
+              width: 1000,
+              height: 800,
+              child: WindowDialogArea(
+                parentWindowId: _parent,
+                child: const SizedBox.expand(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return container;
+}
 
 void main() {
   testWidgets('the dialog area lists every dialog and selects the newest', (
@@ -220,69 +283,35 @@ void main() {
   });
 
   testWidgets('a modal dialog floats instead of taking a tab', (tester) async {
-    final container = ProviderContainer(
-      overrides: [
-        platformManagerProvider.overrideWithValue(
-          const Stream<PlatformEvent>.empty(),
-        ),
-        dialogSetForWindowProvider(
-          _parent,
-        ).overrideWith(() => _FixedDialogSet([_dialogA, _dialogB])),
-        dialogWindowStateProvider(_dialogA).overrideWith(
-          () => _FixedDialogState(_dialog(_dialogA, 'meta-a', 'Alpha')),
-        ),
-        dialogWindowStateProvider(_dialogB).overrideWith(
-          () =>
-              _FixedDialogState(_dialog(_dialogB, _modalMetaWindowId, 'Beta')),
-        ),
-        metaWindowStateProvider(
-          _modalMetaWindowId,
-        ).overrideWith(() => _FixedMetaWindowState(_modalMetaWindow())),
-        wlSurfaceStateProvider(
-          _modalSurfaceId,
-        ).overrideWith(_FixedSurfaceState.new),
-        localizedDesktopEntryForIdProvider(
-          'org.example.App',
-        ).overrideWith(_NoDesktopEntry.new),
-      ],
+    final container = await _pumpModalDialogArea(
+      tester,
+      surfaceSize: const Size(320, 240),
     );
-    addTearDown(container.dispose);
-
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: Scaffold(
-            body: CurrentMonitorName(
-              name: 'M1',
-              child: SizedBox(
-                width: 1000,
-                height: 800,
-                child: WindowDialogArea(
-                  parentWindowId: _parent,
-                  child: const SizedBox.expand(),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
 
     // Only the regular dialog is a tab; the modal floats over the tile.
     expect(find.widgetWithText(PanelTab, 'Alpha'), findsOneWidget);
     expect(find.widgetWithText(PanelTab, 'Beta'), findsNothing);
     expect(find.byType(WindowDialogs), findsOneWidget);
-    // The floating dialog carries the shell frame (rounded + shadow).
+    // A bare surface (buffer == geometry) gets the shell frame.
     expect(find.byType(ServerSideFrame), findsOneWidget);
     // The floating modal keeps the keyboard over the tabbed dialog.
     expect(
       container.read(selectedDialogMetaWindowForWindowProvider(_parent)),
       _modalMetaWindowId,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a client-decorated dialog keeps its CSD, unframed', (
+    tester,
+  ) async {
+    // The surface buffer is bigger than the window geometry: the client draws
+    // its own shadow and rounded corners in the margins, so the shell must not
+    // frame it (nor clip those margins off).
+    await _pumpModalDialogArea(tester, surfaceSize: const Size(360, 280));
+
+    expect(find.byType(WindowDialogs), findsOneWidget);
+    expect(find.byType(ServerSideFrame), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }
