@@ -1,5 +1,6 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/application/model/application_identity.dart';
 import 'package:shell/application/provider/app_launch.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/dev_tools/provider/matching_logs.dart';
@@ -70,6 +71,30 @@ class MatchingEngine extends _$MatchingEngine {
     DialogWindowId() => throw Exception("Dialog don't have matching infos"),
   };
 
+  /// Whether two app ids name the same application, using the shared identity
+  /// rules ([sameApplicationId]): equal ids, or two desktop entries that share
+  /// a `StartupWMClass` (a packaging alias such as `org.gnome.SystemMonitor`
+  /// vs `gnome-system-monitor-kde`).
+  ///
+  /// Falls back to exact equality while the desktop entries are still loading,
+  /// so a gate never matches more than the raw ids before identities are
+  /// available.
+  bool _sameApplication(String a, String b) {
+    if (a == b) {
+      return true;
+    }
+    final entries = ref.read(localizedDesktopEntriesProvider).value;
+    if (entries == null) {
+      return false;
+    }
+    return sameApplicationId(
+      a: a,
+      b: b,
+      entries: entries,
+      binaryToAppId: ref.read(binaryToAppIdProvider).value ?? const {},
+    );
+  }
+
   /// Picks the persistent window that should own a newly mapped native
   /// window.
   ///
@@ -128,7 +153,10 @@ class MatchingEngine extends _$MatchingEngine {
         .where((windowId) {
           if (excludedWindowIds.contains(windowId)) return false;
           final windowState = _getWindowState(windowId);
-          return windowState.properties.appId == metaWindowMatchInfo.appId;
+          return _sameApplication(
+            windowState.properties.appId,
+            metaWindowMatchInfo.appId,
+          );
         });
 
     if (candidateWindowSet.isEmpty) {
@@ -303,8 +331,10 @@ class MatchingEngine extends _$MatchingEngine {
     ) {
       if (excludedWindowIds.contains(windowId)) return false;
       if (windowId is DialogWindowId) return false;
-      return _getWindowState(windowId).properties.appId ==
-          metaWindowMatchInfo.appId;
+      return _sameApplication(
+        _getWindowState(windowId).properties.appId,
+        metaWindowMatchInfo.appId,
+      );
     }).toList();
     if (candidates.isEmpty) {
       return (null, null);
@@ -336,7 +366,7 @@ class MatchingEngine extends _$MatchingEngine {
       if (excludedWindowIds.contains(windowId)) continue;
       if (windowId is DialogWindowId) continue;
       final state = _getWindowState(windowId);
-      if (state.properties.appId != appId) continue;
+      if (!_sameApplication(state.properties.appId, appId)) continue;
       if (state.metaWindowId == null) {
         return windowId;
       }
@@ -366,7 +396,10 @@ class MatchingEngine extends _$MatchingEngine {
           if (excludedWindowIds.contains(windowId)) return false;
           final state = ref.read(persistentWindowStateProvider(windowId));
           if (state.metaWindowId != null) return false;
-          return state.properties.appId == metaWindowMatchInfo.appId;
+          return _sameApplication(
+            state.properties.appId,
+            metaWindowMatchInfo.appId,
+          );
         })
         .toList();
     if (candidates.isEmpty) {
@@ -871,14 +904,21 @@ class MatchingEngine extends _$MatchingEngine {
   /// \> `steamwebhelper`, `electron` or `Godot_Engine` for windows that actually
   /// \> belong to another application. To avoid those hollow ids defeating the
   /// \> recovery (and, on the other side, avoid forcing an unrelated app into
-  /// \> a placeholder), the decision is taken on **desktop-entry identity**:
+  /// \> a placeholder), the decision is taken on **desktop-entry identity**
+  /// \> ([applicationsDiffer]):
   ///
-  /// 1. Map both the reported id and the launching placeholder's app id to
-  ///    desktop entry ids ([localizedDesktopEntriesProvider], with the
-  ///    binary-name fallback of `binaryToAppId`, so `brave` ≈ `brave-browser`).
-  /// 2. Conflict (return true) only when *both* resolve to known entries and
-  ///    those entries differ.
-  /// 3. Anything else (empty id, unresolved id, unresolved launch id) is
+  /// 1. Resolve both the reported id and the launching placeholder's app id to
+  ///    desktop entries ([resolveLocalizedDesktopEntry]: exact id, then binary
+  ///    name via `binaryToAppId`, then a case-insensitive `StartupWMClass`
+  ///    scan).
+  /// 2. Two entries are the same application when they share the entry id or a
+  ///    non-empty `StartupWMClass`. The executable is deliberately not used:
+  ///    `Exec`/`TryExec` basenames are shared by unrelated entries
+  ///    (`gnome-control-center` × 28, `flatpak` × 11), so matching on them
+  ///    would merge those applications.
+  /// 3. Conflict (return true) only when *both* resolve to entries that are
+  ///    different applications.
+  /// 4. Anything else (empty id, unresolved id or entry on either side) is
   ///    treated as a helper/wrapper identity: provenance wins.
   ///
   /// Examples:
@@ -887,6 +927,9 @@ class MatchingEngine extends _$MatchingEngine {
   ///   recovery allowed.
   /// - reported `brave`, launch `brave-browser` — both resolve, same entry →
   ///   related, recovery allowed.
+  /// - reported `org.gnome.SystemMonitor`, launch `gnome-system-monitor-kde` —
+  ///   different entries but the same `StartupWMClass=gnome-system-monitor` →
+  ///   related, recovery allowed (the packaging-alias case).
   /// - reported `game-xyz`, launch `steam`, both resolvable and different →
   ///   conflict, provenance rejected (caller creates a fresh window).
   ///
@@ -908,34 +951,23 @@ class MatchingEngine extends _$MatchingEngine {
       // Desktop entries are not loaded yet: identity cannot be compared.
       return false;
     }
-    final binaryToAppId = ref.read(binaryToAppIdProvider).value;
-
-    String? resolveDesktopAppId(String appId) {
-      final desktopEntryId =
-          entries[appId]?.desktopEntry.id ?? binaryToAppId?[appId];
-      return desktopEntryId;
-    }
+    final binaryToAppId = ref.read(binaryToAppIdProvider).value ?? const {};
 
     final launchAppId = _getWindowState(trackedWindowId).properties.appId;
 
-    final reportedDesktopAppId = resolveDesktopAppId(reportedAppId);
-    if (reportedDesktopAppId == null) {
-      return false;
-    }
-
-    if (reportedDesktopAppId == launchAppId) {
-      return false;
-    }
-
-    final launchDesktopAppId = resolveDesktopAppId(launchAppId);
-    if (launchDesktopAppId == reportedDesktopAppId) {
+    if (!applicationsDiffer(
+      reportedAppId: reportedAppId,
+      launchAppId: launchAppId,
+      entries: entries,
+      binaryToAppId: binaryToAppId,
+    )) {
       return false;
     }
 
     matchingLog.info(
       'Identity conflict for window ${metaWindow.id}: '
-      'reported app_id="$reportedAppId" resolves to "$reportedDesktopAppId" '
-      'but launch app_id="$launchAppId" resolves to "$launchDesktopAppId"',
+      'reported app_id="$reportedAppId" '
+      'but launch app_id="$launchAppId"',
     );
     return true;
   }
