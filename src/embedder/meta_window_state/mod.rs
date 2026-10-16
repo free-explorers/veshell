@@ -541,30 +541,41 @@ pub(crate) fn get_flatpack_app_id_from_pid(pid: i32) -> (bool, Option<String>) {
     (true, app_id)
 }
 
+/// snapd prefixes every confined snap's AppArmor label with this. It is also
+/// what tells a snap apart from an SELinux system: `/proc/<pid>/attr/current`
+/// holds a label for *every* process under SELinux, but its context (e.g.
+/// `unconfined_u:unconfined_r:unconfined_t:s0`) never starts with `snap.`.
+const SNAP_SECURITY_LABEL_PREFIX: &str = "snap.";
+
+/// Parses the snap application id out of an AppArmor security label, or `None`
+/// when the label does not belong to a snap.
+///
+/// AppArmor reports a snap's label as `snap.<snap>.<app> (enforce)` (or
+/// `(complain)`); the id is the part before the ` (mode)` suffix with the dots
+/// replaced by underscores. Anything else — an SELinux context, an unconfined
+/// or non-snap AppArmor profile — yields `None`, which is what keeps the
+/// process-based desktop-file lookup from misidentifying non-snap processes on
+/// SELinux distributions.
+fn snap_app_id_from_security_label(security_label: &str) -> Option<String> {
+    let security_label = security_label.trim_end_matches(['\0', '\n']);
+    let snap = security_label.strip_prefix(SNAP_SECURITY_LABEL_PREFIX)?;
+    Some(snap.split(' ').next().unwrap_or(snap).replace('.', "_"))
+}
+
 pub(crate) fn get_snap_app_id_from_pid(pid: i32) -> (bool, Option<String>) {
     if pid == 0 {
         return (false, None);
     }
 
     let security_label_filename = format!("/proc/{}/attr/current", pid);
-    let security_label_file = std::fs::read_to_string(security_label_filename);
-
-    if security_label_file.is_err() {
+    let Ok(security_label) = std::fs::read_to_string(security_label_filename) else {
         return (false, None);
-    }
-
-    let security_label_contents = security_label_file.unwrap();
-    let security_label_contents =
-        security_label_contents.trim_start_matches("SNAP_SECURITY_LABEL_PREFIX");
-
-    let contents_end_index = security_label_contents.find(' ');
-    let security_label_contents = if let Some(index) = contents_end_index {
-        &security_label_contents[..index]
-    } else {
-        security_label_contents
     };
 
-    (true, Some(security_label_contents.replace('.', "_")))
+    match snap_app_id_from_security_label(&security_label) {
+        Some(snap_id) => (true, Some(snap_id)),
+        None => (false, None),
+    }
 }
 
 pub(crate) fn get_binary_name_from_pid(pid: i32) -> Option<String> {
@@ -739,5 +750,36 @@ mod tests {
         idle.current_output = Some("DP-1".to_string());
         let state = state_with(vec![idle], &[]);
         assert!(state.game_mode_window_ids_for_output("DP-1").is_empty());
+    }
+
+    #[test]
+    fn snap_security_labels_resolve_to_the_desktop_app_id() {
+        assert_eq!(
+            snap_app_id_from_security_label("snap.firefox.firefox (enforce)").as_deref(),
+            Some("firefox_firefox")
+        );
+        assert_eq!(
+            snap_app_id_from_security_label("snap.some-snap.some-app (complain)").as_deref(),
+            Some("some-snap_some-app")
+        );
+    }
+
+    #[test]
+    fn non_snap_security_labels_are_never_treated_as_snaps() {
+        // Fedora/SELinux: every process has a label in /proc/<pid>/attr/current,
+        // so a permissive "the file exists" check used to return the context as
+        // the app id and break window matching.
+        assert_eq!(
+            snap_app_id_from_security_label(
+                "unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023\0"
+            ),
+            None
+        );
+        assert_eq!(
+            snap_app_id_from_security_label("docker-default (enforce)"),
+            None
+        );
+        assert_eq!(snap_app_id_from_security_label("unconfined"), None);
+        assert_eq!(snap_app_id_from_security_label(""), None);
     }
 }
