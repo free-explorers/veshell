@@ -10,10 +10,12 @@ use crate::flutter_engine::embedder::{
 use crate::{backend::Backend, flutter_engine::FlutterEngine};
 use smithay::backend::allocator::dmabuf::{AnyError, AsDmabuf, Dmabuf};
 use smithay::backend::allocator::{Allocator, Slot, Swapchain};
+use smithay::backend::renderer::gles::GlesTexture;
+use smithay::backend::renderer::Texture;
 use smithay::output::Output;
 use smithay::reexports::calloop::{self, channel};
 use smithay::reexports::winit::event;
-use smithay::utils::SerialCounter;
+use smithay::utils::{SerialCounter, Size};
 use tracing::debug;
 pub struct OutputViewIdWrapper {
     pub view_id: i64,
@@ -38,10 +40,108 @@ pub struct BackingStoreId {
     pub generation: u64,
 }
 
+/// One Flutter frame ready to be composited.
+///
+/// Hardware backends hand Flutter a GBM dmabuf; backends without a DRM render
+/// node (software EGL, e.g. a VM without 3D acceleration) hand it a plain GL
+/// texture instead. Both are cheap to clone and keep the frame alive until the
+/// compositor has sampled it.
+#[derive(Debug, Clone)]
+pub enum Frame {
+    Dmabuf(Dmabuf),
+    Texture(GlesTexture),
+}
+
 pub struct AcquiredBackingStore {
     pub id: BackingStoreId,
-    pub dmabuf: Dmabuf,
+    pub frame: Frame,
 }
+
+/// Buffers a Flutter view renders into.
+pub enum ViewSwapchain {
+    Dmabuf(Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>>),
+    /// Used when the EGL context has no DRM device to allocate dmabufs from.
+    Texture(TextureSwapchain),
+}
+
+impl ViewSwapchain {
+    pub fn texture(width: u32, height: u32) -> Self {
+        Self::Texture(TextureSwapchain::new(width, height))
+    }
+
+    fn resize(&mut self, width: u32, height: u32) {
+        match self {
+            Self::Dmabuf(swapchain) => swapchain.resize(width, height),
+            Self::Texture(swapchain) => swapchain.resize(width, height),
+        }
+    }
+
+    fn submitted(&mut self, slot: &Slot<Dmabuf>) {
+        if let Self::Dmabuf(swapchain) = self {
+            swapchain.submitted(slot);
+        }
+    }
+
+    fn recycle(&mut self, texture: GlesTexture) {
+        if let Self::Texture(swapchain) = self {
+            swapchain.recycle(texture);
+        }
+    }
+}
+
+/// A small pool of GL textures for the software/nested fallback path.
+///
+/// The textures are allocated lazily through [`VeshellView::acquire_backing_store`],
+/// which has access to the backend renderer. Idle textures are reused across
+/// frames so steady-state rendering does not create a texture per frame.
+pub struct TextureSwapchain {
+    width: u32,
+    height: u32,
+    idle: Vec<GlesTexture>,
+}
+
+impl TextureSwapchain {
+    fn new(width: u32, height: u32) -> Self {
+        Self {
+            width,
+            height,
+            idle: Vec::new(),
+        }
+    }
+
+    fn acquire(
+        &mut self,
+        create: impl FnOnce(u32, u32) -> Option<GlesTexture>,
+    ) -> Option<GlesTexture> {
+        while let Some(texture) = self.idle.pop() {
+            if texture.size() == Size::from((self.width as i32, self.height as i32)) {
+                return Some(texture);
+            }
+        }
+        create(self.width, self.height)
+    }
+
+    fn recycle(&mut self, texture: GlesTexture) {
+        if texture.size() == Size::from((self.width as i32, self.height as i32)) {
+            self.idle.push(texture);
+        }
+    }
+
+    fn resize(&mut self, width: u32, height: u32) {
+        if self.width == width && self.height == height {
+            return;
+        }
+        self.width = width;
+        self.height = height;
+        self.idle.clear();
+    }
+}
+
+struct InFlightFrame {
+    frame: Frame,
+    slot: Option<Slot<Dmabuf>>,
+}
+
 pub struct ViewsManagement {
     serials: SerialCounter,
     pub views: HashMap<i64, VeshellView>,
@@ -58,27 +158,51 @@ impl ViewsManagement {
 
 pub struct VeshellView {
     view_id: i64,
-    pub swapchain: Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>>,
+    size: (u32, u32),
+    pub swapchain: ViewSwapchain,
     next_backing_store_generation: u64,
-    in_flight_slots: HashMap<u64, Slot<Dmabuf>>,
-    pub last_rendered_slot: Option<Slot<Dmabuf>>,
+    in_flight: HashMap<u64, InFlightFrame>,
+    pub last_rendered: Option<Frame>,
+    /// Holds the presented dmabuf slot so the swapchain cannot recycle the
+    /// buffer while it is still being composited. Texture frames do not need
+    /// this: the texture itself is kept alive by `last_rendered`.
+    last_rendered_slot: Option<Slot<Dmabuf>>,
     pub last_rendered_generation: Option<u64>,
 }
 
 impl VeshellView {
-    pub fn acquire_backing_store(&mut self) -> Option<AcquiredBackingStore> {
-        let slot = self.swapchain.acquire().ok().flatten()?;
-        let dmabuf = slot.export().ok()?;
+    pub fn acquire_backing_store(
+        &mut self,
+        create_texture: impl FnOnce(u32, u32) -> Option<GlesTexture>,
+    ) -> Option<AcquiredBackingStore> {
+        let (frame, slot) = match &mut self.swapchain {
+            ViewSwapchain::Dmabuf(swapchain) => {
+                let slot = swapchain.acquire().ok().flatten()?;
+                let dmabuf = slot.export().ok()?;
+                (Frame::Dmabuf(dmabuf), Some(slot))
+            }
+            ViewSwapchain::Texture(swapchain) => {
+                let texture = swapchain.acquire(create_texture)?;
+                (Frame::Texture(texture), None)
+            }
+        };
+
         let generation = self.next_backing_store_generation;
         self.next_backing_store_generation = self.next_backing_store_generation.wrapping_add(1);
-        self.in_flight_slots.insert(generation, slot);
+        self.in_flight.insert(
+            generation,
+            InFlightFrame {
+                frame: frame.clone(),
+                slot,
+            },
+        );
 
         Some(AcquiredBackingStore {
             id: BackingStoreId {
                 view_id: self.view_id,
                 generation,
             },
-            dmabuf,
+            frame,
         })
     }
 
@@ -86,21 +210,29 @@ impl VeshellView {
         if id.view_id != self.view_id {
             return false;
         }
-        let Some(slot) = self.in_flight_slots.remove(&id.generation) else {
+        let Some(frame) = self.in_flight.remove(&id.generation) else {
             return false;
         };
 
-        self.last_rendered_slot = Some(slot);
+        if let Some(slot) = frame.slot {
+            self.swapchain.submitted(&slot);
+            // Keep the slot alive until the next presented frame, exactly like
+            // the old `last_rendered_slot` field: dropping it here would mark
+            // the buffer free while the compositor may still be sampling it.
+            self.last_rendered_slot = Some(slot);
+        }
         self.last_rendered_generation = Some(id.generation);
-        if let Some(slot) = &self.last_rendered_slot {
-            self.swapchain.submitted(slot);
+        if let Some(previous) = self.last_rendered.replace(frame.frame) {
+            self.recycle(previous);
         }
         true
     }
 
     pub fn discard_backing_store(&mut self, id: BackingStoreId) {
         if id.view_id == self.view_id {
-            self.in_flight_slots.remove(&id.generation);
+            if let Some(frame) = self.in_flight.remove(&id.generation) {
+                self.recycle(frame.frame);
+            }
         }
     }
 
@@ -109,7 +241,15 @@ impl VeshellView {
     /// frame the user is looking at.
     pub fn hold_backing_store(&mut self, id: BackingStoreId) {
         if id.view_id == self.view_id {
-            self.in_flight_slots.remove(&id.generation);
+            if let Some(frame) = self.in_flight.remove(&id.generation) {
+                self.recycle(frame.frame);
+            }
+        }
+    }
+
+    fn recycle(&mut self, frame: Frame) {
+        if let Frame::Texture(texture) = frame {
+            self.swapchain.recycle(texture);
         }
     }
 }
@@ -156,11 +296,13 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     if added {
                         let view = VeshellView {
                             view_id: event_view_id,
+                            size: (size.w as u32, size.h as u32),
                             swapchain: data
                                 .backend_data
                                 .new_swapchain(size.w as u32, size.h as u32),
                             next_backing_store_generation: 1,
-                            in_flight_slots: HashMap::new(),
+                            in_flight: HashMap::new(),
+                            last_rendered: None,
                             last_rendered_slot: None,
                             last_rendered_generation: None,
                         };
@@ -327,8 +469,24 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             if result != 0 {
                 return Err(format!("Could not send window metrics event, error {result}").into());
             }
-            //resize the swapchain
-            view.swapchain.resize(size.w as u32, size.h as u32);
+            // Resize events can repeat the current size (window managers send
+            // a burst of them); only invalidate the presented frame when the
+            // dimensions actually changed, otherwise every burst would blink
+            // the desktop black until Flutter renders again.
+            let new_size = (size.w as u32, size.h as u32);
+            if view.size != new_size {
+                view.size = new_size;
+                view.swapchain.resize(new_size.0, new_size.1);
+                // Texture frames are sized by the pool, so a frame from the
+                // previous size must not be composited scaled until Flutter
+                // renders again. dmabufs keep the old slot (as before): the
+                // renderer scales the last frame while the new one is produced.
+                if matches!(view.swapchain, ViewSwapchain::Texture(_)) {
+                    if let Some(previous) = view.last_rendered.take() {
+                        view.recycle(previous);
+                    }
+                }
+            }
         }
         Ok(())
     }

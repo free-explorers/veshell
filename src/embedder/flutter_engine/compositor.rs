@@ -12,7 +12,7 @@ use crate::{
             FlutterOpenGLFramebuffer, FlutterOpenGLTargetType_kFlutterOpenGLTargetTypeFramebuffer,
             FlutterPresentViewInfo,
         },
-        view::{AcquiredBackingStore, BackingStoreId},
+        view::{AcquiredBackingStore, BackingStoreId, Frame},
         FlutterEngine,
     },
     state::State,
@@ -27,6 +27,14 @@ struct BackingStoreRequest {
 enum BackingStoreEvent {
     Presented(BackingStoreId),
     Collected(BackingStoreId),
+}
+
+/// Flutter-side user data for one backing store. `texture_fbo` is set for the
+/// texture-backed fallback so the collect callback can release the framebuffer
+/// object attached to it.
+struct BackingStoreMeta {
+    id: BackingStoreId,
+    texture_fbo: Option<u32>,
 }
 
 pub struct CompositorUserData {
@@ -50,12 +58,23 @@ impl FlutterCompositor {
         loop_handle
             .insert_source(rx_on_buffer_requested, move |request, _, data| {
                 if let Msg(request) = request {
-                    let flutter_engine = data.flutter_engine_mut();
+                    // Split the borrows: the texture-backed fallback needs the
+                    // primary renderer to allocate a backing texture.
+                    let State {
+                        backend_data,
+                        flutter_engine,
+                        ..
+                    } = data;
+                    let flutter_engine = flutter_engine.as_mut().unwrap();
                     let backing_store = flutter_engine
                         .views_management
                         .views
                         .get_mut(&request.config.view_id)
-                        .and_then(|view| view.acquire_backing_store());
+                        .and_then(|view| {
+                            view.acquire_backing_store(|width, height| {
+                                backend_data.new_texture(width, height)
+                            })
+                        });
 
                     if let Err(error) = request.reply.send(backing_store) {
                         if let Some(backing_store) = error.0 {
@@ -166,15 +185,24 @@ where
     }
 
     if let Ok(Some(backing_store)) = response.recv() {
-        let name = flutter_engine
-            .renderer_data
-            .framebuffer_importer
-            .import_framebuffer(
-                &flutter_engine.renderer_data.main_egl_context,
-                backing_store.dmabuf,
-            )
-            .unwrap_or(0);
+        let context = &flutter_engine.renderer_data.main_egl_context;
+        let importer = &mut flutter_engine.renderer_data.framebuffer_importer;
+        let (name, texture_fbo) = match &backing_store.frame {
+            Frame::Dmabuf(dmabuf) => (
+                importer
+                    .import_framebuffer(context, dmabuf.clone())
+                    .unwrap_or(0),
+                None,
+            ),
+            Frame::Texture(texture) => {
+                let fbo = importer.import_texture(context, texture).unwrap_or(0);
+                (fbo, (fbo != 0).then_some(fbo))
+            }
+        };
         if name == 0 {
+            if let Some(texture_fbo) = texture_fbo {
+                let _ = importer.release_texture_framebuffer(context, texture_fbo);
+            }
             let _ = compositor_data
                 .tx_backing_store_event
                 .send(BackingStoreEvent::Collected(backing_store.id));
@@ -183,7 +211,10 @@ where
 
         *backing_store_out = FlutterBackingStore {
             struct_size: std::mem::size_of::<FlutterBackingStore>(),
-            user_data: Box::into_raw(Box::new(backing_store.id)) as *mut c_void,
+            user_data: Box::into_raw(Box::new(BackingStoreMeta {
+                id: backing_store.id,
+                texture_fbo,
+            })) as *mut c_void,
             type_: FlutterBackingStoreType_kFlutterBackingStoreTypeOpenGL,
             did_update: true,
             __bindgen_anon_1: FlutterBackingStore__bindgen_ty_1 {
@@ -221,14 +252,25 @@ where
     if renderer.is_null() {
         return false;
     }
-    let backing_store_id = (*renderer).user_data as *mut BackingStoreId;
-    if backing_store_id.is_null() {
+    let backing_store_meta = (*renderer).user_data as *mut BackingStoreMeta;
+    if backing_store_meta.is_null() {
         return false;
     }
-    let backing_store_id = *Box::from_raw(backing_store_id);
+    let backing_store_meta = Box::from_raw(backing_store_meta);
+    if let Some(texture_fbo) = backing_store_meta.texture_fbo {
+        let flutter_engine =
+            &mut *(compositor_data.flutter_engine_ptr as *mut FlutterEngine<BackendData>);
+        let _ = flutter_engine
+            .renderer_data
+            .framebuffer_importer
+            .release_texture_framebuffer(
+                &flutter_engine.renderer_data.main_egl_context,
+                texture_fbo,
+            );
+    }
     let _ = compositor_data
         .tx_backing_store_event
-        .send(BackingStoreEvent::Collected(backing_store_id));
+        .send(BackingStoreEvent::Collected(backing_store_meta.id));
 
     true
 }
@@ -263,11 +305,11 @@ where
         if backing_store.is_null() {
             return false;
         }
-        let id = (*backing_store).user_data as *const BackingStoreId;
-        if id.is_null() || (*id).view_id != (*info).view_id {
+        let meta = (*backing_store).user_data as *const BackingStoreMeta;
+        if meta.is_null() || (*meta).id.view_id != (*info).view_id {
             return false;
         }
-        if backing_store_id.replace(*id).is_some() {
+        if backing_store_id.replace((*meta).id).is_some() {
             return false;
         }
     }

@@ -1,4 +1,7 @@
 use std::env;
+use std::os::unix::fs::MetadataExt;
+use std::os::unix::net::UnixStream;
+use std::path::PathBuf;
 
 use backend::Backend;
 use log::debug;
@@ -61,12 +64,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = rlimit::increase_nofile_limit(u64::MAX);
 
     // Backend selection: `VESHELL_BACKEND={drm,winit}` forces a backend, a
-    // `--session` run always drives the DRM backend, and otherwise a nested
-    // session (DISPLAY/WAYLAND_DISPLAY set) uses winit while a bare TTY uses
-    // the DRM backend.
+    // `--session` run always drives the DRM backend, and otherwise only a
+    // reachable host display selects winit; a bare TTY or stale display
+    // variables use the DRM backend.
     let requested = env::var("VESHELL_BACKEND").unwrap_or_default();
     let session = env::args().skip(1).any(|argument| argument == "--session");
-    let nested = env::var("DISPLAY").is_ok() || env::var("WAYLAND_DISPLAY").is_ok();
+    // A display manager can start the session with the greeter's or the
+    // previous session's DISPLAY/WAYLAND_DISPLAY still in the environment.
+    // Only a *reachable* display makes this a nested run; a stale variable
+    // must not turn a real login into a winit window on a dead server.
+    let nested = !session && display_is_live();
+    debug!("Selecting backend: requested={requested:?} session={session} nested={nested}");
     match select_backend(&requested, session, nested) {
         BackendKind::Drm => backend::drm_backend::run_drm_backend(),
         BackendKind::Winit => backend::winit::run_winit_backend()?,
@@ -89,8 +97,8 @@ enum BackendKind {
 /// debugging. Otherwise a run started with `--session` is a real session and
 /// must drive DRM even when the login manager leaked `DISPLAY` or
 /// `WAYLAND_DISPLAY` into the service environment; without that marker, a
-/// nested run (either variable set) uses winit and anything else falls back to
-/// DRM.
+/// nested run (a reachable display server) uses winit and anything else falls
+/// back to DRM.
 fn select_backend(requested: &str, session: bool, nested: bool) -> BackendKind {
     match requested {
         "drm" => BackendKind::Drm,
@@ -98,6 +106,59 @@ fn select_backend(requested: &str, session: bool, nested: bool) -> BackendKind {
         _ if session || !nested => BackendKind::Drm,
         _ => BackendKind::Winit,
     }
+}
+
+/// Whether `DISPLAY` or `WAYLAND_DISPLAY` points at a server we can reach.
+///
+/// `DISPLAY`/`WAYLAND_DISPLAY` alone are not enough: display managers leak
+/// them into the fresh session, often naming a socket that no longer exists.
+/// Treating that as a nested run starts winit against a dead server, which
+/// ends the login immediately. A live Wayland socket or a live X11 socket
+/// owned by this user means the caller really is inside a graphical session.
+fn display_is_live() -> bool {
+    if let Ok(display) = env::var("WAYLAND_DISPLAY") {
+        if wayland_display_is_live(&display) {
+            return true;
+        }
+    }
+    env::var("DISPLAY")
+        .map(|display| x11_display_is_live(&display))
+        .unwrap_or(false)
+}
+
+fn wayland_display_is_live(display: &str) -> bool {
+    let path = if display.starts_with('/') {
+        PathBuf::from(display)
+    } else {
+        let runtime_dir = env::var("XDG_RUNTIME_DIR")
+            .ok()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(format!("/run/user/{}", unsafe { libc::geteuid() })));
+        runtime_dir.join(display)
+    };
+    UnixStream::connect(path).is_ok()
+}
+
+fn x11_display_is_live(display: &str) -> bool {
+    // X11 forwarding (`host:N`) is a deliberate remote display; keep the old
+    // nested behaviour there. Local displays are greeter/previous-session
+    // sockets, which are only usable if this user owns the live X server.
+    if !display.starts_with(':') && !display.starts_with("unix:") {
+        return !display.is_empty();
+    }
+    let rest = display
+        .strip_prefix("unix:")
+        .or_else(|| display.strip_prefix(':'))
+        .unwrap_or_default();
+    let number = rest.split('.').next().unwrap_or_default();
+    if number.is_empty() || !number.bytes().all(|byte| byte.is_ascii_digit()) {
+        return false;
+    }
+    let path = format!("/tmp/.X11-unix/X{number}");
+    let owned = std::fs::metadata(&path)
+        .map(|metadata| metadata.uid() == unsafe { libc::geteuid() })
+        .unwrap_or(false);
+    owned && UnixStream::connect(path).is_ok()
 }
 
 /// How long teardown may take before the process is forced to exit.

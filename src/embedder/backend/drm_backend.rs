@@ -10,10 +10,10 @@ use std::time::{Duration, Instant};
 
 use sd_notify::NotifyState;
 use serde_json::json;
-use smithay::backend::allocator::dmabuf::{AnyError, AsDmabuf, Dmabuf, DmabufAllocator};
+use smithay::backend::allocator::dmabuf::{AnyError, Dmabuf, DmabufAllocator};
 use smithay::backend::allocator::gbm::GbmDevice;
 use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags};
-use smithay::backend::allocator::{Allocator, Fourcc, Slot, Swapchain};
+use smithay::backend::allocator::{Allocator, Fourcc, Swapchain};
 use smithay::backend::drm::compositor::{DrmCompositor, FrameFlags};
 use smithay::backend::drm::exporter::gbm::GbmFramebufferExporter;
 use smithay::backend::drm::{
@@ -27,8 +27,10 @@ use smithay::backend::input::{
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
 use smithay::backend::renderer::element::texture::TextureRenderElement;
 use smithay::backend::renderer::gles::ffi::Gles2;
-use smithay::backend::renderer::gles::GlesRenderer;
-use smithay::backend::renderer::{ImportAll, ImportDma, ImportEgl, Renderer, RendererSuper};
+use smithay::backend::renderer::gles::{GlesError, GlesRenderer, GlesTexture};
+use smithay::backend::renderer::{
+    ImportAll, ImportDma, ImportEgl, Offscreen, Renderer, RendererSuper,
+};
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{libseat, Event as SessionEvent, Session};
 use smithay::backend::udev::{all_gpus, primary_gpu, UdevBackend, UdevEvent};
@@ -66,7 +68,7 @@ use crate::flutter_engine::embedder::{
     FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
     FlutterPointerDeviceKind_kFlutterPointerDeviceKindTouch,
 };
-use crate::flutter_engine::view::{view_id_for_output, OutputViewIdWrapper};
+use crate::flutter_engine::view::{view_id_for_output, OutputViewIdWrapper, ViewSwapchain};
 use crate::flutter_engine::wayland_messages::{
     GestureSwipeBeginEventMessage, GestureSwipeEndEventMessage, GestureSwipeUpdateEventMessage,
 };
@@ -190,16 +192,18 @@ impl Backend for DrmBackend {
         Some(f(&mut self.get_primary_gpu_data_mut().renderer))
     }
 
-    fn new_swapchain(
-        &mut self,
-        width: u32,
-        height: u32,
-    ) -> Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>> {
+    fn new_swapchain(&mut self, width: u32, height: u32) -> ViewSwapchain {
         let primary_gpu_data = self.get_primary_gpu_data_mut();
         let renderer = &primary_gpu_data.renderer;
-        let modifiers = renderer
-            .egl_context()
-            .dmabuf_texture_formats()
+        let formats = renderer.egl_context().dmabuf_texture_formats();
+        if formats.iter().next().is_none() {
+            // Software EGL (kms_swrast/llvmpipe) may expose no dmabuf
+            // formats. Flutter can still render into plain GL textures; the
+            // DRM compositor samples those into its scanout buffers.
+            warn!("EGL exposes no dmabuf formats; using texture-backed Flutter buffers");
+            return ViewSwapchain::texture(width, height);
+        }
+        let modifiers = formats
             .iter()
             .map(|format| format.modifier)
             .collect::<Vec<_>>();
@@ -211,7 +215,27 @@ impl Backend for DrmBackend {
             Box::new(DmabufAllocator(gbm_allocator))
         };
 
-        Swapchain::new(dmabuf_allocator, width, height, Fourcc::Argb8888, modifiers)
+        ViewSwapchain::Dmabuf(Swapchain::new(
+            dmabuf_allocator,
+            width,
+            height,
+            Fourcc::Argb8888,
+            modifiers,
+        ))
+    }
+
+    fn new_texture(&mut self, width: u32, height: u32) -> Option<GlesTexture> {
+        match self
+            .get_primary_gpu_data_mut()
+            .renderer
+            .create_buffer(Fourcc::Abgr8888, (width as i32, height as i32).into())
+        {
+            Ok(texture) => Some(texture),
+            Err(err) => {
+                warn!("Failed to allocate a Flutter backing texture: {err}");
+                None
+            }
+        }
     }
 
     fn capture_dmabuf_setup(&mut self) -> Option<super::CaptureDmabufSetup> {
@@ -388,21 +412,23 @@ pub fn run_drm_backend() {
     let primary_gpu = if let Ok(var) = std::env::var("DRM_DEVICE") {
         DrmNode::from_path(var).expect("Invalid drm device path")
     } else {
-        primary_gpu(session.seat())
-            .unwrap()
-            .and_then(|x| {
-                DrmNode::from_path(x)
-                    .ok()?
-                    .node_with_type(NodeType::Render)?
-                    .ok()
-            })
-            .unwrap_or_else(|| {
-                all_gpus(session.seat())
-                    .unwrap()
+        let primary = primary_gpu(session.seat())
+            .ok()
+            .flatten()
+            .and_then(|path| DrmNode::from_path(path).ok())
+            .and_then(|node| node.node_with_type(NodeType::Render).and_then(Result::ok));
+        let gpu = primary.or_else(|| {
+            all_gpus(session.seat()).ok().and_then(|paths| {
+                paths
                     .into_iter()
-                    .find_map(|x| DrmNode::from_path(x).ok())
-                    .expect("No GPU!")
+                    .find_map(|path| DrmNode::from_path(path).ok())
             })
+        });
+        let Some(gpu) = gpu else {
+            error!("No DRM GPU is available; cannot start a session compositor");
+            return;
+        };
+        gpu
     };
     info!("Using {} as primary gpu.", primary_gpu);
 
@@ -588,10 +614,13 @@ pub fn run_drm_backend() {
         }
     } */
 
-    let primary_node = primary_gpu
+    let Some(primary_node) = primary_gpu
         .node_with_type(NodeType::Primary)
         .and_then(|x| x.ok())
-        .unwrap();
+    else {
+        error!("The primary GPU has no primary DRM node; cannot start a session compositor");
+        return;
+    };
     acquire_primary_gpu(&mut state, primary_node);
 
     /*     let mut renderer = match state.backend_data.gpu_manager.single_renderer(&primary_gpu) {
@@ -617,21 +646,34 @@ pub fn run_drm_backend() {
         |s| unsafe { egl::get_proc_address(s) } as *const _
     ));
 
-    let dmabuf_formats = renderer.dmabuf_formats();
+    let dmabuf_formats = renderer.dmabuf_formats().clone();
 
-    let dmabuf_default_feedback =
-        DmabufFeedbackBuilder::new(state.backend_data.primary_gpu.dev_id(), dmabuf_formats)
-            .build()
-            .unwrap();
-    let mut dmabuf_state = DmabufState::new();
-    let _dmabuf_global = dmabuf_state.create_global_with_default_feedback::<State<DrmBackend>>(
-        &state.display_handle,
-        &dmabuf_default_feedback,
-    );
-
-    state.dmabuf_state = Some(dmabuf_state);
+    // A software EGL context may expose no dmabuf formats at all. Do not
+    // publish an empty dmabuf global: clients would bind it and be unable to
+    // allocate a single buffer.
+    state.dmabuf_state = if dmabuf_formats.iter().next().is_none() {
+        warn!("EGL exposes no dmabuf formats; clients will use shared memory");
+        None
+    } else {
+        let dmabuf_default_feedback =
+            DmabufFeedbackBuilder::new(state.backend_data.primary_gpu.dev_id(), dmabuf_formats)
+                .build()
+                .unwrap();
+        let mut dmabuf_state = DmabufState::new();
+        let _dmabuf_global = dmabuf_state.create_global_with_default_feedback::<State<DrmBackend>>(
+            &state.display_handle,
+            &dmabuf_default_feedback,
+        );
+        Some(dmabuf_state)
+    };
     // Start the Flutter engine.
-    let (flutter_engine, EmbedderChannels { rx_baton }) = FlutterEngine::new(&mut state).unwrap();
+    let (flutter_engine, EmbedderChannels { rx_baton }) = match FlutterEngine::new(&mut state) {
+        Ok(engine) => engine,
+        Err(err) => {
+            error!("Failed to initialize the Flutter engine: {err}");
+            return;
+        }
+    };
     state.flutter_engine = Some(flutter_engine);
 
     let nodes_available: Vec<DrmNode> = state
@@ -1003,6 +1045,12 @@ enum DeviceAddError {
     DrmNode(CreateDrmNodeError),
     #[error("Failed to add device to GpuManager: {0}")]
     AddNode(egl::Error),
+    #[error("Failed to create an EGL display: {0}")]
+    EglDisplay(egl::Error),
+    #[error("Failed to create an EGL context: {0}")]
+    EglContext(egl::Error),
+    #[error("Failed to create the GLES renderer: {0}")]
+    Renderer(GlesError),
 }
 
 impl DeviceAddError {
@@ -1405,15 +1453,16 @@ impl State<DrmBackend> {
 
         let gbm_device = GbmDevice::new(fd.clone()).map_err(DeviceAddError::GbmDevice)?;
         let egl_display =
-            unsafe { EGLDisplay::new(gbm_device.clone()) }.expect("Failed to create EGLDisplay");
+            unsafe { EGLDisplay::new(gbm_device.clone()) }.map_err(DeviceAddError::EglDisplay)?;
 
         let render_node = EGLDevice::device_for_display(&egl_display)
             .ok()
             .and_then(|x| x.try_get_render_node().ok().flatten())
             .unwrap_or(node);
 
+        let egl_context = EGLContext::new(&egl_display).map_err(DeviceAddError::EglContext)?;
         let renderer =
-            unsafe { GlesRenderer::new(EGLContext::new(&egl_display).unwrap()) }.unwrap();
+            unsafe { GlesRenderer::new(egl_context) }.map_err(DeviceAddError::Renderer)?;
 
         /*         self.backend_data
         .gpu_manager
@@ -1773,31 +1822,20 @@ impl State<DrmBackend> {
             (surface, renderer)
         };
 
-        let slot = {
-            let view = slot_view_id.and_then(|view_id| {
-                self.flutter_engine
-                    .as_mut()
-                    .unwrap()
-                    .views_management
-                    .views
-                    .get(&view_id)
-            });
-
-            let last_renderer_slot = if let Some(view) = view {
-                &view.last_rendered_slot
-            } else {
-                &None
-            };
-
-            let slot = if let Some(ref slot) = last_renderer_slot {
-                slot
-            } else {
-                debug!("Flutter hasn't rendered anything yet.");
-                // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
-                initial_render(surface, renderer).expect("Failed to render initial frame");
-                return;
-            };
-            slot
+        let frame = slot_view_id.and_then(|view_id| {
+            self.flutter_engine
+                .as_mut()
+                .unwrap()
+                .views_management
+                .views
+                .get(&view_id)
+                .and_then(|view| view.last_rendered.clone())
+        });
+        let Some(frame) = frame else {
+            debug!("Flutter hasn't rendered anything yet.");
+            // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
+            initial_render(surface, renderer).expect("Failed to render initial frame");
+            return;
         };
 
         // The selection overlay only appears on the output the screenshot
@@ -1817,7 +1855,7 @@ impl State<DrmBackend> {
         let elements = get_render_elements(
             renderer,
             &output,
-            slot,
+            &frame,
             self.space.output_geometry(&output).unwrap().to_f64(),
             self.clock.now(),
             &self.cursor_image_status,

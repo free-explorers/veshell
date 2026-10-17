@@ -9,8 +9,8 @@ use smithay::backend::input::{Event, InputEvent, KeyState, KeyboardKeyEvent};
 use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::element::texture::TextureRenderElement;
 use smithay::backend::renderer::gles::ffi::Gles2;
-use smithay::backend::renderer::gles::GlesRenderer;
-use smithay::backend::renderer::{ImportDma, ImportEgl};
+use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
+use smithay::backend::renderer::{ImportDma, ImportEgl, Offscreen};
 use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend, WinitInput};
 use smithay::output::{Mode, Output, PhysicalProperties, Scale, Subpixel};
 use smithay::reexports::calloop::channel::Event as CalloopEvent;
@@ -24,7 +24,7 @@ use smithay::wayland::dmabuf::{
 };
 use tracing::{error, info, warn};
 
-use crate::flutter_engine::view::OutputViewIdWrapper;
+use crate::flutter_engine::view::{OutputViewIdWrapper, ViewSwapchain};
 use crate::flutter_engine::{EmbedderChannels, FlutterEngine};
 use crate::keyboard::handle_keyboard_event;
 use crate::settings::{self, MonitorConfiguration};
@@ -37,7 +37,10 @@ pub struct Winit {
     backend: WinitGraphicsBackend<GlesRenderer>,
     damage_tracker: OutputDamageTracker,
     output: Output,
-    gbm_device: gbm::Device<DeviceFd>,
+    /// `None` when the winit EGL context has no DRM render node (software
+    /// EGL, e.g. a VM without 3D acceleration). Flutter then renders into GL
+    /// textures instead of GBM dmabufs.
+    gbm_device: Option<gbm::Device<DeviceFd>>,
 }
 
 impl Backend for Winit {
@@ -62,22 +65,45 @@ impl Backend for Winit {
         Some(f(self.backend.renderer()))
     }
 
-    fn new_swapchain(
-        &mut self,
-        width: u32,
-        height: u32,
-    ) -> Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>> {
+    fn new_swapchain(&mut self, width: u32, height: u32) -> ViewSwapchain {
         let dmabuf_formats = self.backend.renderer().dmabuf_formats();
+        let Some(gbm_device) = self.gbm_device.as_ref() else {
+            return ViewSwapchain::texture(width, height);
+        };
+        if dmabuf_formats.iter().next().is_none() {
+            // The EGL context cannot import the dmabufs this device would
+            // allocate, so keep Flutter on plain textures.
+            return ViewSwapchain::texture(width, height);
+        }
         let dmabuf_allocator: Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError>> = {
-            let gbm_allocator =
-                GbmAllocator::new(self.gbm_device.clone(), GbmBufferFlags::RENDERING);
+            let gbm_allocator = GbmAllocator::new(gbm_device.clone(), GbmBufferFlags::RENDERING);
             Box::new(DmabufAllocator(gbm_allocator))
         };
         let modifiers = dmabuf_formats
             .iter()
             .map(|format| format.modifier)
             .collect::<Vec<_>>();
-        Swapchain::new(dmabuf_allocator, width, height, Fourcc::Argb8888, modifiers)
+        ViewSwapchain::Dmabuf(Swapchain::new(
+            dmabuf_allocator,
+            width,
+            height,
+            Fourcc::Argb8888,
+            modifiers,
+        ))
+    }
+
+    fn new_texture(&mut self, width: u32, height: u32) -> Option<GlesTexture> {
+        match self
+            .backend
+            .renderer()
+            .create_buffer(Fourcc::Abgr8888, (width as i32, height as i32).into())
+        {
+            Ok(texture) => Some(texture),
+            Err(err) => {
+                warn!("Failed to allocate a Flutter backing texture: {err}");
+                None
+            }
+        }
     }
 
     fn capture_dmabuf_setup(&mut self) -> Option<super::CaptureDmabufSetup> {
@@ -94,7 +120,7 @@ impl Backend for Winit {
             return None;
         }
         Some(super::CaptureDmabufSetup {
-            allocator: std::rc::Rc::new(self.gbm_device.clone()),
+            allocator: std::rc::Rc::new(self.gbm_device.as_ref()?.clone()),
             formats,
         })
     }
@@ -132,32 +158,72 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
 
     let (mut backend, winit) = winit::init::<GlesRenderer>()?;
 
-    // The Flutter engine renders into dmabufs, so we need a GBM allocator on
-    // the same GPU that backs the winit EGL context. Derive that GPU's render
-    // node from the EGL device and open it directly.
-    let render_node = EGLDevice::device_for_display(backend.renderer().egl_context().display())
-        .and_then(|device| device.try_get_render_node());
-    let render_node = match render_node {
-        Ok(Some(node)) => node,
-        Ok(None) => {
-            return Err(
-                "winit EGL device has no DRM render node: cannot allocate Flutter buffers".into(),
-            )
-        }
-        Err(err) => {
-            return Err(format!("failed to query the winit EGL device render node: {err}").into())
-        }
-    };
-    let render_path = render_node
-        .dev_path()
-        .ok_or("winit render node has no device path")?;
-    let render_file = std::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(&render_path)?;
-    let gbm_device = gbm::Device::new(DeviceFd::from(OwnedFd::from(render_file)))
-        .map_err(|err| format!("failed to open GBM device {}: {err}", render_path.display()))?;
-    info!(?render_node, "Using render node for Flutter buffers");
+    // The Flutter engine prefers rendering into dmabufs, so we need a GBM
+    // allocator on the same GPU that backs the winit EGL context. Derive that
+    // GPU's render node from the EGL device and open it directly.
+    //
+    // Software EGL (llvmpipe/swrast, as selected in a VM without 3D
+    // acceleration) exposes no DRM device. That is not fatal: Flutter can
+    // render into ordinary GL textures and the compositor samples those.
+    // Absence of a render node therefore only downgrades the backing store.
+    let (render_node, gbm_device) =
+        match EGLDevice::device_for_display(backend.renderer().egl_context().display())
+            .and_then(|device| device.try_get_render_node())
+        {
+            Ok(Some(node)) => match node.dev_path() {
+                Some(path) => match std::fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .open(&path)
+                    .map_err(|err| err.to_string())
+                    .and_then(|file| {
+                        gbm::Device::new(DeviceFd::from(OwnedFd::from(file)))
+                            .map_err(|err| err.to_string())
+                    }) {
+                    Ok(gbm_device) => {
+                        if backend.renderer().dmabuf_formats().iter().next().is_none() {
+                            warn!(
+                                "The winit EGL context exposes no dmabuf formats; \
+                                 falling back to texture-backed Flutter buffers"
+                            );
+                            (None, None)
+                        } else {
+                            info!(?node, "Using render node for Flutter buffers");
+                            (Some(node), Some(gbm_device))
+                        }
+                    }
+                    Err(err) => {
+                        warn!(
+                            path = %path.display(),
+                            "Could not open the winit GBM device ({err}); \
+                             falling back to texture-backed Flutter buffers"
+                        );
+                        (None, None)
+                    }
+                },
+                None => {
+                    warn!(
+                        "The winit render node has no device path; \
+                         falling back to texture-backed Flutter buffers"
+                    );
+                    (None, None)
+                }
+            },
+            Ok(None) => {
+                warn!(
+                    "The winit EGL device has no DRM render node (software EGL?); \
+                     falling back to texture-backed Flutter buffers"
+                );
+                (None, None)
+            }
+            Err(err) => {
+                warn!(
+                    "Could not query the winit EGL device render node ({err}); \
+                     falling back to texture-backed Flutter buffers"
+                );
+                (None, None)
+            }
+        };
 
     let mode = Mode {
         size: backend.window_size(),
@@ -184,15 +250,24 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
     output.set_preferred(mode);
     let damage_tracker = OutputDamageTracker::from_output(&output);
 
-    let dmabuf_formats = backend.renderer().dmabuf_formats();
-    let dmabuf_default_feedback = DmabufFeedbackBuilder::new(render_node.dev_id(), dmabuf_formats)
-        .build()
-        .unwrap();
-    let mut dmabuf_state = DmabufState::new();
-    let _dmabuf_global = dmabuf_state.create_global_with_default_feedback::<State<Winit>>(
-        &display.handle(),
-        &dmabuf_default_feedback,
-    );
+    // A texture-backed run has no GPU-allocatable dmabufs to advertise to
+    // clients. Skip the global entirely instead of publishing an empty one.
+    let dmabuf_state = render_node.and_then(|render_node| {
+        let dmabuf_formats = backend.renderer().dmabuf_formats();
+        if dmabuf_formats.iter().next().is_none() {
+            return None;
+        }
+        let dmabuf_default_feedback =
+            DmabufFeedbackBuilder::new(render_node.dev_id(), dmabuf_formats)
+                .build()
+                .unwrap();
+        let mut dmabuf_state = DmabufState::new();
+        let _dmabuf_global = dmabuf_state.create_global_with_default_feedback::<State<Winit>>(
+            &display.handle(),
+            &dmabuf_default_feedback,
+        );
+        Some(dmabuf_state)
+    });
 
     if backend
         .renderer()
@@ -237,7 +312,7 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
             output: output.clone(),
             gbm_device,
         },
-        Some(dmabuf_state),
+        dmabuf_state,
         settings_manager,
     );
 
@@ -389,21 +464,21 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
 
                     let render_result = match data.backend_data.backend.bind() {
                         Ok((renderer, mut framebuffer)) => {
-                            let slot = data
+                            let frame = data
                                 .flutter_engine
                                 .as_ref()
                                 .unwrap()
                                 .views_management
                                 .views
                                 .get(&view_id)
-                                .and_then(|view| view.last_rendered_slot.as_ref());
+                                .and_then(|view| view.last_rendered.clone());
 
-                            Some(match slot {
-                                Some(slot) => {
+                            Some(match frame {
+                                Some(frame) => {
                                     let elements = get_render_elements(
                                         renderer,
                                         &output,
-                                        slot,
+                                        &frame,
                                         geometry,
                                         data.clock.now(),
                                         &data.cursor_image_status,

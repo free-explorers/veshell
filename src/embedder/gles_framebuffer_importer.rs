@@ -20,7 +20,7 @@ use smithay::backend::{
         ffi::egl::{self as ffi_egl, types::EGLImage},
         EGLContext, MakeCurrentError,
     },
-    renderer::gles::{ffi, GlesError},
+    renderer::gles::{ffi, GlesError, GlesTexture},
 };
 use tracing::{info, trace};
 
@@ -63,6 +63,64 @@ impl GlesFramebufferImporter {
             egl_display,
             buffers: vec![],
         })
+    }
+
+    /// Imports a plain GL texture as a framebuffer Flutter can render into.
+    ///
+    /// This is the fallback used when the backend has no DRM render node and
+    /// therefore cannot allocate dmabufs. Smithay's `GlesRenderer` can render
+    /// into a texture, but it owns the framebuffer object privately; Flutter's
+    /// compositor instead needs the raw FBO name, so it is created here.
+    ///
+    /// A fresh framebuffer is created per backing store: Flutter may recycle a
+    /// texture while an older frame is still being collected, so caching by
+    /// texture name could delete the framebuffer of a live frame.
+    pub fn import_texture(
+        &mut self,
+        egl_context: &EGLContext,
+        texture: &GlesTexture,
+    ) -> Result<u32, GlesError> {
+        self.make_current(egl_context)?;
+
+        unsafe {
+            let mut fbo = 0;
+            self.gl.GenFramebuffers(1, &mut fbo as *mut _);
+            self.gl.BindFramebuffer(ffi::FRAMEBUFFER, fbo);
+            self.gl.FramebufferTexture2D(
+                ffi::FRAMEBUFFER,
+                ffi::COLOR_ATTACHMENT0,
+                ffi::TEXTURE_2D,
+                texture.tex_id(),
+                0,
+            );
+            let status = self.gl.CheckFramebufferStatus(ffi::FRAMEBUFFER);
+            self.gl.BindFramebuffer(ffi::FRAMEBUFFER, 0);
+
+            if status != ffi::FRAMEBUFFER_COMPLETE {
+                self.gl.DeleteFramebuffers(1, &fbo as *const _);
+                return Err(GlesError::FramebufferBindingError);
+            }
+
+            trace!(
+                texture_id = texture.tex_id(),
+                fbo,
+                "Created framebuffer for Flutter texture"
+            );
+            Ok(fbo)
+        }
+    }
+
+    /// Releases a framebuffer created by [`Self::import_texture`].
+    pub fn release_texture_framebuffer(
+        &mut self,
+        egl_context: &EGLContext,
+        fbo: ffi::types::GLuint,
+    ) -> Result<(), MakeCurrentError> {
+        self.make_current(egl_context)?;
+        unsafe {
+            self.gl.DeleteFramebuffers(1, &fbo as *const _);
+        }
+        Ok(())
     }
 
     pub fn import_framebuffer(
