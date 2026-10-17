@@ -49,6 +49,8 @@
   shellBundle,
   flutterEngine,
   cargoHash,
+  buildCommit ? null,
+  buildChannel ? null,
 }:
 let
   manifest = builtins.fromTOML (builtins.readFile ../Cargo.toml);
@@ -124,6 +126,12 @@ rustPlatform.buildRustPackage {
     export VESHELL_LIB_DIR="$out/lib/veshell"
     export VESHELL_DATA_DIR="$out/share/veshell/data"
     export VESHELL_DEFAULT_CONFIG_DIR="$out/share/veshell/settings/default"
+    ${lib.optionalString (buildCommit != null) ''
+      export VESHELL_BUILD_COMMIT=${lib.escapeShellArg buildCommit}
+    ''}
+    ${lib.optionalString (buildChannel != null) ''
+      export VESHELL_BUILD_CHANNEL=${lib.escapeShellArg buildChannel}
+    ''}
   '';
 
   installPhase = ''

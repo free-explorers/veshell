@@ -22,9 +22,12 @@ fn main() {
         "VESHELL_LIB_DIR",
         "VESHELL_DATA_DIR",
         "VESHELL_DEFAULT_CONFIG_DIR",
+        "VESHELL_BUILD_COMMIT",
+        "VESHELL_BUILD_CHANNEL",
     ] {
         println!("cargo:rerun-if-env-changed={name}");
     }
+    emit_build_metadata();
     let config =
         BuildConfig::from_env().unwrap_or_else(|e| panic!("Invalid build configuration: {e}"));
     let flutter_engine_build = config.mode;
@@ -85,4 +88,38 @@ fn main() {
         Ok(_) => println!("Flutter engine shared library linked successfully"),
         Err(e) => panic!("Failed to link Flutter engine shared library: {}", e),
     }
+}
+
+/// Embeds the optional provenance inputs in the compositor binary.
+///
+/// The values are deliberately not inferred from `.git`: release tarballs and
+/// Nix source sets have no checkout, and a build script that shells out to git
+/// would either fail or silently report a revision from the wrong tree.
+fn emit_build_metadata() {
+    emit_optional_env("VESHELL_BUILD_COMMIT", 64);
+    emit_optional_env("VESHELL_BUILD_CHANNEL", 32);
+}
+
+fn emit_optional_env(name: &str, max_length: usize) {
+    let value = match env::var(name) {
+        Ok(value) => value,
+        Err(env::VarError::NotPresent) => return,
+        Err(env::VarError::NotUnicode(_)) => panic!("{name} must be valid UTF-8"),
+    };
+    let value = value.trim();
+    if value.is_empty() {
+        return;
+    }
+    assert!(
+        value.len() <= max_length,
+        "{name} must be at most {max_length} bytes"
+    );
+    assert!(
+        value
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric()
+                || matches!(character, '.' | '-' | '_' | '+')),
+        "{name} contains unsupported characters: {value:?}"
+    );
+    println!("cargo:rustc-env={name}={value}");
 }

@@ -20,6 +20,17 @@ TARGET ?= $(CARGO_BUILD_TARGET)
 RUST_PROFILE = $(if $(filter debug,$(PROFILE)),dev,$(PROFILE))
 OUTPUT_PROFILE = $(if $(filter debug dev,$(PROFILE)),debug,$(PROFILE))
 
+# Provenance embedded by `veshell --version`. Packaging may override these; the
+# automatic value is best-effort and stays empty outside a git checkout (source
+# tarballs, Nix sandbox).
+VESHELL_BUILD_COMMIT ?= $(shell \
+	commit=$$(git rev-parse --short=12 HEAD 2>/dev/null) || exit 0; \
+	if [ -n "$$(git status --porcelain 2>/dev/null)" ]; then commit="$$commit-dirty"; fi; \
+	printf '%s' "$$commit")
+VESHELL_BUILD_CHANNEL ?=
+export VESHELL_BUILD_COMMIT
+export VESHELL_BUILD_CHANNEL
+
 # Existing build outputs or independently supplied artifacts.
 BIN ?= $(CARGO_TARGET_DIR)/$(if $(TARGET),$(TARGET)/)$(OUTPUT_PROFILE)/veshell
 ENGINE_LIB ?= extra/third_party/flutter_engine/$(FLUTTER_MODE)/libflutter_engine.so
