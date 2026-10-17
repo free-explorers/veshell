@@ -5,6 +5,7 @@ use std::sync::{LazyLock, Mutex, OnceLock};
 use tracing::debug;
 
 use crate::capture::{RECORDING_CHIP_HEIGHT, RECORDING_CHIP_WIDTH};
+use crate::flutter_engine::view::Frame;
 use crate::{
     backend::render::fractionnal_texture::{
         FractionnalTextureBuffer, FractionnalTextureRenderElement,
@@ -18,7 +19,7 @@ use smithay::{
     backend::{
         allocator::{
             dmabuf::{AsDmabuf, Dmabuf},
-            Fourcc, Slot,
+            Fourcc,
         },
         renderer::{
             element::{
@@ -28,6 +29,7 @@ use smithay::{
                 utils::{Relocate, RelocateRenderElement},
                 Id, Kind, RenderElement,
             },
+            gles::GlesTexture,
             Color32F, ImportAll, ImportDma, ImportMem, Renderer, RendererSuper,
         },
     },
@@ -87,7 +89,7 @@ fn stable_solid_id(key: u64) -> Id {
 pub fn get_render_elements<R>(
     renderer: &mut R,
     output: &Output,
-    slot: &Slot<Dmabuf>,
+    frame: &Frame,
     output_geometry: Rectangle<f64, smithay::utils::Logical>,
     now: Time<Monotonic>,
     cursor_image_status: &Mutex<CursorImageStatus>,
@@ -101,16 +103,15 @@ pub fn get_render_elements<R>(
     recording_chip: Option<crate::capture::RecordingChipData>,
 ) -> Vec<VeshellRenderElements<R>>
 where
-    R: Renderer + ImportAll + ImportMem + ImportDma,
+    R: Renderer<TextureId = GlesTexture> + ImportAll + ImportMem + ImportDma,
     <R as RendererSuper>::TextureId: Send + Clone + 'static,
     <R as RendererSuper>::Error:,
     VeshellRenderElements<R>: RenderElement<R>,
 {
-    let dmabuf = slot.export().unwrap();
-    get_render_elements_from_dmabuf(
+    get_render_elements_for_frame(
         renderer,
         output,
-        &dmabuf,
+        frame,
         output_geometry,
         now,
         cursor_image_status,
@@ -129,16 +130,16 @@ where
 /// rendered through the game-mode fallback. Callers that need the pointer
 /// add [`get_cursor_elements`] on top: the live desktop render and local
 /// recordings do, while screenshots and portal captures stay pointer-free.
-pub fn get_frame_elements_from_dmabuf<R>(
+pub fn get_frame_elements<R>(
     renderer: &mut R,
     output: &Output,
-    dmabuf: &Dmabuf,
+    frame: &Frame,
     output_geometry: Rectangle<f64, smithay::utils::Logical>,
     flip_flutter_texture: bool,
     surfaces_in_gaming_mode: Vec<&WlSurface>,
 ) -> Vec<VeshellRenderElements<R>>
 where
-    R: Renderer + ImportAll + ImportMem + ImportDma,
+    R: Renderer<TextureId = GlesTexture> + ImportAll + ImportMem + ImportDma,
     <R as RendererSuper>::TextureId: Send + Clone + 'static,
     <R as RendererSuper>::Error:,
     VeshellRenderElements<R>: RenderElement<R>,
@@ -150,14 +151,16 @@ where
         elements.extend(get_surface_elements(renderer, surface));
     }
 
-    let flutter_texture_result = renderer.import_dmabuf(dmabuf, None);
+    let flutter_texture = match frame {
+        Frame::Dmabuf(dmabuf) => renderer.import_dmabuf(dmabuf, None).ok(),
+        Frame::Texture(texture) => Some(texture.clone()),
+    };
     let transform = if flip_flutter_texture {
         Transform::Flipped180
     } else {
         Transform::Normal
     };
-    if flutter_texture_result.is_ok() {
-        let flutter_texture = flutter_texture_result.unwrap();
+    if let Some(flutter_texture) = flutter_texture {
         let flutter_texture_buffer = FractionnalTextureBuffer::from_texture(
             renderer,
             flutter_texture,
@@ -790,10 +793,10 @@ fn scrim_regions(
     .collect()
 }
 
-pub fn get_render_elements_from_dmabuf<R>(
+fn get_render_elements_for_frame<R>(
     renderer: &mut R,
     output: &Output,
-    dmabuf: &Dmabuf,
+    frame: &Frame,
     output_geometry: Rectangle<f64, smithay::utils::Logical>,
     now: Time<Monotonic>,
     cursor_image_status: &Mutex<CursorImageStatus>,
@@ -807,7 +810,7 @@ pub fn get_render_elements_from_dmabuf<R>(
     recording_chip: Option<crate::capture::RecordingChipData>,
 ) -> Vec<VeshellRenderElements<R>>
 where
-    R: Renderer + ImportAll + ImportMem + ImportDma,
+    R: Renderer<TextureId = GlesTexture> + ImportAll + ImportMem + ImportDma,
     <R as RendererSuper>::TextureId: Send + Clone + 'static,
     <R as RendererSuper>::Error:,
     VeshellRenderElements<R>: RenderElement<R>,
@@ -850,7 +853,7 @@ where
             .unwrap_or_default(),
     );
     // The live recording indicator rides the same overlay layer; the
-    // capture readback path (get_frame_elements_from_dmabuf) draws none
+    // capture readback path (get_frame_elements) draws none
     // of it, so the chip never reaches the recorded pixels.
     if let Some(chip) = recording_chip {
         elements.extend(get_recording_overlay_elements(
@@ -878,10 +881,10 @@ where
         ));
     }
 
-    let mut frame_elements = get_frame_elements_from_dmabuf(
+    let mut frame_elements = get_frame_elements(
         renderer,
         output,
-        dmabuf,
+        frame,
         output_geometry,
         flip_flutter_texture,
         surfaces_in_gaming_mode,

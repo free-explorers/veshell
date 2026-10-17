@@ -88,15 +88,24 @@ release engine.
 
 ## Troubleshooting
 
-- **No usable GPU:** check `ls -l /dev/dri`. Graphical testing needs a render node
-  and suitable EGL support. In GNOME Boxes, enable 3D acceleration and use
-  Virtio/virgl rather than QXL. Software-only Xvfb is not a substitute.
+- **No usable GPU:** check `ls -l /dev/dri`. A real session needs a render node
+  and suitable EGL support; in GNOME Boxes, enable 3D acceleration and use
+  Virtio/virgl rather than QXL. A nested `VESHELL_BACKEND=winit` run falls back
+  to software EGL when no render node exists, but it is slow and clients get
+  shared-memory buffers only. Software-only Xvfb is still not a substitute for
+  a session.
 - **Loading spinner:** check UPower and the audio server. A missing service can
   block initialization. Run `systemctl status upower.service` and
   `systemctl --user status pipewire-pulse.socket pipewire-pulse.service`.
-- **Startup errors:** inspect `journalctl --user -b -u veshell.service`. Flutter
-  messages are logged at Rust debug level; for the next launch, use
+- **Startup errors / immediate logout:** inspect
+  `journalctl --user -b -u veshell.service`. Flutter messages are logged at Rust
+  debug level; for the next launch, use
   `RUST_LOG=veshell=debug XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=veshell veshell-session`.
+  A log line about a missing DRM GPU, EGL display, or EGL context means the VM
+  has no usable graphics stack for a session: enable 3D acceleration. Also make
+  sure the session entry runs `veshell-session` (or `veshell --session`) rather
+  than a plain `veshell`; a leaked `WAYLAND_DISPLAY`/`DISPLAY` must not select
+  the nested backend at login.
 
 ## Maintainer notes
 

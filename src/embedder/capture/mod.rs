@@ -12,9 +12,9 @@ pub mod state;
 
 pub use state::CaptureState;
 
-use smithay::backend::allocator::dmabuf::{AsDmabuf, Dmabuf};
+use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::backend::allocator::Buffer as _;
-use smithay::backend::allocator::{Fourcc, Slot};
+use smithay::backend::allocator::Fourcc;
 use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::element::memory::MemoryRenderBufferRenderElement;
 use smithay::backend::renderer::element::solid::SolidColorRenderElement;
@@ -35,9 +35,9 @@ use tracing::{debug, info, warn};
 
 use self::selection::{NATIVE_SCREENSHOT_MIME, PNG_MIME};
 use crate::backend::render::{
-    get_cursor_elements, get_frame_elements_from_dmabuf, CaptureCursor, VeshellRenderElements,
+    get_cursor_elements, get_frame_elements, CaptureCursor, VeshellRenderElements,
 };
-use crate::flutter_engine::view::OutputViewIdWrapper;
+use crate::flutter_engine::view::{Frame, OutputViewIdWrapper};
 use crate::meta_window_state::meta_window::MetaWindow;
 use crate::{Backend, State};
 
@@ -773,7 +773,7 @@ fn take_output_snapshot<BackendData: Backend + 'static>(
         .get::<OutputViewIdWrapper>()
         .ok_or_else(|| format!("Output {} has no Flutter view", output.name()))?
         .view_id;
-    let flutter_dmabuf = latest_flutter_dmabuf(state, view_id)?;
+    let flutter_frame = latest_flutter_frame(state, view_id)?;
     let geometry = state
         .space
         .output_geometry(output)
@@ -796,7 +796,7 @@ fn take_output_snapshot<BackendData: Backend + 'static>(
             let bytes = render_output_to_memory(
                 renderer,
                 output,
-                &flutter_dmabuf,
+                &flutter_frame,
                 geometry,
                 BackendData::FLIP_FLUTTER_TEXTURE,
                 game_surface_list.iter().collect(),
@@ -836,7 +836,7 @@ pub fn render_output_into_dmabuf<BackendData: Backend + 'static>(
         .get::<OutputViewIdWrapper>()
         .ok_or_else(|| format!("Output {} has no Flutter view", output.name()))?
         .view_id;
-    let flutter_dmabuf = latest_flutter_dmabuf(state, view_id)?;
+    let flutter_frame = latest_flutter_frame(state, view_id)?;
     let geometry = state
         .space
         .output_geometry(output)
@@ -859,7 +859,7 @@ pub fn render_output_into_dmabuf<BackendData: Backend + 'static>(
             render_output_into_target(
                 renderer,
                 output,
-                &flutter_dmabuf,
+                &flutter_frame,
                 geometry,
                 BackendData::FLIP_FLUTTER_TEXTURE,
                 game_surface_list.iter().collect(),
@@ -876,7 +876,7 @@ pub fn render_output_into_dmabuf<BackendData: Backend + 'static>(
 fn capture_frame_elements(
     renderer: &mut GlesRenderer,
     output: &Output,
-    flutter_dmabuf: &Dmabuf,
+    flutter_frame: &Frame,
     output_geometry: Rectangle<f64, Logical>,
     flip_flutter_texture: bool,
     game_surface_list: Vec<&WlSurface>,
@@ -896,10 +896,10 @@ fn capture_frame_elements(
             cursor.gaming_mode,
         ));
     }
-    elements.extend(get_frame_elements_from_dmabuf(
+    elements.extend(get_frame_elements(
         renderer,
         output,
-        flutter_dmabuf,
+        flutter_frame,
         output_geometry,
         flip_flutter_texture,
         game_surface_list,
@@ -911,7 +911,7 @@ fn capture_frame_elements(
 fn render_output_into_target(
     renderer: &mut GlesRenderer,
     output: &Output,
-    flutter_dmabuf: &Dmabuf,
+    flutter_frame: &Frame,
     output_geometry: Rectangle<f64, Logical>,
     flip_flutter_texture: bool,
     game_surface_list: Vec<&WlSurface>,
@@ -931,7 +931,7 @@ fn render_output_into_target(
     let elements = capture_frame_elements(
         renderer,
         output,
-        flutter_dmabuf,
+        flutter_frame,
         output_geometry,
         flip_flutter_texture,
         game_surface_list,
@@ -1207,29 +1207,26 @@ fn blit_scaled(
     Ok(())
 }
 
-fn latest_flutter_dmabuf<BackendData: Backend + 'static>(
+fn latest_flutter_frame<BackendData: Backend + 'static>(
     state: &State<BackendData>,
     view_id: i64,
-) -> Result<Dmabuf, String> {
+) -> Result<Frame, String> {
     let view = state
         .flutter_engine()
         .views_management
         .views
         .get(&view_id)
         .ok_or_else(|| format!("Flutter view {view_id} is missing"))?;
-    let slot: &Slot<Dmabuf> = view
-        .last_rendered_slot
-        .as_ref()
-        .ok_or_else(|| "Flutter has not rendered this output yet".to_string())?;
-    slot.export()
-        .map_err(|error| format!("Unable to export Flutter frame: {error}"))
+    view.last_rendered
+        .clone()
+        .ok_or_else(|| "Flutter has not rendered this output yet".to_string())
 }
 
 #[allow(clippy::too_many_arguments)]
 fn render_output_to_memory(
     renderer: &mut GlesRenderer,
     output: &Output,
-    flutter_dmabuf: &Dmabuf,
+    flutter_frame: &Frame,
     output_geometry: Rectangle<f64, Logical>,
     flip_flutter_texture: bool,
     game_surface_list: Vec<&smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
@@ -1252,7 +1249,7 @@ fn render_output_to_memory(
     let elements = capture_frame_elements(
         renderer,
         output,
-        flutter_dmabuf,
+        flutter_frame,
         output_geometry,
         flip_flutter_texture,
         game_surface_list,

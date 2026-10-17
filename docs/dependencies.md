@@ -116,7 +116,11 @@ the prepared shell and engine instead; see [building and packaging](building.md)
 ## Runtime requirements
 
 - Fontconfig, Roboto, and Noto fonts for all shipped scripts (see below).
-- A usable DRM render node and compatible EGL/GLES drivers.
+- A usable KMS/DRM device and compatible EGL/GLES drivers for the DRM session.
+  When EGL exposes no dmabuf formats, Flutter falls back to GL textures (and
+  clients to shared memory); this works on software EGL (llvmpipe/swrast) but is
+  much slower. The nested winit backend can likewise run without a DRM render
+  node. A real session still needs a display controller and EGL support.
 - A user session bus and a system D-Bus service.
 - UPower and a PulseAudio-compatible audio server, such as PipeWire-Pulse.
   These are awaited during shell initialization, even on machines without a battery.

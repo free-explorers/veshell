@@ -3,15 +3,16 @@ use std::rc::Rc;
 
 use smithay::backend::{
     allocator::{
-        dmabuf::{AnyError, Dmabuf, DmabufAllocator},
+        dmabuf::{Dmabuf, DmabufAllocator},
         gbm::{GbmAllocator, GbmBufferFlags, GbmDevice},
-        Allocator, Fourcc, Swapchain,
+        Allocator, Fourcc,
     },
-    renderer::gles::GlesRenderer,
+    renderer::gles::{GlesRenderer, GlesTexture},
     session::libseat::LibSeatSession,
 };
 use smithay::reexports::gbm::Modifier;
 
+use crate::flutter_engine::view::ViewSwapchain;
 use crate::state::State;
 
 /// Allocates capture-owned dmabufs the primary renderer can render into and
@@ -99,11 +100,17 @@ pub trait Backend {
     fn with_primary_renderer_mut<T>(&mut self, f: impl FnOnce(&mut GlesRenderer) -> T)
         -> Option<T>;
 
-    fn new_swapchain(
-        &mut self,
-        width: u32,
-        height: u32,
-    ) -> Swapchain<Box<dyn Allocator<Buffer = Dmabuf, Error = AnyError> + 'static>>;
+    fn new_swapchain(&mut self, width: u32, height: u32) -> ViewSwapchain;
+
+    /// Allocates one GL texture for the software fallback path.
+    ///
+    /// Returned by backends whose EGL stack cannot provide dmabuf-backed
+    /// Flutter frames (software EGL in a VM, or a nested run without a DRM
+    /// render node). The default keeps backends that always have dmabufs
+    /// unchanged.
+    fn new_texture(&mut self, _width: u32, _height: u32) -> Option<GlesTexture> {
+        None
+    }
 
     /// The dmabuf allocator and the renderer-supported `(fourcc, modifier)`
     /// list for the PipeWire producer, or `None` when the backend cannot
