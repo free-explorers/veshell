@@ -28,9 +28,17 @@ by `EphemeralWindowWidget`.
   `Tab`, directions) fall through to it instead of being consumed by the
   overview's search pane. While the surface has not been matched yet, the
   placeholder holds the keyboard for the same reason.
-- **Closed** — closing the native window removes the window. Closing while no
-  native window is owned (the waiting case above) removes the window directly
-  and cancels its pending launch (`systemctl --user stop` on the tracked
+- **Window hand-off** — when the application itself closes its window and
+  opens another (a password safe closing its unlock window before showing its
+  main window), the tile stays alive as the launch owner: it falls back to the
+  waiting placeholder, and the replacement surface is attributed back to it
+  (through ordinary matching or launch provenance) instead of becoming a new
+  persistent tile. The tile keeps waiting for as long as its tracked launch
+  runs; when that launch exits with no window left, the tile removes itself.
+- **Closed** — closing the native window through the shell (title-bar close,
+  tab close, close hotkey) removes the window. Closing while no native window
+  is owned (the waiting case above) removes the window directly and cancels
+  its pending launch (`systemctl --user stop` on the tracked
   `veshell-launch-<tile-uuid>-*.service` unit), so a launch that never opened a
   window cannot get stuck on screen or linger in the background.
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -19,6 +20,14 @@ part 'ephemeral_window_state.g.dart';
 @riverpod
 class EphemeralWindowState extends _$EphemeralWindowState
     with WindowProviderMixin<EphemeralWindow> {
+  /// Whether this tile ever displayed a native window.
+  ///
+  /// Distinguishes an application that ended after showing a window (the
+  /// ephemeral session is over) from a launch that never produced one (a
+  /// single-instance app raising an existing window, or a failed launch),
+  /// which must stay readable in its launch-logs placeholder.
+  bool _hasShownWindow = false;
+
   @override
   EphemeralWindow build(EphemeralWindowId windowId) {
     throw Exception('EphemeralWindowState $windowId not yet initialized');
@@ -40,6 +49,18 @@ class EphemeralWindowState extends _$EphemeralWindowState
     // pids from their own windows. It is a weak match signal, the waiting bonus
     // is the strong one.
     waitForSurface(process.pid);
+    // The tracked launch outlives the first window (`systemd-run --wait` exits
+    // with the application's cgroup). Once it ends with no window left, the
+    // ephemeral session is over and the tile must not linger on its launch
+    // logs.
+    unawaited(
+      process.exitCode.then((_) {
+        if (!ref.mounted || !_hasShownWindow || state.metaWindowId != null) {
+          return;
+        }
+        removeWindow();
+      }),
+    );
     return process;
   }
 
@@ -52,6 +73,7 @@ class EphemeralWindowState extends _$EphemeralWindowState
       state = state.copyWith(metaWindowId: null);
       return;
     }
+    _hasShownWindow = true;
     final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
     state = state.copyWith(metaWindowId: metaWindowId, pid: metaWindow.pid);
     ref
@@ -73,8 +95,35 @@ class EphemeralWindowState extends _$EphemeralWindowState
 
   @override
   void onMetaWindowRemoved(MetaWindowId metaWindowId) {
+    // A closure the shell requested (title-bar close, tab close, close hotkey)
+    // ends the ephemeral session, exactly like closing the tile. Any other
+    // closure is the application replacing its own window — a password safe
+    // closing its unlock window before opening its main window — and the tile
+    // must stay behind as the launch owner so the replacement surface is
+    // attributed back to it instead of becoming a new persistent tile.
+    final closeRequested = ref
+        .read(metaWindowStateProvider(metaWindowId).notifier)
+        .closeRequested;
     super.onMetaWindowRemoved(metaWindowId);
-    removeWindow();
+
+    if (closeRequested) {
+      removeWindow();
+      return;
+    }
+    if (state.metaWindowId != null) {
+      // Another window of the application is still displayed; nothing to
+      // hand over.
+      return;
+    }
+    if (!ref.read(appLaunchProvider.notifier).hasLiveLaunch(state.windowId)) {
+      // The application is gone as well, so no replacement surface can arrive.
+      removeWindow();
+      return;
+    }
+    // Keep waiting for the replacement surface, but drop the launch gather: a
+    // window the application closed itself must not be mistaken for a burst
+    // that lost every window and relaunch the application.
+    abandonLaunchGather();
   }
 
   /// Closes the tile.

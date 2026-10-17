@@ -105,6 +105,14 @@ class AppLaunch extends _$AppLaunch {
     _launches[windowId]?.producedWindow = true;
   }
 
+  /// Whether [windowId]'s launch is still running.
+  ///
+  /// The tracked launch lives as long as the application does (`systemd-run
+  /// --wait` exits with its cgroup), so a tile that lost its window can use
+  /// this to tell an application that is about to open a replacement surface
+  /// from one that is already gone.
+  bool hasLiveLaunch(WindowId windowId) => _launches.containsKey(windowId);
+
   /// Cancels the launch of [windowId] if it never produced a native window.
   ///
   /// Called when a tile is removed. A tile that displayed a window already

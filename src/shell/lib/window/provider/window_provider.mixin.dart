@@ -689,6 +689,23 @@ mixin WindowProviderMixin<T extends Window> {
     _launchGatherStartedAt = DateTime.now();
   }
 
+  /// Ends an in-flight launch gather without dispatching or reopening.
+  ///
+  /// Used when the application itself removed a window (a hand-off such as a
+  /// password-safe unlock window closing before its main window maps): the
+  /// tile keeps waiting for the next surface, but the disappearance must not
+  /// be mistaken for a burst that lost every window and relaunch the
+  /// application.
+  void abandonLaunchGather() {
+    _debouncedTimer?.cancel();
+    _debouncedTimer = null;
+    _launchOrigin = false;
+    _launchGatherStartedAt = null;
+    _everOwnedWindow = false;
+    _everOwnedResizableWindow = false;
+    _matchingInfo = _matchingInfo.copyWith(waitingForAppSince: null);
+  }
+
   void onMetaWindowRemoved(MetaWindowId metaWindowId) {
     removeMetaWindow(metaWindowId);
   }
