@@ -1,4 +1,4 @@
-{ pkgs ? import <nixpkgs> { } }:
+{ pkgs ? import <nixpkgs> { }, buildCommit ? null, buildChannel ? null }:
 let
   flutter = pkgs.callPackage ./nix/flutter.nix { };
   dependencies = pkgs.callPackage ./nix/dependencies.nix { };
@@ -10,5 +10,5 @@ in
 pkgs.callPackage ./nix/package.nix {
   inherit (flutter) flutterSdk flutterEngine;
   inherit (dependencies) cargoHash;
-  inherit shellBundle;
+  inherit shellBundle buildCommit buildChannel;
 }

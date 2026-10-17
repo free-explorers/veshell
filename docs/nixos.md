@@ -86,6 +86,11 @@ run`'s default profile) and sets `VESHELL_FLUTTER_MODE`; `nix develop .#release`
 for, and installs — the package, `nix run` and the NixOS module — always use the
 release engine.
 
+The flake passes its `self.rev` (or `self.dirtyRev`) as `VESHELL_BUILD_COMMIT`,
+so `veshell --version` identifies the Nix source revision. Evaluating
+`default.nix` directly without `buildCommit` reports an unknown commit; pass
+the revision explicitly when embedding the package elsewhere.
+
 ## Troubleshooting
 
 - **No usable GPU:** check `ls -l /dev/dri`. A real session needs a render node

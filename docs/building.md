@@ -86,6 +86,31 @@ outputs and project settings. The default-settings path can also be overridden
 at runtime. Engine header, library, architecture, and runtime mode must match;
 the file checks are not a complete ABI compatibility test.
 
+## Build identity
+
+`veshell --version` reports the identity embedded in the compositor at
+compile time. Two optional build inputs carry the provenance that Cargo cannot
+provide:
+
+| Variable | Meaning |
+| --- | --- |
+| `VESHELL_BUILD_COMMIT` | Source revision, for example `31d7d01` or `31d7d01-dirty` |
+| `VESHELL_BUILD_CHANNEL` | Release channel or prerelease id, for example `beta`, `beta.1` or `stable` |
+
+Pass them from the revision actually built; do not copy them from release
+metadata that may describe a different tree. Allowed characters are ASCII
+letters, digits, `.`, `-`, `_` and `+`; the values are length-limited by the
+build script. A build without them reports `commit unknown`, which is expected
+for a source tarball or a Nix source set with no checkout.
+
+The build script never runs `git`: Nix source sets and release tarballs have no
+`.git`, and a guess could identify the wrong tree or break reproducibility. The
+automatic `make` path supplies a best-effort short revision and marks a dirty
+checkout, while the Nix flake passes its revision when available. Direct
+`cargo build`/`cargo run` builds report an unknown commit unless the variables
+are set explicitly. No build timestamp is embedded. Distribution recipes in
+`veshell-packaging` should export the same variables from their source pin.
+
 ## Staged installation
 
 `make install` only copies prepared artifacts. It does not compile, fetch

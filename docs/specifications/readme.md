@@ -29,6 +29,7 @@ answer. Each service specification records its exact split.
 - [Keyboard](/specifications/keyboard.md)
 - [Navigation and actions](/specifications/navigation.md)
 - [Environment variables](/specifications/environment_variables.md)
+- [Build identity and version reporting](/specifications/build_identity.md)
 - [Notification](/specifications/notification.md)
 - [SystemNotification](/specifications/system_notification.md)
 - [MediaPlayer](/specifications/media_player.md)

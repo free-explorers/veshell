@@ -20,7 +20,13 @@
     let
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
-      veshell = import ./default.nix { inherit pkgs; };
+      veshell = import ./default.nix {
+        inherit pkgs;
+        buildCommit =
+          if self ? rev then self.rev
+          else if self ? dirtyRev then self.dirtyRev
+          else null;
+      };
 
       # The engine for a runtime mode. release is what the package uses; debug
       # and profile are compiled on demand for development. Nix only builds a

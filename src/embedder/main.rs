@@ -4,6 +4,8 @@ use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 
 use backend::Backend;
+use build_info::BuildInfo;
+use cli::{Action, Cli};
 use log::debug;
 use smithay::{
     reexports::wayland_server::{
@@ -22,7 +24,9 @@ use crate::state::State;
 
 mod backend;
 mod brightness;
+mod build_info;
 mod capture;
+mod cli;
 mod cursor;
 mod flutter_engine;
 mod focus;
@@ -40,6 +44,29 @@ mod texture_swap_chain;
 mod wayland;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let cli = match Cli::parse(env::args().skip(1)) {
+        Ok(cli) => cli,
+        Err(error) => {
+            eprintln!("veshell: {error}\n\n{}", Cli::USAGE);
+            std::process::exit(2);
+        }
+    };
+
+    // Answer informational flags before touching logging, the font cache, the
+    // display backend or Flutter. `--version` has to work from a plain TTY and
+    // from inside a running session.
+    match cli.action {
+        Action::Help => {
+            print!("{}", Cli::USAGE);
+            return Ok(());
+        }
+        Action::Version => {
+            println!("{}", BuildInfo::current());
+            return Ok(());
+        }
+        Action::Run => {}
+    }
+
     // Set up subscriber with both stdout and file layers
     tracing_subscriber::fmt()
         .with_timer(fmt::time::ChronoLocal::new(String::from(
@@ -68,7 +95,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // reachable host display selects winit; a bare TTY or stale display
     // variables use the DRM backend.
     let requested = env::var("VESHELL_BACKEND").unwrap_or_default();
-    let session = env::args().skip(1).any(|argument| argument == "--session");
+    let session = cli.session;
     // A display manager can start the session with the greeter's or the
     // previous session's DISPLAY/WAYLAND_DISPLAY still in the environment.
     // Only a *reachable* display makes this a nested run; a stale variable
