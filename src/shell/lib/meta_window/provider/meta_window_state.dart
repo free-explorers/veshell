@@ -23,6 +23,15 @@ class MetaWindowState extends _$MetaWindowState {
   // crashing on the uninitialized provider.
   bool _created = false;
 
+  /// Whether the shell asked the client to close this window (title-bar close,
+  /// tile close or the close hotkey). Runtime-only: it lets the owning tile
+  /// tell a closure it requested from one the application performed itself,
+  /// such as a password safe replacing its unlock window with its main window.
+  bool _closeRequested = false;
+
+  /// Whether the shell requested the closure of this window.
+  bool get closeRequested => _closeRequested;
+
   @override
   MetaWindow build(String id) {
     throw Exception('MetaWindowState $id not yet initialized');
@@ -152,6 +161,7 @@ class MetaWindowState extends _$MetaWindowState {
     if (!_created) {
       return;
     }
+    _closeRequested = true;
     ref
         .read(platformManagerProvider.notifier)
         .request(
