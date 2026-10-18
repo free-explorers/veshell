@@ -60,13 +60,14 @@ Use `Debian_13` instead of `xUbuntu_26.04` on Debian.
 
 ## NixOS
 
-Veshell is available as a Nix flake:
+Veshell is available as a Nix flake. See
+[NixOS packaging](docs/nixos.md) for the required `nix.settings` (flakes and the
+Veshell cache), the NixOS module and session setup. With those settings in
+place:
 
 ```sh
 nix run github:free-explorers/veshell
 ```
-
-See [NixOS packaging](docs/nixos.md) for the NixOS module and session setup.
 
 The project ships no analytics; see
 [privacy and telemetry](docs/privacy.md) for the build-time tooling and artifact
