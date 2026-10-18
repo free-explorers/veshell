@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::ffi::{c_char, CStr};
 use std::fs::File;
 use std::io::{ErrorKind, Write};
 use std::os::fd::FromRawFd;
@@ -26,7 +27,7 @@ use smithay::backend::input::{
 };
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
 use smithay::backend::renderer::element::texture::TextureRenderElement;
-use smithay::backend::renderer::gles::ffi::Gles2;
+use smithay::backend::renderer::gles::ffi::{self, Gles2};
 use smithay::backend::renderer::gles::{GlesError, GlesRenderer, GlesTexture};
 use smithay::backend::renderer::{
     ImportAll, ImportDma, ImportEgl, Offscreen, Renderer, RendererSuper,
@@ -138,6 +139,26 @@ fn software_frame_interval() -> Duration {
         .filter(|fps| (1..=240).contains(fps))
         .unwrap_or(DEFAULT_SOFTWARE_FPS);
     Duration::from_millis(1000 / fps)
+}
+
+/// Whether the GL renderer is a software rasterizer.
+///
+/// `GL_RENDERER` is authoritative: llvmpipe, softpipe and swrast are Mesa's
+/// software drivers, while hardware drivers report the GPU model. This is
+/// deliberately not inferred from a missing DRM render node, which also
+/// happens on hardware that lacks `EGL_EXT_device_drm_render_node`.
+fn is_software_renderer(renderer: &GlesRenderer) -> bool {
+    let context = renderer.egl_context();
+    // SAFETY: making the renderer's own context current, then querying a
+    // string that stays valid for the lifetime of the context.
+    if unsafe { context.make_current() }.is_err() {
+        return false;
+    }
+    let gl = unsafe { Gles2::load_with(|name| egl::get_proc_address(name) as *const _) };
+    let name = unsafe { CStr::from_ptr(gl.GetString(ffi::RENDERER) as *const c_char) }
+        .to_string_lossy()
+        .to_ascii_lowercase();
+    name.contains("llvmpipe") || name.contains("softpipe") || name.contains("swrast")
 }
 
 pub struct DrmBackend {
@@ -1513,14 +1534,13 @@ impl State<DrmBackend> {
             .as_ref()
             .and_then(|device| device.try_get_render_node().ok().flatten());
         let render_node = drm_render_node.unwrap_or(node);
-        // Software EGL (llvmpipe, swrast, kms_swrast) exposes no DRM render
-        // node. This is the VM-without-3D case; software composites are far
-        // more expensive than GPU ones.
-        let software_rendering = drm_render_node.is_none();
 
         let egl_context = EGLContext::new(&egl_display).map_err(DeviceAddError::EglContext)?;
         let renderer =
             unsafe { GlesRenderer::new(egl_context) }.map_err(DeviceAddError::Renderer)?;
+        // Only a software rasterizer is capped; hardware GPUs report their
+        // model in GL_RENDERER, so they always take the uncapped path.
+        let software_rendering = is_software_renderer(&renderer);
 
         /*         self.backend_data
         .gpu_manager
