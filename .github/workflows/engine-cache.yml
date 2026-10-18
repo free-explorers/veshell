@@ -1,0 +1,46 @@
+name: Engine Cache
+
+# A bumped engine pin is only mergeable once the exact engine it resolves to has
+# been published to the project cache. This catches both a missing publication
+# and a pin that builds a different Flutter version than the engine repo
+# actually released (the workflow used to fall back to default.json).
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "nix/engine-repository.json"
+      - "flake.nix"
+      - "flake.lock"
+      - "Cargo.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            extra-substituters = https://veshell.cachix.org
+            extra-trusted-public-keys = veshell.cachix.org-1:C8J71PCJ1Fx4+4shICPNsSOnGgijVEHZCTrWhbYyjOI=
+
+      - name: Verify the pinned engine is in the cache
+        run: |
+          set -euo pipefail
+          out="$(nix eval --raw .#packages.x86_64-linux.engine)"
+          hash="${out##*/}"
+          hash="${hash%%-*}"
+          if ! curl -fsS "https://veshell.cachix.org/${hash}.narinfo" >/dev/null; then
+            echo "::error::Engine ${out} is not in the cache; publish it before merging this pin."
+            exit 1
+          fi
+          echo "engine cached: ${out}" | tee -a "$GITHUB_STEP_SUMMARY"
