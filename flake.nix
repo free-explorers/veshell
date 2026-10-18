@@ -3,7 +3,7 @@
 
   # The Flutter engine packaging (free-explorers/flutter-engine-nix) is evaluated
   # against this exact nixpkgs revision; its default.nix pins the same one.
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/774debe7a0d1b496e35677ad955a1011c6ff74f3";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/26f4107e47e3ad0ffd0db220469ba83b6f6d96e8";
 
   # Engine, SDK, shell and package closures are published here by the release
   # workflows, so `nix run` / `nix profile add` substitute instead of compiling
