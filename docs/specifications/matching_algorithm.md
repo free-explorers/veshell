@@ -322,32 +322,45 @@ nothing and bury the application's main window in its own dialog area. A
 genuine dialog — modal, client-parented or fixed-size — is never promoted: it
 stays in the dialog area, shown over the tile's placeholder.
 
-Most dialogs are tiled, not floated: a tab bar lists them (in creation order)
-plus the trusted file chooser, and the selected entry fills a panel that
-overlays the tile. The tile behind the panel is blurred (`ImageFiltered`, the
-overview's recipe) and stops receiving pointer events; the panel is a portion of
-the tile, leaving a margin through which the blurred window stays visible.
-Actions for the selected entry — **extract** and **close** for a dialog,
-**cancel** for the chooser — float on the right of the panel, so a
-client-side-decorated dialog has an extract affordance even though it draws no
-shell titlebar.
+A native window can be attached to a tile as a dialog in two ways: the client
+declares it a dialog (a client parent, a modal hint, a fixed size), or the shell
+gathers it under a tile from a weaker relation (activation, launch provenance, a
+process sibling). Only the second kind is tabbed.
 
-A **modal or fixed-size** dialog is the exception: it keeps the tile's previous
-floating presentation — a dim scrim over the tile with the dialog drawn at its
-natural size — because stretching a fixed-size surface to fill the panel
-distorts it, and neither kind is ever a candidate for extraction, so the tabbed
-area adds nothing. Such a dialog is not a tab; it floats above the panel, with a
-shell frame (rounded corners and a drop shadow) when the client brings no
+Windows the shell attached but that are **regular top-levels** are tiled: a tab
+bar lists them (in creation order) plus the trusted file chooser, and the
+selected entry fills a panel that overlays the tile. The tile behind the panel
+is blurred (`ImageFiltered`, the overview's recipe) and stops receiving pointer
+events; the panel is a portion of the tile, leaving a margin through which the
+blurred window stays visible. Actions for the selected entry — **extract** and
+**close** for a dialog, **cancel** for the chooser — float on the right of the
+panel, so a client-side-decorated dialog has an extract affordance even though
+it draws no shell titlebar.
+
+A window the **client declares a dialog** — a client parent
+(`xdg_toplevel.set_parent`, X11 transient), a modal hint (`xdg_wm_dialog_v1`,
+X11 modal hints), or a size that constrains both axes to a single value — keeps
+the tile's previous floating presentation: a dim scrim over the tile with the
+dialog drawn at its natural size, because stretching one of those to fill the
+panel either distorts a fixed-size client or stretches a modal one beyond what
+it was designed for. Such a dialog is not a tab; it floats above the panel, with
+a shell frame (rounded corners and a drop shadow) when the client brings no
 decoration of its own.
+
+The area and the extraction action share one predicate
+(`isExtractableDialog`), so a tab is always a regular top-level: every tab
+offers **Extract to new tile**, and a floating dialog never does. A window can
+move between the two presentations when a hint arrives late — the presentation
+follows the `MetaWindow` live, while routing was decided when the window mapped.
 
 The selection is kept per tile (`SelectedDialogForWindow`); a dialog that just
 opened, or a chooser that just arrived, takes the selection, and a vanished
 selection falls back to the newest remaining entry. The tile's single focus
 node drives activation of the selected dialog
 (`WindowWidget.activationTarget`), so switching to the tile sends the keyboard
-to the dialog, not to the window behind it; a floating modal or fixed-size
-dialog, being on top, keeps the keyboard over a selected tab. Game mode keeps
-ignoring dialogs; the chooser still shows.
+to the dialog, not to the window behind it; a floating dialog, being on top,
+keeps the keyboard over a selected tab. Game mode keeps ignoring dialogs; the
+chooser still shows.
 
 ### Extract to tile
 

@@ -29,11 +29,12 @@ class SelectedDialogForWindow extends _$SelectedDialogForWindow {
 /// hands the keyboard to, or `null` when no client should be activated (no
 /// dialog, or the chooser is selected).
 ///
-/// A modal or fixed-size dialog floats over the tile and sits above everything
-/// (see `isFloatingDialog`), so it keeps the keyboard even when a tabbed-area
-/// dialog is the one selected; the newest such dialog wins, being on top of the
-/// others. Otherwise the selected tab's dialog is activated, defaulting to the
-/// newest dialog, which is what the old floating stack always raised.
+/// A floating dialog — one the client declares a dialog, see
+/// `isFloatingDialog` — floats over the tile and sits above everything, so it
+/// keeps the keyboard even when a tabbed-area dialog is the one selected; the
+/// newest such dialog wins, being on top of the others. Otherwise the selected
+/// tab's dialog is activated, defaulting to the newest dialog, which is what the
+/// old floating stack always raised.
 @riverpod
 MetaWindowId? selectedDialogMetaWindowForWindow(Ref ref, WindowId parentId) {
   final dialogIds = ref.watch(dialogSetForWindowProvider(parentId));

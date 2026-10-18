@@ -31,8 +31,8 @@ import 'package:shell/window/widget/window_dialogs.dart';
 const _parent = PersistentWindowId('parent');
 const _dialogA = DialogWindowId('a');
 const _dialogB = DialogWindowId('b');
-const _modalMetaWindowId = 'meta-b';
-const _modalSurfaceId = 7;
+const _floatingMetaWindowId = 'meta-b';
+const _floatingSurfaceId = 7;
 
 class _FixedDialogSet extends DialogSetForWindow {
   _FixedDialogSet(this._ids);
@@ -97,11 +97,11 @@ class _FixedSurfaceState extends WlSurfaceState {
   );
 }
 
-MetaWindow _modalMetaWindow() => const MetaWindow(
-  id: _modalMetaWindowId,
+MetaWindow _floatingMetaWindow() => const MetaWindow(
+  id: _floatingMetaWindowId,
   pid: 1,
   mapped: true,
-  surfaceId: _modalSurfaceId,
+  surfaceId: _floatingSurfaceId,
   needDecoration: false,
   gameModeActivated: false,
   scaleRatio: 1,
@@ -109,11 +109,16 @@ MetaWindow _modalMetaWindow() => const MetaWindow(
   geometry: Rect.fromLTWH(0, 0, 320, 240),
 );
 
-/// Pumps the dialog area with a modal dialog (`Beta`) whose surface buffer is
+/// Pumps the dialog area with a floating dialog (`Beta`) whose surface buffer is
 /// [surfaceSize] over a `320x240` window geometry.
-Future<ProviderContainer> _pumpModalDialogArea(
+///
+/// [metaWindow] defaults to a modal dialog; pass one declaring a client parent
+/// to exercise a resizable, non-modal window the client still declares a
+/// dialog.
+Future<ProviderContainer> _pumpFloatingDialogArea(
   WidgetTester tester, {
   required Size surfaceSize,
+  MetaWindow? metaWindow,
   bool settle = true,
 }) async {
   final container = ProviderContainer(
@@ -128,13 +133,14 @@ Future<ProviderContainer> _pumpModalDialogArea(
         () => _FixedDialogState(_dialog(_dialogA, 'meta-a', 'Alpha')),
       ),
       dialogWindowStateProvider(_dialogB).overrideWith(
-        () => _FixedDialogState(_dialog(_dialogB, _modalMetaWindowId, 'Beta')),
+        () =>
+            _FixedDialogState(_dialog(_dialogB, _floatingMetaWindowId, 'Beta')),
       ),
-      metaWindowStateProvider(
-        _modalMetaWindowId,
-      ).overrideWith(() => _FixedMetaWindowState(_modalMetaWindow())),
+      metaWindowStateProvider(_floatingMetaWindowId).overrideWith(
+        () => _FixedMetaWindowState(metaWindow ?? _floatingMetaWindow()),
+      ),
       wlSurfaceStateProvider(
-        _modalSurfaceId,
+        _floatingSurfaceId,
       ).overrideWith(() => _FixedSurfaceState(surfaceSize)),
       localizedDesktopEntryForIdProvider(
         'org.example.App',
@@ -288,7 +294,7 @@ void main() {
   });
 
   testWidgets('a modal dialog floats instead of taking a tab', (tester) async {
-    final container = await _pumpModalDialogArea(
+    final container = await _pumpFloatingDialogArea(
       tester,
       surfaceSize: const Size(320, 240),
     );
@@ -302,7 +308,38 @@ void main() {
     // The floating modal keeps the keyboard over the tabbed dialog.
     expect(
       container.read(selectedDialogMetaWindowForWindowProvider(_parent)),
-      _modalMetaWindowId,
+      _floatingMetaWindowId,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a client-parented dialog floats instead of taking a tab', (
+    tester,
+  ) async {
+    // Resizable and non-modal, but the client declared a parent: a genuine
+    // dialog, so it must not be stretched into a tab (and offers no extract).
+    final container = await _pumpFloatingDialogArea(
+      tester,
+      surfaceSize: const Size(320, 240),
+      metaWindow: const MetaWindow(
+        id: _floatingMetaWindowId,
+        pid: 1,
+        mapped: true,
+        surfaceId: _floatingSurfaceId,
+        needDecoration: false,
+        gameModeActivated: false,
+        scaleRatio: 1,
+        parent: 'meta-owner',
+        geometry: Rect.fromLTWH(0, 0, 320, 240),
+      ),
+    );
+
+    expect(find.widgetWithText(PanelTab, 'Alpha'), findsOneWidget);
+    expect(find.widgetWithText(PanelTab, 'Beta'), findsNothing);
+    expect(find.byType(WindowDialogs), findsOneWidget);
+    expect(
+      container.read(selectedDialogMetaWindowForWindowProvider(_parent)),
+      _floatingMetaWindowId,
     );
     expect(tester.takeException(), isNull);
   });
@@ -313,7 +350,7 @@ void main() {
     // The surface buffer is bigger than the window geometry: the client draws
     // its own shadow and rounded corners in the margins, so the shell must not
     // frame it (nor clip those margins off).
-    await _pumpModalDialogArea(tester, surfaceSize: const Size(360, 280));
+    await _pumpFloatingDialogArea(tester, surfaceSize: const Size(360, 280));
 
     expect(find.byType(WindowDialogs), findsOneWidget);
     expect(find.byType(ServerSideFrame), findsNothing);
@@ -325,7 +362,7 @@ void main() {
   ) async {
     // No settle: a tile built while a dialog is already open must come up
     // frosted, not blur in from nothing.
-    await _pumpModalDialogArea(
+    await _pumpFloatingDialogArea(
       tester,
       surfaceSize: const Size(320, 240),
       settle: false,
