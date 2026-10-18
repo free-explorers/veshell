@@ -32,6 +32,7 @@ class _FixedMetaWindowState extends MetaWindowState {
 
 MetaWindow _metaWindow(
   String id, {
+  String? parent,
   bool isModal = false,
   bool isFixedSized = false,
 }) => MetaWindow(
@@ -42,6 +43,7 @@ MetaWindow _metaWindow(
   needDecoration: false,
   gameModeActivated: false,
   scaleRatio: 1,
+  parent: parent,
   isModal: isModal,
   isFixedSized: isFixedSized,
 );
@@ -194,6 +196,23 @@ void main() {
 
     test('a fixed-size dialog floats', () {
       expect(isFloatingDialog(_metaWindow('meta', isFixedSized: true)), isTrue);
+    });
+
+    test('a dialog declaring a parent floats', () {
+      // Even resizable and non-modal: the client declared it a dialog, so it is
+      // not stretched into a tab (the same predicate that offers extraction).
+      expect(isFloatingDialog(_metaWindow('meta', parent: 'owner')), isTrue);
+    });
+
+    test('floating and extractable are exact complements', () {
+      for (final metaWindow in [
+        _metaWindow('meta'),
+        _metaWindow('meta', parent: 'owner'),
+        _metaWindow('meta', isModal: true),
+        _metaWindow('meta', isFixedSized: true),
+      ]) {
+        expect(isFloatingDialog(metaWindow), !isExtractableDialog(metaWindow));
+      }
     });
   });
 }

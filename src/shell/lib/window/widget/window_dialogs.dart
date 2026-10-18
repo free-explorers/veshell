@@ -5,9 +5,11 @@ import 'package:shell/window/widget/floatable_window.dart';
 
 /// Renders a set of native windows as floating, positionable popups.
 ///
-/// This is the tile's previous dialog presentation, kept for the dialogs a
-/// stretched, tabbed panel does not suit: a modal or fixed-size surface is
-/// shown at its natural size over a dimmed tile instead of being tiled.
+/// This is the tile's previous dialog presentation, kept for the windows the
+/// client itself declares dialogs — a client parent, a modal hint, a fixed size
+/// (see `isFloatingDialog`): stretching one of those into the tabbed panel
+/// either distorts it or stretches it beyond its design, so it is shown at its
+/// natural size over a dimmed tile instead.
 /// [ContainerWithPositionnableChildren] provides the
 /// `RepositionnableControllerWidget` that [FloatableWindow] relies on.
 class WindowDialogs extends StatelessWidget {
@@ -33,8 +35,8 @@ class WindowDialogs extends StatelessWidget {
           FloatableWindow(
             metaWindowId: metaWindowId,
             maxSizeFactor: maxSizeFactor,
-            // Modal and fixed-size dialogs get the shell frame, so one with no
-            // decoration of its own does not read as a flat rectangle.
+            // Floating dialogs get the shell frame, so one with no decoration
+            // of its own does not read as a flat rectangle.
             frame: true,
           ),
       ],

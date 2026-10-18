@@ -64,9 +64,10 @@ const windowFrameDecoration = BoxDecoration(
 /// without the title bar [MetaSurfaceDecoration] adds for a client that asked
 /// for server-side decoration.
 ///
-/// A modal or fixed-size dialog floats over the dimmed tile (`WindowDialogs`),
-/// and a client that draws no decoration of its own would otherwise read as a
-/// flat rectangle pasted on the dim. It is only drawn around a bare surface: a
+/// A floating dialog — one the client declares a dialog, see
+/// `isFloatingDialog` — floats over the dimmed tile (`WindowDialogs`), and a
+/// client that draws no decoration of its own would otherwise read as a flat
+/// rectangle pasted on the dim. It is only drawn around a bare surface: a
 /// client that carries its own decoration in its surface buffer keeps it (see
 /// `FloatableWindow.frame`).
 class ServerSideFrame extends StatelessWidget {

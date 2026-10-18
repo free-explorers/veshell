@@ -37,9 +37,13 @@ const _panelMarginFactor = 0.06;
 /// measured so the content centring lands right on the first frame.
 const _dialogTabBarHeight = 56.0;
 
-/// The dialog area of a tile: the native dialogs attached to [parentWindowId]
-/// (plus the trusted file chooser) presented as a tabbed panel over the tile,
-/// whose content is blurred while the area is open.
+/// The dialog area of a tile: the native windows attached to [parentWindowId]
+/// that are regular top-levels (plus the trusted file chooser) presented as a
+/// tabbed panel over the tile, whose content is blurred while the area is open.
+///
+/// A window the client declares a dialog — a client parent, a modal hint or a
+/// fixed size — is not a tab: it floats at its natural size instead (see
+/// `isFloatingDialog`).
 ///
 /// Tiled instead of floated: only the selected entry is shown, filling the
 /// panel's body, and the entries are navigated through the tab bar. The
@@ -69,9 +73,11 @@ class WindowDialogArea extends HookConsumerWidget {
     final dialogIds = ref.watch(dialogSetForWindowProvider(parentWindowId));
     final chooser = ref.watch(fileChooserForWindowProvider(parentWindowId));
 
-    // Split the dialogs by presentation. A modal or fixed-size surface is not
-    // tiled: it keeps the previous floating presentation (see
-    // `isFloatingDialog`), drawn at its natural size over a dimmed tile.
+    // Split the dialogs by presentation, using the same predicate that offers
+    // extraction: a regular top-level is a tab (and can be pulled out to a tile
+    // of its own), while a window the client declares a dialog — a client
+    // parent, modal or fixed-size — keeps the previous floating presentation
+    // (see `isFloatingDialog`), drawn at its natural size over a dimmed tile.
     final areaDialogIds = <DialogWindowId>[];
     final floatingMetaWindowIds = <MetaWindowId>[];
     if (dialogsEnabled) {
@@ -203,9 +209,9 @@ class WindowDialogArea extends HookConsumerWidget {
               },
             ),
           ),
-        // A modal or fixed-size dialog stays on top of everything, exactly as
-        // it did before the dialog area existed: the tile dims and the dialog
-        // floats at its own size.
+        // A floating dialog stays on top of everything, exactly as it did
+        // before the dialog area existed: the tile dims and the dialog floats
+        // at its own size.
         if (floatingMetaWindowIds.isNotEmpty) ...[
           const Positioned.fill(child: ColoredBox(color: Colors.black38)),
           WindowDialogs(
