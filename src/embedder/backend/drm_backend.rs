@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::ffi::{c_char, CStr};
 use std::fs::File;
 use std::io::{ErrorKind, Write};
 use std::os::fd::FromRawFd;
@@ -26,7 +27,7 @@ use smithay::backend::input::{
 };
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
 use smithay::backend::renderer::element::texture::TextureRenderElement;
-use smithay::backend::renderer::gles::ffi::Gles2;
+use smithay::backend::renderer::gles::ffi::{self, Gles2};
 use smithay::backend::renderer::gles::{GlesError, GlesRenderer, GlesTexture};
 use smithay::backend::renderer::{
     ImportAll, ImportDma, ImportEgl, Offscreen, Renderer, RendererSuper,
@@ -121,6 +122,45 @@ impl<'render> AsGlesRenderer for DrmRenderer<'render> {
     }
 } */
 
+/// Default cap for software (llvmpipe/swrast) composites.
+///
+/// llvmpipe composites a full output far slower than a GPU, and a virtual
+/// display (QXL) can complete page flips faster than the panel refresh, which
+/// lets the flip-driven loop free-run at full raster speed. 30 fps keeps the
+/// desktop responsive while cutting the full-output composite cost roughly by
+/// the ratio to the achieved rate. `VESHELL_SOFTWARE_FPS` overrides it.
+const DEFAULT_SOFTWARE_FPS: u64 = 30;
+
+/// `VESHELL_SOFTWARE_FPS` clamped to a sane range, or the default.
+fn software_frame_interval() -> Duration {
+    let fps = std::env::var("VESHELL_SOFTWARE_FPS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|fps| (1..=240).contains(fps))
+        .unwrap_or(DEFAULT_SOFTWARE_FPS);
+    Duration::from_millis(1000 / fps)
+}
+
+/// Whether the GL renderer is a software rasterizer.
+///
+/// `GL_RENDERER` is authoritative: llvmpipe, softpipe and swrast are Mesa's
+/// software drivers, while hardware drivers report the GPU model. This is
+/// deliberately not inferred from a missing DRM render node, which also
+/// happens on hardware that lacks `EGL_EXT_device_drm_render_node`.
+fn is_software_renderer(renderer: &GlesRenderer) -> bool {
+    let context = renderer.egl_context();
+    // SAFETY: making the renderer's own context current, then querying a
+    // string that stays valid for the lifetime of the context.
+    if unsafe { context.make_current() }.is_err() {
+        return false;
+    }
+    let gl = unsafe { Gles2::load_with(|name| egl::get_proc_address(name) as *const _) };
+    let name = unsafe { CStr::from_ptr(gl.GetString(ffi::RENDERER) as *const c_char) }
+        .to_string_lossy()
+        .to_ascii_lowercase();
+    name.contains("llvmpipe") || name.contains("softpipe") || name.contains("swrast")
+}
+
 pub struct DrmBackend {
     pub session: LibSeatSession,
     gpus: HashMap<DrmNode, GpuData>,
@@ -138,6 +178,15 @@ pub struct DrmBackend {
     /// vblanks are delivering, and to step in only once a whole refresh has
     /// passed with no vblank.
     last_vsync_tick: Option<Instant>,
+    /// Frame interval applied when the GPU uses software EGL (llvmpipe in a
+    /// VM without 3D acceleration). A full software composite is expensive,
+    /// and a virtual display can complete page flips faster than the panel,
+    /// which would let the flip-driven loop free-run. Composites are capped to
+    /// this interval and released by the throttle timer.
+    software_frame_interval: Option<Duration>,
+    /// Nodes with a composite skipped by the software cap, waiting for the
+    /// throttle timer to render the next allowed frame.
+    software_throttled_nodes: HashSet<DrmNode>,
 }
 
 /// Screensaver wake hook: re-insert every blanked output into the render loop.
@@ -507,6 +556,8 @@ pub fn run_drm_backend() {
             highest_hz_crtc: HashMap::new(),
             pacing_crtc: None,
             last_vsync_tick: None,
+            software_frame_interval: None,
+            software_throttled_nodes: HashSet::new(),
         },
         None,
         settings_manager,
@@ -704,6 +755,24 @@ pub fn run_drm_backend() {
             Timer::from_duration(initial_interval),
             move |_, _, data: &mut State<DrmBackend>| {
                 TimeoutAction::ToDuration(data.on_vsync_timer())
+            },
+        )
+        .unwrap();
+
+    // Software EGL caps full-output composites to a sane frame rate (see
+    // `State::render_surface`). This timer releases a composite that the cap
+    // skipped; in a hardware session nothing is ever queued, so it is a cheap
+    // no-op. The period is the cap itself: a flip that arrives too early is
+    // held until the next tick, which keeps the cap exact even on virtual
+    // displays whose page flips complete immediately.
+    let software_interval = software_frame_interval();
+    event_loop
+        .handle()
+        .insert_source(
+            Timer::from_duration(software_interval),
+            move |_, _, data: &mut State<DrmBackend>| {
+                data.on_software_throttle_timer();
+                TimeoutAction::ToDuration(software_interval)
             },
         )
         .unwrap();
@@ -1030,6 +1099,10 @@ struct GpuData {
     render_node: DrmNode,
     registration_token: RegistrationToken,
     renderer: GlesRenderer,
+    /// EGL has no DRM render node (llvmpipe/swrast, e.g. a VM without 3D
+    /// acceleration). Composites are capped to keep the software rasterizer
+    /// from free-running on virtual page flips.
+    software_rendering: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -1356,6 +1429,7 @@ impl State<DrmBackend> {
             last_queue: None,
             last_gaming_present: None,
             frame_pending: false,
+            last_composite: None,
         };
 
         device.surfaces.insert(crtc, surface);
@@ -1455,14 +1529,18 @@ impl State<DrmBackend> {
         let egl_display =
             unsafe { EGLDisplay::new(gbm_device.clone()) }.map_err(DeviceAddError::EglDisplay)?;
 
-        let render_node = EGLDevice::device_for_display(&egl_display)
-            .ok()
-            .and_then(|x| x.try_get_render_node().ok().flatten())
-            .unwrap_or(node);
+        let egl_device = EGLDevice::device_for_display(&egl_display).ok();
+        let drm_render_node = egl_device
+            .as_ref()
+            .and_then(|device| device.try_get_render_node().ok().flatten());
+        let render_node = drm_render_node.unwrap_or(node);
 
         let egl_context = EGLContext::new(&egl_display).map_err(DeviceAddError::EglContext)?;
         let renderer =
             unsafe { GlesRenderer::new(egl_context) }.map_err(DeviceAddError::Renderer)?;
+        // Only a software rasterizer is capped; hardware GPUs report their
+        // model in GL_RENDERER, so they always take the uncapped path.
+        let software_rendering = is_software_renderer(&renderer);
 
         /*         self.backend_data
         .gpu_manager
@@ -1488,6 +1566,7 @@ impl State<DrmBackend> {
                 surfaces: HashMap::new(),
                 active_leases: Vec::new(),
                 renderer,
+                software_rendering,
             },
         );
 
@@ -1670,6 +1749,25 @@ impl State<DrmBackend> {
         }
     }
 
+    /// Releases a composite skipped by the software frame cap.
+    ///
+    /// Texture-backed (software EGL) sessions cap full-output composites to
+    /// [`software_frame_interval`]; when the flip-driven loop asks for one too
+    /// soon, `render_surface` records the node and returns. This renders the
+    /// next allowed frame so the loop keeps flipping (and delivering batons)
+    /// without free-running at raster speed.
+    fn on_software_throttle_timer(&mut self) {
+        if self.backend_data.software_frame_interval.is_none()
+            || self.backend_data.software_throttled_nodes.is_empty()
+        {
+            return;
+        }
+        let nodes: Vec<DrmNode> = self.backend_data.software_throttled_nodes.drain().collect();
+        for node in nodes {
+            self.render(node, None);
+        }
+    }
+
     /// Fallback vsync source, armed at the pacing refresh.
     ///
     /// The primary source is the pacing CRTC's page-flip vblank
@@ -1804,6 +1902,49 @@ impl State<DrmBackend> {
             None => view_id_for_output(&output),
         };
 
+        // Read the latest Flutter frame before borrowing the GPU state: the
+        // software cap below needs it, and the no-frame path needs the
+        // renderer afterwards.
+        let frame = slot_view_id.and_then(|view_id| {
+            self.flutter_engine
+                .as_mut()
+                .unwrap()
+                .views_management
+                .views
+                .get(&view_id)
+                .and_then(|view| view.last_rendered.clone())
+        });
+
+        // Software EGL (llvmpipe/swrast) cannot afford a full-output composite
+        // at raster speed, and a virtual display can complete page flips
+        // faster than the panel, which lets the flip-driven loop free-run.
+        // Cap composites on a software renderer; the throttle timer releases
+        // the skipped one so the loop keeps flipping and Flutter keeps
+        // receiving its batons.
+        let software_rendering = self
+            .backend_data
+            .gpus
+            .get(&node)
+            .map(|gpu| gpu.software_rendering)
+            .unwrap_or(false);
+        if software_rendering {
+            let interval = *self
+                .backend_data
+                .software_frame_interval
+                .get_or_insert_with(software_frame_interval);
+            let last_composite = self
+                .backend_data
+                .gpus
+                .get(&node)
+                .and_then(|gpu| gpu.surfaces.get(&crtc))
+                .and_then(|surface| surface.last_composite);
+            if last_composite.is_some_and(|last| last.elapsed() < interval) {
+                self.backend_data.software_throttled_nodes.insert(node);
+                return;
+            }
+            self.backend_data.software_throttled_nodes.remove(&node);
+        }
+
         let (surface, renderer) = {
             let gpu_data = self.backend_data.gpus.get_mut(&node);
             let gpu_data = if let Some(gpu_data) = gpu_data {
@@ -1822,15 +1963,6 @@ impl State<DrmBackend> {
             (surface, renderer)
         };
 
-        let frame = slot_view_id.and_then(|view_id| {
-            self.flutter_engine
-                .as_mut()
-                .unwrap()
-                .views_management
-                .views
-                .get(&view_id)
-                .and_then(|view| view.last_rendered.clone())
-        });
         let Some(frame) = frame else {
             debug!("Flutter hasn't rendered anything yet.");
             // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
@@ -1892,6 +2024,9 @@ impl State<DrmBackend> {
                 // whether a game surface rode it, so `on_vblank` can report the
                 // presentation latency of gaming frames.
                 surface.last_queue = Some((Instant::now(), had_game_surfaces));
+                // Start the software frame cap's interval from a presented
+                // frame, not from a skipped one.
+                surface.last_composite = Some(Instant::now());
                 // Hold off further renders until this flip's vblank.
                 surface.frame_pending = true;
             }
@@ -2011,6 +2146,9 @@ struct SurfaceData {
     /// While set, rendering is skipped and the vblank repaints instead, which
     /// caps the render rate to the refresh and keeps pointer motion cheap.
     frame_pending: bool,
+    /// When the last frame was actually presented, used by the software frame
+    /// cap. Skipped composites leave it untouched.
+    last_composite: Option<Instant>,
 }
 
 pub type GbmDrmCompositor = DrmCompositor<

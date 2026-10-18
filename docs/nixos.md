@@ -3,6 +3,36 @@
 Veshell is a Nix flake. It supports native **x86_64-linux** only; cross
 compilation is not supported.
 
+## Prerequisites
+
+A stock NixOS install ships with the `nix-command` and `flakes` experimental
+features disabled, and lets only `root` add substituters. Add both settings to
+`configuration.nix` and rebuild before running any of the commands below:
+
+```nix
+nix.settings = {
+  experimental-features = [ "nix-command" "flakes" ];
+  extra-substituters = [ "https://veshell.cachix.org" ];
+  extra-trusted-public-keys = [
+    "veshell.cachix.org-1:C8J71PCJ1Fx4+4shICPNsSOnGgijVEHZCTrWhbYyjOI="
+  ];
+};
+```
+
+```sh
+sudo nixos-rebuild switch
+```
+
+Both parts matter:
+
+- `nix run`, `nix profile` and `nixos-rebuild --flake` refuse to run while the
+  experimental features are off.
+- Nix ignores substituters and public keys configured by an untrusted user, so
+  the cache has to be set system-wide. A per-user `cachix use` or
+  `--accept-flake-config` does not make the cache usable. Without it, the
+  Flutter engine is compiled from source: a long build that currently fails in a
+  Python dependency's test suite on recent nixpkgs.
+
 ## Try it
 
 ```sh
@@ -65,14 +95,11 @@ pinned in `nix/engine-repository.json`). The engine is published to the `veshell
 Cachix cache, so normal installations substitute it instead of compiling it; the
 SDK, shell and Rust binary build locally in a few minutes.
 
-The flake advertises the cache through `nixConfig`, which Nix applies only when
-flake configuration is accepted. If you do not set `accept-flake-config = true`,
-add the cache once — with `cachix use veshell`, or by hand:
-
-```ini
-extra-substituters = https://veshell.cachix.org
-extra-trusted-public-keys = veshell.cachix.org-1:C8J71PCJ1Fx4+4shICPNsSOnGgijVEHZCTrWhbYyjOI=
-```
+The flake also advertises the cache through `nixConfig`. Nix only applies that
+for trusted users, and on a stock NixOS every user except `root` is untrusted,
+so configure the cache system-wide as shown in [Prerequisites](#prerequisites).
+A per-user `cachix use` and `--accept-flake-config` are both ignored in that
+situation.
 
 To build only the engine (for example to warm the cache yourself):
 
@@ -99,6 +126,12 @@ the revision explicitly when embedding the package elsewhere.
   to software EGL when no render node exists, but it is slow and clients get
   shared-memory buffers only. Software-only Xvfb is still not a substitute for
   a session.
+- **Software rendering is slow:** without a DRM render node Veshell composites
+  with software EGL (llvmpipe) and caps the output to 30 fps so the flip-driven
+  loop cannot free-run on a virtual display. Set `VESHELL_SOFTWARE_FPS` (for
+  example `60`, or `15` on a slow VM) in the session environment to trade
+  latency for CPU. Flutter's own full-screen effects, such as the launcher's
+  backdrop blur, are still rasterized on the CPU.
 - **Loading spinner:** check UPower and the audio server. A missing service can
   block initialization. Run `systemctl status upower.service` and
   `systemctl --user status pipewire-pulse.socket pipewire-pulse.service`.
