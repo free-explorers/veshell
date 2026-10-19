@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/settings/provider/util/default_config_directory.dart';
+import 'package:shell/settings/provider/util/theme_detection.dart';
 
 part 'default_settings_json.g.dart';
 
@@ -20,6 +21,6 @@ class DefaultSettingsJson extends _$DefaultSettingsJson {
             )
             as Map<String, dynamic>;
 
-    return defaultSettingsJson;
+    return withDetectedThemeDefaults(defaultSettingsJson);
   }
 }

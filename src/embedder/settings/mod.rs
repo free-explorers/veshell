@@ -176,7 +176,11 @@ fn default_wheel_scroll_factor() -> f64 {
 #[serde(rename_all = "camelCase")]
 pub struct ThemeSettings {
     color: String,
+    /// Kept optional: the packaged defaults no longer hardcode a theme, and the
+    /// shell resolves the best installed one at launch.
+    #[serde(default)]
     pub gtk_theme: String,
+    #[serde(default)]
     pub icon_theme: String,
 }
 
