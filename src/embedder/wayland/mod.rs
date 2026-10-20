@@ -470,6 +470,30 @@ pub mod wayland {
                     .borrow()
                     .surface_id
             });
+
+            // A crashed client can destroy its surface without the role's
+            // teardown running (an X11 window destroyed without an unmap, for
+            // example). Remove the window/popup here as a backstop, before the
+            // surface bookkeeping disappears: the shell would otherwise keep a
+            // tile pointing at a surface that no longer exists, and every
+            // later activation/resize for it fails with `surface_doesnt_exist`.
+            // Both removals are idempotent, so the ordinary role teardown that
+            // already ran is unaffected.
+            if let Some(meta_window_id) = self
+                .meta_window_state
+                .meta_window_id_per_surface_id
+                .remove(&surface_id)
+            {
+                self.remove_meta_window(&meta_window_id);
+            }
+            if let Some(meta_popup_id) = self
+                .meta_window_state
+                .meta_popup_id_per_surface_id
+                .remove(&surface_id)
+            {
+                self.remove_meta_popup(&meta_popup_id);
+            }
+
             self.surfaces.remove(&surface_id);
             self.subsurfaces.remove(&surface_id);
             // Drop the surface's external textures so their Flutter

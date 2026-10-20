@@ -88,7 +88,20 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         }
     }
     pub fn remove_meta_popup(&mut self, meta_popup_id: &String) {
-        self.meta_window_state.meta_popups.remove(meta_popup_id);
+        // Role teardown and surface destruction can both report the same popup.
+        // Emit one removal event and clear the reverse mapping on the first
+        // pass; later passes are no-ops.
+        self.meta_window_state
+            .meta_popup_id_per_surface_id
+            .retain(|_, id| id != meta_popup_id);
+        if self
+            .meta_window_state
+            .meta_popups
+            .remove(meta_popup_id)
+            .is_none()
+        {
+            return;
+        }
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "meta_popup_removed",

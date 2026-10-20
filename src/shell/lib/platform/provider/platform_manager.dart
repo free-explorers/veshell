@@ -8,6 +8,16 @@ import 'package:shell/shared/util/logger.dart';
 
 part 'platform_manager.g.dart';
 
+/// Compositor errors that mean the target of a request was torn down before
+/// the request arrived. They are expected during window/surface teardown and
+/// are safe to drop.
+const _goneInteractionCodes = {
+  'surface_doesnt_exist',
+  'meta_window_doesnt_exist',
+  'toplevel_doesnt_exist',
+  'x11_surface_doesnt_exist',
+};
+
 /// Manager for Wayland interaction
 ///
 /// provide a stream of [PlatformEvent]
@@ -44,7 +54,22 @@ class PlatformManager extends _$PlatformManager {
   /// Send a [PlatformRequest] to the Wayland compositor
   Future<void> request(PlatformRequest request) async {
     const channel = MethodChannel('platform', JSONMethodCodec());
-    await channel.invokeMethod(request.method, request.message?.toJson());
+    try {
+      await channel.invokeMethod(request.method, request.message?.toJson());
+    } on PlatformException catch (error) {
+      // A window can disappear between the shell deciding to send a request
+      // and the compositor handling it: a client crash destroys its surface
+      // (and unhandled `surface_doesnt_exist` errors used to escape from every
+      // fire-and-forget activation/resize/close). The request is stale, not a
+      // failure: the next event/render removes the tile's reference.
+      if (!_goneInteractionCodes.contains(error.code)) {
+        rethrow;
+      }
+      platformLog.fine(
+        '${request.method} dropped for a gone window/surface: '
+        '${error.code} ${error.message}',
+      );
+    }
   }
 
   /// Fetch the environment the compositor exposes to launched applications.
