@@ -201,6 +201,24 @@ impl<BackendData: Backend + 'static> State<BackendData> {
     }
 
     pub fn remove_meta_window(&mut self, meta_window_id: &String) {
+        // Teardown paths can overlap: a client normally unmaps its X11 window
+        // (which removes the MetaWindow) and only later destroys the surface,
+        // but a crashed client can destroy it without the unmap, and the
+        // surface-destroyed handler then asks again. Drop the reverse mapping
+        // here and make the removal idempotent so the shell never receives two
+        // removal events for one window.
+        self.meta_window_state
+            .meta_window_id_per_surface_id
+            .retain(|_, id| id != meta_window_id);
+        if self
+            .meta_window_state
+            .meta_windows
+            .remove(meta_window_id)
+            .is_none()
+        {
+            return;
+        }
+
         // A game that closes itself is torn down through this path, not through
         // an `UpdateGameModeActivated(false)` patch. Without that deactivation
         // the shell never pops its gaming route and the compositor keeps the
@@ -221,10 +239,6 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             );
         }
 
-        self.meta_window_state
-            .meta_windows
-            .remove(meta_window_id)
-            .unwrap();
         // Drop it from the focus order too: a removed window can no longer be
         // the recording app's most recently focused window.
         self.meta_window_state.forget_meta_window(meta_window_id);

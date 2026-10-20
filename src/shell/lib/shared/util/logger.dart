@@ -5,6 +5,7 @@ bool hierarchicalLoggingEnabled = true;
 
 final focusLog = logging.Logger('Focus');
 final navigationLog = logging.Logger('Navigation');
+final platformLog = logging.Logger('Platform');
 final persistenceLog = logging.Logger('Persistence');
 final geometryLog = logging.Logger('Geometry');
 final matchingLog = logging.Logger('Matching');
