@@ -96,6 +96,12 @@ pub struct State<BackendData: Backend + 'static> {
     pub dmabuf_state: Option<DmabufState>,
     pub flutter_engine: Option<Box<FlutterEngine<BackendData>>>,
     pub flutter_sent_keys: HashMap<Keycode, VeshellKeyEvent>,
+    /// Flutter's inferred NumLock state.
+    ///
+    /// Flutter starts with every lock mode disabled and only toggles NumLock on
+    /// NumLock key events. Mirror that state here so a lock that was already on
+    /// at startup, or an event Flutter never received, can be resynchronized.
+    pub flutter_num_lock: bool,
     pub super_key_forwarding: crate::keyboard::SuperKeyForwarding,
     /// Keycodes forwarded to the gaming-mode client and still held. Used to
     /// replay the matching releases when gaming mode ends, so the client can't
@@ -507,7 +513,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 data.flutter_engine
                     .as_mut()
                     .unwrap()
-                    .send_key_event(event, true)
+                    .send_key_event(event, true, true)
                     .expect("Failed to send key event");
             },
         );
@@ -548,6 +554,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             shm_state,
             flutter_engine: None,
             flutter_sent_keys: HashMap::new(),
+            flutter_num_lock: false,
             super_key_forwarding: Default::default(),
             game_mode_forwarded_keys: HashSet::new(),
             dmabuf_state,

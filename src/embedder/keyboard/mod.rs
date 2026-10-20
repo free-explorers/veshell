@@ -184,6 +184,58 @@ impl SuperKeyForwarding {
     }
 }
 
+/// The synthetic events that tell Flutter a lock key is already active.
+///
+/// Flutter keeps NumLock in its own lock-mode set, toggling it on each NumLock
+/// key event. A lock that was enabled before the shell started was never seen,
+/// so Flutter would treat numpad 4/6 as arrow keys. The pair presses and
+/// releases NumLock so Flutter's state matches the compositor's.
+fn num_lock_sync_events(mods: ModifiersState) -> [VeshellKeyEvent; 2] {
+    let pressed = VeshellKeyEvent {
+        // XKB keycode for Num Lock (Linux `KEY_NUMLOCK` + 8).
+        key_code: Keycode::new(0x4d),
+        raw_keysym: Some(Keysym::Num_Lock),
+        keysym: Keysym::Num_Lock,
+        state: KeyState::Pressed,
+        time: 0,
+        mods,
+        mods_changed: false,
+        synthesized: true,
+    };
+    [
+        pressed,
+        VeshellKeyEvent {
+            state: KeyState::Released,
+            ..pressed
+        },
+    ]
+}
+
+/// Keeps Flutter's inferred NumLock state in step with the compositor.
+///
+/// Flutter starts with all lock modes disabled. It only toggles NumLock on a
+/// NumLock key event, so a lock that was already on at startup (or a toggle
+/// Flutter never received) leaves it out of sync. Send a synthetic tap to flip
+/// it back, like Flutter's GTK embedder does for its lock records.
+fn sync_flutter_lock_modes<BackendData: Backend + 'static>(data: &mut State<BackendData>) {
+    if data.flutter_engine.is_none() {
+        return;
+    }
+    let mods = data.keyboard.modifier_state();
+    if data.flutter_num_lock == mods.num_lock {
+        return;
+    }
+    let [pressed, released] = num_lock_sync_events(mods);
+    let engine = data.flutter_engine.as_mut().unwrap();
+    engine
+        .send_key_event(pressed, false, false)
+        .expect("Failed to sync Flutter NumLock");
+    engine
+        .send_key_event(released, false, false)
+        .expect("Failed to sync Flutter NumLock");
+    data.flutter_num_lock = mods.num_lock;
+}
+
 pub fn swap_left_alt_and_meta<BackendData: Backend + 'static>(
     data: &mut State<BackendData>,
     key_code: Keycode,
@@ -213,6 +265,10 @@ pub fn handle_keyboard_event<BackendData: Backend + 'static>(
     time: u32,
     synthesized: bool,
 ) {
+    // Flutter only learns about lock keys from their key events. Keep its
+    // NumLock state in step with xkb before routing each event.
+    sync_flutter_lock_modes(data);
+
     // Update the state of the keyboard.
     // Every key event must be passed through `glfw_key_codes.input_intercept`
     // so that Smithay knows what keys are pressed.
@@ -279,8 +335,11 @@ pub fn handle_keyboard_event<BackendData: Backend + 'static>(
     data.flutter_engine
         .as_mut()
         .unwrap()
-        .send_key_event(veshell_key_event, false)
+        .send_key_event(veshell_key_event, false, true)
         .expect("Failed to send key event to Flutter");
+    // The framework toggles NumLock on the NumLock key's down event, matching
+    // the post-event xkb state; keep our mirror of Flutter's state current.
+    data.flutter_num_lock = veshell_key_event.mods.num_lock;
 
     // Track what Flutter believes is held: every press is remembered and
     // its release retires it. The capture-session branch replays a
@@ -373,7 +432,7 @@ pub fn release_flutter_keys<BackendData: Backend + 'static>(data: &mut State<Bac
     };
     for event in released {
         engine
-            .send_key_event(event, false)
+            .send_key_event(event, false, true)
             .expect("Failed to release a Flutter key");
     }
 }
@@ -423,7 +482,7 @@ fn handle_embedder_hotkeys<BackendData: Backend + 'static>(
                 data.flutter_engine
                     .as_mut()
                     .unwrap()
-                    .send_key_event(event, false)
+                    .send_key_event(event, false, true)
                     .expect("Failed to send pending key release to Flutter");
             }
         }
@@ -545,6 +604,35 @@ mod tests {
 
     fn held(keys: &[u32]) -> HashSet<Keycode> {
         keys.iter().map(|code| Keycode::new(*code)).collect()
+    }
+
+    #[test]
+    fn num_lock_sync_events_match_the_key_mapping() {
+        let mods = ModifiersState {
+            num_lock: true,
+            ..Default::default()
+        };
+        let [pressed, released] = num_lock_sync_events(mods);
+
+        assert_eq!(pressed.key_code, Keycode::new(0x4d));
+        assert_eq!(pressed.raw_keysym, Some(Keysym::Num_Lock));
+        assert_eq!(pressed.keysym, Keysym::Num_Lock);
+        assert_eq!(pressed.state, KeyState::Pressed);
+        assert!(pressed.synthesized);
+        assert!(pressed.mods.num_lock);
+        assert_eq!(released.state, KeyState::Released);
+        assert_eq!(released.key_code, pressed.key_code);
+
+        assert_eq!(
+            key_mapping::XKB_TO_PHYSICAL_KEY_MAP.get(&(pressed.key_code.raw() as u64)),
+            Some(&0x00070053),
+            "the synthetic keycode must resolve to the physical NumLock key",
+        );
+        assert_eq!(
+            key_mapping::GTK_KEYVAL_TO_LOGICAL_KEY_MAP.get(&(Keysym::Num_Lock.raw() as u64)),
+            Some(&0x0010000010a),
+            "Num_Lock must resolve to Flutter's numLock logical key",
+        );
     }
 
     #[test]

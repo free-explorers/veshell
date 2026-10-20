@@ -250,6 +250,10 @@ pub struct FlutterKeyEventData {
     /// key transition. Repeats feed the Flutter shell but must not be forwarded
     /// to the focused Wayland client, which owns its own repetition.
     pub repeat: bool,
+    /// Whether the handled result should be reported to the shell's key
+    /// post-processing (and therefore possibly forwarded to a client). Lock
+    /// sync events feed Flutter only.
+    pub notify: bool,
 }
 
 pub unsafe extern "C" fn key_event_callback(handled: bool, user_data: *mut c_void) {
@@ -260,10 +264,14 @@ pub unsafe extern "C" fn key_event_callback(handled: bool, user_data: *mut c_voi
 
     let event = data.key_event;
     let repeat = data.repeat;
+    let notify = data.notify;
     let tx = data.tx_flutter_handled_key_event.clone();
     data.key_event_channel.send(
         &data.raw_key_event,
         Some(Box::new(move |response: Option<&[u8]>| {
+            if !notify {
+                return;
+            }
             let handled = response
                 .and_then(|response| JsonMessageCodec::new().decode_message(response))
                 .and_then(|message| message["handled"].as_bool())
