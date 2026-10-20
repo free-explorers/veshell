@@ -82,6 +82,24 @@ class _HotkeyCaptureField extends HookWidget {
     final focusNode = useFocusNode();
     const converter = LogicalKeySetConverter();
 
+    // An empty row is either the editor's initial row or one just added with
+    // the Add button. It must own the keyboard: otherwise the previously
+    // focused row keeps it and the chord replaces that binding. Request focus
+    // explicitly once the row is attached; `Focus.autofocus` did not reliably
+    // hand a row added to an already built editor the keyboard.
+    final shouldAutofocus = controller.text.isEmpty;
+    useEffect(() {
+      if (!shouldAutofocus) {
+        return null;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) {
+          focusNode.requestFocus();
+        }
+      });
+      return null;
+    }, []);
+
     LogicalKeySet? current() {
       if (controller.text.isEmpty) {
         return null;

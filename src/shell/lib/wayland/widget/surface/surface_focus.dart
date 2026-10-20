@@ -1,7 +1,37 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/shortcut_manager/provider/hotkeys_activator.dart';
 
+/// Keys a focused client surface owns even when the shell binds them.
+///
+/// A client still expects Enter, Space, Escape and the navigation keys to reach
+/// it; passing them through is what keeps a focused application usable.
+final _clientOwnedKeys = <LogicalKeyboardKey>{
+  LogicalKeyboardKey.enter,
+  LogicalKeyboardKey.numpadEnter,
+  LogicalKeyboardKey.space,
+  LogicalKeyboardKey.gameButtonA,
+  LogicalKeyboardKey.select,
+  LogicalKeyboardKey.escape,
+  LogicalKeyboardKey.tab,
+  LogicalKeyboardKey.arrowLeft,
+  LogicalKeyboardKey.arrowRight,
+  LogicalKeyboardKey.arrowUp,
+  LogicalKeyboardKey.arrowDown,
+  LogicalKeyboardKey.pageUp,
+  LogicalKeyboardKey.pageDown,
+};
+
+/// Routes keyboard input between a focused Wayland client and the shell.
+///
+/// The embedder only hands a key to the client when Flutter does not handle it.
+/// A configured shell hotkey therefore wins over the client, while every other
+/// key is left unhandled so the client receives it. The shell hotkeys come from
+/// the user's settings, so a custom chord such as `Ctrl+Super+Arrow` is not
+/// swallowed by a built-in pass-through. Super chords also stay with the shell
+/// because the overview binds some of them locally rather than through the
+/// hotkey settings.
 class SurfaceFocus extends HookConsumerWidget {
   const SurfaceFocus({required this.child, this.focusNode, super.key});
   final FocusNode? focusNode;
@@ -10,80 +40,48 @@ class SurfaceFocus extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Shortcuts(
-      // https://github.com/flutter/flutter/blob/73e78fd97c44a88fc164b683e8779293ebe85e95/packages/flutter/lib/src/widgets/app.dart#L1234
+    final shellShortcuts = ref.watch(hotkeysActivatorProvider);
 
-      shortcuts: {
-        // Activation.
-        //
-        // The bare keys use `LogicalKeySet` (an exact chord) rather than
-        // `SingleActivator`: the latter only checks control/shift/alt/meta, so
-        // it also matches while the Super key is held. That would swallow a
-        // `Super+Arrow` (or `Super+Space`) chord here — closer to focus than
-        // the shell's shortcut manager — and forward it to the client instead
-        // of letting the shell navigate. `LogicalKeySet({key})` only matches
-        // the key on its own, so Super-modified chords pass through.
-        LogicalKeySet.fromSet({LogicalKeyboardKey.enter}):
-            DisableDefaultShortcutsIntent(),
-        LogicalKeySet.fromSet({LogicalKeyboardKey.numpadEnter}):
-            DisableDefaultShortcutsIntent(),
-        LogicalKeySet.fromSet({LogicalKeyboardKey.space}):
-            DisableDefaultShortcutsIntent(),
-        LogicalKeySet.fromSet({LogicalKeyboardKey.gameButtonA}):
-            DisableDefaultShortcutsIntent(),
-        LogicalKeySet.fromSet({LogicalKeyboardKey.select}):
-            DisableDefaultShortcutsIntent(),
+    return Focus(
+      focusNode: focusNode,
+      onKeyEvent: (node, event) {
+        // A shell control inside the surface (for example a decoration button)
+        // owns the keyboard; leave its events to the Flutter focus tree.
+        if (!node.hasPrimaryFocus) {
+          return KeyEventResult.ignored;
+        }
+        // Releases must reach the shell: it toggles the overview when Super is
+        // released on its own.
+        if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+          return KeyEventResult.ignored;
+        }
 
-        // Dismissal
-        LogicalKeySet.fromSet({LogicalKeyboardKey.escape}):
-            DisableDefaultShortcutsIntent(),
+        final keyboard = HardwareKeyboard.instance;
+        final superPressed =
+            keyboard.logicalKeysPressed.contains(LogicalKeyboardKey.superKey) ||
+            keyboard.isMetaPressed;
+        final hasModifier =
+            keyboard.isControlPressed ||
+            keyboard.isShiftPressed ||
+            keyboard.isAltPressed ||
+            superPressed;
 
-        // Keyboard traversal.
-        LogicalKeySet.fromSet({LogicalKeyboardKey.tab}):
-            DisableDefaultShortcutsIntent(),
-        const SingleActivator(LogicalKeyboardKey.tab, shift: true):
-            DisableDefaultShortcutsIntent(),
-        LogicalKeySet.fromSet({LogicalKeyboardKey.arrowLeft}):
-            DisableDefaultShortcutsIntent(),
-        LogicalKeySet.fromSet({LogicalKeyboardKey.arrowRight}):
-            DisableDefaultShortcutsIntent(),
-        LogicalKeySet.fromSet({LogicalKeyboardKey.arrowDown}):
-            DisableDefaultShortcutsIntent(),
-        LogicalKeySet.fromSet({LogicalKeyboardKey.arrowUp}):
-            DisableDefaultShortcutsIntent(),
+        // Plain keys that a client always expects, even when configured as a
+        // shell action (`navigation.activate` is Enter by default).
+        if (!hasModifier && _clientOwnedKeys.contains(event.logicalKey)) {
+          return KeyEventResult.skipRemainingHandlers;
+        }
 
-        // Scrolling
-        const SingleActivator(LogicalKeyboardKey.arrowUp, control: true):
-            DisableDefaultShortcutsIntent(),
-        const SingleActivator(LogicalKeyboardKey.arrowDown, control: true):
-            DisableDefaultShortcutsIntent(),
-        const SingleActivator(LogicalKeyboardKey.arrowLeft, control: true):
-            DisableDefaultShortcutsIntent(),
-        const SingleActivator(LogicalKeyboardKey.arrowRight, control: true):
-            DisableDefaultShortcutsIntent(),
-        const SingleActivator(LogicalKeyboardKey.pageUp):
-            DisableDefaultShortcutsIntent(),
-        const SingleActivator(LogicalKeyboardKey.pageDown):
-            DisableDefaultShortcutsIntent(),
+        final isShellChord =
+            superPressed ||
+            shellShortcuts.keys.any(
+              (activator) => activator.accepts(event, keyboard),
+            );
+        return isShellChord
+            ? KeyEventResult.ignored
+            : KeyEventResult.skipRemainingHandlers;
       },
-      child: Actions(
-        actions: {
-          DisableDefaultShortcutsIntent: DisableDefaultShortcutsAction(),
-        },
-        child: Focus(focusNode: focusNode, child: child),
-      ),
+      child: child,
     );
   }
-}
-
-class DisableDefaultShortcutsIntent extends Intent {}
-
-class DisableDefaultShortcutsAction
-    extends Action<DisableDefaultShortcutsIntent> {
-  @override
-  Object? invoke(DisableDefaultShortcutsIntent intent) => null;
-
-  /// The embedder will only send key events to Wayland clients if they are not handled by Flutter.
-  @override
-  bool consumesKey(DisableDefaultShortcutsIntent intent) => false;
 }
