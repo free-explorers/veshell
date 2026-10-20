@@ -336,5 +336,6 @@
   "daysAgo": "{count, plural, one{{count} دن پہلے} other{{count} دن پہلے}}",
   "weeksAgo": "{count, plural, one{{count} ہفتہ پہلے} other{{count} ہفتے پہلے}}",
   "monthsAgo": "{count, plural, one{{count} مہینہ پہلے} other{{count} مہینے پہلے}}",
-  "yearsAgo": "{count, plural, one{{count} سال پہلے} other{{count} سال پہلے}}"
+  "yearsAgo": "{count, plural, one{{count} سال پہلے} other{{count} سال پہلے}}",
+  "invalidValue": "ایک درست قدر درج کریں"
 }

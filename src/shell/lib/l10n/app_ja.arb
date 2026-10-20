@@ -336,5 +336,6 @@
   "daysAgo": "{count, plural, other{{count} 日前}}",
   "weeksAgo": "{count, plural, other{{count} 週間前}}",
   "monthsAgo": "{count, plural, other{{count} か月前}}",
-  "yearsAgo": "{count, plural, other{{count} 年前}}"
+  "yearsAgo": "{count, plural, other{{count} 年前}}",
+  "invalidValue": "有効な値を入力してください"
 }

@@ -336,5 +336,6 @@
   "daysAgo": "{count, plural, other{{count} ngày trước}}",
   "weeksAgo": "{count, plural, other{{count} tuần trước}}",
   "monthsAgo": "{count, plural, other{{count} tháng trước}}",
-  "yearsAgo": "{count, plural, other{{count} năm trước}}"
+  "yearsAgo": "{count, plural, other{{count} năm trước}}",
+  "invalidValue": "Nhập một giá trị hợp lệ"
 }

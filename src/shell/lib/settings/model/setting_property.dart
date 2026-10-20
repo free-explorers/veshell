@@ -75,9 +75,14 @@ Widget defaultBuildSearchResult<T>(
       path: path,
       property: property as SettingProperty<bool>,
     ),
-    SettingProperty<int>() => SettingPropertyIntEditor(
+    SettingProperty<int>() => ExpandableSearchResult(
       path: path,
-      property: property as SettingProperty<int>,
+      property: property,
+      buildValue: (context, value, {required isExpanded}) => Text('$value'),
+      buildEditor: (context, {required isExpanded}) => SettingPropertyIntEditor(
+        path: path,
+        property: property as SettingProperty<int>,
+      ),
     ),
     SettingProperty<double>() => ExpandableSearchResult(
       path: path,

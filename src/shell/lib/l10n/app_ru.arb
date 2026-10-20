@@ -336,5 +336,6 @@
   "daysAgo": "{count, plural, one{{count} день назад} few{{count} дня назад} many{{count} дней назад} other{{count} дня назад}}",
   "weeksAgo": "{count, plural, one{{count} неделю назад} few{{count} недели назад} many{{count} недель назад} other{{count} недели назад}}",
   "monthsAgo": "{count, plural, one{{count} месяц назад} few{{count} месяца назад} many{{count} месяцев назад} other{{count} месяца назад}}",
-  "yearsAgo": "{count, plural, one{{count} год назад} few{{count} года назад} many{{count} лет назад} other{{count} года назад}}"
+  "yearsAgo": "{count, plural, one{{count} год назад} few{{count} года назад} many{{count} лет назад} other{{count} года назад}}",
+  "invalidValue": "Введите допустимое значение"
 }

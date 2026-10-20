@@ -82,11 +82,19 @@ class SettingGroupListSliver extends HookConsumerWidget {
       return const SliverToBoxAdapter();
     }
     // A search query force-opens every group so the matches are visible;
-    // otherwise Super+D (or a click) controls the expansion.
+    // otherwise Super+D (or a click) controls the expansion. While filtering,
+    // the header is only a visual separator: it is not focusable and cannot be
+    // selected, so the keyboard walks the matches themselves.
     final expandedPathSet = ref.watch(settingsExpandedGroupsProvider);
-    final isExpanded = searchText != '' || expandedPathSet.contains(path);
+    final isFiltering = searchText.isNotEmpty;
+    final isExpanded = isFiltering || expandedPathSet.contains(path);
     final isSelected = path == selectedPath;
     final colorScheme = Theme.of(context).colorScheme;
+    // While filtering, the header is not interactive: the group is force-open
+    // and the chevron would suggest a toggle that does nothing.
+    final trailing = isFiltering
+        ? null
+        : Icon(isExpanded ? MdiIcons.chevronUp : MdiIcons.chevronDown);
     return SliverMainAxisGroup(
       slivers: [
         SliverAppBar(
@@ -101,8 +109,11 @@ class SettingGroupListSliver extends HookConsumerWidget {
           flexibleSpace: ListTile(
             key: isSelected ? selectedKey : null,
             minTileHeight: 72,
-            onTap: () =>
-                ref.read(settingsExpandedGroupsProvider.notifier).toggle(path),
+            onTap: isFiltering
+                ? null
+                : () => ref
+                      .read(settingsExpandedGroupsProvider.notifier)
+                      .toggle(path),
             leading: settingGroup.icon != null ? Icon(settingGroup.icon) : null,
             title: Text(
               settingGroup.name,
@@ -113,9 +124,7 @@ class SettingGroupListSliver extends HookConsumerWidget {
             subtitle: settingGroup.description != null
                 ? Text(settingGroup.description!)
                 : null,
-            trailing: isExpanded
-                ? const Icon(MdiIcons.chevronUp)
-                : const Icon(MdiIcons.chevronDown),
+            trailing: trailing,
           ),
           pinned: true,
           floating: true,

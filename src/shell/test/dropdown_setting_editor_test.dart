@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
@@ -52,6 +53,47 @@ void main() {
           .value,
       1,
     );
+  });
+
+  testWidgets('takes the keyboard and Enter validates a staged choice', (
+    tester,
+  ) async {
+    final draft = ValueNotifier<int?>(1);
+    addTearDown(draft.dispose);
+    final saved = <int?>[];
+    await tester.pumpWidget(
+      _root(
+        ValueListenableBuilder<int?>(
+          valueListenable: draft,
+          builder: (context, value, _) => DropdownSettingEditor<int>(
+            value: value,
+            items: _items,
+            onChanged: (value) => draft.value = value,
+            onConfirm: () => saved.add(draft.value),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<DropdownButton<int>>(find.byType(DropdownButton<int>))
+          .autofocus,
+      isTrue,
+    );
+    expect(tester.binding.focusManager.primaryFocus, isNotNull);
+
+    await tester.tap(find.byType(DropdownButtonFormField<int>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Two').last);
+    await tester.pumpAndSettle();
+    expect(draft.value, 2);
+    expect(saved, isEmpty);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(saved, [2]);
   });
 
   testWidgets('nullable default selections can be confirmed', (tester) async {

@@ -33,6 +33,10 @@ typedef SettingRow = ({String path, bool isGroup});
 /// A group contributes its header and, when expanded (or while filtering, which
 /// force-opens everything), its children recursively. Keyboard navigation walks
 /// this list, so moving down from an open category lands on its children.
+///
+/// While a filter is active the category headers stay visible, but they are not
+/// part of the navigable list: the matches themselves are selected and
+/// activated, without a category standing between them.
 List<SettingRow> collectSettingVisibleRowList(
   Map<String, SettingGroup> settingMap,
   String searchText,
@@ -62,8 +66,10 @@ void _collectVisibleRows(
     return;
   }
   if (definition is SettingGroup) {
-    rowList.add((path: path, isGroup: true));
-    if (searchText != '' || expandedPathSet.contains(path)) {
+    if (searchText.isEmpty) {
+      rowList.add((path: path, isGroup: true));
+    }
+    if (searchText.isNotEmpty || expandedPathSet.contains(path)) {
       for (final entry in definition.children.entries) {
         _collectVisibleRows(
           entry.value,

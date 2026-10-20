@@ -93,9 +93,17 @@ file or application also resets the search. `Backspace` goes up to the parent
 directory (Files only). Clicking an application selects and launches it
 immediately.
 
-In settings, the rows are walked as one visible list: an opened category's
-children come next, before the following category. `Enter` opens or closes the
-selected category; leaf settings have nothing to activate.
+In settings, the rows are walked as one visible list: a category header is
+followed by its children, before the following category. While a filter is
+active the category headers are only visual separators: they are skipped by the
+selection and the keyboard, so the matches themselves are walked. `Enter` opens
+or closes the selected category; on a setting it opens the editor with its input
+focused, so the value can be typed immediately (an inline switch toggles in
+place). `Enter` again — the framework's `ActivateIntent` — validates the input
+and applies it, keeping the editor open with an inline error when the value
+cannot be parsed. Dropdowns take the keyboard too: `Enter` opens the menu until
+a choice is staged, then validates the staged choice; `Space` always opens the
+menu.
 
 ## Properties
 

@@ -336,5 +336,6 @@
   "daysAgo": "{count, plural, one{{count} দিন আগে} other{{count} দিন আগে}}",
   "weeksAgo": "{count, plural, one{{count} সপ্তাহ আগে} other{{count} সপ্তাহ আগে}}",
   "monthsAgo": "{count, plural, one{{count} মাস আগে} other{{count} মাস আগে}}",
-  "yearsAgo": "{count, plural, one{{count} বছর আগে} other{{count} বছর আগে}}"
+  "yearsAgo": "{count, plural, one{{count} বছর আগে} other{{count} বছর আগে}}",
+  "invalidValue": "একটি বৈধ মান লিখুন"
 }

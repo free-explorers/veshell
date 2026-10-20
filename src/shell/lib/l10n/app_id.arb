@@ -336,5 +336,6 @@
   "daysAgo": "{count, plural, other{{count} hari lalu}}",
   "weeksAgo": "{count, plural, other{{count} minggu lalu}}",
   "monthsAgo": "{count, plural, other{{count} bulan lalu}}",
-  "yearsAgo": "{count, plural, other{{count} tahun lalu}}"
+  "yearsAgo": "{count, plural, other{{count} tahun lalu}}",
+  "invalidValue": "Masukkan nilai yang valid"
 }

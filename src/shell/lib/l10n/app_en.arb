@@ -379,5 +379,7 @@
   "monthsAgo": "{count, plural, =1{1 month ago} other{{count} months ago}}",
   "@monthsAgo": {"description": "Notification age", "placeholders": {"count": {"type": "int", "format": "decimalPattern"}}},
   "yearsAgo": "{count, plural, =1{1 year ago} other{{count} years ago}}",
-  "@yearsAgo": {"description": "Notification age", "placeholders": {"count": {"type": "int", "format": "decimalPattern"}}}
+  "@yearsAgo": {"description": "Notification age", "placeholders": {"count": {"type": "int", "format": "decimalPattern"}}},
+  "invalidValue": "Enter a valid value",
+  "@invalidValue": {"description": "Inline error when a settings value cannot be parsed"}
 }
