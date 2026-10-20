@@ -81,16 +81,34 @@ if hash systemctl &> /dev/null; then
     # The real values are published by the compositor itself once it starts.
     systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY WAYLAND_SOCKET
 
+    # Session identity imported above and by the compositor. The systemd user
+    # manager and the D-Bus activation environment both outlive the login, so
+    # any value left behind is visible to the next session. XDG_CURRENT_DESKTOP
+    # is the one xdg-desktop-portal uses to pick ${desktop}-portals.conf: left
+    # as "veshell", the next desktop's portal loads veshell-portals.conf and
+    # forwards FileChooser to a backend that is not running there, breaking
+    # every file picker until the portal is restarted.
+    SESSION_ENVIRONMENT='WAYLAND_DISPLAY DISPLAY WAYLAND_SOCKET XDG_SESSION_TYPE XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP DESKTOP_SESSION'
+
     # Session teardown shared by the normal exit path and the signal trap
     # below. It is idempotent, so running it twice is harmless.
     teardown() {
         # Force stop of graphical-session.target.
         systemctl --user start --job-mode=replace-irreversibly veshell-shutdown.target
 
-        # Unset environment that we've set (the compositor has published its
-        # own WAYLAND_DISPLAY/DISPLAY for dbus activation; with the session
-        # gone they must not linger for the next login).
-        systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY WAYLAND_SOCKET XDG_SESSION_TYPE XDG_CURRENT_DESKTOP
+        # shellcheck disable=SC2086 # deliberate word splitting
+        systemctl --user unset-environment $SESSION_ENVIRONMENT
+
+        # D-Bus activation has no portable "unset": reset the desktop/session
+        # identity to empty instead. An empty XDG_CURRENT_DESKTOP makes
+        # xdg-desktop-portal skip the per-desktop config, exactly like an
+        # unset one. The display and session-type variables are left out here:
+        # the next session publishes its own, and an empty socket path or
+        # session type would be worse than no value at all.
+        if hash dbus-update-activation-environment 2>/dev/null; then
+            dbus-update-activation-environment \
+                XDG_CURRENT_DESKTOP= XDG_SESSION_DESKTOP= DESKTOP_SESSION= || true
+        fi
     }
 
     # logind ends the session by killing this wrapper with SIGTERM (GDM

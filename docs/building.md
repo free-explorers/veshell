@@ -189,6 +189,7 @@ are not held in this repository.
 
 ```sh
 bash extra/tests/packaging_install.sh
+bash extra/tests/session_teardown.sh
 rustc --edition 2021 --test extra/build/config.rs -o /tmp/veshell-build-config-tests
 /tmp/veshell-build-config-tests
 ```

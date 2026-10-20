@@ -50,6 +50,7 @@ for prefix in /usr '/opt/veshell prefix&pipe|' '/opt/percent%quote"back\ dollar$
     test -f "$root/share/wayland-sessions/veshell.desktop"
     test -f "$root/share/xdg-desktop-portal/veshell-portals.conf"
     test -f "$root/share/xdg-desktop-portal/portals/veshell.portal"
+    grep -Fx 'UseIn=veshell' "$root/share/xdg-desktop-portal/portals/veshell.portal"
     test -f "$root/lib/systemd/user/veshell-shutdown.target"
     service_prefix="$prefix"
     desktop_prefix="$prefix"
