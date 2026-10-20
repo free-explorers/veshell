@@ -50,7 +50,15 @@ void main() {
 
   test('filtering force-opens the matching groups', () {
     final rows = collectSettingVisibleRowList(settingMap, 'night', {});
-    expect(rows.map((row) => row.path), ['display', 'display.nightLight']);
+    expect(rows.map((row) => row.path), ['display.nightLight']);
+  });
+
+  test('filtering skips category headers in the navigable rows', () {
+    final rows = collectSettingVisibleRowList(settingMap, 'bright', {
+      'display',
+    });
+    expect(rows.map((row) => row.path), ['display.brightness']);
+    expect(rows.every((row) => !row.isGroup), isTrue);
   });
 
   test('returns nothing when no row matches', () {

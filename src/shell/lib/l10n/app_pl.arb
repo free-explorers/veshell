@@ -336,5 +336,6 @@
   "daysAgo": "{count, plural, one{{count} dzień temu} few{{count} dni temu} many{{count} dni temu} other{{count} dnia temu}}",
   "weeksAgo": "{count, plural, one{{count} tydzień temu} few{{count} tygodnie temu} many{{count} tygodni temu} other{{count} tygodnia temu}}",
   "monthsAgo": "{count, plural, one{{count} miesiąc temu} few{{count} miesiące temu} many{{count} miesięcy temu} other{{count} miesiąca temu}}",
-  "yearsAgo": "{count, plural, one{{count} rok temu} few{{count} lata temu} many{{count} lat temu} other{{count} roku temu}}"
+  "yearsAgo": "{count, plural, one{{count} rok temu} few{{count} lata temu} many{{count} lat temu} other{{count} roku temu}}",
+  "invalidValue": "Wprowadź prawidłową wartość"
 }

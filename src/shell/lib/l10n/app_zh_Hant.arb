@@ -336,5 +336,6 @@
   "daysAgo": "{count, plural, other{{count} 天前}}",
   "weeksAgo": "{count, plural, other{{count} 週前}}",
   "monthsAgo": "{count, plural, other{{count} 個月前}}",
-  "yearsAgo": "{count, plural, other{{count} 年前}}"
+  "yearsAgo": "{count, plural, other{{count} 年前}}",
+  "invalidValue": "請輸入有效的值"
 }

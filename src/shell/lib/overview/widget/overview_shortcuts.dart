@@ -14,6 +14,7 @@ import 'package:shell/overview/provider/overview_search_text.dart';
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/settings/model/setting_search.dart';
+import 'package:shell/settings/provider/settings_editor_activation.dart';
 import 'package:shell/settings/provider/settings_expanded_groups.dart';
 import 'package:shell/settings/provider/settings_properties.dart';
 import 'package:shell/shared/util/selection.dart';
@@ -252,7 +253,8 @@ void activateOverviewSelection(WidgetRef ref, String screenId) {
   }
 }
 
-/// Opens or closes the settings group at [index], if it is one.
+/// Opens the settings row at [index]: a group toggles, a setting opens its
+/// editor with the input focused.
 void openOverviewSelectedSettingRow(WidgetRef ref, String screenId, int index) {
   final rowList = collectSettingVisibleRowList(
     ref.read(settingsPropertiesProvider),
@@ -265,6 +267,10 @@ void openOverviewSelectedSettingRow(WidgetRef ref, String screenId, int index) {
   final row = rowList[index];
   if (row.isGroup) {
     ref.read(settingsExpandedGroupsProvider.notifier).toggle(row.path);
+  } else {
+    ref
+        .read(settingsEditorActivationProvider(screenId).notifier)
+        .request(row.path);
   }
 }
 

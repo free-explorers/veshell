@@ -336,5 +336,6 @@
   "daysAgo": "{count, plural, zero{قبل {count} يوم} one{قبل يوم واحد} two{قبل يومين} few{قبل {count} أيام} many{قبل {count} يومًا} other{قبل {count} يوم}}",
   "weeksAgo": "{count, plural, zero{قبل {count} أسبوع} one{قبل أسبوع واحد} two{قبل أسبوعين} few{قبل {count} أسابيع} many{قبل {count} أسبوعًا} other{قبل {count} أسبوع}}",
   "monthsAgo": "{count, plural, zero{قبل {count} شهر} one{قبل شهر واحد} two{قبل شهرين} few{قبل {count} أشهر} many{قبل {count} شهرًا} other{قبل {count} شهر}}",
-  "yearsAgo": "{count, plural, zero{قبل {count} سنة} one{قبل سنة واحدة} two{قبل سنتين} few{قبل {count} سنوات} many{قبل {count} سنة} other{قبل {count} سنة}}"
+  "yearsAgo": "{count, plural, zero{قبل {count} سنة} one{قبل سنة واحدة} two{قبل سنتين} few{قبل {count} سنوات} many{قبل {count} سنة} other{قبل {count} سنة}}",
+  "invalidValue": "أدخل قيمة صالحة"
 }

@@ -336,5 +336,6 @@
   "daysAgo": "{count, plural, one{Il y a {count} jour} other{Il y a {count} jours}}",
   "weeksAgo": "{count, plural, one{Il y a {count} semaine} other{Il y a {count} semaines}}",
   "monthsAgo": "{count, plural, one{Il y a {count} mois} other{Il y a {count} mois}}",
-  "yearsAgo": "{count, plural, one{Il y a {count} an} other{Il y a {count} ans}}"
+  "yearsAgo": "{count, plural, one{Il y a {count} an} other{Il y a {count} ans}}",
+  "invalidValue": "Saisissez une valeur valide"
 }

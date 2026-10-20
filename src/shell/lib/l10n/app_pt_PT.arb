@@ -336,5 +336,6 @@
   "daysAgo": "{count, plural, one{Há {count} dia} other{Há {count} dias}}",
   "weeksAgo": "{count, plural, one{Há {count} semana} other{Há {count} semanas}}",
   "monthsAgo": "{count, plural, one{Há {count} mês} other{Há {count} meses}}",
-  "yearsAgo": "{count, plural, one{Há {count} ano} other{Há {count} anos}}"
+  "yearsAgo": "{count, plural, one{Há {count} ano} other{Há {count} anos}}",
+  "invalidValue": "Introduza um valor válido"
 }
