@@ -597,6 +597,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         &self,
         event: VeshellKeyEvent,
         repeat: bool,
+        notify: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let timestamp = unsafe { FlutterEngineGetCurrentTime() / 1000 };
         let event_type = if repeat {
@@ -646,6 +647,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         let key_event_data = Box::new(FlutterKeyEventData {
             key_event: event,
             repeat,
+            notify,
             tx_flutter_handled_key_event: self
                 .renderer_data
                 .channels
