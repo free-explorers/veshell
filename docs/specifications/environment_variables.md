@@ -65,6 +65,29 @@ connect. They are therefore always reported from the live session.
   rejects malformed or duplicated names before writing, and the compositor skips
   any malformed name it finds in a hand-edited file.
 
+## Session teardown
+
+The compositor and the session wrapper import the session variables into the
+systemd user manager and the D-Bus activation environment. Both outlive the
+login: the user manager keeps its environment until the next login, and D-Bus
+activation has no portable way to remove an entry. The wrapper therefore
+undoes the import when the session ends, both from `veshell-session` and from
+the `veshell-session-stop` `ExecStop`, so a clean logout and a crash are
+covered alike:
+
+- `WAYLAND_DISPLAY`, `DISPLAY`, `WAYLAND_SOCKET`, `XDG_SESSION_TYPE`,
+  `XDG_CURRENT_DESKTOP`, `XDG_SESSION_DESKTOP` and `DESKTOP_SESSION` are
+  unset from the systemd user manager;
+- the desktop/session identity (`XDG_CURRENT_DESKTOP`,
+  `XDG_SESSION_DESKTOP`, `DESKTOP_SESSION`) is reset to empty in the D-Bus
+  activation environment.
+
+A leftover `XDG_CURRENT_DESKTOP=veshell` is not harmless: the next desktop's
+xdg-desktop-portal selects `veshell-portals.conf` from it, forwards
+`FileChooser` to the Veshell backend, which is not running there, and every
+file picker fails until the portal is restarted. `veshell.portal` is scoped
+with `UseIn=veshell` so the backend is never offered to another desktop either.
+
 ## Invariants
 
 - A user setting never overrides `WAYLAND_DISPLAY` or `DISPLAY`.

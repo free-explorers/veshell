@@ -16,7 +16,24 @@ systemctl --user stop --no-block 'veshell-launch-*.service' 2>/dev/null || true
 # orphaned active target after the compositor is gone.
 systemctl --user start --job-mode=replace-irreversibly veshell-shutdown.target
 
-# Unset the environment that the compositor/session wrapper has set. DISPLAY
-# and WAYLAND_SOCKET included: GDM re-propagates them for the next session,
-# so a stale value must not survive the dead one.
-systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY WAYLAND_SOCKET XDG_SESSION_TYPE XDG_CURRENT_DESKTOP
+# Unset the session identity that the compositor/session wrapper imported into
+# the systemd user manager and the D-Bus activation environment, both of which
+# outlive the login. DISPLAY and WAYLAND_SOCKET included: GDM re-propagates
+# them for the next session, so a stale value must not survive the dead one.
+# XDG_CURRENT_DESKTOP is what xdg-desktop-portal uses to pick
+# ${desktop}-portals.conf: left as "veshell", the next desktop's portal selects
+# veshell-portals.conf and forwards FileChooser to a backend that is not
+# running there, breaking every file picker until the portal is restarted.
+systemctl --user unset-environment \
+    WAYLAND_DISPLAY DISPLAY WAYLAND_SOCKET XDG_SESSION_TYPE \
+    XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP DESKTOP_SESSION
+
+# D-Bus activation has no portable "unset": reset the desktop/session identity
+# to empty instead. An empty XDG_CURRENT_DESKTOP makes xdg-desktop-portal skip
+# the per-desktop config, exactly like an unset one. The display and
+# session-type variables are left out here: the next session publishes its own,
+# and an empty socket path or session type would be worse than no value at all.
+if hash dbus-update-activation-environment 2>/dev/null; then
+    dbus-update-activation-environment \
+        XDG_CURRENT_DESKTOP= XDG_SESSION_DESKTOP= DESKTOP_SESSION= || true
+fi

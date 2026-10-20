@@ -1,5 +1,9 @@
 [portal]
 Title=Veshell
 DBusName=org.freedesktop.impl.portal.desktop.veshell
+# The backend only exists while a Veshell session is running. Never offer it
+# to another desktop: a stale selection makes that desktop's file picker call
+# a service that is not there.
+UseIn=veshell
 # Only implemented contracts are declared; wrap-up docs/spec/capture.
 Interfaces=org.freedesktop.impl.portal.ScreenCast;org.freedesktop.impl.portal.Screenshot;org.freedesktop.impl.portal.FileChooser;
