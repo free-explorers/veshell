@@ -102,6 +102,41 @@ fn scale_client_wheel_frame(mut frame: AxisFrame, factor: f64) -> AxisFrame {
 }
 
 impl<BackendData: Backend> State<BackendData> {
+    /// Applies one pointer-motion sample to an active floating move/resize.
+    ///
+    /// The compositor owns the pointer during either gesture: the client must
+    /// not receive the motion, and the resulting placement is updated from the
+    /// same sample. Returns whether a gesture consumed the motion.
+    fn consume_floating_gesture_motion(
+        &mut self,
+        pointer_location: Point<f64, Logical>,
+        time: u32,
+    ) -> bool {
+        if self.floating_move.is_none() && self.floating_resize.is_none() {
+            return false;
+        }
+        let pointer = self.pointer.clone();
+        let focus: Option<(PointerFocusTarget, Point<f64, Logical>)> = None;
+        pointer.motion(
+            self,
+            focus,
+            &MotionEvent {
+                location: pointer_location,
+                serial: SERIAL_COUNTER.next_serial(),
+                time,
+            },
+        );
+        if self.floating_move.is_some() {
+            self.update_floating_move(pointer_location);
+        } else {
+            self.update_floating_resize(pointer_location);
+        }
+        self.register_frame();
+        crate::capture::on_pointer_motion_for_recording(self);
+        crate::portal::service::on_pointer_motion(self);
+        true
+    }
+
     pub fn on_pointer_motion<B: InputBackend>(
         &mut self,
         event: B::PointerMotionEvent,
@@ -133,47 +168,11 @@ impl<BackendData: Backend> State<BackendData> {
         // clamp to screen limits
         pointer_location = self.clamp_coords(pointer_location);
 
-        // A floating move owns the pointer like a compositor grab: move the
-        // native window and do not forward motion to the client. Forwarding it
-        // while the window moves under the pointer is the feedback loop that
-        // made X11 panels drift.
-        if self.floating_move.is_some() {
-            pointer_location = self.clamp_coords(pointer_location + event.delta());
-            let focus: Option<(PointerFocusTarget, Point<f64, Logical>)> = None;
-            pointer.motion(
-                self,
-                focus,
-                &MotionEvent {
-                    location: pointer_location,
-                    serial: SERIAL_COUNTER.next_serial(),
-                    time: event.time_msec(),
-                },
-            );
-            self.update_floating_move(pointer_location);
-            self.register_frame();
-            crate::capture::on_pointer_motion_for_recording(self);
-            crate::portal::service::on_pointer_motion(self);
-            return;
-        }
-
-        // A floating resize owns the pointer like a compositor grab. The
-        // client must not receive motion while its own edge is being resized.
-        if self.floating_resize.is_some() {
-            pointer_location = self.clamp_coords(pointer_location + event.delta());
-            let focus: Option<(PointerFocusTarget, Point<f64, Logical>)> = None;
-            pointer.motion(
-                self,
-                focus,
-                &MotionEvent {
-                    location: pointer_location,
-                    serial: SERIAL_COUNTER.next_serial(),
-                    time: event.time_msec(),
-                },
-            );
-            self.update_floating_resize(pointer_location);
-            self.register_frame();
-            crate::capture::on_pointer_motion_for_recording(self);
-            crate::portal::service::on_pointer_motion(self);
+        // A floating move/resize owns the pointer like a compositor grab: do
+        // not forward the motion to the client while the window follows it.
+        if self.floating_move.is_some() || self.floating_resize.is_some() {
+            let location = self.clamp_coords(pointer_location + event.delta());
+            self.consume_floating_gesture_motion(location, event.time_msec());
             return;
         }
 
@@ -268,42 +267,9 @@ impl<BackendData: Backend> State<BackendData> {
             self.pointer_focus = self.gaming_pointer_focus();
         }
 
-        // See `on_pointer_motion`: an active floating move consumes the motion.
-        if self.floating_move.is_some() {
-            let pointer = self.pointer.clone();
-            let focus: Option<(PointerFocusTarget, Point<f64, Logical>)> = None;
-            pointer.motion(
-                self,
-                focus,
-                &MotionEvent {
-                    location: pointer_location,
-                    serial,
-                    time: event.time_msec(),
-                },
-            );
-            self.update_floating_move(pointer_location);
-            self.register_frame();
-            crate::capture::on_pointer_motion_for_recording(self);
-            crate::portal::service::on_pointer_motion(self);
-            return;
-        }
-
-        if self.floating_resize.is_some() {
-            let pointer = self.pointer.clone();
-            let focus: Option<(PointerFocusTarget, Point<f64, Logical>)> = None;
-            pointer.motion(
-                self,
-                focus,
-                &MotionEvent {
-                    location: pointer_location,
-                    serial,
-                    time: event.time_msec(),
-                },
-            );
-            self.update_floating_resize(pointer_location);
-            self.register_frame();
-            crate::capture::on_pointer_motion_for_recording(self);
-            crate::portal::service::on_pointer_motion(self);
+        // See `on_pointer_motion`: an active floating gesture consumes the
+        // motion instead of forwarding it to the client.
+        if self.consume_floating_gesture_motion(pointer_location, event.time_msec()) {
             return;
         }
 
