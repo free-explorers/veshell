@@ -347,18 +347,6 @@ impl MetaWindow {
         position - Point::from((f64::from(geometry.x), f64::from(geometry.y)))
     }
 
-    /// Refreshes the stored pointer basis for a floating window after the
-    /// compositor applied its native position.
-    ///
-    /// Floating mode is the one place where the native/global position is the
-    /// authoritative pointer basis, and the compositor owns the pointer while
-    /// it moves the window. Non-floating windows must never call this: their
-    /// pointer basis is Flutter's render origin.
-    /// The client-surface viewport of the floating tile, if routed there.
-    pub fn floating_viewport(&self) -> Option<Rectangle<i32, Logical>> {
-        self.viewport.as_ref().map(|rect| rect.0)
-    }
-
     /// The size a maximized or fullscreen xdg toplevel must be configured
     /// with, taken from the geometry the shell last pushed.
     ///

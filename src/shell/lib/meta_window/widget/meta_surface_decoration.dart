@@ -56,40 +56,14 @@ class MetaSurfaceDecoration extends HookConsumerWidget {
 
 /// The shell's window frame: a rounded, clipped box with a drop shadow.
 ///
-/// Shared by [MetaSurfaceDecoration] (server-side decoration, title bar
-/// included) and [ServerSideFrame] (the bare frame around a floating dialog)
-/// so every shell-drawn window edge reads the same.
+/// Used by [MetaSurfaceDecoration] for server-side decoration, title bar
+/// included, so every shell-drawn window edge reads the same.
 const windowFrameDecoration = BoxDecoration(
   borderRadius: BorderRadius.all(Radius.circular(10)),
   boxShadow: [
     BoxShadow(color: Colors.black26, blurRadius: 10, spreadRadius: 5),
   ],
 );
-
-/// A bare shell frame for a floating dialog: rounded corners and a drop shadow,
-/// without the title bar [MetaSurfaceDecoration] adds for a client that asked
-/// for server-side decoration.
-///
-/// A floating dialog — one the client declares a dialog, see
-/// `isFloatingDialog` — floats over the dimmed tile (`WindowDialogs`), and a
-/// client that draws no decoration of its own would otherwise read as a flat
-/// rectangle pasted on the dim. It is only drawn around a bare surface: a
-/// client that carries its own decoration in its surface buffer keeps it (see
-/// `FloatableWindow.frame`).
-class ServerSideFrame extends StatelessWidget {
-  const ServerSideFrame({required this.child, super.key});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: windowFrameDecoration,
-      child: child,
-    );
-  }
-}
 
 class WindowTitleBar extends HookConsumerWidget {
   const WindowTitleBar(this.metaWindowId, {this.onMoveStart, super.key});

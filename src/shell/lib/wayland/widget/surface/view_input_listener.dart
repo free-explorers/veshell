@@ -13,7 +13,6 @@ import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/pointer/model/pointer_focus.serializable.dart';
 import 'package:shell/pointer/provider/pointer_focus.manager.dart';
 import 'package:shell/shared/provider/mouse_button_tracker.dart';
-import 'package:shell/shared/util/logger.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 
@@ -62,7 +61,6 @@ class ViewInputListener extends HookConsumerWidget {
     final globalKey = useMemoized(GlobalKey.new);
     final isHovered = useRef(false);
     final lastReportedOffset = useRef<Offset?>(null);
-    final lastFloatingOrigin = useRef<Offset?>(null);
 
     // Surface origin in global compositor space: its view-local render
     // position plus the monitor's compositor origin.
@@ -91,13 +89,6 @@ class ViewInputListener extends HookConsumerWidget {
         // teardown uses it to restore the owner's render-space focus, not the
         // synthetic X11 root position.
         ref.read(surfaceRenderOriginsProvider.notifier).set(surfaceId, offset);
-        if (globalOffsetOverride != null &&
-            lastFloatingOrigin.value != offset) {
-          lastFloatingOrigin.value = offset;
-          geometryLog.info(
-            'drag_trace surface id=$surfaceId floatingOffset=$offset',
-          );
-        }
         if (!isHovered.value || lastReportedOffset.value == offset) {
           return;
         }

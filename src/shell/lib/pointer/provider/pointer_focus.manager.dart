@@ -24,13 +24,6 @@ class SurfaceRenderOrigins extends Notifier<Map<int, Offset>> {
     }
     state = {...state, surfaceId: origin};
   }
-
-  void remove(int surfaceId) {
-    if (!state.containsKey(surfaceId)) {
-      return;
-    }
-    state = {...state}..remove(surfaceId);
-  }
 }
 
 final surfaceRenderOriginsProvider =

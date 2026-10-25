@@ -12,21 +12,12 @@ class WithResizeHandles extends StatelessWidget {
     super.key,
     this.borderWidth = 10,
     this.cornerWidth = 18,
-    this.inside = false,
     this.onResizeStart,
   });
   final String metaWindowId;
   final Widget child;
   final double borderWidth;
   final double cornerWidth;
-
-  /// Place the handles inside the child bounds instead of around them.
-  ///
-  /// The default outside placement relies on `DeferPointer`: a
-  /// `DeferredPointerHandler` hit-tests registered handles even when they lie
-  /// outside its own box, so exact-size `Positioned` windows can still be
-  /// resized from their outer edge.
-  final bool inside;
 
   /// Called on pointer down on a resize handle. When set, the compositor owns
   /// the resize; otherwise the handle uses the historical Flutter-local resize.
@@ -38,16 +29,20 @@ class WithResizeHandles extends StatelessWidget {
     return DeferredPointerHandler(
       child: Stack(
         clipBehavior: Clip.none,
-        // Handles must be after the surface in paint/hit-test order when they
-        // are inside, otherwise the client surface consumes their edges.
-        children: inside ? [child, ...handles] : [...handles, child],
+        // Handles paint above the surface, so their edges win hit-testing.
+        children: [...handles, child],
       ),
     );
   }
 
   List<Widget> _buildResizeHandles() {
-    final inset = inside ? 0.0 : -borderWidth;
-    final edgeInset = inside ? cornerWidth : cornerWidth - borderWidth;
+    final inset = -borderWidth;
+    final edgeInset = cornerWidth - borderWidth;
+    Widget handle(ResizeEdge edge) => ResizeHandle(
+      metaWindowId: metaWindowId,
+      resizeEdge: edge,
+      onResizeStart: onResizeStart,
+    );
     return ResizeEdge.values.whereNot((e) => e == ResizeEdge.none).map((e) {
       return switch (e) {
         ResizeEdge.topLeft => Positioned(
@@ -56,27 +51,14 @@ class WithResizeHandles extends StatelessWidget {
           child: SizedBox(
             width: cornerWidth,
             height: cornerWidth,
-            child: ResizeHandle(
-              metaWindowId: metaWindowId,
-              resizeEdge: e,
-              inside: inside,
-              onResizeStart: onResizeStart,
-            ),
+            child: handle(e),
           ),
         ),
         ResizeEdge.top => Positioned(
           top: inset,
           left: edgeInset,
           right: edgeInset,
-          child: SizedBox(
-            height: borderWidth,
-            child: ResizeHandle(
-              metaWindowId: metaWindowId,
-              resizeEdge: e,
-              inside: inside,
-              onResizeStart: onResizeStart,
-            ),
-          ),
+          child: SizedBox(height: borderWidth, child: handle(e)),
         ),
         ResizeEdge.topRight => Positioned(
           top: inset,
@@ -84,27 +66,14 @@ class WithResizeHandles extends StatelessWidget {
           child: SizedBox(
             width: cornerWidth,
             height: cornerWidth,
-            child: ResizeHandle(
-              metaWindowId: metaWindowId,
-              resizeEdge: e,
-              inside: inside,
-              onResizeStart: onResizeStart,
-            ),
+            child: handle(e),
           ),
         ),
         ResizeEdge.right => Positioned(
           top: edgeInset,
           right: inset,
           bottom: edgeInset,
-          child: SizedBox(
-            width: borderWidth,
-            child: ResizeHandle(
-              metaWindowId: metaWindowId,
-              resizeEdge: e,
-              inside: inside,
-              onResizeStart: onResizeStart,
-            ),
-          ),
+          child: SizedBox(width: borderWidth, child: handle(e)),
         ),
         ResizeEdge.bottomRight => Positioned(
           bottom: inset,
@@ -112,27 +81,14 @@ class WithResizeHandles extends StatelessWidget {
           child: SizedBox(
             width: cornerWidth,
             height: cornerWidth,
-            child: ResizeHandle(
-              metaWindowId: metaWindowId,
-              resizeEdge: e,
-              inside: inside,
-              onResizeStart: onResizeStart,
-            ),
+            child: handle(e),
           ),
         ),
         ResizeEdge.bottom => Positioned(
           bottom: inset,
           left: edgeInset,
           right: edgeInset,
-          child: SizedBox(
-            height: borderWidth,
-            child: ResizeHandle(
-              metaWindowId: metaWindowId,
-              resizeEdge: e,
-              inside: inside,
-              onResizeStart: onResizeStart,
-            ),
-          ),
+          child: SizedBox(height: borderWidth, child: handle(e)),
         ),
         ResizeEdge.bottomLeft => Positioned(
           bottom: inset,
@@ -140,27 +96,14 @@ class WithResizeHandles extends StatelessWidget {
           child: SizedBox(
             width: cornerWidth,
             height: cornerWidth,
-            child: ResizeHandle(
-              metaWindowId: metaWindowId,
-              resizeEdge: e,
-              inside: inside,
-              onResizeStart: onResizeStart,
-            ),
+            child: handle(e),
           ),
         ),
         ResizeEdge.left => Positioned(
           top: edgeInset,
           left: inset,
           bottom: edgeInset,
-          child: SizedBox(
-            width: borderWidth,
-            child: ResizeHandle(
-              metaWindowId: metaWindowId,
-              resizeEdge: e,
-              inside: inside,
-              onResizeStart: onResizeStart,
-            ),
-          ),
+          child: SizedBox(width: borderWidth, child: handle(e)),
         ),
 
         // This case must be filtered out
@@ -175,12 +118,10 @@ class ResizeHandle extends ConsumerWidget {
     required this.metaWindowId,
     required this.resizeEdge,
     super.key,
-    this.inside = false,
     this.onResizeStart,
   });
   final String metaWindowId;
   final ResizeEdge resizeEdge;
-  final bool inside;
   final ValueChanged<ResizeEdge>? onResizeStart;
 
   @override
@@ -202,10 +143,9 @@ class ResizeHandle extends ConsumerWidget {
         },
       ),
     );
-    // Outside handles rely on the deferred handler to be hit-tested beyond the
-    // window box. Inside handles are ordinary descendants; keeping them in the
-    // normal path is what makes their resize cursor visible.
-    return inside ? handle : DeferPointer(child: handle);
+    // The deferred handler hit-tests the handle beyond the window box, so an
+    // exact-size `Positioned` window still has reachable outer edges.
+    return DeferPointer(child: handle);
   }
 
   MouseCursor _getMouseCursor() {

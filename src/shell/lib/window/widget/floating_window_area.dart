@@ -344,11 +344,6 @@ class FloatingWindowArea extends HookConsumerWidget {
           // Popups live in the tile-level overlay below so they can receive
           // input outside this window's box.
           showPopups: false,
-          allowResize: true,
-          // Client-decorated windows (the Zoom panels) keep their own frame and
-          // shadow; the shell only draws decoration when the client asked for
-          // it.
-          frame: true,
           onRaise: () {
             focusNode?.requestFocus();
             raise(metaWindow.id);

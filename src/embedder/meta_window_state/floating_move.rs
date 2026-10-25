@@ -200,14 +200,6 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             // The shell has not placed this floating window yet.
             return false;
         };
-        tracing::info!(
-            target: "veshell::drag_trace",
-            meta_window_id = %meta_window.id,
-            pointer = ?pointer,
-            origin = ?origin.0,
-            viewport = ?meta_window.viewport,
-            "drag_start"
-        );
         self.floating_move = Some(FloatingMove {
             meta_window_id,
             grab_offset: pointer - Point::from((f64::from(origin.0.x), f64::from(origin.0.y))),
@@ -242,26 +234,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let size = self
             .x11_surface_for_meta_window(&meta_window)
             .map(|surface| surface.last_configure().size);
-        tracing::info!(
-            target: "veshell::drag_trace",
-            meta_window_id = %meta_window.id,
-            pointer = ?pointer,
-            grab_offset = ?move_.grab_offset,
-            desired = ?position,
-            clamped = ?clamped,
-            size = ?size,
-            viewport = ?meta_window.viewport,
-            focus_before = ?before_focus,
-            "drag_move_before"
-        );
         self.apply_floating_position(&meta_window, clamped, true);
-        tracing::info!(
-            target: "veshell::drag_trace",
-            meta_window_id = %meta_window.id,
-            applied = ?clamped,
-            focus_after = ?self.pointer_focus.as_ref().map(|(_, offset)| *offset),
-            "drag_move_after"
-        );
     }
 
     /// Ends the current move, if any.
@@ -403,13 +376,6 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         mark_explicit: bool,
     ) {
         let logical = Point::from((position.x.round() as i32, position.y.round() as i32));
-        tracing::info!(
-            target: "veshell::drag_trace",
-            meta_window_id = %meta_window.id,
-            logical = ?logical,
-            mark_explicit,
-            "drag_apply"
-        );
 
         // Configure the native X11 window first, then publish the observed
         // position. The shell renders from `position`; keeping the native

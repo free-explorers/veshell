@@ -16,7 +16,6 @@ import 'package:shell/platform/model/event/meta_window_patches/meta_window_patch
 import 'package:shell/platform/model/request/start_move_window/start_move_window.serializable.dart';
 import 'package:shell/platform/model/request/start_resize_window/start_resize_window.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
-import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/util/snapping.dart';
 import 'package:shell/shared/widget/container_with_positionnable_children/container_with_positionnable_children.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
@@ -58,12 +57,10 @@ class FloatableWindow extends HookConsumerWidget {
     this.placement = FloatableWindowPlacement.dialogOverlay,
     this.tileGlobalOrigin,
     this.maxSizeFactor = 1,
-    this.frame = false,
     this.clientOrigin,
     this.maximized = false,
     this.onRaise,
     this.showPopups = true,
-    this.allowResize = false,
     super.key,
   });
   final MetaWindowId metaWindowId;
@@ -94,15 +91,6 @@ class FloatableWindow extends HookConsumerWidget {
   /// behind it.
   final double maxSizeFactor;
 
-  /// Kept for the floating-stack call sites; the shell no longer wraps a
-  /// surface in its own frame here.
-  ///
-  /// A client-side-decorated surface already carries its own frame and drop
-  /// shadow in its buffer. Wrapping it in [ServerSideFrame] added a second
-  /// backdrop shadow and clipped the client's own decoration. Server-side
-  /// decoration is drawn by [MetaSurfaceDecoration] instead.
-  final bool frame;
-
   /// Called when the pointer goes down on the window, before the window
   /// processes the event. The floating stack uses it to raise the window (and
   /// activate it) above its siblings.
@@ -113,13 +101,6 @@ class FloatableWindow extends HookConsumerWidget {
   /// The floating stack turns this off and renders popups in a tile-level
   /// overlay, so they can be hit-tested outside the parent window's bounds.
   final bool showPopups;
-
-  /// Whether this presentation owns interactive resize affordances.
-  ///
-  /// Only the floating tile and dialog overlay opt in. A tiled/maximized
-  /// window is sized by the tile and must not expose a resize path that could
-  /// desynchronise its surface from the tile.
-  final bool allowResize;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -281,29 +262,6 @@ class FloatableWindow extends HookConsumerWidget {
     final origin = useState<Offset?>(
       clientOrigin == null ? centredOrigin() : clampClientOrigin(clientOrigin!),
     );
-
-    final dragSignature = placement == FloatableWindowPlacement.floatingTile
-        ? '${metaWindow.position}|$clientOrigin|${origin.value}|'
-              '${size.value}|${tileGlobalOrigin ?? Offset.zero}'
-        : null;
-    final lastDragSignature = useRef<String?>(null);
-    useEffect(() {
-      if (dragSignature == null || lastDragSignature.value == dragSignature) {
-        return null;
-      }
-      lastDragSignature.value = dragSignature;
-      final renderOrigin =
-          (tileGlobalOrigin ?? Offset.zero) +
-          (origin.value ?? Offset.zero) +
-          Offset(0, decorationHeight);
-      geometryLog.info(
-        'drag_trace render id=$metaWindowId '
-        'native=${metaWindow.position} clientOrigin=$clientOrigin '
-        'origin=${origin.value} size=${size.value} '
-        'tile=${tileGlobalOrigin ?? Offset.zero} render=$renderOrigin',
-      );
-      return null;
-    }, [dragSignature]);
 
     // Remember the client geometry and global position before a maximize, so
     // leaving the maximized state can restore the window's own placement.
@@ -758,16 +716,12 @@ class FloatableWindow extends HookConsumerWidget {
                 metaWindowId,
               ).select((value) => value.geometry),
             );
-            // The native configure loc is the client-surface position. A
-            // floating tile must keep the root position in lockstep with the
-            // local origin; the dialog overlay keeps its historical
-            // surface-local value.
-            final resizePosition =
-                placement == FloatableWindowPlacement.floatingTile
-                ? (tileGlobalOrigin ?? Offset.zero) +
-                      (origin.value ?? Offset.zero) +
-                      Offset(0, decorationHeight)
-                : Offset(currentGeometry!.left, currentGeometry.top);
+            // The dialog overlay keeps its historical surface-local geometry;
+            // floating tiles never run this local resize path.
+            final resizePosition = Offset(
+              currentGeometry!.left,
+              currentGeometry.top,
+            );
             patchWindowRect(
               Rect.fromLTWH(
                 resizePosition.dx,
@@ -864,11 +818,8 @@ class FloatableWindow extends HookConsumerWidget {
         !metaWindow.isFixedSized &&
         !isMaximized;
     final resizeEnabled =
-        allowResize &&
-        (placement != FloatableWindowPlacement.floatingTile ||
-            compositorResize);
-    final ValueChanged<ResizeEdge>? onResizeStart =
-        compositorResize && allowResize
+        placement != FloatableWindowPlacement.floatingTile || compositorResize;
+    final ValueChanged<ResizeEdge>? onResizeStart = compositorResize
         ? (edge) {
             onRaise?.call();
             unawaited(

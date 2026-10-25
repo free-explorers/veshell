@@ -470,27 +470,14 @@ pub mod xwayland {
                     );
                 }
             }
-            info!(
-                "configure_request: window={:?} meta_window={:?} x={:?} y={:?} w={:?} h={:?} can_position={}",
-                window.window_id(),
-                meta_window.as_ref().map(|mw| mw.id.as_str()),
-                x,
-                y,
-                w,
-                h,
-                can_position
+            tracing::debug!(
+                target: "veshell::geometry",
+                window = ?window.window_id(),
+                meta_window = ?meta_window.as_ref().map(|mw| mw.id.as_str()),
+                requested = ?(x, y, w, h),
+                can_position,
+                "configure_request"
             );
-            if let Some(meta_window) = meta_window.as_ref() {
-                if x.is_some() || y.is_some() {
-                    tracing::info!(
-                        target: "veshell::drag_trace",
-                        meta_window_id = %meta_window.id,
-                        requested = ?(x, y),
-                        can_position,
-                        "drag_configure_request_raw"
-                    );
-                }
-            }
 
             // The size still comes from the surface-local geometry (as
             // before); only the location is a root position. Starting from
@@ -568,14 +555,6 @@ pub mod xwayland {
                         meta_window,
                         (f64::from(configured_loc.x), f64::from(configured_loc.y)).into(),
                     );
-                    tracing::info!(
-                        target: "veshell::drag_trace",
-                        meta_window_id = %meta_window.id,
-                        requested = ?(x, y),
-                        effective = ?configured_loc,
-                        focus = ?self.pointer_focus.as_ref().map(|(_, offset)| *offset),
-                        "drag_configure_request"
-                    );
                 }
             }
         }
@@ -615,16 +594,6 @@ pub mod xwayland {
                         .meta_popups
                         .get(&meta_popup_id)
                         .map(|popup| popup.position.0);
-                    tracing::info!(
-                        target: "veshell::drag_trace",
-                        meta_popup_id = %meta_popup_id,
-                        surface_id,
-                        geometry = ?geometry,
-                        position = ?position,
-                        previous = ?previous,
-                        focus = ?self.pointer_focus.as_ref().map(|(_, offset)| *offset),
-                        "drag_popup_configure_notify"
-                    );
                     self.patch_meta_popup(
                         MetaPopupPatch::UpdatePosition {
                             id: meta_popup_id.clone(),
@@ -767,15 +736,7 @@ pub mod xwayland {
                     &meta_window,
                     (f64::from(root_position.x), f64::from(root_position.y)).into(),
                 );
-                if meta_window.is_floating() {
-                    tracing::info!(
-                        target: "veshell::drag_trace",
-                        meta_window_id = %meta_window.id,
-                        observed_geometry = ?geometry,
-                        focus = ?self.pointer_focus.as_ref().map(|(_, offset)| *offset),
-                        "drag_configure_notify"
-                    );
-                }
+                if meta_window.is_floating() {}
                 let mut surface_geometry = x11_surface.geometry();
                 if surface_geometry.size.w <= 0 || surface_geometry.size.h <= 0 {
                     surface_geometry = Rectangle::from_size(geometry.size);

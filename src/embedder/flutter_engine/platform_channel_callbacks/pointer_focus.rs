@@ -127,16 +127,6 @@ pub fn pointer_focus<BackendData: Backend + 'static>(
                     data.popup_last_native
                         .insert(pointer_focus.surface_id, popup.position.0);
                     global_offset = native + offset;
-                    tracing::info!(
-                        target: "veshell::drag_trace",
-                        surface_id = pointer_focus.surface_id,
-                        native = ?native,
-                        flutter = ?flutter,
-                        popup_offset = ?offset,
-                        applied = ?global_offset,
-                        moved = previous_native != Some(popup.position.0),
-                        "drag_popup_focus"
-                    );
                 }
             }
             let next_focus = (PointerFocusTarget::from(&surface), global_offset);

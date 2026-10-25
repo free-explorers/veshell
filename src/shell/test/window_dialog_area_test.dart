@@ -474,9 +474,6 @@ void main() {
     expect(find.widgetWithText(PanelTab, 'Alpha'), findsOneWidget);
     expect(find.widgetWithText(PanelTab, 'Beta'), findsNothing);
     expect(find.byType(WindowDialogs), findsOneWidget);
-    // `needDecoration: false` means the client draws its own decoration; even
-    // when its buffer equals the geometry the shell must not add a shadow.
-    expect(find.byType(ServerSideFrame), findsNothing);
     // The floating modal keeps the keyboard over the tabbed dialog.
     expect(
       container.read(selectedDialogMetaWindowForWindowProvider(_parent)),
@@ -525,7 +522,6 @@ void main() {
     await _pumpFloatingDialogArea(tester, surfaceSize: const Size(360, 280));
 
     expect(find.byType(WindowDialogs), findsOneWidget);
-    expect(find.byType(ServerSideFrame), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -616,9 +612,6 @@ void main() {
     // not reuse the dialog-area container.
     expect(find.byType(WindowDialogs), findsNothing);
     expect(find.byType(FloatableWindow), findsNWidgets(2));
-    // Both windows are client-decorated (`needDecoration: false`): they keep
-    // their own frames and the shell must not add a second backdrop shadow.
-    expect(find.byType(ServerSideFrame), findsNothing);
 
     // The displayed window sits at the bottom, the dialog above it.
     List<MetaWindowId> stackOrder() => tester
@@ -633,7 +626,6 @@ void main() {
     final floatingHandles = tester
         .widgetList<WithResizeHandles>(find.byType(WithResizeHandles))
         .toList();
-    expect(floatingHandles.every((handles) => !handles.inside), isTrue);
     expect(floatingHandles, isNotEmpty);
     // Handles only request the compositor gesture; they never resize locally.
     expect(
