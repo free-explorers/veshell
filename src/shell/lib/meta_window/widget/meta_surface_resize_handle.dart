@@ -12,95 +12,154 @@ class WithResizeHandles extends StatelessWidget {
     super.key,
     this.borderWidth = 10,
     this.cornerWidth = 18,
+    this.inside = false,
+    this.onResizeStart,
   });
   final String metaWindowId;
   final Widget child;
   final double borderWidth;
   final double cornerWidth;
 
+  /// Place the handles inside the child bounds instead of around them.
+  ///
+  /// The default outside placement relies on `DeferPointer`: a
+  /// `DeferredPointerHandler` hit-tests registered handles even when they lie
+  /// outside its own box, so exact-size `Positioned` windows can still be
+  /// resized from their outer edge.
+  final bool inside;
+
+  /// Called on pointer down on a resize handle. When set, the compositor owns
+  /// the resize; otherwise the handle uses the historical Flutter-local resize.
+  final ValueChanged<ResizeEdge>? onResizeStart;
+
   @override
   Widget build(BuildContext context) {
+    final handles = _buildResizeHandles();
     return DeferredPointerHandler(
       child: Stack(
         clipBehavior: Clip.none,
-        children: [..._buildResizeHandles(), child],
+        // Handles must be after the surface in paint/hit-test order when they
+        // are inside, otherwise the client surface consumes their edges.
+        children: inside ? [child, ...handles] : [...handles, child],
       ),
     );
   }
 
   List<Widget> _buildResizeHandles() {
+    final inset = inside ? 0.0 : -borderWidth;
+    final edgeInset = inside ? cornerWidth : cornerWidth - borderWidth;
     return ResizeEdge.values.whereNot((e) => e == ResizeEdge.none).map((e) {
       return switch (e) {
         ResizeEdge.topLeft => Positioned(
-          top: -borderWidth,
-          left: -borderWidth,
+          top: inset,
+          left: inset,
           child: SizedBox(
             width: cornerWidth,
             height: cornerWidth,
-            child: ResizeHandle(metaWindowId: metaWindowId, resizeEdge: e),
+            child: ResizeHandle(
+              metaWindowId: metaWindowId,
+              resizeEdge: e,
+              inside: inside,
+              onResizeStart: onResizeStart,
+            ),
           ),
         ),
         ResizeEdge.top => Positioned(
-          top: -borderWidth,
-          left: cornerWidth - borderWidth,
-          right: cornerWidth - borderWidth,
+          top: inset,
+          left: edgeInset,
+          right: edgeInset,
           child: SizedBox(
             height: borderWidth,
-            child: ResizeHandle(metaWindowId: metaWindowId, resizeEdge: e),
+            child: ResizeHandle(
+              metaWindowId: metaWindowId,
+              resizeEdge: e,
+              inside: inside,
+              onResizeStart: onResizeStart,
+            ),
           ),
         ),
         ResizeEdge.topRight => Positioned(
-          top: -borderWidth,
-          right: -borderWidth,
+          top: inset,
+          right: inset,
           child: SizedBox(
             width: cornerWidth,
             height: cornerWidth,
-            child: ResizeHandle(metaWindowId: metaWindowId, resizeEdge: e),
+            child: ResizeHandle(
+              metaWindowId: metaWindowId,
+              resizeEdge: e,
+              inside: inside,
+              onResizeStart: onResizeStart,
+            ),
           ),
         ),
         ResizeEdge.right => Positioned(
-          top: cornerWidth - borderWidth,
-          right: -borderWidth,
-          bottom: cornerWidth - borderWidth,
+          top: edgeInset,
+          right: inset,
+          bottom: edgeInset,
           child: SizedBox(
             width: borderWidth,
-            child: ResizeHandle(metaWindowId: metaWindowId, resizeEdge: e),
+            child: ResizeHandle(
+              metaWindowId: metaWindowId,
+              resizeEdge: e,
+              inside: inside,
+              onResizeStart: onResizeStart,
+            ),
           ),
         ),
         ResizeEdge.bottomRight => Positioned(
-          bottom: -borderWidth,
-          right: -borderWidth,
+          bottom: inset,
+          right: inset,
           child: SizedBox(
             width: cornerWidth,
             height: cornerWidth,
-            child: ResizeHandle(metaWindowId: metaWindowId, resizeEdge: e),
+            child: ResizeHandle(
+              metaWindowId: metaWindowId,
+              resizeEdge: e,
+              inside: inside,
+              onResizeStart: onResizeStart,
+            ),
           ),
         ),
         ResizeEdge.bottom => Positioned(
-          bottom: -borderWidth,
-          left: cornerWidth - borderWidth,
-          right: cornerWidth - borderWidth,
+          bottom: inset,
+          left: edgeInset,
+          right: edgeInset,
           child: SizedBox(
             height: borderWidth,
-            child: ResizeHandle(metaWindowId: metaWindowId, resizeEdge: e),
+            child: ResizeHandle(
+              metaWindowId: metaWindowId,
+              resizeEdge: e,
+              inside: inside,
+              onResizeStart: onResizeStart,
+            ),
           ),
         ),
         ResizeEdge.bottomLeft => Positioned(
-          bottom: -borderWidth,
-          left: -borderWidth,
+          bottom: inset,
+          left: inset,
           child: SizedBox(
             width: cornerWidth,
             height: cornerWidth,
-            child: ResizeHandle(metaWindowId: metaWindowId, resizeEdge: e),
+            child: ResizeHandle(
+              metaWindowId: metaWindowId,
+              resizeEdge: e,
+              inside: inside,
+              onResizeStart: onResizeStart,
+            ),
           ),
         ),
         ResizeEdge.left => Positioned(
-          top: cornerWidth - borderWidth,
-          left: -borderWidth,
-          bottom: cornerWidth - borderWidth,
+          top: edgeInset,
+          left: inset,
+          bottom: edgeInset,
           child: SizedBox(
             width: borderWidth,
-            child: ResizeHandle(metaWindowId: metaWindowId, resizeEdge: e),
+            child: ResizeHandle(
+              metaWindowId: metaWindowId,
+              resizeEdge: e,
+              inside: inside,
+              onResizeStart: onResizeStart,
+            ),
           ),
         ),
 
@@ -116,26 +175,37 @@ class ResizeHandle extends ConsumerWidget {
     required this.metaWindowId,
     required this.resizeEdge,
     super.key,
+    this.inside = false,
+    this.onResizeStart,
   });
   final String metaWindowId;
   final ResizeEdge resizeEdge;
+  final bool inside;
+  final ValueChanged<ResizeEdge>? onResizeStart;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return DeferPointer(
-      child: MouseRegion(
-        hitTestBehavior: HitTestBehavior.translucent,
-        cursor: _getMouseCursor(),
-        child: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onPanStart: (_) {
-            ref
-                .read(metaWindowResizingStateProvider(metaWindowId).notifier)
-                .startResizing(resizeEdge);
-          },
-        ),
+    final handle = MouseRegion(
+      hitTestBehavior: HitTestBehavior.translucent,
+      cursor: _getMouseCursor(),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onPanStart: (_) {
+          final start = onResizeStart;
+          if (start != null) {
+            start(resizeEdge);
+            return;
+          }
+          ref
+              .read(metaWindowResizingStateProvider(metaWindowId).notifier)
+              .startResizing(resizeEdge);
+        },
       ),
     );
+    // Outside handles rely on the deferred handler to be hit-tested beyond the
+    // window box. Inside handles are ordinary descendants; keeping them in the
+    // normal path is what makes their resize cursor visible.
+    return inside ? handle : DeferPointer(child: handle);
   }
 
   MouseCursor _getMouseCursor() {

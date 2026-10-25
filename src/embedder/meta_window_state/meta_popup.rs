@@ -17,6 +17,13 @@ use crate::{
 pub struct MetaPopup {
     pub id: String,
     pub parent: String,
+    /// Position of the popup surface relative to the parent window box's
+    /// top-left corner.
+    ///
+    /// X11 reports override-redirect popups at the root and Wayland xdg
+    /// popups relative to the toplevel; both are normalized to this space when
+    /// they enter the model. A host (tile surface stack or floating overlay)
+    /// adds its own parent origin when it places the popup.
     pub position: MyPoint<i32, Logical>,
     pub geometry: Option<MyRectangle<i32, Logical>>,
     pub surface_id: u64,
@@ -102,6 +109,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         {
             return;
         }
+
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "meta_popup_removed",

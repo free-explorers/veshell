@@ -172,7 +172,7 @@ pub mod xdg {
                 parent_meta_window_id = %parent_meta_window_id,
                 position = ?position,
                 geometry = ?geometry,
-                "Creating popup with root-relative position"
+                "Creating popup with parent-box-relative position"
             );
 
             let scale_ratio = {
@@ -231,7 +231,21 @@ pub mod xdg {
 
         fn move_request(&mut self, surface: ToplevelSurface, _seat: WlSeat, _serial: Serial) {
             let surface_id = get_surface_id(surface.wl_surface());
-            let meta_window = self.get_meta_window(surface_id).unwrap();
+            let Some(meta_window) = self.get_meta_window(surface_id) else {
+                return;
+            };
+            // A floating Wayland toplevel has no native position to configure;
+            // the compositor tracks the move and publishes the new box origin.
+            // Tiled windows keep the legacy notification-only path.
+            if meta_window.is_floating() {
+                let pointer = self.pointer.current_location();
+                self.start_floating_move(meta_window.id.clone(), pointer);
+                // A floating window has exactly one move path: the compositor
+                // tracks the pointer and publishes the placement. Do not also
+                // notify Flutter's local drag machinery.
+                return;
+            }
+
             let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
             platform_method_channel.invoke_method(
                 "interactive_move",
@@ -250,11 +264,25 @@ pub mod xdg {
             edges: xdg_toplevel::ResizeEdge,
         ) {
             let surface_id = get_surface_id(surface.wl_surface());
-            let meta_window = self.get_meta_window(surface_id).unwrap();
+            let Some(meta_window) = self.get_meta_window(surface_id) else {
+                return;
+            };
 
-            let pointer = self.seat.get_pointer().unwrap();
+            let Some(pointer) = self.seat.get_pointer() else {
+                return;
+            };
             if pointer.has_grab(serial) {
                 pointer.unset_grab(self, serial, self.clock.now().as_millis() as u32);
+            }
+
+            if !meta_window.allows_interactive_resize() {
+                tracing::debug!(
+                    target: "veshell::geometry",
+                    meta_window_id = %meta_window.id,
+                    display_mode = ?meta_window.display_mode,
+                    "ignoring interactive_resize for tiled/maximized window"
+                );
+                return;
             }
 
             // See if this comes from a touch grab.
@@ -270,9 +298,18 @@ pub mod xdg {
                 }
             } */
 
-            let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
             let resize_edge = MetaResizeEdge::from(edges);
             info!("resize_request Resize edge: {:?}", resize_edge);
+            if meta_window.is_floating() {
+                let pointer = self.pointer.current_location();
+                self.start_floating_resize(meta_window.id.clone(), resize_edge, pointer);
+                // Floating windows have exactly one resize path. Even when the
+                // gesture is rejected (fixed size, missing placement), never
+                // fall back to Flutter's local resize: that would desynchronise
+                // the client surface from the compositor box.
+                return;
+            }
+            let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
             platform_method_channel.invoke_method(
                 "interactive_resize",
                 Some(Box::new(json!({
@@ -422,6 +459,44 @@ pub mod xdg {
                 state.states.unset(xdg_toplevel::State::Fullscreen);
             });
             surface.send_configure();
+        }
+
+        fn maximize_request(&mut self, surface: ToplevelSurface) {
+            let Some(meta_window) = self.get_meta_window(get_surface_id(surface.wl_surface()))
+            else {
+                surface.send_configure();
+                return;
+            };
+            // A floating window fills its tile on a CSD maximize request. A
+            // tiled window keeps the toplevel negotiation the shell already
+            // drives through its display mode.
+            if meta_window.is_floating() {
+                self.patch_meta_window(
+                    MetaWindowPatch::UpdateClientMaximized {
+                        id: meta_window.id,
+                        value: true,
+                    },
+                    true,
+                );
+            } else {
+                surface.send_configure();
+            }
+        }
+
+        fn unmaximize_request(&mut self, surface: ToplevelSurface) {
+            let Some(meta_window) = self.get_meta_window(get_surface_id(surface.wl_surface()))
+            else {
+                return;
+            };
+            if meta_window.is_floating() {
+                self.patch_meta_window(
+                    MetaWindowPatch::UpdateClientMaximized {
+                        id: meta_window.id,
+                        value: false,
+                    },
+                    true,
+                );
+            }
         }
 
         fn ack_configure(

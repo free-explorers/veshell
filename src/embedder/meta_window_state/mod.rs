@@ -10,7 +10,7 @@ use smithay::{
         wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode as DecorationMode,
         wayland_server::{DisplayHandle, Resource},
     },
-    utils::{Logical, Rectangle},
+    utils::{Logical, Point, Rectangle},
     wayland::{
         compositor::with_states,
         shell::xdg::{SurfaceCachedState, ToplevelSurface, XdgToplevelSurfaceData},
@@ -30,6 +30,7 @@ use crate::{
     wayland::wayland::get_surface_id,
 };
 
+pub mod floating_move;
 pub mod meta_popup;
 pub mod meta_resize_edge;
 pub mod meta_window;
@@ -64,6 +65,21 @@ impl MetaWindowState {
             focus_order: Vec::new(),
             pending_activation_parent: HashMap::new(),
         }
+    }
+
+    /// The compositor-global origin of a MetaWindow's box.
+    ///
+    /// Popup positions are stored relative to their parent window box, so the
+    /// same popup can be rendered inside a tile or in a floating overlay. A
+    /// missing position (a Wayland window before the shell placed it) falls
+    /// back to the global origin; callers that need a native position already
+    /// guard on `MetaWindow::position`.
+    pub fn meta_window_box_origin(&self, meta_window_id: &str) -> Point<i32, Logical> {
+        self.meta_windows
+            .get(meta_window_id)
+            .and_then(|window| window.position.as_ref())
+            .map(|position| position.0)
+            .unwrap_or_else(|| Point::from((0, 0)))
     }
 
     /// Records `id` as the most recently focused MetaWindow.
@@ -390,6 +406,13 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             is_fixed_sized: false,
             is_modal: modal,
             is_fullscreen: false,
+            client_maximized: false,
+            skip_taskbar: false,
+            keep_on_top: false,
+            position: None,
+            position_explicit: false,
+            viewport: None,
+            viewport_origin: None,
             geometry,
             current_output: None,
             need_decoration: !is_decorated,
@@ -443,6 +466,12 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 binary_name.clone()
             });
 
+        let position = x11_surface
+            .size_hints()
+            .and_then(|hints| hints.position)
+            .map(|(_, x, y)| Point::from((x, y)).into())
+            .or_else(|| Some(x11_surface.last_configure().loc.into()));
+
         self.emit_process_info(pid);
 
         let meta_window = self.create_meta_window(MetaWindow {
@@ -465,6 +494,13 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             is_fixed_sized: x11_is_fixed_sized(&x11_surface),
             is_modal: x11_is_modal(&x11_surface),
             is_fullscreen: x11_surface.is_fullscreen(),
+            client_maximized: false,
+            skip_taskbar: x11_surface.is_skip_taskbar(),
+            keep_on_top: x11_surface.is_above(),
+            position,
+            position_explicit: false,
+            viewport: None,
+            viewport_origin: None,
             current_output: None,
             geometry: Some(x11_surface.geometry().into()),
             need_decoration: !x11_surface.is_decorated(),
@@ -615,6 +651,13 @@ mod tests {
             is_fixed_sized: false,
             is_modal: false,
             is_fullscreen: false,
+            client_maximized: false,
+            skip_taskbar: false,
+            keep_on_top: false,
+            position: None,
+            position_explicit: false,
+            viewport: None,
+            viewport_origin: None,
             geometry: None,
             need_decoration: false,
             current_output: None,
@@ -633,6 +676,94 @@ mod tests {
             state.record_meta_window_focus(id);
         }
         state
+    }
+
+    #[test]
+    fn decorated_floating_windows_use_the_compositor_resize_path() {
+        let mut floating = window("floating", 1, Some("org.example.Floating"));
+        floating.display_mode = Some(DisplayMode::Floating);
+        floating.need_decoration = true;
+        assert!(
+            crate::meta_window_state::floating_move::can_resize_floating(
+                &floating,
+                crate::meta_window_state::meta_resize_edge::MetaResizeEdge::BOTTOM_RIGHT,
+            )
+        );
+
+        floating.is_fixed_sized = true;
+        assert!(
+            !crate::meta_window_state::floating_move::can_resize_floating(
+                &floating,
+                crate::meta_window_state::meta_resize_edge::MetaResizeEdge::BOTTOM_RIGHT,
+            )
+        );
+    }
+
+    #[test]
+    fn interactive_resize_is_limited_to_floating_windows_and_dialogs() {
+        let mut tiled = window("tiled", 1, Some("org.example.Tiled"));
+        tiled.display_mode = Some(DisplayMode::Maximized);
+        assert!(!tiled.allows_interactive_resize());
+
+        let mut floating = window("floating", 1, Some("org.example.Floating"));
+        floating.display_mode = Some(DisplayMode::Floating);
+        assert!(floating.allows_interactive_resize());
+
+        let mut parented = window("parented", 1, Some("org.example.Dialog"));
+        parented.parent = Some("owner".to_string());
+        assert!(parented.allows_interactive_resize());
+
+        let mut modal = window("modal", 1, Some("org.example.Dialog"));
+        modal.is_modal = true;
+        assert!(modal.allows_interactive_resize());
+
+        let mut fixed = window("fixed", 1, Some("org.example.Dialog"));
+        fixed.is_fixed_sized = true;
+        assert!(fixed.allows_interactive_resize());
+    }
+
+    #[test]
+    fn window_placement_derives_the_surface_origin() {
+        let placement = crate::meta_window_state::meta_window::WindowPlacement {
+            origin: Point::from((48, 48)),
+            client_size: (2512, 1356).into(),
+            geometry_offset: Point::from((24, 21)),
+        };
+
+        assert_eq!(placement.surface_origin(), Point::from((24.0, 27.0)));
+        assert_eq!(
+            placement.client_rect(),
+            Rectangle::new((48, 48).into(), (2512, 1356).into())
+        );
+    }
+
+    #[test]
+    fn surface_origin_accounts_for_a_wayland_csd_geometry_offset() {
+        let mut window = window("wayland", 42, Some("firefox"));
+        window.position = Some(Point::from((48, 48)).into());
+        window.geometry = Some(Rectangle::new((24, 21).into(), (2512, 1356).into()).into());
+
+        assert_eq!(window.surface_origin(), Some(Point::from((24.0, 27.0))));
+    }
+
+    #[test]
+    fn surface_origin_of_an_x11_window_is_its_root_position() {
+        let mut window = window("x11", 42, Some("zoom"));
+        window.position = Some(Point::from((710, 326)).into());
+        window.geometry = Some(Rectangle::new((0, 0).into(), (1188, 800).into()).into());
+
+        assert_eq!(window.surface_origin(), Some(Point::from((710.0, 326.0))));
+    }
+
+    #[test]
+    fn surface_origin_at_uses_the_window_geometry() {
+        let mut window = window("wayland", 42, Some("firefox"));
+        window.geometry = Some(Rectangle::new((24, 21).into(), (2512, 1356).into()).into());
+
+        assert_eq!(
+            window.surface_origin_at(Point::from((100.0, 200.0))),
+            Point::from((76.0, 179.0))
+        );
     }
 
     #[test]

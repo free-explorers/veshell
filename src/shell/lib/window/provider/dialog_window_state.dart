@@ -1,17 +1,32 @@
+import 'dart:async';
+
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/window/model/dialog_window.dart';
+import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/model/window_properties.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
+import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/matching_engine.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/window/provider/window_provider.mixin.dart';
 
 part 'dialog_window_state.g.dart';
+
+/// The display mode a dialog inherits from its owner tile.
+///
+/// Compatibility contract: every non-floating presentation keeps the
+/// historical `maximized` assignment (the dialog area, fullscreen and game
+/// modes). Only the floating escape hatch puts its dialogs in floating mode.
+MetaWindowDisplayMode dialogMetaWindowDisplayMode(DisplayMode? parentMode) {
+  return parentMode == DisplayMode.floating
+      ? MetaWindowDisplayMode.floating
+      : MetaWindowDisplayMode.maximized;
+}
 
 /// Workspace provider
 @riverpod
@@ -64,17 +79,38 @@ class DialogWindowState extends _$DialogWindowState
 
   @override
   void onCurrentlyDisplayedMetaWindowChanged(MetaWindowId? metaWindowId) {
-    if (metaWindowId != null) {
-      state = state.copyWith(metaWindowId: metaWindowId);
-      ref
-          .read(metaWindowStateProvider(state.metaWindowId).notifier)
-          .patch(
-            MetaWindowPatchMessage.updateDisplayMode(
-              id: state.metaWindowId,
-              value: MetaWindowDisplayMode.maximized,
-            ),
-          );
+    if (metaWindowId == null) {
+      return;
     }
+    state = state.copyWith(metaWindowId: metaWindowId);
+
+    // Compatibility: every tiled presentation (including the dialog area,
+    // fullscreen and game) keeps the historical `maximized` assignment. Only a
+    // floating tile puts its dialogs in floating mode, which is what lets the
+    // compositor accept their client-requested positions.
+    final parentId = state.parentWindowId;
+    DisplayMode? parentMode;
+    if (parentId is PersistentWindowId) {
+      try {
+        parentMode = ref
+            .read(persistentWindowStateProvider(parentId))
+            .displayMode;
+      } on Object {
+        // The parent may still be initializing; default to the tiled
+        // presentation, which is the compatibility path.
+      }
+    }
+    final notifier = ref.read(
+      metaWindowStateProvider(state.metaWindowId).notifier,
+    );
+    unawaited(
+      notifier.patch(
+        MetaWindowPatchMessage.updateDisplayMode(
+          id: state.metaWindowId,
+          value: dialogMetaWindowDisplayMode(parentMode),
+        ),
+      ),
+    );
   }
 
   @override

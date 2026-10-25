@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:hooks_riverpod/misc.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
@@ -68,6 +70,12 @@ class MetaWindowState extends _$MetaWindowState {
       isFixedSized: message.isFixedSized,
       isModal: message.isModal,
       isFullscreen: message.isFullscreen,
+      clientMaximized: message.clientMaximized,
+      skipTaskbar: message.skipTaskbar,
+      keepOnTop: message.keepOnTop,
+      position: message.position,
+      positionExplicit: message.positionExplicit,
+      viewport: message.viewport,
       geometry: message.geometry,
       needDecoration: message.needDecoration,
       gameModeActivated: message.gameModeActivated,
@@ -122,12 +130,41 @@ class MetaWindowState extends _$MetaWindowState {
         state = state.copyWith(isModal: patch.value);
       case UpdateIsFullscreen():
         state = state.copyWith(isFullscreen: patch.value);
+      case UpdateClientMaximized():
+        state = state.copyWith(clientMaximized: patch.value);
+      case UpdateSkipTaskbar():
+        state = state.copyWith(skipTaskbar: patch.value);
+      case UpdateKeepOnTop():
+        state = state.copyWith(keepOnTop: patch.value);
       case UpdateDisplayMode():
         state = state.copyWith(displayMode: patch.value);
+      case UpdateViewport():
+        state = state.copyWith(viewport: patch.value);
       case UpdateMapped():
         state = state.copyWith(mapped: patch.value);
+      case UpdatePosition():
+        state = state.copyWith(position: patch.value);
+      case UpdatePositionExplicit():
+        state = state.copyWith(positionExplicit: patch.value);
       case UpdateGeometry():
         state = state.copyWith(geometry: patch.value);
+      case SetWindowRect():
+        final rect = patch.value;
+        state = state.copyWith(
+          position: rect?.topLeft,
+          positionExplicit: true,
+          geometry: rect == null
+              ? null
+              // Preserve the CSD visible-content offset inside the surface
+              // buffer. Rust keeps it too; resetting it here shifts a Wayland
+              // client by its shadow margin on every resize frame.
+              : Rect.fromLTWH(
+                  state.geometry?.left ?? 0,
+                  state.geometry?.top ?? 0,
+                  rect.width,
+                  rect.height,
+                ),
+        );
       case UpdateNeedDecoration():
         state = state.copyWith(needDecoration: patch.value);
       case UpdateGameModeActivated():

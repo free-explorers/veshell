@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
+import 'package:shell/shared/util/json_converter/offset.dart';
 import 'package:shell/shared/util/json_converter/rect.dart';
 
 part 'meta_window_patches.serializable.freezed.dart';
@@ -63,20 +64,65 @@ sealed class MetaWindowPatchMessage
     required bool value,
   }) = UpdateIsFullscreen;
 
+  const factory MetaWindowPatchMessage.updateClientMaximized({
+    required String id,
+    required bool value,
+  }) = UpdateClientMaximized;
+
+  const factory MetaWindowPatchMessage.updateSkipTaskbar({
+    required String id,
+    required bool value,
+  }) = UpdateSkipTaskbar;
+
+  const factory MetaWindowPatchMessage.updateKeepOnTop({
+    required String id,
+    required bool value,
+  }) = UpdateKeepOnTop;
+
   const factory MetaWindowPatchMessage.updateDisplayMode({
     required String id,
     MetaWindowDisplayMode? value,
   }) = UpdateDisplayMode;
+
+  /// Publishes the measured viewport of a floating tile. The destination
+  /// window must derive floating ownership from [updateDisplayMode]; this
+  /// message carries only the viewport geometry and origin.
+  const factory MetaWindowPatchMessage.updateViewport({
+    required String id,
+    @RectConverter() Rect? value,
+    @OffsetIntConverter() Offset? origin,
+  }) = UpdateViewport;
 
   const factory MetaWindowPatchMessage.updateMapped({
     required String id,
     required bool value,
   }) = UpdateMapped;
 
+  const factory MetaWindowPatchMessage.updatePosition({
+    required String id,
+    @OffsetIntConverter() Offset? value,
+  }) = UpdatePosition;
+
+  const factory MetaWindowPatchMessage.updatePositionExplicit({
+    required String id,
+    required bool value,
+  }) = UpdatePositionExplicit;
+
   const factory MetaWindowPatchMessage.updateGeometry({
     required String id,
     @RectConverter() Rect? value,
   }) = UpdateGeometry;
+
+  /// Moves/resizes a floating window in compositor-global coordinates.
+  ///
+  /// `UpdateGeometry` remains surface-local geometry. Keeping the two separate
+  /// removes the mode-dependent meaning of a bare Rect and lets the
+  /// compositor gate the conversion at the message boundary.
+  const factory MetaWindowPatchMessage.setWindowRect({
+    required String id,
+    @RectConverter() Rect? value,
+    @Default(true) bool isFloatingMode,
+  }) = SetWindowRect;
 
   const factory MetaWindowPatchMessage.updateNeedDecoration({
     required String id,

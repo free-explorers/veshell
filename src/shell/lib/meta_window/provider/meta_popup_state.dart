@@ -1,11 +1,20 @@
+import 'dart:async';
+import 'dart:ui';
+
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:hooks_riverpod/misc.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/meta_window/model/meta_popup.serializable.dart';
 import 'package:shell/meta_window/provider/meta_popup_for_id.dart';
+import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/platform/model/event/meta_popup_created/meta_popup_created.serializable.dart';
 import 'package:shell/platform/model/event/meta_popup_patches/meta_popup_patches.serializable.dart';
 import 'package:shell/platform/model/request/meta_popup_patches/meta_popup_patches.dart';
+import 'package:shell/platform/model/request/mouse_buttons_event/mouse_buttons_event.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
+import 'package:shell/pointer/model/pointer_focus.serializable.dart';
+import 'package:shell/pointer/provider/pointer_focus.manager.dart';
+import 'package:shell/shared/provider/mouse_button_tracker.dart';
 
 part 'meta_popup_state.g.dart';
 
@@ -26,6 +35,7 @@ class MetaPopupState extends _$MetaPopupState {
       id: id,
       parent: message.parent,
       position: message.position,
+      geometry: message.geometry,
       surfaceId: message.surfaceId,
       scaleRatio: message.scaleRatio,
     );
@@ -54,6 +64,72 @@ class MetaPopupState extends _$MetaPopupState {
   }
 
   void destroy() {
+    // Flutter is the focus master. If this popup is focused when its surface
+    // is removed, restore focus to the owner's current *rendered* origin.
+    // Never fall back to the native X11 root: in non-floating modes that root
+    // is a synthetic (0,0) value.
+    final popupSurfaceId = state.surfaceId;
+    final parentId = state.parent;
+    try {
+      final parent = ref.read(metaWindowStateProvider(parentId));
+      final focusManager = ref.read(pointerFocusManagerProvider.notifier);
+      // Derive the owner's render origin from the popup's current focus
+      // offset. The surface-origin registry can be stale for a parent that
+      // moved without rebuilding; the popup origin is the last position the
+      // user actually hovered.
+      final popupOrigin = focusManager.currentFocus?.surfaceId == popupSurfaceId
+          ? focusManager.currentFocus?.globalOffset
+          : ref.read(surfaceRenderOriginsProvider)[popupSurfaceId];
+      final derivedOrigin = popupOrigin == null
+          ? null
+          : popupOrigin -
+                state.position +
+                (state.geometry?.topLeft ?? Offset.zero) +
+                (parent.position ?? Offset.zero);
+      final origin =
+          derivedOrigin ??
+          ref.read(surfaceRenderOriginsProvider)[parent.surfaceId];
+      // The popup may have consumed the primary button-up when it closed.
+      // Flutter's button bitmap would then stay latched, making the next
+      // primary press look like a release and blocking hover. Flush any stuck
+      // buttons to the owner before restoring focus.
+      final releases = ref.read(mouseButtonTrackerProvider).trackButtonState(0);
+      focusManager.resetDrag();
+      if (origin != null) {
+        focusManager.restoreSurface(
+          popupSurfaceId,
+          PointerFocus(surfaceId: parent.surfaceId, globalOffset: origin),
+        );
+      } else {
+        focusManager.forgetSurface(popupSurfaceId);
+      }
+      if (releases.isNotEmpty) {
+        unawaited(
+          ref
+              .read(platformManagerProvider.notifier)
+              .request(
+                MouseButtonsEventRequest(
+                  message: MouseButtonsEventMessage(
+                    surfaceId: parent.surfaceId,
+                    buttons: [
+                      for (final event in releases)
+                        Button(
+                          button: event.button,
+                          isPressed: event.state == MouseButtonState.pressed,
+                        ),
+                    ].lockUnsafe,
+                  ),
+                ),
+              ),
+        );
+      }
+    } on Object {
+      // The owner may already be torn down; clearing the local focus is the
+      // only safe fallback.
+      ref
+          .read(pointerFocusManagerProvider.notifier)
+          .forgetSurface(popupSurfaceId);
+    }
     _keepAliveLink?.close();
     ref.read(metaPopupForIdProvider(state.parent).notifier).remove(id);
   }

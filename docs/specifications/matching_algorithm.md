@@ -353,7 +353,63 @@ offers **Extract to new tile**, and a floating dialog never does. A window can
 move between the two presentations when a hint arrives late — the presentation
 follows the `MetaWindow` live, while routing was decided when the window mapped.
 
-The selection is kept per tile (`SelectedDialogForWindow`); a dialog that just
+A tile in the **floating** display mode has no dialog area at all. It behaves
+like a regular floating compositor: the displayed window and each dialog
+attached to the tile — regular top-levels included — are independently
+decorated, positionable and resizable floating windows in one shared stack.
+The stack is ordered bottom-to-top: a window that opens goes above the others
+and pressing on a window raises it. Selecting the tile activates the topmost
+window.
+
+Floating mode is the escape hatch for applications that need free placement;
+X11 clients such as Zoom are the reference, and client-decorated Wayland
+toplevels use the same presentation. Tiled modes (`maximized`, `fullscreen`,
+`game`) keep their existing Wayland-focused architecture; floating behaviour is
+scoped to the tile and must not change those modes. Both backends share one
+`WindowPlacement` model: X11 receives a native configure at the placement
+origin, while a Wayland toplevel receives the same origin in the model and the
+shell renders it there. Initial placement, moves and resizes are compositor
+owned for both.
+
+A client that positions one of its own windows (an X11 application such as Zoom
+placing its panels) keeps that placement: the window's output position is
+translated into the tile's coordinate space and clamped at the tile edges. The
+tile's displayed window follows the same rule. A window the client has not
+explicitly placed is centred (the legacy launch configure leaves every X11
+window at the origin, which is not a client placement); an explicit `(0,0)` is
+a real position and stays at the tile origin. Positions are kept separate from
+the surface-local geometry, so a window position never shifts the surface or
+its subsurfaces inside the window.
+
+A size-only X11 configure request preserves the current output position; only
+an explicit `x`/`y` moves the window. The shell and the client do not both
+translate a drag: a shell-drawn title bar and a client `_NET_WM_MOVERESIZE` or
+`xdg_toplevel.move` request both start a compositor-owned move, and the shell
+renders the observed placement. This keeps the native X11 position, the
+Wayland model origin, the Flutter box, the pointer basis and the client's
+override-redirect panels in the same coordinate space.
+
+Resize handles are drawn just outside the window box and use the same
+compositor-owned gesture path: the handle only asks Rust to start the drag;
+Rust follows the pointer and publishes the new placement. Fixed-size,
+fullscreen and client-maximized windows expose no resize handles. A client
+`xdg_toplevel.resize` or X11 resize request enters the same path.
+
+The floating tile has a task bar along its bottom edge, listing its windows in
+creation order. The list stays stable while raising changes the paint stack, so
+the entry under the pointer does not move. Windows that ask for
+`_NET_WM_STATE_SKIP_TASKBAR` (and small fixed-size or client-child panels) are
+left out of it. Pressing an entry raises and activates that window. Windows with
+`_NET_WM_STATE_ABOVE` stay above the rest of the stack regardless of activation. A maximize request from the client's own decoration
+buttons (`xdg_toplevel.set_maximized`,
+X11 `_NET_WM_STATE_MAXIMIZED_*`) resizes that floating window to fill the window
+area; a restore request returns it to its own size. This is not the tile's
+display mode, so the dialogs stay floating. The trusted file chooser keeps its
+modal presentation above the stack and task bar, since it is a shell dialog with
+no native window of its own.
+
+Within the area, the selection is kept per tile
+(`SelectedDialogForWindow`); a dialog that just
 opened, or a chooser that just arrived, takes the selection, and a vanished
 selection falls back to the newest remaining entry. The tile's single focus
 node drives activation of the selected dialog

@@ -13,6 +13,7 @@ import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/pointer/model/pointer_focus.serializable.dart';
 import 'package:shell/pointer/provider/pointer_focus.manager.dart';
 import 'package:shell/shared/provider/mouse_button_tracker.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 
@@ -22,11 +23,24 @@ class ViewInputListener extends HookConsumerWidget {
   const ViewInputListener({
     required this.surfaceId,
     required this.child,
+    this.globalOffsetOverride,
     super.key,
   });
 
   final SurfaceId surfaceId;
   final Widget child;
+
+  /// Surface-buffer origin in compositor-global logical coordinates, when the
+  /// floating placement is authoritative.
+  ///
+  /// A floating X11 window can move itself (`configure_request`) or be moved by
+  /// the compositor. Deriving the pointer basis from the Flutter render box in
+  /// that case feeds the rendered position back into the client's own drag and
+  /// makes it accelerate. A floating Wayland client has no native move, but
+  /// its CSD shadow margin makes the box origin differ from the surface-buffer
+  /// origin, so the floating stack passes the latter here for both backends.
+  /// Tiled windows leave this `null` and keep the render-box basis.
+  final Offset? globalOffsetOverride;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -46,15 +60,52 @@ class ViewInputListener extends HookConsumerWidget {
         ref.watch(monitorByNameProvider(monitorName))?.location ?? Offset.zero;
 
     final globalKey = useMemoized(GlobalKey.new);
+    final isHovered = useRef(false);
+    final lastReportedOffset = useRef<Offset?>(null);
+    final lastFloatingOrigin = useRef<Offset?>(null);
 
     // Surface origin in global compositor space: its view-local render
     // position plus the monitor's compositor origin.
     Offset globalOffsetForSurface() {
+      final override = globalOffsetOverride;
+      if (override != null) {
+        return override;
+      }
       final renderBox =
           globalKey.currentContext?.findRenderObject() as RenderBox?;
       return (renderBox?.localToGlobal(Offset.zero) ?? Offset.zero) +
           monitorLocation;
     }
+
+    // A popup can move under a stationary cursor (X11 menus/toolbars). Hover
+    // events do not fire for that move, so push the new render origin after the
+    // layout that actually moved the widget. This keeps the client's hover
+    // coordinates in step with the pixels it is highlighting.
+    useEffect(() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) {
+          return;
+        }
+        final offset = globalOffsetForSurface();
+        // Keep the focus master's surface-origin registry current. Popup
+        // teardown uses it to restore the owner's render-space focus, not the
+        // synthetic X11 root position.
+        ref.read(surfaceRenderOriginsProvider.notifier).set(surfaceId, offset);
+        if (globalOffsetOverride != null &&
+            lastFloatingOrigin.value != offset) {
+          lastFloatingOrigin.value = offset;
+          geometryLog.info(
+            'drag_trace surface id=$surfaceId floatingOffset=$offset',
+          );
+        }
+        if (!isHovered.value || lastReportedOffset.value == offset) {
+          return;
+        }
+        lastReportedOffset.value = offset;
+        _pointerMoved(ref, offset);
+      });
+      return null;
+    });
 
     return DeferPointer(
       child: Stack(
@@ -66,7 +117,7 @@ class ViewInputListener extends HookConsumerWidget {
             rect: inputRegion,
             child: ArenaListener(
               onPointerDown: (PointerDownEvent event) {
-                _onPointerDown(ref, event);
+                _onPointerDown(ref, event, globalOffsetForSurface());
                 return null;
               },
               onPointerMove:
@@ -107,14 +158,18 @@ class ViewInputListener extends HookConsumerWidget {
                 },
                 child: MouseRegion(
                   onEnter: (_) {
+                    isHovered.value = true;
+                    final offset = globalOffsetForSurface();
+                    lastReportedOffset.value = offset;
                     pointerFocusManager.enterSurface(
-                      PointerFocus(
-                        surfaceId: surfaceId,
-                        globalOffset: globalOffsetForSurface(),
-                      ),
+                      PointerFocus(surfaceId: surfaceId, globalOffset: offset),
                     );
                   },
-                  onExit: (_) => pointerFocusManager.exitSurface(),
+                  onExit: (_) {
+                    isHovered.value = false;
+                    lastReportedOffset.value = null;
+                    pointerFocusManager.exitSurface(surfaceId);
+                  },
                 ),
               ),
             ),
@@ -124,8 +179,18 @@ class ViewInputListener extends HookConsumerWidget {
     );
   }
 
-  Future<void> _onPointerDown(WidgetRef ref, PointerEvent event) async {
+  Future<void> _onPointerDown(
+    WidgetRef ref,
+    PointerEvent event,
+    Offset globalOffset,
+  ) async {
     if (event.kind == PointerDeviceKind.mouse) {
+      // A popup can move under a stationary cursor (X11 menus and toolbars
+      // reposition themselves). Refresh the render origin before the click so
+      // the button press uses the current visible surface, not the hover
+      // offset from before the move.
+      _pointerMoved(ref, globalOffset);
+      await ref.read(pointerFocusManagerProvider.notifier).flushFocus();
       await _sendMouseButtonsToPlatform(ref, event.buttons);
       ref.read(pointerFocusManagerProvider.notifier).startPotentialDrag();
     } else if (event.kind == PointerDeviceKind.touch) {
@@ -150,8 +215,8 @@ class ViewInputListener extends HookConsumerWidget {
     if (event.kind == PointerDeviceKind.mouse) {
       // If a button is being pressed while another one is already down,
       // it's considered a move event, not a down event.
-      await _sendMouseButtonsToPlatform(ref, event.buttons);
       _pointerMoved(ref, globalOffset);
+      await _sendMouseButtonsToPlatform(ref, event.buttons);
     } else if (event.kind == PointerDeviceKind.touch) {
       await ref
           .read(platformManagerProvider.notifier)

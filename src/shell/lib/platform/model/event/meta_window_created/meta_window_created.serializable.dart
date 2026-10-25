@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
+import 'package:shell/shared/util/json_converter/offset.dart';
 import 'package:shell/shared/util/json_converter/rect.dart';
 
 part 'meta_window_created.serializable.freezed.dart';
@@ -31,6 +32,12 @@ sealed class MetaWindowCreatedMessage
     @Default(false) bool isFixedSized,
     @Default(false) bool isModal,
     @Default(false) bool isFullscreen,
+    @Default(false) bool clientMaximized,
+    @Default(false) bool skipTaskbar,
+    @Default(false) bool keepOnTop,
+    @OffsetIntConverter() Offset? position,
+    @Default(false) bool positionExplicit,
+    @RectConverter() Rect? viewport,
     @RectConverter() Rect? geometry,
   }) = _MetaWindowCreatedMessage;
 

@@ -31,6 +31,37 @@ void main() {
         );
   });
 
+  test('a stale exit does not clear the new surface focus', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final manager = container.read(pointerFocusManagerProvider.notifier);
+
+    manager.enterSurface(_focus(1));
+    manager.enterSurface(_focus(2));
+    // The old surface's MouseRegion can report its exit after the new surface
+    // entered (the MetaWindow -> popup transition). It must not clear focus 2.
+    manager.exitSurface(1);
+    expect(container.read(pointerFocusManagerProvider)?.surfaceId, 2);
+
+    manager.exitSurface(2);
+    await Future<void>.delayed(Duration.zero);
+    expect(container.read(pointerFocusManagerProvider), isNull);
+  });
+
+  test('removing the focused popup restores its owner', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final manager = container.read(pointerFocusManagerProvider.notifier);
+
+    manager.enterSurface(_focus(1));
+    manager.restoreSurface(1, _focus(2));
+    expect(container.read(pointerFocusManagerProvider)?.surfaceId, 2);
+
+    // A removal for a surface that is no longer focused is a no-op.
+    manager.restoreSurface(3, _focus(1));
+    expect(container.read(pointerFocusManagerProvider)?.surfaceId, 2);
+  });
+
   test('a held button keeps the surface under the cursor focused', () {
     final container = ProviderContainer();
     addTearDown(container.dispose);

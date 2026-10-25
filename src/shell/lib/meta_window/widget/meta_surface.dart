@@ -20,11 +20,29 @@ class MetaSurfaceWidget extends HookConsumerWidget {
     required this.metaWindowId,
     required this.decorated,
     this.focusNode,
+    this.showPopups = true,
+    this.onTitleBarMoveStart,
     super.key,
   });
   final MetaWindowId metaWindowId;
   final FocusNode? focusNode;
   final bool decorated;
+
+  /// Invoked when the shell-drawn title bar receives a primary-button press.
+  ///
+  /// The floating tile provides a callback that asks the compositor to start a
+  /// native move; the dialog area leaves it `null` and keeps the historical
+  /// local drag.
+  final VoidCallback? onTitleBarMoveStart;
+
+  /// Whether popups (menus, X11 override-redirect toolbars) are drawn as
+  /// children of this surface.
+  ///
+  /// A floating stack draws them in a tile-level overlay instead: a popup can
+  /// extend far outside its parent window's box, and Flutter cannot hit-test a
+  /// child outside its parent's bounds. Keeping them here would make e.g. the
+  /// Zoom meeting toolbar visible but unclickable.
+  final bool showPopups;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final metaWindow = ref.watch(metaWindowStateProvider(metaWindowId));
@@ -117,14 +135,24 @@ class MetaSurfaceWidget extends HookConsumerWidget {
                   child: MetaSurfaceDecoration(
                     metaWindowId: metaWindowId,
                     enabled: decorated,
+                    onTitleBarMoveStart: onTitleBarMoveStart,
                     child: SurfaceWidget(
                       surfaceId: surfaceId,
                       scaleRatio: metaWindow.scaleRatio,
+                      // A floating window's surface origin is the
+                      // authoritative pointer basis. X11 clients can move
+                      // themselves (Zoom's panels) and the compositor can move
+                      // them; deriving the basis from the lagging render box
+                      // feeds that lag back into the client's drag. Wayland
+                      // clients subtract their CSD geometry margin so the
+                      // basis is the surface buffer, not the window box.
+                      globalOffsetOverride: metaWindow.floatingSurfaceOrigin,
                     ),
                   ),
                 ),
-                for (final popupId in popups)
-                  MetaPopupWidget(metaPopupId: popupId),
+                if (showPopups)
+                  for (final popupId in popups)
+                    MetaPopupWidget(metaPopupId: popupId),
               ],
             ),
           ),

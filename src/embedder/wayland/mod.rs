@@ -20,7 +20,7 @@ pub mod wayland {
         desktop::{find_popup_root_surface, PopupKind},
         input::pointer::{CursorImageStatus, CursorImageSurfaceData},
         reexports::wayland_server::{protocol::wl_surface::WlSurface, Client},
-        utils::{Buffer as BufferCoords, Size},
+        utils::{Buffer as BufferCoords, Rectangle, Size},
         wayland::{
             compositor::{
                 get_parent, with_states, with_surface_tree_upward, CompositorClientState,
@@ -436,6 +436,40 @@ pub mod wayland {
             }
 
             let surface_message = self.construct_surface_message(surface);
+
+            // XWayland has no `xdg_surface.configure` equivalent for geometry:
+            // the committed buffer is the authoritative size of the window
+            // until the matching ConfigureNotify arrives. An X11 client can
+            // commit the full-size buffer before the configure catches up, so
+            // keep the shell's geometry in lockstep with the buffer instead of
+            // waiting for (or synthesizing) that event.
+            let committed_x11_geometry = self
+                .x11_surface_per_wl_surface
+                .get(surface)
+                .and_then(|_| self.get_meta_window(surface_id))
+                .and_then(|meta_window| {
+                    let buffer_size = surface_message.buffer_size.as_ref()?;
+                    let scale = meta_window.scale_ratio.max(1.0);
+                    let width = (f64::from(buffer_size.0.w) / scale).round() as i32;
+                    let height = (f64::from(buffer_size.0.h) / scale).round() as i32;
+                    let geometry = meta_window.geometry.as_ref()?.0;
+                    (width > geometry.size.w || height > geometry.size.h).then(|| {
+                        (
+                            meta_window.id.clone(),
+                            Rectangle::from_size(Size::from((width, height))),
+                        )
+                    })
+                });
+            if let Some((id, geometry)) = committed_x11_geometry {
+                self.patch_meta_window(
+                    MetaWindowPatch::UpdateGeometry {
+                        id,
+                        value: Some(geometry.into()),
+                    },
+                    true,
+                );
+            }
+
             tracing::info!(
                 target: "veshell::geometry",
                 surface_id = surface_message.surface_id,

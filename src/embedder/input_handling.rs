@@ -7,6 +7,7 @@ use smithay::backend::input::{
 use smithay::input::pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent};
 use smithay::reexports::wayland_server::protocol::wl_pointer;
 use smithay::utils::{Logical, Point, Rectangle, SERIAL_COUNTER};
+use smithay::wayland::seat::WaylandFocus;
 use tracing::{debug, info};
 
 use crate::backend::Backend;
@@ -132,6 +133,50 @@ impl<BackendData: Backend> State<BackendData> {
         // clamp to screen limits
         pointer_location = self.clamp_coords(pointer_location);
 
+        // A floating move owns the pointer like a compositor grab: move the
+        // native window and do not forward motion to the client. Forwarding it
+        // while the window moves under the pointer is the feedback loop that
+        // made X11 panels drift.
+        if self.floating_move.is_some() {
+            pointer_location = self.clamp_coords(pointer_location + event.delta());
+            let focus: Option<(PointerFocusTarget, Point<f64, Logical>)> = None;
+            pointer.motion(
+                self,
+                focus,
+                &MotionEvent {
+                    location: pointer_location,
+                    serial: SERIAL_COUNTER.next_serial(),
+                    time: event.time_msec(),
+                },
+            );
+            self.update_floating_move(pointer_location);
+            self.register_frame();
+            crate::capture::on_pointer_motion_for_recording(self);
+            crate::portal::service::on_pointer_motion(self);
+            return;
+        }
+
+        // A floating resize owns the pointer like a compositor grab. The
+        // client must not receive motion while its own edge is being resized.
+        if self.floating_resize.is_some() {
+            pointer_location = self.clamp_coords(pointer_location + event.delta());
+            let focus: Option<(PointerFocusTarget, Point<f64, Logical>)> = None;
+            pointer.motion(
+                self,
+                focus,
+                &MotionEvent {
+                    location: pointer_location,
+                    serial: SERIAL_COUNTER.next_serial(),
+                    time: event.time_msec(),
+                },
+            );
+            self.update_floating_resize(pointer_location);
+            self.register_frame();
+            crate::capture::on_pointer_motion_for_recording(self);
+            crate::portal::service::on_pointer_motion(self);
+            return;
+        }
+
         pointer.relative_motion(
             self,
             self.pointer_focus.clone(),
@@ -221,6 +266,45 @@ impl<BackendData: Backend> State<BackendData> {
         // from its surface.
         if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
             self.pointer_focus = self.gaming_pointer_focus();
+        }
+
+        // See `on_pointer_motion`: an active floating move consumes the motion.
+        if self.floating_move.is_some() {
+            let pointer = self.pointer.clone();
+            let focus: Option<(PointerFocusTarget, Point<f64, Logical>)> = None;
+            pointer.motion(
+                self,
+                focus,
+                &MotionEvent {
+                    location: pointer_location,
+                    serial,
+                    time: event.time_msec(),
+                },
+            );
+            self.update_floating_move(pointer_location);
+            self.register_frame();
+            crate::capture::on_pointer_motion_for_recording(self);
+            crate::portal::service::on_pointer_motion(self);
+            return;
+        }
+
+        if self.floating_resize.is_some() {
+            let pointer = self.pointer.clone();
+            let focus: Option<(PointerFocusTarget, Point<f64, Logical>)> = None;
+            pointer.motion(
+                self,
+                focus,
+                &MotionEvent {
+                    location: pointer_location,
+                    serial,
+                    time: event.time_msec(),
+                },
+            );
+            self.update_floating_resize(pointer_location);
+            self.register_frame();
+            crate::capture::on_pointer_motion_for_recording(self);
+            crate::portal::service::on_pointer_motion(self);
+            return;
         }
 
         let pointer = self.pointer.clone();
@@ -339,6 +423,8 @@ impl<BackendData: Backend> State<BackendData> {
                 .are_any_buttons_pressed()
         {
             self.pointer_gesture_view_id = None;
+            self.end_floating_move();
+            self.end_floating_resize();
         }
         // The button tracker is updated above even when there is no view, so a
         // button released between outputs cannot get stuck. Only the Flutter
@@ -641,6 +727,34 @@ impl<BackendData: Backend> State<BackendData> {
             .map(|geometry| geometry.loc.to_f64())
             .unwrap_or_else(|| (0.0, 0.0).into());
         Some((PointerFocusTarget::from(surface), origin))
+    }
+
+    /// Shifts the stored pointer origin for a surface.
+    ///
+    /// Used when an override-redirect popup moves itself: its Flutter render
+    /// origin moves by the same delta as the native popup, and the client uses
+    /// pointer-relative coordinates to decide its next position. A stale origin
+    /// there feeds the movement back into the popup and makes it accelerate.
+    pub(crate) fn translate_pointer_focus_offset_for_surface(
+        &mut self,
+        surface_id: u64,
+        dx: f64,
+        dy: f64,
+    ) {
+        if dx == 0.0 && dy == 0.0 {
+            return;
+        }
+        let Some(surface) = self.surfaces.get(&surface_id) else {
+            return;
+        };
+        let Some((target, offset)) = self.pointer_focus.as_ref() else {
+            return;
+        };
+        if target.wl_surface().as_deref() != Some(surface) {
+            return;
+        }
+        let target = target.clone();
+        self.pointer_focus = Some((target, Point::from((offset.x + dx, offset.y + dy))));
     }
 
     /// Re-drives the Smithay pointer with the current `pointer_focus`.

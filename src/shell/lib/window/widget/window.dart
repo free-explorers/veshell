@@ -246,7 +246,13 @@ class WindowWidget extends HookConsumerWidget {
       ),
       DisplayMode.game => MetaSurfaceGamingOverlay(metaWindowId: metaWindowId),
       DisplayMode.floating => ContainerWithPositionnableChildren(
-        children: [FloatableWindow(metaWindowId: metaWindowId)],
+        children: [
+          FloatableWindow(
+            metaWindowId: metaWindowId,
+            allowResize: true,
+            frame: true,
+          ),
+        ],
       ),
     };
   }

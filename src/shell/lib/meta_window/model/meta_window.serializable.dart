@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:shell/shared/util/json_converter/offset.dart';
 import 'package:shell/shared/util/json_converter/rect.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 
@@ -21,6 +22,15 @@ abstract class MetaWindow with _$MetaWindow {
     required bool needDecoration,
     required bool gameModeActivated,
     required double scaleRatio,
+
+    /// The window's position on the output, for clients that place themselves
+    /// (X11). Separate from [geometry], which stays surface-local.
+    @OffsetIntConverter() Offset? position,
+
+    /// Whether [position] came from an explicit client placement (an X11
+    /// configure request with x/y), rather than the legacy launch origin.
+    /// An unplaced floating window is centred; an explicit `(0,0)` is kept.
+    @Default(false) bool positionExplicit,
     String? appId,
     String? parent,
     String? activatedBy,
@@ -36,6 +46,25 @@ abstract class MetaWindow with _$MetaWindow {
     /// surface for routing, not as a dialog.
     @Default(false) bool isFullscreen,
 
+    /// Whether the client asked for this window to be maximized through its own
+    /// decoration buttons. The floating tile turns that into filling the
+    /// floating window; it is not the tile's `displayMode`.
+    @Default(false) bool clientMaximized,
+
+    /// The global logical viewport of the floating tile, used to clamp native
+    /// moves and to translate between the compositor's global space and the
+    /// tile-local Flutter space. `null` outside a floating tile.
+    ///
+    /// Floating ownership is derived from [displayMode]; this is only the
+    /// measured viewport, not a second placement flag.
+    @RectConverter() Rect? viewport,
+
+    /// Whether the client asked not to be listed in task bars.
+    @Default(false) bool skipTaskbar,
+
+    /// Whether the client asked to stay above other windows.
+    @Default(false) bool keepOnTop,
+
     /// Whether a live screen cast is recording this window. Resolved by the
     /// compositor (consumer pid, then app id) and rendered on the tile and its
     /// workspace; the shell never re-derives the mapping.
@@ -46,4 +75,71 @@ abstract class MetaWindow with _$MetaWindow {
 
   factory MetaWindow.fromJson(Map<String, dynamic> json) =>
       _$MetaWindowFromJson(json);
+}
+
+/// The compositor-global placement of a window box.
+///
+/// This is the backend-neutral placement shared by Wayland and XWayland:
+/// [origin] is the window-box top-left, [clientSize] is the configured client
+/// surface size, and [geometryOffset] is the visible-content offset inside the
+/// client buffer (nonzero for Wayland CSD shadow margins).
+class WindowPlacement {
+  const WindowPlacement({
+    required this.origin,
+    required this.clientSize,
+    this.geometryOffset = Offset.zero,
+  });
+
+  final Offset origin;
+  final Size clientSize;
+  final Offset geometryOffset;
+
+  /// The origin pointer coordinates are relative to.
+  Offset get surfaceOrigin => origin - geometryOffset;
+
+  /// The client-surface rect in compositor-global coordinates.
+  Rect get clientRect => origin & clientSize;
+}
+
+extension MetaWindowPlacement on MetaWindow {
+  /// The placement represented by [position] and [geometry].
+  WindowPlacement? get windowPlacement {
+    final position = this.position;
+    final geometry = this.geometry;
+    if (position == null || geometry == null) {
+      return null;
+    }
+    return WindowPlacement(
+      origin: position,
+      clientSize: geometry.size,
+      geometryOffset: geometry.topLeft,
+    );
+  }
+}
+
+extension MetaWindowSurfaceOrigin on MetaWindow {
+  /// The compositor-global origin of the client surface buffer, when this
+  /// window is in floating mode.
+  ///
+  /// [position] addresses the window box. A Wayland client with client-side
+  /// decorations reports a non-zero [geometry] top-left: that is the visible
+  /// content offset inside the surface buffer (the CSD shadow margin). The
+  /// buffer itself starts at `position - geometry.topLeft`, which is the origin
+  /// pointer coordinates are relative to. X11 reports a zero geometry offset,
+  /// so its root position is returned unchanged. Outside floating mode the
+  /// shell's render-box basis is authoritative and this returns `null`.
+  Offset? get floatingSurfaceOrigin {
+    if (displayMode != MetaWindowDisplayMode.floating) {
+      return null;
+    }
+    final placement = windowPlacement;
+    if (placement != null) {
+      return placement.surfaceOrigin;
+    }
+    final position = this.position;
+    if (position == null) {
+      return null;
+    }
+    return position - (geometry?.topLeft ?? Offset.zero);
+  }
 }

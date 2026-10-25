@@ -18,6 +18,13 @@ abstract class MetaPopup with _$MetaPopup {
     required MetaWindowId parent,
     required SurfaceId surfaceId,
     required double scaleRatio,
+
+    /// Position of the popup surface relative to the parent window box's
+    /// top-left corner.
+    ///
+    /// X11 override-redirect popups are reported at the root and Wayland xdg
+    /// popups relative to the toplevel; the compositor normalizes both to this
+    /// space. A host tile or floating overlay adds its own parent origin.
     @OffsetConverter() required Offset position,
     @RectConverter() Rect? geometry,
   }) = _MetaPopup;
