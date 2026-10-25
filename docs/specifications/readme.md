@@ -25,6 +25,7 @@ answer. Each service specification records its exact split.
         - [EphemeralWindow](/specifications/ephemeral_window.md)
         - [FileExplorer](/specifications/file_explorer.md)
 - [WindowManager](/specifications/window_manager.md)
+  - [Floating window](/specifications/floating_window.md)
   - [Gaming mode](/specifications/gaming_mode.md)
 - [Keyboard](/specifications/keyboard.md)
 - [Navigation and actions](/specifications/navigation.md)
