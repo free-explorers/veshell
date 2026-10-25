@@ -53,8 +53,12 @@ window.
 
 For a Wayland CSD window, pointer coordinates are based on the surface-buffer
 origin: `box_origin - geometry_offset`. X11 has a zero geometry offset, so its
-root position is the surface origin. Popups are stored relative to their
-parent window box and are re-constrained when the parent size changes.
+root position is the surface origin. Flutter publishes each window's rendered
+client-surface origin; a popup's surface origin is derived as
+`parent_render_origin + popup.position - popup.geometry_offset`. This also works
+for tiled windows, whose native X11 position can be synthetic. Popups are stored
+relative to their parent window box and are re-constrained when the parent size
+changes.
 
 ## Interaction
 

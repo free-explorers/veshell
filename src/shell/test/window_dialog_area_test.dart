@@ -15,6 +15,7 @@ import 'package:shell/meta_window/model/meta_popup.serializable.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_popup_for_id.dart';
 import 'package:shell/meta_window/provider/meta_popup_state.dart';
+import 'package:shell/meta_window/provider/meta_window_id_per_surface_id.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/widget/meta_popup.dart';
 import 'package:shell/meta_window/widget/meta_surface.dart';
@@ -194,6 +195,14 @@ class _FixedPopupState extends MetaPopupState {
 
   @override
   MetaPopup build(String id) => _popup;
+}
+
+class _FixedMetaWindowIdPerSurfaceId extends MetaWindowIdPerSurfaceId {
+  _FixedMetaWindowIdPerSurfaceId(this._id);
+  final MetaWindowId? _id;
+
+  @override
+  MetaWindowId? build(SurfaceId surfaceId) => _id;
 }
 
 /// Accepts activation requests without a platform channel.
@@ -1249,6 +1258,56 @@ void main() {
     // authority and would race the model patch.
     final rectPatches = mainState.patches.whereType<SetWindowRect>().toList();
     expect(rectPatches, isEmpty);
+  });
+
+  testWidgets('a floating surface publishes its render origin', (tester) async {
+    final mainState = _RecordingMetaWindowState(_mainMetaWindow());
+    final container = ProviderContainer(
+      overrides: [
+        platformManagerProvider.overrideWith(_FakePlatformManager.new),
+        hotkeysSettingProvider.overrideWithValue(const {}),
+        dialogSetForWindowProvider(
+          _parent,
+        ).overrideWith(() => _FixedDialogSet(const [])),
+        metaWindowStateProvider('meta-main').overrideWith(() => mainState),
+        metaWindowIdPerSurfaceIdProvider(
+          9,
+        ).overrideWith(() => _FixedMetaWindowIdPerSurfaceId('meta-main')),
+        wlSurfaceStateProvider(
+          9,
+        ).overrideWith(() => _FixedSurfaceState(const Size(400, 300))),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: CurrentMonitorName(
+              name: 'M1',
+              child: SizedBox(
+                width: 1000,
+                height: 800,
+                child: FloatingWindowArea(
+                  parentWindowId: _parent,
+                  mainMetaWindowId: 'meta-main',
+                  background: const SizedBox.expand(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final origins = mainState.patches.whereType<UpdateRenderOrigin>().toList();
+    expect(origins, isNotEmpty);
+    expect(origins.last.value, isNotNull);
   });
 
   testWidgets('a popup in a tile overlay uses its parent box origin', (

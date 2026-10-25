@@ -108,6 +108,12 @@ sealed class MetaWindowPatchMessage
     required bool value,
   }) = UpdatePositionExplicit;
 
+  /// The compositor-global client-surface origin as rendered by Flutter.
+  const factory MetaWindowPatchMessage.updateRenderOrigin({
+    required String id,
+    @OffsetIntConverter() Offset? value,
+  }) = UpdateRenderOrigin;
+
   const factory MetaWindowPatchMessage.updateGeometry({
     required String id,
     @RectConverter() Rect? value,

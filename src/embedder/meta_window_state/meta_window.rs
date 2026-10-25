@@ -133,6 +133,13 @@ pub enum MetaWindowPatch {
         id: String,
         value: bool,
     },
+    /// The compositor-global origin of the client surface as rendered by
+    /// Flutter. Unlike `position`, this is valid for tiled windows whose
+    /// native X11 position is synthetic.
+    UpdateRenderOrigin {
+        id: String,
+        value: Option<MyPoint<i32, Logical>>,
+    },
     /// Surface-local geometry. Never a native/global window position.
     UpdateGeometry {
         id: String,
@@ -225,6 +232,10 @@ pub struct MetaWindow {
     /// configure request with x/y), rather than the legacy launch origin.
     /// This is placement provenance, not a coordinate-space flag.
     pub position_explicit: bool,
+    /// The compositor-global client-surface origin as rendered by Flutter.
+    /// This is the surface-buffer origin, not the decorated window box; it is
+    /// the basis popups and pointer focus use for both backends.
+    pub render_origin: Option<MyPoint<i32, Logical>>,
     /// The global logical client-surface viewport of the floating tile, used
     /// by the coordinate gateway to clamp native moves. `None` outside a
     /// floating tile or before the area is measured.
@@ -763,6 +774,21 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         return;
                     }
                     meta_window.position_explicit = value;
+                }
+            }
+            MetaWindowPatch::UpdateRenderOrigin { id, value } => {
+                if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
+                    let equal = match (&meta_window.render_origin, &value) {
+                        (Some(current), Some(next)) => {
+                            current.0.x == next.0.x && current.0.y == next.0.y
+                        }
+                        (None, None) => true,
+                        _ => false,
+                    };
+                    if equal {
+                        return;
+                    }
+                    meta_window.render_origin = value;
                 }
             }
             MetaWindowPatch::UpdateGeometry { id, value } => {

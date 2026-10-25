@@ -82,6 +82,29 @@ impl MetaWindowState {
             .unwrap_or_else(|| Point::from((0, 0)))
     }
 
+    /// The compositor-global origin of a popup's client surface.
+    ///
+    /// Popup positions are stored relative to the parent window box. The parent
+    /// render origin comes from Flutter, so the same formula works for floating
+    /// windows and for tiled windows whose native X11 position is synthetic.
+    pub fn popup_surface_origin(&self, popup: &MetaPopup) -> Point<f64, Logical> {
+        let parent_origin = self
+            .meta_windows
+            .get(&popup.parent)
+            .and_then(|window| window.render_origin.as_ref())
+            .map(|origin| origin.0)
+            .unwrap_or_else(|| self.meta_window_box_origin(&popup.parent));
+        let geometry = popup
+            .geometry
+            .as_ref()
+            .map(|geometry| geometry.0.loc)
+            .unwrap_or_else(|| Point::from((0, 0)));
+        Point::from((
+            f64::from(parent_origin.x + popup.position.0.x - geometry.x),
+            f64::from(parent_origin.y + popup.position.0.y - geometry.y),
+        ))
+    }
+
     /// Records `id` as the most recently focused MetaWindow.
     ///
     /// Called from `activate_window`: the shell is the compositor's focus
@@ -411,6 +434,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             keep_on_top: false,
             position: None,
             position_explicit: false,
+            render_origin: None,
             viewport: None,
             viewport_origin: None,
             geometry,
@@ -499,6 +523,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             keep_on_top: x11_surface.is_above(),
             position,
             position_explicit: false,
+            render_origin: None,
             viewport: None,
             viewport_origin: None,
             current_output: None,
@@ -656,6 +681,7 @@ mod tests {
             keep_on_top: false,
             position: None,
             position_explicit: false,
+            render_origin: None,
             viewport: None,
             viewport_origin: None,
             geometry: None,
@@ -676,6 +702,26 @@ mod tests {
             state.record_meta_window_focus(id);
         }
         state
+    }
+
+    #[test]
+    fn popup_origin_uses_the_parent_render_origin() {
+        let mut parent = window("parent", 1, Some("org.example.Parent"));
+        parent.render_origin = Some(Point::from((700, 120)).into());
+        let state = state_with(vec![parent], &[]);
+        let popup = MetaPopup {
+            id: "popup".to_string(),
+            parent: "parent".to_string(),
+            position: Point::from((30, 40)).into(),
+            geometry: Some(Rectangle::new((10, 10).into(), (100, 100).into()).into()),
+            surface_id: 0,
+            scale_ratio: 1.0,
+        };
+
+        assert_eq!(
+            state.popup_surface_origin(&popup),
+            Point::from((720.0, 150.0))
+        );
     }
 
     #[test]

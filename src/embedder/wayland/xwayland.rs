@@ -619,31 +619,16 @@ pub mod xwayland {
                         .mouse_button_tracker
                         .are_any_buttons_pressed()
                     {
-                        if let (Some(offset), Some(popup), Some(surface)) = (
-                            self.popup_render_offsets.get(&surface_id).copied(),
+                        if let (Some(popup), Some(surface)) = (
                             self.meta_window_state.meta_popups.get(&meta_popup_id),
                             self.surfaces.get(&surface_id).cloned(),
                         ) {
-                            let geometry_loc = popup
-                                .geometry
-                                .as_ref()
-                                .map(|geometry| {
-                                    (f64::from(geometry.0.loc.x), f64::from(geometry.0.loc.y))
-                                })
-                                .unwrap_or((0.0, 0.0));
-                            let parent_box =
-                                self.meta_window_state.meta_window_box_origin(&popup.parent);
-                            let native = smithay::utils::Point::from((
-                                f64::from(parent_box.x + popup.position.0.x) - geometry_loc.0,
-                                f64::from(parent_box.y + popup.position.0.y) - geometry_loc.1,
+                            self.pointer_focus = Some((
+                                PointerFocusTarget::from(&surface),
+                                self.meta_window_state.popup_surface_origin(popup),
                             ));
-                            self.pointer_focus =
-                                Some((PointerFocusTarget::from(&surface), native + offset));
                         }
                     }
-                    // The Flutter popup widget publishes its new render-box
-                    // origin after layout; do not translate the stored offset
-                    // here, which could get ahead of the pixels being hovered.
                 }
             }
             if let Some(meta_window) = self.get_meta_window(surface_id) {

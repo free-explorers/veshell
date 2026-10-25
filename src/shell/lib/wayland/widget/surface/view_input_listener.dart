@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:arena_listener/arena_listener.dart';
 import 'package:defer_pointer/defer_pointer.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
@@ -5,8 +7,11 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/meta_window/provider/meta_window_id_per_surface_id.dart';
+import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/monitor/provider/monitor_by_name.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
+import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/platform/model/request/mouse_buttons_event/mouse_buttons_event.serializable.dart';
 import 'package:shell/platform/model/request/touch/touch.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
@@ -89,6 +94,32 @@ class ViewInputListener extends HookConsumerWidget {
         // teardown uses it to restore the owner's render-space focus, not the
         // synthetic X11 root position.
         ref.read(surfaceRenderOriginsProvider.notifier).set(surfaceId, offset);
+        // Rust derives popup origins from the parent render origin. Rendered
+        // positions are authoritative for tiled windows whose native X11
+        // position is synthetic.
+        final metaWindowId = ref.read(
+          metaWindowIdPerSurfaceIdProvider(surfaceId),
+        );
+        if (metaWindowId != null) {
+          try {
+            final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+            if (metaWindow.renderOrigin != offset) {
+              unawaited(
+                ref
+                    .read(metaWindowStateProvider(metaWindowId).notifier)
+                    .patch(
+                      MetaWindowPatchMessage.updateRenderOrigin(
+                        id: metaWindowId,
+                        value: offset,
+                      ),
+                    ),
+              );
+            }
+          } on Object {
+            // The MetaWindow can be torn down between the mapping lookup and
+            // this post-frame callback.
+          }
+        }
         if (!isHovered.value || lastReportedOffset.value == offset) {
           return;
         }

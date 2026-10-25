@@ -31,6 +31,12 @@ abstract class MetaWindow with _$MetaWindow {
     /// configure request with x/y), rather than the legacy launch origin.
     /// An unplaced floating window is centred; an explicit `(0,0)` is kept.
     @Default(false) bool positionExplicit,
+
+    /// Compositor-global client-surface origin as rendered by Flutter.
+    ///
+    /// Unlike [position], this is valid for tiled windows whose native X11
+    /// position is synthetic. Popups use it as their parent coordinate base.
+    @OffsetIntConverter() Offset? renderOrigin,
     String? appId,
     String? parent,
     String? activatedBy,

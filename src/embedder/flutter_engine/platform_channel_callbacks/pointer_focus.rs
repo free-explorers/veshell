@@ -86,47 +86,16 @@ pub fn pointer_focus<BackendData: Backend + 'static>(
                 }
             }
             // A popup can move itself under the cursor (override-redirect
-            // menus/toolbars). Flutter's render origin lags the configure
-            // event, so derive the basis from the native position plus the
-            // render offset seen while the popup was stationary. Otherwise the
-            // client's local pointer feeds its own movement back into it.
+            // menus/toolbars). Derive its surface origin from the parent render
+            // origin published by Flutter, so a native move is reflected before
+            // Flutter has laid out the new popup position.
             if let Some(popup_id) = data
                 .meta_window_state
                 .meta_popup_id_per_surface_id
                 .get(&pointer_focus.surface_id)
             {
                 if let Some(popup) = data.meta_window_state.meta_popups.get(popup_id) {
-                    let geometry = popup
-                        .geometry
-                        .as_ref()
-                        .map(|geometry| (f64::from(geometry.0.loc.x), f64::from(geometry.0.loc.y)))
-                        .unwrap_or((0.0, 0.0));
-                    let parent_box = data.meta_window_state.meta_window_box_origin(&popup.parent);
-                    let native = smithay::utils::Point::from((
-                        f64::from(parent_box.x + popup.position.0.x) - geometry.0,
-                        f64::from(parent_box.y + popup.position.0.y) - geometry.1,
-                    ));
-                    let flutter = smithay::utils::Point::from((flutter_offset.0, flutter_offset.1));
-                    let previous_native = data
-                        .popup_last_native
-                        .get(&pointer_focus.surface_id)
-                        .copied();
-                    let mut offset = data
-                        .popup_render_offsets
-                        .get(&pointer_focus.surface_id)
-                        .copied()
-                        .unwrap_or(flutter - native);
-                    if previous_native == Some(popup.position.0) {
-                        // The popup did not move since the previous focus
-                        // request: Flutter's origin is current, so refresh the
-                        // tile/parent offset.
-                        offset = flutter - native;
-                    }
-                    data.popup_render_offsets
-                        .insert(pointer_focus.surface_id, offset);
-                    data.popup_last_native
-                        .insert(pointer_focus.surface_id, popup.position.0);
-                    global_offset = native + offset;
+                    global_offset = data.meta_window_state.popup_surface_origin(popup);
                 }
             }
             let next_focus = (PointerFocusTarget::from(&surface), global_offset);

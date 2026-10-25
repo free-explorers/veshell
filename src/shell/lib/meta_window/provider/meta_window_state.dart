@@ -146,6 +146,8 @@ class MetaWindowState extends _$MetaWindowState {
         state = state.copyWith(position: patch.value);
       case UpdatePositionExplicit():
         state = state.copyWith(positionExplicit: patch.value);
+      case UpdateRenderOrigin():
+        state = state.copyWith(renderOrigin: patch.value);
       case UpdateGeometry():
         state = state.copyWith(geometry: patch.value);
       case SetWindowRect():
