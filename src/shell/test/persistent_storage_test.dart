@@ -50,6 +50,8 @@ void main() {
     expect(jsonDecode(stored!.data), {
       'windowId': 'abc',
       'properties': {'appId': 'firefox', 'title': 'Mozilla'},
+      'resumeContext': null,
+      'resumeTimedOut': false,
     });
 
     // The legacy content is rewritten with the envelope, and the file is
@@ -62,6 +64,8 @@ void main() {
     expect(rewritten['data'], {
       'windowId': 'abc',
       'properties': {'appId': 'firefox', 'title': 'Mozilla'},
+      'resumeContext': null,
+      'resumeTimedOut': false,
     });
     expect(modeOf(file.path), 0x180); // 0600
   });

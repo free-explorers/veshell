@@ -566,6 +566,18 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     }
                     meta_window.title = value.clone();
                 }
+                // Terminals often change their title when the shell changes
+                // directory or foreground job. Refresh the `/proc` facts before
+                // forwarding the patch so the shell can capture the new
+                // resume context with the new title.
+                if let Some(pid) = self
+                    .meta_window_state
+                    .meta_windows
+                    .get(&id)
+                    .map(|meta_window| meta_window.pid)
+                {
+                    self.emit_process_info(pid);
+                }
             }
             MetaWindowPatch::UpdateMapped { id, value } => {
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {

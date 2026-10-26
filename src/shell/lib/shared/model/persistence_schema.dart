@@ -26,9 +26,9 @@ extension PersistenceStoreSchema on PersistenceStore {
   /// Bump this and add the matching `version -> version + 1` migration in
   /// [_persistenceMigrations] whenever a persisted model changes shape.
   int get currentVersion => switch (this) {
-    // Version 1 is the first versioned on-disk layout (the envelope). The
-    // per-tile resume context (#187) will bump this to 2.
-    PersistenceStore.persistentWindow => 1,
+    // Version 1 is the first versioned on-disk layout (the envelope).
+    // Version 2 adds the per-tile resume context and its runtime timeout flag.
+    PersistenceStore.persistentWindow => 2,
     _ => 1,
   };
 }
@@ -228,5 +228,17 @@ _persistenceMigrations = {
       // the current shape for every store, so the first migration only marks
       // the data as versioned.
       0: (data) => data,
+      if (store == PersistenceStore.persistentWindow)
+        1: _persistentWindowV1ToV2,
     },
+};
+
+/// Adds the resume-context fields to a pre-resume tile.
+///
+/// Persisted windows are migrated before the freezed decoder runs, so a field
+/// added here is never silently discarded because the decoder threw first.
+Map<String, dynamic> _persistentWindowV1ToV2(Map<String, dynamic> data) => {
+  ...data,
+  'resumeContext': data['resumeContext'],
+  'resumeTimedOut': data['resumeTimedOut'] ?? false,
 };

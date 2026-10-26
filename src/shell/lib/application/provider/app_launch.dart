@@ -27,6 +27,59 @@ String _windowKey(WindowId windowId) => switch (windowId) {
   EphemeralWindowId(:final uuid) => uuid,
 };
 
+/// Builds the `systemd-run` argv for a tracked launch.
+///
+/// Public for tests. The working directory and application argv are passed as
+/// discrete arguments: a saved path or document can never be interpreted by a
+/// shell. Custom exec launches keep their shell-form command.
+List<String> buildTrackedLaunchArguments({
+  required LaunchConfig config,
+  required String unitName,
+  required Map<String, String> environment,
+  String? fallbackWorkingDirectory,
+}) {
+  return [
+    // The whole lifecycle runs under the *user* manager of this uid.
+    '--user',
+    '--quiet',
+    // Forward service stdio to this process, so the shell-side execution
+    // log viewer shows the application's output.
+    '--pipe',
+    // Stay alive until the service stops, so the placeholder's execution
+    // log viewer and waiting state track the application's lifetime.
+    // Attribution does *not* depend on this process exiting: it is keyed
+    // by the unit cgroup and outlives the supervisor (see below).
+    '--wait',
+    // Transient unit immediately garbage-collected after exit — no
+    // stale "veshell-launch-*" units in `systemctl --user`.
+    '--collect',
+    // Consider the service finished only when the whole cgroup is empty,
+    // not when the launcher shell returns: steam-style bootstrappers that
+    // re-exec games keep the launch attributed while children live on.
+    '--property=ExitType=cgroup',
+    // The user manager does not inherit the compositor's cwd. A resume launch
+    // passes the tile's saved directory here; it is one argv element, never
+    // interpolated.
+    '--working-directory='
+        '${config.workingDirectory ?? fallbackWorkingDirectory ?? Directory.current.path}',
+    '--unit=$unitName',
+    // Compositor session environment overrides the manager's own (which
+    // may still carry values imported by another desktop on this uid:
+    // DISPLAY=:0 from GNOME, etc.). PWD/OLDPWD are excluded: they do not
+    // describe the service's cwd and conflict with WorkingDirectory.
+    ...environment.entries
+        .where((entry) => entry.key != 'PWD' && entry.key != 'OLDPWD')
+        .map((entry) => '--setenv=${entry.key}=${entry.value}'),
+    if (config.argv.isNotEmpty)
+      ...config.argv
+    else ...[
+      '/bin/sh',
+      '-c',
+      config.command ?? '',
+    ],
+  ];
+}
+
 /// A live tracked launch of one tile: the supervisor process the shell spawned
 /// and, for a systemd-managed launch, the transient unit that owns the
 /// application's cgroup.
@@ -84,7 +137,7 @@ class AppLaunch extends _$AppLaunch {
     final launch = await _launchTracked(config, trackedWindowId);
     ref
         .read(logsForPidProvider(launch.process.pid).notifier)
-        .setProcess(launch.process, command: config.command);
+        .setProcess(launch.process, command: config.displayCommand);
     _launches[trackedWindowId] = launch;
     // A `--wait` supervisor exits when its unit stops, so once it is gone there
     // is nothing left to cancel. A relaunch installs a fresh entry; only clear
@@ -181,7 +234,18 @@ class AppLaunch extends _$AppLaunch {
   /// surface as `process exited with code N` in the placeholder's
   /// execution logs instead.
   Future<Process> _launchStandard(LaunchConfig config) {
-    return Process.start('/bin/sh', ['-c', config.command]);
+    final workingDirectory = config.workingDirectory;
+    if (config.argv.isNotEmpty) {
+      return Process.start(
+        config.argv.first,
+        config.argv.skip(1).toList(),
+        workingDirectory: workingDirectory,
+      );
+    }
+    return Process.start('/bin/sh', [
+      '-c',
+      config.command ?? '',
+    ], workingDirectory: workingDirectory);
   }
 
   Future<_Launch> _launchTracked(
@@ -213,39 +277,15 @@ class AppLaunch extends _$AppLaunch {
         '${const Uuid().v4().substring(0, 8)}';
     late final Process process;
     try {
-      process = await Process.start('systemd-run', [
-        // The whole lifecycle runs under the *user* manager of this uid.
-        '--user',
-        '--quiet',
-        // Forward service stdio to this process, so the shell-side execution
-        // log viewer shows the application's output.
-        '--pipe',
-        // Stay alive until the service stops, so the placeholder's execution
-        // log viewer and waiting state track the application's lifetime.
-        // Attribution does *not* depend on this process exiting: it is keyed
-        // by the unit cgroup and outlives the supervisor (see below).
-        '--wait',
-        // Transient unit immediately garbage-collected after exit — no
-        // stale "veshell-launch-*" units in `systemctl --user`.
-        '--collect',
-        // Consider the service finished only when the whole cgroup is empty,
-        // not when the launcher shell returns: steam-style bootstrappers that
-        // re-exec games keep the launch attributed while children live on.
-        '--property=ExitType=cgroup',
-        // The user manager does not inherit the compositor's cwd.
-        '--working-directory=${Directory.current.path}',
-        '--unit=$unitName',
-        // Compositor session environment overrides the manager's own (which
-        // may still carry values imported by another desktop on this uid:
-        // DISPLAY=:0 from GNOME, etc.). PWD/OLDPWD are excluded: they do not
-        // describe the service's cwd and conflict with WorkingDirectory.
-        ...environment.entries
-            .where((entry) => entry.key != 'PWD' && entry.key != 'OLDPWD')
-            .map((entry) => '--setenv=${entry.key}=${entry.value}'),
-        '/bin/sh',
-        '-c',
-        config.command,
-      ], environment: environment);
+      process = await Process.start(
+        'systemd-run',
+        buildTrackedLaunchArguments(
+          config: config,
+          unitName: unitName,
+          environment: environment,
+        ),
+        environment: environment,
+      );
     } on ProcessException catch (error) {
       print('Tracked launch unavailable, using standard launch: $error');
       return _Launch(process: await _launchStandard(config), unitName: null);

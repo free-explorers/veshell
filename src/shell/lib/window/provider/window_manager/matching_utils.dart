@@ -220,7 +220,10 @@ MatchingCost windowMatchingCost(
         .difference(windowMatchInfo.waitingForAppSince!)
         .inMilliseconds;
     // Clamp the difference to be between 0 and 1000 milliseconds.
-    waiting = 100 - (elapsedMs.clamp(0, 1000) / 100).round();
+    waiting =
+        100 -
+        (elapsedMs.clamp(0, 1000) / 100).round() +
+        windowMatchInfo.waitingPenalty;
   } else {
     waiting = 200;
   }

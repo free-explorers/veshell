@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
+import 'package:shell/platform/model/event/process_info/process_info.serializable.dart';
 import 'package:shell/platform/model/request/platform_request.dart';
 import 'package:shell/shared/util/logger.dart';
 
@@ -69,6 +70,28 @@ class PlatformManager extends _$PlatformManager {
         '${request.method} dropped for a gone window/surface: '
         '${error.code} ${error.message}',
       );
+    }
+  }
+
+  /// Fetches a fresh `/proc` snapshot for [pid].
+  ///
+  /// Used by the resume-context poller: cwd and a terminal's shell/foreground
+  /// job change while the window lives, without a platform event. Returns null
+  /// when the process is gone or the compositor cannot read it.
+  Future<ProcessInfoMessage?> fetchProcessInfo(int pid) async {
+    const channel = MethodChannel('platform', JSONMethodCodec());
+    try {
+      final response = await channel.invokeMapMethod<dynamic, dynamic>(
+        'get_process_info',
+        {'pid': pid},
+      );
+      if (response == null) {
+        return null;
+      }
+      return ProcessInfoMessage.fromJson(response.cast<String, dynamic>());
+    } on PlatformException catch (error) {
+      platformLog.fine('get_process_info failed for pid $pid: $error');
+      return null;
     }
   }
 

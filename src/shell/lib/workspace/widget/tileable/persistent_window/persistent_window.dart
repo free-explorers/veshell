@@ -355,6 +355,23 @@ class PersistentWindowTileable extends Tileable {
           );
         },
       ),
+      Consumer(
+        builder: (context, subref, child) {
+          final window = subref.read(persistentWindowStateProvider(windowId));
+          if (window.resumeContext == null && window.properties.title == null) {
+            return const SizedBox.shrink();
+          }
+          return MenuItemButton(
+            onPressed: () {
+              ref
+                  .read(persistentWindowStateProvider(windowId).notifier)
+                  .forgetResumeContext();
+            },
+            leadingIcon: const Icon(MdiIcons.eraser),
+            child: Text(context.l10n.forgetSavedContext),
+          );
+        },
+      ),
       MenuItemButton(
         onPressed: () {
           ref

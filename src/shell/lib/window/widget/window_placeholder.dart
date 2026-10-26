@@ -15,6 +15,7 @@ import 'package:shell/l10n/l10n.dart';
 import 'package:shell/platform/provider/platform_event_recorder.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
+import 'package:shell/window/widget/resume_context_summary.dart';
 
 class WindowPlaceholder extends HookConsumerWidget {
   const WindowPlaceholder({
@@ -51,6 +52,16 @@ class WindowPlaceholder extends HookConsumerWidget {
     final launchedProcess = useRef<Process?>(null);
     final launchFailed = useState(false);
 
+    final resumeSummary = resumeContextSummary(
+      window.resumeContext,
+      title: window.properties.title,
+      homeDirectory: Platform.environment['HOME'],
+    );
+    final canLaunch =
+        entry != null ||
+        window.customExec != null ||
+        (window.resumeContext?.argv.isNotEmpty ?? false);
+
     Future<void> launch() async {
       final process = await onLaunch?.call();
       if (process == null) return;
@@ -63,6 +74,19 @@ class WindowPlaceholder extends HookConsumerWidget {
         return;
       }
       launchFailed.value = exitCode != 0;
+    }
+
+    Future<void> retry() async {
+      launchFailed.value = false;
+      await ref
+          .read(persistentWindowStateProvider(window.windowId).notifier)
+          .retryResume();
+    }
+
+    void forgetResumeContext() {
+      ref
+          .read(persistentWindowStateProvider(window.windowId).notifier)
+          .forgetResumeContext();
     }
 
     // The execution logs replace the launcher while the app is starting and
@@ -136,6 +160,19 @@ class WindowPlaceholder extends HookConsumerWidget {
                             child: Text(moreMenuLabel),
                           ),
                         ),
+                        if (window.resumeContext != null ||
+                            window.properties.title != null)
+                          Directionality(
+                            textDirection: Directionality.of(context),
+                            child: MenuItemButton(
+                              trailingIcon: const Icon(MdiIcons.eraser),
+                              onPressed: () {
+                                forgetResumeContext();
+                                moreMenuController.close();
+                              },
+                              child: Text(context.l10n.forgetSavedContext),
+                            ),
+                          ),
                       ],
                       builder: (context, controller, child) => IconButton(
                         tooltip: context.l10n.more,
@@ -208,14 +245,25 @@ class WindowPlaceholder extends HookConsumerWidget {
               ),
             ),
             Expanded(
-              child: Text(
-                context.l10n.clickToStartApplication,
-                style: Theme.of(context).textTheme.headlineSmall!.copyWith(
-                  color: isFocused
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).disabledColor,
-                ),
-              ),
+              child: window.resumeTimedOut
+                  ? _ResumeActions(
+                      message: context.l10n.resumeFailed,
+                      retryLabel: context.l10n.retry,
+                      forgetLabel: context.l10n.forgetSavedContext,
+                      onRetry: retry,
+                      onForget: forgetResumeContext,
+                    )
+                  : Text(
+                      resumeSummary == null
+                          ? context.l10n.clickToStartApplication
+                          : context.l10n.resumeWith(resumeSummary),
+                      style: Theme.of(context).textTheme.headlineSmall!
+                          .copyWith(
+                            color: isFocused
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context).disabledColor,
+                          ),
+                    ),
             ),
           ],
         );
@@ -227,7 +275,7 @@ class WindowPlaceholder extends HookConsumerWidget {
               child: InkWell(
                 focusNode: backgroundFocusNode,
                 canRequestFocus: false,
-                onTap: entry != null && !showLaunchLogs ? launch : null,
+                onTap: canLaunch && !showLaunchLogs ? launch : null,
                 child: ColoredBox(
                   color: Theme.of(context).colorScheme.surface.withAlpha(150),
                 ),
@@ -246,7 +294,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                   color: Theme.of(context).colorScheme.surface.withAlpha(150),
                   child: InkWell(
                     canRequestFocus: false,
-                    onTap: entry != null && !showLaunchLogs ? launch : null,
+                    onTap: canLaunch && !showLaunchLogs ? launch : null,
                     splashColor: Theme.of(
                       context,
                     ).colorScheme.primary.withAlpha(32),
@@ -271,6 +319,20 @@ class WindowPlaceholder extends HookConsumerWidget {
                                       onPressed: () =>
                                           launchFailed.value = false,
                                       icon: const Icon(MdiIcons.close),
+                                    ),
+                                  ),
+                                if (launchFailed.value)
+                                  Positioned(
+                                    left: 8,
+                                    right: 8,
+                                    bottom: 8,
+                                    child: _ResumeActions(
+                                      message: context.l10n.resumeFailed,
+                                      retryLabel: context.l10n.retry,
+                                      forgetLabel:
+                                          context.l10n.forgetSavedContext,
+                                      onRetry: retry,
+                                      onForget: forgetResumeContext,
                                     ),
                                   ),
                               ],
@@ -459,6 +521,57 @@ class DisplayModeRow extends StatelessWidget {
           })
           .expand((widget) => widget)
           .toList(),
+    );
+  }
+}
+
+/// Retry / forget controls shown when a resume fails or hangs.
+class _ResumeActions extends StatelessWidget {
+  const _ResumeActions({
+    required this.message,
+    required this.retryLabel,
+    required this.forgetLabel,
+    required this.onRetry,
+    required this.onForget,
+  });
+
+  final String message;
+  final String retryLabel;
+  final String forgetLabel;
+  final Future<void> Function() onRetry;
+  final void Function() onForget;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            message,
+            style: Theme.of(context).textTheme.bodyMedium,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: onRetry,
+                icon: const Icon(MdiIcons.refresh),
+                label: Text(retryLabel),
+              ),
+              TextButton.icon(
+                onPressed: onForget,
+                icon: const Icon(MdiIcons.eraser),
+                label: Text(forgetLabel),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

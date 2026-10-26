@@ -14,6 +14,7 @@ mod file_chooser_decision;
 mod get_environment_variables;
 mod get_keyboard_layouts;
 mod get_monitor_layout;
+mod get_process_info;
 mod meta_popup_patches;
 mod meta_window_patches;
 mod mouse_buttons_event;
@@ -38,6 +39,7 @@ use self::close_window::close_window;
 use self::get_environment_variables::get_environment_variables;
 use self::get_keyboard_layouts::get_keyboard_layouts;
 use self::get_monitor_layout::get_monitor_layout;
+use self::get_process_info::get_process_info;
 use self::meta_popup_patches::meta_popup_patches;
 use self::meta_window_patches::meta_window_patches;
 use self::mouse_buttons_event::mouse_buttons_event;
@@ -70,6 +72,7 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             "get_monitor_layout" => get_monitor_layout(method_call, result, data),
             "get_environment_variables" => get_environment_variables(method_call, result, data),
             "get_keyboard_layouts" => get_keyboard_layouts(method_call, result, data),
+            "get_process_info" => get_process_info(method_call, result, data),
             "meta_window_patches" => meta_window_patches(method_call, result, data),
             "meta_popup_patches" => meta_popup_patches(method_call, result, data),
             "shell_ready" => on_shell_ready(method_call, result, data),
