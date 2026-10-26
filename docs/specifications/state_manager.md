@@ -35,7 +35,9 @@ Every file is wrapped in an envelope:
 
 The `store` selects a migration chain. A file without the envelope is treated as
 version `0` and migrated on load, then rewritten with the current envelope, so
-adding versioning does not drop existing tiles or workspaces.
+adding versioning does not drop existing tiles or workspaces. The persistent
+window store is currently version `2`: version `1` files gain the resume-context
+fields before the model decoder runs.
 
 When a persisted model changes shape:
 

@@ -1,5 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
+import 'package:shell/window/model/resume_context.serializable.dart';
 import 'package:shell/window/model/window_base.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/model/window_properties.serializable.dart';
@@ -19,6 +20,8 @@ abstract class PersistentWindow extends Window with _$PersistentWindow {
     @Default(DisplayMode.maximized) DisplayMode displayMode,
     String? customExec,
     int? pid,
+    ResumeContext? resumeContext,
+    @Default(false) bool resumeTimedOut,
   }) = _PersistentWindow;
 
   const PersistentWindow._();
