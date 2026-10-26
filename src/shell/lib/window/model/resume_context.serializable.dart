@@ -24,10 +24,6 @@ abstract class ResumeContext with _$ResumeContext {
     /// Resolved executable (`/proc/<pid>/exe`) or argv[0].
     String? executable,
 
-    /// The tracked-launch cgroup, when known. Sibling tiles launched from the
-    /// same application group can be discovered after a shell restart.
-    String? cgroup,
-
     /// Terminal-only context: the shell and its working directory.
     TerminalResumeContext? terminal,
 

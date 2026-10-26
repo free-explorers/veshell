@@ -136,8 +136,6 @@ class PersistentWindowState extends _$PersistentWindowState
       return null;
     }
 
-    _armSiblingTilesForResume();
-
     final process = await ref
         .read(appLaunchProvider.notifier)
         .launchApplication(plan.config, trackedWindowId: state.windowId);
@@ -175,46 +173,6 @@ class PersistentWindowState extends _$PersistentWindowState
     );
 
     return process;
-  }
-
-  /// Arms sibling tiles of the same application for the launch burst.
-  ///
-  /// They receive a small waiting penalty, which keeps the clicked tile first
-  /// in line while still letting the matching engine distribute additional
-  /// windows from the same launch. Nothing is
-  /// persisted: a sibling that receives no window stays a placeholder.
-  void _armSiblingTilesForResume() {
-    final current = state;
-    for (final siblingId
-        in ref
-            .read(windowManagerProvider)
-            .windows
-            .whereType<PersistentWindowId>()) {
-      if (siblingId == windowId) {
-        continue;
-      }
-      final PersistentWindow sibling;
-      try {
-        sibling = ref.read(persistentWindowStateProvider(siblingId));
-      } on Object {
-        continue;
-      }
-      if (!sameResumeGroup(
-        appIdA: current.properties.appId,
-        cgroupA: current.resumeContext?.cgroup,
-        appIdB: sibling.properties.appId,
-        cgroupB: sibling.resumeContext?.cgroup,
-      )) {
-        continue;
-      }
-      if (sibling.metaWindowId != null) {
-        // A tile already showing a window is not a destination for this burst.
-        continue;
-      }
-      ref
-          .read(persistentWindowStateProvider(siblingId).notifier)
-          .armForSiblingResume();
-    }
   }
 
   void _onResumeTimeout() {

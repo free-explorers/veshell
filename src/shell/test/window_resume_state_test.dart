@@ -111,7 +111,6 @@ void main() {
     final window = container.read(persistentWindowStateProvider(windowId));
     expect(window.resumeContext?.workingDirectory, '/home/user/src');
     expect(window.resumeContext?.terminal?.shell, '/usr/bin/fish');
-    expect(window.resumeContext?.cgroup, '/launch/term');
 
     final persisted = persistedData();
     expect(persisted['resumeContext'], isA<Map<String, dynamic>>());

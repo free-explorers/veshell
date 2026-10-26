@@ -150,7 +150,7 @@ None of these signals is authoritative on its own, and every one may be absent, 
 - **Tile placement (workspace, screen) and display mode** — high reliability.
   - Notes: persisted across restarts.
 - **Waiting / expecting state after a launch** — medium reliability.
-  - Notes: marks the tile that launched an application; currently cleared as soon as a window attaches. A resume launch also arms sibling tiles of the same application group (desktop-entry id or saved cgroup) with a small waiting penalty, so the clicked tile has first claim while extra windows from the same launch can still fill matching siblings.
+  - Notes: marks the tile that launched an application; currently cleared as soon as a window attaches.
 - **Launch cgroup prefix (pid → tile)** — high reliability as long as the launch cgroup exists.
   - Notes: links a running process to the tile that started it by matching the
     `veshell-launch-<tile-uuid>-` prefix in `/proc/<pid>/cgroup`, derived from the

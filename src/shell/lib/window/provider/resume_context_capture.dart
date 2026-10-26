@@ -28,7 +28,6 @@ ResumeContext? captureResumeContextFromProcessInfo(
     workingDirectory: workingDirectory,
     argv: argv,
     executable: executable,
-    cgroup: info.cgroup,
     terminal: shell == null
         ? null
         : TerminalResumeContext(
@@ -37,23 +36,6 @@ ResumeContext? captureResumeContextFromProcessInfo(
           ),
     capturedAt: capturedAt ?? DateTime.now(),
   );
-}
-
-/// Whether two tiles belong to the same application group for a resume burst.
-///
-/// Same desktop-entry id is the normal grouping. A shared saved cgroup catches
-/// windows that belong to the same application instance even when helper
-/// surfaces report a different app id.
-bool sameResumeGroup({
-  required String appIdA,
-  String? cgroupA,
-  required String appIdB,
-  String? cgroupB,
-}) {
-  if (appIdA.isNotEmpty && appIdA == appIdB) {
-    return true;
-  }
-  return cgroupA != null && cgroupA.isNotEmpty && cgroupA == cgroupB;
 }
 
 /// Compares contexts while ignoring the capture timestamp.

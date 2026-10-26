@@ -95,11 +95,6 @@ mixin WindowProviderMixin<T extends Window> {
 
   Timer? _debouncedTimer;
 
-  /// Bounds how long a sibling tile keeps its resume-gather bonus. The clicked
-  /// tile clears its own bonus at the burst settle; a sibling that received no
-  /// window must not keep outranking ordinary tiles indefinitely.
-  Timer? _siblingGatherTimer;
-
   /// Whether this tile is the origin of an in-flight launch burst: it gathers
   /// the whole burst (waiting bonus armed), then at the settle it dispatches
   /// the windows a sibling matches better and keeps the rest. Cleared at the
@@ -149,12 +144,7 @@ mixin WindowProviderMixin<T extends Window> {
         _everOwnedResizableWindow = true;
       }
     } else {
-      _matchingInfo = _matchingInfo.copyWith(
-        waitingForAppSince: null,
-        waitingPenalty: 0,
-      );
-      _siblingGatherTimer?.cancel();
-      _siblingGatherTimer = null;
+      _matchingInfo = _matchingInfo.copyWith(waitingForAppSince: null);
     }
     ref
         .read(metaWindowWindowMapProvider.notifier)
@@ -388,10 +378,7 @@ mixin WindowProviderMixin<T extends Window> {
     }
 
     // Titles have settled: matching is by identity from here on.
-    _matchingInfo = _matchingInfo.copyWith(
-      waitingForAppSince: null,
-      waitingPenalty: 0,
-    );
+    _matchingInfo = _matchingInfo.copyWith(waitingForAppSince: null);
     // Clear the origin before redistributing so a throw cannot leave the tile
     // gathering forever; the reopen branch below re-arms it when needed.
     _launchOrigin = false;
@@ -687,11 +674,8 @@ mixin WindowProviderMixin<T extends Window> {
   bool get isGatheringLaunch => _launchOrigin;
 
   void waitForSurface(int? pid) {
-    _siblingGatherTimer?.cancel();
-    _siblingGatherTimer = null;
     _matchingInfo = _matchingInfo.copyWith(
       waitingForAppSince: DateTime.now(),
-      waitingPenalty: 0,
       pid: pid,
     );
     // A fresh user launch resets the burst state; an internal reopen (see
@@ -703,29 +687,6 @@ mixin WindowProviderMixin<T extends Window> {
     }
     _launchOrigin = true;
     _launchGatherStartedAt = DateTime.now();
-  }
-
-  /// Arms the gather bonus on a tile that did **not** initiate the launch.
-  ///
-  /// Used when one tile of a same-application group resumes: the siblings get a
-  /// small waiting penalty so the clicked tile still has first claim while the
-  /// matching engine can distribute extra windows from the same launch. This never marks the sibling as launch
-  /// origin, so it cannot auto-reopen or cancel the launch.
-  void armForSiblingResume() {
-    _matchingInfo = _matchingInfo.copyWith(
-      waitingForAppSince: DateTime.now(),
-      // The clicked tile keeps penalty 0; siblings rank just behind it.
-      waitingPenalty: 25,
-      pid: null,
-    );
-    _siblingGatherTimer?.cancel();
-    _siblingGatherTimer = Timer(const Duration(seconds: 3), () {
-      _siblingGatherTimer = null;
-      _matchingInfo = _matchingInfo.copyWith(
-        waitingForAppSince: null,
-        waitingPenalty: 0,
-      );
-    });
   }
 
   /// Ends an in-flight launch gather without dispatching or reopening.
@@ -742,10 +703,7 @@ mixin WindowProviderMixin<T extends Window> {
     _launchGatherStartedAt = null;
     _everOwnedWindow = false;
     _everOwnedResizableWindow = false;
-    _matchingInfo = _matchingInfo.copyWith(
-      waitingForAppSince: null,
-      waitingPenalty: 0,
-    );
+    _matchingInfo = _matchingInfo.copyWith(waitingForAppSince: null);
   }
 
   void onMetaWindowRemoved(MetaWindowId metaWindowId) {
@@ -764,8 +722,6 @@ mixin WindowProviderMixin<T extends Window> {
     _keepAliveLink?.close();
     _debouncedTimer?.cancel();
     _debouncedTimer = null;
-    _siblingGatherTimer?.cancel();
-    _siblingGatherTimer = null;
   }
 
   void closeWindow() {

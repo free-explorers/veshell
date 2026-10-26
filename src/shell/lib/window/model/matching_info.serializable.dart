@@ -14,14 +14,6 @@ abstract class MatchingInfo with _$MatchingInfo {
     String? startupId,
     int? pid,
     DateTime? waitingForAppSince,
-
-    /// Extra cost applied on top of the gather bonus.
-    ///
-    /// The clicked tile keeps the default 0. Sibling tiles armed for a resume
-    /// burst use a positive value, so the clicked tile has first claim on the
-    /// most likely surface while the siblings can still receive redistributed
-    /// windows.
-    @Default(0) int waitingPenalty,
   }) = _MatchingInfo;
 
   factory MatchingInfo.fromWindowProperties(WindowProperties props) =>

@@ -63,11 +63,11 @@ process is the source of truth, not the fact that this shell launched it.
 
 ### Sibling tiles
 
-Before a launch, other tiles of the same application group (same desktop-entry
-id, or same saved cgroup) are armed with a small waiting penalty. The clicked
-tile gets first claim; the matching engine distributes
-additional windows from the same launch to the siblings. The application is
-launched only once, and arming itself persists nothing.
+The clicked tile owns the launch gather. After the burst settles, the matching
+engine distributes the extra windows to matching sibling tiles by title; the
+application is launched only once. There is deliberately no separate sibling
+arming: letting a sibling compete before the settle would skip the title
+arbitration for windows that restore their title later.
 
 ### Failure, retry and forgetting
 
