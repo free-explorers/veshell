@@ -317,7 +317,9 @@ class FloatableWindow extends HookConsumerWidget {
         }
         final mismatch =
             '$metaWindowId|${maxSurfaceSize.width}x${maxSurfaceSize.height}'
-            '|${geometry.size}|$tileGlobalOrigin';
+            '|${geometry.left},${geometry.top},${geometry.width},'
+            '${geometry.height}|${tileGlobalOrigin?.dx},'
+            '${tileGlobalOrigin?.dy}';
         if (lastCorrectedMismatch.value == mismatch) {
           return null;
         }

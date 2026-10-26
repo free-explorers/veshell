@@ -204,7 +204,6 @@ class FloatingWindowArea extends HookConsumerWidget {
     // moves can be clamped and X11 windows are reconciled once after motion.
     // Floating ownership itself comes from the routed display mode; this
     // message carries only the settled viewport.
-    final contentRectKey = viewportRect.value?.toString();
     final decorationKey = metaWindows.values
         .map((window) => '${window.id}:${window.needDecoration}')
         .join('\u0000');
@@ -215,8 +214,8 @@ class FloatingWindowArea extends HookConsumerWidget {
     final floatingKey = metaWindows.values
         .map(
           (window) =>
-              '${window.id}:${window.displayMode}:${window.viewport}:'
-              '${window.positionExplicit}',
+              '${window.id}:${window.displayMode?.name}:'
+              '${_rectKey(window.viewport)}:${window.positionExplicit}',
         )
         .join('\u0000');
     useEffect(() {
@@ -278,7 +277,7 @@ class FloatingWindowArea extends HookConsumerWidget {
         }
       });
       return null;
-    }, [contentRectKey, orderKey, decorationKey, floatingKey]);
+    }, [viewportRect.value, orderKey, decorationKey, floatingKey]);
 
     // Selecting the tile hands the keyboard to the window on top, exactly like
     // activating a window in a floating compositor.
@@ -571,3 +570,7 @@ MetaWindow? _readMetaWindow(WidgetRef ref, MetaWindowId metaWindowId) {
     return null;
   }
 }
+
+String _rectKey(Rect? rect) => rect == null
+    ? 'null'
+    : '${rect.left},${rect.top},${rect.right},${rect.bottom}';

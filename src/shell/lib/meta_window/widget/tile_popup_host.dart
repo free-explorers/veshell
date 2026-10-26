@@ -12,7 +12,6 @@ import 'package:shell/meta_window/widget/meta_popup.dart';
 import 'package:shell/monitor/provider/monitor_by_name.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
-import 'package:shell/platform/provider/platform_manager.dart';
 
 /// Renders every popup owned by a tile in one tile-level coordinate space.
 ///
@@ -112,9 +111,16 @@ String _motionKeyFor(WidgetRef ref, MetaWindowId metaWindowId) {
         ),
       ),
     );
-    return '$metaWindowId:${motion.position}:${motion.renderOrigin}:'
-        '${motion.viewport}';
+    return '$metaWindowId:${_offsetKey(motion.position)}:'
+        '${_offsetKey(motion.renderOrigin)}:${_rectKey(motion.viewport)}';
   } catch (_) {
     return '$metaWindowId:?';
   }
 }
+
+String _offsetKey(Offset? offset) =>
+    offset == null ? 'null' : '${offset.dx},${offset.dy}';
+
+String _rectKey(Rect? rect) => rect == null
+    ? 'null'
+    : '${rect.left},${rect.top},${rect.right},${rect.bottom}';
