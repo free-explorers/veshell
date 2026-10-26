@@ -86,6 +86,12 @@ use crate::wayland::wayland::{get_direct_subsurfaces, get_surface_id};
 use crate::wayland::xwayland::xwayland::XWaylandState;
 use crate::{flutter_engine, Backend, ClientState};
 
+/// The surface that owns an implicit X11 popup drag.
+#[derive(Clone, Copy, Debug)]
+pub struct PopupPointerGrab {
+    pub surface_id: u64,
+}
+
 pub struct State<BackendData: Backend + 'static> {
     pub backend_data: Box<BackendData>,
     pub batons: Vec<flutter_engine::Baton>,
@@ -154,6 +160,13 @@ pub struct State<BackendData: Backend + 'static> {
     /// native position is authoritative and the compositor owns the pointer.
     /// Non-floating configure paths must never overwrite the render origin.
     pub pointer_focus: Option<(PointerFocusTarget, Point<f64, Logical>)>,
+    /// Explicit pointer-grab owner for an override-redirect X11 popup.
+    ///
+    /// X11 reports XGrabPointer only implicitly (as a stream of configure
+    /// events). The compositor records the grab at ButtonPress and ignores
+    /// Flutter hover focus changes until ButtonRelease, so the popup remains
+    /// the sole writer of the local pointer basis for the gesture.
+    pub popup_pointer_grab: Option<PopupPointerGrab>,
     /// An in-progress move of a window owned by a floating tile.
     pub floating_move: Option<FloatingMove>,
     /// An in-progress compositor-owned resize of a floating window.
@@ -609,6 +622,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             xwayland_state: None,
             space: Space::default(),
             pointer_focus: None,
+            popup_pointer_grab: None,
             floating_move: None,
             floating_resize: None,
             cursor_state: CursorState::default(),

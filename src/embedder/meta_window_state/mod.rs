@@ -87,22 +87,34 @@ impl MetaWindowState {
     /// Popup positions are stored relative to the parent window box. The parent
     /// render origin comes from Flutter, so the same formula works for floating
     /// windows and for tiled windows whose native X11 position is synthetic.
-    pub fn popup_surface_origin(&self, popup: &MetaPopup) -> Point<f64, Logical> {
-        let parent_origin = self
-            .meta_windows
-            .get(&popup.parent)
-            .and_then(|window| window.render_origin.as_ref())
-            .map(|origin| origin.0)
-            .unwrap_or_else(|| self.meta_window_box_origin(&popup.parent));
+    pub fn popup_surface_origin(&self, popup: &MetaPopup) -> Option<Point<f64, Logical>> {
+        let parent = self.meta_windows.get(&popup.parent)?;
+        // A floating parent's native surface origin is authoritative and moves
+        // with the model. Falling back to Flutter's render origin here leaves a
+        // stale value between an X11 configure and the next Flutter frame,
+        // which feeds a self-moving override-redirect popup back into itself.
+        let parent_origin = if parent.is_floating() {
+            parent.surface_origin().or_else(|| {
+                parent
+                    .render_origin
+                    .as_ref()
+                    .map(|origin| Point::from((f64::from(origin.0.x), f64::from(origin.0.y))))
+            })?
+        } else {
+            parent
+                .render_origin
+                .as_ref()
+                .map(|origin| Point::from((f64::from(origin.0.x), f64::from(origin.0.y))))?
+        };
         let geometry = popup
             .geometry
             .as_ref()
             .map(|geometry| geometry.0.loc)
             .unwrap_or_else(|| Point::from((0, 0)));
-        Point::from((
-            f64::from(parent_origin.x + popup.position.0.x - geometry.x),
-            f64::from(parent_origin.y + popup.position.0.y - geometry.y),
-        ))
+        Some(Point::from((
+            parent_origin.x + f64::from(popup.position.0.x - geometry.x),
+            parent_origin.y + f64::from(popup.position.0.y - geometry.y),
+        )))
     }
 
     /// Records `id` as the most recently focused MetaWindow.
@@ -720,7 +732,21 @@ mod tests {
 
         assert_eq!(
             state.popup_surface_origin(&popup),
-            Point::from((720.0, 150.0))
+            Some(Point::from((720.0, 150.0)))
+        );
+
+        let without_render_origin =
+            state_with(vec![window("parent", 1, Some("org.example.Parent"))], &[]);
+        assert_eq!(without_render_origin.popup_surface_origin(&popup), None);
+
+        let mut floating_parent = window("parent", 1, Some("org.example.Parent"));
+        floating_parent.display_mode = Some(DisplayMode::Floating);
+        floating_parent.position = Some(Point::from((48, 88)).into());
+        floating_parent.render_origin = Some(Point::from((961, 644)).into());
+        let floating_state = state_with(vec![floating_parent], &[]);
+        assert_eq!(
+            floating_state.popup_surface_origin(&popup),
+            Some(Point::from((68.0, 118.0)))
         );
     }
 

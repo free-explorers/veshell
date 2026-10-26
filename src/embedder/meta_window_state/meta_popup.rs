@@ -101,13 +101,14 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         self.meta_window_state
             .meta_popup_id_per_surface_id
             .retain(|_, id| id != meta_popup_id);
-        if self
-            .meta_window_state
-            .meta_popups
-            .remove(meta_popup_id)
-            .is_none()
-        {
+        let Some(removed) = self.meta_window_state.meta_popups.remove(meta_popup_id) else {
             return;
+        };
+        if self
+            .popup_pointer_grab
+            .is_some_and(|grab| grab.surface_id == removed.surface_id)
+        {
+            self.popup_pointer_grab = None;
         }
 
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;

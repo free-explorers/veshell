@@ -608,27 +608,51 @@ pub mod xwayland {
                             f64::from(position.y - previous.y),
                         );
                     }
-                    // Override-redirect menus/toolbars often grab the pointer
-                    // while dragging themselves. Flutter's hover can flip to
-                    // the parent as the popup moves, but the X11 client is
-                    // still the grab owner and must receive local coordinates
-                    // relative to the popup. Keep the popup focused while a
-                    // button is held.
+                    if let Some(popup) = self.meta_window_state.meta_popups.get(&meta_popup_id) {
+                        let parent = self.meta_window_state.meta_windows.get(&popup.parent);
+                        tracing::debug!(
+                            target: "veshell::popup_drag",
+                            popup_id = %meta_popup_id,
+                            surface_id,
+                            root_geometry = ?geometry,
+                            popup_position = ?popup.position.0,
+                            parent_id = %popup.parent,
+                            parent_position = ?parent.and_then(|w| w.position.as_ref().map(|p| p.0)),
+                            parent_render_origin = ?parent.and_then(|w| w.render_origin.as_ref().map(|p| p.0)),
+                            parent_surface_origin = ?parent.and_then(|w| w.surface_origin()),
+                            parent_floating = ?parent.map(|w| w.is_floating()),
+                            model_origin = ?self.meta_window_state.popup_surface_origin(popup),
+                            pointer = ?self.pointer.current_location(),
+                            focus = ?self.pointer_focus.as_ref().map(|(target, offset)| (
+                                target.wl_surface().map(|surface| get_surface_id(&surface)),
+                                *offset,
+                            )),
+                            buttons = self.flutter_engine().mouse_button_tracker.are_any_buttons_pressed(),
+                            grab_owner = ?self.popup_pointer_grab.map(|grab| grab.surface_id),
+                            "popup_drag_configure"
+                        );
+                    }
                     if self
-                        .flutter_engine()
-                        .mouse_button_tracker
-                        .are_any_buttons_pressed()
+                        .popup_pointer_grab
+                        .is_some_and(|grab| grab.surface_id == surface_id)
                     {
                         if let (Some(popup), Some(surface)) = (
                             self.meta_window_state.meta_popups.get(&meta_popup_id),
                             self.surfaces.get(&surface_id).cloned(),
                         ) {
-                            self.pointer_focus = Some((
-                                PointerFocusTarget::from(&surface),
-                                self.meta_window_state.popup_surface_origin(popup),
-                            ));
+                            if let Some(origin) = self.meta_window_state.popup_surface_origin(popup)
+                            {
+                                self.pointer_focus =
+                                    Some((PointerFocusTarget::from(&surface), origin));
+                            }
                         }
                     }
+                    // Override-redirect menus/toolbars often grab the pointer
+                    // while dragging themselves. The configure delta above has
+                    // already translated the focused popup's basis; do not
+                    // overwrite it with a model-derived origin while the drag
+                    // is active, or the client feeds that movement back into
+                    // its own position.
                 }
             }
             if let Some(meta_window) = self.get_meta_window(surface_id) {

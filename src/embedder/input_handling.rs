@@ -24,7 +24,9 @@ use crate::flutter_engine::view::view_id_for_output;
 use crate::flutter_engine::{view, FlutterEngine};
 use crate::focus::PointerFocusTarget;
 use crate::settings::{MouseAndTouchpadSettings, DEFAULT_WHEEL_SCROLL_PIXELS_PER_DETENT};
+use crate::state::PopupPointerGrab;
 use crate::state::State;
+use crate::wayland::wayland::get_surface_id;
 
 /// Bounding box of a set of output geometries, in global logical coordinates.
 ///
@@ -355,6 +357,21 @@ impl<BackendData: Backend> State<BackendData> {
             .flutter_engine()
             .mouse_button_tracker
             .are_any_buttons_pressed();
+        // X11 does not report XGrabPointer. The only observable start of an
+        // override-redirect popup drag is the button press on its surface;
+        // record that owner so Flutter hover cannot steal the pointer basis
+        // while the configure stream drives the popup.
+        if event.state() == ButtonState::Pressed {
+            self.popup_pointer_grab = self.pointer_focus.as_ref().and_then(|(target, _)| {
+                target.wl_surface().and_then(|surface| {
+                    let surface_id = get_surface_id(&surface);
+                    self.meta_window_state
+                        .meta_popup_id_per_surface_id
+                        .contains_key(&surface_id)
+                        .then_some(PopupPointerGrab { surface_id })
+                })
+            });
+        }
         let event_view_id = self.pointer_gesture_view_id.or(view_id);
         let phase = if event.state() == ButtonState::Pressed {
             let _ = self
@@ -389,6 +406,7 @@ impl<BackendData: Backend> State<BackendData> {
                 .are_any_buttons_pressed()
         {
             self.pointer_gesture_view_id = None;
+            self.popup_pointer_grab = None;
             self.end_floating_move();
             self.end_floating_resize();
         }
