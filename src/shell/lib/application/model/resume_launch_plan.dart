@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:path/path.dart' as path;
 import 'package:shell/application/model/desktop_exec.dart';
 import 'package:shell/application/model/launch_config.serializable.dart';
+import 'package:shell/application/model/terminal_emulator.dart';
+import 'package:shell/application/model/terminal_program_policy.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/window/model/resume_context.serializable.dart';
 
@@ -33,9 +35,14 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
   String? entryName,
   String? entryIcon,
   String? homeDirectory,
+  String? appId,
+  Map<String, String>? environment,
   bool Function(String path)? pathExists,
+  bool Function(String path)? isExecutable,
 }) {
   final exists = pathExists ?? _entityExists;
+  final executable = isExecutable ?? isExecutableFile;
+  final variables = environment ?? Platform.environment;
   final saved = context ?? const ResumeContext();
   // A tile that has never been captured keeps the compositor cwd (the
   // historical launch behaviour) instead of jumping to home; home is the
@@ -46,9 +53,33 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
   final resolved = saved.copyWith(workingDirectory: workingDirectory);
 
   if (customExec != null && customExec.trim().isNotEmpty) {
+    var command = customExec;
+    final customTokens = DesktopExec.parse(customExec).tokens;
+    final emulator = terminalEmulatorFor(
+      executable: saved.executable,
+      execTemplate: customExec,
+      appId: appId,
+      capturedArgv: saved.argv,
+    );
+    if (emulator != null && !emulator.hasCommandArguments(customTokens)) {
+      final suffix = _terminalProgramArguments(
+        saved: saved,
+        emulator: emulator,
+        workingDirectory: workingDirectory,
+        environment: variables,
+        isExecutable: executable,
+        // `wezterm` needs its `start` subcommand unless the custom exec
+        // already has it; every other terminal's suffix is the whole syntax.
+        includeSubcommand:
+            emulator.name == 'wezterm' && !customTokens.contains('start'),
+      );
+      if (suffix != null) {
+        command = appendShellArguments(command, suffix);
+      }
+    }
     return ResumeLaunchPlan(
       config: LaunchConfig(
-        command: customExec,
+        command: command,
         workingDirectory: workingDirectory,
       ),
       context: resolved,
@@ -87,6 +118,32 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
       entryIcon: entryIcon,
     );
     if (argv.isNotEmpty) {
+      final emulator = terminalEmulatorFor(
+        executable: saved.executable,
+        execTemplate: execTemplate,
+        appId: appId,
+        capturedArgv: saved.argv,
+      );
+      if (emulator != null) {
+        if (!emulator.hasCommandArguments(exec.tokens)) {
+          final suffix = _terminalProgramArguments(
+            saved: saved,
+            emulator: emulator,
+            workingDirectory: workingDirectory,
+            environment: variables,
+            isExecutable: executable,
+            includeSubcommand: true,
+          );
+          if (suffix != null) {
+            argv.addAll(suffix);
+          }
+        }
+      } else if (saved.terminal?.foreground != null) {
+        matchingLog.info(
+          'Unknown terminal for tile; resuming its shell without replaying '
+          '"${saved.terminal!.foreground!.program}"',
+        );
+      }
       return ResumeLaunchPlan(
         config: LaunchConfig(argv: argv, workingDirectory: workingDirectory),
         context: resolved,
@@ -291,6 +348,94 @@ List<String> _fallbackArgv({
       if (!argument.isDocument || argument.exists) argument.value,
   ];
 }
+
+/// Arguments appended to the terminal command to replay the saved foreground
+/// program, or null when nothing safe can be replayed.
+List<String>? _terminalProgramArguments({
+  required ResumeContext saved,
+  required TerminalEmulator emulator,
+  required String? workingDirectory,
+  required Map<String, String> environment,
+  required bool Function(String path) isExecutable,
+  required bool includeSubcommand,
+}) {
+  final terminal = saved.terminal;
+  final foreground = terminal?.foreground;
+  if (terminal == null || foreground == null) {
+    return null;
+  }
+  if (!isSafeTerminalProgram(foreground.program)) {
+    matchingLog.info(
+      'Not replaying "${foreground.program}": not on the terminal allowlist',
+    );
+    return null;
+  }
+  final program = resolveExecutablePath(
+    foreground.program,
+    workingDirectory: workingDirectory,
+    environment: environment,
+    isExecutable: isExecutable,
+  );
+  if (program == null) {
+    matchingLog.warning(
+      'Saved terminal program "${foreground.program}" is gone; '
+      'resuming the shell only',
+    );
+    return null;
+  }
+
+  final shell = _resolveTerminalShell(
+    terminal.shell,
+    environment,
+    isExecutable,
+  );
+  if (shell == null) {
+    matchingLog.warning(
+      'No usable shell to keep alive after "${foreground.program}"; '
+      'resuming the shell only',
+    );
+    return null;
+  }
+
+  return [
+    ...includeSubcommand
+        ? emulator.commandArguments(workingDirectory)
+        : emulator.suffixArguments(workingDirectory),
+    ..._shellSurvivalCommand(shell, program, foreground.arguments),
+  ];
+}
+
+String? _resolveTerminalShell(
+  String? saved,
+  Map<String, String> environment,
+  bool Function(String path) isExecutable,
+) {
+  for (final candidate in [saved, environment['SHELL'], '/bin/sh']) {
+    if (candidate == null || candidate.isEmpty) {
+      continue;
+    }
+    if (!isTerminalShell(candidate)) {
+      continue;
+    }
+    final resolved = resolveExecutablePath(
+      candidate,
+      environment: environment,
+      isExecutable: isExecutable,
+    );
+    if (resolved != null) {
+      return resolved;
+    }
+  }
+  return null;
+}
+
+/// Runs [program] and then replaces the wrapper with the interactive shell, so
+/// the terminal remains at a prompt when the program exits.
+List<String> _shellSurvivalCommand(
+  String shell,
+  String program,
+  List<String> arguments,
+) => ['/bin/sh', '-c', r'"$@"; exec "$0"', shell, program, ...arguments];
 
 String _asFileArgument(String document) {
   final uri = Uri.tryParse(document);

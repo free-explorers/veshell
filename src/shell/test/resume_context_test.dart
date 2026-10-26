@@ -6,7 +6,7 @@ import 'package:shell/window/widget/resume_context_summary.dart';
 
 void main() {
   group('captureResumeContextFromProcessInfo', () {
-    test('captures command line, cwd and cgroup', () {
+    test('captures command line, cwd and executable', () {
       final info = ProcessInfoMessage(
         pid: 42,
         cgroup: '/user.slice/app.scope',
@@ -47,12 +47,121 @@ void main() {
       expect(context.terminal?.workingDirectory, '/home/user/src');
     });
 
+    test('captures an allowlisted foreground program', () {
+      final info = ProcessInfoMessage(
+        pid: 10,
+        cmdline: const ['foot'],
+        cwd: '/home/user',
+        exe: '/usr/bin/foot',
+        terminal: TerminalInfoMessage(
+          shell: ProcessDescriptorMessage(
+            pid: 11,
+            cmdline: const ['bash'],
+            cwd: '/home/user/src',
+            exe: '/usr/bin/bash',
+          ),
+          foreground: ProcessDescriptorMessage(
+            pid: 12,
+            cmdline: const ['htop', '-d', '10'],
+            cwd: '/home/user/src',
+            exe: '/usr/bin/htop',
+          ),
+        ),
+      );
+
+      final context = captureResumeContextFromProcessInfo(
+        info,
+        isExecutable: (path) => path == '/usr/bin/htop',
+      )!;
+
+      expect(context.terminal?.foreground?.program, '/usr/bin/htop');
+      expect(context.terminal?.foreground?.arguments, ['-d', '10']);
+    });
+
+    test('drops a foreground program that is not allowlisted', () {
+      final info = ProcessInfoMessage(
+        pid: 10,
+        cmdline: const ['foot'],
+        cwd: '/home/user',
+        exe: '/usr/bin/foot',
+        terminal: TerminalInfoMessage(
+          shell: ProcessDescriptorMessage(
+            pid: 11,
+            cmdline: const ['bash'],
+            cwd: '/home/user/src',
+            exe: '/usr/bin/bash',
+          ),
+          foreground: ProcessDescriptorMessage(
+            pid: 12,
+            cmdline: const ['ssh', 'host'],
+            exe: '/usr/bin/ssh',
+          ),
+        ),
+      );
+
+      final context = captureResumeContextFromProcessInfo(
+        info,
+        isExecutable: (_) => true,
+      )!;
+
+      expect(context.terminal, isNotNull);
+      expect(context.terminal?.foreground, isNull);
+      expect(context.workingDirectory, '/home/user/src');
+    });
+
+    test('drops an allowlisted program that is missing', () {
+      final info = ProcessInfoMessage(
+        pid: 10,
+        terminal: TerminalInfoMessage(
+          shell: ProcessDescriptorMessage(
+            pid: 11,
+            cmdline: const ['bash'],
+            cwd: '/home/user/src',
+            exe: '/usr/bin/bash',
+          ),
+          foreground: ProcessDescriptorMessage(
+            pid: 12,
+            cmdline: const ['htop'],
+            exe: '/usr/bin/htop',
+          ),
+        ),
+      );
+
+      final context = captureResumeContextFromProcessInfo(
+        info,
+        isExecutable: (_) => false,
+      )!;
+
+      expect(context.terminal?.foreground, isNull);
+    });
+
     test('returns null when /proc gave nothing useful', () {
       expect(captureResumeContextFromProcessInfo(null), isNull);
       expect(
         captureResumeContextFromProcessInfo(ProcessInfoMessage(pid: 1)),
         isNull,
       );
+    });
+
+    test('round-trips a terminal foreground through JSON', () {
+      final context = ResumeContext(
+        workingDirectory: '/home/user/src',
+        argv: const ['foot'],
+        executable: '/usr/bin/foot',
+        terminal: const TerminalResumeContext(
+          shell: '/usr/bin/bash',
+          workingDirectory: '/home/user/src',
+          foreground: ForegroundProgram(
+            program: '/usr/bin/htop',
+            arguments: ['-d', '10'],
+          ),
+        ),
+      );
+
+      final decoded = ResumeContext.fromJson(context.toJson());
+
+      expect(decoded.terminal?.foreground?.program, '/usr/bin/htop');
+      expect(decoded.terminal?.foreground?.arguments, ['-d', '10']);
     });
 
     test('compares contexts ignoring the capture timestamp', () {

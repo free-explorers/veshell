@@ -471,6 +471,41 @@ mod tests {
     }
 
     #[test]
+    fn falls_back_to_a_group_member_when_the_leader_exited() {
+        let root = proc_root();
+        add_process(&root, 100, 1, "foot", &["foot"], "/home/user");
+        add_process(&root, 101, 100, "bash", &["bash"], "/home/user/src");
+        add_process(
+            &root,
+            201,
+            101,
+            "nvim",
+            &["nvim", "file.txt"],
+            "/home/user/src",
+        );
+        std::fs::write(
+            root.join("101").join("stat"),
+            "101 (bash) S 100 101 101 34816 200 0",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("201").join("stat"),
+            "201 (nvim) S 101 200 101 34816 200 0",
+        )
+        .unwrap();
+
+        let terminal = ProcessInfo::for_pid_in(&root, 100)
+            .terminal
+            .expect("terminal info");
+        let foreground = terminal.foreground.expect("foreground group member");
+
+        assert_eq!(foreground.pid, 201);
+        assert_eq!(foreground.cmdline, vec!["nvim", "file.txt"]);
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
     fn a_shell_at_the_prompt_is_not_a_foreground_program() {
         let root = proc_root();
         add_process(&root, 100, 1, "foot", &["foot"], "/home/user");

@@ -127,6 +127,8 @@ class PersistentWindowState extends _$PersistentWindowState
       entryName: entry?.entries[DesktopEntryKey.name.string],
       entryIcon: entry?.entries[DesktopEntryKey.icon.string],
       homeDirectory: home,
+      appId: state.properties.appId,
+      environment: Platform.environment,
     );
     if (plan == null) {
       matchingLog.info(

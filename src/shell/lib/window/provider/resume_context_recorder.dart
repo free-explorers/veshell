@@ -18,7 +18,7 @@ part 'resume_context_recorder.g.dart';
 /// Window map/title changes capture immediately; this interval only covers
 /// state that changes without a platform event (a terminal `cd`, a foreground
 /// job starting or ending).
-const _refreshInterval = Duration(seconds: 5);
+const _refreshInterval = Duration(seconds: 2);
 
 /// Keeps each displayed tile's resume context in sync with its live process.
 @riverpod

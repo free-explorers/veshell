@@ -32,14 +32,14 @@ by helper surfaces). It stores:
 - the captured argv (fallback command line);
 - the executable identity;
 - the tracked-launch cgroup, used to find sibling tiles;
-- terminal shell/working directory (the foreground program replayed by #188);
+- terminal shell/working directory and the foreground program to replay;
 - the capture time.
 
 ### Capture
 
 The context is captured from the launch configuration, refreshed from
 `process_info` when a window maps and when its title changes, and polled every
-5 seconds while the tile displays a window. Rust reads `/proc/<pid>/cmdline`,
+2 seconds while the tile displays a window. Rust reads `/proc/<pid>/cmdline`,
 `cwd`, `exe`, and — for terminal windows — the shell descendant and its
 foreground job. Capture never blocks a launch; unreadable `/proc` facts simply
 leave the previous context in place.
@@ -83,8 +83,69 @@ does.
 The placeholder says **Start** with the application name while a tile has no
 saved context yet, and **Resume** with the saved summary afterwards.
 
-Terminal foreground-program replay, the allowlist and terminal-specific exec
-syntax are specified by #188.
+## Terminal resume
+
+For a terminal window the tile stores the shell and the shell's cwd, plus a
+foreground program when it is safe to replay.
+
+### What is captured
+
+A foreground program is stored only when all of these hold:
+
+- Rust reported it as the shell's actual foreground job (`tpgid`, not merely a
+  child process);
+- its basename is on the allowlist in
+  `src/shell/lib/application/model/terminal_program_policy.dart`
+  (editors, pagers, monitors, file managers, multiplexers and `man`/`info`);
+- it is not a shell, not in the explicit denylist, and not a build tool,
+  interpreter, package manager or remote-session command;
+- its captured executable still exists and is executable.
+
+Shells, `ssh`, `sudo`, package managers, builds, scripts and arbitrary commands
+are never replayed. If the program cannot be represented safely, the tile keeps
+the shell cwd only.
+
+### Resume
+
+The terminal starts in the shell cwd, then the saved program is run inside it:
+
+```text
+/bin/sh -c '"$@"; exec "$0"' <shell> <program> <args...>
+```
+
+The wrapper is non-interactive and non-login. When the program exits, it execs
+the captured shell, so the terminal stays at an interactive prompt. Program and
+arguments are positional argv elements, never shell-interpolated text.
+
+Command separators come from a small terminal table:
+
+- `alacritty`, `xterm`, `urxvt`, `st`, `sakura`, `konsole`,
+  `xfce4-terminal`, `ghostty` → `-e` / `-x` variants;
+- `foot`, `kitty`, `gnome-terminal`, `kgx` → `--`;
+- `wezterm` → `start --`, with `--cwd` when a cwd flag is needed.
+
+Known terminals also get their own working-directory flag where the emulator
+uses a server and would otherwise ignore the inherited cwd. An unknown terminal
+is not guessed: the tile opens its normal shell in the saved cwd and drops the
+program with a log line. A missing program, a non-executable program or a
+missing shell does the same.
+
+`htop` is therefore resumed; `ssh`, `sudo`, `make` and arbitrary scripts are
+not.
+
+### Custom exec
+
+A tile with a custom exec keeps it as the base command and still applies the
+saved cwd. If the custom command is a recognised terminal without a command
+separator, the saved foreground is appended with that terminal's syntax. If it
+already supplies a command (`-e`, `--`, `--command`, ...), it is left alone. A
+non-terminal custom command never gets a terminal program appended.
+
+### Refresh
+
+Shell cwd and foreground are refreshed while the terminal window lives (title
+changes and the 2-second process-info poll). The last context is kept when the
+window closes; closing the terminal does not forget it.
 
 ## Properties
 
