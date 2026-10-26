@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:defer_pointer/defer_pointer.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
@@ -10,9 +9,7 @@ import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
 import 'package:shell/file_chooser/widget/file_chooser_dialog.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
-import 'package:shell/meta_window/provider/meta_popup_for_id.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
-import 'package:shell/meta_window/widget/meta_popup.dart';
 import 'package:shell/meta_window/widget/meta_surface_decoration.dart';
 import 'package:shell/monitor/provider/monitor_by_name.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
@@ -134,21 +131,6 @@ class FloatingWindowArea extends HookConsumerWidget {
     final topMetaWindowId = orderedMetaWindows.isEmpty
         ? null
         : orderedMetaWindows.last.id;
-
-    // Popups (menus, X11 override-redirect toolbars) are positioned in output
-    // coordinates. Render them in a tile-level overlay rather than inside the
-    // parent's `FloatingWindow`: a large popup such as Zoom's meeting toolbar
-    // extends well beyond the small annotate palette, and Flutter would paint
-    // it (because the parent stack does not clip) while refusing to hit-test it
-    // outside the parent's bounds.
-    final popupIds = <String>[];
-    final popupParents = <String, MetaWindow>{};
-    for (final metaWindow in metaWindows.values) {
-      for (final popupId in ref.watch(metaPopupForIdProvider(metaWindow.id))) {
-        popupIds.add(popupId);
-        popupParents[popupId] = metaWindow;
-      }
-    }
 
     final monitorName = CurrentMonitorName.of(context);
     final monitorLocation =
@@ -341,9 +323,6 @@ class FloatingWindowArea extends HookConsumerWidget {
           tileGlobalOrigin: contentRect.value?.topLeft,
           clientOrigin: clientOriginFor(metaWindow, contentRect.value),
           maximized: metaWindow.id == maximizedMetaWindowId,
-          // Popups live in the tile-level overlay below so they can receive
-          // input outside this window's box.
-          showPopups: false,
           onRaise: () {
             focusNode?.requestFocus();
             raise(metaWindow.id);
@@ -368,36 +347,6 @@ class FloatingWindowArea extends HookConsumerWidget {
                   if (floatingChildren.isNotEmpty)
                     ContainerWithPositionnableChildren(
                       children: floatingChildren,
-                    ),
-                  if (popupIds.isNotEmpty)
-                    Positioned.fill(
-                      // Same pointer contract as a surface and its popups: the
-                      // deferred handler must be an ancestor of the popup's
-                      // input listener for clicks to reach the popup surface.
-                      //
-                      // Popups live in output/root coordinates. This overlay
-                      // fills the measured content area, so its origin is the
-                      // tile content origin and it follows the tile when the
-                      // workspace moves — no separately cached offset.
-                      child: DeferredPointerHandler(
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            for (final popupId in popupIds)
-                              MetaPopupWidget(
-                                metaPopupId: popupId,
-                                parentOrigin:
-                                    popupParents[popupId]
-                                        ?.windowPlacement
-                                        ?.origin ??
-                                    popupParents[popupId]?.position ??
-                                    Offset.zero,
-                                coordinateOffset:
-                                    contentRect.value?.topLeft ?? Offset.zero,
-                              ),
-                          ],
-                        ),
-                      ),
                     ),
                 ],
               ),

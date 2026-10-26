@@ -164,6 +164,10 @@ pub mod xdg {
                         .map(|popup| popup.parent)
                 })
                 .expect("Popup parent has no root meta window");
+            let position = self
+                .meta_window_state
+                .popup_tile_position(&parent_meta_window_id, position)
+                .unwrap_or(position);
 
             info!(
                 target: "veshell::geometry",
@@ -350,8 +354,20 @@ pub mod xdg {
                 // `XdgPopupSurfaceData` through `parent()`, which deadlocks if
                 // nested inside `with_pending_state`.
                 let geometry_loc = surface.with_pending_state(|state| state.geometry.loc);
-                let position =
+                let parent_relative =
                     geometry_loc + get_popup_toplevel_coords(&PopupKind::Xdg(surface.clone()));
+                let parent_meta_window_id = self
+                    .meta_window_state
+                    .meta_popups
+                    .get(&meta_popup_id)
+                    .map(|popup| popup.parent.clone());
+                let position = parent_meta_window_id
+                    .as_deref()
+                    .and_then(|parent| {
+                        self.meta_window_state
+                            .popup_tile_position(parent, parent_relative)
+                    })
+                    .unwrap_or(parent_relative);
                 self.patch_meta_popup(
                     MetaPopupPatch::UpdatePosition {
                         id: meta_popup_id,
@@ -811,8 +827,12 @@ pub mod xdg {
                 // `XdgPopupSurfaceData` via `parent()`, so it must run after
                 // `with_pending_state` has released the lock.
                 let geometry_loc = surface.with_pending_state(|state| state.geometry.loc);
-                let new_position =
+                let parent_relative =
                     geometry_loc + get_popup_toplevel_coords(&PopupKind::Xdg(surface.clone()));
+                let new_position = self
+                    .meta_window_state
+                    .popup_tile_position(meta_window_id, parent_relative)
+                    .unwrap_or(parent_relative);
                 if previous_position == Some(new_position) {
                     continue;
                 }

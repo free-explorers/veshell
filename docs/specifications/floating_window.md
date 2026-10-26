@@ -54,11 +54,12 @@ window.
 For a Wayland CSD window, pointer coordinates are based on the surface-buffer
 origin: `box_origin - geometry_offset`. X11 has a zero geometry offset, so its
 root position is the surface origin. Flutter publishes each window's rendered
-client-surface origin; a popup's surface origin is derived as
-`parent_render_origin + popup.position - popup.geometry_offset`. This also works
-for tiled windows, whose native X11 position can be synthetic. Popups are stored
-relative to their parent window box and are re-constrained when the parent size
-changes.
+client-surface origin; popup placement is expressed relative to the owning
+tile's content origin, not to the parent window. The tile popup host renders
+popups directly in that space, so a popup follows its tile and is clipped to
+it. Moving a parent window inside the tile does not move an X11
+override-redirect popup; Wayland xdg popup positions are translated by the
+Wayland adapter because their protocol position is parent-relative.
 
 X11 override-redirect windows are categorized when they enter the model. Menus,
 tooltips and regular popups stay renderable; one-pixel and non-interactive

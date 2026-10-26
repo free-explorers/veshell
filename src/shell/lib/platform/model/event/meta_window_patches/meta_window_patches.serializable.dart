@@ -114,6 +114,12 @@ sealed class MetaWindowPatchMessage
     @OffsetIntConverter() Offset? value,
   }) = UpdateRenderOrigin;
 
+  /// The owning tile's content origin in compositor-global coordinates.
+  const factory MetaWindowPatchMessage.updateTileOrigin({
+    required String id,
+    @OffsetIntConverter() Offset? value,
+  }) = UpdateTileOrigin;
+
   const factory MetaWindowPatchMessage.updateGeometry({
     required String id,
     @RectConverter() Rect? value,

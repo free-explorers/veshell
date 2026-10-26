@@ -6,51 +6,27 @@ import 'package:shell/shared/util/snapping.dart';
 import 'package:shell/wayland/widget/surface.dart';
 
 class MetaPopupWidget extends HookConsumerWidget {
-  const MetaPopupWidget({
-    required this.metaPopupId,
-    this.parentOrigin = Offset.zero,
-    this.coordinateOffset = Offset.zero,
-    super.key,
-  });
+  const MetaPopupWidget({required this.metaPopupId, super.key});
 
   final MetaPopupId metaPopupId;
-
-  /// Compositor-global origin of the popup parent's window box.
-  ///
-  /// [MetaPopup.position] is stored relative to that box for both backends, so
-  /// a popup rendered outside the parent's own surface stack (the floating
-  /// tile overlay) must add it back before subtracting the overlay origin.
-  final Offset parentOrigin;
-
-  /// Origin of the overlay that hosts the popup, in compositor-global
-  /// coordinates.
-  ///
-  /// A popup rendered in a tile-level overlay must subtract the overlay's own
-  /// compositor origin, or it is offset by the workspace/sidebar and its
-  /// pointer coordinates are mapped as if it were somewhere else.
-  final Offset coordinateOffset;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final metaPopup = ref.watch(metaPopupStateProvider(metaPopupId));
     // Backing/preview windows are tracked by the compositor but are not UI.
-    // Filtering here keeps every popup host (surface stack and floating
-    // overlay) consistent instead of duplicating the category check.
+    // Filtering here keeps the single tile popup host consistent instead of
+    // duplicating the category check.
     if (metaPopup.category == MetaPopupCategory.helper) {
       return const SizedBox.shrink();
     }
+    // Popup positions are already in tile-content coordinates. The tile popup
+    // host shares that coordinate origin, so no parent/overlay translation is
+    // allowed here.
+    //
     // Keep the popup on the whole-pixel grid: a fractional origin would make
     // Flutter sample its external texture bilinearly and soften it (see
     // `snapToWholePixel`).
-    //
-    // A maximized MetaWindow is undecorated: the SSD title bar is only used by
-    // dialogs. Do not add its height to popup positions here.
-    final position = snapOffsetToWholePixels(
-      metaPopup.position +
-          parentOrigin -
-          Offset(metaPopup.geometry?.left ?? 0, metaPopup.geometry?.top ?? 0) -
-          coordinateOffset,
-    );
+    final position = snapOffsetToWholePixels(metaPopup.placement.surfaceOrigin);
     return Positioned(
       left: position.dx,
       top: position.dy,

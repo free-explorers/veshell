@@ -8,8 +8,12 @@ import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/capture/provider/recording_workspaces.dart';
 import 'package:shell/capture/provider/screen_cast_indicator.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/meta_window/model/meta_window.serializable.dart';
+import 'package:shell/meta_window/widget/tile_popup_host.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
+import 'package:shell/window/provider/dialog_set_for_window.dart';
+import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/selected_dialog_for_window.dart';
 import 'package:shell/window/widget/floating_window_area.dart';
@@ -131,6 +135,20 @@ class PersistentWindowTileable extends Tileable {
             child: content,
           );
 
+    final dialogWindowIds = ref.watch(dialogSetForWindowProvider(windowId));
+    final popupMetaWindowIds = <MetaWindowId>[];
+    if (metaWindowId != null) {
+      popupMetaWindowIds.add(metaWindowId);
+    }
+    for (final dialogWindowId in dialogWindowIds) {
+      final dialogMetaWindowId = ref
+          .watch(dialogWindowStateProvider(dialogWindowId))
+          .metaWindowId;
+      if (dialogMetaWindowId != null) {
+        popupMetaWindowIds.add(dialogMetaWindowId);
+      }
+    }
+
     return ClipRect(
       child: Stack(
         fit: StackFit.expand,
@@ -165,6 +183,9 @@ class PersistentWindowTileable extends Tileable {
               // tiles bypass it entirely and float every native child instead.
               child: area,
             ),
+          ),
+          Positioned.fill(
+            child: TilePopupHost(metaWindowIds: popupMetaWindowIds),
           ),
         ],
       ),

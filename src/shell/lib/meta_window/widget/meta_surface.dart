@@ -3,9 +3,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
-import 'package:shell/meta_window/provider/meta_popup_for_id.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
-import 'package:shell/meta_window/widget/meta_popup.dart';
 import 'package:shell/meta_window/widget/meta_surface_decoration.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
@@ -20,7 +18,6 @@ class MetaSurfaceWidget extends HookConsumerWidget {
     required this.metaWindowId,
     required this.decorated,
     this.focusNode,
-    this.showPopups = true,
     this.onTitleBarMoveStart,
     super.key,
   });
@@ -34,15 +31,6 @@ class MetaSurfaceWidget extends HookConsumerWidget {
   /// native move; the dialog area leaves it `null` and keeps the historical
   /// local drag.
   final VoidCallback? onTitleBarMoveStart;
-
-  /// Whether popups (menus, X11 override-redirect toolbars) are drawn as
-  /// children of this surface.
-  ///
-  /// A floating stack draws them in a tile-level overlay instead: a popup can
-  /// extend far outside its parent window's box, and Flutter cannot hit-test a
-  /// child outside its parent's bounds. Keeping them here would make e.g. the
-  /// Zoom meeting toolbar visible but unclickable.
-  final bool showPopups;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final metaWindow = ref.watch(metaWindowStateProvider(metaWindowId));
@@ -50,7 +38,6 @@ class MetaSurfaceWidget extends HookConsumerWidget {
     final surfaceId = ref.watch(
       metaWindowStateProvider(metaWindowId).select((value) => value.surfaceId),
     );
-    final popups = ref.watch(metaPopupForIdProvider(metaWindowId));
     final offset = Offset(
       -1 * (metaWindow.geometry?.left ?? 0),
       -1 * (metaWindow.geometry?.top ?? 0),
@@ -150,9 +137,6 @@ class MetaSurfaceWidget extends HookConsumerWidget {
                     ),
                   ),
                 ),
-                if (showPopups)
-                  for (final popupId in popups)
-                    MetaPopupWidget(metaPopupId: popupId),
               ],
             ),
           ),

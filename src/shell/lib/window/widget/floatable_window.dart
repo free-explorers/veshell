@@ -60,7 +60,6 @@ class FloatableWindow extends HookConsumerWidget {
     this.clientOrigin,
     this.maximized = false,
     this.onRaise,
-    this.showPopups = true,
     super.key,
   });
   final MetaWindowId metaWindowId;
@@ -95,12 +94,6 @@ class FloatableWindow extends HookConsumerWidget {
   /// processes the event. The floating stack uses it to raise the window (and
   /// activate it) above its siblings.
   final VoidCallback? onRaise;
-
-  /// Whether popups are drawn inside this window's box.
-  ///
-  /// The floating stack turns this off and renders popups in a tile-level
-  /// overlay, so they can be hit-tested outside the parent window's bounds.
-  final bool showPopups;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -793,7 +786,6 @@ class FloatableWindow extends HookConsumerWidget {
     final surface = MetaSurfaceWidget(
       metaWindowId: metaWindowId,
       decorated: metaWindow.needDecoration,
-      showPopups: showPopups,
       onTitleBarMoveStart: onTitleBarMoveStart,
     );
 

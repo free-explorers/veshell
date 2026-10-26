@@ -618,11 +618,11 @@ pub mod xwayland {
                         .meta_popups
                         .get(&meta_popup_id)
                         .map(|popup| popup.parent.clone());
-                    let parent_box = parent_meta_window_id
+                    let tile_origin = parent_meta_window_id
                         .as_deref()
-                        .map(|parent| self.meta_window_state.meta_window_box_origin(parent))
+                        .and_then(|parent| self.meta_window_state.tile_content_origin(parent))
                         .unwrap_or_else(|| Point::from((0, 0)));
-                    let position = geometry.loc - parent_box;
+                    let position = geometry.loc - tile_origin;
                     let previous = self
                         .meta_window_state
                         .meta_popups
@@ -1267,14 +1267,13 @@ pub mod xwayland {
                 {
                     let geometry = surface.geometry();
                     // X11 reports override-redirect popups at the root. Store
-                    // them relative to the parent window box, the same space
-                    // Wayland xdg popups use, so the shell can place a popup in
-                    // either a tile or a floating overlay without knowing the
-                    // backend.
-                    let parent_box = self
+                    // them relative to the owning tile's content origin so the
+                    // tile popup host can render them in every display mode.
+                    let tile_origin = self
                         .meta_window_state
-                        .meta_window_box_origin(parent_meta_window_id);
-                    let position = surface.last_configure().loc - parent_box;
+                        .tile_content_origin(parent_meta_window_id)
+                        .unwrap_or_else(|| Point::from((0, 0)));
+                    let position = surface.last_configure().loc - tile_origin;
                     let meta_popup = self.create_meta_popup(MetaPopup {
                         id: Uuid::new_v4().hyphenated().to_string(),
                         category: x11_popup_category(&surface, geometry),

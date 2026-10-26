@@ -24,7 +24,10 @@ use crate::{
     state::State,
 };
 
-use super::{determine_desktop_file_app_id_from_pid, meta_popup::MetaPopup};
+use super::{
+    determine_desktop_file_app_id_from_pid,
+    meta_popup::{MetaPopup, MetaPopupPatch},
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -140,6 +143,14 @@ pub enum MetaWindowPatch {
         id: String,
         value: Option<MyPoint<i32, Logical>>,
     },
+    /// The owning tile's content origin in compositor-global coordinates.
+    ///
+    /// Popups are stored relative to this origin so they follow the tile and
+    /// never follow a parent window move accidentally.
+    UpdateTileOrigin {
+        id: String,
+        value: Option<MyPoint<i32, Logical>>,
+    },
     /// Surface-local geometry. Never a native/global window position.
     UpdateGeometry {
         id: String,
@@ -244,6 +255,10 @@ pub struct MetaWindow {
     /// the viewport so a tile/workspace move can translate the native window
     /// by the same delta.
     pub viewport_origin: Option<MyPoint<i32, Logical>>,
+    /// The owning tile's content origin in global coordinates. Published by
+    /// the tile popup host for every display mode; popup positions and native
+    /// X11 popup coordinates are normalized against it.
+    pub tile_origin: Option<MyPoint<i32, Logical>>,
     pub geometry: Option<MyRectangle<i32, Logical>>,
     pub need_decoration: bool,
     pub current_output: Option<String>,
@@ -789,6 +804,65 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         return;
                     }
                     meta_window.render_origin = value;
+                }
+            }
+            MetaWindowPatch::UpdateTileOrigin { id, value } => {
+                let previous_effective = self.meta_window_state.tile_content_origin(&id);
+                let had_origin = self
+                    .meta_window_state
+                    .meta_windows
+                    .get(&id)
+                    .is_some_and(|meta_window| meta_window.tile_origin.is_some());
+                if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
+                    let equal = match (&meta_window.tile_origin, &value) {
+                        (Some(current), Some(next)) => {
+                            current.0.x == next.0.x && current.0.y == next.0.y
+                        }
+                        (None, None) => true,
+                        _ => false,
+                    };
+                    if equal {
+                        return;
+                    }
+                    meta_window.tile_origin = value.clone();
+                }
+                if !had_origin {
+                    // Popups created before the first host measurement used a
+                    // fallback tile origin. Rebase them once to the measured
+                    // origin; later tile moves must leave tile-relative
+                    // positions untouched.
+                    if let (Some(previous), Some(next)) =
+                        (previous_effective, value.as_ref().map(|value| value.0))
+                    {
+                        let dx = previous.x - next.x;
+                        let dy = previous.y - next.y;
+                        if dx != 0 || dy != 0 {
+                            let popups: Vec<(String, MyPoint<i32, Logical>)> = self
+                                .meta_window_state
+                                .meta_popups
+                                .values()
+                                .filter(|popup| popup.parent == id)
+                                .map(|popup| {
+                                    (
+                                        popup.id.clone(),
+                                        MyPoint::from(Point::from((
+                                            popup.position.0.x + dx,
+                                            popup.position.0.y + dy,
+                                        ))),
+                                    )
+                                })
+                                .collect();
+                            for (popup_id, position) in popups {
+                                self.patch_meta_popup(
+                                    MetaPopupPatch::UpdatePosition {
+                                        id: popup_id,
+                                        value: position,
+                                    },
+                                    true,
+                                );
+                            }
+                        }
+                    }
                 }
             }
             MetaWindowPatch::UpdateGeometry { id, value } => {

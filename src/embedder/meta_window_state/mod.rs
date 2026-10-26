@@ -67,53 +67,138 @@ impl MetaWindowState {
         }
     }
 
-    /// The compositor-global origin of a MetaWindow's box.
+    /// The compositor-global origin of the tile content area that owns a
+    /// window.
     ///
-    /// Popup positions are stored relative to their parent window box, so the
-    /// same popup can be rendered inside a tile or in a floating overlay. A
-    /// missing position (a Wayland window before the shell placed it) falls
-    /// back to the global origin; callers that need a native position already
-    /// guard on `MetaWindow::position`.
-    pub fn meta_window_box_origin(&self, meta_window_id: &str) -> Point<i32, Logical> {
-        self.meta_windows
-            .get(meta_window_id)
-            .and_then(|window| window.position.as_ref())
-            .map(|position| position.0)
-            .unwrap_or_else(|| Point::from((0, 0)))
+    /// The tile popup host publishes this for every display mode. Floating
+    /// windows fall back to their measured viewport origin, and tiled windows
+    /// to their rendered surface origin, so popups can be normalized before
+    /// the first host frame completes.
+    pub fn tile_content_origin(&self, meta_window_id: &str) -> Option<Point<i32, Logical>> {
+        let meta_window = self.meta_windows.get(meta_window_id)?;
+        meta_window
+            .tile_origin
+            .as_ref()
+            .map(|origin| origin.0)
+            .or_else(|| {
+                if meta_window.is_floating() {
+                    meta_window
+                        .viewport_origin
+                        .as_ref()
+                        .map(|origin| origin.0)
+                        .or_else(|| meta_window.position.as_ref().map(|position| position.0))
+                } else {
+                    meta_window
+                        .render_origin
+                        .as_ref()
+                        .map(|origin| origin.0)
+                        .or_else(|| meta_window.position.as_ref().map(|position| position.0))
+                }
+            })
+    }
+
+    /// The compositor-global origin of a window's client surface.
+    ///
+    /// A floating window's native surface is authoritative; a tiled window
+    /// uses the origin rendered by Flutter because its native X11 position can
+    /// be synthetic.
+    pub fn meta_window_surface_origin(&self, meta_window_id: &str) -> Option<Point<f64, Logical>> {
+        let meta_window = self.meta_windows.get(meta_window_id)?;
+        if meta_window.is_floating() {
+            meta_window.surface_origin().or_else(|| {
+                meta_window
+                    .render_origin
+                    .as_ref()
+                    .map(|origin| Point::from((f64::from(origin.0.x), f64::from(origin.0.y))))
+            })
+        } else {
+            meta_window
+                .render_origin
+                .as_ref()
+                .map(|origin| Point::from((f64::from(origin.0.x), f64::from(origin.0.y))))
+                .or_else(|| meta_window.surface_origin())
+        }
+    }
+
+    /// The owning tile-relative origin of a window's client box.
+    ///
+    /// Wayland xdg popups report coordinates relative to the parent window
+    /// box, not its surface buffer. A floating window already stores that box
+    /// origin in `position`; a tiled window derives it from Flutter's surface
+    /// render origin plus the surface-local geometry offset.
+    pub fn meta_window_box_tile_origin(&self, meta_window_id: &str) -> Option<Point<i32, Logical>> {
+        let tile_origin = self.tile_content_origin(meta_window_id)?;
+        let meta_window = self.meta_windows.get(meta_window_id)?;
+        let global_box_origin = if meta_window.is_floating() {
+            meta_window
+                .position
+                .as_ref()
+                .map(|position| position.0)
+                .or_else(|| {
+                    meta_window.render_origin.as_ref().map(|origin| {
+                        let geometry_offset = meta_window
+                            .geometry
+                            .as_ref()
+                            .map(|geometry| geometry.0.loc)
+                            .unwrap_or_else(|| Point::from((0, 0)));
+                        Point::from((
+                            origin.0.x + geometry_offset.x,
+                            origin.0.y + geometry_offset.y,
+                        ))
+                    })
+                })?
+        } else {
+            meta_window
+                .render_origin
+                .as_ref()
+                .map(|origin| {
+                    let geometry_offset = meta_window
+                        .geometry
+                        .as_ref()
+                        .map(|geometry| geometry.0.loc)
+                        .unwrap_or_else(|| Point::from((0, 0)));
+                    Point::from((
+                        origin.0.x + geometry_offset.x,
+                        origin.0.y + geometry_offset.y,
+                    ))
+                })
+                .or_else(|| meta_window.position.as_ref().map(|position| position.0))?
+        };
+        Some(Point::from((
+            global_box_origin.x - tile_origin.x,
+            global_box_origin.y - tile_origin.y,
+        )))
+    }
+
+    /// Convert a position that is relative to a parent window's client box
+    /// into the owning tile's content coordinates.
+    ///
+    /// Wayland xdg popups report parent-box-relative coordinates. The shared
+    /// popup model stores tile-relative coordinates; this boundary conversion
+    /// keeps the protocol-specific space out of the renderer.
+    pub fn popup_tile_position(
+        &self,
+        parent_meta_window_id: &str,
+        parent_relative: Point<i32, Logical>,
+    ) -> Option<Point<i32, Logical>> {
+        let parent_tile_origin = self.meta_window_box_tile_origin(parent_meta_window_id)?;
+        Some(Point::from((
+            parent_tile_origin.x + parent_relative.x,
+            parent_tile_origin.y + parent_relative.y,
+        )))
     }
 
     /// The compositor-global origin of a popup's client surface.
     ///
-    /// Popup positions are stored relative to the parent window box. The parent
-    /// render origin comes from Flutter, so the same formula works for floating
-    /// windows and for tiled windows whose native X11 position is synthetic.
+    /// Popup positions are stored relative to the owning tile's content
+    /// origin. The tile origin is the anchor, so moving the tile moves the
+    /// popup while moving its parent window does not.
     pub fn popup_surface_origin(&self, popup: &MetaPopup) -> Option<Point<f64, Logical>> {
-        let parent = self.meta_windows.get(&popup.parent)?;
-        // A floating parent's native surface origin is authoritative and moves
-        // with the model. Falling back to Flutter's render origin here leaves a
-        // stale value between an X11 configure and the next Flutter frame,
-        // which feeds a self-moving override-redirect popup back into itself.
-        let parent_origin = if parent.is_floating() {
-            parent.surface_origin().or_else(|| {
-                parent
-                    .render_origin
-                    .as_ref()
-                    .map(|origin| Point::from((f64::from(origin.0.x), f64::from(origin.0.y))))
-            })?
-        } else {
-            parent
-                .render_origin
-                .as_ref()
-                .map(|origin| Point::from((f64::from(origin.0.x), f64::from(origin.0.y))))?
-        };
-        let geometry = popup
-            .geometry
-            .as_ref()
-            .map(|geometry| geometry.0.loc)
-            .unwrap_or_else(|| Point::from((0, 0)));
+        let tile_origin = self.tile_content_origin(&popup.parent)?;
+        let surface_origin = popup.placement().surface_origin();
         Some(Point::from((
-            parent_origin.x + f64::from(popup.position.0.x - geometry.x),
-            parent_origin.y + f64::from(popup.position.0.y - geometry.y),
+            f64::from(tile_origin.x) + surface_origin.x,
+            f64::from(tile_origin.y) + surface_origin.y,
         )))
     }
 
@@ -449,6 +534,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             render_origin: None,
             viewport: None,
             viewport_origin: None,
+            tile_origin: None,
             geometry,
             current_output: None,
             need_decoration: !is_decorated,
@@ -538,6 +624,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             render_origin: None,
             viewport: None,
             viewport_origin: None,
+            tile_origin: None,
             current_output: None,
             geometry: Some(x11_surface.geometry().into()),
             need_decoration: !x11_surface.is_decorated(),
@@ -697,6 +784,7 @@ mod tests {
             render_origin: None,
             viewport: None,
             viewport_origin: None,
+            tile_origin: None,
             geometry: None,
             need_decoration: false,
             current_output: None,
@@ -718,7 +806,43 @@ mod tests {
     }
 
     #[test]
-    fn popup_origin_uses_the_parent_render_origin() {
+    fn wayland_popup_position_uses_the_parent_box_not_the_surface() {
+        let mut parent = window("parent", 1, Some("org.example.Parent"));
+        parent.display_mode = Some(DisplayMode::Floating);
+        parent.position = Some(Point::from((48, 30)).into());
+        parent.tile_origin = Some(Point::from((48, 48)).into());
+        parent.geometry = Some(Rectangle::new((24, 21).into(), (2512, 1392).into()).into());
+        let state = state_with(vec![parent], &[]);
+
+        assert_eq!(
+            state.popup_tile_position("parent", Point::from((550, 66))),
+            Some(Point::from((550, 48)))
+        );
+    }
+
+    #[test]
+    fn popup_origin_uses_the_tile_origin() {
+        let mut parent = window("parent", 1, Some("org.example.Parent"));
+        parent.tile_origin = Some(Point::from((100, 200)).into());
+        let state = state_with(vec![parent], &[]);
+        let popup = MetaPopup {
+            id: "popup".to_string(),
+            parent: "parent".to_string(),
+            category: MetaPopupCategory::Popup,
+            position: Point::from((30, 40)).into(),
+            geometry: Some(Rectangle::new((10, 10).into(), (100, 100).into()).into()),
+            surface_id: 0,
+            scale_ratio: 1.0,
+        };
+
+        assert_eq!(
+            state.popup_surface_origin(&popup),
+            Some(Point::from((120.0, 230.0)))
+        );
+    }
+
+    #[test]
+    fn popup_origin_uses_the_parent_render_origin_as_a_fallback() {
         let mut parent = window("parent", 1, Some("org.example.Parent"));
         parent.render_origin = Some(Point::from((700, 120)).into());
         let state = state_with(vec![parent], &[]);

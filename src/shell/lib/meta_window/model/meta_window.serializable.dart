@@ -32,6 +32,10 @@ abstract class MetaWindow with _$MetaWindow {
     /// An unplaced floating window is centred; an explicit `(0,0)` is kept.
     @Default(false) bool positionExplicit,
 
+    /// The owning tile's content origin in compositor-global coordinates.
+    /// Published by the tile popup host for every display mode.
+    @OffsetIntConverter() Offset? tileOrigin,
+
     /// Compositor-global client-surface origin as rendered by Flutter.
     ///
     /// Unlike [position], this is valid for tiled windows whose native X11

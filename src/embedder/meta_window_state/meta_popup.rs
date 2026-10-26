@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use smithay::{
-    utils::Logical,
+    utils::{Logical, Point},
     wayland::{compositor::with_states, fractional_scale::with_fractional_scale},
     xwayland::XWaylandClientData,
 };
@@ -11,6 +11,28 @@ use crate::{
     flutter_engine::wayland_messages::{MyPoint, MyRectangle},
     state::State,
 };
+
+/// The tile-content placement of a popup's client surface.
+///
+/// `origin` is the popup box origin relative to the owning tile's content
+/// origin; `geometry_offset` is the surface-local offset inside the popup
+/// buffer. This mirrors `WindowPlacement`, with the tile as the coordinate
+/// anchor instead of the compositor root.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PopupPlacement {
+    pub origin: Point<i32, Logical>,
+    pub geometry_offset: Point<i32, Logical>,
+}
+
+impl PopupPlacement {
+    /// The origin pointer coordinates are relative to.
+    pub fn surface_origin(&self) -> Point<f64, Logical> {
+        Point::from((
+            f64::from(self.origin.x - self.geometry_offset.x),
+            f64::from(self.origin.y - self.geometry_offset.y),
+        ))
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -35,17 +57,33 @@ pub struct MetaPopup {
     pub id: String,
     pub parent: String,
     pub category: MetaPopupCategory,
-    /// Position of the popup surface relative to the parent window box's
-    /// top-left corner.
+    /// Position of the popup surface relative to the owning tile's content
+    /// origin.
     ///
     /// X11 reports override-redirect popups at the root and Wayland xdg
-    /// popups relative to the toplevel; both are normalized to this space when
-    /// they enter the model. A host (tile surface stack or floating overlay)
-    /// adds its own parent origin when it places the popup.
+    /// popups relative to the parent; both are normalized to tile-content
+    /// coordinates when they enter the model. The tile popup host renders
+    /// directly in this space, so moving a parent window inside the tile does
+    /// not move an X11 popup.
     pub position: MyPoint<i32, Logical>,
     pub geometry: Option<MyRectangle<i32, Logical>>,
     pub surface_id: u64,
     pub scale_ratio: f64,
+}
+
+impl MetaPopup {
+    /// The tile-content placement represented by the current model.
+    pub fn placement(&self) -> PopupPlacement {
+        let geometry_offset = self
+            .geometry
+            .as_ref()
+            .map(|geometry| geometry.0.loc)
+            .unwrap_or_else(|| Point::from((0, 0)));
+        PopupPlacement {
+            origin: self.position.0,
+            geometry_offset,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -113,6 +151,48 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             );
         }
     }
+    /// Translate the Wayland popups owned by a root window after the parent
+    /// itself moves inside its tile.
+    ///
+    /// X11 override-redirect popups are deliberately excluded: they are
+    /// independent native windows and only a native configure event may move
+    /// them. Wayland xdg popups, by contrast, follow their parent.
+    pub fn translate_wayland_popups_for_root(
+        &mut self,
+        parent_meta_window_id: &str,
+        dx: i32,
+        dy: i32,
+    ) {
+        if dx == 0 && dy == 0 {
+            return;
+        }
+        let popups: Vec<(String, MyPoint<i32, Logical>)> = self
+            .meta_window_state
+            .meta_popups
+            .values()
+            .filter(|popup| popup.parent == parent_meta_window_id)
+            .filter(|popup| self.xdg_popups.contains_key(&popup.surface_id))
+            .map(|popup| {
+                (
+                    popup.id.clone(),
+                    MyPoint::from(Point::from((
+                        popup.position.0.x + dx,
+                        popup.position.0.y + dy,
+                    ))),
+                )
+            })
+            .collect();
+        for (popup_id, position) in popups {
+            self.patch_meta_popup(
+                MetaPopupPatch::UpdatePosition {
+                    id: popup_id,
+                    value: position,
+                },
+                true,
+            );
+        }
+    }
+
     pub fn remove_meta_popup(&mut self, meta_popup_id: &String) {
         // Role teardown and surface destruction can both report the same popup.
         // Emit one removal event and clear the reverse mapping on the first

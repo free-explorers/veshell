@@ -234,7 +234,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let size = self
             .x11_surface_for_meta_window(&meta_window)
             .map(|surface| surface.last_configure().size);
-        self.apply_floating_position(&meta_window, clamped, true);
+        self.apply_floating_position(&meta_window, clamped, true, true);
     }
 
     /// Ends the current move, if any.
@@ -260,7 +260,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             return;
         }
         let position = self.clamp_to_viewport(&meta_window, position);
-        self.apply_floating_position(&meta_window, position, true);
+        self.apply_floating_position(&meta_window, position, true, true);
     }
 
     /// Clamps an explicitly placed floating window inside its tile.
@@ -286,7 +286,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let position = Point::from((f64::from(position.0.x), f64::from(position.0.y)));
         let clamped = self.clamp_to_viewport(&meta_window, position);
         if clamped != position {
-            self.apply_floating_position(&meta_window, clamped, false);
+            self.apply_floating_position(&meta_window, clamped, false, true);
         }
     }
 
@@ -316,7 +316,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             f64::from(position.0.x) + f64::from(dx),
             f64::from(position.0.y) + f64::from(dy),
         ));
-        self.apply_floating_position(&meta_window, position, false);
+        self.apply_floating_position(&meta_window, position, false, false);
     }
 
     /// Centres an unplaced floating window inside its tile.
@@ -366,6 +366,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             &meta_window,
             Point::from((f64::from(placement.origin.x), f64::from(placement.origin.y))),
             false,
+            true,
         );
     }
 
@@ -374,8 +375,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         meta_window: &MetaWindow,
         position: Point<f64, Logical>,
         mark_explicit: bool,
+        follow_wayland_popups: bool,
     ) {
         let logical = Point::from((position.x.round() as i32, position.y.round() as i32));
+        let previous_position = meta_window.position.as_ref().map(|position| position.0);
 
         // Configure the native X11 window first, then publish the observed
         // position. The shell renders from `position`; keeping the native
@@ -430,6 +433,15 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             },
             true,
         );
+        if follow_wayland_popups {
+            if let Some(previous_position) = previous_position {
+                self.translate_wayland_popups_for_root(
+                    &meta_window.id,
+                    logical.x - previous_position.x,
+                    logical.y - previous_position.y,
+                );
+            }
+        }
     }
 
     fn clamp_to_viewport(

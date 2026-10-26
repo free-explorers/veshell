@@ -21,6 +21,7 @@ import 'package:shell/meta_window/widget/meta_popup.dart';
 import 'package:shell/meta_window/widget/meta_surface.dart';
 import 'package:shell/meta_window/widget/meta_surface_decoration.dart';
 import 'package:shell/meta_window/widget/meta_surface_resize_handle.dart';
+import 'package:shell/meta_window/widget/tile_popup_host.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/platform/model/event/interactive_resize/interactive_resize.serializable.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
@@ -1310,9 +1311,7 @@ void main() {
     expect(origins.last.value, isNotNull);
   });
 
-  testWidgets('a popup in a tile overlay uses its parent box origin', (
-    tester,
-  ) async {
+  testWidgets('a popup uses its tile-relative position', (tester) async {
     final container = ProviderContainer(
       overrides: [
         metaPopupStateProvider('meta-popup').overrideWith(
@@ -1346,13 +1345,7 @@ void main() {
                 name: 'M1',
                 child: DeferredPointerHandler(
                   child: Stack(
-                    children: [
-                      MetaPopupWidget(
-                        metaPopupId: 'meta-popup',
-                        parentOrigin: Offset(48, 48),
-                        coordinateOffset: Offset(48, 48),
-                      ),
-                    ],
+                    children: [MetaPopupWidget(metaPopupId: 'meta-popup')],
                   ),
                 ),
               ),
@@ -1472,10 +1465,17 @@ void main() {
                 height: 300,
                 child: CurrentMonitorName(
                   name: 'M1',
-                  child: MetaSurfaceWidget(
-                    metaWindowId: 'meta-main',
-                    decorated: false,
-                    focusNode: focusNode,
+                  child: Stack(
+                    children: [
+                      MetaSurfaceWidget(
+                        metaWindowId: 'meta-main',
+                        decorated: false,
+                        focusNode: focusNode,
+                      ),
+                      const Positioned.fill(
+                        child: TilePopupHost(metaWindowIds: ['meta-main']),
+                      ),
+                    ],
                   ),
                 ),
               ),

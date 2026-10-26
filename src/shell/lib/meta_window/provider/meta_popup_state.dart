@@ -5,6 +5,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:hooks_riverpod/misc.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/meta_window/model/meta_popup.serializable.dart';
+import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_popup_for_id.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/platform/model/event/meta_popup_created/meta_popup_created.serializable.dart';
@@ -74,21 +75,13 @@ class MetaPopupState extends _$MetaPopupState {
     try {
       final parent = ref.read(metaWindowStateProvider(parentId));
       final focusManager = ref.read(pointerFocusManagerProvider.notifier);
-      // Derive the owner's render origin from the popup's current focus
-      // offset. The surface-origin registry can be stale for a parent that
-      // moved without rebuilding; the popup origin is the last position the
-      // user actually hovered.
-      final popupOrigin = focusManager.currentFocus?.surfaceId == popupSurfaceId
-          ? focusManager.currentFocus?.globalOffset
-          : ref.read(surfaceRenderOriginsProvider)[popupSurfaceId];
-      final derivedOrigin = popupOrigin == null
-          ? null
-          : popupOrigin -
-                state.position +
-                (state.geometry?.topLeft ?? Offset.zero) +
-                (parent.position ?? Offset.zero);
+      // Restore to the owner's surface origin. Popup placement is tile
+      // relative, so subtracting it from the popup's global focus offset
+      // cannot recover the parent origin without a second coordinate anchor.
+      // The parent model already owns the authoritative origin for its mode.
       final origin =
-          derivedOrigin ??
+          parent.floatingSurfaceOrigin ??
+          parent.renderOrigin ??
           ref.read(surfaceRenderOriginsProvider)[parent.surfaceId];
       // The popup may have consumed the primary button-up when it closed.
       // Flutter's button bitmap would then stay latched, making the next
