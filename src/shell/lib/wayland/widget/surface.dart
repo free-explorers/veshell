@@ -11,11 +11,16 @@ class SurfaceWidget extends ConsumerWidget {
   const SurfaceWidget({
     required this.surfaceId,
     required this.scaleRatio,
+    this.globalOffsetOverride,
     super.key,
   });
 
   final SurfaceId surfaceId;
   final double scaleRatio;
+
+  /// Native surface origin for pointer mapping, when it is authoritative
+  /// (floating X11 windows). See [ViewInputListener.globalOffsetOverride].
+  final Offset? globalOffsetOverride;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return SurfaceSize(
@@ -31,6 +36,7 @@ class SurfaceWidget extends ConsumerWidget {
           ),
           ViewInputListener(
             surfaceId: surfaceId,
+            globalOffsetOverride: globalOffsetOverride,
             child: Consumer(
               builder: (BuildContext context, WidgetRef ref, Widget? child) {
                 final textureId = ref.watch(

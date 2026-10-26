@@ -14,7 +14,7 @@ pub mod xdg {
                 Resource,
             },
         },
-        utils::{Logical, Rectangle, Serial},
+        utils::{Logical, Rectangle, Serial, Size},
         wayland::{
             compositor::{self, add_post_commit_hook, with_states},
             fractional_scale::with_fractional_scale,
@@ -34,9 +34,9 @@ pub mod xdg {
     use uuid::Uuid;
 
     use crate::{
-        flutter_engine::wayland_messages::MyPoint,
+        flutter_engine::wayland_messages::{MyPoint, MyRectangle},
         meta_window_state::{
-            meta_popup::{self, MetaPopup, MetaPopupPatch},
+            meta_popup::{self, MetaPopup, MetaPopupCategory, MetaPopupPatch},
             meta_resize_edge::MetaResizeEdge,
             meta_window::{self, MetaWindowPatch},
         },
@@ -79,24 +79,48 @@ pub mod xdg {
             compositor::add_post_commit_hook(
                 surface.wl_surface(),
                 |state: &mut Self, _, surface| {
-                    let geometry = with_states(surface, |surface_data| {
-                        surface_data
-                            .cached_state
-                            .get::<SurfaceCachedState>()
-                            .current()
-                            .geometry
-                            .map(|geometry| geometry.into())
-                    });
+                    let surface_id = get_surface_id(surface);
+                    let geometry: Option<MyRectangle<i32, Logical>> =
+                        with_states(surface, |surface_data| {
+                            surface_data
+                                .cached_state
+                                .get::<SurfaceCachedState>()
+                                .current()
+                                .geometry
+                                .map(|geometry| geometry.into())
+                        })
+                        .or_else(|| {
+                            // xdg-shell geometry is optional. Some clients
+                            // (notably Blender) never call
+                            // `wl_surface.set_window_geometry`, so the
+                            // committed buffer is the only size information
+                            // available. Without this fallback the window has
+                            // no placement and cannot be moved or resized.
+                            let (_, buffer_size) = state
+                                .texture_ids_per_surface_id
+                                .get(&surface_id)?
+                                .last()?
+                                .clone();
+                            let scale = state
+                                .get_meta_window(surface_id)
+                                .map(|meta_window| meta_window.scale_ratio)
+                                .unwrap_or(1.0)
+                                .max(1.0);
+                            let width = (f64::from(buffer_size.w) / scale).round() as i32;
+                            let height = (f64::from(buffer_size.h) / scale).round() as i32;
+                            (width > 0 && height > 0)
+                                .then(|| Rectangle::from_size(Size::from((width, height))).into())
+                        });
                     info!(
                         target: "veshell::geometry",
-                        surface_id = get_surface_id(surface),
+                        surface_id,
                         geometry = ?geometry,
                         "XDG toplevel geometry after commit"
                     );
                     if let Some(meta_window_id) = state
                         .meta_window_state
                         .meta_window_id_per_surface_id
-                        .get(&get_surface_id(surface))
+                        .get(&surface_id)
                     {
                         state.patch_meta_window(
                             MetaWindowPatch::UpdateGeometry {
@@ -164,6 +188,11 @@ pub mod xdg {
                         .map(|popup| popup.parent)
                 })
                 .expect("Popup parent has no root meta window");
+            let parent_relative = position;
+            let position = self
+                .meta_window_state
+                .popup_tile_position(&parent_meta_window_id, parent_relative)
+                .unwrap_or(parent_relative);
 
             info!(
                 target: "veshell::geometry",
@@ -172,7 +201,7 @@ pub mod xdg {
                 parent_meta_window_id = %parent_meta_window_id,
                 position = ?position,
                 geometry = ?geometry,
-                "Creating popup with root-relative position"
+                "Creating popup with parent-box-relative position"
             );
 
             let scale_ratio = {
@@ -185,8 +214,11 @@ pub mod xdg {
 
             let meta_popup = self.create_meta_popup(MetaPopup {
                 id: Uuid::new_v4().hyphenated().to_string(),
+                category: MetaPopupCategory::Popup,
                 parent: parent_meta_window_id,
                 position: position.into(),
+                native_root: None,
+                parent_relative: Some(parent_relative.into()),
                 surface_id,
                 scale_ratio: scale_ratio,
                 geometry: geometry,
@@ -216,6 +248,7 @@ pub mod xdg {
                         .meta_window_state
                         .meta_popup_id_per_surface_id
                         .get(&get_surface_id(surface))
+                        .cloned()
                     {
                         state.patch_meta_popup(
                             MetaPopupPatch::UpdateGeometry {
@@ -224,6 +257,7 @@ pub mod xdg {
                             },
                             true,
                         );
+                        state.clamp_meta_popup_to_tile(&meta_popup_id);
                     }
                 },
             );
@@ -231,7 +265,21 @@ pub mod xdg {
 
         fn move_request(&mut self, surface: ToplevelSurface, _seat: WlSeat, _serial: Serial) {
             let surface_id = get_surface_id(surface.wl_surface());
-            let meta_window = self.get_meta_window(surface_id).unwrap();
+            let Some(meta_window) = self.get_meta_window(surface_id) else {
+                return;
+            };
+            // A floating Wayland toplevel has no native position to configure;
+            // the compositor tracks the move and publishes the new box origin.
+            // Tiled windows keep the legacy notification-only path.
+            if meta_window.is_floating() {
+                let pointer = self.pointer.current_location();
+                self.start_floating_move(meta_window.id.clone(), pointer);
+                // A floating window has exactly one move path: the compositor
+                // tracks the pointer and publishes the placement. Do not also
+                // notify Flutter's local drag machinery.
+                return;
+            }
+
             let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
             platform_method_channel.invoke_method(
                 "interactive_move",
@@ -250,11 +298,25 @@ pub mod xdg {
             edges: xdg_toplevel::ResizeEdge,
         ) {
             let surface_id = get_surface_id(surface.wl_surface());
-            let meta_window = self.get_meta_window(surface_id).unwrap();
+            let Some(meta_window) = self.get_meta_window(surface_id) else {
+                return;
+            };
 
-            let pointer = self.seat.get_pointer().unwrap();
+            let Some(pointer) = self.seat.get_pointer() else {
+                return;
+            };
             if pointer.has_grab(serial) {
                 pointer.unset_grab(self, serial, self.clock.now().as_millis() as u32);
+            }
+
+            if !meta_window.allows_interactive_resize() {
+                tracing::debug!(
+                    target: "veshell::geometry",
+                    meta_window_id = %meta_window.id,
+                    display_mode = ?meta_window.display_mode,
+                    "ignoring interactive_resize for tiled/maximized window"
+                );
+                return;
             }
 
             // See if this comes from a touch grab.
@@ -270,9 +332,18 @@ pub mod xdg {
                 }
             } */
 
-            let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
             let resize_edge = MetaResizeEdge::from(edges);
             info!("resize_request Resize edge: {:?}", resize_edge);
+            if meta_window.is_floating() {
+                let pointer = self.pointer.current_location();
+                self.start_floating_resize(meta_window.id.clone(), resize_edge, pointer);
+                // Floating windows have exactly one resize path. Even when the
+                // gesture is rejected (fixed size, missing placement), never
+                // fall back to Flutter's local resize: that would desynchronise
+                // the client surface from the compositor box.
+                return;
+            }
+            let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
             platform_method_channel.invoke_method(
                 "interactive_resize",
                 Some(Box::new(json!({
@@ -312,15 +383,31 @@ pub mod xdg {
                 // `XdgPopupSurfaceData` through `parent()`, which deadlocks if
                 // nested inside `with_pending_state`.
                 let geometry_loc = surface.with_pending_state(|state| state.geometry.loc);
-                let position =
+                let parent_relative =
                     geometry_loc + get_popup_toplevel_coords(&PopupKind::Xdg(surface.clone()));
+                if let Some(popup) = self.meta_window_state.meta_popups.get_mut(&meta_popup_id) {
+                    popup.parent_relative = Some(parent_relative.into());
+                }
+                let parent_meta_window_id = self
+                    .meta_window_state
+                    .meta_popups
+                    .get(&meta_popup_id)
+                    .map(|popup| popup.parent.clone());
+                let position = parent_meta_window_id
+                    .as_deref()
+                    .and_then(|parent| {
+                        self.meta_window_state
+                            .popup_tile_position(parent, parent_relative)
+                    })
+                    .unwrap_or(parent_relative);
                 self.patch_meta_popup(
                     MetaPopupPatch::UpdatePosition {
-                        id: meta_popup_id,
+                        id: meta_popup_id.clone(),
                         value: position.into(),
                     },
                     true,
                 );
+                self.clamp_meta_popup_to_tile(&meta_popup_id);
             }
             surface.send_repositioned(token);
             if let Err(err) = surface.send_configure() {
@@ -424,6 +511,49 @@ pub mod xdg {
             surface.send_configure();
         }
 
+        fn maximize_request(&mut self, surface: ToplevelSurface) {
+            let Some(meta_window) = self.get_meta_window(get_surface_id(surface.wl_surface()))
+            else {
+                surface.send_configure();
+                return;
+            };
+            // Floating is the free-placement escape hatch: a client maximize
+            // request is not honored there, because the shell has no
+            // maximize/unmaximize affordance to get out of it. Tiled windows
+            // keep the toplevel negotiation driven by their display mode.
+            if meta_window.is_floating() {
+                surface.with_pending_state(|state| {
+                    state.states.unset(xdg_toplevel::State::Maximized);
+                });
+                surface.send_configure();
+                self.patch_meta_window(
+                    MetaWindowPatch::UpdateClientMaximized {
+                        id: meta_window.id,
+                        value: false,
+                    },
+                    true,
+                );
+            } else {
+                surface.send_configure();
+            }
+        }
+
+        fn unmaximize_request(&mut self, surface: ToplevelSurface) {
+            let Some(meta_window) = self.get_meta_window(get_surface_id(surface.wl_surface()))
+            else {
+                return;
+            };
+            if meta_window.is_floating() {
+                self.patch_meta_window(
+                    MetaWindowPatch::UpdateClientMaximized {
+                        id: meta_window.id,
+                        value: false,
+                    },
+                    true,
+                );
+            }
+        }
+
         fn ack_configure(
             &mut self,
             surface: smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
@@ -435,12 +565,26 @@ pub mod xdg {
                     .decoration_mode
                     .map(|mode| mode == zxdg_toplevel_decoration_v1::Mode::ServerSide)
                     .unwrap_or(false);
+                let is_maximized = configure
+                    .state
+                    .states
+                    .contains(xdg_toplevel::State::Maximized);
 
                 if let Some(meta_window) = self.get_meta_window(get_surface_id(&surface)) {
                     self.patch_meta_window(
                         MetaWindowPatch::UpdateNeedDecoration {
                             id: meta_window.id.clone(),
                             value: is_ssd,
+                        },
+                        true,
+                    );
+                    // Floating is always unmaximized. A stale maximized
+                    // configure ack must not re-enable the flag after the
+                    // display mode has switched to floating.
+                    self.patch_meta_window(
+                        MetaWindowPatch::UpdateClientMaximized {
+                            id: meta_window.id.clone(),
+                            value: is_maximized && !meta_window.is_floating(),
                         },
                         true,
                     );
@@ -735,8 +879,15 @@ pub mod xdg {
                 // `XdgPopupSurfaceData` via `parent()`, so it must run after
                 // `with_pending_state` has released the lock.
                 let geometry_loc = surface.with_pending_state(|state| state.geometry.loc);
-                let new_position =
+                let parent_relative =
                     geometry_loc + get_popup_toplevel_coords(&PopupKind::Xdg(surface.clone()));
+                if let Some(popup) = self.meta_window_state.meta_popups.get_mut(&meta_popup_id) {
+                    popup.parent_relative = Some(parent_relative.into());
+                }
+                let new_position = self
+                    .meta_window_state
+                    .popup_tile_position(meta_window_id, parent_relative)
+                    .unwrap_or(parent_relative);
                 if previous_position == Some(new_position) {
                     continue;
                 }
@@ -749,11 +900,12 @@ pub mod xdg {
                 );
                 self.patch_meta_popup(
                     MetaPopupPatch::UpdatePosition {
-                        id: meta_popup_id,
+                        id: meta_popup_id.clone(),
                         value: new_position.into(),
                     },
                     true,
                 );
+                self.clamp_meta_popup_to_tile(&meta_popup_id);
             }
         }
     }

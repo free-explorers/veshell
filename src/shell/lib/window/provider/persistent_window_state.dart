@@ -133,12 +133,19 @@ class PersistentWindowState extends _$PersistentWindowState
     final metaWindowId = state.metaWindowId;
     if (metaWindowId == null) return;
 
+    final metaWindowNotifier = ref.read(
+      metaWindowStateProvider(metaWindowId).notifier,
+    );
+
     // Gaming mode owns its own transition: the overlay resizes the window to
     // the monitor's logical size and only then requests fullscreen, so the
     // configure that carries the fullscreen state already has the final size.
     // Requesting fullscreen here, before that resize, latches Chromium to the
     // tile size (the meta window has no `currentOutput` yet at this point).
-    if (state.displayMode == DisplayMode.game) return;
+    if (state.displayMode == DisplayMode.game) {
+      syncDialogDisplayModes();
+      return;
+    }
 
     final metaDisplayMode = switch (state.displayMode) {
       DisplayMode.maximized => MetaWindowDisplayMode.maximized,
@@ -147,14 +154,51 @@ class PersistentWindowState extends _$PersistentWindowState
       DisplayMode.game => MetaWindowDisplayMode.fullscreen,
     };
 
-    ref
-        .read(metaWindowStateProvider(metaWindowId).notifier)
-        .patch(
-          MetaWindowPatchMessage.updateDisplayMode(
-            id: metaWindowId,
-            value: metaDisplayMode,
+    unawaited(
+      metaWindowNotifier.patch(
+        MetaWindowPatchMessage.updateDisplayMode(
+          id: metaWindowId,
+          value: metaDisplayMode,
+        ),
+      ),
+    );
+    syncDialogDisplayModes();
+  }
+
+  /// Mirrors the tile's presentation onto its attached dialogs.
+  ///
+  /// Tiled dialogs keep `maximized`; only a floating tile puts its dialogs in
+  /// floating mode. This is what makes `configure_request` accept their
+  /// client-requested positions without changing the dialog area of the other
+  /// modes.
+  void syncDialogDisplayModes() {
+    final dialogIds = ref.read(dialogSetForWindowProvider(windowId));
+    for (final dialogId in dialogIds) {
+      final MetaWindowId metaWindowId;
+      try {
+        metaWindowId = ref
+            .read(dialogWindowStateProvider(dialogId))
+            .metaWindowId;
+      } on Object {
+        continue;
+      }
+      try {
+        final notifier = ref.read(
+          metaWindowStateProvider(metaWindowId).notifier,
+        );
+        unawaited(
+          notifier.patch(
+            MetaWindowPatchMessage.updateDisplayMode(
+              id: metaWindowId,
+              value: dialogMetaWindowDisplayMode(state.displayMode),
+            ),
           ),
         );
+      } on Object {
+        // The dialog's meta window may have been torn down between the two
+        // reads; the next routing pass will settle it.
+      }
+    }
   }
 
   @override

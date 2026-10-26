@@ -5,8 +5,11 @@ pub mod xwayland {
     use crate::capture::selection::{send_native_selection, NATIVE_SCREENSHOT_MIME, PNG_MIME};
     use crate::cursor::{load_cursor_theme, Cursor};
     use crate::flutter_engine::wayland_messages::{MapX11Surface, MyPoint, NewX11Surface};
-    use crate::focus::KeyboardFocusTarget;
-    use crate::meta_window_state::meta_popup::{self, MetaPopup, MetaPopupPatch};
+    use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
+    use crate::meta_window_state::floating_move::clamp_position;
+    use crate::meta_window_state::meta_popup::{
+        self, MetaPopup, MetaPopupCategory, MetaPopupPatch,
+    };
     use crate::meta_window_state::meta_resize_edge::MetaResizeEdge;
     use crate::meta_window_state::meta_window::MetaWindowPatch;
     use crate::state::State;
@@ -40,7 +43,7 @@ pub mod xwayland {
     };
     use smithay::wayland::selection::SelectionTarget;
     use smithay::wayland::xwayland_shell::{XWaylandShellHandler, XWaylandShellState};
-    use smithay::xwayland::xwm::{Reorder, WmWindowProperty, XwmId};
+    use smithay::xwayland::xwm::{Reorder, WmWindowProperty, WmWindowType, XwmId};
     use smithay::xwayland::{
         xwm, X11Surface, X11Wm, XWayland, XWaylandClientData, XWaylandEvent, XwmHandler,
     };
@@ -158,6 +161,38 @@ pub mod xwayland {
 
     pub struct MyX11SurfaceState {
         pub x11_surface_id: u64,
+    }
+
+    /// X11 clients use override-redirect windows for several different roles.
+    /// Keep the distinction in the model instead of making Flutter guess from
+    /// a size or an application title.
+    fn x11_popup_category(
+        surface: &X11Surface,
+        geometry: Rectangle<i32, Logical>,
+    ) -> MetaPopupCategory {
+        match surface.window_type() {
+            Some(
+                WmWindowType::Menu
+                | WmWindowType::PopupMenu
+                | WmWindowType::DropdownMenu
+                | WmWindowType::Combo,
+            ) => return MetaPopupCategory::Menu,
+            _ => {}
+        }
+
+        // A one-pixel window is a backing/preview window, never visible UI. A
+        // non-interactive override-redirect window is likewise bookkeeping-only
+        // for the shell; the client cannot receive pointer input through it.
+        let is_tiny = geometry.size.w <= 1 || geometry.size.h <= 1;
+        let is_non_interactive = surface.hints().and_then(|hints| hints.input) == Some(false);
+        if is_tiny || is_non_interactive {
+            return MetaPopupCategory::Helper;
+        }
+
+        match surface.window_type() {
+            Some(WmWindowType::Tooltip) => MetaPopupCategory::Tooltip,
+            _ => MetaPopupCategory::Popup,
+        }
     }
 
     impl<BackendData: Backend> State<BackendData> {
@@ -369,6 +404,12 @@ pub mod xwayland {
         fn new_window(&mut self, _xwm: XwmId, surface: X11Surface) {
             info!("X11 new_window {:?}", surface);
 
+            // Keep the legacy tiled placement at the X11 origin. Honouring an
+            // ICCCM position hint here would change every X11 window at
+            // launch, including tiled/maximized ones whose override-redirect
+            // popups are rendered against the origin. A floating window
+            // recovers its own placement from the client's configure requests
+            // once the floating tile owns it.
             let mut geometry = surface.geometry();
             geometry.loc = Point::from((0, 0));
             surface.configure(geometry).unwrap();
@@ -411,10 +452,8 @@ pub mod xwayland {
                 {
                     self.remove_meta_popup(&meta_popup_id);
                 }
-            } else {
-                if let Some(meta_window) = self.get_meta_window(surface_id) {
-                    self.remove_meta_window(&meta_window.id);
-                }
+            } else if let Some(meta_window) = self.get_meta_window(surface_id) {
+                self.remove_meta_window(&meta_window.id);
             }
 
             if !surface.is_override_redirect() {
@@ -433,22 +472,125 @@ pub mod xwayland {
             &mut self,
             _xwm: XwmId,
             window: X11Surface,
-            _x: Option<i32>,
-            _y: Option<i32>,
+            x: Option<i32>,
+            y: Option<i32>,
             w: Option<u32>,
             h: Option<u32>,
             _reorder: Option<Reorder>,
         ) {
-            // We just set the new size, but don't let windows move themselves around freely.
+            // Windows may not move themselves while the shell tiles them. A
+            // floating window is different: clients place their own panels and
+            // auxiliary windows at explicit coordinates, and the shell draws
+            // them there. `display_mode` is the placement authority;
+            // `None` means "not routed yet" and stays on the legacy tiled
+            // path.
+            let meta_window = window
+                .wl_surface()
+                .and_then(|surface| self.get_meta_window(get_surface_id(&surface)));
+            let can_position = meta_window.as_ref().is_some_and(|mw| mw.is_floating());
+            if let Some(meta_window) = meta_window.as_ref() {
+                // Only a configure accepted for a floating window is an
+                // explicit floating placement. Tiled/launch configures at
+                // (0,0) used to mark the window explicit before the viewport
+                // existed, so the window was pinned to the tile origin instead
+                // of being centred once it entered a floating tile.
+                if can_position && !meta_window.position_explicit && (x.is_some() || y.is_some()) {
+                    self.patch_meta_window(
+                        MetaWindowPatch::UpdatePositionExplicit {
+                            id: meta_window.id.clone(),
+                            value: true,
+                        },
+                        true,
+                    );
+                }
+            }
+            tracing::debug!(
+                target: "veshell::geometry",
+                window = ?window.window_id(),
+                meta_window = ?meta_window.as_ref().map(|mw| mw.id.as_str()),
+                requested = ?(x, y, w, h),
+                can_position,
+                "configure_request"
+            );
+
+            // The size still comes from the surface-local geometry (as
+            // before); only the location is a root position. Starting from
+            // `last_configure` preserves the current root position for
+            // size-only requests instead of resetting it to (0, 0).
             let mut geo = window.geometry();
-            geo.loc = Point::from((0, 0));
+            if can_position {
+                geo.loc = window.last_configure().loc;
+                if let Some(x) = x {
+                    geo.loc.x = x;
+                }
+                if let Some(y) = y {
+                    geo.loc.y = y;
+                }
+            } else {
+                geo.loc = Point::from((0, 0));
+            }
             if let Some(w) = w {
                 geo.size.w = w as i32;
             }
             if let Some(h) = h {
                 geo.size.h = h as i32;
             }
+            if can_position {
+                if let Some(rect) = meta_window
+                    .as_ref()
+                    .and_then(|meta_window| meta_window.viewport.as_ref())
+                    .filter(|rect| rect.0.size.w > 0 && rect.0.size.h > 0)
+                {
+                    // A floating client may only position itself inside the tile.
+                    // Clamping here keeps the native position and the rendered
+                    // box identical for client-driven panel moves too.
+                    let clamped = clamp_position(
+                        rect.0,
+                        Size::from((geo.size.w, geo.size.h)),
+                        Point::from((f64::from(geo.loc.x), f64::from(geo.loc.y))),
+                    );
+                    geo.loc = Point::from((clamped.x.round() as i32, clamped.y.round() as i32));
+                    tracing::debug!(
+                        target: "veshell::geometry",
+                        meta_window_id = %meta_window.as_ref().map(|mw| mw.id.as_str()).unwrap_or(""),
+                        requested_loc = ?(x, y),
+                        effective_loc = ?geo.loc,
+                        viewport = ?rect,
+                        size = ?geo.size,
+                        "clamped floating configure_request"
+                    );
+                } else if let Some(meta_window) = meta_window.as_ref() {
+                    tracing::debug!(
+                        target: "veshell::geometry",
+                        meta_window_id = %meta_window.id,
+                        requested_loc = ?(x, y),
+                        effective_loc = ?geo.loc,
+                        "floating configure_request without a viewport rect"
+                    );
+                }
+            }
+            let configured_loc = geo.loc;
             let _ = window.configure(geo);
+            if can_position {
+                if let Some(meta_window) = meta_window.as_ref() {
+                    // Update the authoritative position immediately instead of
+                    // waiting for ConfigureNotify. The client's next XMoveWindow
+                    // can arrive before that event; a stale position would make
+                    // the pointer basis trail the client's own drag and feed the
+                    // movement back into it.
+                    self.patch_meta_window(
+                        MetaWindowPatch::UpdatePosition {
+                            id: meta_window.id.clone(),
+                            value: Some(configured_loc.into()),
+                        },
+                        true,
+                    );
+                    self.update_floating_pointer_basis(
+                        meta_window,
+                        (f64::from(configured_loc.x), f64::from(configured_loc.y)).into(),
+                    );
+                }
+            }
         }
 
         fn configure_notify(
@@ -471,20 +613,205 @@ pub mod xwayland {
                     .get(&surface_id)
                     .cloned()
                 {
+                    let parent_meta_window_id = self
+                        .meta_window_state
+                        .meta_popups
+                        .get(&meta_popup_id)
+                        .map(|popup| popup.parent.clone());
+                    let position = parent_meta_window_id
+                        .as_deref()
+                        .and_then(|parent| {
+                            self.meta_window_state
+                                .x11_popup_tile_position(parent, geometry.loc)
+                        })
+                        .unwrap_or_else(|| {
+                            let tile_origin = parent_meta_window_id
+                                .as_deref()
+                                .and_then(|parent| {
+                                    self.meta_window_state.tile_content_origin(parent)
+                                })
+                                .unwrap_or_else(|| Point::from((0, 0)));
+                            geometry.loc - tile_origin
+                        });
+                    let previous = self
+                        .meta_window_state
+                        .meta_popups
+                        .get(&meta_popup_id)
+                        .map(|popup| popup.position.0);
                     self.patch_meta_popup(
                         MetaPopupPatch::UpdatePosition {
-                            id: meta_popup_id,
-                            value: geometry.loc.into(),
+                            id: meta_popup_id.clone(),
+                            value: position.into(),
+                        },
+                        true,
+                    );
+                    if let Some(popup) = self.meta_window_state.meta_popups.get_mut(&meta_popup_id)
+                    {
+                        popup.native_root = Some(geometry.loc.into());
+                    }
+                    if let Some(previous) = previous {
+                        self.translate_pointer_focus_offset_for_surface(
+                            surface_id,
+                            f64::from(position.x - previous.x),
+                            f64::from(position.y - previous.y),
+                        );
+                    }
+                    if let Some(popup) = self.meta_window_state.meta_popups.get(&meta_popup_id) {
+                        let parent = self.meta_window_state.meta_windows.get(&popup.parent);
+                        tracing::debug!(
+                            target: "veshell::popup_drag",
+                            popup_id = %meta_popup_id,
+                            surface_id,
+                            root_geometry = ?geometry,
+                            popup_position = ?popup.position.0,
+                            parent_id = %popup.parent,
+                            parent_position = ?parent.and_then(|w| w.position.as_ref().map(|p| p.0)),
+                            parent_render_origin = ?parent.and_then(|w| w.render_origin.as_ref().map(|p| p.0)),
+                            parent_surface_origin = ?parent.and_then(|w| w.surface_origin()),
+                            parent_floating = ?parent.map(|w| w.is_floating()),
+                            model_origin = ?self.meta_window_state.popup_surface_origin(popup),
+                            pointer = ?self.pointer.current_location(),
+                            focus = ?self.pointer_focus.as_ref().map(|(target, offset)| (
+                                target.wl_surface().map(|surface| get_surface_id(&surface)),
+                                *offset,
+                            )),
+                            buttons = self.flutter_engine().mouse_button_tracker.are_any_buttons_pressed(),
+                            grab_owner = ?self.popup_pointer_grab.map(|grab| grab.surface_id),
+                            "popup_drag_configure"
+                        );
+                    }
+                    if self
+                        .popup_pointer_grab
+                        .is_some_and(|grab| grab.surface_id == surface_id)
+                    {
+                        if let (Some(popup), Some(surface)) = (
+                            self.meta_window_state.meta_popups.get(&meta_popup_id),
+                            self.surfaces.get(&surface_id).cloned(),
+                        ) {
+                            if let Some(origin) = self.meta_window_state.popup_surface_origin(popup)
+                            {
+                                self.pointer_focus =
+                                    Some((PointerFocusTarget::from(&surface), origin));
+                            }
+                        }
+                    }
+                    // Override-redirect menus/toolbars often grab the pointer
+                    // while dragging themselves. The configure delta above has
+                    // already translated the focused popup's basis; do not
+                    // overwrite it with a model-derived origin while the drag
+                    // is active, or the client feeds that movement back into
+                    // its own position.
+                }
+            }
+            if let Some(meta_window) = self.get_meta_window(surface_id) {
+                let skip_taskbar = x11_surface.is_skip_taskbar();
+                if meta_window.skip_taskbar != skip_taskbar {
+                    self.patch_meta_window(
+                        MetaWindowPatch::UpdateSkipTaskbar {
+                            id: meta_window.id.clone(),
+                            value: skip_taskbar,
                         },
                         true,
                     );
                 }
-            }
-            if let Some(meta_window) = self.get_meta_window(surface_id) {
+                let keep_on_top = x11_surface.is_above();
+                if meta_window.keep_on_top != keep_on_top {
+                    self.patch_meta_window(
+                        MetaWindowPatch::UpdateKeepOnTop {
+                            id: meta_window.id.clone(),
+                            value: keep_on_top,
+                        },
+                        true,
+                    );
+                }
+                // ConfigureNotify carries the root-window position; keep that
+                // separate from the surface-local geometry the shell renders.
+                //
+                // A floating client can reach this path with a position outside
+                // its tile: XMoveWindow does not necessarily go through
+                // configure_request (and a stale/missing viewport rect would
+                // make the request path a no-op). Correct the native window
+                // here as well, otherwise the Flutter box is clamped to the
+                // tile while the X11 window stays outside and pointer events
+                // are offset from what the user sees.
+                let mut root_position = geometry.loc;
+                // A ConfigureNotify caused by our own compositor configure must
+                // not undo a move/resize gesture: those gestures use the
+                // half-outside move clamp. Client-initiated XMoveWindow still
+                // goes through the strict clamp in configure_request.
+                let gesture_active =
+                    self.floating_move.as_ref().is_some_and(|move_| {
+                        move_.meta_window_id.as_str() == meta_window.id.as_str()
+                    }) || self.floating_resize.as_ref().is_some_and(|resize| {
+                        resize.meta_window_id.as_str() == meta_window.id.as_str()
+                    });
+                if meta_window.is_floating()
+                    && !meta_window.client_maximized
+                    && !gesture_active
+                    && geometry.size.w > 0
+                    && geometry.size.h > 0
+                {
+                    if let Some(rect) = meta_window
+                        .viewport
+                        .as_ref()
+                        .filter(|rect| rect.0.size.w > 0 && rect.0.size.h > 0)
+                    {
+                        let clamped = clamp_position(
+                            rect.0,
+                            geometry.size,
+                            Point::from((f64::from(geometry.loc.x), f64::from(geometry.loc.y))),
+                        );
+                        let clamped_loc =
+                            Point::from((clamped.x.round() as i32, clamped.y.round() as i32));
+                        if clamped_loc != geometry.loc {
+                            let mut configure = x11_surface.last_configure();
+                            configure.loc = clamped_loc;
+                            if configure.size.w <= 0 || configure.size.h <= 0 {
+                                // A ConfigureNotify can arrive before the
+                                // first real configure size is cached. Using
+                                // that zero size would hide the window.
+                                configure.size = geometry.size;
+                            }
+                            tracing::info!(
+                                target: "veshell::geometry",
+                                meta_window_id = %meta_window.id,
+                                observed_loc = ?geometry.loc,
+                                corrected_loc = ?clamped_loc,
+                                viewport = ?rect,
+                                size = ?configure.size,
+                                "correcting out-of-tile floating configure_notify"
+                            );
+                            let _ = x11_surface.configure(configure);
+                            root_position = clamped_loc;
+                        }
+                    } else {
+                        tracing::debug!(
+                            target: "veshell::geometry",
+                            meta_window_id = %meta_window.id,
+                            observed_loc = ?geometry.loc,
+                            "floating configure_notify without a viewport rect"
+                        );
+                    }
+                }
+                self.patch_meta_window(
+                    MetaWindowPatch::UpdatePosition {
+                        id: meta_window.id.clone(),
+                        value: Some(root_position.into()),
+                    },
+                    true,
+                );
+                self.update_floating_pointer_basis(
+                    &meta_window,
+                    (f64::from(root_position.x), f64::from(root_position.y)).into(),
+                );
+                let mut surface_geometry = x11_surface.geometry();
+                if surface_geometry.size.w <= 0 || surface_geometry.size.h <= 0 {
+                    surface_geometry = Rectangle::from_size(geometry.size);
+                }
                 self.patch_meta_window(
                     MetaWindowPatch::UpdateGeometry {
                         id: meta_window.id,
-                        value: Some(geometry.into()),
+                        value: Some(surface_geometry.into()),
                     },
                     true,
                 );
@@ -504,6 +831,26 @@ pub mod xwayland {
 
             let surface_id = get_surface_id(&wl_surface);
             if let Some(meta_window) = self.get_meta_window(surface_id) {
+                let skip_taskbar = x11_surface.is_skip_taskbar();
+                if meta_window.skip_taskbar != skip_taskbar {
+                    self.patch_meta_window(
+                        MetaWindowPatch::UpdateSkipTaskbar {
+                            id: meta_window.id.clone(),
+                            value: skip_taskbar,
+                        },
+                        true,
+                    );
+                }
+                let keep_on_top = x11_surface.is_above();
+                if meta_window.keep_on_top != keep_on_top {
+                    self.patch_meta_window(
+                        MetaWindowPatch::UpdateKeepOnTop {
+                            id: meta_window.id.clone(),
+                            value: keep_on_top,
+                        },
+                        true,
+                    );
+                }
                 match property {
                     WmWindowProperty::Title => {
                         let title = x11_surface.title();
@@ -616,15 +963,34 @@ pub mod xwayland {
             _button: u32,
             resize_edge: xwm::ResizeEdge,
         ) {
-            print!("resize_request");
             let Some(wl_surface) = x11_surface.wl_surface() else {
                 return;
             };
             let surface_id = get_surface_id(&wl_surface);
-            let meta_window = self.get_meta_window(surface_id).unwrap();
-            let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
+            let Some(meta_window) = self.get_meta_window(surface_id) else {
+                return;
+            };
+            if !meta_window.allows_interactive_resize() {
+                tracing::debug!(
+                    target: "veshell::geometry",
+                    meta_window_id = %meta_window.id,
+                    display_mode = ?meta_window.display_mode,
+                    "ignoring interactive_resize for tiled/maximized X11 window"
+                );
+                return;
+            }
             let resize_edge = MetaResizeEdge::from(resize_edge);
 
+            if meta_window.is_floating() {
+                let pointer = self.pointer.current_location();
+                self.start_floating_resize(meta_window.id.clone(), resize_edge, pointer);
+                // Floating windows have exactly one resize path. Even when the
+                // gesture is rejected (fixed size, missing placement), never
+                // fall back to Flutter's local resize: that would desynchronise
+                // the client surface from the compositor box.
+                return;
+            }
+            let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
             platform_method_channel.invoke_method(
                 "interactive_resize",
                 Some(Box::new(json!({
@@ -640,9 +1006,23 @@ pub mod xwayland {
             let Some(wl_surface) = x11_surface.wl_surface() else {
                 return;
             };
-            print!("move_request");
             let surface_id = get_surface_id(&wl_surface);
-            let meta_window = self.get_meta_window(surface_id).unwrap();
+            let Some(meta_window) = self.get_meta_window(surface_id) else {
+                return;
+            };
+
+            // A floating X11 window is moved by the compositor: the client
+            // asked the WM to do it (`_NET_WM_MOVERESIZE`), it does not move
+            // itself. Tiled windows keep the previous notification-only path.
+            if meta_window.is_floating() {
+                let pointer = self.pointer.current_location();
+                self.start_floating_move(meta_window.id.clone(), pointer);
+                // A floating window has exactly one move path: the compositor
+                // tracks the pointer and publishes the placement. Do not also
+                // notify Flutter's local drag machinery.
+                return;
+            }
+
             let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
             platform_method_channel.invoke_method(
                 "interactive_move",
@@ -801,11 +1181,50 @@ pub mod xwayland {
         }
         fn maximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
             info!("maximize_request");
-            window.set_maximized(true).unwrap();
+            let meta_window = window
+                .wl_surface()
+                .and_then(|surface| self.get_meta_window(get_surface_id(&surface)));
+            let Some(meta_window) = meta_window else {
+                window.set_maximized(true).unwrap();
+                return;
+            };
+            // Floating is the free-placement escape hatch: reject a client
+            // maximize request there. A tiled window keeps the previous
+            // behaviour: the shell already sizes the tile.
+            if meta_window.is_floating() {
+                let _ = window.set_maximized(false);
+                self.patch_meta_window(
+                    MetaWindowPatch::UpdateClientMaximized {
+                        id: meta_window.id,
+                        value: false,
+                    },
+                    true,
+                );
+            } else {
+                window.set_maximized(true).unwrap();
+            }
         }
         fn unmaximize_request(&mut self, _xwm: XwmId, window: X11Surface) {
             info!("unmaximize_request");
-            window.set_maximized(false).unwrap();
+            let meta_window = window
+                .wl_surface()
+                .and_then(|surface| self.get_meta_window(get_surface_id(&surface)));
+            let Some(meta_window) = meta_window else {
+                window.set_maximized(false).unwrap();
+                return;
+            };
+            if meta_window.is_floating() {
+                let _ = window.set_maximized(false);
+                self.patch_meta_window(
+                    MetaWindowPatch::UpdateClientMaximized {
+                        id: meta_window.id,
+                        value: false,
+                    },
+                    true,
+                );
+            } else {
+                window.set_maximized(false).unwrap();
+            }
         }
     }
 
@@ -867,9 +1286,31 @@ pub mod xwayland {
                     })
                 {
                     let geometry = surface.geometry();
+                    // X11 reports override-redirect popups at the root. Store
+                    // them relative to the owning tile's content origin so the
+                    // tile popup host can render them in every display mode.
+                    // Subtract the parent's native root first: tiled X11
+                    // parents are kept at root (0,0), not at their rendered
+                    // tile origin.
+                    let position = self
+                        .meta_window_state
+                        .x11_popup_tile_position(
+                            parent_meta_window_id,
+                            surface.last_configure().loc,
+                        )
+                        .unwrap_or_else(|| {
+                            let tile_origin = self
+                                .meta_window_state
+                                .tile_content_origin(parent_meta_window_id)
+                                .unwrap_or_else(|| Point::from((0, 0)));
+                            surface.last_configure().loc - tile_origin
+                        });
                     let meta_popup = self.create_meta_popup(MetaPopup {
                         id: Uuid::new_v4().hyphenated().to_string(),
-                        position: surface.last_configure().loc.into(),
+                        category: x11_popup_category(&surface, geometry),
+                        position: position.into(),
+                        native_root: Some(surface.last_configure().loc.into()),
+                        parent_relative: None,
                         parent: parent_meta_window_id.clone(),
                         surface_id: get_surface_id(wl_surface.borrow()),
                         scale_ratio: xwayland_scale_ratio,

@@ -7,11 +7,16 @@ import 'package:shell/application/provider/logs_for_pid.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/capture/provider/recording_workspaces.dart';
 import 'package:shell/capture/provider/screen_cast_indicator.dart';
+import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/meta_window/widget/tile_popup_host.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
+import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/selected_dialog_for_window.dart';
+import 'package:shell/window/widget/floating_window_area.dart';
+import 'package:shell/window/widget/visible_popup_meta_windows.dart';
 import 'package:shell/window/widget/window.dart';
 import 'package:shell/window/widget/window_dialog_area.dart';
 import 'package:shell/window/widget/window_placeholder.dart';
@@ -41,6 +46,12 @@ class PersistentWindowTileable extends Tileable {
 
     final primaryFocusNode = useFocusNode(
       debugLabel: 'PrimaryFocusNode ${window.properties.title}',
+    );
+
+    // Floating windows have their own focus target: sharing `primaryFocusNode`
+    // with the placeholder/WindowWidget would attach the same node twice.
+    final floatingFocusNode = useFocusNode(
+      debugLabel: 'FloatingFocusNode ${window.properties.title}',
     );
 
     useEffect(() {
@@ -80,6 +91,65 @@ class PersistentWindowTileable extends Tileable {
     final selectedDialogMetaWindow = window.displayMode == DisplayMode.game
         ? null
         : ref.watch(selectedDialogMetaWindowForWindowProvider(windowId));
+    final selectedDialogEntry = ref.watch(
+      selectedDialogForWindowProvider(windowId),
+    );
+    final chooserVisible =
+        ref.watch(fileChooserForWindowProvider(windowId)) != null;
+
+    final placeholder = WindowPlaceholder(
+      isSelected: isSelected,
+      focusNode: primaryFocusNode,
+      window: window,
+      onLaunch: () {
+        primaryFocusNode.requestFocus();
+        return ref
+            .read(persistentWindowStateProvider(windowId).notifier)
+            .launchSelf();
+      },
+    );
+
+    final content = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 200),
+      child: metaWindowId != null
+          ? WindowWidget(
+              metaWindowId: metaWindowId,
+              focusNode: primaryFocusNode,
+              displayMode: window.displayMode,
+              activationTarget: selectedDialogMetaWindow,
+            )
+          : placeholder,
+    );
+
+    // A floating tile has no dialog panel: every native window — the displayed
+    // one and each attached dialog — is an independent floating window in one
+    // shared, z-ordered stack. Other display modes keep the dialog area.
+    final area = window.displayMode == DisplayMode.floating
+        ? FloatingWindowArea(
+            parentWindowId: windowId,
+            mainMetaWindowId: metaWindowId,
+            background: metaWindowId == null
+                ? placeholder
+                : const SizedBox.expand(),
+            focusNode: floatingFocusNode,
+            isSelected: isSelected,
+          )
+        : WindowDialogArea(
+            parentWindowId: windowId,
+            dialogsEnabled: window.displayMode != DisplayMode.game,
+            child: content,
+          );
+
+    final dialogWindowIds = ref.watch(dialogSetForWindowProvider(windowId));
+    final popupMetaWindowIds = visiblePopupMetaWindowIds(
+      ref: ref,
+      mainMetaWindowId: metaWindowId,
+      dialogWindowIds: dialogWindowIds,
+      dialogsEnabled: window.displayMode != DisplayMode.game,
+      allDialogsVisible: window.displayMode == DisplayMode.floating,
+      selectedEntry: selectedDialogEntry,
+      chooserVisible: chooserVisible,
+    );
 
     return ClipRect(
       child: Stack(
@@ -101,43 +171,23 @@ class PersistentWindowTileable extends Tileable {
                 // it and make the defunct node the primary focus again, which
                 // breaks the shell's hotkeys while the pause overlay shows.
                 if (value && window.displayMode != DisplayMode.game) {
-                  persistentFocusNode.autofocus(primaryFocusNode);
+                  persistentFocusNode.autofocus(
+                    window.displayMode == DisplayMode.floating
+                        ? floatingFocusNode
+                        : primaryFocusNode,
+                  );
                 }
               },
               // The dialog area owns the tile's dialogs and the trusted file
               // chooser: it presents them as a tabbed panel over a blurred
               // tile and keeps the selection. Native dialogs stay out of the
-              // area in game mode (the overlay must not be covered).
-              child: WindowDialogArea(
-                parentWindowId: windowId,
-                dialogsEnabled: window.displayMode != DisplayMode.game,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  child: metaWindowId != null
-                      ? WindowWidget(
-                          metaWindowId: metaWindowId,
-                          focusNode: primaryFocusNode,
-                          displayMode: window.displayMode,
-                          activationTarget: selectedDialogMetaWindow,
-                        )
-                      : WindowPlaceholder(
-                          isSelected: isSelected,
-                          focusNode: primaryFocusNode,
-                          window: window,
-                          onLaunch: () {
-                            primaryFocusNode.requestFocus();
-                            return ref
-                                .read(
-                                  persistentWindowStateProvider(
-                                    windowId,
-                                  ).notifier,
-                                )
-                                .launchSelf();
-                          },
-                        ),
-                ),
-              ),
+              // area in game mode (the overlay must not be covered). Floating
+              // tiles bypass it entirely and float every native child instead.
+              child: area,
             ),
+          ),
+          Positioned.fill(
+            child: TilePopupHost(metaWindowIds: popupMetaWindowIds),
           ),
         ],
       ),

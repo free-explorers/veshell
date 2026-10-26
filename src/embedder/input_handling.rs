@@ -7,6 +7,7 @@ use smithay::backend::input::{
 use smithay::input::pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent};
 use smithay::reexports::wayland_server::protocol::wl_pointer;
 use smithay::utils::{Logical, Point, Rectangle, SERIAL_COUNTER};
+use smithay::wayland::seat::WaylandFocus;
 use tracing::{debug, info};
 
 use crate::backend::Backend;
@@ -23,7 +24,9 @@ use crate::flutter_engine::view::view_id_for_output;
 use crate::flutter_engine::{view, FlutterEngine};
 use crate::focus::PointerFocusTarget;
 use crate::settings::{MouseAndTouchpadSettings, DEFAULT_WHEEL_SCROLL_PIXELS_PER_DETENT};
+use crate::state::PopupPointerGrab;
 use crate::state::State;
+use crate::wayland::wayland::get_surface_id;
 
 /// Bounding box of a set of output geometries, in global logical coordinates.
 ///
@@ -101,6 +104,41 @@ fn scale_client_wheel_frame(mut frame: AxisFrame, factor: f64) -> AxisFrame {
 }
 
 impl<BackendData: Backend> State<BackendData> {
+    /// Applies one pointer-motion sample to an active floating move/resize.
+    ///
+    /// The compositor owns the pointer during either gesture: the client must
+    /// not receive the motion, and the resulting placement is updated from the
+    /// same sample. Returns whether a gesture consumed the motion.
+    fn consume_floating_gesture_motion(
+        &mut self,
+        pointer_location: Point<f64, Logical>,
+        time: u32,
+    ) -> bool {
+        if self.floating_move.is_none() && self.floating_resize.is_none() {
+            return false;
+        }
+        let pointer = self.pointer.clone();
+        let focus: Option<(PointerFocusTarget, Point<f64, Logical>)> = None;
+        pointer.motion(
+            self,
+            focus,
+            &MotionEvent {
+                location: pointer_location,
+                serial: SERIAL_COUNTER.next_serial(),
+                time,
+            },
+        );
+        if self.floating_move.is_some() {
+            self.update_floating_move(pointer_location);
+        } else {
+            self.update_floating_resize(pointer_location);
+        }
+        self.register_frame();
+        crate::capture::on_pointer_motion_for_recording(self);
+        crate::portal::service::on_pointer_motion(self);
+        true
+    }
+
     pub fn on_pointer_motion<B: InputBackend>(
         &mut self,
         event: B::PointerMotionEvent,
@@ -131,6 +169,14 @@ impl<BackendData: Backend> State<BackendData> {
 
         // clamp to screen limits
         pointer_location = self.clamp_coords(pointer_location);
+
+        // A floating move/resize owns the pointer like a compositor grab: do
+        // not forward the motion to the client while the window follows it.
+        if self.floating_move.is_some() || self.floating_resize.is_some() {
+            let location = self.clamp_coords(pointer_location + event.delta());
+            self.consume_floating_gesture_motion(location, event.time_msec());
+            return;
+        }
 
         pointer.relative_motion(
             self,
@@ -223,6 +269,12 @@ impl<BackendData: Backend> State<BackendData> {
             self.pointer_focus = self.gaming_pointer_focus();
         }
 
+        // See `on_pointer_motion`: an active floating gesture consumes the
+        // motion instead of forwarding it to the client.
+        if self.consume_floating_gesture_motion(pointer_location, event.time_msec()) {
+            return;
+        }
+
         let pointer = self.pointer.clone();
         pointer.motion(
             self,
@@ -305,6 +357,21 @@ impl<BackendData: Backend> State<BackendData> {
             .flutter_engine()
             .mouse_button_tracker
             .are_any_buttons_pressed();
+        // X11 does not report XGrabPointer. The only observable start of an
+        // override-redirect popup drag is the button press on its surface;
+        // record that owner so Flutter hover cannot steal the pointer basis
+        // while the configure stream drives the popup.
+        if event.state() == ButtonState::Pressed {
+            self.popup_pointer_grab = self.pointer_focus.as_ref().and_then(|(target, _)| {
+                target.wl_surface().and_then(|surface| {
+                    let surface_id = get_surface_id(&surface);
+                    self.meta_window_state
+                        .meta_popup_id_per_surface_id
+                        .contains_key(&surface_id)
+                        .then_some(PopupPointerGrab { surface_id })
+                })
+            });
+        }
         let event_view_id = self.pointer_gesture_view_id.or(view_id);
         let phase = if event.state() == ButtonState::Pressed {
             let _ = self
@@ -339,6 +406,9 @@ impl<BackendData: Backend> State<BackendData> {
                 .are_any_buttons_pressed()
         {
             self.pointer_gesture_view_id = None;
+            self.popup_pointer_grab = None;
+            self.end_floating_move();
+            self.end_floating_resize();
         }
         // The button tracker is updated above even when there is no view, so a
         // button released between outputs cannot get stuck. Only the Flutter
@@ -641,6 +711,34 @@ impl<BackendData: Backend> State<BackendData> {
             .map(|geometry| geometry.loc.to_f64())
             .unwrap_or_else(|| (0.0, 0.0).into());
         Some((PointerFocusTarget::from(surface), origin))
+    }
+
+    /// Shifts the stored pointer origin for a surface.
+    ///
+    /// Used when an override-redirect popup moves itself: its Flutter render
+    /// origin moves by the same delta as the native popup, and the client uses
+    /// pointer-relative coordinates to decide its next position. A stale origin
+    /// there feeds the movement back into the popup and makes it accelerate.
+    pub(crate) fn translate_pointer_focus_offset_for_surface(
+        &mut self,
+        surface_id: u64,
+        dx: f64,
+        dy: f64,
+    ) {
+        if dx == 0.0 && dy == 0.0 {
+            return;
+        }
+        let Some(surface) = self.surfaces.get(&surface_id) else {
+            return;
+        };
+        let Some((target, offset)) = self.pointer_focus.as_ref() else {
+            return;
+        };
+        if target.wl_surface().as_deref() != Some(surface) {
+            return;
+        }
+        let target = target.clone();
+        self.pointer_focus = Some((target, Point::from((offset.x + dx, offset.y + dy))));
     }
 
     /// Re-drives the Smithay pointer with the current `pointer_focus`.

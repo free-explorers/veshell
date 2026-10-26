@@ -26,6 +26,25 @@ breaks the build, not just style.
   the source does not parse. Delete the stale generated files and re-run
   `dart run build_runner build`.
 
+## Comparison keys
+
+Never use `.toString()` (or string interpolation of geometry objects) as a
+comparison or cache key. Flutter's `Rect`, `Offset` and `Size` `toString()`
+round coordinates to one decimal, so distinct release-frame values can collapse
+to the same string and skip an update.
+
+Use explicit numeric fields or typed records instead. This applies to
+`useEffect` dependency keys, `last...Mismatch` caches and tile/popup motion
+keys.
+
+```dart
+// Wrong: both rects can produce the same string.
+final key = rect.toString();
+
+// Right: exact values participate in equality.
+final key = (rect.left, rect.top, rect.right, rect.bottom);
+```
+
 ## Platform-channel naming contract
 
 - Compositor-to-shell events: Rust calls

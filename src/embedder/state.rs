@@ -74,6 +74,7 @@ use crate::flutter_engine::FlutterEngine;
 use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
 use crate::keyboard::key_repeater::KeyRepeater;
 use crate::keyboard::{handle_keyboard_event, swap_left_alt_and_meta, VeshellKeyEvent};
+use crate::meta_window_state::floating_move::{FloatingMove, FloatingResize};
 use crate::meta_window_state::meta_window::MetaWindowPatch;
 use crate::meta_window_state::MetaWindowState;
 use crate::settings::{
@@ -84,6 +85,12 @@ use crate::texture_swap_chain::TextureSwapChain;
 use crate::wayland::wayland::{get_direct_subsurfaces, get_surface_id};
 use crate::wayland::xwayland::xwayland::XWaylandState;
 use crate::{flutter_engine, Backend, ClientState};
+
+/// The surface that owns an implicit X11 popup drag.
+#[derive(Clone, Copy, Debug)]
+pub struct PopupPointerGrab {
+    pub surface_id: u64,
+}
 
 pub struct State<BackendData: Backend + 'static> {
     pub backend_data: Box<BackendData>,
@@ -145,7 +152,25 @@ pub struct State<BackendData: Backend + 'static> {
     pub space: Space<Window>,
     pub surface_id_per_texture_id: HashMap<i64, u64>,
     pub surface_id_under_cursor: Option<u64>,
+    /// Current pointer target and its render-space origin.
+    ///
+    /// Flutter is the focus master: `pointer_focus`/`pointer_exit` write this
+    /// (plus the explicit gaming-mode takeover). The one native exception is
+    /// `update_floating_pointer_basis`, used only while a floating window's
+    /// native position is authoritative and the compositor owns the pointer.
+    /// Non-floating configure paths must never overwrite the render origin.
     pub pointer_focus: Option<(PointerFocusTarget, Point<f64, Logical>)>,
+    /// Explicit pointer-grab owner for an override-redirect X11 popup.
+    ///
+    /// X11 reports XGrabPointer only implicitly (as a stream of configure
+    /// events). The compositor records the grab at ButtonPress and ignores
+    /// Flutter hover focus changes until ButtonRelease, so the popup remains
+    /// the sole writer of the local pointer basis for the gesture.
+    pub popup_pointer_grab: Option<PopupPointerGrab>,
+    /// An in-progress move of a window owned by a floating tile.
+    pub floating_move: Option<FloatingMove>,
+    /// An in-progress compositor-owned resize of a floating window.
+    pub floating_resize: Option<FloatingResize>,
     pub surfaces: HashMap<u64, WlSurface>,
     pub subsurfaces: HashMap<u64, WlSurface>,
     pub texture_ids_per_surface_id: HashMap<u64, Vec<(i64, Size<i32, BufferCoords>)>>,
@@ -597,6 +622,9 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             xwayland_state: None,
             space: Space::default(),
             pointer_focus: None,
+            popup_pointer_grab: None,
+            floating_move: None,
+            floating_resize: None,
             cursor_state: CursorState::default(),
             cursor_image_status: Mutex::new(CursorImageStatus::default_named()),
             settings_manager,

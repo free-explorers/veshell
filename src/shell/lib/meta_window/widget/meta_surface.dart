@@ -3,9 +3,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
-import 'package:shell/meta_window/provider/meta_popup_for_id.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
-import 'package:shell/meta_window/widget/meta_popup.dart';
 import 'package:shell/meta_window/widget/meta_surface_decoration.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
@@ -20,11 +18,19 @@ class MetaSurfaceWidget extends HookConsumerWidget {
     required this.metaWindowId,
     required this.decorated,
     this.focusNode,
+    this.onTitleBarMoveStart,
     super.key,
   });
   final MetaWindowId metaWindowId;
   final FocusNode? focusNode;
   final bool decorated;
+
+  /// Invoked when the shell-drawn title bar receives a primary-button press.
+  ///
+  /// The floating tile provides a callback that asks the compositor to start a
+  /// native move; the dialog area leaves it `null` and keeps the historical
+  /// local drag.
+  final VoidCallback? onTitleBarMoveStart;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final metaWindow = ref.watch(metaWindowStateProvider(metaWindowId));
@@ -32,7 +38,6 @@ class MetaSurfaceWidget extends HookConsumerWidget {
     final surfaceId = ref.watch(
       metaWindowStateProvider(metaWindowId).select((value) => value.surfaceId),
     );
-    final popups = ref.watch(metaPopupForIdProvider(metaWindowId));
     final offset = Offset(
       -1 * (metaWindow.geometry?.left ?? 0),
       -1 * (metaWindow.geometry?.top ?? 0),
@@ -117,14 +122,21 @@ class MetaSurfaceWidget extends HookConsumerWidget {
                   child: MetaSurfaceDecoration(
                     metaWindowId: metaWindowId,
                     enabled: decorated,
+                    onTitleBarMoveStart: onTitleBarMoveStart,
                     child: SurfaceWidget(
                       surfaceId: surfaceId,
                       scaleRatio: metaWindow.scaleRatio,
+                      // A floating window's surface origin is the
+                      // authoritative pointer basis. X11 clients can move
+                      // themselves (Zoom's panels) and the compositor can move
+                      // them; deriving the basis from the lagging render box
+                      // feeds that lag back into the client's drag. Wayland
+                      // clients subtract their CSD geometry margin so the
+                      // basis is the surface buffer, not the window box.
+                      globalOffsetOverride: metaWindow.floatingSurfaceOrigin,
                     ),
                   ),
                 ),
-                for (final popupId in popups)
-                  MetaPopupWidget(metaPopupId: popupId),
               ],
             ),
           ),

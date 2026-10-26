@@ -2,9 +2,13 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/widget/logs_viewer.dart';
+import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
+import 'package:shell/meta_window/widget/tile_popup_host.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
+import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
 import 'package:shell/window/provider/selected_dialog_for_window.dart';
+import 'package:shell/window/widget/visible_popup_meta_windows.dart';
 import 'package:shell/window/widget/window.dart';
 import 'package:shell/window/widget/window_dialog_area.dart';
 
@@ -42,15 +46,21 @@ class EphemeralWindowWidget extends HookConsumerWidget {
       return null;
     }, [metaWindowId]);
 
+    final selectedDialogMetaWindow = ref.watch(
+      selectedDialogMetaWindowForWindowProvider(windowId),
+    );
+    final selectedDialogEntry = ref.watch(
+      selectedDialogForWindowProvider(windowId),
+    );
+    final chooserVisible =
+        ref.watch(fileChooserForWindowProvider(windowId)) != null;
     final content = metaWindowId != null
         ? WindowDialogArea(
             parentWindowId: windowId,
             child: WindowWidget(
               metaWindowId: metaWindowId,
               focusNode: focusNode,
-              activationTarget: ref.watch(
-                selectedDialogMetaWindowForWindowProvider(windowId),
-              ),
+              activationTarget: selectedDialogMetaWindow,
             ),
           )
         : Focus(
@@ -68,6 +78,17 @@ class EphemeralWindowWidget extends HookConsumerWidget {
             ),
           );
 
+    final dialogWindowIds = ref.watch(dialogSetForWindowProvider(windowId));
+    final popupMetaWindowIds = visiblePopupMetaWindowIds(
+      ref: ref,
+      mainMetaWindowId: metaWindowId,
+      dialogWindowIds: dialogWindowIds,
+      dialogsEnabled: true,
+      allDialogsVisible: false,
+      selectedEntry: selectedDialogEntry,
+      chooserVisible: chooserVisible,
+    );
+
     // Clicking into the window hands it the keyboard as well. The compositor
     // already activates the client on pointer down
     // (`ActivateSurfaceOnPointerDown`); this keeps the Flutter focus in step,
@@ -75,7 +96,15 @@ class EphemeralWindowWidget extends HookConsumerWidget {
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: (_) => activeFocusNode.requestFocus(),
-      child: content,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          content,
+          Positioned.fill(
+            child: TilePopupHost(metaWindowIds: popupMetaWindowIds),
+          ),
+        ],
+      ),
     );
   }
 }

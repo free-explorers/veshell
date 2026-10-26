@@ -38,6 +38,7 @@ use crate::backend::render::{
     get_cursor_elements, get_frame_elements, CaptureCursor, VeshellRenderElements,
 };
 use crate::flutter_engine::view::{Frame, OutputViewIdWrapper};
+use crate::meta_window_state::meta_popup::MetaPopupCategory;
 use crate::meta_window_state::meta_window::MetaWindow;
 use crate::{Backend, State};
 
@@ -474,21 +475,20 @@ pub(crate) fn owned_popup_layers(
         .meta_popups
         .values()
         .filter(|popup| popup.parent == meta_window.id)
+        .filter(|popup| popup.category != MetaPopupCategory::Helper)
         .filter_map(|popup| {
             let surface = state.surfaces.get(&popup.surface_id)?.clone();
-            // The shell view places a popup surface's top-left corner at
-            // `position - content-area top-left`, relative to the window's
-            // own surface origin (see MetaPopupWidget).
-            let origin = match popup.geometry.as_ref() {
-                Some(geometry) => Point::<f64, Logical>::from((
-                    (popup.position.0.x - geometry.0.loc.x) as f64,
-                    (popup.position.0.y - geometry.0.loc.y) as f64,
-                )),
-                None => Point::<f64, Logical>::from((
-                    popup.position.0.x as f64,
-                    popup.position.0.y as f64,
-                )),
-            };
+            // Capture renders relative to the captured window's surface
+            // origin. Popup placement is tile-relative, so resolve the popup
+            // and window in compositor-global coordinates first.
+            let popup_origin = state.meta_window_state.popup_surface_origin(popup)?;
+            let window_origin = state
+                .meta_window_state
+                .meta_window_surface_origin(&meta_window.id)?;
+            let origin = Point::<f64, Logical>::from((
+                popup_origin.x - window_origin.x,
+                popup_origin.y - window_origin.y,
+            ));
             Some((
                 popup.surface_id,
                 surface,

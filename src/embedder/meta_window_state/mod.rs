@@ -10,7 +10,7 @@ use smithay::{
         wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode as DecorationMode,
         wayland_server::{DisplayHandle, Resource},
     },
-    utils::{Logical, Rectangle},
+    utils::{Logical, Point, Rectangle, Size},
     wayland::{
         compositor::with_states,
         shell::xdg::{SurfaceCachedState, ToplevelSurface, XdgToplevelSurfaceData},
@@ -30,6 +30,7 @@ use crate::{
     wayland::wayland::get_surface_id,
 };
 
+pub mod floating_move;
 pub mod meta_popup;
 pub mod meta_resize_edge;
 pub mod meta_window;
@@ -64,6 +65,181 @@ impl MetaWindowState {
             focus_order: Vec::new(),
             pending_activation_parent: HashMap::new(),
         }
+    }
+
+    /// The compositor-global origin of the tile content area that owns a
+    /// window.
+    ///
+    /// The tile popup host publishes this for every display mode. Floating
+    /// windows fall back to their measured viewport origin, and tiled windows
+    /// to their rendered surface origin, so popups can be normalized before
+    /// the first host frame completes.
+    pub fn tile_content_origin(&self, meta_window_id: &str) -> Option<Point<i32, Logical>> {
+        let meta_window = self.meta_windows.get(meta_window_id)?;
+        meta_window
+            .tile_origin
+            .as_ref()
+            .map(|origin| origin.0)
+            .or_else(|| {
+                if meta_window.is_floating() {
+                    meta_window
+                        .viewport_origin
+                        .as_ref()
+                        .map(|origin| origin.0)
+                        .or_else(|| meta_window.position.as_ref().map(|position| position.0))
+                } else {
+                    meta_window
+                        .render_origin
+                        .as_ref()
+                        .map(|origin| origin.0)
+                        .or_else(|| meta_window.position.as_ref().map(|position| position.0))
+                }
+            })
+    }
+
+    /// The compositor-global origin of a window's client surface.
+    ///
+    /// A floating window's native surface is authoritative; a tiled window
+    /// uses the origin rendered by Flutter because its native X11 position can
+    /// be synthetic.
+    pub fn meta_window_surface_origin(&self, meta_window_id: &str) -> Option<Point<f64, Logical>> {
+        let meta_window = self.meta_windows.get(meta_window_id)?;
+        if meta_window.is_floating() {
+            meta_window.surface_origin().or_else(|| {
+                meta_window
+                    .render_origin
+                    .as_ref()
+                    .map(|origin| Point::from((f64::from(origin.0.x), f64::from(origin.0.y))))
+            })
+        } else {
+            meta_window
+                .render_origin
+                .as_ref()
+                .map(|origin| Point::from((f64::from(origin.0.x), f64::from(origin.0.y))))
+                .or_else(|| meta_window.surface_origin())
+        }
+    }
+
+    /// The owning tile-relative origin of a window's client box.
+    ///
+    /// Wayland xdg popups report coordinates relative to the parent window
+    /// box, not its surface buffer. A floating window already stores that box
+    /// origin in `position`; a tiled window derives it from Flutter's surface
+    /// render origin plus the surface-local geometry offset.
+    pub fn meta_window_box_tile_origin(&self, meta_window_id: &str) -> Option<Point<i32, Logical>> {
+        let tile_origin = self.tile_content_origin(meta_window_id)?;
+        let meta_window = self.meta_windows.get(meta_window_id)?;
+        let global_box_origin = if meta_window.is_floating() {
+            meta_window
+                .position
+                .as_ref()
+                .map(|position| position.0)
+                .or_else(|| {
+                    meta_window.render_origin.as_ref().map(|origin| {
+                        let geometry_offset = meta_window
+                            .geometry
+                            .as_ref()
+                            .map(|geometry| geometry.0.loc)
+                            .unwrap_or_else(|| Point::from((0, 0)));
+                        Point::from((
+                            origin.0.x + geometry_offset.x,
+                            origin.0.y + geometry_offset.y,
+                        ))
+                    })
+                })?
+        } else {
+            meta_window
+                .render_origin
+                .as_ref()
+                .map(|origin| {
+                    let geometry_offset = meta_window
+                        .geometry
+                        .as_ref()
+                        .map(|geometry| geometry.0.loc)
+                        .unwrap_or_else(|| Point::from((0, 0)));
+                    Point::from((
+                        origin.0.x + geometry_offset.x,
+                        origin.0.y + geometry_offset.y,
+                    ))
+                })
+                .or_else(|| meta_window.position.as_ref().map(|position| position.0))?
+        };
+        Some(Point::from((
+            global_box_origin.x - tile_origin.x,
+            global_box_origin.y - tile_origin.y,
+        )))
+    }
+
+    /// The tile-content bounds available to a popup owned by `meta_window_id`.
+    ///
+    /// A tiled parent is sized to the tile content. A floating parent publishes
+    /// the client viewport; its title bar is part of the tile content but not of
+    /// the client viewport.
+    pub fn popup_tile_bounds(&self, meta_window_id: &str) -> Option<Size<i32, Logical>> {
+        let meta_window = self.meta_windows.get(meta_window_id)?;
+        if let Some(viewport) = meta_window.viewport.as_ref() {
+            let decoration = if meta_window.need_decoration { 40 } else { 0 };
+            return Some(Size::from((
+                viewport.0.size.w,
+                viewport.0.size.h + decoration,
+            )));
+        }
+        meta_window
+            .geometry
+            .as_ref()
+            .map(|geometry| geometry.0.size)
+    }
+
+    /// Convert a position that is relative to a parent window's client box
+    /// into the owning tile's content coordinates.
+    ///
+    /// Wayland xdg popups report parent-box-relative coordinates. The shared
+    /// popup model stores tile-relative coordinates; this boundary conversion
+    /// keeps the protocol-specific space out of the renderer.
+    pub fn popup_tile_position(
+        &self,
+        parent_meta_window_id: &str,
+        parent_relative: Point<i32, Logical>,
+    ) -> Option<Point<i32, Logical>> {
+        let parent_tile_origin = self.meta_window_box_tile_origin(parent_meta_window_id)?;
+        Some(Point::from((
+            parent_tile_origin.x + parent_relative.x,
+            parent_tile_origin.y + parent_relative.y,
+        )))
+    }
+
+    /// Convert an X11 override-redirect popup's root position to the owning
+    /// tile's content coordinates.
+    ///
+    /// X11 popups are independent top-level windows reported in root
+    /// coordinates, but the parent's native root is not the parent's rendered
+    /// origin for a tiled window (the X11 adapter deliberately keeps tiled
+    /// parents at root `(0,0)`). Subtract the parent's native root first, then
+    /// use the shared parent-box conversion.
+    pub fn x11_popup_tile_position(
+        &self,
+        parent_meta_window_id: &str,
+        popup_root: Point<i32, Logical>,
+    ) -> Option<Point<i32, Logical>> {
+        let parent = self.meta_windows.get(parent_meta_window_id)?;
+        let parent_root = parent.position.as_ref()?.0;
+        let parent_relative =
+            Point::from((popup_root.x - parent_root.x, popup_root.y - parent_root.y));
+        self.popup_tile_position(parent_meta_window_id, parent_relative)
+    }
+
+    /// The compositor-global origin of a popup's client surface.
+    ///
+    /// Popup positions are stored relative to the owning tile's content
+    /// origin. The tile origin is the anchor, so moving the tile moves the
+    /// popup while moving its parent window does not.
+    pub fn popup_surface_origin(&self, popup: &MetaPopup) -> Option<Point<f64, Logical>> {
+        let tile_origin = self.tile_content_origin(&popup.parent)?;
+        let surface_origin = popup.placement().surface_origin();
+        Some(Point::from((
+            f64::from(tile_origin.x) + surface_origin.x,
+            f64::from(tile_origin.y) + surface_origin.y,
+        )))
     }
 
     /// Records `id` as the most recently focused MetaWindow.
@@ -390,6 +566,15 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             is_fixed_sized: false,
             is_modal: modal,
             is_fullscreen: false,
+            client_maximized: false,
+            skip_taskbar: false,
+            keep_on_top: false,
+            position: None,
+            position_explicit: false,
+            render_origin: None,
+            viewport: None,
+            viewport_origin: None,
+            tile_origin: None,
             geometry,
             current_output: None,
             need_decoration: !is_decorated,
@@ -443,6 +628,12 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 binary_name.clone()
             });
 
+        let position = x11_surface
+            .size_hints()
+            .and_then(|hints| hints.position)
+            .map(|(_, x, y)| Point::from((x, y)).into())
+            .or_else(|| Some(x11_surface.last_configure().loc.into()));
+
         self.emit_process_info(pid);
 
         let meta_window = self.create_meta_window(MetaWindow {
@@ -465,6 +656,15 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             is_fixed_sized: x11_is_fixed_sized(&x11_surface),
             is_modal: x11_is_modal(&x11_surface),
             is_fullscreen: x11_surface.is_fullscreen(),
+            client_maximized: false,
+            skip_taskbar: x11_surface.is_skip_taskbar(),
+            keep_on_top: x11_surface.is_above(),
+            position,
+            position_explicit: false,
+            render_origin: None,
+            viewport: None,
+            viewport_origin: None,
+            tile_origin: None,
             current_output: None,
             geometry: Some(x11_surface.geometry().into()),
             need_decoration: !x11_surface.is_decorated(),
@@ -596,6 +796,7 @@ pub(crate) fn get_binary_name_from_pid(pid: i32) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use super::meta_popup::MetaPopupCategory;
     use super::*;
 
     fn window(id: &str, pid: i32, app_id: Option<&str>) -> MetaWindow {
@@ -615,6 +816,15 @@ mod tests {
             is_fixed_sized: false,
             is_modal: false,
             is_fullscreen: false,
+            client_maximized: false,
+            skip_taskbar: false,
+            keep_on_top: false,
+            position: None,
+            position_explicit: false,
+            render_origin: None,
+            viewport: None,
+            viewport_origin: None,
+            tile_origin: None,
             geometry: None,
             need_decoration: false,
             current_output: None,
@@ -633,6 +843,201 @@ mod tests {
             state.record_meta_window_focus(id);
         }
         state
+    }
+
+    #[test]
+    fn wayland_popup_position_uses_the_parent_box_not_the_surface() {
+        let mut parent = window("parent", 1, Some("org.example.Parent"));
+        parent.display_mode = Some(DisplayMode::Floating);
+        parent.position = Some(Point::from((48, 30)).into());
+        parent.tile_origin = Some(Point::from((48, 48)).into());
+        parent.geometry = Some(Rectangle::new((24, 21).into(), (2512, 1392).into()).into());
+        let state = state_with(vec![parent], &[]);
+
+        assert_eq!(
+            state.popup_tile_position("parent", Point::from((550, 66))),
+            Some(Point::from((550, 48)))
+        );
+    }
+
+    #[test]
+    fn popup_origin_uses_the_tile_origin() {
+        let mut parent = window("parent", 1, Some("org.example.Parent"));
+        parent.tile_origin = Some(Point::from((100, 200)).into());
+        let state = state_with(vec![parent], &[]);
+        let popup = MetaPopup {
+            id: "popup".to_string(),
+            parent: "parent".to_string(),
+            category: MetaPopupCategory::Popup,
+            position: Point::from((30, 40)).into(),
+            native_root: None,
+            parent_relative: None,
+            geometry: Some(Rectangle::new((10, 10).into(), (100, 100).into()).into()),
+            surface_id: 0,
+            scale_ratio: 1.0,
+        };
+
+        assert_eq!(
+            state.popup_surface_origin(&popup),
+            Some(Point::from((120.0, 230.0)))
+        );
+    }
+
+    #[test]
+    fn x11_popup_position_uses_the_parent_native_root() {
+        let mut tiled_parent = window("tiled-parent", 1, Some("org.example.Parent"));
+        tiled_parent.display_mode = Some(DisplayMode::Maximized);
+        // Tiled X11 windows deliberately keep their native root at (0,0)
+        // while Flutter renders them at the tile origin.
+        tiled_parent.position = Some(Point::from((0, 0)).into());
+        tiled_parent.render_origin = Some(Point::from((1000, 100)).into());
+        tiled_parent.tile_origin = Some(Point::from((1000, 100)).into());
+        tiled_parent.geometry =
+            Some(Rectangle::new((0, 0).into(), smithay::utils::Size::from((800, 600))).into());
+        let state = state_with(vec![tiled_parent], &[]);
+
+        assert_eq!(
+            state.x11_popup_tile_position("tiled-parent", Point::from((100, 80))),
+            Some(Point::from((100, 80)))
+        );
+
+        let mut floating_parent = window("floating-parent", 1, Some("org.example.Parent"));
+        floating_parent.display_mode = Some(DisplayMode::Floating);
+        floating_parent.position = Some(Point::from((1000, 100)).into());
+        floating_parent.tile_origin = Some(Point::from((1000, 100)).into());
+        floating_parent.geometry =
+            Some(Rectangle::new((0, 0).into(), smithay::utils::Size::from((800, 600))).into());
+        let state = state_with(vec![floating_parent], &[]);
+
+        assert_eq!(
+            state.x11_popup_tile_position("floating-parent", Point::from((1100, 180))),
+            Some(Point::from((100, 80)))
+        );
+    }
+
+    #[test]
+    fn popup_origin_uses_the_parent_render_origin_as_a_fallback() {
+        let mut parent = window("parent", 1, Some("org.example.Parent"));
+        parent.render_origin = Some(Point::from((700, 120)).into());
+        let state = state_with(vec![parent], &[]);
+        let popup = MetaPopup {
+            id: "popup".to_string(),
+            parent: "parent".to_string(),
+            category: MetaPopupCategory::Popup,
+            position: Point::from((30, 40)).into(),
+            native_root: None,
+            parent_relative: None,
+            geometry: Some(Rectangle::new((10, 10).into(), (100, 100).into()).into()),
+            surface_id: 0,
+            scale_ratio: 1.0,
+        };
+
+        assert_eq!(
+            state.popup_surface_origin(&popup),
+            Some(Point::from((720.0, 150.0)))
+        );
+
+        let without_render_origin =
+            state_with(vec![window("parent", 1, Some("org.example.Parent"))], &[]);
+        assert_eq!(without_render_origin.popup_surface_origin(&popup), None);
+
+        let mut floating_parent = window("parent", 1, Some("org.example.Parent"));
+        floating_parent.display_mode = Some(DisplayMode::Floating);
+        floating_parent.position = Some(Point::from((48, 88)).into());
+        floating_parent.render_origin = Some(Point::from((961, 644)).into());
+        let floating_state = state_with(vec![floating_parent], &[]);
+        assert_eq!(
+            floating_state.popup_surface_origin(&popup),
+            Some(Point::from((68.0, 118.0)))
+        );
+    }
+
+    #[test]
+    fn decorated_floating_windows_use_the_compositor_resize_path() {
+        let mut floating = window("floating", 1, Some("org.example.Floating"));
+        floating.display_mode = Some(DisplayMode::Floating);
+        floating.need_decoration = true;
+        assert!(
+            crate::meta_window_state::floating_move::can_resize_floating(
+                &floating,
+                crate::meta_window_state::meta_resize_edge::MetaResizeEdge::BOTTOM_RIGHT,
+            )
+        );
+
+        floating.is_fixed_sized = true;
+        assert!(
+            !crate::meta_window_state::floating_move::can_resize_floating(
+                &floating,
+                crate::meta_window_state::meta_resize_edge::MetaResizeEdge::BOTTOM_RIGHT,
+            )
+        );
+    }
+
+    #[test]
+    fn interactive_resize_is_limited_to_floating_windows_and_dialogs() {
+        let mut tiled = window("tiled", 1, Some("org.example.Tiled"));
+        tiled.display_mode = Some(DisplayMode::Maximized);
+        assert!(!tiled.allows_interactive_resize());
+
+        let mut floating = window("floating", 1, Some("org.example.Floating"));
+        floating.display_mode = Some(DisplayMode::Floating);
+        assert!(floating.allows_interactive_resize());
+
+        let mut parented = window("parented", 1, Some("org.example.Dialog"));
+        parented.parent = Some("owner".to_string());
+        assert!(parented.allows_interactive_resize());
+
+        let mut modal = window("modal", 1, Some("org.example.Dialog"));
+        modal.is_modal = true;
+        assert!(modal.allows_interactive_resize());
+
+        let mut fixed = window("fixed", 1, Some("org.example.Dialog"));
+        fixed.is_fixed_sized = true;
+        assert!(fixed.allows_interactive_resize());
+    }
+
+    #[test]
+    fn window_placement_derives_the_surface_origin() {
+        let placement = crate::meta_window_state::meta_window::WindowPlacement {
+            origin: Point::from((48, 48)),
+            client_size: (2512, 1356).into(),
+            geometry_offset: Point::from((24, 21)),
+        };
+
+        assert_eq!(placement.surface_origin(), Point::from((24.0, 27.0)));
+        assert_eq!(
+            placement.client_rect(),
+            Rectangle::new((48, 48).into(), (2512, 1356).into())
+        );
+    }
+
+    #[test]
+    fn surface_origin_accounts_for_a_wayland_csd_geometry_offset() {
+        let mut window = window("wayland", 42, Some("firefox"));
+        window.position = Some(Point::from((48, 48)).into());
+        window.geometry = Some(Rectangle::new((24, 21).into(), (2512, 1356).into()).into());
+
+        assert_eq!(window.surface_origin(), Some(Point::from((24.0, 27.0))));
+    }
+
+    #[test]
+    fn surface_origin_of_an_x11_window_is_its_root_position() {
+        let mut window = window("x11", 42, Some("zoom"));
+        window.position = Some(Point::from((710, 326)).into());
+        window.geometry = Some(Rectangle::new((0, 0).into(), (1188, 800).into()).into());
+
+        assert_eq!(window.surface_origin(), Some(Point::from((710.0, 326.0))));
+    }
+
+    #[test]
+    fn surface_origin_at_uses_the_window_geometry() {
+        let mut window = window("wayland", 42, Some("firefox"));
+        window.geometry = Some(Rectangle::new((24, 21).into(), (2512, 1356).into()).into());
+
+        assert_eq!(
+            window.surface_origin_at(Point::from((100.0, 200.0))),
+            Point::from((76.0, 179.0))
+        );
     }
 
     #[test]

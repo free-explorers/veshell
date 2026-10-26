@@ -5,6 +5,7 @@ import 'package:shell/meta_window/model/meta_popup.serializable.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/util/json_converter/offset.dart';
+import 'package:shell/shared/util/json_converter/rect.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 
 part 'meta_popup_created.serializable.freezed.dart';
@@ -19,9 +20,11 @@ sealed class MetaPopupCreatedMessage
   factory MetaPopupCreatedMessage({
     required MetaPopupId id,
     required MetaWindowId parent,
+    @Default(MetaPopupCategory.popup) MetaPopupCategory category,
     required SurfaceId surfaceId,
     required double scaleRatio,
     @OffsetConverter() required Offset position,
+    @RectConverter() Rect? geometry,
     String? currentOutput,
   }) = _MetaPopupCreatedMessage;
 

@@ -13,13 +13,20 @@ class MetaPopupWidget extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final metaPopup = ref.watch(metaPopupStateProvider(metaPopupId));
+    // Backing/preview windows are tracked by the compositor but are not UI.
+    // Filtering here keeps the single tile popup host consistent instead of
+    // duplicating the category check.
+    if (metaPopup.category == MetaPopupCategory.helper) {
+      return const SizedBox.shrink();
+    }
+    // Popup positions are already in tile-content coordinates. The tile popup
+    // host shares that coordinate origin, so no parent/overlay translation is
+    // allowed here.
+    //
     // Keep the popup on the whole-pixel grid: a fractional origin would make
     // Flutter sample its external texture bilinearly and soften it (see
     // `snapToWholePixel`).
-    final position = snapOffsetToWholePixels(
-      metaPopup.position -
-          Offset(metaPopup.geometry?.left ?? 0, metaPopup.geometry?.top ?? 0),
-    );
+    final position = snapOffsetToWholePixels(metaPopup.placement.surfaceOrigin);
     return Positioned(
       left: position.dx,
       top: position.dy,

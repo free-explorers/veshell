@@ -9,10 +9,8 @@ import 'package:shell/platform/model/event/meta_window_patches/meta_window_patch
 import 'package:shell/platform/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/util/logger.dart';
-import 'package:shell/shared/widget/container_with_positionnable_children/container_with_positionnable_children.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
-import 'package:shell/window/widget/floatable_window.dart';
 
 class WindowWidget extends HookConsumerWidget {
   const WindowWidget({
@@ -245,8 +243,8 @@ class WindowWidget extends HookConsumerWidget {
         ],
       ),
       DisplayMode.game => MetaSurfaceGamingOverlay(metaWindowId: metaWindowId),
-      DisplayMode.floating => ContainerWithPositionnableChildren(
-        children: [FloatableWindow(metaWindowId: metaWindowId)],
+      DisplayMode.floating => throw StateError(
+        'DisplayMode.floating is rendered by FloatingWindowArea',
       ),
     };
   }

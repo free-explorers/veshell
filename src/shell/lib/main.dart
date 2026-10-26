@@ -41,6 +41,17 @@ import 'package:shell/window/provider/window_manager/window_manager.dart';
 
 void main() async {
   configureLogs();
+  // Widget/framework errors otherwise only paint the red error box and never
+  // reach the compositor log, which made a focus-tree crash invisible.
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    flutterLog.severe(
+      'FlutterError: ${details.exceptionAsString()}'
+      '${details.context == null ? '' : ' (${details.context})'}',
+      details.exception,
+      details.stack,
+    );
+  };
   // debugRepaintRainbowEnabled = true;
   // debugPrintGestureArenaDiagnostics = true;
   WidgetsFlutterBinding.ensureInitialized();
