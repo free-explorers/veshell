@@ -248,6 +248,7 @@ pub mod xdg {
                         .meta_window_state
                         .meta_popup_id_per_surface_id
                         .get(&get_surface_id(surface))
+                        .cloned()
                     {
                         state.patch_meta_popup(
                             MetaPopupPatch::UpdateGeometry {
@@ -256,6 +257,7 @@ pub mod xdg {
                             },
                             true,
                         );
+                        state.clamp_meta_popup_to_tile(&meta_popup_id);
                     }
                 },
             );
@@ -400,11 +402,12 @@ pub mod xdg {
                     .unwrap_or(parent_relative);
                 self.patch_meta_popup(
                     MetaPopupPatch::UpdatePosition {
-                        id: meta_popup_id,
+                        id: meta_popup_id.clone(),
                         value: position.into(),
                     },
                     true,
                 );
+                self.clamp_meta_popup_to_tile(&meta_popup_id);
             }
             surface.send_repositioned(token);
             if let Err(err) = surface.send_configure() {
@@ -897,11 +900,12 @@ pub mod xdg {
                 );
                 self.patch_meta_popup(
                     MetaPopupPatch::UpdatePosition {
-                        id: meta_popup_id,
+                        id: meta_popup_id.clone(),
                         value: new_position.into(),
                     },
                     true,
                 );
+                self.clamp_meta_popup_to_tile(&meta_popup_id);
             }
         }
     }

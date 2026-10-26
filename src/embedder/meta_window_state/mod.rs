@@ -10,7 +10,7 @@ use smithay::{
         wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode as DecorationMode,
         wayland_server::{DisplayHandle, Resource},
     },
-    utils::{Logical, Point, Rectangle},
+    utils::{Logical, Point, Rectangle, Size},
     wayland::{
         compositor::with_states,
         shell::xdg::{SurfaceCachedState, ToplevelSurface, XdgToplevelSurfaceData},
@@ -168,6 +168,26 @@ impl MetaWindowState {
             global_box_origin.x - tile_origin.x,
             global_box_origin.y - tile_origin.y,
         )))
+    }
+
+    /// The tile-content bounds available to a popup owned by `meta_window_id`.
+    ///
+    /// A tiled parent is sized to the tile content. A floating parent publishes
+    /// the client viewport; its title bar is part of the tile content but not of
+    /// the client viewport.
+    pub fn popup_tile_bounds(&self, meta_window_id: &str) -> Option<Size<i32, Logical>> {
+        let meta_window = self.meta_windows.get(meta_window_id)?;
+        if let Some(viewport) = meta_window.viewport.as_ref() {
+            let decoration = if meta_window.need_decoration { 40 } else { 0 };
+            return Some(Size::from((
+                viewport.0.size.w,
+                viewport.0.size.h + decoration,
+            )));
+        }
+        meta_window
+            .geometry
+            .as_ref()
+            .map(|geometry| geometry.0.size)
     }
 
     /// Convert a position that is relative to a parent window's client box

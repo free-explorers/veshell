@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use smithay::{
-    utils::{Logical, Point},
+    utils::{Logical, Point, Rectangle, Size},
     wayland::{compositor::with_states, fractional_scale::with_fractional_scale},
     xwayland::XWaylandClientData,
 };
@@ -203,6 +203,65 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         }
     }
 
+    /// Keep a Wayland popup's client surface inside its tile.
+    ///
+    /// The protocol positioner is advisory: clients can request a menu below
+    /// the tile edge without slide/flip adjustment. The tile host clips such a
+    /// popup away entirely, so clamp the resolved tile-relative position after
+    /// the popup geometry is known.
+    pub fn clamp_meta_popup_to_tile(&mut self, meta_popup_id: &str) {
+        let Some(popup) = self
+            .meta_window_state
+            .meta_popups
+            .get(meta_popup_id)
+            .cloned()
+        else {
+            return;
+        };
+        if !self.xdg_popups.contains_key(&popup.surface_id) {
+            return;
+        }
+        let Some(geometry) = popup.geometry.as_ref().map(|geometry| geometry.0) else {
+            return;
+        };
+        let Some(bounds) = self.meta_window_state.popup_tile_bounds(&popup.parent) else {
+            return;
+        };
+        if geometry.size.w <= 0 || geometry.size.h <= 0 {
+            return;
+        }
+
+        let position = clamped_popup_position(popup.position.0, geometry, bounds);
+        if position == popup.position.0 {
+            return;
+        }
+
+        let dx = position.x - popup.position.0.x;
+        let dy = position.y - popup.position.0.y;
+        let position = MyPoint::from(position);
+        tracing::debug!(
+            target: "veshell::geometry",
+            popup_id = %meta_popup_id,
+            old_position = ?popup.position.0,
+            new_position = ?position.0,
+            bounds = ?bounds,
+            geometry = ?geometry,
+            "clamping popup inside the tile"
+        );
+        self.patch_meta_popup(
+            MetaPopupPatch::UpdatePosition {
+                id: meta_popup_id.to_string(),
+                value: position,
+            },
+            true,
+        );
+        self.translate_pointer_focus_offset_for_surface(
+            popup.surface_id,
+            f64::from(dx),
+            f64::from(dy),
+        );
+    }
+
     /// Translate X11 override-redirect children when the owning tile moves.
     ///
     /// X11 popups are independent root windows; moving the parent window is
@@ -303,5 +362,49 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             Some(Box::new(json!({"id":meta_popup_id.clone()}))),
             None,
         );
+    }
+}
+
+/// Clamp a popup box origin so its client surface stays inside the tile.
+fn clamped_popup_position(
+    position: Point<i32, Logical>,
+    geometry: Rectangle<i32, Logical>,
+    bounds: Size<i32, Logical>,
+) -> Point<i32, Logical> {
+    let offset = geometry.loc;
+    let surface_x = position.x - offset.x;
+    let surface_y = position.y - offset.y;
+    let max_x = (bounds.w - geometry.size.w).max(0);
+    let max_y = (bounds.h - geometry.size.h).max(0);
+    Point::from((
+        surface_x.clamp(0, max_x) + offset.x,
+        surface_y.clamp(0, max_y) + offset.y,
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clamped_popup_position;
+    use smithay::utils::{Logical, Point, Rectangle, Size};
+
+    #[test]
+    fn clamps_a_popup_below_the_tile_back_inside() {
+        let position = Point::from((2091, 1511));
+        let geometry = Rectangle::new((24, 12).into(), (421, 834).into());
+        let bounds = Size::from((2512, 1392));
+
+        assert_eq!(
+            clamped_popup_position(position, geometry, bounds),
+            Point::from((2091, 570))
+        );
+    }
+
+    #[test]
+    fn leaves_a_contained_popup_untouched() {
+        let position = Point::from((2091, 400));
+        let geometry = Rectangle::new((24, 12).into(), (421, 834).into());
+        let bounds = Size::from((2512, 1392));
+
+        assert_eq!(clamped_popup_position(position, geometry, bounds), position);
     }
 }
