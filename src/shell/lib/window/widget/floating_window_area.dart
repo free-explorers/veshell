@@ -35,6 +35,10 @@ import 'package:shell/window/widget/floatable_window.dart';
 /// others and pressing on one raises it. Selecting the tile activates the
 /// topmost window. The trusted file chooser keeps its own modal presentation
 /// above the stack.
+/// How long the tile origin must remain unchanged before native placement is
+/// reconciled. The workspace/tile slide animations are 200 ms.
+const _viewportSettleDelay = Duration(milliseconds: 250);
+
 class FloatingWindowArea extends HookConsumerWidget {
   const FloatingWindowArea({
     required this.parentWindowId,
@@ -161,16 +165,53 @@ class FloatingWindowArea extends HookConsumerWidget {
       return null;
     });
 
-    // Tell the compositor where the floating viewport is so native moves can
-    // be clamped to it. Floating ownership itself comes from the routed
-    // display mode; this message carries only the measured viewport.
-    final contentRectKey = contentRect.value?.toString();
+    // The render rect follows every tile transform so the floating children
+    // stay fixed relative to the tile. Native placement is different: X11
+    // windows must not be reconfigured on every animation frame. Publish a
+    // settled viewport origin after the motion stops, measuring once more so a
+    // scroll animation that never rebuilt this widget still reconciles.
+    final viewportRect = useState<Rect?>(null);
+    useEffect(() {
+      final rect = contentRect.value;
+      if (rect == null) {
+        return null;
+      }
+      // Publish the first measurement immediately; an initially visible
+      // floating tile must not wait for the settle timer.
+      if (viewportRect.value == null) {
+        viewportRect.value = rect;
+        return null;
+      }
+      final timer = Timer(_viewportSettleDelay, () {
+        if (!context.mounted) {
+          return;
+        }
+        final renderBox =
+            contentKey.currentContext?.findRenderObject() as RenderBox?;
+        if (renderBox == null || !renderBox.hasSize) {
+          return;
+        }
+        final origin = renderBox.localToGlobal(Offset.zero) + monitorLocation;
+        final next = origin & renderBox.size;
+        if (viewportRect.value != next) {
+          viewportRect.value = next;
+        }
+      });
+      return timer.cancel;
+    }, [contentRect.value, contentKey, monitorLocation]);
+
+    // Tell the compositor where the settled floating viewport is so native
+    // moves can be clamped and X11 windows are reconciled once after motion.
+    // Floating ownership itself comes from the routed display mode; this
+    // message carries only the settled viewport.
+    final contentRectKey = viewportRect.value?.toString();
     final decorationKey = metaWindows.values
         .map((window) => '${window.id}:${window.needDecoration}')
         .join('\u0000');
-    // Re-publish the viewport when the routed display mode becomes floating or
-    // the measured rect changes. Floating ownership lives in `displayMode`;
-    // this key only tracks the viewport/provenance state needed to rebuild it.
+    // Re-publish the settled viewport when the routed display mode becomes
+    // floating or the origin/size changes. Floating ownership lives in
+    // `displayMode`; this key only tracks the viewport/provenance state needed
+    // to rebuild it.
     final floatingKey = metaWindows.values
         .map(
           (window) =>
@@ -179,7 +220,7 @@ class FloatingWindowArea extends HookConsumerWidget {
         )
         .join('\u0000');
     useEffect(() {
-      final rect = contentRect.value;
+      final rect = viewportRect.value;
       if (rect == null) {
         return null;
       }

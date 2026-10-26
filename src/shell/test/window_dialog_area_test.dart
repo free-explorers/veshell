@@ -1261,6 +1261,89 @@ void main() {
     expect(rectPatches, isEmpty);
   });
 
+  testWidgets('a floating viewport settles before native placement', (
+    tester,
+  ) async {
+    final mainState = _RecordingMetaWindowState(_mainMetaWindow());
+    final offset = ValueNotifier(Offset.zero);
+    addTearDown(offset.dispose);
+    final container = ProviderContainer(
+      overrides: [
+        platformManagerProvider.overrideWith(_FakePlatformManager.new),
+        hotkeysSettingProvider.overrideWithValue(const {}),
+        dialogSetForWindowProvider(
+          _parent,
+        ).overrideWith(() => _FixedDialogSet(const [])),
+        metaWindowStateProvider('meta-main').overrideWith(() => mainState),
+        wlSurfaceStateProvider(
+          9,
+        ).overrideWith(() => _FixedSurfaceState(const Size(400, 300))),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: CurrentMonitorName(
+              name: 'M1',
+              child: ValueListenableBuilder<Offset>(
+                valueListenable: offset,
+                builder: (context, value, _) {
+                  return Transform.translate(
+                    offset: value,
+                    child: SizedBox(
+                      width: 600,
+                      height: 500,
+                      child: FloatingWindowArea(
+                        parentWindowId: _parent,
+                        mainMetaWindowId: 'meta-main',
+                        background: const SizedBox.expand(),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final initialViewportPatches = mainState.patches
+        .whereType<UpdateViewport>()
+        .length;
+
+    for (var frame = 1; frame <= 8; frame++) {
+      offset.value = Offset(frame * 10, 0);
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    // The render rect follows the tile immediately, but the native placement
+    // origin is not republished on every animation frame.
+    expect(
+      mainState.patches.whereType<UpdateViewport>().length,
+      initialViewportPatches,
+    );
+
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+
+    expect(
+      mainState.patches.whereType<UpdateViewport>().length,
+      greaterThan(initialViewportPatches),
+    );
+    expect(
+      mainState.patches.whereType<UpdateViewport>().last.origin,
+      const Offset(80, 0),
+    );
+  });
+
   testWidgets('an oversized floating window is fitted below the title bar', (
     tester,
   ) async {
