@@ -200,6 +200,15 @@ class FloatableWindow extends HookConsumerWidget {
       ],
     );
 
+    // A main floating window can arrive larger than the tile (for example a
+    // Wayland client that starts at the output size). Treat it like a capped
+    // floating window: configure the client down to the available surface
+    // area so the SSD title bar and the window both stay reachable.
+    final overflowsTile =
+        naturalBoxSize.width > maxBoxSize.width + 1 ||
+        naturalBoxSize.height > maxBoxSize.height + 1;
+    final needsFit = isCapped || overflowsTile;
+
     final metaSize = useMemoized(
       () => Size(
         math.min(naturalBoxSize.width, maxBoxSize.width),
@@ -388,15 +397,15 @@ class FloatableWindow extends HookConsumerWidget {
       return null;
     }, [clientOrigin]);
 
-    // A resizable dialog bigger than the cap is configured down to it, so it
-    // leaves the window behind visible. A smaller dialog is left alone, so a
-    // manual shrink survives navigating away and back. At most one correction
-    // per observed mismatch keeps a client that refuses the configure from
-    // being re-patched in a loop.
+    // A resizable dialog or main floating window bigger than the tile is
+    // configured down to it, so its decorations and content remain reachable.
+    // A smaller window is left alone, so a manual shrink survives navigating
+    // away and back. At most one correction per observed mismatch keeps a
+    // client that refuses the configure from being re-patched in a loop.
     final lastCorrectedMismatch = useRef<String?>(null);
     useEffect(
       () {
-        if (!isCapped || metaWindow.isFixedSized) {
+        if (!needsFit || metaWindow.isFixedSized) {
           return null;
         }
         final geometry = metaWindow.geometry;
@@ -408,9 +417,17 @@ class FloatableWindow extends HookConsumerWidget {
             geometry.height <= maxSurfaceSize.height + tolerance) {
           return null;
         }
+        // A floating window's patch is in compositor-global coordinates. Wait
+        // for the tile's measured origin instead of sending a temporary rect
+        // around (0,0), which would mark the window explicit at the wrong
+        // position.
+        if (placement == FloatableWindowPlacement.floatingTile &&
+            tileGlobalOrigin == null) {
+          return null;
+        }
         final mismatch =
             '$metaWindowId|${maxSurfaceSize.width}x${maxSurfaceSize.height}'
-            '|${geometry.size}';
+            '|${geometry.size}|$tileGlobalOrigin';
         if (lastCorrectedMismatch.value == mismatch) {
           return null;
         }
@@ -458,12 +475,13 @@ class FloatableWindow extends HookConsumerWidget {
         return null;
       },
       [
-        isCapped,
+        needsFit,
         metaWindow.isFixedSized,
         metaWindow.geometry,
         maxSurfaceSize,
         decorationHeight,
         constraints,
+        tileGlobalOrigin,
       ],
     );
 
@@ -850,7 +868,7 @@ class FloatableWindow extends HookConsumerWidget {
     // A fixed-size dialog cannot be resized through a configure. When it is
     // bigger than the cap it is scaled down uniformly (and centred) instead of
     // being squished or covering the window behind.
-    final scaleDown = isCapped && metaWindow.isFixedSized;
+    final scaleDown = needsFit && metaWindow.isFixedSized;
     // A fixed-size client cannot be configured to the filling size, so scale
     // its unchanged buffer instead of stretching it.
     final fillFixed = isMaximized && metaWindow.isFixedSized;

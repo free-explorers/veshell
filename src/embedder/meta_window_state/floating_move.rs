@@ -384,9 +384,20 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .as_ref()
             .map(|geometry| geometry.0.loc)
             .unwrap_or_else(|| Point::from((0, 0)));
-        let placement = centered_placement(rect.0, size, geometry_offset);
+        let centered = centered_placement(rect.0, size, geometry_offset);
+        // The viewport is the client-surface area; the SSD title bar lives
+        // above it. A window larger than the viewport would otherwise be
+        // centred with its title bar outside the tile. Pin an oversized
+        // window to the viewport origin so its top-left decoration remains
+        // reachable, then let the shell fit the client to the tile.
+        let origin = clamp_position(
+            rect.0,
+            size,
+            Point::from((f64::from(centered.origin.x), f64::from(centered.origin.y))),
+        );
+        let placement_origin = Point::from((origin.x.round() as i32, origin.y.round() as i32));
         if let Some(current) = meta_window.position.as_ref() {
-            if current.0 == placement.origin {
+            if current.0 == placement_origin {
                 // The viewport is republished on every floating-state change;
                 // re-configuring an already centred window would make clients
                 // flicker or hide transient panels.
@@ -395,7 +406,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         }
         self.apply_floating_position(
             &meta_window,
-            Point::from((f64::from(placement.origin.x), f64::from(placement.origin.y))),
+            Point::from((f64::from(placement_origin.x), f64::from(placement_origin.y))),
             false,
             true,
         );

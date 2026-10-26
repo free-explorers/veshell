@@ -1261,6 +1261,73 @@ void main() {
     expect(rectPatches, isEmpty);
   });
 
+  testWidgets('an oversized floating window is fitted below the title bar', (
+    tester,
+  ) async {
+    const tileOrigin = Offset(100, 100);
+    final mainState = _RecordingMetaWindowState(
+      _mainMetaWindow().copyWith(
+        needDecoration: true,
+        position: null,
+        positionExplicit: false,
+        geometry: const Rect.fromLTWH(0, 0, 1200, 1000),
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        platformManagerProvider.overrideWith(_FakePlatformManager.new),
+        hotkeysSettingProvider.overrideWithValue(const {}),
+        dialogSetForWindowProvider(
+          _parent,
+        ).overrideWith(() => _FixedDialogSet(const [])),
+        metaWindowStateProvider('meta-main').overrideWith(() => mainState),
+        wlSurfaceStateProvider(
+          9,
+        ).overrideWith(() => _FixedSurfaceState(const Size(1200, 1000))),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: CurrentMonitorName(
+              name: 'M1',
+              child: Padding(
+                padding: const EdgeInsets.only(left: 100, top: 100),
+                child: SizedBox(
+                  width: 600,
+                  height: 500,
+                  child: FloatingWindowArea(
+                    parentWindowId: _parent,
+                    mainMetaWindowId: 'meta-main',
+                    background: const SizedBox.expand(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final rectPatches = mainState.patches.whereType<SetWindowRect>().toList();
+    expect(rectPatches, isNotEmpty);
+    final rect = rectPatches.last.value!;
+    expect(rect.left, closeTo(tileOrigin.dx, 0.5));
+    expect(rect.width, closeTo(600, 0.5));
+    expect(rect.height, lessThanOrEqualTo(500 - WindowTitleBar.height));
+    // The client rect starts below the shell title bar at the measured tile
+    // origin, so the title bar is inside the tile instead of being cropped
+    // above it.
+    expect(rect.top, closeTo(tileOrigin.dy + WindowTitleBar.height, 0.5));
+  });
+
   testWidgets('a floating surface publishes its render origin', (tester) async {
     final mainState = _RecordingMetaWindowState(_mainMetaWindow());
     final container = ProviderContainer(

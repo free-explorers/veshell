@@ -34,9 +34,12 @@ shifts the surface or its subsurfaces inside the window.
 
 Initial placement is compositor-owned for both backends. The shell publishes
 the measured floating viewport, and Rust centres a window that the client did
-not place explicitly. X11 receives a native configure at the placement origin;
-Wayland receives the same origin in the model and the shell renders there.
-Changes to the tile origin translate each floating window by the same delta.
+not place explicitly. A client larger than the client-surface viewport is
+configured down to it, so a server-decorated window's title bar and content
+stay inside the tile; fixed-size clients are scaled instead. X11 receives a
+native configure at the placement origin; Wayland receives the same origin in
+the model and the shell renders there. Changes to the tile origin translate
+each floating window by the same delta.
 
 A client that positions one of its own windows (an X11 application such as Zoom
 placing its panels) keeps that placement: the output position is translated
