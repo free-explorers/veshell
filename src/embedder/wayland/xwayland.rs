@@ -618,11 +618,21 @@ pub mod xwayland {
                         .meta_popups
                         .get(&meta_popup_id)
                         .map(|popup| popup.parent.clone());
-                    let tile_origin = parent_meta_window_id
+                    let position = parent_meta_window_id
                         .as_deref()
-                        .and_then(|parent| self.meta_window_state.tile_content_origin(parent))
-                        .unwrap_or_else(|| Point::from((0, 0)));
-                    let position = geometry.loc - tile_origin;
+                        .and_then(|parent| {
+                            self.meta_window_state
+                                .x11_popup_tile_position(parent, geometry.loc)
+                        })
+                        .unwrap_or_else(|| {
+                            let tile_origin = parent_meta_window_id
+                                .as_deref()
+                                .and_then(|parent| {
+                                    self.meta_window_state.tile_content_origin(parent)
+                                })
+                                .unwrap_or_else(|| Point::from((0, 0)));
+                            geometry.loc - tile_origin
+                        });
                     let previous = self
                         .meta_window_state
                         .meta_popups
@@ -721,8 +731,19 @@ pub mod xwayland {
                 // tile while the X11 window stays outside and pointer events
                 // are offset from what the user sees.
                 let mut root_position = geometry.loc;
+                // A ConfigureNotify caused by our own compositor configure must
+                // not undo a move/resize gesture: those gestures use the
+                // half-outside move clamp. Client-initiated XMoveWindow still
+                // goes through the strict clamp in configure_request.
+                let gesture_active =
+                    self.floating_move.as_ref().is_some_and(|move_| {
+                        move_.meta_window_id.as_str() == meta_window.id.as_str()
+                    }) || self.floating_resize.as_ref().is_some_and(|resize| {
+                        resize.meta_window_id.as_str() == meta_window.id.as_str()
+                    });
                 if meta_window.is_floating()
                     && !meta_window.client_maximized
+                    && !gesture_active
                     && geometry.size.w > 0
                     && geometry.size.h > 0
                 {
@@ -1265,11 +1286,22 @@ pub mod xwayland {
                     // X11 reports override-redirect popups at the root. Store
                     // them relative to the owning tile's content origin so the
                     // tile popup host can render them in every display mode.
-                    let tile_origin = self
+                    // Subtract the parent's native root first: tiled X11
+                    // parents are kept at root (0,0), not at their rendered
+                    // tile origin.
+                    let position = self
                         .meta_window_state
-                        .tile_content_origin(parent_meta_window_id)
-                        .unwrap_or_else(|| Point::from((0, 0)));
-                    let position = surface.last_configure().loc - tile_origin;
+                        .x11_popup_tile_position(
+                            parent_meta_window_id,
+                            surface.last_configure().loc,
+                        )
+                        .unwrap_or_else(|| {
+                            let tile_origin = self
+                                .meta_window_state
+                                .tile_content_origin(parent_meta_window_id)
+                                .unwrap_or_else(|| Point::from((0, 0)));
+                            surface.last_configure().loc - tile_origin
+                        });
                     let meta_popup = self.create_meta_popup(MetaPopup {
                         id: Uuid::new_v4().hyphenated().to_string(),
                         category: x11_popup_category(&surface, geometry),

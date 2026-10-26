@@ -188,6 +188,26 @@ impl MetaWindowState {
         )))
     }
 
+    /// Convert an X11 override-redirect popup's root position to the owning
+    /// tile's content coordinates.
+    ///
+    /// X11 popups are independent top-level windows reported in root
+    /// coordinates, but the parent's native root is not the parent's rendered
+    /// origin for a tiled window (the X11 adapter deliberately keeps tiled
+    /// parents at root `(0,0)`). Subtract the parent's native root first, then
+    /// use the shared parent-box conversion.
+    pub fn x11_popup_tile_position(
+        &self,
+        parent_meta_window_id: &str,
+        popup_root: Point<i32, Logical>,
+    ) -> Option<Point<i32, Logical>> {
+        let parent = self.meta_windows.get(parent_meta_window_id)?;
+        let parent_root = parent.position.as_ref()?.0;
+        let parent_relative =
+            Point::from((popup_root.x - parent_root.x, popup_root.y - parent_root.y));
+        self.popup_tile_position(parent_meta_window_id, parent_relative)
+    }
+
     /// The compositor-global origin of a popup's client surface.
     ///
     /// Popup positions are stored relative to the owning tile's content
@@ -838,6 +858,38 @@ mod tests {
         assert_eq!(
             state.popup_surface_origin(&popup),
             Some(Point::from((120.0, 230.0)))
+        );
+    }
+
+    #[test]
+    fn x11_popup_position_uses_the_parent_native_root() {
+        let mut tiled_parent = window("tiled-parent", 1, Some("org.example.Parent"));
+        tiled_parent.display_mode = Some(DisplayMode::Maximized);
+        // Tiled X11 windows deliberately keep their native root at (0,0)
+        // while Flutter renders them at the tile origin.
+        tiled_parent.position = Some(Point::from((0, 0)).into());
+        tiled_parent.render_origin = Some(Point::from((1000, 100)).into());
+        tiled_parent.tile_origin = Some(Point::from((1000, 100)).into());
+        tiled_parent.geometry =
+            Some(Rectangle::new((0, 0).into(), smithay::utils::Size::from((800, 600))).into());
+        let state = state_with(vec![tiled_parent], &[]);
+
+        assert_eq!(
+            state.x11_popup_tile_position("tiled-parent", Point::from((100, 80))),
+            Some(Point::from((100, 80)))
+        );
+
+        let mut floating_parent = window("floating-parent", 1, Some("org.example.Parent"));
+        floating_parent.display_mode = Some(DisplayMode::Floating);
+        floating_parent.position = Some(Point::from((1000, 100)).into());
+        floating_parent.tile_origin = Some(Point::from((1000, 100)).into());
+        floating_parent.geometry =
+            Some(Rectangle::new((0, 0).into(), smithay::utils::Size::from((800, 600))).into());
+        let state = state_with(vec![floating_parent], &[]);
+
+        assert_eq!(
+            state.x11_popup_tile_position("floating-parent", Point::from((1100, 180))),
+            Some(Point::from((100, 80)))
         );
     }
 
