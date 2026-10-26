@@ -17,19 +17,19 @@ import 'package:shell/platform/model/event/meta_window_patches/meta_window_patch
 import 'package:shell/platform/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/util/logger.dart';
-import 'package:shell/shared/widget/container_with_positionnable_children/container_with_positionnable_children.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/widget/floatable_window.dart';
+import 'package:shell/window/widget/floating_window_stack.dart';
 
 /// The floating display mode's window stack.
 ///
 /// Every native window owned by [parentWindowId] — the displayed window and
 /// each attached dialog, regular top-levels included — is an independently
 /// decorated, positionable and resizable [FloatableWindow]. They are all
-/// siblings in one [ContainerWithPositionnableChildren], sharing one drag/resize
-/// controller and one z-order.
+/// siblings in one [FloatingWindowStack], sharing one drag/resize controller
+/// and one z-order.
 ///
 /// The stack is ordered bottom-to-top: a window that opens goes above the
 /// others and pressing on one raises it. Selecting the tile activates the
@@ -321,16 +321,6 @@ class FloatingWindowArea extends HookConsumerWidget {
             isTaskBarWindow(metaWindows[metaWindowId]!))
           metaWindows[metaWindowId]!,
     ];
-    // The CSD maximize button is a client request: the newest window that asked
-    // to be maximized fills the tile, and a restore request clears it. Tiled
-    // modes keep the tile's own display mode instead.
-    MetaWindowId? maximizedMetaWindowId;
-    for (final metaWindow in orderedMetaWindows) {
-      if (metaWindow.clientMaximized) {
-        maximizedMetaWindowId = metaWindow.id;
-      }
-    }
-
     final tileAnchors = useRef<Map<MetaWindowId, Offset>>({});
     final previousPositions = useRef<Map<MetaWindowId, Offset?>>({});
 
@@ -365,30 +355,6 @@ class FloatingWindowArea extends HookConsumerWidget {
       return position - anchor - Offset(0, decoration);
     }
 
-    final floatingChildren = <Widget>[];
-    for (final metaWindow in orderedMetaWindows) {
-      floatingChildren.add(
-        FloatableWindow(
-          // The key keeps each window's state (position, size, surface) with
-          // the window when the stack is reordered.
-          key: ValueKey(metaWindow.id),
-          metaWindowId: metaWindow.id,
-          placement: FloatableWindowPlacement.floatingTile,
-          tileGlobalOrigin: viewportRect.value?.topLeft,
-          // Keep the native-placement anchor stable while the tile animates;
-          // using the live contentRect here would subtract the animation and
-          // pin the window in compositor space instead of moving with the tile.
-          clientOrigin: clientOriginFor(metaWindow, viewportRect.value),
-          maximized: metaWindow.id == maximizedMetaWindowId,
-          onRaise: () {
-            focusNode?.requestFocus();
-            raise(metaWindow.id);
-            _activateMetaWindow(ref, metaWindow.id);
-          },
-        ),
-      );
-    }
-
     final content = Stack(
       fit: StackFit.expand,
       children: [
@@ -401,10 +367,22 @@ class FloatingWindowArea extends HookConsumerWidget {
                 fit: StackFit.expand,
                 children: [
                   background,
-                  if (floatingChildren.isNotEmpty)
-                    ContainerWithPositionnableChildren(
-                      children: floatingChildren,
+                  FloatingWindowStack(
+                    metaWindowIds: orderedMetaWindows
+                        .map((metaWindow) => metaWindow.id)
+                        .toList(growable: false),
+                    placement: FloatableWindowPlacement.floatingTile,
+                    tileGlobalOrigin: viewportRect.value?.topLeft,
+                    clientOriginFor: (metaWindowId) => clientOriginFor(
+                      metaWindows[metaWindowId]!,
+                      viewportRect.value,
                     ),
+                    onRaise: (metaWindowId) {
+                      focusNode?.requestFocus();
+                      raise(metaWindowId);
+                      _activateMetaWindow(ref, metaWindowId);
+                    },
+                  ),
                 ],
               ),
             ),

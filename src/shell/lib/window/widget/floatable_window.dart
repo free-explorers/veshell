@@ -59,7 +59,6 @@ class FloatableWindow extends HookConsumerWidget {
     this.tileGlobalOrigin,
     this.maxSizeFactor = 1,
     this.clientOrigin,
-    this.maximized = false,
     this.frame = false,
     this.onRaise,
     super.key,
@@ -79,13 +78,6 @@ class FloatableWindow extends HookConsumerWidget {
   /// panels). `null` centres the window, the default for a single window or a
   /// window that has not declared a position.
   final Offset? clientOrigin;
-
-  /// Whether this floating window fills the whole stack.
-  ///
-  /// This is a resize, not the tile's `DisplayMode.maximized`: the window stays
-  /// in the floating stack (other floating windows can still sit above it) but
-  /// is configured to the stack's size.
-  final bool maximized;
 
   /// Fraction of the available space the window may grow to. Used to keep a
   /// dialog from filling a maximized tile entirely and hiding the window
@@ -136,13 +128,6 @@ class FloatableWindow extends HookConsumerWidget {
         maxSizeFactor < 1 &&
         constraints.biggest.width.isFinite &&
         constraints.biggest.height.isFinite;
-
-    // Maximize is a resize of this floating window to the stack's bounds, not
-    // the tile's `DisplayMode.maximized` (which would tab its dialogs again).
-    final isMaximized =
-        maximized &&
-        constraints.hasBoundedWidth &&
-        constraints.hasBoundedHeight;
 
     // The largest box the window may occupy, decoration included.
     final maxBoxSize = useMemoized(() => constraints.biggest * maxSizeFactor, [
@@ -284,121 +269,6 @@ class FloatableWindow extends HookConsumerWidget {
 
     final origin = useState<Offset?>(
       clientOrigin == null ? centredOrigin() : clampClientOrigin(clientOrigin!),
-    );
-
-    // Remember the client geometry and global position before a maximize, so
-    // leaving the maximized state can restore the window's own placement.
-    final preMaximizeGeometry = useRef<Rect?>(null);
-    final preMaximizePosition = useRef<Offset?>(null);
-    final wasMaximized = useRef(false);
-    useEffect(() {
-      if (isMaximized && !wasMaximized.value) {
-        wasMaximized.value = true;
-        preMaximizeGeometry.value = metaWindow.geometry;
-        preMaximizePosition.value = metaWindow.position;
-      } else if (!isMaximized && wasMaximized.value) {
-        wasMaximized.value = false;
-        final previous = preMaximizeGeometry.value;
-        final previousPosition = preMaximizePosition.value;
-        preMaximizeGeometry.value = null;
-        preMaximizePosition.value = null;
-        if (previous != null) {
-          final fallbackPosition =
-              (tileGlobalOrigin ?? Offset.zero) +
-              Offset(0, decorationHeight) +
-              (origin.value ?? Offset.zero);
-          final restorePosition = previousPosition ?? fallbackPosition;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!context.mounted) {
-              return;
-            }
-            patchWindowRect(
-              Rect.fromLTWH(
-                restorePosition.dx,
-                restorePosition.dy,
-                previous.width,
-                previous.height,
-              ),
-            );
-          });
-        }
-      }
-      return null;
-    }, [isMaximized]);
-
-    // Configure the client to the filling size. A fixed-size window cannot be
-    // resized this way and is scaled by the render path instead.
-    //
-    // The target is derived from the tile constraints, not from the observed
-    // client geometry. `lastMaximizedSize` is the *requested* target, so a
-    // client that commits a slightly different size cannot restart the
-    // configure loop (the old code re-patched on every 1 px commit).
-    final maximizedTargetSize = useMemoized(
-      () => Size(
-        constraints.maxWidth.floorToDouble(),
-        (constraints.maxHeight - decorationHeight).floorToDouble(),
-      ),
-      [constraints, decorationHeight],
-    );
-    final lastMaximizedSize = useRef<Size?>(null);
-    final lastMaximizedOrigin = useRef<Offset?>(null);
-    useEffect(
-      () {
-        if (!isMaximized) {
-          lastMaximizedSize.value = null;
-          lastMaximizedOrigin.value = null;
-          return null;
-        }
-        if (metaWindow.isFixedSized) {
-          return null;
-        }
-        final target = maximizedTargetSize;
-        if (target.width <= 0 || target.height <= 0) {
-          return null;
-        }
-        final globalPosition =
-            (tileGlobalOrigin ?? Offset.zero) + Offset(0, decorationHeight);
-        final originChanged = lastMaximizedOrigin.value != globalPosition;
-        if (lastMaximizedSize.value == target && !originChanged) {
-          return null;
-        }
-        lastMaximizedSize.value = target;
-        lastMaximizedOrigin.value = globalPosition;
-
-        final geometry = metaWindow.geometry;
-        final sizeMatches =
-            geometry != null &&
-            (geometry.width - target.width).abs() < 1 &&
-            (geometry.height - target.height).abs() < 1;
-        // The size is already what we asked for and only the tile moved:
-        // still re-configure the position so the native window follows.
-        if (sizeMatches && !originChanged) {
-          return null;
-        }
-        // `useEffect` runs during the first build, where modifying a
-        // provider is forbidden; defer the patch to after the frame.
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!context.mounted) {
-            return;
-          }
-          patchWindowRect(
-            Rect.fromLTWH(
-              globalPosition.dx,
-              globalPosition.dy,
-              target.width,
-              target.height,
-            ),
-          );
-        });
-        return null;
-      },
-      [
-        isMaximized,
-        maximizedTargetSize,
-        tileGlobalOrigin,
-        metaWindow.geometry,
-        metaWindow.isFixedSized,
-      ],
     );
 
     // A client that moves one of its own windows (X11 configure requests, which
@@ -803,11 +673,6 @@ class FloatableWindow extends HookConsumerWidget {
     final onTitleBarMoveStart =
         placement == FloatableWindowPlacement.floatingTile
         ? () {
-            // A maximized floating window is drawn at the tile origin; a move
-            // would only move the native window and desynchronise the box.
-            if (isMaximized) {
-              return;
-            }
             unawaited(
               ref
                   .read(platformManagerProvider.notifier)
@@ -850,13 +715,12 @@ class FloatableWindow extends HookConsumerWidget {
 
     // A floating window has exactly one resize path: the handle asks Rust to
     // start the gesture, Rust owns the pointer and publishes the rect, and
-    // Flutter only draws/hit-tests the affordance. Fixed-size and maximized
+    // Flutter only draws/hit-tests the affordance. Fixed-size and fullscreen
     // windows expose no resize handles.
     final compositorResize =
         placement == FloatableWindowPlacement.floatingTile &&
         !metaWindow.isFixedSized &&
-        !metaWindow.isFullscreen &&
-        !isMaximized;
+        !metaWindow.isFullscreen;
     final resizeEnabled =
         placement != FloatableWindowPlacement.floatingTile || compositorResize;
     final ValueChanged<ResizeEdge>? onResizeStart = compositorResize
@@ -898,9 +762,6 @@ class FloatableWindow extends HookConsumerWidget {
     // bigger than the cap it is scaled down uniformly (and centred) instead of
     // being squished or covering the window behind.
     final scaleDown = needsFit && metaWindow.isFixedSized;
-    // A fixed-size client cannot be configured to the filling size, so scale
-    // its unchanged buffer instead of stretching it.
-    final fillFixed = isMaximized && metaWindow.isFixedSized;
 
     // Dragging and resizing accumulate raw pointer deltas, which are
     // fractional, so `origin` leaves the whole-pixel grid the window was
@@ -912,17 +773,12 @@ class FloatableWindow extends HookConsumerWidget {
         ? null
         : snapOffsetToWholePixels(origin.value!);
 
-    final positionedSize = isMaximized
-        ? Size(
-            constraints.maxWidth.floorToDouble(),
-            constraints.maxHeight.floorToDouble(),
-          )
-        : size.value;
-    final positionedOrigin = isMaximized ? Offset.zero : renderOrigin;
+    final positionedSize = size.value;
+    final positionedOrigin = renderOrigin;
 
-    final content = scaleDown || fillFixed
+    final content = scaleDown
         ? FittedBox(
-            fit: fillFixed ? BoxFit.contain : BoxFit.scaleDown,
+            fit: BoxFit.scaleDown,
             child: SizedBox(
               width: naturalBoxSize.width,
               height: naturalBoxSize.height,

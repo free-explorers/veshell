@@ -22,7 +22,8 @@ behaviour.
 
 Both backends use one `WindowPlacement`:
 
-- `origin`: the compositor-global origin of the window box;
+- `origin`: the compositor-global origin of the client visible-content box; the
+  shell title bar is added separately;
 - `client_size`: the configured client-surface size;
 - `geometry_offset`: the visible-content offset inside the client buffer. It is
   zero for X11 and can be non-zero for a Wayland client with CSD shadow margins.

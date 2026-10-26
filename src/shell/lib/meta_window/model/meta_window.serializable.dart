@@ -56,9 +56,10 @@ abstract class MetaWindow with _$MetaWindow {
     /// surface for routing, not as a dialog.
     @Default(false) bool isFullscreen,
 
-    /// Whether the client asked for this window to be maximized through its own
-    /// decoration buttons. The floating tile turns that into filling the
-    /// floating window; it is not the tile's `displayMode`.
+    /// Whether the compositor negotiated a client-maximized state.
+    ///
+    /// Floating windows reject and clear it; their placement is always the
+    /// floating one. This is not the tile's `displayMode`.
     @Default(false) bool clientMaximized,
 
     /// The global logical viewport of the floating tile, used to clamp native
@@ -87,12 +88,13 @@ abstract class MetaWindow with _$MetaWindow {
       _$MetaWindowFromJson(json);
 }
 
-/// The compositor-global placement of a window box.
+/// The compositor-global placement of a client visible-content box.
 ///
 /// This is the backend-neutral placement shared by Wayland and XWayland:
-/// [origin] is the window-box top-left, [clientSize] is the configured client
-/// surface size, and [geometryOffset] is the visible-content offset inside the
-/// client buffer (nonzero for Wayland CSD shadow margins).
+/// [origin] is the visible-content top-left (the shell decoration is added by
+/// Flutter), [clientSize] is the configured client surface size, and
+/// [geometryOffset] is the visible-content offset inside the client buffer
+/// (nonzero for Wayland CSD shadow margins).
 class WindowPlacement {
   const WindowPlacement({
     required this.origin,
@@ -131,9 +133,10 @@ extension MetaWindowSurfaceOrigin on MetaWindow {
   /// The compositor-global origin of the client surface buffer, when this
   /// window is in floating mode.
   ///
-  /// [position] addresses the window box. A Wayland client with client-side
-  /// decorations reports a non-zero [geometry] top-left: that is the visible
-  /// content offset inside the surface buffer (the CSD shadow margin). The
+  /// [position] addresses the client visible-content box. A Wayland client
+  /// with client-side decorations reports a non-zero [geometry] top-left: that
+  /// is the visible content offset inside the surface buffer (the CSD shadow
+  /// margin). The
   /// buffer itself starts at `position - geometry.topLeft`, which is the origin
   /// pointer coordinates are relative to. X11 reports a zero geometry offset,
   /// so its root position is returned unchanged. Outside floating mode the

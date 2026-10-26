@@ -224,10 +224,9 @@ pub struct MetaWindow {
     /// state. Unlike [`MetaWindow::display_mode`], which is the shell's requested
     /// mode, this reflects the state the toplevel actually acked.
     pub is_fullscreen: bool,
-    /// Whether the client asked for this window to be maximized through its
-    /// own decoration buttons (`xdg_toplevel.set_maximized`, X11
-    /// `_NET_WM_STATE_MAXIMIZED_*`). The shell turns that into filling the
-    /// floating window, independent of the tile's own display mode.
+    /// The negotiated client-maximized state (`xdg_toplevel.set_maximized`,
+    /// X11 `_NET_WM_STATE_MAXIMIZED_*`). Floating windows reject and clear it;
+    /// it is not the tile's display mode and never overrides floating placement.
     pub client_maximized: bool,
     /// Whether the client asked not to be listed in task bars
     /// (`_NET_WM_STATE_SKIP_TASKBAR`).
@@ -272,13 +271,13 @@ pub struct MetaWindow {
     pub is_recording: bool,
 }
 
-/// The compositor-global placement of a window box.
+/// The compositor-global placement of a client visible-content box.
 ///
-/// `origin` is the window-box top-left, `client_size` is the configured client
-/// surface size, and `geometry_offset` is the client's visible-content offset
-/// inside its buffer (non-zero for Wayland CSD shadow margins; zero for X11).
-/// The same placement describes both backends; only the adapter that applies
-/// it differs.
+/// `origin` is the visible-content top-left (the shell decoration is added by
+/// Flutter), `client_size` is the configured client surface size, and
+/// `geometry_offset` is the client's visible-content offset inside its buffer
+/// (non-zero for Wayland CSD shadow margins; zero for X11). The same placement
+/// describes both backends; only the adapter that applies it differs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WindowPlacement {
     pub origin: Point<i32, Logical>,
@@ -302,7 +301,7 @@ impl WindowPlacement {
 }
 
 impl MetaWindow {
-    /// The floating/window-box placement derived from the current model.
+    /// The floating client visible-content placement derived from the current model.
     pub fn window_placement(&self) -> Option<WindowPlacement> {
         let origin = self.position.as_ref()?.0;
         let geometry = self.geometry.as_ref()?.0;
@@ -347,8 +346,9 @@ impl MetaWindow {
 
     /// The compositor-global origin of this window's client surface buffer.
     ///
-    /// [`MetaWindow::position`] addresses the window box. A Wayland client
-    /// with client-side decorations reports a non-zero `geometry.loc`: that is
+    /// [`MetaWindow::position`] addresses the client visible-content box. A
+    /// Wayland client with client-side decorations reports a non-zero
+    /// `geometry.loc`: that is
     /// the visible-content offset inside the surface buffer (the CSD shadow
     /// margin). The surface buffer itself starts at `position - geometry.loc`,
     /// and that is the origin pointer coordinates are relative to. X11 reports
@@ -362,7 +362,7 @@ impl MetaWindow {
         })
     }
 
-    /// Converts a window-box position into the surface-buffer origin using the
+    /// Converts a visible-content position into the surface-buffer origin using the
     /// current geometry offset. See [`MetaWindow::surface_origin`].
     pub fn surface_origin_at(&self, position: Point<f64, Logical>) -> Point<f64, Logical> {
         let geometry = self

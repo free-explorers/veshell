@@ -804,7 +804,6 @@ pub mod xwayland {
                     &meta_window,
                     (f64::from(root_position.x), f64::from(root_position.y)).into(),
                 );
-                if meta_window.is_floating() {}
                 let mut surface_geometry = x11_surface.geometry();
                 if surface_geometry.size.w <= 0 || surface_geometry.size.h <= 0 {
                     surface_geometry = Rectangle::from_size(geometry.size);

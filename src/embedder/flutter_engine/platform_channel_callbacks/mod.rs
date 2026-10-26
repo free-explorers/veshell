@@ -25,7 +25,6 @@ mod notification_ready;
 mod on_shell_ready;
 mod pointer_exit;
 mod pointer_focus;
-mod resize_window;
 mod screen_cast_consent_decision;
 mod screen_cast_stop;
 mod screenshot_prompt_decision;
@@ -45,7 +44,6 @@ use self::mouse_buttons_event::mouse_buttons_event;
 use self::on_shell_ready::on_shell_ready;
 use self::pointer_exit::pointer_exit;
 use self::pointer_focus::pointer_focus;
-use self::resize_window::resize_window;
 use self::start_move_window::start_move_window;
 use self::start_resize_window::start_resize_window;
 use self::switch_keyboard_layout::switch_keyboard_layout;
@@ -64,7 +62,6 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             "pointer_focus" => pointer_focus(method_call, result, data),
             "mouse_buttons_event" => mouse_buttons_event(method_call, result, data),
             "activate_window" => activate_window(method_call, result, data),
-            "resize_window" => resize_window(method_call, result, data),
             "start_move_window" => start_move_window(method_call, result, data),
             "start_resize_window" => start_resize_window(method_call, result, data),
             "close_window" => close_window(method_call, result, data),

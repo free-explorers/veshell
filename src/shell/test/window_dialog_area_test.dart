@@ -143,11 +143,6 @@ class _MutableMetaWindowState extends MetaWindowState {
   @override
   MetaWindow build(String id) => _metaWindow;
 
-  void setClientMaximized({required bool value}) {
-    _metaWindow = _metaWindow.copyWith(clientMaximized: value);
-    state = _metaWindow;
-  }
-
   void setPosition(Offset value) {
     _metaWindow = _metaWindow.copyWith(position: value);
     state = _metaWindow;
@@ -719,32 +714,8 @@ void main() {
     // full buffer immediately instead of waiting for the next configure.
     expect(dialogRect.height, closeTo(300, 0.5));
 
-    // The task bar lists both windows; the CSD maximize request fills the
-    // window area without changing the tile's mode.
+    // The task bar lists both windows.
     expect(find.text('Alpha'), findsOneWidget);
-    final dialogState =
-        container.read(metaWindowStateProvider('meta-a').notifier)
-            as _MutableMetaWindowState;
-    dialogState.setClientMaximized(value: true);
-    await tester.pump();
-
-    Rect dialogWindowRect() => tester.getRect(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is FloatableWindow && widget.metaWindowId == 'meta-a',
-      ),
-    );
-
-    final maximizedRect = dialogWindowRect();
-    expect(maximizedRect.left, closeTo(tileRect.left, 0.5));
-    expect(maximizedRect.top, closeTo(tileRect.top, 0.5));
-    expect(maximizedRect.width, closeTo(tileRect.width, 0.5));
-    expect(maximizedRect.height, closeTo(tileRect.height - 36, 0.5));
-
-    // A CSD restore request puts the window back to its client placement.
-    dialogState.setClientMaximized(value: false);
-    await tester.pump();
-    expect(dialogWindowRect(), dialogRect);
 
     // The task bar itself does not follow the paint stack: raising a window
     // must not move the entry under the pointer.

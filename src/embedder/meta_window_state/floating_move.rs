@@ -261,37 +261,12 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 
         let position = pointer - move_.grab_offset;
         let clamped = self.clamp_to_viewport_for_move(&meta_window, position);
-        let before_focus = self.pointer_focus.as_ref().map(|(_, offset)| *offset);
-        let size = self
-            .x11_surface_for_meta_window(&meta_window)
-            .map(|surface| surface.last_configure().size);
         self.apply_floating_position(&meta_window, clamped, true, true);
     }
 
     /// Ends the current move, if any.
     pub fn end_floating_move(&mut self) {
         self.floating_move = None;
-    }
-
-    /// Moves a floating window to `position` (global logical).
-    ///
-    /// Used by the shell-initiated move and by the client `move_request` path.
-    /// Only X11 windows are configured natively; the model/patch is updated for
-    /// every floating window so the shell can follow.
-    pub fn move_floating_window(&mut self, meta_window_id: &str, position: Point<f64, Logical>) {
-        let Some(meta_window) = self
-            .meta_window_state
-            .meta_windows
-            .get(meta_window_id)
-            .cloned()
-        else {
-            return;
-        };
-        if !meta_window.is_floating() {
-            return;
-        }
-        let position = self.clamp_to_viewport(&meta_window, position);
-        self.apply_floating_position(&meta_window, position, true, true);
     }
 
     /// Clamps an explicitly placed floating window inside its tile.

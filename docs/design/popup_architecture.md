@@ -1,9 +1,8 @@
 # Popup placement and hosting — design notes
 
-Status: **implemented, pending runtime validation.** Branch
+Status: **implemented; runtime validation ongoing.** Branch
 `feat/floating-window-placement`. Companion to
-[`floating_window.md`](../specifications/floating_window.md); the popup
-contract is not settled until this design is accepted.
+[`floating_window.md`](../specifications/floating_window.md).
 
 ## Goal
 
@@ -15,27 +14,23 @@ The immediate bug is that dragging a floating X11 parent visually moves its
 override-redirect children even though X11 did not move them. Maximized and
 fullscreen must not become separate coordinate systems to work around that.
 
-## Current behavior
+## Before this change
 
-`MetaPopup.position` is currently stored relative to the owning `MetaWindow`
-box for both backends. Flutter adds the live parent origin:
+Popups were stored relative to the owning `MetaWindow` box and Flutter added the
+live parent origin:
 
 ```text
 position = popup.position + parentOrigin - geometry.topLeft
 ```
 
-That is correct for Wayland `xdg_popup`, whose position is parent-relative by
-protocol. It is wrong for X11 override-redirect windows, which are independent
+That was correct for Wayland `xdg_popup`, whose position is parent-relative by
+protocol. It was wrong for X11 override-redirect windows, which are independent
 top-level windows: moving the parent does not move them, and only a native
 `ConfigureNotify` changes their root position.
 
-The current hosts also differ:
-
-- floating mode renders popups in a tile-level overlay;
-- maximized/fullscreen/game render them inside `MetaSurfaceWidget`.
-
-That split is why a placement change would otherwise need a
-maximized/fullscreen special case.
+The hosts also differed: floating mode used a tile-level overlay, while
+maximized/fullscreen/game rendered popups inside `MetaSurfaceWidget`. That split
+is why a placement change would otherwise need a display-mode special case.
 
 ## Invariants
 
@@ -80,7 +75,7 @@ changes once:
 
 - `position` is the popup box origin relative to the tile content origin;
 - `geometry` remains surface-local;
-- `PopupPlacement` is derived as `position` plus `geometry.topLeft`, exactly
+- `PopupPlacement` is derived as `position` minus `geometry.topLeft`, exactly
   like `WindowPlacement` is derived from `MetaWindow`.
 
 The Dart mirror uses the same shape and a `surfaceOrigin` getter:
@@ -104,11 +99,13 @@ vocabulary such as `positionSpace`, `ParentRelative` or `Global`.
   `ConfigureNotify` produces a popup position patch.
 - Moving or resizing the parent window inside the tile does not change the
   popup position.
-- Moving the tile does not produce a popup patch: the tile-relative position
-  stays fixed and the popup host moves with the tile.
+- Moving the tile does not produce a popup position patch: the tile-relative
+  position stays fixed, the popup host moves with the tile, and the native X11
+  root is translated with the tile.
 
-The X11 adapter therefore keeps the native popup root for protocol work, while
-the shared model and renderer use the tile-relative placement.
+The X11 adapter therefore keeps the native popup root in
+`MetaPopup.native_root` for protocol work and tile translation, while the shared
+model and renderer use the tile-relative placement.
 
 ### Wayland xdg_popup
 
@@ -161,10 +158,10 @@ workspace-level overlay. This is the containment rule.
 
 ## Containment and movement
 
-- The popup box is clamped to the tile content rect on creation, native move,
+- The popup box is constrained against the parent box on creation, native move,
   parent move (Wayland), and parent resize.
-- If the popup is larger than the tile, its origin is pinned to the tile
-  content origin and the overhang is clipped by the host.
+- The tile host clips every popup to the tile content rect. If the popup is
+  larger than the tile, its origin is pinned and the overhang is clipped.
 - Moving, resizing or sliding the tile moves the host. Tile-relative popup
   positions stay unchanged, so popups follow the tile.
 - Moving a parent inside the tile is not a tile move. It only moves Wayland
@@ -213,6 +210,9 @@ global origin. The capture path does not define a second placement model.
 
 ## Tests
 
+The pure placement helpers and popup-origin resolution have automated coverage.
+The following are the runtime acceptance cases; not all are automated yet.
+
 - X11: moving the parent does not change a popup's position.
 - X11: a popup `ConfigureNotify` does change its position.
 - X11: moving the tile moves the popup host but leaves the popup position
@@ -243,8 +243,6 @@ global origin. The capture path does not define a second placement model.
 
 ## Open questions
 
-- Do we need the immediate parent popup for Wayland z-order or for X11
-  transient chains? Current ownership is the root `MetaWindow`; placement does
-  not require the immediate parent.
-- Should a popup that is larger than the tile be scaled down, or only clipped?
-  The containment rule above clips it and pins its origin.
+- No immediate-parent z-order/transient chain is needed today: ownership is the
+  root `MetaWindow`, and placement does not require the immediate parent.
+- A popup larger than the tile is currently clipped rather than scaled.
