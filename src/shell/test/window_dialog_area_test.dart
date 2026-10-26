@@ -484,6 +484,8 @@ void main() {
     expect(find.widgetWithText(PanelTab, 'Alpha'), findsOneWidget);
     expect(find.widgetWithText(PanelTab, 'Beta'), findsNothing);
     expect(find.byType(WindowDialogs), findsOneWidget);
+    // A bare dialog gets the shell frame in the dialog overlay.
+    expect(find.byType(ServerSideFrame), findsOneWidget);
     // The floating modal keeps the keyboard over the tabbed dialog.
     expect(
       container.read(selectedDialogMetaWindowForWindowProvider(_parent)),
@@ -532,6 +534,7 @@ void main() {
     await _pumpFloatingDialogArea(tester, surfaceSize: const Size(360, 280));
 
     expect(find.byType(WindowDialogs), findsOneWidget);
+    expect(find.byType(ServerSideFrame), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

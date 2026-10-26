@@ -427,6 +427,20 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             return;
         }
 
+        // Popups are independent surfaces. A client that tears down its
+        // toplevel without destroying its override-redirect children must not
+        // leave them in the registry, rendering over the tile forever.
+        let popup_ids: Vec<String> = self
+            .meta_window_state
+            .meta_popups
+            .values()
+            .filter(|popup| popup.parent == *meta_window_id)
+            .map(|popup| popup.id.clone())
+            .collect();
+        for popup_id in popup_ids {
+            self.remove_meta_popup(&popup_id);
+        }
+
         // A game that closes itself is torn down through this path, not through
         // an `UpdateGameModeActivated(false)` patch. Without that deactivation
         // the shell never pops its gaming route and the compositor keeps the
@@ -574,6 +588,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         .meta_windows
                         .get(&id)
                         .is_some_and(|meta_window| meta_window.client_maximized);
+                let mut x11_fullscreen = None;
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
                     meta_window.display_mode = value.clone();
                     // A maximized/fullscreen xdg configure must carry the size,
@@ -625,6 +640,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                             if let Some(x11_surface) =
                                 self.x11_surface_per_wl_surface.get(&wl_surface)
                             {
+                                x11_fullscreen =
+                                    Some(matches!(value.as_ref(), Some(DisplayMode::Fullscreen)));
                                 match value {
                                     Some(DisplayMode::Maximized) => {
                                         x11_surface
@@ -653,6 +670,15 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         }
                         _ => {}
                     }
+                }
+                if let Some(value) = x11_fullscreen {
+                    self.patch_meta_window(
+                        MetaWindowPatch::UpdateIsFullscreen {
+                            id: id.clone(),
+                            value,
+                        },
+                        true,
+                    );
                 }
                 if clear_client_maximized {
                     // Floating is the free-placement escape hatch. Do not
@@ -831,6 +857,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     }
                     meta_window.render_origin = value;
                 }
+                self.renormalize_wayland_popups_for_root(&id);
             }
             MetaWindowPatch::UpdateTileOrigin { id, value } => {
                 let previous_effective = self.meta_window_state.tile_content_origin(&id);
@@ -890,6 +917,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         }
                     }
                 }
+                self.renormalize_wayland_popups_for_root(&id);
             }
             MetaWindowPatch::UpdateGeometry { id, value } => {
                 if self
@@ -1064,6 +1092,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         .map(|geometry| geometry.0.loc)
                         .unwrap_or_else(|| Point::from((0, 0))),
                 };
+                let previous_position = meta_window.position.as_ref().map(|position| position.0);
                 let mut size_changed = false;
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
                     size_changed = meta_window
@@ -1082,6 +1111,13 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     });
                     geometry.0.size = placement.client_size;
                     meta_window.geometry = Some(geometry);
+                }
+                if let Some(previous) = previous_position {
+                    let dx = placement.origin.x - previous.x;
+                    let dy = placement.origin.y - previous.y;
+                    if dx != 0 || dy != 0 {
+                        self.translate_wayland_popups_for_root(&id, dx, dy);
+                    }
                 }
                 let Some(wl_surface) = self.surfaces.get(&meta_window.surface_id).cloned() else {
                     return;

@@ -348,6 +348,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             f64::from(position.0.y) + f64::from(dy),
         ));
         self.apply_floating_position(&meta_window, position, false, false);
+        self.translate_x11_popups_for_root(meta_window_id, dx, dy);
     }
 
     /// Centres an unplaced floating window inside its tile.

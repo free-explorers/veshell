@@ -7,16 +7,16 @@ import 'package:shell/application/provider/logs_for_pid.dart';
 import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/capture/provider/recording_workspaces.dart';
 import 'package:shell/capture/provider/screen_cast_indicator.dart';
+import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
 import 'package:shell/l10n/l10n.dart';
-import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/widget/tile_popup_host.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
-import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/selected_dialog_for_window.dart';
 import 'package:shell/window/widget/floating_window_area.dart';
+import 'package:shell/window/widget/visible_popup_meta_windows.dart';
 import 'package:shell/window/widget/window.dart';
 import 'package:shell/window/widget/window_dialog_area.dart';
 import 'package:shell/window/widget/window_placeholder.dart';
@@ -91,6 +91,11 @@ class PersistentWindowTileable extends Tileable {
     final selectedDialogMetaWindow = window.displayMode == DisplayMode.game
         ? null
         : ref.watch(selectedDialogMetaWindowForWindowProvider(windowId));
+    final selectedDialogEntry = ref.watch(
+      selectedDialogForWindowProvider(windowId),
+    );
+    final chooserVisible =
+        ref.watch(fileChooserForWindowProvider(windowId)) != null;
 
     final placeholder = WindowPlaceholder(
       isSelected: isSelected,
@@ -136,18 +141,15 @@ class PersistentWindowTileable extends Tileable {
           );
 
     final dialogWindowIds = ref.watch(dialogSetForWindowProvider(windowId));
-    final popupMetaWindowIds = <MetaWindowId>[];
-    if (metaWindowId != null) {
-      popupMetaWindowIds.add(metaWindowId);
-    }
-    for (final dialogWindowId in dialogWindowIds) {
-      final dialogMetaWindowId = ref
-          .watch(dialogWindowStateProvider(dialogWindowId))
-          .metaWindowId;
-      if (dialogMetaWindowId != null) {
-        popupMetaWindowIds.add(dialogMetaWindowId);
-      }
-    }
+    final popupMetaWindowIds = visiblePopupMetaWindowIds(
+      ref: ref,
+      mainMetaWindowId: metaWindowId,
+      dialogWindowIds: dialogWindowIds,
+      dialogsEnabled: window.displayMode != DisplayMode.game,
+      allDialogsVisible: window.displayMode == DisplayMode.floating,
+      selectedEntry: selectedDialogEntry,
+      chooserVisible: chooserVisible,
+    );
 
     return ClipRect(
       child: Stack(

@@ -60,6 +60,7 @@ class FloatableWindow extends HookConsumerWidget {
     this.maxSizeFactor = 1,
     this.clientOrigin,
     this.maximized = false,
+    this.frame = false,
     this.onRaise,
     super.key,
   });
@@ -90,6 +91,11 @@ class FloatableWindow extends HookConsumerWidget {
   /// dialog from filling a maximized tile entirely and hiding the window
   /// behind it.
   final double maxSizeFactor;
+
+  /// Draws the shell's bare frame around a dialog-overlay surface with no
+  /// decoration of its own. The floating tile leaves this false: its CSD
+  /// surfaces already carry their own frame and must not be double-framed.
+  final bool frame;
 
   /// Called when the pointer goes down on the window, before the window
   /// processes the event. The floating stack uses it to raise the window (and
@@ -165,6 +171,20 @@ class FloatableWindow extends HookConsumerWidget {
       final ratio = metaWindow.scaleRatio;
       return Size(size.width / ratio, size.height / ratio);
     }, [surfaceSize, metaWindow.scaleRatio]);
+
+    // A client-side-decorated surface draws its shadow and rounded corners
+    // outside the window geometry; framing it would double the decoration and
+    // clipping it would slice the client's own frame off.
+    final hasClientDecoration = useMemoized(() {
+      final geometry = metaWindow.geometry;
+      final surface = logicalSurfaceSize;
+      if (geometry == null || surface == null) {
+        return false;
+      }
+      const tolerance = 1.0;
+      return surface.width > geometry.width + tolerance ||
+          surface.height > geometry.height + tolerance;
+    }, [metaWindow.geometry, logicalSurfaceSize]);
 
     // The size the window wants on its own, decoration included.
     final naturalBoxSize = useMemoized(
@@ -820,6 +840,14 @@ class FloatableWindow extends HookConsumerWidget {
             child: surface,
           );
 
+    // Dialog-overlay dialogs get a bare shell frame when neither the shell
+    // decoration nor the client buffer provides one. Floating-tile windows
+    // leave `frame` false; their CSD surfaces are drawn as-is.
+    final framedSurface =
+        frame && !metaWindow.needDecoration && !hasClientDecoration
+        ? ServerSideFrame(child: surfaceWithRaise)
+        : surfaceWithRaise;
+
     // A floating window has exactly one resize path: the handle asks Rust to
     // start the gesture, Rust owns the pointer and publishes the rect, and
     // Flutter only draws/hit-tests the affordance. Fixed-size and maximized
@@ -827,6 +855,7 @@ class FloatableWindow extends HookConsumerWidget {
     final compositorResize =
         placement == FloatableWindowPlacement.floatingTile &&
         !metaWindow.isFixedSized &&
+        !metaWindow.isFullscreen &&
         !isMaximized;
     final resizeEnabled =
         placement != FloatableWindowPlacement.floatingTile || compositorResize;
@@ -861,9 +890,9 @@ class FloatableWindow extends HookConsumerWidget {
             // carries both in its buffer and must be drawn as-is: wrapping it
             // here added a second backdrop shadow and clipped its own
             // decoration.
-            child: surfaceWithRaise,
+            child: framedSurface,
           )
-        : surfaceWithRaise;
+        : framedSurface;
 
     // A fixed-size dialog cannot be resized through a configure. When it is
     // bigger than the cap it is scaled down uniformly (and centred) instead of

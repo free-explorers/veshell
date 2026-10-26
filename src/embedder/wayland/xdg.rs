@@ -188,10 +188,11 @@ pub mod xdg {
                         .map(|popup| popup.parent)
                 })
                 .expect("Popup parent has no root meta window");
+            let parent_relative = position;
             let position = self
                 .meta_window_state
-                .popup_tile_position(&parent_meta_window_id, position)
-                .unwrap_or(position);
+                .popup_tile_position(&parent_meta_window_id, parent_relative)
+                .unwrap_or(parent_relative);
 
             info!(
                 target: "veshell::geometry",
@@ -216,6 +217,8 @@ pub mod xdg {
                 category: MetaPopupCategory::Popup,
                 parent: parent_meta_window_id,
                 position: position.into(),
+                native_root: None,
+                parent_relative: Some(parent_relative.into()),
                 surface_id,
                 scale_ratio: scale_ratio,
                 geometry: geometry,
@@ -380,6 +383,9 @@ pub mod xdg {
                 let geometry_loc = surface.with_pending_state(|state| state.geometry.loc);
                 let parent_relative =
                     geometry_loc + get_popup_toplevel_coords(&PopupKind::Xdg(surface.clone()));
+                if let Some(popup) = self.meta_window_state.meta_popups.get_mut(&meta_popup_id) {
+                    popup.parent_relative = Some(parent_relative.into());
+                }
                 let parent_meta_window_id = self
                     .meta_window_state
                     .meta_popups
@@ -872,6 +878,9 @@ pub mod xdg {
                 let geometry_loc = surface.with_pending_state(|state| state.geometry.loc);
                 let parent_relative =
                     geometry_loc + get_popup_toplevel_coords(&PopupKind::Xdg(surface.clone()));
+                if let Some(popup) = self.meta_window_state.meta_popups.get_mut(&meta_popup_id) {
+                    popup.parent_relative = Some(parent_relative.into());
+                }
                 let new_position = self
                     .meta_window_state
                     .popup_tile_position(meta_window_id, parent_relative)

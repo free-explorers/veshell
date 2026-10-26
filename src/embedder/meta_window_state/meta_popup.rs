@@ -67,6 +67,16 @@ pub struct MetaPopup {
     /// not move an X11 popup.
     pub position: MyPoint<i32, Logical>,
     pub geometry: Option<MyRectangle<i32, Logical>>,
+    /// The X11 root position of an override-redirect popup. The shared model
+    /// stores tile-relative placement, but moving the owning tile must also
+    /// move the independent native X11 window by the same delta.
+    #[serde(skip)]
+    pub native_root: Option<MyPoint<i32, Logical>>,
+    /// The Wayland popup's parent-box-relative protocol position. Kept so a
+    /// popup opened before the parent's tile/render origin is known can be
+    /// renormalized once that origin arrives.
+    #[serde(skip)]
+    pub parent_relative: Option<MyPoint<i32, Logical>>,
     pub surface_id: u64,
     pub scale_ratio: f64,
 }
@@ -183,6 +193,83 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             })
             .collect();
         for (popup_id, position) in popups {
+            self.patch_meta_popup(
+                MetaPopupPatch::UpdatePosition {
+                    id: popup_id,
+                    value: position,
+                },
+                true,
+            );
+        }
+    }
+
+    /// Translate X11 override-redirect children when the owning tile moves.
+    ///
+    /// X11 popups are independent root windows; moving the parent window is
+    /// not enough. Their native roots move with the tile while their
+    /// tile-relative model positions stay unchanged.
+    pub fn translate_x11_popups_for_root(&mut self, parent_meta_window_id: &str, dx: i32, dy: i32) {
+        if dx == 0 && dy == 0 {
+            return;
+        }
+        let popups: Vec<(String, u64, MyPoint<i32, Logical>)> = self
+            .meta_window_state
+            .meta_popups
+            .values()
+            .filter(|popup| popup.parent == parent_meta_window_id)
+            .filter_map(|popup| {
+                popup
+                    .native_root
+                    .clone()
+                    .map(|native_root| (popup.id.clone(), popup.surface_id, native_root))
+            })
+            .collect();
+        for (popup_id, surface_id, native_root) in popups {
+            let Some(wl_surface) = self.surfaces.get(&surface_id).cloned() else {
+                continue;
+            };
+            let Some(x11_surface) = self.x11_surface_per_wl_surface.get(&wl_surface).cloned()
+            else {
+                continue;
+            };
+            let mut configure = x11_surface.last_configure();
+            configure.loc = Point::from((native_root.0.x + dx, native_root.0.y + dy));
+            if x11_surface.configure(configure).is_ok() {
+                if let Some(popup) = self.meta_window_state.meta_popups.get_mut(&popup_id) {
+                    popup.native_root = Some(configure.loc.into());
+                }
+                self.translate_pointer_focus_offset_for_surface(
+                    surface_id,
+                    f64::from(dx),
+                    f64::from(dy),
+                );
+            }
+        }
+    }
+
+    /// Recompute Wayland popup positions from their stored parent-relative
+    /// protocol coordinates after the parent's tile/render origin becomes
+    /// available or changes.
+    pub fn renormalize_wayland_popups_for_root(&mut self, parent_meta_window_id: &str) {
+        let popups: Vec<(String, MyPoint<i32, Logical>, MyPoint<i32, Logical>)> = self
+            .meta_window_state
+            .meta_popups
+            .values()
+            .filter(|popup| popup.parent == parent_meta_window_id)
+            .filter_map(|popup| {
+                let parent_relative = popup.parent_relative.clone()?;
+                let normalized = self
+                    .meta_window_state
+                    .popup_tile_position(parent_meta_window_id, parent_relative.0)?;
+                Some((
+                    popup.id.clone(),
+                    popup.position.clone(),
+                    MyPoint::from(normalized),
+                ))
+            })
+            .filter(|(_, current, next)| current.0 != next.0)
+            .collect();
+        for (popup_id, _, position) in popups {
             self.patch_meta_popup(
                 MetaPopupPatch::UpdatePosition {
                     id: popup_id,

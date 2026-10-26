@@ -645,6 +645,10 @@ pub mod xwayland {
                         },
                         true,
                     );
+                    if let Some(popup) = self.meta_window_state.meta_popups.get_mut(&meta_popup_id)
+                    {
+                        popup.native_root = Some(geometry.loc.into());
+                    }
                     if let Some(previous) = previous {
                         self.translate_pointer_focus_offset_for_surface(
                             surface_id,
@@ -1306,6 +1310,8 @@ pub mod xwayland {
                         id: Uuid::new_v4().hyphenated().to_string(),
                         category: x11_popup_category(&surface, geometry),
                         position: position.into(),
+                        native_root: Some(surface.last_configure().loc.into()),
+                        parent_relative: None,
                         parent: parent_meta_window_id.clone(),
                         surface_id: get_surface_id(wl_surface.borrow()),
                         scale_ratio: xwayland_scale_ratio,

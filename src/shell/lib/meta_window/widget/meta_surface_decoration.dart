@@ -66,6 +66,29 @@ const windowFrameDecoration = BoxDecoration(
   ],
 );
 
+/// A bare shell frame for a floating dialog: rounded corners and a drop shadow,
+/// without the title bar [MetaSurfaceDecoration] adds for a client that asked
+/// for server-side decoration.
+///
+/// A client-declared dialog in the tile's dialog overlay floats over the dimmed
+/// tile. A client that draws no decoration of its own would otherwise read as a
+/// flat rectangle pasted on the dim. It is only drawn around a bare surface: a
+/// client that carries its own decoration in its surface buffer keeps it.
+class ServerSideFrame extends StatelessWidget {
+  const ServerSideFrame({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: windowFrameDecoration,
+      child: child,
+    );
+  }
+}
+
 class WindowTitleBar extends HookConsumerWidget {
   const WindowTitleBar(this.metaWindowId, {this.onMoveStart, super.key});
   final String metaWindowId;

@@ -38,6 +38,7 @@ use crate::backend::render::{
     get_cursor_elements, get_frame_elements, CaptureCursor, VeshellRenderElements,
 };
 use crate::flutter_engine::view::{Frame, OutputViewIdWrapper};
+use crate::meta_window_state::meta_popup::MetaPopupCategory;
 use crate::meta_window_state::meta_window::MetaWindow;
 use crate::{Backend, State};
 
@@ -474,6 +475,7 @@ pub(crate) fn owned_popup_layers(
         .meta_popups
         .values()
         .filter(|popup| popup.parent == meta_window.id)
+        .filter(|popup| popup.category != MetaPopupCategory::Helper)
         .filter_map(|popup| {
             let surface = state.surfaces.get(&popup.surface_id)?.clone();
             // Capture renders relative to the captured window's surface

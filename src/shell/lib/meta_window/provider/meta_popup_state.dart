@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
-
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:hooks_riverpod/misc.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -72,57 +70,64 @@ class MetaPopupState extends _$MetaPopupState {
     // is a synthetic (0,0) value.
     final popupSurfaceId = state.surfaceId;
     final parentId = state.parent;
-    try {
-      final parent = ref.read(metaWindowStateProvider(parentId));
-      final focusManager = ref.read(pointerFocusManagerProvider.notifier);
-      // Restore to the owner's surface origin. Popup placement is tile
-      // relative, so subtracting it from the popup's global focus offset
-      // cannot recover the parent origin without a second coordinate anchor.
-      // The parent model already owns the authoritative origin for its mode.
-      final origin =
-          parent.floatingSurfaceOrigin ??
-          parent.renderOrigin ??
-          ref.read(surfaceRenderOriginsProvider)[parent.surfaceId];
-      // The popup may have consumed the primary button-up when it closed.
-      // Flutter's button bitmap would then stay latched, making the next
-      // primary press look like a release and blocking hover. Flush any stuck
-      // buttons to the owner before restoring focus.
-      final releases = ref.read(mouseButtonTrackerProvider).trackButtonState(0);
-      focusManager.resetDrag();
-      if (origin != null) {
-        focusManager.restoreSurface(
-          popupSurfaceId,
-          PointerFocus(surfaceId: parent.surfaceId, globalOffset: origin),
-        );
-      } else {
-        focusManager.forgetSurface(popupSurfaceId);
-      }
-      if (releases.isNotEmpty) {
-        unawaited(
-          ref
-              .read(platformManagerProvider.notifier)
-              .request(
-                MouseButtonsEventRequest(
-                  message: MouseButtonsEventMessage(
-                    surfaceId: parent.surfaceId,
-                    buttons: [
-                      for (final event in releases)
-                        Button(
-                          button: event.button,
-                          isPressed: event.state == MouseButtonState.pressed,
-                        ),
-                    ].lockUnsafe,
+    final focusManager = ref.read(pointerFocusManagerProvider.notifier);
+    // Teardown is global only for the popup that currently owns pointer focus.
+    // An unrelated popup closing must not reset another surface's drag or
+    // flush the compositor-wide button tracker.
+    if (focusManager.currentFocus?.surfaceId != popupSurfaceId) {
+      focusManager.forgetSurface(popupSurfaceId);
+    } else {
+      try {
+        final parent = ref.read(metaWindowStateProvider(parentId));
+        // Restore to the owner's surface origin. Popup placement is tile
+        // relative, so subtracting it from the popup's global focus offset
+        // cannot recover the parent origin without a second coordinate anchor.
+        // The parent model already owns the authoritative origin for its mode.
+        final origin =
+            parent.floatingSurfaceOrigin ??
+            parent.renderOrigin ??
+            ref.read(surfaceRenderOriginsProvider)[parent.surfaceId];
+        // The popup may have consumed the primary button-up when it closed.
+        // Flutter's button bitmap would then stay latched, making the next
+        // primary press look like a release and blocking hover. Flush any stuck
+        // buttons to the owner before restoring focus.
+        final releases = ref
+            .read(mouseButtonTrackerProvider)
+            .trackButtonState(0);
+        focusManager.resetDrag();
+        if (origin != null) {
+          focusManager.restoreSurface(
+            popupSurfaceId,
+            PointerFocus(surfaceId: parent.surfaceId, globalOffset: origin),
+          );
+        } else {
+          focusManager.forgetSurface(popupSurfaceId);
+        }
+        if (releases.isNotEmpty) {
+          unawaited(
+            ref
+                .read(platformManagerProvider.notifier)
+                .request(
+                  MouseButtonsEventRequest(
+                    message: MouseButtonsEventMessage(
+                      surfaceId: parent.surfaceId,
+                      buttons: [
+                        for (final event in releases)
+                          Button(
+                            button: event.button,
+                            isPressed: event.state == MouseButtonState.pressed,
+                          ),
+                      ].lockUnsafe,
+                    ),
                   ),
                 ),
-              ),
-        );
+          );
+        }
+      } on Object {
+        // The owner may already be torn down; clearing the local focus is the
+        // only safe fallback.
+        focusManager.forgetSurface(popupSurfaceId);
       }
-    } on Object {
-      // The owner may already be torn down; clearing the local focus is the
-      // only safe fallback.
-      ref
-          .read(pointerFocusManagerProvider.notifier)
-          .forgetSurface(popupSurfaceId);
     }
     _keepAliveLink?.close();
     ref.read(metaPopupForIdProvider(state.parent).notifier).remove(id);

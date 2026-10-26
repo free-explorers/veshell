@@ -35,6 +35,9 @@ class WindowDialogs extends StatelessWidget {
           FloatableWindow(
             metaWindowId: metaWindowId,
             maxSizeFactor: maxSizeFactor,
+            // The dialog overlay needs a shell frame for a bare surface;
+            // floating-tile CSD windows render their own.
+            frame: true,
           ),
       ],
     );
