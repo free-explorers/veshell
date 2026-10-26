@@ -1,5 +1,7 @@
 import 'package:collection/collection.dart';
+import 'package:shell/application/model/terminal_program_policy.dart';
 import 'package:shell/platform/model/event/process_info/process_info.serializable.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:shell/window/model/resume_context.serializable.dart';
 
 /// Builds a resume context from a `/proc` snapshot.
@@ -10,31 +12,83 @@ import 'package:shell/window/model/resume_context.serializable.dart';
 ResumeContext? captureResumeContextFromProcessInfo(
   ProcessInfoMessage? info, {
   DateTime? capturedAt,
+  Map<String, String>? environment,
+  bool Function(String path)? isExecutable,
 }) {
   if (info == null) {
     return null;
   }
 
-  final shell = info.terminal?.shell;
+  final shellDescriptor = info.terminal?.shell;
   final argv = info.cmdline;
   final executable = info.exe ?? argv.firstOrNull;
-  final workingDirectory = shell?.cwd ?? info.cwd;
+  final workingDirectory = shellDescriptor?.cwd ?? info.cwd;
 
   if (workingDirectory == null && argv.isEmpty && executable == null) {
     return null;
   }
 
+  final shell = shellDescriptor == null
+      ? null
+      : shellDescriptor.exe ?? shellDescriptor.cmdline.firstOrNull;
+  final validShell = shell != null && isTerminalShell(shell) ? shell : null;
+  final foregroundDescriptor = info.terminal?.foreground;
+  final foreground = foregroundDescriptor == null
+      ? null
+      : _safeForeground(
+          foregroundDescriptor,
+          workingDirectory,
+          environment,
+          isExecutable,
+        );
+
   return ResumeContext(
     workingDirectory: workingDirectory,
     argv: argv,
     executable: executable,
-    terminal: shell == null
+    terminal: shellDescriptor == null
         ? null
         : TerminalResumeContext(
-            shell: shell.exe ?? shell.cmdline.firstOrNull,
-            workingDirectory: shell.cwd,
+            shell: validShell,
+            workingDirectory: workingDirectory,
+            foreground: foreground,
           ),
     capturedAt: capturedAt ?? DateTime.now(),
+  );
+}
+
+ForegroundProgram? _safeForeground(
+  ProcessDescriptorMessage descriptor,
+  String? workingDirectory,
+  Map<String, String>? environment,
+  bool Function(String path)? isExecutable,
+) {
+  final program = descriptor.exe ?? descriptor.cmdline.firstOrNull;
+  if (program == null || program.isEmpty) {
+    return null;
+  }
+  if (!isSafeTerminalProgram(program)) {
+    matchingLog.fine(
+      'Not resuming terminal foreground "$program": not allowlisted',
+    );
+    return null;
+  }
+  final resolved = resolveExecutablePath(
+    program,
+    workingDirectory: workingDirectory,
+    environment: environment,
+    isExecutable: isExecutable,
+  );
+  if (resolved == null) {
+    matchingLog.warning(
+      'Allowlisted terminal program "$program" is not executable; '
+      'resuming the shell only',
+    );
+    return null;
+  }
+  return ForegroundProgram(
+    program: resolved,
+    arguments: descriptor.cmdline.skip(1).toList(),
   );
 }
 

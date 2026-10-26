@@ -81,3 +81,23 @@ class DesktopExec {
 /// Whether [token] is a standalone document field code.
 bool isFileFieldCode(String token) =>
     token == '%f' || token == '%F' || token == '%u' || token == '%U';
+
+/// Quotes [argument] for a POSIX shell command line.
+///
+/// Used only when appending to an already shell-form custom exec. Resume
+/// launches built from a desktop entry use argv directly and never need this.
+String shellQuoteArgument(String argument) {
+  if (argument.isEmpty) {
+    return "''";
+  }
+  if (RegExp(r'^[A-Za-z0-9_@%+=:,./-]+$').hasMatch(argument)) {
+    return argument;
+  }
+  return "'${argument.replaceAll("'", "'\\''")}'";
+}
+
+/// Appends [arguments] as safely quoted shell arguments.
+String appendShellArguments(String command, Iterable<String> arguments) {
+  final quoted = arguments.map(shellQuoteArgument).join(' ');
+  return quoted.isEmpty ? command : '$command $quoted';
+}
