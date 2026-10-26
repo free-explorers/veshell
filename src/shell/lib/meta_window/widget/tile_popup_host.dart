@@ -42,10 +42,18 @@ class TilePopupHost extends HookConsumerWidget {
     final metaWindowIdsKey = metaWindowIds.join('\u0000');
     final monitorKey =
         '$monitorName:${monitorLocation.dx},${monitorLocation.dy}';
+    final tileMotionKey = metaWindowIds
+        .map((metaWindowId) => _motionKeyFor(ref, metaWindowId))
+        .join('|');
 
     // Publish the tile origin so Rust can normalize native X11 popup
     // coordinates and derive global pointer origins. Rendering does not use
     // this value: popup positions are already tile-relative.
+    //
+    // The tile can move by a render transform without rebuilding this host.
+    // Watching the parent window's position/render origin makes the effect run
+    // when that transform changes, instead of keeping the origin measured
+    // during the overview animation forever.
     useEffect(() {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!context.mounted) {
@@ -76,7 +84,7 @@ class TilePopupHost extends HookConsumerWidget {
         }
       });
       return null;
-    }, [metaWindowIdsKey, monitorKey]);
+    }, [metaWindowIdsKey, monitorKey, tileMotionKey]);
 
     return ClipRect(
       child: DeferredPointerHandler(
@@ -90,5 +98,23 @@ class TilePopupHost extends HookConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+String _motionKeyFor(WidgetRef ref, MetaWindowId metaWindowId) {
+  try {
+    final motion = ref.watch(
+      metaWindowStateProvider(metaWindowId).select(
+        (window) => (
+          position: window.position,
+          renderOrigin: window.renderOrigin,
+          viewport: window.viewport,
+        ),
+      ),
+    );
+    return '$metaWindowId:${motion.position}:${motion.renderOrigin}:'
+        '${motion.viewport}';
+  } catch (_) {
+    return '$metaWindowId:?';
   }
 }
