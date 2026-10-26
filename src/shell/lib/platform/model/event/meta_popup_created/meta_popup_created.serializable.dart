@@ -20,6 +20,7 @@ sealed class MetaPopupCreatedMessage
   factory MetaPopupCreatedMessage({
     required MetaPopupId id,
     required MetaWindowId parent,
+    @Default(MetaPopupCategory.popup) MetaPopupCategory category,
     required SurfaceId surfaceId,
     required double scaleRatio,
     @OffsetConverter() required Offset position,

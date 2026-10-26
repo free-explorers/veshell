@@ -33,6 +33,12 @@ class MetaPopupWidget extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final metaPopup = ref.watch(metaPopupStateProvider(metaPopupId));
+    // Backing/preview windows are tracked by the compositor but are not UI.
+    // Filtering here keeps every popup host (surface stack and floating
+    // overlay) consistent instead of duplicating the category check.
+    if (metaPopup.category == MetaPopupCategory.helper) {
+      return const SizedBox.shrink();
+    }
     // Keep the popup on the whole-pixel grid: a fractional origin would make
     // Flutter sample its external texture bilinearly and soften it (see
     // `snapToWholePixel`).

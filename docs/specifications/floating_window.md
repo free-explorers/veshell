@@ -60,6 +60,12 @@ for tiled windows, whose native X11 position can be synthetic. Popups are stored
 relative to their parent window box and are re-constrained when the parent size
 changes.
 
+X11 override-redirect windows are categorized when they enter the model. Menus,
+tooltips and regular popups stay renderable; one-pixel and non-interactive
+backing windows are `helper` popups. The compositor keeps helpers for pointer
+and removal bookkeeping, but Flutter filters them out of the popup stack so a
+client's preview/backing windows cannot be mistaken for user-visible UI.
+
 ## Interaction
 
 A shell-drawn title bar and a client `_NET_WM_MOVERESIZE` or

@@ -669,6 +669,7 @@ pub(crate) fn get_binary_name_from_pid(pid: i32) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use super::meta_popup::MetaPopupCategory;
     use super::*;
 
     fn window(id: &str, pid: i32, app_id: Option<&str>) -> MetaWindow {
@@ -724,6 +725,7 @@ mod tests {
         let popup = MetaPopup {
             id: "popup".to_string(),
             parent: "parent".to_string(),
+            category: MetaPopupCategory::Popup,
             position: Point::from((30, 40)).into(),
             geometry: Some(Rectangle::new((10, 10).into(), (100, 100).into()).into()),
             surface_id: 0,

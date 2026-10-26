@@ -34,6 +34,7 @@ class MetaPopupState extends _$MetaPopupState {
     state = MetaPopup(
       id: id,
       parent: message.parent,
+      category: message.category,
       position: message.position,
       geometry: message.geometry,
       surfaceId: message.surfaceId,

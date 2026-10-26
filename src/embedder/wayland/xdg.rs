@@ -36,7 +36,7 @@ pub mod xdg {
     use crate::{
         flutter_engine::wayland_messages::MyPoint,
         meta_window_state::{
-            meta_popup::{self, MetaPopup, MetaPopupPatch},
+            meta_popup::{self, MetaPopup, MetaPopupCategory, MetaPopupPatch},
             meta_resize_edge::MetaResizeEdge,
             meta_window::{self, MetaWindowPatch},
         },
@@ -185,6 +185,7 @@ pub mod xdg {
 
             let meta_popup = self.create_meta_popup(MetaPopup {
                 id: Uuid::new_v4().hyphenated().to_string(),
+                category: MetaPopupCategory::Popup,
                 parent: parent_meta_window_id,
                 position: position.into(),
                 surface_id,

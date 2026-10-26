@@ -11,11 +11,29 @@ part 'meta_popup.serializable.g.dart';
 
 typedef MetaPopupId = String;
 
+enum MetaPopupCategory {
+  /// A regular client popup that should be rendered as UI.
+  popup,
+
+  /// A menu, dropdown, combo or other interactive menu popup.
+  menu,
+
+  /// A tooltip-like popup. Some X11 clients use this type for floating
+  /// panels, so it is not hidden by default.
+  tooltip,
+
+  /// A non-visible or non-interactive backing window owned by the client.
+  /// The shell keeps it in the model for focus/bookkeeping but does not
+  /// render it as a popup surface.
+  helper,
+}
+
 @freezed
 abstract class MetaPopup with _$MetaPopup {
   const factory MetaPopup({
     required MetaPopupId id,
     required MetaWindowId parent,
+    @Default(MetaPopupCategory.popup) MetaPopupCategory category,
     required SurfaceId surfaceId,
     required double scaleRatio,
 

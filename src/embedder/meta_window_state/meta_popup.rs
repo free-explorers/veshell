@@ -12,11 +12,29 @@ use crate::{
     state::State,
 };
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum MetaPopupCategory {
+    /// A regular client popup that should be rendered as UI.
+    #[default]
+    Popup,
+    /// A menu, dropdown, combo or other interactive menu popup.
+    Menu,
+    /// A tooltip-like popup. Some X11 clients use this type for floating
+    /// panels, so it is not hidden by default.
+    Tooltip,
+    /// A non-visible or non-interactive backing window owned by the client.
+    /// The shell keeps it in the model for focus/bookkeeping but does not
+    /// render it as a popup surface.
+    Helper,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct MetaPopup {
     pub id: String,
     pub parent: String,
+    pub category: MetaPopupCategory,
     /// Position of the popup surface relative to the parent window box's
     /// top-left corner.
     ///
@@ -50,6 +68,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             popup_id = %meta_popup.id,
             surface_id = meta_popup.surface_id,
             parent = %meta_popup.parent,
+            category = ?meta_popup.category,
             position = ?meta_popup.position,
             geometry = ?meta_popup.geometry,
             "Publishing popup geometry to Flutter"

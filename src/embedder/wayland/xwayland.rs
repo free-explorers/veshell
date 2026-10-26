@@ -7,7 +7,9 @@ pub mod xwayland {
     use crate::flutter_engine::wayland_messages::{MapX11Surface, MyPoint, NewX11Surface};
     use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
     use crate::meta_window_state::floating_move::clamp_position;
-    use crate::meta_window_state::meta_popup::{self, MetaPopup, MetaPopupPatch};
+    use crate::meta_window_state::meta_popup::{
+        self, MetaPopup, MetaPopupCategory, MetaPopupPatch,
+    };
     use crate::meta_window_state::meta_resize_edge::MetaResizeEdge;
     use crate::meta_window_state::meta_window::MetaWindowPatch;
     use crate::state::State;
@@ -41,7 +43,7 @@ pub mod xwayland {
     };
     use smithay::wayland::selection::SelectionTarget;
     use smithay::wayland::xwayland_shell::{XWaylandShellHandler, XWaylandShellState};
-    use smithay::xwayland::xwm::{Reorder, WmWindowProperty, XwmId};
+    use smithay::xwayland::xwm::{Reorder, WmWindowProperty, WmWindowType, XwmId};
     use smithay::xwayland::{
         xwm, X11Surface, X11Wm, XWayland, XWaylandClientData, XWaylandEvent, XwmHandler,
     };
@@ -159,6 +161,38 @@ pub mod xwayland {
 
     pub struct MyX11SurfaceState {
         pub x11_surface_id: u64,
+    }
+
+    /// X11 clients use override-redirect windows for several different roles.
+    /// Keep the distinction in the model instead of making Flutter guess from
+    /// a size or an application title.
+    fn x11_popup_category(
+        surface: &X11Surface,
+        geometry: Rectangle<i32, Logical>,
+    ) -> MetaPopupCategory {
+        match surface.window_type() {
+            Some(
+                WmWindowType::Menu
+                | WmWindowType::PopupMenu
+                | WmWindowType::DropdownMenu
+                | WmWindowType::Combo,
+            ) => return MetaPopupCategory::Menu,
+            _ => {}
+        }
+
+        // A one-pixel window is a backing/preview window, never visible UI. A
+        // non-interactive override-redirect window is likewise bookkeeping-only
+        // for the shell; the client cannot receive pointer input through it.
+        let is_tiny = geometry.size.w <= 1 || geometry.size.h <= 1;
+        let is_non_interactive = surface.hints().and_then(|hints| hints.input) == Some(false);
+        if is_tiny || is_non_interactive {
+            return MetaPopupCategory::Helper;
+        }
+
+        match surface.window_type() {
+            Some(WmWindowType::Tooltip) => MetaPopupCategory::Tooltip,
+            _ => MetaPopupCategory::Popup,
+        }
     }
 
     impl<BackendData: Backend> State<BackendData> {
@@ -1243,6 +1277,7 @@ pub mod xwayland {
                     let position = surface.last_configure().loc - parent_box;
                     let meta_popup = self.create_meta_popup(MetaPopup {
                         id: Uuid::new_v4().hyphenated().to_string(),
+                        category: x11_popup_category(&surface, geometry),
                         position: position.into(),
                         parent: parent_meta_window_id.clone(),
                         surface_id: get_surface_id(wl_surface.borrow()),
