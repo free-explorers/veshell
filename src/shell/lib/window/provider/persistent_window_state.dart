@@ -11,6 +11,7 @@ import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/shared/provider/persistent_storage_state.dart';
 import 'package:shell/shared/util/logger.dart';
+import 'package:shell/systemd/provider/session_guard.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
@@ -46,6 +47,14 @@ String persistentWindowStorageKey(PersistentWindowId windowId) =>
 class PersistentWindowState extends _$PersistentWindowState
     with WindowProviderMixin<PersistentWindow> {
   String get _persistKey => persistentWindowStorageKey(windowId);
+
+  /// Whether the session is being torn down (logout/reboot/shutdown).
+  ///
+  /// Window-loss and title-change events during teardown are transient: the
+  /// last complete resume context must survive into the next session.
+  bool get _isSessionLeaving =>
+      ref.read(sessionGuardProvider.notifier).isLeaving;
+
   @override
   PersistentWindow build(PersistentWindowId windowId) {
     persist(
@@ -203,6 +212,17 @@ class PersistentWindowState extends _$PersistentWindowState
 
   @override
   void onCurrentlyDisplayedMetaWindowChanged(MetaWindowId? metaWindowId) {
+    if (_isSessionLeaving) {
+      // The session is ending: applications are being terminated and their
+      // windows disappear. Do not adopt a title/pid from that teardown, and do
+      // not touch the saved resume context. The runtime window reference is
+      // still dropped, so a cancelled shutdown does not leave the tile
+      // pointing at a destroyed window.
+      if (metaWindowId == null && state.metaWindowId != null) {
+        state = state.copyWith(metaWindowId: null, isWaitingForSurface: false);
+      }
+      return;
+    }
     if (metaWindowId == null) {
       // The native window is gone: drop the reference so the tile falls back
       // to its placeholder. Keeping it would make MetaSurfaceWidget read the
@@ -233,6 +253,9 @@ class PersistentWindowState extends _$PersistentWindowState
 
   @override
   void onMetaWindowDisplayedPropertiesChanged(MetaWindow metaWindow) {
+    if (_isSessionLeaving) {
+      return;
+    }
     // Keep the appId defined by the desktop entry: the displayed native window
     // may belong to a helper process with a different or unknown app id.
     state = state.copyWith(

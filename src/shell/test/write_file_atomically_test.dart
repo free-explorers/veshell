@@ -47,4 +47,38 @@ void main() {
     expect(File(path).readAsStringSync(), 'burst-39');
     expect(File('$path.tmp').existsSync(), isFalse);
   });
+
+  test('flush writes a pending debounced value without waiting', () async {
+    unawaited(writeFileAtomically(path, 'flushed'));
+    await flushPendingWrites();
+
+    expect(File(path).readAsStringSync(), 'flushed');
+    expect(File('$path.tmp').existsSync(), isFalse);
+  });
+
+  test('a discarded pending write is never flushed', () async {
+    unawaited(writeFileAtomically(path, 'discarded'));
+    discardPendingWrite(path);
+    await flushPendingWrites();
+
+    expect(File(path).existsSync(), isFalse);
+  });
+
+  test('a queued delete wins over a pending write', () async {
+    await writeFileAtomicallyNow(path, 'existing');
+    unawaited(writeFileAtomically(path, 'pending'));
+
+    await deleteFileQueued(path);
+    await flushPendingWrites();
+
+    expect(File(path).existsSync(), isFalse);
+  });
+
+  test('flushed files are owner-readable only', () async {
+    await writeFileAtomically(path, 'private');
+    await flushPendingWrites();
+
+    // chmod(1) permission bits for 0600.
+    expect(FileStat.statSync(path).mode & 0x1FF, 0x180);
+  });
 }

@@ -34,7 +34,10 @@ final _stacktraceLogger = Logger(printer: PrettyPrinter());
 void configureLogs() {
   logging.hierarchicalLoggingEnabled = true;
 
-  persistenceLog.level = logging.Level.OFF;
+  // Persistence is normally silent, but load/migration/quarantine and flush
+  // failures are exactly the events needed to diagnose a lost tile. Keep the
+  // logger at INFO so the per-startup summary is visible.
+  persistenceLog.level = logging.Level.INFO;
 
   // Per-frame surface/window layout traces log at `fine`; keep them out
   // of the default output so a moving window does not flood the log.

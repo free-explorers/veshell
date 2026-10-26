@@ -1,6 +1,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/shared/provider/dbus_client.dart';
+import 'package:shell/systemd/provider/session_guard.dart';
 import 'package:ubuntu_session/ubuntu_session.dart';
 
 part 'session.g.dart';
@@ -42,11 +43,32 @@ class Session extends _$Session {
     return null;
   }
 
-  Future<void> shutdown() => state.powerOff(true);
+  Future<void> shutdown() async {
+    final guard = ref.read(sessionGuardProvider.notifier);
+    await guard.beginLeaving();
+    try {
+      await state.powerOff(true);
+    } on Object {
+      guard.cancelLeaving();
+      rethrow;
+    }
+  }
 
-  Future<void> reboot() => state.reboot(true);
+  Future<void> reboot() async {
+    final guard = ref.read(sessionGuardProvider.notifier);
+    await guard.beginLeaving();
+    try {
+      await state.reboot(true);
+    } on Object {
+      guard.cancelLeaving();
+      rethrow;
+    }
+  }
 
-  Future<void> sleep() => state.suspend(true);
+  Future<void> sleep() async {
+    await ref.read(sessionGuardProvider.notifier).flushBeforeSuspend();
+    await state.suspend(true);
+  }
 
   Future<Set<SessionControlAction>> availableControls() async {
     final capabilities = await Future.wait([
@@ -93,13 +115,22 @@ class Session extends _$Session {
         ref.read(shellLocalizationsProvider).hibernationUnavailable(capability),
       );
     }
+    await ref.read(sessionGuardProvider.notifier).flushBeforeSuspend();
     await state.hibernate(true);
   }
 
   Future<void> logout() async {
     final session = await getActiveUserSession();
-    if (session != null) {
+    if (session == null) {
+      return;
+    }
+    final guard = ref.read(sessionGuardProvider.notifier);
+    await guard.beginLeaving();
+    try {
       await session.terminate(interactive: true);
+    } on Object {
+      guard.cancelLeaving();
+      rethrow;
     }
   }
 

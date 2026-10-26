@@ -35,6 +35,7 @@ import 'package:shell/shared/pulseaudio/provider/pulse_server_info.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_sink_list.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_source_list.dart';
 import 'package:shell/shared/util/logger.dart';
+import 'package:shell/systemd/provider/session_guard.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/window/provider/window_manager/matching_engine.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
@@ -211,6 +212,7 @@ class _EagerInitialization extends ConsumerWidget {
       ..watch(screenManagerProvider)
       ..watch(windowManagerProvider)
       ..watch(metaWindowManagerProvider)
+      ..watch(sessionGuardProvider)
       ..watch(polkitAuthenticationAgentStateProvider)
       ..watch(matchingEngineProvider)
       ..watch(notificationManagerProvider)
