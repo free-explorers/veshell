@@ -16,6 +16,7 @@ import 'package:shell/platform/model/event/meta_window_patches/meta_window_patch
 import 'package:shell/platform/model/request/start_move_window/start_move_window.serializable.dart';
 import 'package:shell/platform/model/request/start_resize_window/start_resize_window.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/util/snapping.dart';
 import 'package:shell/shared/widget/container_with_positionnable_children/container_with_positionnable_children.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
@@ -813,6 +814,7 @@ class FloatableWindow extends HookConsumerWidget {
         placement != FloatableWindowPlacement.floatingTile || compositorResize;
     final ValueChanged<ResizeEdge>? onResizeStart = compositorResize
         ? (edge) {
+            geometryLog.info('resize-handle start id=$metaWindowId edge=$edge');
             onRaise?.call();
             unawaited(
               ref

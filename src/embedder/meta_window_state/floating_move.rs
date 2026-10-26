@@ -88,9 +88,26 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             return false;
         };
         if !can_resize_floating(meta_window, edge) {
+            tracing::debug!(
+                target: "veshell::geometry",
+                meta_window_id = %meta_window_id,
+                display_mode = ?meta_window.display_mode,
+                client_maximized = meta_window.client_maximized,
+                is_fullscreen = meta_window.is_fullscreen,
+                is_fixed_sized = meta_window.is_fixed_sized,
+                ?edge,
+                "floating resize rejected by window state"
+            );
             return false;
         }
         let Some(mut placement) = meta_window.window_placement() else {
+            tracing::debug!(
+                target: "veshell::geometry",
+                meta_window_id = %meta_window_id,
+                position = ?meta_window.position,
+                geometry = ?meta_window.geometry,
+                "floating resize rejected without a placement"
+            );
             return false;
         };
         if let Some(size) = self.floating_size(meta_window) {
@@ -194,10 +211,24 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         if !meta_window.is_floating() || meta_window.client_maximized {
             // A maximized floating window is drawn at the tile origin; moving
             // only the native window would desynchronise the box.
+            tracing::debug!(
+                target: "veshell::geometry",
+                meta_window_id = %meta_window_id,
+                display_mode = ?meta_window.display_mode,
+                client_maximized = meta_window.client_maximized,
+                "floating move rejected by window state"
+            );
             return false;
         }
         let Some(origin) = meta_window.position.as_ref() else {
             // The shell has not placed this floating window yet.
+            tracing::debug!(
+                target: "veshell::geometry",
+                meta_window_id = %meta_window_id,
+                viewport = ?meta_window.viewport,
+                geometry = ?meta_window.geometry,
+                "floating move rejected without a placement"
+            );
             return false;
         };
         self.floating_move = Some(FloatingMove {

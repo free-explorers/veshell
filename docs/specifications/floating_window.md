@@ -80,10 +80,15 @@ A client `xdg_toplevel.resize` or X11 resize request enters the same path.
 Server-decorated and client-decorated windows use the same resize handling.
 Fixed-size, fullscreen and client-maximized windows expose no resize handles.
 
-A client's own maximize request resizes that floating window to fill the window
-area; a restore request returns it to its previous size. This is not the tile's
-display mode, so the tile's dialogs stay floating. The trusted file chooser
-keeps its modal presentation above the floating stack.
+Floating windows are never client-maximized. Entering floating mode clears a
+client-maximized state, and a client maximize request while floating is answered
+with an unmaximize configure. Clearing the state also restores a movable
+placement (centering an unplaced window and clamping an explicit one). There is
+no shell maximize/unmaximize affordance inside the floating stack to recover
+from a client-maximized window, so the shell owns the free-placement contract
+instead. This is not the tile's display mode, so the tile's dialogs stay
+floating. The trusted file chooser keeps its modal presentation above the
+floating stack.
 
 Client-decorated windows keep their own frame and shadow. The shell does not
 wrap them in a second decoration. Server-decorated windows use the shell's

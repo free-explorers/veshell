@@ -568,6 +568,12 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 }
             }
             MetaWindowPatch::UpdateDisplayMode { id, value } => {
+                let clear_client_maximized = matches!(value.as_ref(), Some(DisplayMode::Floating))
+                    && self
+                        .meta_window_state
+                        .meta_windows
+                        .get(&id)
+                        .is_some_and(|meta_window| meta_window.client_maximized);
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
                     meta_window.display_mode = value.clone();
                     // A maximized/fullscreen xdg configure must carry the size,
@@ -648,6 +654,16 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         _ => {}
                     }
                 }
+                if clear_client_maximized {
+                    // Floating is the free-placement escape hatch. Do not
+                    // keep a client-maximized flag that would disable move and
+                    // resize; the display-mode configure above already told
+                    // the client to unmaximize.
+                    self.patch_meta_window(
+                        MetaWindowPatch::UpdateClientMaximized { id, value: false },
+                        true,
+                    );
+                }
             }
             MetaWindowPatch::UpdateWindowClass { id, value } => {
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
@@ -690,11 +706,21 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 }
             }
             MetaWindowPatch::UpdateClientMaximized { id, value } => {
+                let mut place_floating = false;
                 if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
                     if meta_window.client_maximized == value {
                         return;
                     }
                     meta_window.client_maximized = value;
+                    // Leaving client-maximized in floating mode must also
+                    // restore a movable placement. The maximized path does not
+                    // publish a position, and a stale maximized state may have
+                    // suppressed the viewport centering pass.
+                    place_floating = !value && meta_window.is_floating();
+                }
+                if place_floating {
+                    self.center_floating_window(&id);
+                    self.clamp_floating_window(&id);
                 }
             }
             MetaWindowPatch::UpdateSkipTaskbar { id, value } => {

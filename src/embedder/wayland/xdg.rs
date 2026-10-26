@@ -14,7 +14,7 @@ pub mod xdg {
                 Resource,
             },
         },
-        utils::{Logical, Rectangle, Serial},
+        utils::{Logical, Rectangle, Serial, Size},
         wayland::{
             compositor::{self, add_post_commit_hook, with_states},
             fractional_scale::with_fractional_scale,
@@ -34,7 +34,7 @@ pub mod xdg {
     use uuid::Uuid;
 
     use crate::{
-        flutter_engine::wayland_messages::MyPoint,
+        flutter_engine::wayland_messages::{MyPoint, MyRectangle},
         meta_window_state::{
             meta_popup::{self, MetaPopup, MetaPopupCategory, MetaPopupPatch},
             meta_resize_edge::MetaResizeEdge,
@@ -79,24 +79,48 @@ pub mod xdg {
             compositor::add_post_commit_hook(
                 surface.wl_surface(),
                 |state: &mut Self, _, surface| {
-                    let geometry = with_states(surface, |surface_data| {
-                        surface_data
-                            .cached_state
-                            .get::<SurfaceCachedState>()
-                            .current()
-                            .geometry
-                            .map(|geometry| geometry.into())
-                    });
+                    let surface_id = get_surface_id(surface);
+                    let geometry: Option<MyRectangle<i32, Logical>> =
+                        with_states(surface, |surface_data| {
+                            surface_data
+                                .cached_state
+                                .get::<SurfaceCachedState>()
+                                .current()
+                                .geometry
+                                .map(|geometry| geometry.into())
+                        })
+                        .or_else(|| {
+                            // xdg-shell geometry is optional. Some clients
+                            // (notably Blender) never call
+                            // `wl_surface.set_window_geometry`, so the
+                            // committed buffer is the only size information
+                            // available. Without this fallback the window has
+                            // no placement and cannot be moved or resized.
+                            let (_, buffer_size) = state
+                                .texture_ids_per_surface_id
+                                .get(&surface_id)?
+                                .last()?
+                                .clone();
+                            let scale = state
+                                .get_meta_window(surface_id)
+                                .map(|meta_window| meta_window.scale_ratio)
+                                .unwrap_or(1.0)
+                                .max(1.0);
+                            let width = (f64::from(buffer_size.w) / scale).round() as i32;
+                            let height = (f64::from(buffer_size.h) / scale).round() as i32;
+                            (width > 0 && height > 0)
+                                .then(|| Rectangle::from_size(Size::from((width, height))).into())
+                        });
                     info!(
                         target: "veshell::geometry",
-                        surface_id = get_surface_id(surface),
+                        surface_id,
                         geometry = ?geometry,
                         "XDG toplevel geometry after commit"
                     );
                     if let Some(meta_window_id) = state
                         .meta_window_state
                         .meta_window_id_per_surface_id
-                        .get(&get_surface_id(surface))
+                        .get(&surface_id)
                     {
                         state.patch_meta_window(
                             MetaWindowPatch::UpdateGeometry {
@@ -484,14 +508,19 @@ pub mod xdg {
                 surface.send_configure();
                 return;
             };
-            // A floating window fills its tile on a CSD maximize request. A
-            // tiled window keeps the toplevel negotiation the shell already
-            // drives through its display mode.
+            // Floating is the free-placement escape hatch: a client maximize
+            // request is not honored there, because the shell has no
+            // maximize/unmaximize affordance to get out of it. Tiled windows
+            // keep the toplevel negotiation driven by their display mode.
             if meta_window.is_floating() {
+                surface.with_pending_state(|state| {
+                    state.states.unset(xdg_toplevel::State::Maximized);
+                });
+                surface.send_configure();
                 self.patch_meta_window(
                     MetaWindowPatch::UpdateClientMaximized {
                         id: meta_window.id,
-                        value: true,
+                        value: false,
                     },
                     true,
                 );
@@ -527,12 +556,26 @@ pub mod xdg {
                     .decoration_mode
                     .map(|mode| mode == zxdg_toplevel_decoration_v1::Mode::ServerSide)
                     .unwrap_or(false);
+                let is_maximized = configure
+                    .state
+                    .states
+                    .contains(xdg_toplevel::State::Maximized);
 
                 if let Some(meta_window) = self.get_meta_window(get_surface_id(&surface)) {
                     self.patch_meta_window(
                         MetaWindowPatch::UpdateNeedDecoration {
                             id: meta_window.id.clone(),
                             value: is_ssd,
+                        },
+                        true,
+                    );
+                    // Floating is always unmaximized. A stale maximized
+                    // configure ack must not re-enable the flag after the
+                    // display mode has switched to floating.
+                    self.patch_meta_window(
+                        MetaWindowPatch::UpdateClientMaximized {
+                            id: meta_window.id.clone(),
+                            value: is_maximized && !meta_window.is_floating(),
                         },
                         true,
                     );

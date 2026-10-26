@@ -1164,19 +1164,15 @@ pub mod xwayland {
                 window.set_maximized(true).unwrap();
                 return;
             };
-            // A floating window fills its tile instead of taking the
-            // output-sized maximized state. A tiled window keeps the previous
+            // Floating is the free-placement escape hatch: reject a client
+            // maximize request there. A tiled window keeps the previous
             // behaviour: the shell already sizes the tile.
             if meta_window.is_floating() {
-                // Advertise the real maximized state so the client's own
-                // decoration button reflects it; the shell still owns the
-                // tile-sized configure (set_maximized only changes the state
-                // property).
-                let _ = window.set_maximized(true);
+                let _ = window.set_maximized(false);
                 self.patch_meta_window(
                     MetaWindowPatch::UpdateClientMaximized {
                         id: meta_window.id,
-                        value: true,
+                        value: false,
                     },
                     true,
                 );
