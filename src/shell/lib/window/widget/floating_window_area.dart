@@ -331,6 +331,9 @@ class FloatingWindowArea extends HookConsumerWidget {
       }
     }
 
+    final tileAnchors = useRef<Map<MetaWindowId, Offset>>({});
+    final previousPositions = useRef<Map<MetaWindowId, Offset?>>({});
+
     Offset? clientOriginFor(MetaWindow metaWindow, Rect? tileRect) {
       final placement = metaWindow.windowPlacement;
       final position = placement?.origin ?? metaWindow.position;
@@ -343,13 +346,23 @@ class FloatingWindowArea extends HookConsumerWidget {
       if (!metaWindow.positionExplicit && position == Offset.zero) {
         return null;
       }
+      // A tile move changes the rendered `viewportRect` before the compositor
+      // has translated the native window. Keep using the tile origin that was
+      // current when the position last changed, so the window travels with the
+      // tile; once the position patch arrives, anchor it to the settled tile.
+      final previousPosition = previousPositions.value[metaWindow.id];
+      if (previousPosition != position) {
+        previousPositions.value[metaWindow.id] = position;
+        tileAnchors.value[metaWindow.id] = tileRect.topLeft;
+      }
+      final anchor = tileAnchors.value[metaWindow.id] ?? tileRect.topLeft;
       // `position` is the client surface in compositor-global coordinates;
       // the Flutter box is tile-local and (for a server-decorated window)
       // includes the shell title bar above the client surface.
       final decoration = metaWindow.needDecoration
           ? WindowTitleBar.height
           : 0.0;
-      return position - tileRect.topLeft - Offset(0, decoration);
+      return position - anchor - Offset(0, decoration);
     }
 
     final floatingChildren = <Widget>[];
@@ -361,8 +374,11 @@ class FloatingWindowArea extends HookConsumerWidget {
           key: ValueKey(metaWindow.id),
           metaWindowId: metaWindow.id,
           placement: FloatableWindowPlacement.floatingTile,
-          tileGlobalOrigin: contentRect.value?.topLeft,
-          clientOrigin: clientOriginFor(metaWindow, contentRect.value),
+          tileGlobalOrigin: viewportRect.value?.topLeft,
+          // Keep the native-placement anchor stable while the tile animates;
+          // using the live contentRect here would subtract the animation and
+          // pin the window in compositor space instead of moving with the tile.
+          clientOrigin: clientOriginFor(metaWindow, viewportRect.value),
           maximized: metaWindow.id == maximizedMetaWindowId,
           onRaise: () {
             focusNode?.requestFocus();

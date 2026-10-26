@@ -1318,14 +1318,22 @@ void main() {
     final initialViewportPatches = mainState.patches
         .whereType<UpdateViewport>()
         .length;
+    final initialWindowTopLeft = tester.getTopLeft(
+      find.byType(FloatableWindow),
+    );
 
     for (var frame = 1; frame <= 8; frame++) {
       offset.value = Offset(frame * 10, 0);
       await tester.pump(const Duration(milliseconds: 16));
     }
 
-    // The render rect follows the tile immediately, but the native placement
-    // origin is not republished on every animation frame.
+    // The window follows the moving tile even though its native placement is
+    // not republished on every animation frame.
+    expect(
+      tester.getTopLeft(find.byType(FloatableWindow)).dx -
+          initialWindowTopLeft.dx,
+      closeTo(80, 0.5),
+    );
     expect(
       mainState.patches.whereType<UpdateViewport>().length,
       initialViewportPatches,
@@ -1341,6 +1349,11 @@ void main() {
     expect(
       mainState.patches.whereType<UpdateViewport>().last.origin,
       const Offset(80, 0),
+    );
+    expect(
+      tester.getTopLeft(find.byType(FloatableWindow)).dx -
+          initialWindowTopLeft.dx,
+      closeTo(80, 0.5),
     );
   });
 
