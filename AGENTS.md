@@ -56,6 +56,8 @@ project SDK from `src/shell/`:
 
 - `docs/dependencies.md`: dependency versions and system packages.
 - `docs/specifications/`: feature contracts (the milestones live there).
-- `docs/agents/flutter-codegen-rules.md`: Dart codegen conventions and the
-  platform-channel naming contract.
+- `docs/agents/flutter-codegen-rules.md`: Dart codegen conventions, comparison
+  keys and the platform-channel naming contract. Never use geometry
+  `.toString()` values as effect/cache keys; see that file for the release
+  rounding trap.
 - `extra/build/shell.rs`: the shell build pipeline implementation.
