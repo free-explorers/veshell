@@ -80,6 +80,9 @@ custom exec.
 Closing a window does not clear the context. Only Forget or removing the tile
 does.
 
+The placeholder says **Start** with the application name while a tile has no
+saved context yet, and **Resume** with the saved summary afterwards.
+
 Terminal foreground-program replay, the allowlist and terminal-specific exec
 syntax are specified by #188.
 

@@ -265,6 +265,7 @@
   "launchAndRecord": "启动并记录所有平台事件",
   "clickToStartApplication": "点击启动应用",
   "resumeWith": "继续 {summary}",
+  "startWith": "启动 {summary}",
   "resume": "继续",
   "retry": "重试",
   "forgetSavedContext": "忘记已保存的上下文",

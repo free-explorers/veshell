@@ -265,6 +265,7 @@
   "launchAndRecord": "लॉन्च करें और सभी प्लेटफ़ॉर्म घटनाएँ रिकॉर्ड करें",
   "clickToStartApplication": "ऐप शुरू करने के लिए क्लिक करें",
   "resumeWith": "{summary} फिर से शुरू करें",
+  "startWith": "{summary} शुरू करें",
   "resume": "फिर से शुरू करें",
   "retry": "पुनः प्रयास करें",
   "forgetSavedContext": "सहेजा गया संदर्भ भूलें",

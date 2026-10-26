@@ -301,6 +301,8 @@
   "launchAndRecord": "Launch and record all platform events",
   "clickToStartApplication": "Click to start the application",
   "resumeWith": "Resume {summary}",
+  "startWith": "Start {summary}",
+  "@startWith": {"description": "Primary placeholder action for a tile that has no saved context yet", "placeholders": {"summary": {"type": "String"}}},
   "resume": "Resume",
   "retry": "Retry",
   "forgetSavedContext": "Forget saved context",

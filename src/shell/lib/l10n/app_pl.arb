@@ -265,6 +265,7 @@
   "launchAndRecord": "Uruchom i rejestruj wszystkie zdarzenia platformy",
   "clickToStartApplication": "Kliknij, aby uruchomić aplikację",
   "resumeWith": "Wznów {summary}",
+  "startWith": "Uruchom {summary}",
   "resume": "Wznów",
   "retry": "Ponów",
   "forgetSavedContext": "Zapomnij zapisany kontekst",

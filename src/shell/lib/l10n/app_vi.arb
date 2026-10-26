@@ -265,6 +265,7 @@
   "launchAndRecord": "Khởi chạy và ghi lại mọi sự kiện nền tảng",
   "clickToStartApplication": "Nhấp để khởi chạy ứng dụng",
   "resumeWith": "Tiếp tục {summary}",
+  "startWith": "Bắt đầu {summary}",
   "resume": "Tiếp tục",
   "retry": "Thử lại",
   "forgetSavedContext": "Quên ngữ cảnh đã lưu",

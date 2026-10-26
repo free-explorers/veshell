@@ -265,6 +265,7 @@
   "launchAndRecord": "شروع کریں اور پلیٹ فارم کے تمام واقعات ریکارڈ کریں",
   "clickToStartApplication": "ایپ شروع کرنے کے لیے کلک کریں",
   "resumeWith": "{summary} دوبارہ شروع کریں",
+  "startWith": "{summary} شروع کریں",
   "resume": "دوبارہ شروع کریں",
   "retry": "دوبارہ کوشش کریں",
   "forgetSavedContext": "محفوظ سیاق و سباق بھولیں",

@@ -265,6 +265,7 @@
   "launchAndRecord": "Jalankan dan rekam semua peristiwa platform",
   "clickToStartApplication": "Klik untuk menjalankan aplikasi",
   "resumeWith": "Lanjutkan {summary}",
+  "startWith": "Mulai {summary}",
   "resume": "Lanjutkan",
   "retry": "Coba lagi",
   "forgetSavedContext": "Lupakan konteks tersimpan",

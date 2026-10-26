@@ -265,6 +265,7 @@
   "launchAndRecord": "起動してすべてのプラットフォームイベントを記録",
   "clickToStartApplication": "クリックしてアプリを起動",
   "resumeWith": "{summary} を再開",
+  "startWith": "{summary} を開始",
   "resume": "再開",
   "retry": "再試行",
   "forgetSavedContext": "保存されたコンテキストを忘れる",

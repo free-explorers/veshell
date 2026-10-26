@@ -265,6 +265,7 @@
   "launchAndRecord": "Iniciar e registrar todos os eventos da plataforma",
   "clickToStartApplication": "Clique para iniciar o aplicativo",
   "resumeWith": "Retomar {summary}",
+  "startWith": "Iniciar {summary}",
   "resume": "Retomar",
   "retry": "Tentar novamente",
   "forgetSavedContext": "Esquecer o contexto salvo",

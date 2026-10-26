@@ -265,6 +265,7 @@
   "launchAndRecord": "Başlat ve tüm platform olaylarını kaydet",
   "clickToStartApplication": "Uygulamayı başlatmak için tıklayın",
   "resumeWith": "{summary} devam et",
+  "startWith": "{summary} başlat",
   "resume": "Devam et",
   "retry": "Yeniden dene",
   "forgetSavedContext": "Kaydedilmiş bağlamı unut",

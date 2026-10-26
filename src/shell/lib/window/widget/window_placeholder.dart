@@ -57,6 +57,11 @@ class WindowPlaceholder extends HookConsumerWidget {
       title: window.properties.title,
       homeDirectory: Platform.environment['HOME'],
     );
+    final primaryLabel = switch ((resumeSummary, window.resumeContext)) {
+      (null, _) => context.l10n.clickToStartApplication,
+      (final summary?, null) => context.l10n.startWith(summary),
+      (final summary?, _) => context.l10n.resumeWith(summary),
+    };
     final canLaunch =
         entry != null ||
         window.customExec != null ||
@@ -254,9 +259,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                       onForget: forgetResumeContext,
                     )
                   : Text(
-                      resumeSummary == null
-                          ? context.l10n.clickToStartApplication
-                          : context.l10n.resumeWith(resumeSummary),
+                      primaryLabel,
                       style: Theme.of(context).textTheme.headlineSmall!
                           .copyWith(
                             color: isFocused

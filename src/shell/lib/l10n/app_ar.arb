@@ -265,6 +265,7 @@
   "launchAndRecord": "تشغيل وتسجيل جميع أحداث المنصة",
   "clickToStartApplication": "انقر لتشغيل التطبيق",
   "resumeWith": "استئناف {summary}",
+  "startWith": "بدء {summary}",
   "resume": "استئناف",
   "retry": "إعادة المحاولة",
   "forgetSavedContext": "نسيان السياق المحفوظ",

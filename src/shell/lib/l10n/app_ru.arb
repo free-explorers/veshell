@@ -265,6 +265,7 @@
   "launchAndRecord": "Запустить и записывать все события платформы",
   "clickToStartApplication": "Нажмите, чтобы запустить приложение",
   "resumeWith": "Продолжить {summary}",
+  "startWith": "Запустить {summary}",
   "resume": "Продолжить",
   "retry": "Повторить",
   "forgetSavedContext": "Забыть сохранённый контекст",

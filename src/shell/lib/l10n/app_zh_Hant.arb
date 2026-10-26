@@ -265,6 +265,7 @@
   "launchAndRecord": "啟動並記錄所有平台事件",
   "clickToStartApplication": "點擊以啟動應用程式",
   "resumeWith": "繼續 {summary}",
+  "startWith": "啟動 {summary}",
   "resume": "繼續",
   "retry": "重試",
   "forgetSavedContext": "忘記已儲存的內容",
