@@ -70,6 +70,27 @@ void main() {
     expect(chart.data.minX, closeTo(2, 0.01));
   });
 
+  testWidgets('slides new samples in while the buffer is filling', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_chart(_window(0, count: 10)));
+    await tester.pump();
+
+    var chart = tester.widget<LineChart>(find.byType(LineChart));
+    expect(chart.data.minX, 9 - (monitoringWindowSamples - 1));
+
+    await tester.pumpWidget(_chart(_window(0, count: 11)));
+    await tester.pump(const Duration(milliseconds: 250));
+
+    chart = tester.widget<LineChart>(find.byType(LineChart));
+    expect(chart.data.minX, closeTo(10 - monitoringWindowSamples + 0.5, 0.1));
+
+    await tester.pump(const Duration(milliseconds: 300));
+
+    chart = tester.widget<LineChart>(find.byType(LineChart));
+    expect(chart.data.minX, closeTo(10 - monitoringWindowSamples + 1, 0.01));
+  });
+
   testWidgets('anchors the growing chart to the right', (tester) async {
     final spots = [for (var i = 0; i < 10; i++) FlSpot(i.toDouble(), 50)];
     await tester.pumpWidget(_chart(spots));

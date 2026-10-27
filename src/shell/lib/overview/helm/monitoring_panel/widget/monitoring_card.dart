@@ -227,7 +227,7 @@ class _MonitoringChartState extends State<MonitoringChart>
                       _controller.value
             : hasOverflow
             ? firstX + monitoringChartOverflowSamples - 1 + _controller.value
-            : lastX - (monitoringWindowSamples - 1);
+            : lastX - monitoringWindowSamples + _controller.value;
         return LineChart(
           LineChartData(
             minX: windowStart,
