@@ -25,7 +25,7 @@ class AppGrid extends HookConsumerWidget {
     );
     final widgets = desktopEntries.maybeWhen(
       skipLoadingOnReload: true,
-      data: (List<LocalizedDesktopEntry> desktopEntries) => desktopEntries
+      data: (desktopEntries) => desktopEntries
           .map(
             (desktopEntry) => AppEntry(
               key: ValueKey(desktopEntry.desktopEntry.id),
@@ -41,11 +41,11 @@ class AppGrid extends HookConsumerWidget {
       padding: const EdgeInsets.all(24),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 120,
-        childAspectRatio: 0.68,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
+        childAspectRatio: 0.8,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
       ),
-      itemBuilder: (BuildContext context, int index) => widgets[index],
+      itemBuilder: (context, index) => widgets[index],
     );
   }
 }
@@ -81,6 +81,7 @@ class AppEntry extends ConsumerWidget {
                 aspectRatio: 1,
                 child: AppIconByPath(
                   path: desktopEntry.entries[DesktopEntryKey.icon.string],
+                  title: desktopEntry.entries[DesktopEntryKey.name.string],
                 ),
               ),
             ),

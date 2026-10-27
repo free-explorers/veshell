@@ -627,7 +627,17 @@ class _PlaceholderBackground extends ConsumerWidget {
     if (path == null) {
       return const SizedBox.shrink();
     }
-    final image = ref.watch(iconBackgroundImageProvider(path)).value;
+    final image = ref
+        .watch(iconBackgroundImageProvider(path))
+        .when(
+          data: (image) => image,
+          // Keep painting nothing while the provider rebuilds. Its previous
+          // image is disposed before the replacement is ready, and RawImage
+          // would try to clone that disposed handle and throw.
+          loading: () => null,
+          error: (_, _) => null,
+          skipLoadingOnRefresh: false,
+        );
     if (image == null) {
       return const SizedBox.shrink();
     }

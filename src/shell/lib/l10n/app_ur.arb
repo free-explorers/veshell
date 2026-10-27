@@ -178,6 +178,7 @@
   "gtkThemeDescription": "GTK تھیم",
   "iconTheme": "آئیکن تھیم",
   "iconThemeDescription": "آئیکن کا تھیم",
+  "letterIcons": "حرفی پلیس ہولڈرز",
   "transformNormal": "معمول",
   "transformRotate": "{degrees}° گھمائیں",
   "transformFlipped": "عکس شدہ",

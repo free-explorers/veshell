@@ -178,6 +178,7 @@
   "gtkThemeDescription": "GTK-Design",
   "iconTheme": "Symbolthema",
   "iconThemeDescription": "Symbolthema",
+  "letterIcons": "Buchstaben-Platzhalter",
   "transformNormal": "Normal",
   "transformRotate": "Um {degrees}° drehen",
   "transformFlipped": "Gespiegelt",

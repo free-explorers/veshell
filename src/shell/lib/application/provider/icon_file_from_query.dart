@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/provider/icon_themes.dart';
+import 'package:shell/settings/provider/state/icon_theme_setting.dart';
+import 'package:shell/settings/provider/util/theme_detection.dart';
 
 part 'icon_file_from_query.g.dart';
 
@@ -17,6 +19,16 @@ part 'icon_file_from_query.g.dart';
 /// decoded pixels are cached separately, by Flutter.
 @Riverpod(keepAlive: true)
 Future<File?> iconFileFromQuery(Ref ref, IconQuery query) async {
+  // The letter theme is deliberately not a real icon theme: every icon site
+  // falls back to its application-name badge instead of consulting a theme.
+  if (isLetterIconTheme(ref.watch(iconThemeSettingProvider))) {
+    return null;
+  }
   final themes = await ref.watch(iconThemesProvider.future);
-  return await themes.findIcon(query);
+  final icon = await themes.findIcon(query);
+  // An absolute icon path from a desktop file is returned without checking the
+  // filesystem. Treat a vanished file as a missing icon so the letter fallback
+  // can take over instead of painting a broken image.
+  if (icon != null && !icon.existsSync()) return null;
+  return icon;
 }

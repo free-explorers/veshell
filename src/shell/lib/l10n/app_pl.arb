@@ -178,6 +178,7 @@
   "gtkThemeDescription": "Motyw GTK",
   "iconTheme": "Motyw ikon",
   "iconThemeDescription": "Motyw ikon",
+  "letterIcons": "Literowe symbole zastępcze",
   "transformNormal": "Normalne",
   "transformRotate": "Obróć o {degrees}°",
   "transformFlipped": "Odbicie",

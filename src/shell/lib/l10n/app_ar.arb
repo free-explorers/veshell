@@ -178,6 +178,7 @@
   "gtkThemeDescription": "سمة GTK",
   "iconTheme": "سمة الأيقونات",
   "iconThemeDescription": "سمة الأيقونات",
+  "letterIcons": "حروف بديلة",
   "transformNormal": "عادي",
   "transformRotate": "تدوير {degrees}°",
   "transformFlipped": "معكوس",

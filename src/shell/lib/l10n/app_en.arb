@@ -199,6 +199,7 @@
   "gtkThemeDescription": "GTK theme",
   "iconTheme": "Icon Theme",
   "iconThemeDescription": "Icon theme",
+  "letterIcons": "Letter placeholders",
   "transformNormal": "Normal",
   "transformRotate": "Rotate {degrees}°",
   "@transformRotate": {"description": "Display rotation option", "placeholders": {"degrees": {"type": "int"}}},

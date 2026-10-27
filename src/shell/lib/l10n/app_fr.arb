@@ -178,6 +178,7 @@
   "gtkThemeDescription": "Thème GTK",
   "iconTheme": "Thème d’icônes",
   "iconThemeDescription": "Thème d’icônes",
+  "letterIcons": "Lettres de remplacement",
   "transformNormal": "Normal",
   "transformRotate": "Rotation de {degrees}°",
   "transformFlipped": "Inversé",

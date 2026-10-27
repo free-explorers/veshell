@@ -178,6 +178,7 @@
   "gtkThemeDescription": "GTK थीम",
   "iconTheme": "आइकन थीम",
   "iconThemeDescription": "आइकन की थीम",
+  "letterIcons": "अक्षर प्लेसहोल्डर",
   "transformNormal": "सामान्य",
   "transformRotate": "{degrees}° घुमाएँ",
   "transformFlipped": "प्रतिबिंबित",

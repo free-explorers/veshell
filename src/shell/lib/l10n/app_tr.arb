@@ -178,6 +178,7 @@
   "gtkThemeDescription": "GTK teması",
   "iconTheme": "Simge teması",
   "iconThemeDescription": "Simge teması",
+  "letterIcons": "Harf yer tutucuları",
   "transformNormal": "Normal",
   "transformRotate": "{degrees}° döndür",
   "transformFlipped": "Ters çevrilmiş",
