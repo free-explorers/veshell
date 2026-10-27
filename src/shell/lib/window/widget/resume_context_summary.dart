@@ -3,8 +3,13 @@ import 'package:shell/window/model/resume_context.serializable.dart';
 
 /// Describes what clicking a placeholder will resume.
 ///
-/// Examples: `~/src/veshell — nvim`, `~/Documents`, `report.pdf`, or the last
-/// window title when the context has no more specific fact.
+/// The summary only names facts that describe resumable work: a terminal's
+/// directory and foreground program, an opened document, or the last window
+/// title. A non-terminal application's working directory is deliberately not
+/// used: most applications ignore it on a fresh launch, and applications such
+/// as IDEs restore their own workspace instead.
+///
+/// Examples: `~/src/veshell — nvim`, `report.pdf`, or the last window title.
 String? resumeContextSummary(
   ResumeContext? context, {
   String? title,
@@ -35,11 +40,6 @@ String? resumeContextSummary(
     final document = _firstDocument(context);
     if (document != null) {
       return path.basename(document);
-    }
-
-    final directory = _abbreviate(context.workingDirectory, homeDirectory);
-    if (directory != null) {
-      return directory;
     }
   }
 

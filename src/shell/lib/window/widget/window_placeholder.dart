@@ -52,15 +52,25 @@ class WindowPlaceholder extends HookConsumerWidget {
     final launchedProcess = useRef<Process?>(null);
     final launchFailed = useState(false);
 
-    final resumeSummary = resumeContextSummary(
-      window.resumeContext,
-      title: window.properties.title,
-      homeDirectory: Platform.environment['HOME'],
-    );
-    final primaryLabel = switch ((resumeSummary, window.resumeContext)) {
-      (null, _) => context.l10n.clickToStartApplication,
-      (final summary?, null) => context.l10n.startWith(summary),
-      (final summary?, _) => context.l10n.resumeWith(summary),
+    // The saved title can be an arbitrary page or document title, so it must
+    // not become the Start action's object: it is long, and browsers can set
+    // it to transient text such as "Restore ~". Start names the application;
+    // only a saved resume context uses the title as a summary.
+    final applicationName = entry?.entries[DesktopEntryKey.name.string];
+    final startLabel = applicationName == null
+        ? context.l10n.clickToStartApplication
+        : context.l10n.startWith(applicationName);
+    final resumeSummary = window.resumeContext == null
+        ? null
+        : resumeContextSummary(
+            window.resumeContext,
+            title: window.properties.title,
+            homeDirectory: Platform.environment['HOME'],
+          );
+    final primaryLabel = switch ((window.resumeContext, resumeSummary)) {
+      (null, _) => startLabel,
+      (_, null) => context.l10n.resume,
+      (_, final summary?) => context.l10n.resumeWith(summary),
     };
     final canLaunch =
         entry != null ||
@@ -215,8 +225,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                             : CrossAxisAlignment.center,
                         children: [
                           Text(
-                            entry?.entries[DesktopEntryKey.name.string] ??
-                                context.l10n.unknown,
+                            applicationName ?? context.l10n.unknown,
                             style: Theme.of(context).textTheme.displayMedium,
                             textAlign: TextAlign.center,
                             softWrap: false,
@@ -258,14 +267,21 @@ class WindowPlaceholder extends HookConsumerWidget {
                       onRetry: retry,
                       onForget: forgetResumeContext,
                     )
-                  : Text(
-                      primaryLabel,
-                      style: Theme.of(context).textTheme.headlineSmall!
-                          .copyWith(
-                            color: isFocused
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).disabledColor,
-                          ),
+                  : Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        primaryLabel,
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.headlineSmall!
+                            .copyWith(
+                              color: isFocused
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).disabledColor,
+                            ),
+                      ),
                     ),
             ),
           ],

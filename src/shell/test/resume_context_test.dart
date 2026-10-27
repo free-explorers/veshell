@@ -208,15 +208,36 @@ void main() {
       expect(summary, 'report.pdf');
     });
 
-    test('falls back to the cwd, then the title', () {
+    test('falls back to the title instead of the application cwd', () {
       expect(
         resumeContextSummary(
           const ResumeContext(workingDirectory: '/home/user/src'),
+          title: 'Code - OSS',
           homeDirectory: '/home/user',
         ),
-        '~/src',
+        'Code - OSS',
+      );
+      expect(
+        resumeContextSummary(
+          const ResumeContext(workingDirectory: '/home/user'),
+          homeDirectory: '/home/user',
+        ),
+        isNull,
       );
       expect(resumeContextSummary(null, title: 'Mozilla'), 'Mozilla');
+    });
+
+    test('keeps a terminal directory even when the title is available', () {
+      final summary = resumeContextSummary(
+        const ResumeContext(
+          workingDirectory: '/home/user',
+          terminal: TerminalResumeContext(workingDirectory: '/home/user'),
+        ),
+        title: 'user@host:~',
+        homeDirectory: '/home/user',
+      );
+
+      expect(summary, '~');
     });
   });
 }

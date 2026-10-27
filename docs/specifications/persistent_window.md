@@ -83,6 +83,12 @@ does.
 The placeholder says **Start** with the application name while a tile has no
 saved context yet, and **Resume** with the saved summary afterwards.
 
+The resume summary only names facts that describe resumable work: a terminal's
+directory and foreground program, an opened document, or the last window title.
+A non-terminal application's working directory is not shown: most applications
+ignore it on launch, and applications such as IDEs restore their own workspace
+or project instead.
+
 ## Terminal resume
 
 For a terminal window the tile stores the shell and the shell's cwd, plus a
