@@ -23,7 +23,7 @@ Widget _chart(List<FlSpot> spots) {
 }
 
 List<FlSpot> _window(int first) => [
-  for (var i = first; i < first + monitoringWindowSamples; i++)
+  for (var i = first; i < first + monitoringChartBufferSamples; i++)
     FlSpot(i.toDouble(), 50),
 ];
 
@@ -33,19 +33,19 @@ void main() {
     await tester.pump();
 
     var chart = tester.widget<LineChart>(find.byType(LineChart));
-    expect(chart.data.minX, 0);
+    expect(chart.data.minX, monitoringChartOverflowSamples);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(_chart(_window(1)));
     await tester.pump(const Duration(milliseconds: 250));
 
     chart = tester.widget<LineChart>(find.byType(LineChart));
-    expect(chart.data.minX, closeTo(0.5, 0.1));
+    expect(chart.data.minX, closeTo(monitoringChartOverflowSamples + 0.5, 0.1));
 
     await tester.pump(const Duration(milliseconds: 300));
 
     chart = tester.widget<LineChart>(find.byType(LineChart));
-    expect(chart.data.minX, closeTo(1, 0.01));
+    expect(chart.data.minX, closeTo(monitoringChartOverflowSamples + 1, 0.01));
     expect(tester.takeException(), isNull);
   });
 

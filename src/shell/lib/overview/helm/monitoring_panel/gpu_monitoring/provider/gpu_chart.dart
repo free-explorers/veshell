@@ -11,7 +11,7 @@ part 'gpu_chart.g.dart';
 /// climbing curve when the overview is opened.
 @Riverpod(keepAlive: true)
 class GpuChart extends _$GpuChart {
-  static const int _maxPoints = monitoringWindowSamples;
+  static const int _maxPoints = monitoringChartBufferSamples;
 
   @override
   List<FlSpot> build() => const [];

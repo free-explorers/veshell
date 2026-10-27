@@ -10,7 +10,7 @@ part 'gpu_memory_chart.g.dart';
 /// can overlay load and VRAM over the same recent window.
 @Riverpod(keepAlive: true)
 class GpuMemoryChart extends _$GpuMemoryChart {
-  static const int _maxPoints = monitoringWindowSamples;
+  static const int _maxPoints = monitoringChartBufferSamples;
 
   @override
   List<FlSpot> build() => const [];

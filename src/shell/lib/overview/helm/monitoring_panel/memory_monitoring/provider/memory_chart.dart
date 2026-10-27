@@ -10,7 +10,7 @@ part 'memory_chart.g.dart';
 /// [_maxPoints] samples (about a minute) of memory usage.
 @Riverpod(keepAlive: true)
 class MemoryChart extends _$MemoryChart {
-  static const int _maxPoints = monitoringWindowSamples;
+  static const int _maxPoints = monitoringChartBufferSamples;
 
   @override
   List<FlSpot> build() => const [];

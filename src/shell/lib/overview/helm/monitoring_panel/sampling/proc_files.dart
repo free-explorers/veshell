@@ -8,11 +8,21 @@ import 'package:shell/shared/util/logger.dart';
 /// the same cadence.
 const monitoringSampleInterval = Duration(milliseconds: 500);
 
-/// Number of samples kept by the scrolling monitoring charts.
+/// Number of samples visible in the scrolling monitoring charts.
 ///
 /// At [monitoringSampleInterval] this is the one-minute window the dashboard
 /// shows when the overview is opened.
 const monitoringWindowSamples = 120;
+
+/// Samples kept beyond each side of the visible window.
+///
+/// The extra points let the line and area fill run past the chart edges while
+/// the viewport slides, so the left and right edges never show a gap.
+const monitoringChartOverflowSamples = 2;
+
+/// Total samples retained by the chart providers.
+const int monitoringChartBufferSamples =
+    monitoringWindowSamples + 2 * monitoringChartOverflowSamples;
 
 int? _pageSize;
 

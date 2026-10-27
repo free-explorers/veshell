@@ -144,7 +144,8 @@ class MonitoringCard extends StatelessWidget {
 /// Every series is drawn on the same `0..100` axis; a filled series sits under
 /// the stroked ones. The viewport slides by one sample over
 /// [monitoringSampleInterval] whenever a new sample arrives, so the graph
-/// scrolls instead of stepping.
+/// scrolls instead of stepping. A few samples are kept beyond each edge of the
+/// visible window, so the line and area fill never stop at a chart edge.
 class MonitoringChart extends StatefulWidget {
   /// Creates a chart for [series].
   const MonitoringChart({required this.series, super.key});
@@ -183,10 +184,13 @@ class _MonitoringChartState extends State<MonitoringChart>
   @override
   Widget build(BuildContext context) {
     final firstX = _firstX(widget.series);
+    final hasOverflow = _hasOverflow(widget.series);
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
-        final windowStart = firstX > 0 ? firstX - 1 + _controller.value : 0.0;
+        final windowStart = hasOverflow
+            ? firstX + monitoringChartOverflowSamples - 1 + _controller.value
+            : 0.0;
         return LineChart(
           LineChartData(
             minX: windowStart,
@@ -217,6 +221,15 @@ class _MonitoringChartState extends State<MonitoringChart>
         );
       },
     );
+  }
+
+  bool _hasOverflow(List<MonitoringSeries> series) {
+    for (final line in series) {
+      if (line.spots.length >= monitoringChartBufferSamples) {
+        return true;
+      }
+    }
+    return false;
   }
 
   double _firstX(List<MonitoringSeries> series) {
