@@ -79,6 +79,12 @@ the prepared shell and engine instead; see [building and packaging](building.md)
       <td>libssl-dev</td>
     </tr>
     <tr>
+      <td>pam (lock screen authentication)</td>
+      <td>pam</td>
+      <td>pam-devel</td>
+      <td>libpam0g-dev</td>
+    </tr>
+    <tr>
       <td>libstdc</td>
       <td></td>
       <td></td>

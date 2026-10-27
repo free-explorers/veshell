@@ -77,5 +77,8 @@ pub fn on_shell_ready<BackendData: Backend + 'static>(
     // pointer has not moved yet. This makes startup focus deterministic.
     data.focus_view_under_pointer();
 
+    // A shell restarted while locked must draw the lock screen again.
+    crate::lock::replay_to_shell(data);
+
     result.success(None);
 }

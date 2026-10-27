@@ -110,7 +110,9 @@ pub fn activate_window<BackendData: Backend + 'static>(
             });
             toplevel.send_pending_configure();
 
-            if keyboard.current_focus() == Some(KeyboardFocusTarget::WlSurface(wl_surface)) {
+            let target = KeyboardFocusTarget::WlSurface(wl_surface);
+            data.lock.forget_keyboard_focus(&target);
+            if keyboard.current_focus() == Some(target) {
                 keyboard.set_focus(data, None, serial);
             }
 
@@ -128,7 +130,9 @@ pub fn activate_window<BackendData: Backend + 'static>(
             };
             x11_surface.set_activated(false).unwrap();
 
-            if keyboard.current_focus() == Some(KeyboardFocusTarget::X11Surface(x11_surface)) {
+            let target = KeyboardFocusTarget::X11Surface(x11_surface);
+            data.lock.forget_keyboard_focus(&target);
+            if keyboard.current_focus() == Some(target) {
                 keyboard.set_focus(data, None, serial);
             }
 
@@ -141,6 +145,22 @@ pub fn activate_window<BackendData: Backend + 'static>(
                 None,
             );
         }
+    }
+}
+
+/// Gives `target` the keyboard, or, while the session is locked, records it
+/// as the focus to restore on unlock: a locked session never hands the
+/// keyboard to a client.
+fn set_keyboard_focus<BackendData: Backend + 'static>(
+    data: &mut State<BackendData>,
+    keyboard: &smithay::input::keyboard::KeyboardHandle<State<BackendData>>,
+    target: KeyboardFocusTarget,
+    serial: smithay::utils::Serial,
+) {
+    if data.is_locked() {
+        data.lock.defer_keyboard_focus(Some(target));
+    } else {
+        keyboard.set_focus(data, Some(target), serial);
     }
 }
 
@@ -184,9 +204,10 @@ pub(crate) fn focus_surface<BackendData: Backend + 'static>(
             });
             toplevel.send_pending_configure();
 
-            keyboard.set_focus(
+            set_keyboard_focus(
                 data,
-                Some(KeyboardFocusTarget::WlSurface(wl_surface.clone())),
+                &keyboard,
+                KeyboardFocusTarget::WlSurface(wl_surface.clone()),
                 serial,
             );
             if let Some(meta_window) = data.get_meta_window(surface_id) {
@@ -215,9 +236,10 @@ pub(crate) fn focus_surface<BackendData: Backend + 'static>(
                     .unwrap()
                     .raise_window(&x11_surface);
 
-                keyboard.set_focus(
+                set_keyboard_focus(
                     data,
-                    Some(KeyboardFocusTarget::X11Surface(x11_surface.clone())),
+                    &keyboard,
+                    KeyboardFocusTarget::X11Surface(x11_surface.clone()),
                     serial,
                 );
                 if let Some(meta_window) = data.get_meta_window(surface_id) {

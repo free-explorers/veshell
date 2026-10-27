@@ -6,6 +6,9 @@ SHAREDIR ?= $(PREFIX)/share/veshell
 SESSIONDIR ?= $(PREFIX)/share/wayland-sessions
 PORTALDIR ?= $(PREFIX)/share/xdg-desktop-portal
 SYSTEMD_USER_DIR ?= $(PREFIX)/lib/systemd/user
+# Linux-PAM only reads service files from fixed system directories, never from
+# an install prefix, so this does not follow PREFIX.
+PAMDIR ?= /etc/pam.d
 
 PROFILE ?= release
 FLUTTER_MODE ?= $(if $(filter dev,$(PROFILE)),debug,$(PROFILE))
@@ -101,6 +104,8 @@ install: check-config
 	install -Dm644 $(call quote,$(ASSETS_DIR)/veshell.portal) $(call quote,$(DESTDIR)$(PORTALDIR)/portals/veshell.portal)
 	install -Dm644 $(call quote,$(SERVICE_OUTPUT)) $(call quote,$(DESTDIR)$(SYSTEMD_USER_DIR)/veshell.service)
 	install -Dm644 $(call quote,$(ASSETS_DIR)/veshell-shutdown.target) $(call quote,$(DESTDIR)$(SYSTEMD_USER_DIR)/veshell-shutdown.target)
+	install -Dm644 $(call quote,$(ASSETS_DIR)/pam.d/veshell) $(call quote,$(DESTDIR)$(PAMDIR)/veshell)
+	install -Dm644 $(call quote,$(ASSETS_DIR)/pam.d/veshell-fingerprint) $(call quote,$(DESTDIR)$(PAMDIR)/veshell-fingerprint)
 	install -d -m755 $(call quote,$(DESTDIR)$(LIBDIR))
 	@set -eu; for lib in $(call quote,$(SHELL_LIB_DIR))/*; do \
 		[ -e "$$lib" ] || [ -L "$$lib" ] || continue; \
@@ -116,7 +121,7 @@ install: check-config
 	cp -a $(call quote,$(SETTINGS_DIR))/. $(call quote,$(DESTDIR)$(SHAREDIR)/settings)/
 
 install-local: build
-	sudo $(MAKE) install $(foreach var,PREFIX BINDIR LIBDIR SHAREDIR SESSIONDIR PORTALDIR SYSTEMD_USER_DIR DESTDIR PROFILE FLUTTER_MODE ARCH ARCH_DIR BIN ENGINE_LIB APP_LIB SHELL_LIB_DIR DATA_DIR ASSETS_DIR SETTINGS_DIR SERVICE_TEMPLATE SERVICE_OUTPUT INSTALL_ENGINE,$(var)=$(call quote,$($(var))))
+	sudo $(MAKE) install $(foreach var,PREFIX BINDIR LIBDIR SHAREDIR SESSIONDIR PORTALDIR SYSTEMD_USER_DIR PAMDIR DESTDIR PROFILE FLUTTER_MODE ARCH ARCH_DIR BIN ENGINE_LIB APP_LIB SHELL_LIB_DIR DATA_DIR ASSETS_DIR SETTINGS_DIR SERVICE_TEMPLATE SERVICE_OUTPUT INSTALL_ENGINE,$(var)=$(call quote,$($(var))))
 
 # Never erase an arbitrary directory or silently package stale files.
 stage:
@@ -140,6 +145,7 @@ uninstall:
 	rm -f $(call quote,$(DESTDIR)$(BINDIR)/veshell) $(call quote,$(DESTDIR)$(BINDIR)/veshell-session) $(call quote,$(DESTDIR)$(BINDIR)/veshell-session-stop)
 	rm -f $(call quote,$(DESTDIR)$(SESSIONDIR)/veshell.desktop) $(call quote,$(DESTDIR)$(PORTALDIR)/veshell-portals.conf) $(call quote,$(DESTDIR)$(PORTALDIR)/portals/veshell.portal)
 	rm -f $(call quote,$(DESTDIR)$(SYSTEMD_USER_DIR)/veshell.service) $(call quote,$(DESTDIR)$(SYSTEMD_USER_DIR)/veshell-shutdown.target)
+	rm -f $(call quote,$(DESTDIR)$(PAMDIR)/veshell) $(call quote,$(DESTDIR)$(PAMDIR)/veshell-fingerprint)
 	rm -f $(call quote,$(DESTDIR)$(LIBDIR))/*.so $(call quote,$(DESTDIR)$(LIBDIR))/*.so.*
 	rmdir --ignore-fail-on-non-empty $(call quote,$(DESTDIR)$(LIBDIR))
 	rm -rf $(call quote,$(DESTDIR)$(SHAREDIR)/data) $(call quote,$(DESTDIR)$(SHAREDIR)/settings)

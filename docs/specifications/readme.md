@@ -28,6 +28,7 @@ answer. Each service specification records its exact split.
   - [Floating window](/specifications/floating_window.md)
   - [Gaming mode](/specifications/gaming_mode.md)
 - [Keyboard](/specifications/keyboard.md)
+- [Lock screen](/specifications/lock_screen.md)
 - [Navigation and actions](/specifications/navigation.md)
 - [Environment variables](/specifications/environment_variables.md)
 - [Build identity and version reporting](/specifications/build_identity.md)

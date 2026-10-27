@@ -280,6 +280,11 @@ class SettingsProperties extends _$SettingsProperties {
                     description: l10n.toggleKeyboardLayoutDescription,
                     converter: const LogicalKeySetListConverter(),
                   ),
+              'system.lockSession': SettingProperty<List<LogicalKeySet>>(
+                name: l10n.lockSession,
+                description: l10n.lockSessionDescription,
+                converter: const LogicalKeySetListConverter(),
+              ),
               'media.playPause': SettingProperty<List<LogicalKeySet>>(
                 name: l10n.playPauseMedia,
                 description: l10n.playPauseMediaDescription,

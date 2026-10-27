@@ -19,7 +19,8 @@
                 "muteVolume": ["volumeMute"],
                 "increaseBrightness": ["brightnessUp"],
                 "decreaseBrightness": ["brightnessDown"],
-                "toggleKeyboardLayout": ["super+space"]
+                "toggleKeyboardLayout": ["super+space"],
+                "lockSession": ["super+l"]
             },
             "media": {
                 "playPause": ["mediaPlayPause"],

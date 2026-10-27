@@ -35,6 +35,9 @@
                 },
                 "toggleKeyboardLayout": {
                     "$ref": "#/$defs/hotkeyList"
+                },
+                "lockSession": {
+                    "$ref": "#/$defs/hotkeyList"
                 }
             }
         },

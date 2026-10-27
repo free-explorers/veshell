@@ -3,6 +3,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/capture/widget/capture_prompt_overlay.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/lock_screen/widget/lock_screen_overlay.dart';
 import 'package:shell/main.dart';
 import 'package:shell/monitor/model/monitor_configuration.serializable.dart';
 import 'package:shell/monitor/model/screen_configuration.serializable.dart';
@@ -59,17 +60,30 @@ class MonitorWidget extends HookConsumerWidget {
       // `Super+Space`) chord before the shell's own bindings — built from exact
       // `LogicalKeySet`s — ever see it. Below them, the manager is closer to
       // focus and wins the chord, while ordinary typing still flows through.
-      builder: (context, child) => VeshellShortcutManager(
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            child ?? const SizedBox.shrink(),
-            CapturePromptOverlay(monitorName: monitorName),
-            // Display-setting confirmation sits above everything, including
-            // the capture prompts, so a pending rollback can never be hidden.
-            const MonitorSettingChangeConfirmationOverlay(),
-          ],
-        ),
+      //
+      // The lock screen sits outside the shortcut manager: while locked, keys
+      // typed into its password field must never bubble into a shell binding.
+      // `LockScreenBlur` also excludes the desktop below from focus.
+      builder: (context, child) => Stack(
+        fit: StackFit.expand,
+        children: [
+          VeshellShortcutManager(
+            child: LockScreenBlur(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  child ?? const SizedBox.shrink(),
+                  CapturePromptOverlay(monitorName: monitorName),
+                  // Display-setting confirmation sits above everything,
+                  // including the capture prompts, so a pending rollback can
+                  // never be hidden.
+                  const MonitorSettingChangeConfirmationOverlay(),
+                ],
+              ),
+            ),
+          ),
+          LockScreenOverlay(monitorName: monitorName),
+        ],
       ),
       home: Material(
         child: initializationStatus.when(

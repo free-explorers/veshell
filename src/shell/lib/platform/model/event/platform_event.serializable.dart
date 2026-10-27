@@ -6,6 +6,8 @@ import 'package:shell/capture/model/screen_cast_recording/screen_cast_recording.
 import 'package:shell/capture/model/screen_cast_stopped/screen_cast_stopped.serializable.dart';
 import 'package:shell/capture/model/screenshot_prompt/screenshot_prompt.serializable.dart';
 import 'package:shell/file_chooser/model/file_chooser_request/file_chooser_request.serializable.dart';
+import 'package:shell/lock_screen/model/lock_auth_update/lock_auth_update.serializable.dart';
+import 'package:shell/lock_screen/model/lock_state_changed/lock_state_changed.serializable.dart';
 import 'package:shell/notification/model/notification_close_requested/notification_close_requested.serializable.dart';
 import 'package:shell/notification/model/notification_received/notification_received.serializable.dart';
 import 'package:shell/platform/model/event/brightness_changed/brightness_changed.serializable.dart';
@@ -246,6 +248,20 @@ sealed class PlatformEvent with _$PlatformEvent implements PlatformInteraction {
     required String method,
     required BrightnessChangedMessage message,
   }) = BrightnessChangedEvent;
+
+  /// The compositor locked or unlocked the session; the shell draws the lock
+  /// screen while it is locked.
+  const factory PlatformEvent.lockStateChanged({
+    required String method,
+    required LockStateChangedMessage message,
+  }) = LockStateChangedEvent;
+
+  /// Progress of one of the lock screen's PAM stacks (a prompt, a message, a
+  /// failed attempt).
+  const factory PlatformEvent.lockAuthUpdate({
+    required String method,
+    required LockAuthUpdateMessage message,
+  }) = LockAuthUpdateEvent;
 
   /// Gesture Swipe Begin Event
   /// This event is sent when the user performs a swipe gesture.

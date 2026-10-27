@@ -153,7 +153,7 @@ impl SuperKeyForwarding {
         )
     }
 
-    fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.pending.clear();
         self.consumed.clear();
         self.forwarded.clear();
@@ -310,7 +310,7 @@ pub fn handle_keyboard_event<BackendData: Backend + 'static>(
         return;
     }
 
-    if data.meta_window_state.meta_window_in_gaming_mode.is_some() {
+    if data.gaming_input_active() {
         keyboard.input_forward(
             data,
             key_code,
@@ -396,7 +396,9 @@ pub(crate) fn repeat_interval(rate: u64) -> Option<Duration> {
 /// Flutter, so without this the client would keep the Ctrl of `Ctrl+Esc` — and
 /// any other held key — down. The seat state is updated first so the modifiers
 /// event that accompanies each release is correct.
-fn release_game_mode_forwarded_keys<BackendData: Backend + 'static>(data: &mut State<BackendData>) {
+pub(crate) fn release_game_mode_forwarded_keys<BackendData: Backend + 'static>(
+    data: &mut State<BackendData>,
+) {
     let keyboard = data.keyboard.clone();
     for key_code in std::mem::take(&mut data.game_mode_forwarded_keys) {
         let (_, mods_changed) =
@@ -457,6 +459,30 @@ fn handle_embedder_hotkeys<BackendData: Backend + 'static>(
             data.notify_brightness_changed();
             return true;
         }
+    }
+
+    // While locked, only the keys that cannot reveal or reach the session
+    // stay live: brightness (above), VT switching and the compositor exit.
+    // Capture and the gaming-mode toggle are swallowed; everything else goes
+    // to the lock screen in Flutter.
+    if data.is_locked() {
+        if (Keysym::XF86_Switch_VT_1.raw()..=Keysym::XF86_Switch_VT_12.raw())
+            .contains(&event.keysym.raw())
+        {
+            if let Err(_err) = data
+                .backend_data
+                .get_session()
+                .change_vt((event.keysym.raw() - Keysym::XF86_Switch_VT_1.raw() + 1) as i32)
+            {
+                error!("Failed switching virtual terminal.");
+            }
+            return true;
+        }
+        if event.keysym == Keysym::Delete && event.mods.alt && event.mods.logo {
+            data.running.store(false, Ordering::SeqCst);
+            return true;
+        }
+        return event.keysym == Keysym::Print;
     }
 
     // While a recording runs, the desktop stays live and input flows
@@ -550,6 +576,22 @@ pub fn post_flutter_handle_key_event<BackendData: Backend + 'static>(
     handled: bool,
     repeat: bool,
 ) {
+    // The lock screen is the only key consumer while locked: nothing is ever
+    // forwarded to a client, whatever Flutter did with the key.
+    if data.is_locked() {
+        data.super_key_forwarding.clear();
+        let text_input = &mut data.flutter_engine.as_mut().unwrap().text_input;
+        if text_input.is_active()
+            && !handled
+            && event.state == KeyState::Pressed
+            && !event.mods.ctrl
+            && !event.mods.alt
+        {
+            text_input.press_key(event.keysym);
+        }
+        return;
+    }
+
     let text_input = &mut data.flutter_engine.as_mut().unwrap().text_input;
     if text_input.is_active() {
         data.super_key_forwarding.clear();

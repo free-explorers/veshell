@@ -26,6 +26,7 @@
   pixman,
   udev,
   openssl,
+  pam,
   pipewire,
   gst_all_1,
   fontconfig,
@@ -105,6 +106,7 @@ rustPlatform.buildRustPackage {
     pixman
     udev
     openssl
+    pam
     pipewire
     gst_all_1.gstreamer
     gst_all_1.gst-plugins-base
@@ -139,7 +141,7 @@ rustPlatform.buildRustPackage {
     make install PREFIX="$out" PROFILE=release INSTALL_ENGINE=0 \
       BIN="target/${stdenv.hostPlatform.rust.rustcTarget}/release/veshell" \
       APP_LIB="${shellBundle}/lib/libapp.so" DATA_DIR="${shellBundle}/data" \
-      SYSTEMD_USER_DIR="$out/lib/systemd/user"
+      SYSTEMD_USER_DIR="$out/lib/systemd/user" PAMDIR="$out/etc/pam.d"
     chmod -R u+w "$out/lib/veshell"
     # Keep engine bytes in the independently published runtime closure.
     ln -s ${flutterEngine}/release/libflutter_engine.so "$out/lib/veshell/libflutter_engine.so"
