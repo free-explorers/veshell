@@ -163,7 +163,7 @@ impl<BackendData: Backend> State<BackendData> {
 
         // The game owns the pointer while it is active: derive the focus from
         // its own surface so a stray shell update cannot starve it of motion.
-        if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
+        if self.gaming_input_active() {
             self.pointer_focus = self.gaming_pointer_focus();
         }
 
@@ -180,7 +180,7 @@ impl<BackendData: Backend> State<BackendData> {
 
         pointer.relative_motion(
             self,
-            self.pointer_focus.clone(),
+            self.client_pointer_focus(),
             &RelativeMotionEvent {
                 delta: event.delta(),
                 delta_unaccel: event.delta_unaccel(),
@@ -195,7 +195,7 @@ impl<BackendData: Backend> State<BackendData> {
 
         pointer.motion(
             self,
-            self.pointer_focus.clone(),
+            self.client_pointer_focus(),
             &MotionEvent {
                 location: pointer_location,
                 serial: SERIAL_COUNTER.next_serial(),
@@ -209,7 +209,7 @@ impl<BackendData: Backend> State<BackendData> {
         crate::capture::on_pointer_motion_for_recording(self);
         crate::portal::service::on_pointer_motion(self);
 
-        if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
+        if self.gaming_input_active() {
             return;
         }
         let current_view_id = self.view_id_under_pointer();
@@ -265,7 +265,7 @@ impl<BackendData: Backend> State<BackendData> {
 
         // See `on_pointer_motion`: keep the active game's pointer focus derived
         // from its surface.
-        if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
+        if self.gaming_input_active() {
             self.pointer_focus = self.gaming_pointer_focus();
         }
 
@@ -278,7 +278,7 @@ impl<BackendData: Backend> State<BackendData> {
         let pointer = self.pointer.clone();
         pointer.motion(
             self,
-            self.pointer_focus.clone(),
+            self.client_pointer_focus(),
             &MotionEvent {
                 location: pointer_location,
                 serial,
@@ -290,7 +290,7 @@ impl<BackendData: Backend> State<BackendData> {
         // screen-cast pointer frames.
         crate::capture::on_pointer_motion_for_recording(self);
         crate::portal::service::on_pointer_motion(self);
-        if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
+        if self.gaming_input_active() {
             return;
         }
         let current_view_id = self.view_id_under_pointer();
@@ -336,7 +336,7 @@ impl<BackendData: Backend> State<BackendData> {
         // Gaming mode forwards the button straight to the client. It must not
         // touch the Flutter button tracker: those events never reach Flutter,
         // and a press tracked here would desync the next Flutter event.
-        if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
+        if self.gaming_input_active() {
             let state = wl_pointer::ButtonState::from(event.state());
 
             let pointer = self.pointer.clone();
@@ -513,12 +513,14 @@ impl<BackendData: Backend> State<BackendData> {
         // `scale_client_wheel_frame`). The unscaled `frame` is kept for Flutter
         // below.
         let client_frame = scale_client_wheel_frame(frame, self.wheel_scroll_factor);
-        pointer.axis(self, client_frame);
-        self.register_frame();
+        if !self.is_locked() {
+            pointer.axis(self, client_frame);
+            self.register_frame();
+        }
 
         // Gaming mode already delivered the axis to the focused client; keep it
         // out of Flutter, like motion and buttons.
-        if self.meta_window_state.meta_window_in_gaming_mode.is_some() {
+        if self.gaming_input_active() {
             return;
         }
 
@@ -755,7 +757,7 @@ impl<BackendData: Backend> State<BackendData> {
         BackendData: Backend + 'static,
     {
         let pointer = self.pointer.clone();
-        let focus = self.pointer_focus.clone();
+        let focus = self.client_pointer_focus();
         let event = MotionEvent {
             location: pointer.current_location(),
             serial: SERIAL_COUNTER.next_serial(),

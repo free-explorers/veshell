@@ -15,6 +15,9 @@ mod get_environment_variables;
 mod get_keyboard_layouts;
 mod get_monitor_layout;
 mod get_process_info;
+mod lock_auth_respond;
+mod lock_screen_shown;
+mod lock_session;
 mod meta_popup_patches;
 mod meta_window_patches;
 mod mouse_buttons_event;
@@ -76,6 +79,13 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             "meta_window_patches" => meta_window_patches(method_call, result, data),
             "meta_popup_patches" => meta_popup_patches(method_call, result, data),
             "shell_ready" => on_shell_ready(method_call, result, data),
+            "lock_session" => self::lock_session::lock_session(method_call, result, data),
+            "lock_auth_respond" => {
+                self::lock_auth_respond::lock_auth_respond(method_call, result, data)
+            }
+            "lock_screen_shown" => {
+                self::lock_screen_shown::lock_screen_shown(method_call, result, data)
+            }
             "screen_cast_consent_decision" => {
                 self::screen_cast_consent_decision::screen_cast_consent_decision(
                     method_call,

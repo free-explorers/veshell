@@ -28,6 +28,15 @@ in
       group = "root";
       setuid = true;
     };
+    # Lock screen PAM services (see docs/specifications/lock_screen.md). The
+    # password stack must not pull fprintd in: the fingerprint has its own
+    # stack running alongside, so a typed password is never stuck behind it.
+    security.pam.services.veshell.fprintAuth = false;
+    security.pam.services.veshell-fingerprint = lib.mkIf config.services.fprintd.enable {
+      text = ''
+        auth required ${config.services.fprintd.package}/lib/security/pam_fprintd.so
+      '';
+    };
     services.pipewire = {
       enable = lib.mkDefault true;
       pulse.enable = lib.mkDefault true;

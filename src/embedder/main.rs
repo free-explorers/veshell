@@ -34,6 +34,7 @@ mod gles_framebuffer_importer;
 mod idle;
 mod input_handling;
 mod keyboard;
+mod lock;
 mod meta_window_state;
 mod mouse_button_tracker;
 mod notification;

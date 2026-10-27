@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/lock_screen/provider/lock_screen.dart';
 import 'package:shell/notification/provider/system_notification_manager.dart';
 import 'package:shell/platform/model/request/adjust_brightness/adjust_brightness.serializable.dart';
 import 'package:shell/platform/model/request/switch_keyboard_layout/switch_keyboard_layout.serializable.dart';
@@ -132,6 +133,12 @@ class VeshellShortcutManager extends HookConsumerWidget {
               ref
                   .read(platformManagerProvider.notifier)
                   .request(const SwitchKeyboardLayoutRequest());
+              return null;
+            },
+          ),
+          LockSessionIntent: CallbackAction<LockSessionIntent>(
+            onInvoke: (_) {
+              ref.read(lockScreenProvider.notifier).lock();
               return null;
             },
           ),

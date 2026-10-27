@@ -1,0 +1,4 @@
+#%PAM-1.0
+# Veshell lock screen: fingerprint stack. It runs next to the password stack
+# and only when fprintd reports an enrolled finger for the user.
+auth required pam_fprintd.so

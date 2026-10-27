@@ -1,0 +1,4 @@
+#%PAM-1.0
+# Veshell lock screen: password stack. Unlocking checks the same
+# credentials as a console login.
+auth include login

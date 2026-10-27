@@ -30,6 +30,11 @@ pub fn mouse_buttons_event<BackendData: Backend + 'static>(
     mut result: Box<dyn MethodResult<serde_json::Value>>,
     data: &mut State<BackendData>,
 ) {
+    // A locked session forwards no button to a client.
+    if data.is_locked() {
+        result.success(None);
+        return;
+    }
     let now = Duration::from(data.clock.now()).as_millis() as u32;
     let pointer = data.pointer.clone();
 

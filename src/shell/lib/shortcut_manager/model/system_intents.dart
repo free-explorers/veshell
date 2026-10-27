@@ -35,3 +35,9 @@ class ToggleKeyboardLayout extends Intent {
   ///
   const ToggleKeyboardLayout();
 }
+
+/// An intent to lock the session
+class LockSessionIntent extends Intent {
+  ///
+  const LockSessionIntent();
+}

@@ -76,7 +76,7 @@
                 cargo rustc rustfmt clippy
                 pkg-config cmake ninja clang git unzip xz zstd
                 wayland libinput libdisplay-info seatd libgbm libxkbcommon pixman
-                udev openssl pipewire gst_all_1.gstreamer gst_all_1.gst-plugins-base
+                udev openssl pam pipewire gst_all_1.gstreamer gst_all_1.gst-plugins-base
                 gtk3 libpulseaudio libGL libepoxy vulkan-loader fontconfig
               ];
               env = {

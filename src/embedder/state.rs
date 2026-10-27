@@ -205,6 +205,8 @@ pub struct State<BackendData: Backend + 'static> {
     pub output_layout_revision: u64,
     /// Screensaver: idle stage machine driving the dim overlay and blanking.
     pub idle: crate::idle::IdleState<BackendData>,
+    /// Session lock: while set, no input reaches a client. See `crate::lock`.
+    pub lock: crate::lock::LockState,
     /// ext-idle-notify-v1: lets clients learn when the user became active.
     pub idle_notifier_state: IdleNotifierState<State<BackendData>>,
     /// idle-inhibit-unstable-v1: clients can suppress idleness from here.
@@ -564,6 +566,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             &settings.idle,
             brightness.is_available(),
         );
+        let lock = crate::lock::LockState::new::<BackendData>(&loop_handle);
 
         let mut state = Self {
             running: Arc::new(AtomicBool::new(true)),
@@ -638,6 +641,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             pointer_gesture_view_id: None,
             mirror_of: HashMap::new(),
             idle,
+            lock,
             idle_notifier_state,
             idle_inhibit_manager_state,
             brightness,

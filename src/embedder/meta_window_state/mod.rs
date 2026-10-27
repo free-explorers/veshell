@@ -373,6 +373,11 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         &self,
         output_name: &str,
     ) -> Vec<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface> {
+        // The lock screen must cover the game: it is drawn by Flutter, below
+        // these surfaces.
+        if self.is_locked() {
+            return Vec::new();
+        }
         self.meta_window_state
             .game_mode_window_ids_for_output(output_name)
             .into_iter()

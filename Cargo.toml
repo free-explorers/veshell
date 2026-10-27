@@ -113,6 +113,7 @@ assets = [
     { source = "build/package-root/usr/share/veshell/**/*", dest = "/usr/share/veshell/", mode = "644" },
     { source = "build/package-root/usr/share/wayland-sessions/*", dest = "/usr/share/wayland-sessions/", mode = "644" },
     { source = "build/package-root/usr/share/xdg-desktop-portal/**/*", dest = "/usr/share/xdg-desktop-portal/", mode = "644" },
+    { source = "build/package-root/etc/pam.d/*", dest = "/etc/pam.d/", mode = "644", config = true },
 ]
 
 [package.metadata.deb]
@@ -125,4 +126,5 @@ assets = [
     ["build/package-root/usr/share/veshell/**/*", "usr/share/veshell/", "644"],
     ["build/package-root/usr/share/wayland-sessions/*", "usr/share/wayland-sessions/", "644"],
     ["build/package-root/usr/share/xdg-desktop-portal/**/*", "usr/share/xdg-desktop-portal/", "644"],
+    ["build/package-root/etc/pam.d/*", "etc/pam.d/", "644"],
 ]

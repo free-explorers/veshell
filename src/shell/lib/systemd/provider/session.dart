@@ -1,5 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/lock_screen/provider/lock_screen.dart';
 import 'package:shell/shared/provider/dbus_client.dart';
 import 'package:shell/systemd/provider/session_guard.dart';
 import 'package:ubuntu_session/ubuntu_session.dart';
@@ -77,7 +78,8 @@ class Session extends _$Session {
       _isActionAvailable(state.canReboot),
       _isActionAvailable(state.canPowerOff),
     ]);
-    final actions = <SessionControlAction>{};
+    // The compositor owns the lock screen: locking never depends on logind.
+    final actions = <SessionControlAction>{SessionControlAction.lock};
     if (capabilities[0]) actions.add(SessionControlAction.sleep);
     if (capabilities[1]) actions.add(SessionControlAction.hibernate);
     if (capabilities[2]) actions.add(SessionControlAction.reboot);
@@ -85,10 +87,7 @@ class Session extends _$Session {
 
     try {
       if (await getActiveUserSession() != null) {
-        actions.addAll([
-          SessionControlAction.lock,
-          SessionControlAction.logout,
-        ]);
+        actions.add(SessionControlAction.logout);
       }
     } catch (_) {
       // Hide session-specific actions if the active session cannot be queried.
@@ -134,10 +133,7 @@ class Session extends _$Session {
     }
   }
 
-  Future<void> lock() async {
-    final session = await getActiveUserSession();
-    if (session != null) {
-      await session.lock(interactive: true);
-    }
-  }
+  /// Locks the session through the compositor, which owns the lock screen
+  /// and publishes logind's `LockedHint`.
+  Future<void> lock() => ref.read(lockScreenProvider.notifier).lock();
 }

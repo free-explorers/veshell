@@ -52,6 +52,9 @@ for prefix in /usr '/opt/veshell prefix&pipe|' '/opt/percent%quote"back\ dollar$
     test -f "$root/share/xdg-desktop-portal/portals/veshell.portal"
     grep -Fx 'UseIn=veshell' "$root/share/xdg-desktop-portal/portals/veshell.portal"
     test -f "$root/lib/systemd/user/veshell-shutdown.target"
+    # PAM reads services from /etc/pam.d only, whatever the prefix.
+    cmp "$repo/extra/assets/pam.d/veshell" "$tmp/root/etc/pam.d/veshell"
+    cmp "$repo/extra/assets/pam.d/veshell-fingerprint" "$tmp/root/etc/pam.d/veshell-fingerprint"
     service_prefix="$prefix"
     desktop_prefix="$prefix"
     if [[ "$prefix" == '/opt/percent%quote"back\ dollar$`tick' ]]; then
@@ -70,8 +73,9 @@ done
 
 # The Nix alias and every final path override use the same installer.
 run package "DESTDIR=$tmp/custom" BINDIR=/custom/bin LIBDIR=/custom/lib SHAREDIR=/custom/share \
-    SESSIONDIR=/custom/sessions PORTALDIR=/custom/portals SYSTEMD_USER_DIR=/custom/units
+    SESSIONDIR=/custom/sessions PORTALDIR=/custom/portals SYSTEMD_USER_DIR=/custom/units PAMDIR=/custom/pam.d
 test -f "$tmp/custom/custom/units/veshell.service"
+test -f "$tmp/custom/custom/pam.d/veshell"
 test -f "$tmp/custom/custom/portals/portals/veshell.portal"
 test -f "$tmp/custom/custom/lib/libplugin.so.1"
 grep -Fx 'Exec=/custom/bin/veshell-session' "$tmp/custom/custom/sessions/veshell.desktop"
@@ -105,6 +109,7 @@ reject check-config INSTALL_ENGINE=invalid
 run stage "STAGING_DIR=$tmp/stage" PREFIX=/opt/ignored
 test -f "$tmp/stage/usr/bin/veshell"
 test -f "$tmp/stage/usr/lib/systemd/user/veshell.service"
+test -f "$tmp/stage/etc/pam.d/veshell"
 test ! -e "$tmp/stage/opt"
 reject stage "STAGING_DIR=$tmp/stage"
 test -f "$tmp/stage/usr/bin/veshell"
@@ -159,6 +164,7 @@ if [[ "${TEST_ARCHIVES:-0}" == 1 ]]; then
     for subtree in bin lib/veshell lib/systemd/user share/veshell share/wayland-sessions share/xdg-desktop-portal; do
         diff -r "$archive/build/package-root/usr/$subtree" "$tmp/deb-extracted/usr/$subtree"
     done
+    diff -r "$archive/build/package-root/etc/pam.d" "$tmp/deb-extracted/etc/pam.d"
     # DesktopNames is a session-manager extension, not an application desktop key.
     sed '/^DesktopNames=/d' "$tmp/deb-extracted/usr/share/wayland-sessions/veshell.desktop" > "$tmp/session.desktop"
     desktop-file-validate "$tmp/session.desktop"
