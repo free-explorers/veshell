@@ -49,12 +49,12 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('keeps a fixed window before the buffer is full', (tester) async {
+  testWidgets('anchors the growing chart to the right', (tester) async {
     final spots = [for (var i = 0; i < 10; i++) FlSpot(i.toDouble(), 50)];
     await tester.pumpWidget(_chart(spots));
 
     final chart = tester.widget<LineChart>(find.byType(LineChart));
-    expect(chart.data.minX, 0);
-    expect(chart.data.maxX, monitoringWindowSamples - 1);
+    expect(chart.data.maxX, spots.last.x);
+    expect(chart.data.minX, spots.last.x - (monitoringWindowSamples - 1));
   });
 }

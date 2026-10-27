@@ -184,13 +184,17 @@ class _MonitoringChartState extends State<MonitoringChart>
   @override
   Widget build(BuildContext context) {
     final firstX = _firstX(widget.series);
+    final lastX = _lastX(widget.series) ?? 0;
     final hasOverflow = _hasOverflow(widget.series);
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
+        // While the buffer fills, anchor the newest sample at the right edge so
+        // the chart grows in from the right. Once there is overflow data, the
+        // sliding window takes over.
         final windowStart = hasOverflow
             ? firstX + monitoringChartOverflowSamples - 1 + _controller.value
-            : 0.0;
+            : lastX - (monitoringWindowSamples - 1);
         return LineChart(
           LineChartData(
             minX: windowStart,
