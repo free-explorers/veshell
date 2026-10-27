@@ -157,6 +157,9 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
     let mut display_handle = display.handle();
 
     let (mut backend, winit) = winit::init::<GlesRenderer>()?;
+    // Smithay's winit backend names the host window after the library; show
+    // the compositor's own name instead.
+    backend.window().set_title("Veshell");
 
     // The Flutter engine prefers rendering into dmabufs, so we need a GBM
     // allocator on the same GPU that backs the winit EGL context. Derive that
