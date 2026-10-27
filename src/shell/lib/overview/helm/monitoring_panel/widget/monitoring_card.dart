@@ -165,19 +165,47 @@ class _MonitoringChartState extends State<MonitoringChart>
     value: 1,
   );
 
+  bool _fillingIntoOverflow = false;
+  double _fillingFrom = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addStatusListener(_handleAnimationStatus);
+  }
+
+  void _handleAnimationStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed && _fillingIntoOverflow) {
+      setState(() {
+        _fillingIntoOverflow = false;
+      });
+    }
+  }
+
   @override
   void didUpdateWidget(covariant MonitoringChart oldWidget) {
     super.didUpdateWidget(oldWidget);
     final oldLastX = _lastX(oldWidget.series);
     final newLastX = _lastX(widget.series);
-    if (oldLastX != null && newLastX != null && newLastX != oldLastX) {
+    final oldFull = _hasOverflow(oldWidget.series);
+    final newFull = _hasOverflow(widget.series);
+    if (!oldFull && newFull) {
+      // The right-aligned filling chart has to make room for the right-side
+      // overflow. Move it there over one sample instead of jumping.
+      _fillingFrom = (oldLastX ?? 0) - (monitoringWindowSamples - 1);
+      _fillingIntoOverflow = true;
+      _controller.forward(from: 0);
+    } else if (oldLastX != null && newLastX != null && newLastX != oldLastX) {
+      _fillingIntoOverflow = false;
       _controller.forward(from: 0);
     }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller
+      ..removeStatusListener(_handleAnimationStatus)
+      ..dispose();
     super.dispose();
   }
 
@@ -191,8 +219,13 @@ class _MonitoringChartState extends State<MonitoringChart>
       builder: (context, child) {
         // While the buffer fills, anchor the newest sample at the right edge so
         // the chart grows in from the right. Once there is overflow data, the
-        // sliding window takes over.
-        final windowStart = hasOverflow
+        // sliding window takes over; the first transition is animated from the
+        // filling window to the overflow window.
+        final windowStart = _fillingIntoOverflow
+            ? _fillingFrom +
+                  (firstX + monitoringChartOverflowSamples - _fillingFrom) *
+                      _controller.value
+            : hasOverflow
             ? firstX + monitoringChartOverflowSamples - 1 + _controller.value
             : lastX - (monitoringWindowSamples - 1);
         return LineChart(

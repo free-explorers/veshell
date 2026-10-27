@@ -22,8 +22,8 @@ Widget _chart(List<FlSpot> spots) {
   );
 }
 
-List<FlSpot> _window(int first) => [
-  for (var i = first; i < first + monitoringChartBufferSamples; i++)
+List<FlSpot> _window(int first, {int? count}) => [
+  for (var i = first; i < first + (count ?? monitoringChartBufferSamples); i++)
     FlSpot(i.toDouble(), 50),
 ];
 
@@ -47,6 +47,27 @@ void main() {
     chart = tester.widget<LineChart>(find.byType(LineChart));
     expect(chart.data.minX, closeTo(monitoringChartOverflowSamples + 1, 0.01));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('slides into the overflow window when the buffer fills', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_chart(_window(0, count: 123)));
+    await tester.pump();
+
+    var chart = tester.widget<LineChart>(find.byType(LineChart));
+    expect(chart.data.minX, 3);
+
+    await tester.pumpWidget(_chart(_window(0)));
+    await tester.pump(const Duration(milliseconds: 250));
+
+    chart = tester.widget<LineChart>(find.byType(LineChart));
+    expect(chart.data.minX, closeTo(2.5, 0.1));
+
+    await tester.pump(const Duration(milliseconds: 300));
+
+    chart = tester.widget<LineChart>(find.byType(LineChart));
+    expect(chart.data.minX, closeTo(2, 0.01));
   });
 
   testWidgets('anchors the growing chart to the right', (tester) async {
