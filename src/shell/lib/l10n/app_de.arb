@@ -344,5 +344,10 @@
   "weeksAgo": "{count, plural, one{Vor 1 Woche} other{Vor {count} Wochen}}",
   "monthsAgo": "{count, plural, one{Vor 1 Monat} other{Vor {count} Monaten}}",
   "yearsAgo": "{count, plural, one{Vor 1 Jahr} other{Vor {count} Jahren}}",
-  "invalidValue": "Einen gültigen Wert eingeben"
+  "invalidValue": "Einen gültigen Wert eingeben",
+  "focusIndicator": "Fokusanzeige",
+  "focusIndicatorDescription": "Wie sich das aktive Fenster abhebt, wenn mehrere Fenster angezeigt werden",
+  "focusIndicatorBorder": "Gleitender Rahmen",
+  "focusIndicatorGrayscale": "Andere Fenster in Graustufen",
+  "focusIndicatorNone": "Keine"
 }

@@ -3,7 +3,9 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
+import 'package:shell/settings/provider/state/focus_indicator_setting.dart';
 import 'package:shell/shared/util/logger.dart';
+import 'package:shell/shared/widget/saturation_filter.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
 import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
@@ -88,6 +90,18 @@ class WorkspaceWidget extends HookConsumerWidget {
       );
     }
     tileableList.add(appLauncher);
+
+    // Emphasize the focused tile only when it shares the screen with others.
+    final focusIndicator = ref.watch(focusIndicatorSettingProvider);
+    final showsFocusIndicator = workspaceState.visibleLength > 1;
+    final grayscaleUnfocused =
+        showsFocusIndicator && focusIndicator == FocusIndicator.grayscale;
+    final selectionIndicator =
+        showsFocusIndicator && focusIndicator == FocusIndicator.border
+        ? SlidingSelectionIndicator(
+            color: Theme.of(context).colorScheme.primary,
+          )
+        : null;
     return CurrentWorkspaceId(
       workspaceId: workspaceId,
       child: Actions(
@@ -211,7 +225,18 @@ class WorkspaceWidget extends HookConsumerWidget {
                         CurrentScreenId.of(context) ==
                             ref.watch(focusedScreenProvider) &&
                         isSelected,
-                    children: tileableList,
+                    selectionIndicator: selectionIndicator,
+                    children: [
+                      // Always wrapped, even when not filtering, so changing
+                      // the setting or the selection never remounts a tile.
+                      for (final (index, tileable) in tileableList.indexed)
+                        _FocusSaturation(
+                          desaturated:
+                              grayscaleUnfocused &&
+                              index != workspaceState.selectedIndex,
+                          child: tileable,
+                        ),
+                    ],
                   ),
                 ),
               ],
@@ -221,4 +246,30 @@ class WorkspaceWidget extends HookConsumerWidget {
       ),
     );
   }
+}
+
+/// How much an unfocused tile is darkened on top of the grayscale, so the
+/// effect still reads on apps that are already gray.
+const _unfocusedDim = 0.20;
+
+/// Fades [child] to a dimmed grayscale while [desaturated].
+class _FocusSaturation extends StatelessWidget {
+  const _FocusSaturation({required this.desaturated, required this.child});
+
+  final bool desaturated;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+    // 0 is untouched, 1 is fully desaturated and dimmed.
+    tween: Tween(end: desaturated ? 1 : 0),
+    duration: const Duration(milliseconds: 200),
+    curve: Curves.easeInOut,
+    builder: (context, amount, child) => SaturationFilter(
+      saturation: 1 - amount,
+      brightness: 1 - _unfocusedDim * amount,
+      child: child,
+    ),
+    child: child,
+  );
 }

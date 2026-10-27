@@ -344,5 +344,10 @@
   "weeksAgo": "{count, plural, zero{قبل {count} أسبوع} one{قبل أسبوع واحد} two{قبل أسبوعين} few{قبل {count} أسابيع} many{قبل {count} أسبوعًا} other{قبل {count} أسبوع}}",
   "monthsAgo": "{count, plural, zero{قبل {count} شهر} one{قبل شهر واحد} two{قبل شهرين} few{قبل {count} أشهر} many{قبل {count} شهرًا} other{قبل {count} شهر}}",
   "yearsAgo": "{count, plural, zero{قبل {count} سنة} one{قبل سنة واحدة} two{قبل سنتين} few{قبل {count} سنوات} many{قبل {count} سنة} other{قبل {count} سنة}}",
-  "invalidValue": "أدخل قيمة صالحة"
+  "invalidValue": "أدخل قيمة صالحة",
+  "focusIndicator": "مؤشر التركيز",
+  "focusIndicatorDescription": "كيفية تمييز النافذة النشطة عند عرض عدة نوافذ",
+  "focusIndicatorBorder": "حد منزلق",
+  "focusIndicatorGrayscale": "النوافذ الأخرى بتدرج الرمادي",
+  "focusIndicatorNone": "لا شيء"
 }

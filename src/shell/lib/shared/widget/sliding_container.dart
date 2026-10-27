@@ -17,6 +17,7 @@ class SlidingContainer extends HookConsumerWidget {
     this.onIndexChanged,
     this.onFirstVisibleIndexChanged,
     this.isSwipeEnabled = true,
+    this.selectionIndicator,
     super.key,
   });
   final Axis direction;
@@ -35,6 +36,11 @@ class SlidingContainer extends HookConsumerWidget {
   /// settles on a new index, so callers can persist it and restore the exact
   /// same view when the container is rebuilt.
   final void Function(int newFirstVisibleIndex)? onFirstVisibleIndexChanged;
+
+  /// Bars drawn on both sides of the selected page, across [direction], that
+  /// slide to the newly selected page instead of jumping. `null` hides them
+  /// and removes the gap they live in.
+  final SlidingSelectionIndicator? selectionIndicator;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Resolve the leading tile up front: the effect below runs during the build
@@ -52,6 +58,19 @@ class SlidingContainer extends HookConsumerWidget {
     final cumulatedSwipeDelta = useState<double>(0);
     final swipeVelocityTracker = useState<VelocityTracker?>(null);
     final reportedFirstVisibleIndex = useRef<int?>(null);
+
+    // The selected position as a fractional page index, eased between pages
+    // with the same timing as the scroll so the indicator glides along.
+    final selectionPosition = useAnimationController(
+      duration: const Duration(milliseconds: 200),
+      lowerBound: double.negativeInfinity,
+      upperBound: double.infinity,
+      initialValue: index.toDouble(),
+    );
+    useEffect(() {
+      selectionPosition.animateTo(index.toDouble(), curve: Curves.easeInOut);
+      return null;
+    }, [index]);
 
     void reportFirstVisibleIndex(int newFirstVisibleIndex) {
       final clamped = newFirstVisibleIndex.clamp(0, children.length - 1);
@@ -196,23 +215,48 @@ class SlidingContainer extends HookConsumerWidget {
                   ? constraints.maxWidth
                   : constraints.maxHeight;
               final pageViewport = snapPageViewport(mainAxisExtent, visible);
+              // The indicator fills a gap of its own thickness on both
+              // cross-axis sides. The
+              // widget structure stays the same with or without it (only the
+              // gap and the painting change) so toggling it never remounts
+              // the pages.
+              final gap = selectionIndicator?.thickness ?? 0;
+              final crossAxisExtent =
+                  (isHorizontal
+                      ? constraints.maxHeight
+                      : constraints.maxWidth) -
+                  2 * gap;
               return Align(
                 alignment: isHorizontal
                     ? Alignment.centerLeft
                     : Alignment.topCenter,
-                child: SizedBox(
-                  width: isHorizontal ? pageViewport : constraints.maxWidth,
-                  height: isHorizontal ? constraints.maxHeight : pageViewport,
-                  child: PageView.builder(
-                    controller: pageController,
-                    scrollDirection: direction,
-                    itemCount: children.length,
-                    itemBuilder: (context, index) {
-                      return children[index];
-                    },
-                    physics: const NeverScrollableScrollPhysics(),
-                    pageSnapping: false,
-                    padEnds: false,
+                child: CustomPaint(
+                  foregroundPainter: _SelectionIndicatorPainter(
+                    indicator: selectionIndicator,
+                    position: selectionPosition,
+                    pageController: pageController,
+                    pageExtent: pageViewport / visible,
+                    direction: direction,
+                  ),
+                  child: Padding(
+                    padding: isHorizontal
+                        ? EdgeInsets.symmetric(vertical: gap)
+                        : EdgeInsets.symmetric(horizontal: gap),
+                    child: SizedBox(
+                      width: isHorizontal ? pageViewport : crossAxisExtent,
+                      height: isHorizontal ? crossAxisExtent : pageViewport,
+                      child: PageView.builder(
+                        controller: pageController,
+                        scrollDirection: direction,
+                        itemCount: children.length,
+                        itemBuilder: (context, index) {
+                          return children[index];
+                        },
+                        physics: const NeverScrollableScrollPhysics(),
+                        pageSnapping: false,
+                        padEnds: false,
+                      ),
+                    ),
                   ),
                 ),
               );
@@ -245,4 +289,79 @@ class SlidingContainer extends HookConsumerWidget {
     }
     return leading.clamp(0, maxLeading);
   }
+}
+
+/// Appearance of the [SlidingContainer] selection indicator.
+@immutable
+class SlidingSelectionIndicator {
+  const SlidingSelectionIndicator({required this.color, this.thickness = 3});
+
+  final Color color;
+
+  /// Width of each bar across the sliding axis, which is also the gap kept
+  /// free for it on each cross-axis side of the pages. Along the sliding axis
+  /// a bar spans its whole page.
+  final double thickness;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SlidingSelectionIndicator &&
+      other.color == color &&
+      other.thickness == thickness;
+
+  @override
+  int get hashCode => Object.hash(color, thickness);
+}
+
+class _SelectionIndicatorPainter extends CustomPainter {
+  _SelectionIndicatorPainter({
+    required this.indicator,
+    required this.position,
+    required this.pageController,
+    required this.pageExtent,
+    required this.direction,
+  }) : super(repaint: Listenable.merge([position, pageController]));
+
+  final SlidingSelectionIndicator? indicator;
+  final Animation<double> position;
+  final PageController pageController;
+  final double pageExtent;
+  final Axis direction;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final indicator = this.indicator;
+    if (indicator == null || pageExtent <= 0) {
+      return;
+    }
+    final scrollOffset =
+        pageController.hasClients && pageController.position.hasPixels
+        ? pageController.offset
+        : 0.0;
+    final start = position.value * pageExtent - scrollOffset;
+    final end = start + pageExtent;
+    final isHorizontal = direction == Axis.horizontal;
+    final crossExtent = isHorizontal ? size.height : size.width;
+    final thickness = indicator.thickness;
+    final paint = Paint()..color = indicator.color;
+
+    canvas
+      ..save()
+      ..clipRect(Offset.zero & size);
+    for (final cross in [0.0, crossExtent - thickness]) {
+      final rect = isHorizontal
+          ? Rect.fromLTRB(start, cross, end, cross + thickness)
+          : Rect.fromLTRB(cross, start, cross + thickness, end);
+      canvas.drawRect(rect, paint);
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_SelectionIndicatorPainter oldDelegate) =>
+      indicator != oldDelegate.indicator ||
+      position != oldDelegate.position ||
+      pageController != oldDelegate.pageController ||
+      pageExtent != oldDelegate.pageExtent ||
+      direction != oldDelegate.direction;
 }

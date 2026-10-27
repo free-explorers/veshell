@@ -344,5 +344,10 @@
   "weeksAgo": "{count, plural, other{{count} 週間前}}",
   "monthsAgo": "{count, plural, other{{count} か月前}}",
   "yearsAgo": "{count, plural, other{{count} 年前}}",
-  "invalidValue": "有効な値を入力してください"
+  "invalidValue": "有効な値を入力してください",
+  "focusIndicator": "フォーカス表示",
+  "focusIndicatorDescription": "複数のウィンドウを表示しているときにアクティブなウィンドウを目立たせる方法",
+  "focusIndicatorBorder": "スライドする枠線",
+  "focusIndicatorGrayscale": "他のウィンドウをグレースケール表示",
+  "focusIndicatorNone": "なし"
 }

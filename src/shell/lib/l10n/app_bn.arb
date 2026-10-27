@@ -344,5 +344,10 @@
   "weeksAgo": "{count, plural, one{{count} সপ্তাহ আগে} other{{count} সপ্তাহ আগে}}",
   "monthsAgo": "{count, plural, one{{count} মাস আগে} other{{count} মাস আগে}}",
   "yearsAgo": "{count, plural, one{{count} বছর আগে} other{{count} বছর আগে}}",
-  "invalidValue": "একটি বৈধ মান লিখুন"
+  "invalidValue": "একটি বৈধ মান লিখুন",
+  "focusIndicator": "ফোকাস নির্দেশক",
+  "focusIndicatorDescription": "একাধিক উইন্ডো দেখানো হলে সক্রিয় উইন্ডো কীভাবে আলাদা দেখাবে",
+  "focusIndicatorBorder": "সরে যাওয়া সীমানা",
+  "focusIndicatorGrayscale": "অন্যান্য উইন্ডো গ্রেস্কেলে",
+  "focusIndicatorNone": "কোনোটিই নয়"
 }

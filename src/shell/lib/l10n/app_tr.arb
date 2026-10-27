@@ -344,5 +344,10 @@
   "weeksAgo": "{count, plural, other{{count} hafta önce}}",
   "monthsAgo": "{count, plural, other{{count} ay önce}}",
   "yearsAgo": "{count, plural, other{{count} yıl önce}}",
-  "invalidValue": "Geçerli bir değer girin"
+  "invalidValue": "Geçerli bir değer girin",
+  "focusIndicator": "Odak göstergesi",
+  "focusIndicatorDescription": "Birden fazla pencere gösterildiğinde etkin pencerenin nasıl öne çıkacağı",
+  "focusIndicatorBorder": "Kayan kenarlık",
+  "focusIndicatorGrayscale": "Diğer pencereler gri tonlamalı",
+  "focusIndicatorNone": "Yok"
 }

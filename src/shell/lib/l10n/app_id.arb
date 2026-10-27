@@ -344,5 +344,10 @@
   "weeksAgo": "{count, plural, other{{count} minggu lalu}}",
   "monthsAgo": "{count, plural, other{{count} bulan lalu}}",
   "yearsAgo": "{count, plural, other{{count} tahun lalu}}",
-  "invalidValue": "Masukkan nilai yang valid"
+  "invalidValue": "Masukkan nilai yang valid",
+  "focusIndicator": "Indikator fokus",
+  "focusIndicatorDescription": "Cara jendela aktif menonjol saat beberapa jendela ditampilkan",
+  "focusIndicatorBorder": "Batas bergeser",
+  "focusIndicatorGrayscale": "Jendela lain dalam skala abu-abu",
+  "focusIndicatorNone": "Tidak ada"
 }

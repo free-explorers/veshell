@@ -344,5 +344,10 @@
   "weeksAgo": "{count, plural, other{{count} 週前}}",
   "monthsAgo": "{count, plural, other{{count} 個月前}}",
   "yearsAgo": "{count, plural, other{{count} 年前}}",
-  "invalidValue": "請輸入有效的值"
+  "invalidValue": "請輸入有效的值",
+  "focusIndicator": "焦點指示",
+  "focusIndicatorDescription": "顯示多個視窗時突顯目前視窗的方式",
+  "focusIndicatorBorder": "滑動邊框",
+  "focusIndicatorGrayscale": "其他視窗顯示為灰階",
+  "focusIndicatorNone": "無"
 }

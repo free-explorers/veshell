@@ -344,5 +344,10 @@
   "weeksAgo": "{count, plural, one{{count} tydzień temu} few{{count} tygodnie temu} many{{count} tygodni temu} other{{count} tygodnia temu}}",
   "monthsAgo": "{count, plural, one{{count} miesiąc temu} few{{count} miesiące temu} many{{count} miesięcy temu} other{{count} miesiąca temu}}",
   "yearsAgo": "{count, plural, one{{count} rok temu} few{{count} lata temu} many{{count} lat temu} other{{count} roku temu}}",
-  "invalidValue": "Wprowadź prawidłową wartość"
+  "invalidValue": "Wprowadź prawidłową wartość",
+  "focusIndicator": "Wskaźnik fokusu",
+  "focusIndicatorDescription": "Jak wyróżnia się aktywne okno, gdy wyświetlanych jest kilka okien",
+  "focusIndicatorBorder": "Przesuwana ramka",
+  "focusIndicatorGrayscale": "Pozostałe okna w skali szarości",
+  "focusIndicatorNone": "Brak"
 }

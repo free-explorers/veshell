@@ -344,5 +344,10 @@
   "weeksAgo": "{count, plural, one{{count} सप्ताह पहले} other{{count} सप्ताह पहले}}",
   "monthsAgo": "{count, plural, one{{count} महीने पहले} other{{count} महीने पहले}}",
   "yearsAgo": "{count, plural, one{{count} वर्ष पहले} other{{count} वर्ष पहले}}",
-  "invalidValue": "एक मान्य मान दर्ज करें"
+  "invalidValue": "एक मान्य मान दर्ज करें",
+  "focusIndicator": "फ़ोकस संकेतक",
+  "focusIndicatorDescription": "कई विंडो दिखने पर सक्रिय विंडो कैसे अलग दिखे",
+  "focusIndicatorBorder": "खिसकने वाली सीमा",
+  "focusIndicatorGrayscale": "अन्य विंडो ग्रेस्केल में",
+  "focusIndicatorNone": "कोई नहीं"
 }
