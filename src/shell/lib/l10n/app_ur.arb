@@ -84,6 +84,8 @@
   "lockScreenWrongPassword": "غلط پاس ورڈ، دوبارہ کوشش کریں",
   "lockScreenChecking": "جانچ ہو رہی ہے…",
   "lockScreenUnlock": "کھولیں",
+  "lockScreenShowPassword": "پاس ورڈ دکھائیں",
+  "lockScreenHidePassword": "پاس ورڈ چھپائیں",
   "swapAltAndWin": "Alt اور Win کو تبدیل کریں",
   "swapAltAndWinDescription": "Alt اور Win کلیدوں کو بدل کر انگوٹھوں کے استعمال کو آرام دہ بنائیں",
   "capsLock": "Caps Lock",

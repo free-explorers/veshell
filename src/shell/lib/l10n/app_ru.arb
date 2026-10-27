@@ -84,6 +84,8 @@
   "lockScreenWrongPassword": "Неверный пароль, попробуйте ещё раз",
   "lockScreenChecking": "Проверка…",
   "lockScreenUnlock": "Разблокировать",
+  "lockScreenShowPassword": "Показать пароль",
+  "lockScreenHidePassword": "Скрыть пароль",
   "swapAltAndWin": "Поменять Alt и Win местами",
   "swapAltAndWinDescription": "Улучшить удобство работы большими пальцами, поменяв клавиши Alt и Win местами",
   "capsLock": "Caps Lock",

@@ -84,6 +84,8 @@
   "lockScreenWrongPassword": "Nieprawidłowe hasło, spróbuj ponownie",
   "lockScreenChecking": "Sprawdzanie…",
   "lockScreenUnlock": "Odblokuj",
+  "lockScreenShowPassword": "Pokaż hasło",
+  "lockScreenHidePassword": "Ukryj hasło",
   "swapAltAndWin": "Zamień Alt i Win",
   "swapAltAndWinDescription": "Popraw ergonomię kciuków, zamieniając klawisze Alt i Win",
   "capsLock": "Caps Lock",

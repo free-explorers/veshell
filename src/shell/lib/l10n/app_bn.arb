@@ -84,6 +84,8 @@
   "lockScreenWrongPassword": "ভুল পাসওয়ার্ড, আবার চেষ্টা করুন",
   "lockScreenChecking": "যাচাই করা হচ্ছে…",
   "lockScreenUnlock": "আনলক করুন",
+  "lockScreenShowPassword": "পাসওয়ার্ড দেখান",
+  "lockScreenHidePassword": "পাসওয়ার্ড লুকান",
   "swapAltAndWin": "Alt ও Win অদলবদল করুন",
   "swapAltAndWinDescription": "Alt ও Win কী অদলবদল করে বুড়ো আঙুলের ব্যবহার আরামদায়ক করুন",
   "capsLock": "Caps Lock",

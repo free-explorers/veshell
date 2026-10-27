@@ -46,6 +46,11 @@ compositor publishes `LockedHint` on it.
   over the Flutter frame. The game resumes after unlock.
 - The shell blurs each monitor's content, excludes it from focus, and draws the
   lock screen outside the shortcut manager, so no shell hotkey fires.
+- The lock screen is mounted beside the Navigator, so it brings its own
+  `Material` and `Overlay`. Without them its text field cannot build properly,
+  never takes the keyboard, and editing keys such as Backspace go unhandled.
+- An eye button shows the password in clear. The password is hidden again on
+  every lock.
 
 ## Authentication
 

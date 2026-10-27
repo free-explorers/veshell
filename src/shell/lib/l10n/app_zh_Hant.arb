@@ -84,6 +84,8 @@
   "lockScreenWrongPassword": "密碼錯誤，請再試一次",
   "lockScreenChecking": "正在驗證…",
   "lockScreenUnlock": "解鎖",
+  "lockScreenShowPassword": "顯示密碼",
+  "lockScreenHidePassword": "隱藏密碼",
   "swapAltAndWin": "交換 Alt 與 Win",
   "swapAltAndWinDescription": "交換 Alt 與 Win 鍵，改善拇指操作體驗",
   "capsLock": "大寫鎖定",
