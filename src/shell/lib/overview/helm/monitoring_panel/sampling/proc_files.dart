@@ -8,6 +8,12 @@ import 'package:shell/shared/util/logger.dart';
 /// the same cadence.
 const monitoringSampleInterval = Duration(milliseconds: 500);
 
+/// Number of samples kept by the scrolling monitoring charts.
+///
+/// At [monitoringSampleInterval] this is the one-minute window the dashboard
+/// shows when the overview is opened.
+const monitoringWindowSamples = 120;
+
 int? _pageSize;
 
 /// System page size in bytes, resolved once.

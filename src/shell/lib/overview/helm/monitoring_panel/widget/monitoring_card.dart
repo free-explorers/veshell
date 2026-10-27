@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -9,6 +7,7 @@ import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/helm/monitoring_panel/model/process_ranking.dart';
 import 'package:shell/overview/helm/monitoring_panel/provider/process_name.dart';
+import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
 import 'package:shell/shared/widget/expandable_card.dart';
 
 /// One line drawn by [MonitoringChart].
@@ -143,8 +142,10 @@ class MonitoringCard extends StatelessWidget {
 /// The line chart shared by every monitoring card.
 ///
 /// Every series is drawn on the same `0..100` axis; a filled series sits under
-/// the stroked ones.
-class MonitoringChart extends StatelessWidget {
+/// the stroked ones. The viewport slides by one sample over
+/// [monitoringSampleInterval] whenever a new sample arrives, so the graph
+/// scrolls instead of stepping.
+class MonitoringChart extends StatefulWidget {
   /// Creates a chart for [series].
   const MonitoringChart({required this.series, super.key});
 
@@ -152,36 +153,90 @@ class MonitoringChart extends StatelessWidget {
   final List<MonitoringSeries> series;
 
   @override
+  State<MonitoringChart> createState() => _MonitoringChartState();
+}
+
+class _MonitoringChartState extends State<MonitoringChart>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: monitoringSampleInterval,
+    value: 1,
+  );
+
+  @override
+  void didUpdateWidget(covariant MonitoringChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldLastX = _lastX(oldWidget.series);
+    final newLastX = _lastX(widget.series);
+    if (oldLastX != null && newLastX != null && newLastX != oldLastX) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final spots = [for (final line in series) ...line.spots];
-    return LineChart(
-      LineChartData(
-        minX: spots.isEmpty ? 0 : spots.map((spot) => spot.x).reduce(math.min),
-        maxX: spots.isEmpty ? 0 : spots.map((spot) => spot.x).reduce(math.max),
-        maxY: 100,
-        minY: 0,
-        gridData: const FlGridData(show: false),
-        borderData: FlBorderData(show: false),
-        titlesData: const FlTitlesData(show: false),
-        lineTouchData: const LineTouchData(enabled: false),
-        lineBarsData: [
-          for (final line in series)
-            LineChartBarData(
-              spots: line.spots,
-              dotData: const FlDotData(show: false),
-              barWidth: line.filled ? 0 : 2,
-              isCurved: true,
-              curveSmoothness: 0.1,
-              color: line.color,
-              belowBarData: BarAreaData(
-                show: line.filled,
-                color: line.color.withAlpha(100),
-              ),
-            ),
-        ],
-      ),
-      duration: Duration.zero,
+    final firstX = _firstX(widget.series);
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final windowStart = firstX > 0 ? firstX - 1 + _controller.value : 0.0;
+        return LineChart(
+          LineChartData(
+            minX: windowStart,
+            maxX: windowStart + monitoringWindowSamples - 1,
+            maxY: 100,
+            minY: 0,
+            gridData: const FlGridData(show: false),
+            borderData: FlBorderData(show: false),
+            titlesData: const FlTitlesData(show: false),
+            lineTouchData: const LineTouchData(enabled: false),
+            lineBarsData: [
+              for (final line in widget.series)
+                LineChartBarData(
+                  spots: line.spots,
+                  dotData: const FlDotData(show: false),
+                  barWidth: line.filled ? 0 : 2,
+                  isCurved: true,
+                  curveSmoothness: 0.1,
+                  color: line.color,
+                  belowBarData: BarAreaData(
+                    show: line.filled,
+                    color: line.color.withAlpha(100),
+                  ),
+                ),
+            ],
+          ),
+          duration: Duration.zero,
+        );
+      },
     );
+  }
+
+  double _firstX(List<MonitoringSeries> series) {
+    var first = double.infinity;
+    for (final line in series) {
+      for (final spot in line.spots) {
+        if (spot.x < first) first = spot.x;
+      }
+    }
+    return first == double.infinity ? 0 : first;
+  }
+
+  double? _lastX(List<MonitoringSeries> series) {
+    var last = double.negativeInfinity;
+    for (final line in series) {
+      for (final spot in line.spots) {
+        if (spot.x > last) last = spot.x;
+      }
+    }
+    return last == double.negativeInfinity ? null : last;
   }
 }
 
