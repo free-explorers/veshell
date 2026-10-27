@@ -638,10 +638,10 @@ packages:
     dependency: "direct main"
     description:
       name: pulseaudio
-      sha256: "12fc741412795ceefdc2295aa7a8f196704c4f5edfde40a79815903df6a4e2fe"
+      sha256: "21ebdfee37ec9c6aaf94165f511c3034b176c9f5f4bf2fc5e44541add408a7bf"
       url: "https://pub.dev"
     source: hosted
-    version: "0.0.8"
+    version: "0.0.9"
   riverpod:
     dependency: transitive
     description:
