@@ -11,7 +11,7 @@ enum FocusIndicator {
   /// tile to tile as the focus moves.
   border,
 
-  /// Unfocused tiles are shown in grayscale.
+  /// Unfocused tiles are shown in a dimmed grayscale. The default.
   grayscale,
 
   /// No extra emphasis beyond the workspace panel.
@@ -19,7 +19,7 @@ enum FocusIndicator {
 }
 
 const focusIndicatorPath = 'theme.focusIndicator';
-const FocusIndicator focusIndicatorFallback = FocusIndicator.border;
+const FocusIndicator focusIndicatorFallback = FocusIndicator.grayscale;
 
 @riverpod
 FocusIndicator focusIndicatorSetting(Ref ref) {
