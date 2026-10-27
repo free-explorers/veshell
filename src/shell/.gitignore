@@ -50,3 +50,6 @@ app.*.map.json
 /lib/l10n/app_localizations*.dart
 **/**.freezed.dart
 **/**.g.dart
+
+# Local sibling-package overrides
+pubspec_overrides.yaml

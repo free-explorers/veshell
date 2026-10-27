@@ -61,7 +61,7 @@ dependencies:
   dbus: ^0.7.11
   bluez: ^0.8.3
   nm: ^0.5.0
-  pulseaudio: ^0.0.8
+  pulseaudio: ^0.0.9
   flex_color_picker: ^4.0.0
   defer_pointer: ^0.0.2
   upower: ^0.7.0

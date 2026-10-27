@@ -5,6 +5,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/overview/helm/control_panel/audio/widget/device_slider.dart';
 import 'package:shell/shared/pulseaudio/provider/default_sink.dart';
 import 'package:shell/shared/pulseaudio/provider/default_source.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_audio.dart';
@@ -85,7 +86,11 @@ class AudioOutputList extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final defaultSink = ref.watch(defaultPulseSinkProvider);
-    final sinkList = ref.watch(pulseSinkListProvider).requireValue;
+    final sinkList = ref
+        .watch(pulseSinkListProvider)
+        .requireValue
+        .where((sink) => sink.available)
+        .toList();
     return Flexible(
       child: ColoredBox(
         color: Colors.black12,
@@ -116,7 +121,11 @@ class AudioInputList extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final defaultSource = ref.watch(defaultPulseSourceProvider);
-    final sourceList = ref.watch(pulseSourceListProvider).requireValue;
+    final sourceList = ref
+        .watch(pulseSourceListProvider)
+        .requireValue
+        .where((source) => source.available)
+        .toList();
     return Flexible(
       child: ColoredBox(
         color: Colors.black12,
@@ -166,7 +175,8 @@ class AudioOutputControl extends HookConsumerWidget {
           defaultSink?.mute ?? true ? MdiIcons.volumeOff : MdiIcons.volumeHigh,
         ),
       ),
-      title: Slider(
+      title: DeviceSlider(
+        label: defaultSink?.description ?? '',
         value: defaultSink?.mute ?? true ? 0.0 : defaultSink?.volume ?? 0.0,
         onChanged: defaultSink == null
             ? null
@@ -216,7 +226,8 @@ class AudioInputControl extends HookConsumerWidget {
               : MdiIcons.microphone,
         ),
       ),
-      title: Slider(
+      title: DeviceSlider(
+        label: defaultSource?.description ?? '',
         value: defaultSource?.mute ?? true
             ? 0.0
             : min(defaultSource?.volume ?? 0.0, 1),
