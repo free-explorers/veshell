@@ -344,5 +344,10 @@
   "weeksAgo": "{count, plural, other{{count}주 전}}",
   "monthsAgo": "{count, plural, other{{count}개월 전}}",
   "yearsAgo": "{count, plural, other{{count}년 전}}",
-  "invalidValue": "유효한 값을 입력하세요"
+  "invalidValue": "유효한 값을 입력하세요",
+  "focusIndicator": "포커스 표시",
+  "focusIndicatorDescription": "여러 창이 표시될 때 활성 창을 강조하는 방식",
+  "focusIndicatorBorder": "슬라이드 테두리",
+  "focusIndicatorGrayscale": "다른 창을 회색조로 표시",
+  "focusIndicatorNone": "없음"
 }

@@ -344,5 +344,10 @@
   "weeksAgo": "{count, plural, one{1 settimana fa} other{{count} settimane fa}}",
   "monthsAgo": "{count, plural, one{1 mese fa} other{{count} mesi fa}}",
   "yearsAgo": "{count, plural, one{1 anno fa} other{{count} anni fa}}",
-  "invalidValue": "Inserisci un valore valido"
+  "invalidValue": "Inserisci un valore valido",
+  "focusIndicator": "Indicatore di focus",
+  "focusIndicatorDescription": "Come si distingue la finestra attiva quando sono visibili più finestre",
+  "focusIndicatorBorder": "Bordo scorrevole",
+  "focusIndicatorGrayscale": "Altre finestre in scala di grigi",
+  "focusIndicatorNone": "Nessuno"
 }

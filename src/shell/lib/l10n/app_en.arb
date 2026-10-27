@@ -390,5 +390,11 @@
   "yearsAgo": "{count, plural, =1{1 year ago} other{{count} years ago}}",
   "@yearsAgo": {"description": "Notification age", "placeholders": {"count": {"type": "int", "format": "decimalPattern"}}},
   "invalidValue": "Enter a valid value",
-  "@invalidValue": {"description": "Inline error when a settings value cannot be parsed"}
+  "@invalidValue": {"description": "Inline error when a settings value cannot be parsed"},
+  "focusIndicator": "Focus indicator",
+  "focusIndicatorDescription": "How the focused window stands out when several windows are shown",
+  "@focusIndicatorDescription": {"description": "Theme setting choosing how the focused tile is emphasized"},
+  "focusIndicatorBorder": "Sliding border",
+  "focusIndicatorGrayscale": "Grayscale other windows",
+  "focusIndicatorNone": "None"
 }

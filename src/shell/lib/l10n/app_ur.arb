@@ -344,5 +344,10 @@
   "weeksAgo": "{count, plural, one{{count} ہفتہ پہلے} other{{count} ہفتے پہلے}}",
   "monthsAgo": "{count, plural, one{{count} مہینہ پہلے} other{{count} مہینے پہلے}}",
   "yearsAgo": "{count, plural, one{{count} سال پہلے} other{{count} سال پہلے}}",
-  "invalidValue": "ایک درست قدر درج کریں"
+  "invalidValue": "ایک درست قدر درج کریں",
+  "focusIndicator": "فوکس اشارہ",
+  "focusIndicatorDescription": "کئی ونڈوز دکھائی جانے پر فعال ونڈو کیسے نمایاں ہو",
+  "focusIndicatorBorder": "سرکنے والی سرحد",
+  "focusIndicatorGrayscale": "دیگر ونڈوز گرے اسکیل میں",
+  "focusIndicatorNone": "کوئی نہیں"
 }

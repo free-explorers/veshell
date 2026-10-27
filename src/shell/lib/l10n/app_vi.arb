@@ -344,5 +344,10 @@
   "weeksAgo": "{count, plural, other{{count} tuần trước}}",
   "monthsAgo": "{count, plural, other{{count} tháng trước}}",
   "yearsAgo": "{count, plural, other{{count} năm trước}}",
-  "invalidValue": "Nhập một giá trị hợp lệ"
+  "invalidValue": "Nhập một giá trị hợp lệ",
+  "focusIndicator": "Chỉ báo tiêu điểm",
+  "focusIndicatorDescription": "Cách làm nổi bật cửa sổ đang hoạt động khi hiển thị nhiều cửa sổ",
+  "focusIndicatorBorder": "Viền trượt",
+  "focusIndicatorGrayscale": "Các cửa sổ khác ở thang xám",
+  "focusIndicatorNone": "Không"
 }

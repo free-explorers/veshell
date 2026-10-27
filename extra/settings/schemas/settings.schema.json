@@ -169,6 +169,14 @@
                 },
                 "iconTheme": {
                     "type": "string"
+                },
+                "focusIndicator": {
+                    "type": "string",
+                    "enum": [
+                        "border",
+                        "grayscale",
+                        "none"
+                    ]
                 }
             },
             "additionalProperties": false
