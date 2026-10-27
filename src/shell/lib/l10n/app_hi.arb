@@ -84,6 +84,8 @@
   "lockScreenWrongPassword": "गलत पासवर्ड, फिर से कोशिश करें",
   "lockScreenChecking": "जाँच हो रही है…",
   "lockScreenUnlock": "अनलॉक करें",
+  "lockScreenShowPassword": "पासवर्ड दिखाएँ",
+  "lockScreenHidePassword": "पासवर्ड छिपाएँ",
   "swapAltAndWin": "Alt और Win की अदला-बदली करें",
   "swapAltAndWinDescription": "Alt और Win कुंजियों की अदला-बदली करके अंगूठों का उपयोग आसान बनाएँ",
   "capsLock": "Caps Lock",

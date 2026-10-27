@@ -84,6 +84,8 @@
   "lockScreenWrongPassword": "Falsches Passwort, bitte erneut versuchen",
   "lockScreenChecking": "Wird geprüft…",
   "lockScreenUnlock": "Entsperren",
+  "lockScreenShowPassword": "Passwort anzeigen",
+  "lockScreenHidePassword": "Passwort verbergen",
   "swapAltAndWin": "Alt und Win vertauschen",
   "swapAltAndWinDescription": "Die Daumenergonomie durch Vertauschen der Alt- und Win-Tasten verbessern",
   "capsLock": "Feststelltaste",

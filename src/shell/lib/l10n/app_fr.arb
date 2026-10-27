@@ -84,6 +84,8 @@
   "lockScreenWrongPassword": "Mot de passe incorrect, réessayez",
   "lockScreenChecking": "Vérification…",
   "lockScreenUnlock": "Déverrouiller",
+  "lockScreenShowPassword": "Afficher le mot de passe",
+  "lockScreenHidePassword": "Masquer le mot de passe",
   "swapAltAndWin": "Inverser Alt et Win",
   "swapAltAndWinDescription": "Améliorer l’ergonomie des pouces en inversant les touches Alt et Win",
   "capsLock": "Verr. Maj.",

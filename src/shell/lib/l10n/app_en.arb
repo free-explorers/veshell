@@ -106,6 +106,8 @@
   "lockScreenWrongPassword": "Wrong password, try again",
   "lockScreenChecking": "Checking…",
   "lockScreenUnlock": "Unlock",
+  "lockScreenShowPassword": "Show password",
+  "lockScreenHidePassword": "Hide password",
   "swapAltAndWin": "Swap Alt and Win",
   "swapAltAndWinDescription": "Improve thumb ergonomics by swapping the Alt and Win keys",
   "capsLock": "Caps Lock",

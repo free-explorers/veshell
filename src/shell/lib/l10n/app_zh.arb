@@ -84,6 +84,8 @@
   "lockScreenWrongPassword": "密码错误，请重试",
   "lockScreenChecking": "正在验证…",
   "lockScreenUnlock": "解锁",
+  "lockScreenShowPassword": "显示密码",
+  "lockScreenHidePassword": "隐藏密码",
   "swapAltAndWin": "交换 Alt 和 Win",
   "swapAltAndWinDescription": "交换 Alt 和 Win 键，改善拇指操作体验",
   "capsLock": "大写锁定",

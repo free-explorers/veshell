@@ -84,6 +84,8 @@
   "lockScreenWrongPassword": "비밀번호가 틀렸습니다. 다시 시도하세요",
   "lockScreenChecking": "확인 중…",
   "lockScreenUnlock": "잠금 해제",
+  "lockScreenShowPassword": "비밀번호 표시",
+  "lockScreenHidePassword": "비밀번호 숨기기",
   "swapAltAndWin": "Alt와 Win 바꾸기",
   "swapAltAndWinDescription": "Alt와 Win 키를 바꿔 엄지손가락의 사용 편의성 개선",
   "capsLock": "Caps Lock",

@@ -84,6 +84,8 @@
   "lockScreenWrongPassword": "Password errata, riprova",
   "lockScreenChecking": "Verifica in corso…",
   "lockScreenUnlock": "Sblocca",
+  "lockScreenShowPassword": "Mostra password",
+  "lockScreenHidePassword": "Nascondi password",
   "swapAltAndWin": "Scambia Alt e Win",
   "swapAltAndWinDescription": "Migliora l’ergonomia dei pollici scambiando i tasti Alt e Win",
   "capsLock": "Bloc Maiusc",
