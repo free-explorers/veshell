@@ -36,6 +36,18 @@ abstract class ResumeContext with _$ResumeContext {
   /// Arguments passed to [executable], i.e. [argv] without its first element.
   List<String> get arguments => argv.length <= 1 ? const [] : argv.sublist(1);
 
+  /// The saved command line in a form suitable for display.
+  ///
+  /// Mirrors the relaunch fallback: the captured [argv] when present,
+  /// otherwise the resolved [executable].
+  String? get displayCommand {
+    if (argv.isNotEmpty) {
+      return argv.join(' ');
+    }
+    final program = executable;
+    return program == null || program.isEmpty ? null : program;
+  }
+
   factory ResumeContext.fromJson(Map<String, dynamic> json) =>
       _$ResumeContextFromJson(json);
 }

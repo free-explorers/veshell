@@ -83,6 +83,11 @@ does.
 The placeholder says **Start** with the application name while a tile has no
 saved context yet, and **Resume** with the saved summary afterwards.
 
+When no desktop entry matches the tile's app id, the placeholder shows the
+tile's last saved title and the saved command (captured argv, then executable)
+instead of "Unknown". The saved command is the same fallback relaunch uses, so
+the tile does not hide the command it will actually run.
+
 The resume summary only names facts that describe resumable work: a terminal's
 directory and foreground program, an opened document, or the last window title.
 A non-terminal application's working directory is not shown: most applications

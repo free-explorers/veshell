@@ -31,14 +31,17 @@ LocalizedDesktopEntry _entry(String name) => LocalizedDesktopEntry(
 
 Future<void> _pumpPlaceholder(
   WidgetTester tester,
-  PersistentWindow window,
-) async {
+  PersistentWindow window, {
+  bool hasDesktopEntry = true,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         localizedDesktopEntryForIdProvider(
           window.properties.appId,
-        ).overrideWith(() => _FixedLocalizedEntry(_entry('Brave'))),
+        ).overrideWith(
+          () => _FixedLocalizedEntry(hasDesktopEntry ? _entry('Brave') : null),
+        ),
         iconFileFromQueryProvider.overrideWith((ref, query) async => null),
       ],
       child: MaterialApp(
@@ -118,4 +121,41 @@ void main() {
     expect(find.textContaining('~'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('without a desktop entry the saved title and command are shown', (
+    tester,
+  ) async {
+    final window = _window(
+      title: 'Saved document title',
+      resumeContext: ResumeContext(
+        argv: const ['/usr/bin/app', '--flag', 'document.txt'],
+        capturedAt: DateTime(2026),
+      ),
+    );
+
+    await _pumpPlaceholder(tester, window, hasDesktopEntry: false);
+
+    expect(find.text('Saved document title'), findsOneWidget);
+    final execField = tester.widget<TextField>(find.byType(TextField));
+    expect(execField.controller!.text, '/usr/bin/app --flag document.txt');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'without a desktop entry the executable backs the saved command',
+    (tester) async {
+      final window = _window(
+        resumeContext: ResumeContext(
+          executable: '/usr/bin/app',
+          capturedAt: DateTime(2026),
+        ),
+      );
+
+      await _pumpPlaceholder(tester, window, hasDesktopEntry: false);
+
+      final execField = tester.widget<TextField>(find.byType(TextField));
+      expect(execField.controller!.text, '/usr/bin/app');
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

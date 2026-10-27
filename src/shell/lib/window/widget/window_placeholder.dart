@@ -57,6 +57,12 @@ class WindowPlaceholder extends HookConsumerWidget {
     // it to transient text such as "Restore ~". Start names the application;
     // only a saved resume context uses the title as a summary.
     final applicationName = entry?.entries[DesktopEntryKey.name.string];
+    // Without a desktop entry there is no application name to show. The tile
+    // still remembers the last window title and the command it was launched
+    // with, so show those instead of "Unknown".
+    final placeholderTitle =
+        applicationName ?? window.properties.title ?? context.l10n.unknown;
+    final savedExec = window.resumeContext?.displayCommand;
     final startLabel = applicationName == null
         ? context.l10n.clickToStartApplication
         : context.l10n.startWith(applicationName);
@@ -73,9 +79,7 @@ class WindowPlaceholder extends HookConsumerWidget {
       (_, final summary?) => context.l10n.resumeWith(summary),
     };
     final canLaunch =
-        entry != null ||
-        window.customExec != null ||
-        (window.resumeContext?.argv.isNotEmpty ?? false);
+        entry != null || window.customExec != null || savedExec != null;
 
     Future<void> launch() async {
       final process = await onLaunch?.call();
@@ -225,7 +229,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                             : CrossAxisAlignment.center,
                         children: [
                           Text(
-                            applicationName ?? context.l10n.unknown,
+                            placeholderTitle,
                             style: Theme.of(context).textTheme.displayMedium,
                             textAlign: TextAlign.center,
                             softWrap: false,
@@ -241,6 +245,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                                 entry?.entries[DesktopEntryKey
                                     .tryExec
                                     .string] ??
+                                savedExec ??
                                 context.l10n.unknown,
                             customExec: window.customExec,
                             onChanged: (customExec) => ref
@@ -289,6 +294,15 @@ class WindowPlaceholder extends HookConsumerWidget {
 
         return Stack(
           children: [
+            // Dark base for a placeholder without an icon wash. A matched
+            // desktop entry paints its blurred icon over this layer, hiding it;
+            // an unknown app keeps the dark background instead of showing the
+            // workspace through the translucent scrim.
+            Positioned.fill(
+              child: ColoredBox(
+                color: Theme.of(context).colorScheme.surfaceContainerLowest,
+              ),
+            ),
             Positioned.fill(child: _PlaceholderBackground(iconPath: iconPath)),
             Positioned.fill(
               child: InkWell(
