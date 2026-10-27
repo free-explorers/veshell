@@ -12,6 +12,19 @@ int width;
 int height;  
 List<[Workspace](workspace.md)> workspaceList;
 
+## Workspace list
+
+A screen's `workspaceList` always ends with an empty workspace: that trailing
+slot is how a new workspace is created. Opening a window in the last workspace
+appends a fresh one automatically, and the screen drops the redundant trailing
+slot when the workspace before it becomes empty while the user is elsewhere.
+
+The invariant also holds across a restart. A persisted list can end with a
+non-empty workspace (for example when the previous session removed the
+redundant blank); restore normalizes it before the screen builds by appending a
+fresh empty workspace, so the last slot is usable immediately instead of only
+after the next workspace change.
+
 ## Focused screen
 
 `focusedScreenProvider` holds the screen that currently owns focus, or `null`

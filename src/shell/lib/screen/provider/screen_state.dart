@@ -34,35 +34,62 @@ class ScreenState extends _$ScreenState {
       options: const StorageOptions(cacheTime: StorageCacheTime.unsafe_forever),
     );
 
-    if (stateOrNull != null) {
-      state = stateOrNull!;
+    final restored = stateOrNull;
+    var workspaceList =
+        restored?.workspaceList ?? IList<WorkspaceId>([const Uuid().v4()]);
+    var selectedIndex = restored?.selectedIndex ?? 0;
+
+    // A screen always ends with the empty workspace that creates the next one.
+    // A restore can violate that: the previous session may have ended with
+    // windows in what was the last workspace (the trailing blank is removed
+    // when it becomes redundant), and the listener below only appends a blank
+    // in reaction to a later workspace change. Normalize before the UI builds,
+    // otherwise the screen is stuck without a fresh workspace until something
+    // changes a workspace.
+    if (workspaceList.isEmpty) {
+      workspaceList = IList<WorkspaceId>([const Uuid().v4()]);
+      selectedIndex = 0;
     } else {
-      state = Screen(
-        screenId: screenId,
-        workspaceList: IList([const Uuid().v4()]),
-        selectedIndex: 0,
+      final lastWorkspace = ref.read(
+        workspaceStateProvider(workspaceList.last),
       );
+      if (lastWorkspace.tileableWindowList.isNotEmpty) {
+        workspaceList = workspaceList.add(const Uuid().v4());
+      }
+      selectedIndex = selectedIndex.clamp(0, workspaceList.length - 1);
     }
-    /*     state = stateOrNull ??
+
+    state =
+        restored?.copyWith(
+          workspaceList: workspaceList,
+          selectedIndex: selectedIndex,
+        ) ??
         Screen(
           screenId: screenId,
-          workspaceList: IList([const Uuid().v4()]),
-          selectedIndex: 0,
-        ); */
+          workspaceList: workspaceList,
+          selectedIndex: selectedIndex,
+        );
+
+    // The empty tail workspace is a list invariant, not a one-off startup
+    // fix. Keep the workspace listeners attached to whatever the list is now;
+    // this also replaces subscriptions left over from a previous build.
+    _syncWorkspaceListeners(state.workspaceList);
     // When the last workspace got a new window open in it
     // we create a new blank workspace
     listenSelf((prev, next) {
       if (next.workspaceList == prev?.workspaceList) return;
-      for (final element in _workspaceListenerMap.values) {
-        element.close();
-      }
-      _workspaceListenerMap.clear();
-      for (final workspaceId in next.workspaceList) {
-        _listenToWorkspaceChanges(workspaceId);
-      }
+      _syncWorkspaceListeners(next.workspaceList);
     });
 
     return state;
+  }
+
+  void _syncWorkspaceListeners(IList<WorkspaceId> workspaceList) {
+    for (final element in _workspaceListenerMap.values) {
+      element.close();
+    }
+    _workspaceListenerMap.clear();
+    workspaceList.forEach(_listenToWorkspaceChanges);
   }
 
   Future<void> delete() async {
@@ -80,7 +107,6 @@ class ScreenState extends _$ScreenState {
   /// Listen to workspace changes in order to always have a blank workspace
   /// at the end of the list
   void _listenToWorkspaceChanges(WorkspaceId workspaceId) {
-    print('Listening to workspace changes for $workspaceId');
     if (_workspaceListenerMap.containsKey(workspaceId)) {
       return;
     }
@@ -88,7 +114,6 @@ class ScreenState extends _$ScreenState {
       _,
       workspace,
     ) {
-      print('Workspace $workspaceId changed');
       final isLast = state.workspaceList.last == workspaceId;
       final isBeforeLast =
           state.workspaceList.length > 1 &&
@@ -109,17 +134,21 @@ class ScreenState extends _$ScreenState {
         // Just delay the remove call to ensure that
         // a window is not being transfered
         final workspaceIdToCheck = state.workspaceList.last;
-        Future.delayed(Duration.zero, () {
-          if (ref
-              .read(workspaceStateProvider(workspaceIdToCheck))
-              .tileableWindowList
-              .isEmpty) {
-            removeWorkspace(workspaceIdToCheck);
-            ref
-                .read(workspaceStateProvider(workspaceIdToCheck).notifier)
-                .delete();
-          }
-        });
+        unawaited(
+          Future.delayed(Duration.zero, () {
+            if (ref
+                .read(workspaceStateProvider(workspaceIdToCheck))
+                .tileableWindowList
+                .isEmpty) {
+              removeWorkspace(workspaceIdToCheck);
+              unawaited(
+                ref
+                    .read(workspaceStateProvider(workspaceIdToCheck).notifier)
+                    .delete(),
+              );
+            }
+          }),
+        );
       }
     });
     _workspaceListenerMap[workspaceId] = workspaceListener;
