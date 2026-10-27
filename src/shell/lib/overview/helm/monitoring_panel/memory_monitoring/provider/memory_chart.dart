@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
 
 part 'memory_chart.g.dart';
 
@@ -9,7 +10,7 @@ part 'memory_chart.g.dart';
 /// [_maxPoints] samples (about a minute) of memory usage.
 @Riverpod(keepAlive: true)
 class MemoryChart extends _$MemoryChart {
-  static const _maxPoints = 120;
+  static const int _maxPoints = monitoringChartBufferSamples;
 
   @override
   List<FlSpot> build() => const [];

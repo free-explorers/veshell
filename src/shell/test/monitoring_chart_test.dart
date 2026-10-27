@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/provider/cpu_chart.dart';
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/provider/gpu_memory_chart.dart';
+import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
 
 void main() {
   test('CpuChart keeps the newest points in order', () {
@@ -15,11 +16,11 @@ void main() {
 
     final spots = container.read(cpuChartProvider);
 
-    expect(spots, hasLength(120));
-    expect(spots.first.y, 30);
+    expect(spots, hasLength(monitoringChartBufferSamples));
+    expect(spots.first.y, 150 - monitoringChartBufferSamples);
     expect(spots.last.y, 149);
     // The x axis keeps advancing one sample at a time.
-    expect(spots.last.x - spots.first.x, 119);
+    expect(spots.last.x - spots.first.x, monitoringChartBufferSamples - 1);
   });
 
   test('GpuMemoryChart keeps the newest points in order', () {
