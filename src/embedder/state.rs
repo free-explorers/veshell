@@ -10,7 +10,7 @@ use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::delegate_dispatch2;
 use smithay::desktop::{Space, Window};
 use smithay::input::dnd::{DnDGrab, DndGrabHandler, GrabType, Source};
-use smithay::input::keyboard::{KeyboardHandle, XkbConfig};
+use smithay::input::keyboard::{KeyboardHandle, LedState, XkbConfig};
 use smithay::input::pointer::{CursorImageStatus, Focus, PointerHandle};
 use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::output::{Output, Scale};
@@ -1056,6 +1056,27 @@ impl<BackendData: Backend> SeatHandler for State<BackendData> {
 
     fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {
         *self.cursor_image_status.lock().unwrap() = image;
+    }
+
+    fn led_state_changed(&mut self, _seat: &Seat<Self>, led_state: LedState) {
+        self.update_keyboard_leds(led_state);
+    }
+}
+
+impl<BackendData: Backend> State<BackendData> {
+    /// Mirrors the xkb lock state onto the physical keyboard LEDs.
+    ///
+    /// Besides lighting the LEDs, this tells the keyboard firmware the host's
+    /// lock state. Some keyboards pick their layer from it: the Framework
+    /// numpad sends its "Num Lock off" layer (backlight controls on `+` and
+    /// Enter) until the host reports Num Lock as on.
+    pub fn update_keyboard_leds(&mut self, led_state: LedState) {
+        let leds = input::Led::from(led_state);
+        for mut device in self.input_devices.iter().cloned() {
+            if device.has_capability(input::DeviceCapability::Keyboard) {
+                device.led_update(leds);
+            }
+        }
     }
 }
 

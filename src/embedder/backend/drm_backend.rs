@@ -607,6 +607,9 @@ pub fn run_drm_backend() {
                 if let Err(err) = libinput_context.resume() {
                     error!("Failed to resume libinput context: {:?}", err);
                 }
+                // Another session may have changed the keyboard LEDs.
+                let led_state = data.keyboard.led_state();
+                data.update_keyboard_leds(led_state);
                 for (node, backend) in data
                     .backend_data
                     .gpus
@@ -806,6 +809,10 @@ pub fn run_drm_backend() {
                         &settings.mouse_and_touchpad,
                         &mut device,
                     );
+                    // A new keyboard starts with its LEDs off; hand it the
+                    // current lock state (Num Lock may already be on).
+                    let led_state = data.keyboard.led_state();
+                    data.update_keyboard_leds(led_state);
                 }
                 InputEvent::DeviceRemoved { device } => {
                     data.input_devices.remove(&device);
