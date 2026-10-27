@@ -178,6 +178,7 @@
   "gtkThemeDescription": "GTK のテーマ",
   "iconTheme": "アイコンテーマ",
   "iconThemeDescription": "アイコンのテーマ",
+  "letterIcons": "文字のプレースホルダー",
   "transformNormal": "通常",
   "transformRotate": "{degrees}° 回転",
   "transformFlipped": "反転",

@@ -178,6 +178,7 @@
   "gtkThemeDescription": "GTK থিম",
   "iconTheme": "আইকন থিম",
   "iconThemeDescription": "আইকন থিম",
+  "letterIcons": "অক্ষর প্লেসহোল্ডার",
   "transformNormal": "স্বাভাবিক",
   "transformRotate": "{degrees}° ঘোরান",
   "transformFlipped": "প্রতিফলিত",

@@ -7,20 +7,34 @@ import 'package:shell/application/provider/icon_file_from_query.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/application/util/icon_size.dart';
 import 'package:shell/application/util/normalizing_svg_file_loader.dart';
+import 'package:shell/application/widget/letter_app_icon.dart';
 
 class AppIconByPath extends StatelessWidget {
-  const AppIconByPath({required this.path, super.key});
+  const AppIconByPath({required this.path, this.title, super.key});
 
   final String? path;
 
+  /// The application name used to draw the letter fallback.
+  final String? title;
+
   @override
   Widget build(BuildContext context) {
-    if (path == null) return const SizedBox();
+    final label = title?.trim();
+    if (path == null || path!.isEmpty) {
+      return label == null || label.isEmpty
+          ? const SizedBox()
+          : LetterAppIcon(title: label);
+    }
 
     return LayoutBuilder(
       builder: (context, constraints) => Consumer(
-        builder: (context, ref, _) =>
-            _buildIcon(context, ref, path!, constraints.biggest.shortestSide),
+        builder: (context, ref, _) => _buildIcon(
+          context,
+          ref,
+          path!,
+          label,
+          constraints.biggest.shortestSide,
+        ),
       ),
     );
   }
@@ -29,6 +43,7 @@ class AppIconByPath extends StatelessWidget {
     BuildContext context,
     WidgetRef ref,
     String path,
+    String? label,
     double logicalSize,
   ) {
     if (logicalSize <= 0) return const SizedBox();
@@ -41,18 +56,20 @@ class AppIconByPath extends StatelessWidget {
       MediaQuery.devicePixelRatioOf(context),
     );
 
-    final iconFile = ref
-        .watch(
-          iconFileFromQueryProvider(
-            IconQuery(
-              name: path,
-              size: bucket,
-              extensions: const ['svg', 'png'],
-            ),
-          ),
-        )
-        .value;
-    if (iconFile == null) return const SizedBox();
+    final icon = ref.watch(
+      iconFileFromQueryProvider(
+        IconQuery(name: path, size: bucket, extensions: const ['svg', 'png']),
+      ),
+    );
+    final iconFile = icon.value;
+    if (iconFile == null) {
+      // A pending lookup is not a missing icon: show nothing until the theme
+      // has answered, then the letter fallback if it found no file.
+      if (icon.isLoading) return const SizedBox();
+      return label == null || label.isEmpty
+          ? const SizedBox()
+          : LetterAppIcon(title: label);
+    }
 
     // Let the image widgets own their decoded frames. In particular, a
     // RawImage using a provider-owned ui.Image can lose its handle when the
@@ -78,7 +95,7 @@ class AppIconById extends ConsumerWidget {
 
   final String? id;
 
-  /// Shown while the desktop entry is unknown, or when it names no icon.
+  /// Shown while the desktop entry is unknown, or when it names no title.
   final Widget fallback;
 
   @override
@@ -94,11 +111,12 @@ class AppIconById extends ConsumerWidget {
             if (entry == null) {
               return fallback;
             }
+            final title = entry.entries[DesktopEntryKey.name.string];
             final iconPath = entry.entries[DesktopEntryKey.icon.string];
-            if (iconPath == null) {
+            if (title == null || title.trim().isEmpty) {
               return fallback;
             }
-            return AppIconByPath(path: iconPath);
+            return AppIconByPath(path: iconPath, title: title);
           },
           orElse: () => fallback,
         );

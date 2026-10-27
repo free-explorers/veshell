@@ -194,6 +194,7 @@ class _ApplicationRow extends StatelessWidget {
                 height: 42,
                 child: AppIconByPath(
                   path: entry.entries[DesktopEntryKey.icon.string],
+                  title: entry.entries[DesktopEntryKey.name.string],
                 ),
               ),
               const SizedBox(width: 12),

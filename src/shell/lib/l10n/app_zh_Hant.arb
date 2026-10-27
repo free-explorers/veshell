@@ -178,6 +178,7 @@
   "gtkThemeDescription": "GTK 佈景主題",
   "iconTheme": "圖示佈景主題",
   "iconThemeDescription": "圖示佈景主題",
+  "letterIcons": "字母預留位置",
   "transformNormal": "正常",
   "transformRotate": "旋轉 {degrees}°",
   "transformFlipped": "翻轉",

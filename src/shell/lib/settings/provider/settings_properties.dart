@@ -29,6 +29,7 @@ import 'package:shell/settings/widget/monitor/monitor_resolution_editor.dart';
 import 'package:shell/settings/widget/monitor/monitor_resolution_value.dart';
 import 'package:shell/settings/widget/monitor/monitor_transform_editor.dart';
 import 'package:shell/settings/widget/monitor/monitor_transform_value.dart';
+import 'package:shell/settings/widget/theme/icon_theme_editor.dart';
 import 'package:shell/shared/util/file.dart';
 import 'package:shell/shared/util/json_converter/color.dart';
 import 'package:shell/shared/util/json_converter/logical_key_set.dart';
@@ -433,6 +434,15 @@ class SettingsProperties extends _$SettingsProperties {
           'iconTheme': SettingProperty<String>(
             name: l10n.iconTheme,
             description: l10n.iconThemeDescription,
+            buildSearchResult: (context, path, property) =>
+                ExpandableSearchResult<String>(
+                  path: path,
+                  property: property,
+                  buildValue: (context, value, {required isExpanded}) =>
+                      IconThemeValue(path: path),
+                  buildEditor: (context, {required isExpanded}) =>
+                      IconThemeEditor(path: path, property: property),
+                ),
           ),
         },
       ),

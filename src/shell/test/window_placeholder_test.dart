@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:hooks_riverpod/misc.dart' show Override;
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/application/provider/icon_background_image.dart';
 import 'package:shell/application/provider/icon_file_from_query.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/l10n/l10n.dart';
@@ -26,13 +30,29 @@ class _FixedLocalizedEntry extends LocalizedDesktopEntryForId {
 
 LocalizedDesktopEntry _entry(String name) => LocalizedDesktopEntry(
   desktopEntry: const DesktopEntry(entries: {}),
-  entries: {DesktopEntryKey.name.string: name},
+  entries: {
+    DesktopEntryKey.name.string: name,
+    DesktopEntryKey.icon.string: 'brave',
+  },
 );
+
+ui.Image _image() {
+  final recorder = ui.PictureRecorder();
+  ui.Canvas(recorder).drawRect(
+    const ui.Rect.fromLTWH(0, 0, 64, 64),
+    ui.Paint()..color = const ui.Color(0xFF000000),
+  );
+  final picture = recorder.endRecording();
+  final image = picture.toImageSync(64, 64);
+  picture.dispose();
+  return image;
+}
 
 Future<void> _pumpPlaceholder(
   WidgetTester tester,
   PersistentWindow window, {
   bool hasDesktopEntry = true,
+  List<Override> overrides = const [],
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -43,6 +63,7 @@ Future<void> _pumpPlaceholder(
           () => _FixedLocalizedEntry(hasDesktopEntry ? _entry('Brave') : null),
         ),
         iconFileFromQueryProvider.overrideWith((ref, query) async => null),
+        ...overrides,
       ],
       child: MaterialApp(
         localizationsDelegates: shellLocalizationsDelegates,
@@ -119,6 +140,54 @@ void main() {
 
     expect(find.text('Resume'), findsOneWidget);
     expect(find.textContaining('~'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('rebuilding the icon wash never clones a disposed image', (
+    tester,
+  ) async {
+    final initialImage = _image();
+    final replacementImage = _image();
+    final pendingReplacement = Completer<ui.Image?>();
+    var useReplacement = false;
+
+    await _pumpPlaceholder(
+      tester,
+      _window(),
+      overrides: [
+        iconBackgroundImageProvider.overrideWith((ref, path) {
+          if (useReplacement) {
+            return pendingReplacement.future.then((image) {
+              if (image != null) ref.onDispose(image.dispose);
+              return image;
+            });
+          }
+          ref.onDispose(initialImage.dispose);
+          return initialImage;
+        }),
+      ],
+    );
+    await tester.pump();
+    expect(find.byType(RawImage), findsOneWidget);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(WindowPlaceholder)),
+    );
+    useReplacement = true;
+    container.invalidate(iconBackgroundImageProvider('brave'));
+    // The provider disposed the old image before its replacement is ready.
+    // Rebuilding with the old AsyncValue must not hand it to RawImage.
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.byType(RawImage), findsNothing);
+
+    pendingReplacement.complete(replacementImage);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(RawImage), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

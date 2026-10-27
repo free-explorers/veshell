@@ -89,4 +89,53 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a missing icon falls back to the application initial', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          iconFileFromQueryProvider.overrideWith((ref, query) async => null),
+        ],
+        child: const MaterialApp(
+          home: Center(
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: AppIconByPath(path: 'missing', title: 'Files'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Fi'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an entry without an icon uses the application initial', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          iconFileFromQueryProvider.overrideWith(
+            (ref, query) => fail('No icon lookup is expected'),
+          ),
+        ],
+        child: const MaterialApp(
+          home: Center(
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: AppIconByPath(path: null, title: 'Alacritty'),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Al'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -178,6 +178,7 @@
   "gtkThemeDescription": "Тема GTK",
   "iconTheme": "Тема значков",
   "iconThemeDescription": "Тема значков",
+  "letterIcons": "Буквенные заполнители",
   "transformNormal": "Обычное",
   "transformRotate": "Поворот на {degrees}°",
   "transformFlipped": "Отражение",

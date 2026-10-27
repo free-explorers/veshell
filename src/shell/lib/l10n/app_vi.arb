@@ -178,6 +178,7 @@
   "gtkThemeDescription": "Chủ đề GTK",
   "iconTheme": "Chủ đề biểu tượng",
   "iconThemeDescription": "Chủ đề biểu tượng",
+  "letterIcons": "Ký tự thay thế",
   "transformNormal": "Bình thường",
   "transformRotate": "Xoay {degrees}°",
   "transformFlipped": "Đã lật",

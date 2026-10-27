@@ -178,6 +178,7 @@
   "gtkThemeDescription": "GTK 테마",
   "iconTheme": "아이콘 테마",
   "iconThemeDescription": "아이콘 테마",
+  "letterIcons": "문자 자리 표시자",
   "transformNormal": "일반",
   "transformRotate": "{degrees}° 회전",
   "transformFlipped": "반전됨",

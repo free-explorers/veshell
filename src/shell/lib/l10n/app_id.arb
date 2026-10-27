@@ -178,6 +178,7 @@
   "gtkThemeDescription": "Tema GTK",
   "iconTheme": "Tema ikon",
   "iconThemeDescription": "Tema ikon",
+  "letterIcons": "Placeholder huruf",
   "transformNormal": "Normal",
   "transformRotate": "Putar {degrees}°",
   "transformFlipped": "Dibalik",

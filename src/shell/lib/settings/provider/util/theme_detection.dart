@@ -2,6 +2,16 @@ import 'dart:io';
 
 import 'package:path/path.dart' as path;
 
+/// The built-in icon theme that paints a letter badge from the application
+/// name instead of loading an icon.
+///
+/// It is stored like any other icon theme name in `theme.iconTheme`, but it is
+/// not a directory: the shell short-circuits icon lookups when it is selected.
+const letterIconThemeId = '__veshell_letters__';
+
+/// Whether [theme] selects the built-in letter placeholders.
+bool isLetterIconTheme(String? theme) => theme == letterIconThemeId;
+
 /// Common icon themes in fallback order.
 ///
 /// Breeze comes before Adwaita because it ships the non-symbolic application
@@ -79,9 +89,14 @@ Set<String> installedIconThemes({Map<String, String>? environment}) {
     for (final entity in Directory(directory).listSync()) {
       final name = path.basename(entity.path);
       if (name.endsWith('_cursors')) continue;
-      if (File(path.join(entity.path, 'index.theme')).existsSync()) {
-        themes.add(name);
-      }
+      // Cursor themes also ship an `index.theme`, but without any icon
+      // directory; offering one would blank every icon.
+      final directories = _readIniValue(
+        path.join(entity.path, 'index.theme'),
+        section: 'Icon Theme',
+        key: 'Directories',
+      );
+      if (directories != null && directories.isNotEmpty) themes.add(name);
     }
   }
 
@@ -213,6 +228,10 @@ String? _matchTheme(String? name, Set<String> installed) {
   }
   return null;
 }
+
+/// The XDG base directories that hold icon themes, in lookup order.
+List<String> iconThemeBaseDirectories({Map<String, String>? environment}) =>
+    _iconThemeDirectories(environment ?? Platform.environment);
 
 List<String> _iconThemeDirectories(Map<String, String> env) {
   final directories = <String>[];
