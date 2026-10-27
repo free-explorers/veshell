@@ -84,6 +84,8 @@
   "lockScreenWrongPassword": "Sai mật khẩu, hãy thử lại",
   "lockScreenChecking": "Đang kiểm tra…",
   "lockScreenUnlock": "Mở khóa",
+  "lockScreenShowPassword": "Hiện mật khẩu",
+  "lockScreenHidePassword": "Ẩn mật khẩu",
   "swapAltAndWin": "Hoán đổi Alt và Win",
   "swapAltAndWinDescription": "Cải thiện sự thoải mái cho ngón cái bằng cách hoán đổi phím Alt và Win",
   "capsLock": "Caps Lock",

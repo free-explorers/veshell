@@ -84,6 +84,8 @@
   "lockScreenWrongPassword": "كلمة مرور خاطئة، حاول مرة أخرى",
   "lockScreenChecking": "جارٍ التحقق…",
   "lockScreenUnlock": "فتح القفل",
+  "lockScreenShowPassword": "إظهار كلمة المرور",
+  "lockScreenHidePassword": "إخفاء كلمة المرور",
   "swapAltAndWin": "تبديل Alt وWin",
   "swapAltAndWinDescription": "تحسين راحة الإبهام بتبديل مفتاحَي Alt وWin",
   "capsLock": "مفتاح Caps Lock",

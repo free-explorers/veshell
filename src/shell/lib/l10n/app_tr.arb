@@ -84,6 +84,8 @@
   "lockScreenWrongPassword": "Yanlış parola, tekrar deneyin",
   "lockScreenChecking": "Denetleniyor…",
   "lockScreenUnlock": "Kilidi aç",
+  "lockScreenShowPassword": "Parolayı göster",
+  "lockScreenHidePassword": "Parolayı gizle",
   "swapAltAndWin": "Alt ve Win tuşlarını değiştir",
   "swapAltAndWinDescription": "Alt ve Win tuşlarını değiştirerek başparmak ergonomisini iyileştirin",
   "capsLock": "Caps Lock",

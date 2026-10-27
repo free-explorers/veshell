@@ -116,19 +116,29 @@ class LockScreenOverlay extends HookConsumerWidget {
     return Positioned.fill(
       child: Listener(
         behavior: HitTestBehavior.opaque,
+        // Opaque to hover too, so nothing below shows a hover state or
+        // cursor.
         child: MouseRegion(
-          child: Opacity(
-            opacity: progress,
-            child: SafeArea(
-              child: Center(
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const _LockClock(),
-                      const SizedBox(height: 48),
-                      if (isFocusedMonitor && locked) const _UnlockPrompt(),
-                    ],
+          // The overlay sits beside the Navigator, so it has neither the
+          // `Material` the pages provide nor the Navigator's `Overlay`: the
+          // text field and the tooltips need both.
+          child: Material(
+            type: MaterialType.transparency,
+            child: Overlay.wrap(
+              child: Opacity(
+                opacity: progress,
+                child: SafeArea(
+                  child: Center(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const _LockClock(),
+                          const SizedBox(height: 48),
+                          if (isFocusedMonitor && locked) const _UnlockPrompt(),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -184,6 +194,9 @@ class _UnlockPrompt extends HookConsumerWidget {
     final lockState = ref.watch(lockScreenProvider);
     final controller = useTextEditingController();
     final focusNode = useFocusNode();
+    // Hidden by default, and again on every lock: the prompt is rebuilt from
+    // scratch each time the session locks.
+    final revealed = useState(false);
     final shake = useAnimationController(
       duration: const Duration(milliseconds: 400),
     );
@@ -266,7 +279,7 @@ class _UnlockPrompt extends HookConsumerWidget {
                 focusNode: focusNode,
                 autofocus: true,
                 readOnly: !waiting,
-                obscureText: !lockState.echo,
+                obscureText: !lockState.echo && !revealed.value,
                 enableSuggestions: false,
                 autocorrect: false,
                 textInputAction: TextInputAction.done,
@@ -283,19 +296,43 @@ class _UnlockPrompt extends HookConsumerWidget {
                   ),
                   suffixIcon: Padding(
                     padding: const EdgeInsets.only(right: 4),
-                    child: lockState.checking
-                        ? const Padding(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // A PAM prompt that asks for visible input (a user
+                        // name) is already shown in clear.
+                        if (!lockState.echo)
+                          // Not focusable: clicking it must leave the
+                          // keyboard on the field.
+                          ExcludeFocus(
+                            child: IconButton(
+                              tooltip: revealed.value
+                                  ? context.l10n.lockScreenHidePassword
+                                  : context.l10n.lockScreenShowPassword,
+                              onPressed: () => revealed.value = !revealed.value,
+                              icon: Icon(
+                                revealed.value
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                              ),
+                            ),
+                          ),
+                        if (lockState.checking)
+                          const Padding(
                             padding: EdgeInsets.all(14),
                             child: SizedBox.square(
                               dimension: 20,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             ),
                           )
-                        : IconButton(
+                        else
+                          IconButton(
                             tooltip: context.l10n.lockScreenUnlock,
                             onPressed: waiting ? submit : null,
                             icon: const Icon(Icons.arrow_forward),
                           ),
+                      ],
+                    ),
                   ),
                 ),
               ),

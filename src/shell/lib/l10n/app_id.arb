@@ -84,6 +84,8 @@
   "lockScreenWrongPassword": "Kata sandi salah, coba lagi",
   "lockScreenChecking": "Memeriksa…",
   "lockScreenUnlock": "Buka kunci",
+  "lockScreenShowPassword": "Tampilkan kata sandi",
+  "lockScreenHidePassword": "Sembunyikan kata sandi",
   "swapAltAndWin": "Tukar Alt dan Win",
   "swapAltAndWinDescription": "Tingkatkan kenyamanan ibu jari dengan menukar tombol Alt dan Win",
   "capsLock": "Caps Lock",

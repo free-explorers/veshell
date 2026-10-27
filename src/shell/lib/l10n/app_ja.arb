@@ -84,6 +84,8 @@
   "lockScreenWrongPassword": "パスワードが違います。もう一度お試しください",
   "lockScreenChecking": "確認中…",
   "lockScreenUnlock": "ロック解除",
+  "lockScreenShowPassword": "パスワードを表示",
+  "lockScreenHidePassword": "パスワードを隠す",
   "swapAltAndWin": "Alt と Win を入れ替える",
   "swapAltAndWinDescription": "Alt キーと Win キーを入れ替えて親指の操作性を改善",
   "capsLock": "Caps Lock",

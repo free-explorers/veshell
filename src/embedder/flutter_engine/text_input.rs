@@ -47,15 +47,20 @@ impl TextInput {
                 self.press_enter();
                 false
             }
-            _ => {
-                if let Some(code_point) = keysym.key_char() {
+            // Editing keys Flutter left unhandled (an empty field, a field
+            // without the default editing shortcuts). Their keysyms map to
+            // control characters (Backspace is U+0008), which must never be
+            // inserted as text.
+            Keysym::BackSpace => model.backspace(),
+            Keysym::Delete | Keysym::KP_Delete => model.delete(),
+            _ => match typed_char(keysym) {
+                Some(code_point) => {
                     // A regular character.
                     model.add_char_point(code_point);
                     true
-                } else {
-                    false
                 }
-            }
+                None => false,
+            },
         };
         if changed {
             self.send_state_update();
@@ -106,6 +111,12 @@ impl TextInput {
             None,
         );
     }
+}
+
+/// The character a key types into a text field, if any. Control characters
+/// (Backspace, Tab, Escape, Delete, ...) type nothing.
+fn typed_char(keysym: Keysym) -> Option<char> {
+    keysym.key_char().filter(|c| !c.is_control())
 }
 
 pub fn text_input_channel_method_call_handler<BackendData: Backend + 'static>(
@@ -166,5 +177,31 @@ pub fn text_input_channel_method_call_handler<BackendData: Backend + 'static>(
             _ => {}
         }
         result.success(None);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn printable_keys_type_their_character() {
+        assert_eq!(typed_char(Keysym::a), Some('a'));
+        assert_eq!(typed_char(Keysym::space), Some(' '));
+        assert_eq!(typed_char(Keysym::eacute), Some('é'));
+    }
+
+    #[test]
+    fn control_keys_type_nothing() {
+        for keysym in [
+            Keysym::BackSpace,
+            Keysym::Delete,
+            Keysym::Tab,
+            Keysym::Escape,
+            Keysym::Return,
+            Keysym::KP_Enter,
+        ] {
+            assert_eq!(typed_char(keysym), None, "{keysym:?}");
+        }
     }
 }
