@@ -418,14 +418,36 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         self.meta_window_state
             .meta_window_id_per_surface_id
             .retain(|_, id| id != meta_window_id);
-        if self
+        if !self
             .meta_window_state
             .meta_windows
-            .remove(meta_window_id)
-            .is_none()
+            .contains_key(meta_window_id)
         {
             return;
         }
+
+        // A game that closes itself is torn down through this path, not through
+        // an `UpdateGameModeActivated(false)` patch. Without that deactivation
+        // the shell never pops its gaming route, which keeps covering the
+        // screen and swallowing every click, and the compositor keeps the
+        // pointer focus it set on entry. Deactivate while the MetaWindow still
+        // exists: the patch handler ignores an unknown window and would then
+        // never forward the patch to the shell. This clears the
+        // compositor-set pointer focus, hands the output back its fixed
+        // cadence, drops the forwarded keys and tells the shell to leave the
+        // mode.
+        if self.meta_window_state.meta_window_in_gaming_mode.as_deref()
+            == Some(meta_window_id.as_str())
+        {
+            self.patch_meta_window(
+                MetaWindowPatch::UpdateGameModeActivated {
+                    id: meta_window_id.clone(),
+                    value: false,
+                },
+                true,
+            );
+        }
+        self.meta_window_state.meta_windows.remove(meta_window_id);
 
         // Popups are independent surfaces. A client that tears down its
         // toplevel without destroying its override-redirect children must not
@@ -439,26 +461,6 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .collect();
         for popup_id in popup_ids {
             self.remove_meta_popup(&popup_id);
-        }
-
-        // A game that closes itself is torn down through this path, not through
-        // an `UpdateGameModeActivated(false)` patch. Without that deactivation
-        // the shell never pops its gaming route and the compositor keeps the
-        // pointer focus it set on entry, now targeting a freed surface, so
-        // Flutter never gets its pointer events back. Deactivate first so both
-        // release cleanly: this clears the compositor-set pointer focus, hands
-        // the output back its fixed cadence, drops the forwarded keys and tells
-        // the shell to leave the mode.
-        if self.meta_window_state.meta_window_in_gaming_mode.as_deref()
-            == Some(meta_window_id.as_str())
-        {
-            self.patch_meta_window(
-                MetaWindowPatch::UpdateGameModeActivated {
-                    id: meta_window_id.clone(),
-                    value: false,
-                },
-                true,
-            );
         }
 
         // Drop it from the focus order too: a removed window can no longer be
