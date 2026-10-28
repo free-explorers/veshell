@@ -139,4 +139,50 @@ void main() {
       expect(reported.last, 1);
     },
   );
+
+  testWidgets('a keyed page keeps its state when it moves to another index', (
+    tester,
+  ) async {
+    final events = StreamController<PlatformEvent>.broadcast();
+    addTearDown(events.close);
+    tester.view
+      ..devicePixelRatio = 1.0
+      ..physicalSize = const Size(600, 100);
+    addTearDown(tester.view.reset);
+    Widget pages(List<String> order) => ProviderScope(
+      overrides: [platformManagerProvider.overrideWithValue(events.stream)],
+      child: MaterialApp(
+        home: SlidingContainer(
+          index: 0,
+          visible: 2,
+          children: [
+            for (final id in order) _StatefulPage(key: ValueKey(id), id: id),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpWidget(pages(['a', 'b']));
+    final stateOfA = tester.state(find.byKey(const ValueKey('a')));
+
+    await tester.pumpWidget(pages(['b', 'a']));
+
+    expect(tester.state(find.byKey(const ValueKey('a'))), same(stateOfA));
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('a'))).dx,
+      greaterThan(tester.getTopLeft(find.byKey(const ValueKey('b'))).dx),
+    );
+  });
+}
+
+class _StatefulPage extends StatefulWidget {
+  const _StatefulPage({required this.id, super.key});
+  final String id;
+
+  @override
+  State<_StatefulPage> createState() => _StatefulPageState();
+}
+
+class _StatefulPageState extends State<_StatefulPage> {
+  @override
+  Widget build(BuildContext context) => Text(widget.id);
 }

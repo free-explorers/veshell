@@ -18,6 +18,7 @@ import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/pointer/model/pointer_focus.serializable.dart';
 import 'package:shell/pointer/provider/pointer_focus.manager.dart';
 import 'package:shell/shared/provider/mouse_button_tracker.dart';
+import 'package:shell/tile_grab/widget/tile_grab_region.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 
@@ -72,6 +73,9 @@ class ViewInputListener extends HookConsumerWidget {
 
     final globalKey = useMemoized(GlobalKey.new);
     final isHovered = useRef(false);
+    // Presses that start a tile grab belong to the shell: the client never
+    // sees them, nor the release the arena loss would otherwise report.
+    final grabPointers = useRef(<int>{});
     final lastReportedOffset = useRef<Offset?>(null);
 
     // Surface origin in global compositor space: its view-local render
@@ -146,6 +150,10 @@ class ViewInputListener extends HookConsumerWidget {
             rect: _clipToSurface(inputRegion, surfaceSize),
             child: ArenaListener(
               onPointerDown: (PointerDownEvent event) {
+                if (TileGrabRegion.claims(context, event)) {
+                  grabPointers.value.add(event.pointer);
+                  return null;
+                }
                 _onPointerDown(ref, event, globalOffsetForSurface());
                 return null;
               },
@@ -168,7 +176,12 @@ class ViewInputListener extends HookConsumerWidget {
               onPointerCancel: (_, __) {
                 return GestureDisposition.rejected;
               },
-              onLose: (event) => _onLoseArena(ref, event),
+              // The grab wins the arena, so every later event of its pointer
+              // arrives rejected and is ignored above.
+              onLose: (event) {
+                if (grabPointers.value.remove(event.pointer)) return;
+                unawaited(_onLoseArena(ref, event));
+              },
               child: Listener(
                 onPointerHover: (PointerHoverEvent event) {
                   if (event.kind == PointerDeviceKind.mouse) {

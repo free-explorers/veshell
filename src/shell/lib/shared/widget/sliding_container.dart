@@ -18,6 +18,8 @@ class SlidingContainer extends HookConsumerWidget {
     this.onFirstVisibleIndexChanged,
     this.isSwipeEnabled = true,
     this.selectionIndicator,
+    this.viewportMetaData,
+    this.buildsNeighbors = false,
     super.key,
   });
   final Axis direction;
@@ -41,6 +43,15 @@ class SlidingContainer extends HookConsumerWidget {
   /// slide to the newly selected page instead of jumping. `null` hides them
   /// and removes the gap they live in.
   final SlidingSelectionIndicator? selectionIndicator;
+
+  /// Builds a `MetaData` value attached to the page viewport, given the
+  /// viewport's current scroll offset, so a hit test can map a position to a
+  /// page.
+  final Object Function(double Function() scrollOffset)? viewportMetaData;
+
+  /// Keeps a viewport's worth of pages built on each side of the visible ones,
+  /// so a page sliding in from off screen is already there.
+  final bool buildsNeighbors;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Resolve the leading tile up front: the effect below runs during the build
@@ -242,19 +253,39 @@ class SlidingContainer extends HookConsumerWidget {
                     padding: isHorizontal
                         ? EdgeInsets.symmetric(vertical: gap)
                         : EdgeInsets.symmetric(horizontal: gap),
-                    child: SizedBox(
-                      width: isHorizontal ? pageViewport : crossAxisExtent,
-                      height: isHorizontal ? crossAxisExtent : pageViewport,
-                      child: PageView.builder(
-                        controller: pageController,
-                        scrollDirection: direction,
-                        itemCount: children.length,
-                        itemBuilder: (context, index) {
-                          return children[index];
-                        },
-                        physics: const NeverScrollableScrollPhysics(),
-                        pageSnapping: false,
-                        padEnds: false,
+                    child: MetaData(
+                      metaData: viewportMetaData?.call(
+                        () =>
+                            pageController.hasClients &&
+                                pageController.position.hasPixels
+                            ? pageController.offset
+                            : 0,
+                      ),
+                      behavior: HitTestBehavior.translucent,
+                      child: SizedBox(
+                        width: isHorizontal ? pageViewport : crossAxisExtent,
+                        height: isHorizontal ? crossAxisExtent : pageViewport,
+                        child: PageView.builder(
+                          controller: pageController,
+                          scrollDirection: direction,
+                          itemCount: children.length,
+                          itemBuilder: (context, index) {
+                            return children[index];
+                          },
+                          // A keyed page keeps its state when it moves to
+                          // another index, instead of the page now at its old
+                          // index taking that state over.
+                          findChildIndexCallback: (key) {
+                            final index = children.indexWhere(
+                              (child) => child.key == key,
+                            );
+                            return index < 0 ? null : index;
+                          },
+                          allowImplicitScrolling: buildsNeighbors,
+                          physics: const NeverScrollableScrollPhysics(),
+                          pageSnapping: false,
+                          padEnds: false,
+                        ),
                       ),
                     ),
                   ),

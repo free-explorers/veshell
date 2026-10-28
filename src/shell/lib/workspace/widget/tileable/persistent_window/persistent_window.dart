@@ -11,6 +11,7 @@ import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/widget/tile_popup_host.dart';
 import 'package:shell/shared/widget/shell_icon.dart';
+import 'package:shell/tile_grab/widget/tile_grab_region.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
@@ -152,45 +153,50 @@ class PersistentWindowTileable extends Tileable {
       chooserVisible: chooserVisible,
     );
 
-    return ClipRect(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Listener(
-            onPointerDown: (event) {
-              final currentWorkspaceId = CurrentWorkspaceId.of(context);
-              ref
-                  .read(workspaceStateProvider(currentWorkspaceId).notifier)
-                  .selectWindow(windowId);
-            },
-            child: FocusScope(
-              node: persistentFocusNode,
-              autofocus: true,
-              onFocusChange: (value) {
-                // In game mode the overlay never builds `primaryFocusNode`,
-                // so it is detached. Re-autofocusing it here would reparent
-                // it and make the defunct node the primary focus again, which
-                // breaks the shell's hotkeys while the pause overlay shows.
-                if (value && window.displayMode != DisplayMode.game) {
-                  persistentFocusNode.autofocus(
-                    window.displayMode == DisplayMode.floating
-                        ? floatingFocusNode
-                        : primaryFocusNode,
-                  );
-                }
+    return TileGrabRegion(
+      windowId: windowId,
+      // A game tile hands the pointer straight to the client.
+      enabled: window.displayMode != DisplayMode.game,
+      child: ClipRect(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Listener(
+              onPointerDown: (event) {
+                final currentWorkspaceId = CurrentWorkspaceId.of(context);
+                ref
+                    .read(workspaceStateProvider(currentWorkspaceId).notifier)
+                    .selectWindow(windowId);
               },
-              // The dialog area owns the tile's dialogs and the trusted file
-              // chooser: it presents them as a tabbed panel over a blurred
-              // tile and keeps the selection. Native dialogs stay out of the
-              // area in game mode (the overlay must not be covered). Floating
-              // tiles bypass it entirely and float every native child instead.
-              child: area,
+              child: FocusScope(
+                node: persistentFocusNode,
+                autofocus: true,
+                onFocusChange: (value) {
+                  // In game mode the overlay never builds `primaryFocusNode`,
+                  // so it is detached. Re-autofocusing it here would reparent
+                  // it and make the defunct node the primary focus again, which
+                  // breaks the shell's hotkeys while the pause overlay shows.
+                  if (value && window.displayMode != DisplayMode.game) {
+                    persistentFocusNode.autofocus(
+                      window.displayMode == DisplayMode.floating
+                          ? floatingFocusNode
+                          : primaryFocusNode,
+                    );
+                  }
+                },
+                // The dialog area owns the tile's dialogs and the trusted file
+                // chooser: it presents them as a tabbed panel over a blurred
+                // tile and keeps the selection. Native dialogs stay out of the
+                // area in game mode (the overlay must not be covered). Floating
+                // tiles bypass it entirely and float every native child instead.
+                child: area,
+              ),
             ),
-          ),
-          Positioned.fill(
-            child: TilePopupHost(metaWindowIds: popupMetaWindowIds),
-          ),
-        ],
+            Positioned.fill(
+              child: TilePopupHost(metaWindowIds: popupMetaWindowIds),
+            ),
+          ],
+        ),
       ),
     );
   }

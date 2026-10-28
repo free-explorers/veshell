@@ -18,6 +18,9 @@ import 'package:shell/shared/widget/cross_reorderable_list.dart';
 import 'package:shell/shared/widget/multi_view_drag.dart';
 import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/theme//provider/theme.dart';
+import 'package:shell/tile_grab/model/tile_drop.dart';
+import 'package:shell/tile_grab/model/tile_grab_marker.dart';
+import 'package:shell/tile_grab/provider/tile_grab_controller.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/tileable/persistent_window/persistent_window.dart';
@@ -229,68 +232,80 @@ class WorkspaceListButton extends HookConsumerWidget {
     final isRecording = ref
         .watch(recordingWorkspacesProvider)
         .contains(workspaceId);
+    final isGrabTarget = ref.watch(
+      tileGrabControllerProvider.select(
+        (grab) =>
+            grab?.target == TileDropTarget.workspace(workspaceId: workspaceId),
+      ),
+    );
 
     return NotificationArea(
       channel: workspaceNotificationChannel(workspaceId),
-      child: ShellDragTarget<PersistentWindowTileable>(
-        onWillAcceptWithDetails: (details) => !ref
-            .read(workspaceStateProvider(workspaceId))
-            .tileableWindowList
-            .contains(details.data.windowId),
-        onAcceptWithDetails: (details) {
-          ref
-              .read(workspaceStateProvider(workspaceId).notifier)
-              .addWindow(details.data.windowId);
-        },
-        builder: (context, candidateData, rejectedData) {
-          return AspectRatio(
-            aspectRatio: 1,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned.fill(
-                  child: IconButton(
-                    style: ButtonStyle(
-                      backgroundColor: WidgetStatePropertyAll(
-                        candidateData.isNotEmpty
-                            ? Theme.of(context).colorScheme.primaryContainer
-                            : null,
-                      ),
-                      foregroundColor: WidgetStatePropertyAll(
-                        candidateData.isNotEmpty
-                            ? Theme.of(context).colorScheme.onPrimaryContainer
-                            : null,
-                      ),
-                      shape: WidgetStateProperty.all(
-                        const RoundedRectangleBorder(),
-                      ),
-                    ),
-                    onPressed: () {
-                      ref
-                          .read(screenStateProvider(screenId).notifier)
-                          .selectWorkspace(
-                            screenState.workspaceList.indexOf(workspaceId),
-                          );
-                    },
-                    icon: WorkspaceIcon(workspaceId: workspaceId),
-                  ),
-                ),
-                if (isRecording || unreadNotifications.isNotEmpty)
+      // A tile held with Super + drag lands at the end of this workspace.
+      child: MetaData(
+        metaData: TileWorkspaceButtonMarker(workspaceId),
+        behavior: HitTestBehavior.translucent,
+        child: ShellDragTarget<PersistentWindowTileable>(
+          onWillAcceptWithDetails: (details) => !ref
+              .read(workspaceStateProvider(workspaceId))
+              .tileableWindowList
+              .contains(details.data.windowId),
+          onAcceptWithDetails: (details) {
+            ref
+                .read(workspaceStateProvider(workspaceId).notifier)
+                .addWindow(details.data.windowId);
+          },
+          builder: (context, candidateData, rejectedData) {
+            final isHovered = candidateData.isNotEmpty || isGrabTarget;
+            return AspectRatio(
+              aspectRatio: 1,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
                   Positioned.fill(
-                    child: IgnorePointer(
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: NotificationDot(
-                          color: isRecording ? Colors.red : null,
-                          blinking: isRecording,
+                    child: IconButton(
+                      style: ButtonStyle(
+                        backgroundColor: WidgetStatePropertyAll(
+                          isHovered
+                              ? Theme.of(context).colorScheme.primaryContainer
+                              : null,
+                        ),
+                        foregroundColor: WidgetStatePropertyAll(
+                          isHovered
+                              ? Theme.of(context).colorScheme.onPrimaryContainer
+                              : null,
+                        ),
+                        shape: WidgetStateProperty.all(
+                          const RoundedRectangleBorder(),
+                        ),
+                      ),
+                      onPressed: () {
+                        ref
+                            .read(screenStateProvider(screenId).notifier)
+                            .selectWorkspace(
+                              screenState.workspaceList.indexOf(workspaceId),
+                            );
+                      },
+                      icon: WorkspaceIcon(workspaceId: workspaceId),
+                    ),
+                  ),
+                  if (isRecording || unreadNotifications.isNotEmpty)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: NotificationDot(
+                            color: isRecording ? Colors.red : null,
+                            blinking: isRecording,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-              ],
-            ),
-          );
-        },
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
