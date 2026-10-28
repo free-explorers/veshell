@@ -26,12 +26,19 @@ import 'package:shell/wayland/provider/wl_surface_state.dart';
 class ViewInputListener extends HookConsumerWidget {
   const ViewInputListener({
     required this.surfaceId,
+    required this.surfaceSize,
     required this.child,
     this.globalOffsetOverride,
     super.key,
   });
 
   final SurfaceId surfaceId;
+
+  /// The surface's logical size. The input region is clipped to it: without a
+  /// client-set region the compositor reports the whole buffer, whose size is
+  /// in buffer pixels, so on a scaled output it reached past the surface and
+  /// took clicks meant for whatever is beside it.
+  final Size surfaceSize;
   final Widget child;
 
   /// Surface-buffer origin in compositor-global logical coordinates, when the
@@ -136,7 +143,7 @@ class ViewInputListener extends HookConsumerWidget {
         children: [
           IgnorePointer(child: child),
           Positioned.fromRect(
-            rect: inputRegion,
+            rect: _clipToSurface(inputRegion, surfaceSize),
             child: ArenaListener(
               onPointerDown: (PointerDownEvent event) {
                 _onPointerDown(ref, event, globalOffsetForSurface());
@@ -313,6 +320,11 @@ class ViewInputListener extends HookConsumerWidget {
             ),
           ),
         );
+  }
+
+  static Rect _clipToSurface(Rect inputRegion, Size surfaceSize) {
+    final clipped = inputRegion.intersect(Offset.zero & surfaceSize);
+    return clipped.isEmpty ? Rect.zero : clipped;
   }
 
   void _pointerMoved(WidgetRef ref, Offset globalOffset) {

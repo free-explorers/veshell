@@ -9,6 +9,7 @@ import 'package:shell/platform/model/event/meta_window_patches/meta_window_patch
 import 'package:shell/platform/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/util/logger.dart';
+import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 
@@ -87,12 +88,12 @@ class WindowWidget extends HookConsumerWidget {
     } on Object {
       displayedSizing = null;
     }
-    final displayedBufferSize = displayedSizing == null
-        ? null
+    final (displayedBufferSize, displayedBufferScale) = displayedSizing == null
+        ? (null, 1)
         : ref.watch(
             wlSurfaceStateProvider(
               displayedSizing.surfaceId,
-            ).select((value) => value.texture?.size),
+            ).select((value) => (value.texture?.size, value.scale)),
           );
     // One corrective patch per observed mismatch: a client that refuses the
     // configure would otherwise be re-patched on every commit it makes. The
@@ -156,15 +157,14 @@ class WindowWidget extends HookConsumerWidget {
                         final geometry = metaWindow.geometry;
                         final targetSize = constraints.biggest;
                         // The committed buffer is the surface's actual size,
-                        // in physical pixels: divide by the scale to compare
-                        // it with the logical tile bounds.
+                        // in buffer pixels: divide by its scale to compare it
+                        // with the logical tile bounds.
                         final logicalBufferSize = displayedBufferSize == null
                             ? null
-                            : Size(
-                                displayedBufferSize.width /
-                                    metaWindow.scaleRatio,
-                                displayedBufferSize.height /
-                                    metaWindow.scaleRatio,
+                            : surfaceLogicalSize(
+                                displayedBufferSize,
+                                displayedBufferScale,
+                                metaWindow.scaleRatio,
                               );
 
                         geometryLog.info(
@@ -228,6 +228,7 @@ class WindowWidget extends HookConsumerWidget {
                       metaWindowId,
                       displayedSizing,
                       displayedBufferSize,
+                      displayedBufferScale,
                     ],
                   );
 

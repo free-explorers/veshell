@@ -19,6 +19,7 @@ import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/util/snapping.dart';
 import 'package:shell/shared/widget/container_with_positionnable_children/container_with_positionnable_children.dart';
+import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 
 /// How a [FloatableWindow] is presented.
@@ -107,10 +108,10 @@ class FloatableWindow extends HookConsumerWidget {
     // `texture` is null until the surface commits its first buffer; a null
     // check here would make a not-yet-committed dialog crash instead of
     // appearing as soon as it is ready.
-    final surfaceSize = ref.watch(
+    final (surfaceSize, bufferScale) = ref.watch(
       wlSurfaceStateProvider(
         metaWindow.surfaceId,
-      ).select((v) => v.texture?.size),
+      ).select((v) => (v.texture?.size, v.scale)),
     );
 
     final repositionnableControllerWidget = RepositionnableControllerWidget.of(
@@ -153,9 +154,8 @@ class FloatableWindow extends HookConsumerWidget {
       if (size == null) {
         return null;
       }
-      final ratio = metaWindow.scaleRatio;
-      return Size(size.width / ratio, size.height / ratio);
-    }, [surfaceSize, metaWindow.scaleRatio]);
+      return surfaceLogicalSize(size, bufferScale, metaWindow.scaleRatio);
+    }, [surfaceSize, bufferScale, metaWindow.scaleRatio]);
 
     // A client-side-decorated surface draws its shadow and rounded corners
     // outside the window geometry; framing it would double the decoration and

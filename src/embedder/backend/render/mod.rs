@@ -161,6 +161,21 @@ where
         Transform::Normal
     };
     if let Some(flutter_texture) = flutter_texture {
+        // The destination is the output's exact physical size, in logical
+        // units. `output_geometry` is rounded up to whole logical pixels
+        // (`Space::output_geometry`), so at a scale that does not divide the
+        // mode (2560 px at 1.2 is 2133.33 logical, ceiled to 2134) it maps
+        // back to 2561 px and the whole Flutter frame is resampled one pixel
+        // wider: the entire UI goes soft.
+        let destination_size = output
+            .current_mode()
+            .map(|mode| {
+                flutter_frame_size(
+                    output.current_transform().transform_size(mode.size),
+                    scale.fractional_scale(),
+                )
+            })
+            .unwrap_or(output_geometry.size);
         let flutter_texture_buffer = FractionnalTextureBuffer::from_texture(
             renderer,
             flutter_texture,
@@ -177,13 +192,20 @@ where
             // differs from its own geometry, so fixing `src` to the local
             // geometry would sample only its top-left region at native size.
             None,
-            Some(output_geometry.size),
+            Some(destination_size),
             Kind::Unspecified,
         );
         elements.push(VeshellRenderElements::Flutter(flutter_texture_element));
     }
 
     elements
+}
+
+/// The logical size that maps an output's Flutter frame onto exactly
+/// `physical_size` pixels: unlike `Space::output_geometry`, not rounded to
+/// whole logical pixels.
+fn flutter_frame_size(physical_size: Size<i32, Physical>, scale: f64) -> Size<f64, Logical> {
+    physical_size.to_f64().to_logical(scale)
 }
 
 /// Cursor imagery to composite into a capture readback. Screenshots and
@@ -905,6 +927,24 @@ where
     VeshellRenderElements<R>: RenderElement<R>,
 {
     render_elements_from_surface_tree(renderer, surface, (0, 0), 1.0, 1.0, Kind::Unspecified)
+}
+
+#[cfg(test)]
+mod flutter_frame_size_tests {
+    use super::*;
+
+    /// The Flutter frame must cover the output 1:1 at every scale, including
+    /// those that do not divide the mode (2560 at 1.2 is 2133.33 logical).
+    #[test]
+    fn maps_back_to_the_exact_mode_size() {
+        let mode = Size::<i32, Physical>::from((2560, 1440));
+        for scale in [1.0, 1.1, 1.15, 1.2, 1.25, 1.5, 1.75, 2.0] {
+            let size = flutter_frame_size(mode, scale);
+            let physical = Rectangle::<f64, Logical>::from_size(size)
+                .to_physical_precise_round::<f64, i32>(scale);
+            assert_eq!(physical.size, mode, "scale {scale}");
+        }
+    }
 }
 
 #[cfg(test)]

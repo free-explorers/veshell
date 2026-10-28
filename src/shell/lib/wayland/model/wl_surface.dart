@@ -27,3 +27,22 @@ abstract class WlSurface with _$WlSurface {
     required Rect inputRegion,
   }) = _WlSurface;
 }
+
+/// How many buffer pixels make one logical pixel of a committed surface.
+///
+/// A client that sets an integer `wl_surface.buffer_scale` above 1 declares
+/// its buffer to be exactly that multiple of its logical size; this is what a
+/// client without fractional-scale support does on a fractional output
+/// (`wl_output.scale` is advertised rounded up, so 2 at 1.25). Every other
+/// client (fractional-aware Wayland clients, Xwayland) renders at
+/// [scaleRatio] with a buffer scale of 1. Dividing such a 2x buffer by the
+/// fractional ratio drew the surface too large, and pointer coordinates, which
+/// the client reads in its own logical space, drifted away from what it drew.
+double surfaceBufferScale(int bufferScale, double scaleRatio) =>
+    bufferScale > 1 ? bufferScale.toDouble() : scaleRatio;
+
+/// A committed buffer's size in logical pixels; see [surfaceBufferScale].
+Size surfaceLogicalSize(Size bufferSize, int bufferScale, double scaleRatio) {
+  final scale = surfaceBufferScale(bufferScale, scaleRatio);
+  return Size(bufferSize.width / scale, bufferSize.height / scale);
+}

@@ -8,32 +8,37 @@ class SurfaceSize extends ConsumerWidget {
   const SurfaceSize({
     required this.surfaceId,
     required this.scaleRatio,
-    required this.child,
+    required this.builder,
     super.key,
   });
 
   final SurfaceId surfaceId;
   final double scaleRatio;
 
-  final Widget child;
+  /// Builds the surface content laid out at the logical size it is given.
+  final Widget Function(BuildContext context, Size logicalSize) builder;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final surfaceSize = ref.watch(
-      wlSurfaceStateProvider(surfaceId).select((v) => v.texture!.size),
+    final (surfaceSize, bufferScale) = ref.watch(
+      wlSurfaceStateProvider(
+        surfaceId,
+      ).select((v) => (v.texture!.size, v.scale)),
     );
-    final logicalSize = Size(
-      surfaceSize.width / scaleRatio,
-      surfaceSize.height / scaleRatio,
+    final logicalSize = surfaceLogicalSize(
+      surfaceSize,
+      bufferScale,
+      scaleRatio,
     );
     geometryLog.fine(
       'surface layout surface=$surfaceId texture=$surfaceSize '
-      'outputScale=$scaleRatio logicalSize=$logicalSize',
+      'outputScale=$scaleRatio bufferScale=$bufferScale '
+      'logicalSize=$logicalSize',
     );
     return SizedBox(
       width: logicalSize.width,
       height: logicalSize.height,
-      child: child,
+      child: builder(context, logicalSize),
     );
   }
 }
