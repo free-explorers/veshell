@@ -88,12 +88,16 @@ class WindowWidget extends HookConsumerWidget {
     } on Object {
       displayedSizing = null;
     }
-    final (displayedBufferSize, displayedBufferScale) = displayedSizing == null
-        ? (null, 1)
+    final (
+      displayedBufferSize,
+      displayedBufferScale,
+      displayedViewportSize,
+    ) = displayedSizing == null
+        ? (null, 1, null)
         : ref.watch(
-            wlSurfaceStateProvider(
-              displayedSizing.surfaceId,
-            ).select((value) => (value.texture?.size, value.scale)),
+            wlSurfaceStateProvider(displayedSizing.surfaceId).select(
+              (value) => (value.texture?.size, value.scale, value.viewportSize),
+            ),
           );
     // One corrective patch per observed mismatch: a client that refuses the
     // configure would otherwise be re-patched on every commit it makes. The
@@ -165,6 +169,7 @@ class WindowWidget extends HookConsumerWidget {
                                 displayedBufferSize,
                                 displayedBufferScale,
                                 metaWindow.scaleRatio,
+                                viewportSize: displayedViewportSize,
                               );
 
                         geometryLog.info(
@@ -229,6 +234,7 @@ class WindowWidget extends HookConsumerWidget {
                       displayedSizing,
                       displayedBufferSize,
                       displayedBufferScale,
+                      displayedViewportSize,
                     ],
                   );
 

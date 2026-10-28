@@ -25,6 +25,13 @@ abstract class WlSurface with _$WlSurface {
     required IList<int> subsurfacesBelow,
     required IList<int> subsurfacesAbove,
     required Rect inputRegion,
+
+    /// `wp_viewport` destination, when the client set one; see
+    /// [surfaceLogicalSize].
+    Size? viewportSize,
+
+    /// `wp_viewport` source crop in buffer pixels, when the client set one.
+    Rect? viewportSource,
   }) = _WlSurface;
 }
 
@@ -41,8 +48,19 @@ abstract class WlSurface with _$WlSurface {
 double surfaceBufferScale(int bufferScale, double scaleRatio) =>
     bufferScale > 1 ? bufferScale.toDouble() : scaleRatio;
 
-/// A committed buffer's size in logical pixels; see [surfaceBufferScale].
-Size surfaceLogicalSize(Size bufferSize, int bufferScale, double scaleRatio) {
+/// A committed surface's size in logical pixels.
+///
+/// A `wp_viewport` destination ([viewportSize]) is the logical size by
+/// definition: fractional-scale clients render at the preferred scale and
+/// declare their size with it. Otherwise the buffer is divided by its scale;
+/// see [surfaceBufferScale].
+Size surfaceLogicalSize(
+  Size bufferSize,
+  int bufferScale,
+  double scaleRatio, {
+  Size? viewportSize,
+}) {
+  if (viewportSize != null) return viewportSize;
   final scale = surfaceBufferScale(bufferScale, scaleRatio);
   return Size(bufferSize.width / scale, bufferSize.height / scale);
 }

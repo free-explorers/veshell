@@ -27,6 +27,13 @@ sealed class CommitSurfaceMessage
     required IList<int> subsurfacesAbove,
     @OffsetConverter() Offset? bufferDelta,
     @SizeConverter() Size? bufferSize,
+
+    /// `wp_viewport` destination: the surface's logical size, whatever its
+    /// buffer size and scale.
+    @SizeConverter() Size? viewportSize,
+
+    /// `wp_viewport` source crop, in buffer pixels.
+    @RectConverter() Rect? viewportSource,
   }) = _CommitSurfaceMessage;
 
   factory CommitSurfaceMessage.fromJson(Map<String, dynamic> json) =>

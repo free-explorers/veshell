@@ -54,6 +54,8 @@ class WlSurfaceState extends _$WlSurfaceState {
     required IList<int> subsurfacesBelow,
     required IList<int> subsurfacesAbove,
     required Rect inputRegion,
+    Size? viewportSize,
+    Rect? viewportSource,
   }) {
     final previous = state;
     state = state.copyWith(
@@ -63,12 +65,17 @@ class WlSurfaceState extends _$WlSurfaceState {
       subsurfacesBelow: subsurfacesBelow,
       subsurfacesAbove: subsurfacesAbove,
       inputRegion: inputRegion,
+      // Every commit carries the whole viewport state: a cleared viewport
+      // must clear these too.
+      viewportSize: viewportSize,
+      viewportSource: viewportSource,
     );
     geometryLog.fine(
       'surface state surface=$surfaceId '
       'texture ${previous.texture?.id}/${previous.texture?.size} -> '
       '$textureId/$surfaceSize scale ${previous.scale} -> $scale '
-      'role ${previous.role} -> $role input=$inputRegion',
+      'role ${previous.role} -> $role input=$inputRegion '
+      'viewport=$viewportSize source=$viewportSource',
     );
   }
 

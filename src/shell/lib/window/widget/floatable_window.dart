@@ -108,10 +108,10 @@ class FloatableWindow extends HookConsumerWidget {
     // `texture` is null until the surface commits its first buffer; a null
     // check here would make a not-yet-committed dialog crash instead of
     // appearing as soon as it is ready.
-    final (surfaceSize, bufferScale) = ref.watch(
+    final (surfaceSize, bufferScale, viewportSize) = ref.watch(
       wlSurfaceStateProvider(
         metaWindow.surfaceId,
-      ).select((v) => (v.texture?.size, v.scale)),
+      ).select((v) => (v.texture?.size, v.scale, v.viewportSize)),
     );
 
     final repositionnableControllerWidget = RepositionnableControllerWidget.of(
@@ -154,8 +154,13 @@ class FloatableWindow extends HookConsumerWidget {
       if (size == null) {
         return null;
       }
-      return surfaceLogicalSize(size, bufferScale, metaWindow.scaleRatio);
-    }, [surfaceSize, bufferScale, metaWindow.scaleRatio]);
+      return surfaceLogicalSize(
+        size,
+        bufferScale,
+        metaWindow.scaleRatio,
+        viewportSize: viewportSize,
+      );
+    }, [surfaceSize, bufferScale, viewportSize, metaWindow.scaleRatio]);
 
     // A client-side-decorated surface draws its shadow and rounded corners
     // outside the window geometry; framing it would double the decoration and
