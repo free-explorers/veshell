@@ -68,6 +68,8 @@
   "refreshRateDescription": "মনিটরের রিফ্রেশ রেট",
   "fractionalScale": "ভগ্নাংশ স্কেল",
   "fractionalScaleDescription": "মনিটরের ভগ্নাংশ স্কেলিং",
+  "fractionalScaleExactValues": "{resolution}-এ সঠিক মান: {values}",
+  "fractionalScaleRecommended": "প্রস্তাবিত: {value}",
   "transform": "রূপান্তর",
   "transformDescription": "ডিসপ্লে ঘোরানো ও প্রতিফলন",
   "mirror": "প্রতিলিপি দেখান",

@@ -1,12 +1,14 @@
 import 'dart:convert';
 
 import 'package:collection/collection.dart';
+import 'package:intl/intl.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
+import 'package:shell/monitor/util/scale_recommendation.dart';
 import 'package:shell/monitor/widget/monitor_arrangement/monitor_arrangement_editor.dart';
 import 'package:shell/settings/model/setting_group.dart';
 import 'package:shell/settings/model/setting_property.dart';
@@ -164,7 +166,7 @@ class SettingsProperties extends _$SettingsProperties {
                 ),
                 'fractionnalScale': SettingProperty<double>(
                   name: l10n.fractionalScale,
-                  description: l10n.fractionalScaleDescription,
+                  description: _fractionalScaleDescription(l10n, e),
                 ),
                 'transform': SettingProperty<MonitorTransform>(
                   name: l10n.transform,
@@ -537,4 +539,34 @@ class SettingsProperties extends _$SettingsProperties {
     );
     ref.read(configuredSettingsJsonProvider.notifier).publish(json);
   }
+}
+
+/// The fractional-scale description of [monitor], with the scales that suit
+/// its current resolution: those that divide it exactly, and the one
+/// recommended for its pixel density (see `scale_recommendation.dart`).
+String _fractionalScaleDescription(AppLocalizations l10n, Monitor monitor) {
+  final resolution = monitor.currentMode?.size;
+  if (resolution == null || resolution.isEmpty) {
+    return l10n.fractionalScaleDescription;
+  }
+  final separator = NumberFormat.decimalPattern(
+    l10n.localeName,
+  ).symbols.DECIMAL_SEP;
+  String format(double scale) => formatScale(scale, separator);
+  final lines = [
+    l10n.fractionalScaleDescription,
+    l10n.fractionalScaleExactValues(
+      '${resolution.width.round()} × ${resolution.height.round()}',
+      exactScales(resolution).map(format).join(', '),
+    ),
+  ];
+  final recommended = recommendedScale(
+    resolution,
+    monitor.physicalProperties.size,
+    builtIn: isBuiltInConnector(monitor.name),
+  );
+  if (recommended != null) {
+    lines.add(l10n.fractionalScaleRecommended(format(recommended)));
+  }
+  return lines.join('\n');
 }

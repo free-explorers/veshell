@@ -68,6 +68,8 @@
   "refreshRateDescription": "مانیٹر کا ریفریش ریٹ",
   "fractionalScale": "کسری پیمانہ",
   "fractionalScaleDescription": "مانیٹر کی کسری پیمانہ بندی",
+  "fractionalScaleExactValues": "{resolution} پر درست قدریں: {values}",
+  "fractionalScaleRecommended": "تجویز کردہ: {value}",
   "transform": "تبدیلی",
   "transformDescription": "ڈسپلے کی گردش اور عکس",
   "mirror": "عکس دکھائیں",

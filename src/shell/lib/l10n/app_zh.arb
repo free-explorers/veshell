@@ -68,6 +68,8 @@
   "refreshRateDescription": "显示器刷新率",
   "fractionalScale": "分数缩放",
   "fractionalScaleDescription": "显示器分数缩放比例",
+  "fractionalScaleExactValues": "{resolution} 下的精确值：{values}",
+  "fractionalScaleRecommended": "推荐：{value}",
   "transform": "变换",
   "transformDescription": "显示旋转和镜像",
   "mirror": "镜像显示",

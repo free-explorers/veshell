@@ -68,6 +68,8 @@
   "refreshRateDescription": "モニターのリフレッシュレート",
   "fractionalScale": "分数スケーリング",
   "fractionalScaleDescription": "モニターの分数スケーリング",
+  "fractionalScaleExactValues": "{resolution} で正確な値: {values}",
+  "fractionalScaleRecommended": "推奨: {value}",
   "transform": "変換",
   "transformDescription": "画面の回転と反転",
   "mirror": "ミラーリング",

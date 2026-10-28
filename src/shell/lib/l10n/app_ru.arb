@@ -68,6 +68,8 @@
   "refreshRateDescription": "Частота обновления монитора",
   "fractionalScale": "Дробное масштабирование",
   "fractionalScaleDescription": "Дробное масштабирование монитора",
+  "fractionalScaleExactValues": "Точные для {resolution}: {values}",
+  "fractionalScaleRecommended": "Рекомендуется: {value}",
   "transform": "Преобразование",
   "transformDescription": "Поворот и отражение изображения",
   "mirror": "Дублирование",

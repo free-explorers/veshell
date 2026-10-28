@@ -68,6 +68,8 @@
   "refreshRateDescription": "모니터 주사율",
   "fractionalScale": "분수 배율",
   "fractionalScaleDescription": "모니터 분수 배율 설정",
+  "fractionalScaleExactValues": "{resolution}에서 정확한 값: {values}",
+  "fractionalScaleRecommended": "권장: {value}",
   "transform": "변환",
   "transformDescription": "디스플레이 회전 및 반전",
   "mirror": "복제",

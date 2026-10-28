@@ -68,6 +68,8 @@
   "refreshRateDescription": "Monitör yenileme hızı",
   "fractionalScale": "Kesirli ölçek",
   "fractionalScaleDescription": "Monitörün kesirli ölçeklendirmesi",
+  "fractionalScaleExactValues": "{resolution} için tam değerler: {values}",
+  "fractionalScaleRecommended": "Önerilen: {value}",
   "transform": "Dönüşüm",
   "transformDescription": "Ekran döndürme ve yansıtma",
   "mirror": "Yansıt",

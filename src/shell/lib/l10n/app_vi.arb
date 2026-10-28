@@ -68,6 +68,8 @@
   "refreshRateDescription": "Tần số quét màn hình",
   "fractionalScale": "Tỷ lệ phân số",
   "fractionalScaleDescription": "Tỷ lệ phân số của màn hình",
+  "fractionalScaleExactValues": "Chính xác ở {resolution}: {values}",
+  "fractionalScaleRecommended": "Đề xuất: {value}",
   "transform": "Biến đổi",
   "transformDescription": "Xoay và lật hình ảnh",
   "mirror": "Phản chiếu",
