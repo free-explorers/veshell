@@ -404,14 +404,14 @@ pub mod xwayland {
         fn new_window(&mut self, _xwm: XwmId, surface: X11Surface) {
             info!("X11 new_window {:?}", surface);
 
-            // Keep the legacy tiled placement at the X11 origin. Honouring an
-            // ICCCM position hint here would change every X11 window at
-            // launch, including tiled/maximized ones whose override-redirect
-            // popups are rendered against the origin. A floating window
-            // recovers its own placement from the client's configure requests
-            // once the floating tile owns it.
+            // Start at the synthetic tiled root. Honouring an ICCCM position
+            // hint here would change every X11 window at launch, including
+            // tiled/maximized ones whose override-redirect popups are rendered
+            // against that root. A floating window recovers its own placement
+            // from the client's configure requests once the floating tile owns
+            // it.
             let mut geometry = surface.geometry();
-            geometry.loc = Point::from((0, 0));
+            geometry.loc = self.tiled_x11_root(None);
             surface.configure(geometry).unwrap();
 
             self.new_x11_surface(surface);
@@ -516,7 +516,7 @@ pub mod xwayland {
             // The size still comes from the surface-local geometry (as
             // before); only the location is a root position. Starting from
             // `last_configure` preserves the current root position for
-            // size-only requests instead of resetting it to (0, 0).
+            // size-only requests instead of resetting it to the tiled root.
             let mut geo = window.geometry();
             if can_position {
                 geo.loc = window.last_configure().loc;
@@ -527,7 +527,11 @@ pub mod xwayland {
                     geo.loc.y = y;
                 }
             } else {
-                geo.loc = Point::from((0, 0));
+                geo.loc = self.tiled_x11_root(
+                    meta_window
+                        .as_ref()
+                        .and_then(|meta_window| meta_window.current_output.as_deref()),
+                );
             }
             if let Some(w) = w {
                 geo.size.w = w as i32;
@@ -1290,8 +1294,8 @@ pub mod xwayland {
                     // them relative to the owning tile's content origin so the
                     // tile popup host can render them in every display mode.
                     // Subtract the parent's native root first: tiled X11
-                    // parents are kept at root (0,0), not at their rendered
-                    // tile origin.
+                    // parents are kept at a synthetic root (their output's
+                    // origin), not at their rendered tile origin.
                     let position = self
                         .meta_window_state
                         .x11_popup_tile_position(
