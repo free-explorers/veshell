@@ -9,7 +9,11 @@ import 'package:shell/shared/mpris/provider/mpris_manager.dart';
 import 'package:shell/shortcut_manager/model/media_intents.dart';
 import 'package:shell/shortcut_manager/model/screen_shortcuts.dart';
 import 'package:shell/shortcut_manager/provider/hotkeys_activator.dart';
+import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 import 'package:shell/shortcut_manager/widget/shortcut_manager.dart';
+import 'package:shell/tile_grab/model/tile_grab.dart';
+import 'package:shell/tile_grab/provider/tile_grab_controller.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
 
 /// An [MprisManager] whose control methods only record the call, so the media
 /// hotkeys can be tested without a session bus.
@@ -31,6 +35,34 @@ class _FakeMprisManager extends MprisManager {
 
   @override
   void stop() => calls.add('stop');
+}
+
+/// A tile grab that is started by hand and records the intents it consumes.
+class _FakeTileGrab extends TileGrabController {
+  final intents = <Intent>[];
+
+  @override
+  TileGrab? build() => null;
+
+  void hold() => state = const TileGrab(
+    pointer: 1,
+    windowId: PersistentWindowId('w'),
+    sourceWorkspaceId: 'ws',
+    sourceScreenId: 'screen',
+    originRect: Rect.fromLTWH(0, 0, 100, 100),
+    grabAnchor: Offset.zero,
+    pressPosition: Offset.zero,
+    globalPosition: Offset.zero,
+  );
+
+  void release() => state = null;
+
+  @override
+  bool handleIntent(Intent intent) {
+    if (state == null) return false;
+    intents.add(intent);
+    return true;
+  }
 }
 
 void main() {
@@ -122,6 +154,110 @@ void main() {
       ),
     );
     expect(overviewCount, 1);
+  });
+
+  group('while a tile is held', () {
+    late _FakeTileGrab grab;
+    late int overviewCount;
+    late List<Intent> navigated;
+
+    Future<void> pumpManager(
+      WidgetTester tester, {
+      Map<ShortcutActivator, Intent> activators = const {},
+    }) async {
+      grab = _FakeTileGrab();
+      overviewCount = 0;
+      navigated = [];
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            hotkeysActivatorProvider.overrideWithValue(activators),
+            tileGrabControllerProvider.overrideWith(() => grab),
+          ],
+          child: VeshellShortcutManager(
+            child: Actions(
+              actions: {
+                ToggleOverviewIntent: CallbackAction<ToggleOverviewIntent>(
+                  onInvoke: (_) {
+                    overviewCount++;
+                    return null;
+                  },
+                ),
+                NavigateIntent: CallbackAction<NavigateIntent>(
+                  onInvoke: (intent) {
+                    navigated.add(intent);
+                    return null;
+                  },
+                ),
+              },
+              child: const Focus(autofocus: true, child: SizedBox()),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    bool dispatch(KeyEvent event) {
+      final keyboard = HardwareKeyboard.instance;
+      final handled = keyboard.handleKeyEvent(event);
+      return ServicesBinding.instance.keyEventManager.keyMessageHandler!(
+            KeyMessage([event], null),
+          ) ||
+          handled;
+    }
+
+    const superPhysical = PhysicalKeyboardKey.metaLeft;
+    const superLogical = LogicalKeyboardKey.superKey;
+    const superDown = KeyDownEvent(
+      physicalKey: superPhysical,
+      logicalKey: superLogical,
+      timeStamp: Duration.zero,
+    );
+    const superUp = KeyUpEvent(
+      physicalKey: superPhysical,
+      logicalKey: superLogical,
+      timeStamp: Duration.zero,
+    );
+
+    testWidgets('the grabbing Super release neither opens the overview nor '
+        'reaches the client', (tester) async {
+      await pumpManager(tester);
+      dispatch(superDown);
+      grab.hold();
+      await tester.pump();
+      grab.release();
+      await tester.pump();
+      expect(dispatch(superUp), isTrue);
+      expect(overviewCount, 0);
+
+      // The next lone Super tap is an ordinary one again.
+      dispatch(superDown);
+      dispatch(superUp);
+      expect(overviewCount, 1);
+    });
+
+    testWidgets('navigation goes to the held tile, not the focused context', (
+      tester,
+    ) async {
+      const right = NavigateIntent(NavigationDirection.right);
+      await pumpManager(
+        tester,
+        activators: {LogicalKeySet(LogicalKeyboardKey.arrowRight): right},
+      );
+      grab.hold();
+      await tester.pump();
+      await simulateKeyDownEvent(LogicalKeyboardKey.arrowRight);
+      await simulateKeyUpEvent(LogicalKeyboardKey.arrowRight);
+      expect(grab.intents, [right]);
+      expect(navigated, isEmpty);
+
+      grab.release();
+      await tester.pump();
+      await simulateKeyDownEvent(LogicalKeyboardKey.arrowRight);
+      await simulateKeyUpEvent(LogicalKeyboardKey.arrowRight);
+      expect(navigated, [right]);
+    });
   });
 
   testWidgets('media keys drive the active MPRIS player', (tester) async {

@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/shortcut_manager/model/super_key.dart';
 import 'package:shell/shortcut_manager/provider/hotkeys_activator.dart';
 
 /// Keys a focused client surface owns even when the shell binds them.
@@ -57,9 +58,7 @@ class SurfaceFocus extends HookConsumerWidget {
         }
 
         final keyboard = HardwareKeyboard.instance;
-        final superPressed =
-            keyboard.logicalKeysPressed.contains(LogicalKeyboardKey.superKey) ||
-            keyboard.isMetaPressed;
+        final superPressed = isSuperKeyPressed(keyboard);
         final hasModifier =
             keyboard.isControlPressed ||
             keyboard.isShiftPressed ||

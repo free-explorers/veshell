@@ -15,8 +15,10 @@ import 'package:shell/shared/pulseaudio/provider/pulse_audio.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_sink_by_name.dart';
 import 'package:shell/shortcut_manager/model/media_intents.dart';
 import 'package:shell/shortcut_manager/model/screen_shortcuts.dart';
+import 'package:shell/shortcut_manager/model/super_key.dart';
 import 'package:shell/shortcut_manager/model/system_intents.dart';
 import 'package:shell/shortcut_manager/provider/hotkeys_activator.dart';
+import 'package:shell/tile_grab/provider/tile_grab_controller.dart';
 
 class VeshellShortcutManager extends HookConsumerWidget {
   const VeshellShortcutManager({required this.child, super.key});
@@ -26,9 +28,22 @@ class VeshellShortcutManager extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final hotkeysActivator = ref.watch(hotkeysActivatorProvider);
     final manager = useMemoized(
-      () => _ShortcutManager(shortcuts: hotkeysActivator),
+      () => _ShortcutManager(
+        shortcuts: hotkeysActivator,
+        // While a tile is held, its controller acts on the screen under the
+        // pointer, which is not the one holding keyboard focus.
+        interceptIntent: (intent) =>
+            ref.read(tileGrabControllerProvider.notifier).handleIntent(intent),
+      ),
       [hotkeysActivator],
     );
+    // The Super press that grabbed a tile was a chord, not a sole press.
+    ref.listen(tileGrabControllerProvider.select((grab) => grab != null), (
+      _,
+      isGrabbing,
+    ) {
+      if (isGrabbing) manager.claimSuperPress();
+    });
     // A chord consumed by a local `Shortcuts` widget (for example Super+W in
     // the overview) never reaches the shortcut manager, which would then still
     // toggle the overview when Super is released. Track the Super-sole-press
@@ -178,10 +193,24 @@ class VeshellShortcutManager extends HookConsumerWidget {
 }
 
 class _ShortcutManager extends ShortcutManager {
-  _ShortcutManager({super.shortcuts});
+  _ShortcutManager({super.shortcuts, this.interceptIntent});
   bool _isOverviewKeySolePressed = false;
   ToggleOverviewIntent overviewIntent = const ToggleOverviewIntent();
   final LogicalKeyboardKey overviewKey = LogicalKeyboardKey.superKey;
+
+  /// Gets the first look at every bound intent; returning `true` consumes the
+  /// key without dispatching the intent to the focused context.
+  final bool Function(Intent intent)? interceptIntent;
+
+  /// Whether the held Super key was used by a pointer gesture (a tile grab).
+  bool _isSuperClaimed = false;
+
+  /// Marks the held Super key as used by a pointer gesture: its release
+  /// neither toggles the overview nor reaches the client as a lone Super tap.
+  void claimSuperPress() {
+    _isOverviewKeySolePressed = false;
+    _isSuperClaimed = isSuperKeyPressed();
+  }
 
   /// Mirrors the Super-sole-press state from the global hardware keyboard.
   ///
@@ -194,6 +223,7 @@ class _ShortcutManager extends ShortcutManager {
     }
     if (event is KeyDownEvent && event.logicalKey == overviewKey) {
       _isOverviewKeySolePressed = true;
+      _isSuperClaimed = false;
     } else if (event.logicalKey != overviewKey &&
         (event is KeyDownEvent || event is KeyRepeatEvent)) {
       _isOverviewKeySolePressed = false;
@@ -207,6 +237,13 @@ class _ShortcutManager extends ShortcutManager {
       _isOverviewKeySolePressed = false;
       // A synthesized release (focus change, etc.) must not toggle.
       if (event.synthesized) {
+        return KeyEventResult.handled;
+      }
+      if (_isSuperClaimed) {
+        _isSuperClaimed = false;
+        return KeyEventResult.handled;
+      }
+      if (wasSolePressed && interceptIntent?.call(overviewIntent) == true) {
         return KeyEventResult.handled;
       }
       if (wasSolePressed) {
@@ -224,6 +261,17 @@ class _ShortcutManager extends ShortcutManager {
               return action.toKeyEventResult(overviewIntent, invokeResult);
             }
           }
+        }
+      }
+    }
+
+    final intercept = interceptIntent;
+    if (intercept != null &&
+        (event is KeyDownEvent || event is KeyRepeatEvent)) {
+      for (final MapEntry(key: activator, value: intent) in shortcuts.entries) {
+        if (activator.accepts(event, HardwareKeyboard.instance) &&
+            intercept(intent)) {
+          return KeyEventResult.handled;
         }
       }
     }

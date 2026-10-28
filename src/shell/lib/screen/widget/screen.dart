@@ -16,6 +16,7 @@ import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
 import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 import 'package:shell/shortcut_manager/model/screen_shortcuts.dart';
+import 'package:shell/tile_grab/model/tile_grab_marker.dart';
 import 'package:shell/workspace/widget/workspace.dart';
 
 /// Widget that represent the Screen in the widget tree
@@ -72,108 +73,107 @@ class ScreenWidget extends HookConsumerWidget {
                     .setFocusedScreen(screenId);
               }
             },
-            child: Stack(
-              children: [
-                // Screen-level notification popups (workspace buttons, screen
-                // panel) are hosted in an Overlay below the overview. An
-                // OverlayPortal would otherwise land in the root overlay and
-                // float above the overview.
-                // Composed through `OverviewBlurTarget` so the overview owns
-                // the blur it applies to the rest of the screen while open.
-                OverviewBlurTarget(
-                  screenId: screenId,
-                  child: Overlay.wrap(
-                    child: Actions(
-                      actions: {
-                        // The screen owns the vertical axis: workspaces are
-                        // stacked per screen. Horizontal navigation is owned
-                        // by the focused workspace, whose handler sits closer
-                        // to focus, so the screen leaves it alone.
-                        NavigateIntent: CallbackAction<NavigateIntent>(
-                          onInvoke: (intent) {
-                            final notifier = ref.read(
-                              screenStateProvider(screenId).notifier,
-                            );
-                            switch (intent.direction) {
-                              case NavigationDirection.up:
-                                final nextIndex = screenState.selectedIndex - 1;
-                                if (nextIndex >= 0) {
-                                  notifier.selectWorkspace(nextIndex);
-                                }
-                              case NavigationDirection.down:
-                                final nextIndex = screenState.selectedIndex + 1;
-                                if (nextIndex <
-                                    screenState.workspaceList.length) {
-                                  notifier.selectWorkspace(nextIndex);
-                                }
-                              case NavigationDirection.left:
-                              case NavigationDirection.right:
-                                break;
-                            }
-                            return null;
-                          },
-                        ),
-                        // Vertically, a move sends the selected tile to the
-                        // workspace above/below; horizontal reordering is
-                        // owned by the workspace itself (its handler is
-                        // closer to focus and delegates up here).
-                        MoveIntent: CallbackAction<MoveIntent>(
-                          onInvoke: (intent) {
-                            final notifier = ref.read(
-                              screenStateProvider(screenId).notifier,
-                            );
-                            switch (intent.direction) {
-                              case NavigationDirection.up:
-                                notifier.moveSelectedTileableToWorkspace(-1);
-                              case NavigationDirection.down:
-                                notifier.moveSelectedTileableToWorkspace(1);
-                              case NavigationDirection.left:
-                              case NavigationDirection.right:
-                                break;
-                            }
-                            return null;
-                          },
-                        ),
-                      },
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        textDirection: TextDirection.rtl,
-                        children: [
-                          Expanded(
-                            child: SlidingContainer(
-                              direction: Axis.vertical,
-                              index: screenState.selectedIndex,
-                              onIndexChanged: (newIndex) {
-                                ref
-                                    .read(
-                                      screenStateProvider(screenId).notifier,
-                                    )
-                                    .selectWorkspace(newIndex);
-                              },
-                              isSwipeEnabled:
-                                  screenId == ref.watch(focusedScreenProvider),
-                              children: screenState.workspaceList
-                                  .mapIndexed(
-                                    (index, workspaceId) => WorkspaceWidget(
-                                      workspaceId: workspaceId,
-                                      isSelected:
-                                          screenState.selectedIndex == index,
-                                    ),
-                                  )
-                                  .toList(),
-                            ),
+            // Marks the screen under a held tile, which Super+WASD navigates.
+            child: MetaData(
+              metaData: TileGrabScreenMarker(screenId),
+              behavior: HitTestBehavior.translucent,
+              child: Stack(
+                children: [
+                  // Screen-level notification popups (workspace buttons, screen
+                  // panel) are hosted in an Overlay below the overview. An
+                  // OverlayPortal would otherwise land in the root overlay and
+                  // float above the overview.
+                  // Composed through `OverviewBlurTarget` so the overview owns
+                  // the blur it applies to the rest of the screen while open.
+                  OverviewBlurTarget(
+                    screenId: screenId,
+                    child: Overlay.wrap(
+                      child: Actions(
+                        actions: {
+                          // The screen owns the vertical axis: workspaces are
+                          // stacked per screen. Horizontal navigation is owned
+                          // by the focused workspace, whose handler sits closer
+                          // to focus, so the screen leaves it alone.
+                          NavigateIntent: CallbackAction<NavigateIntent>(
+                            onInvoke: (intent) {
+                              final notifier = ref.read(
+                                screenStateProvider(screenId).notifier,
+                              );
+                              switch (intent.direction) {
+                                case NavigationDirection.up:
+                                  notifier.selectAdjacentWorkspace(-1);
+                                case NavigationDirection.down:
+                                  notifier.selectAdjacentWorkspace(1);
+                                case NavigationDirection.left:
+                                case NavigationDirection.right:
+                                  break;
+                              }
+                              return null;
+                            },
                           ),
-                          const Material(elevation: 4, child: ScreenPanel()),
-                        ],
+                          // Vertically, a move sends the selected tile to the
+                          // workspace above/below; horizontal reordering is
+                          // owned by the workspace itself (its handler is
+                          // closer to focus and delegates up here).
+                          MoveIntent: CallbackAction<MoveIntent>(
+                            onInvoke: (intent) {
+                              final notifier = ref.read(
+                                screenStateProvider(screenId).notifier,
+                              );
+                              switch (intent.direction) {
+                                case NavigationDirection.up:
+                                  notifier.moveSelectedTileableToWorkspace(-1);
+                                case NavigationDirection.down:
+                                  notifier.moveSelectedTileableToWorkspace(1);
+                                case NavigationDirection.left:
+                                case NavigationDirection.right:
+                                  break;
+                              }
+                              return null;
+                            },
+                          ),
+                        },
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          textDirection: TextDirection.rtl,
+                          children: [
+                            Expanded(
+                              child: SlidingContainer(
+                                direction: Axis.vertical,
+                                index: screenState.selectedIndex,
+                                onIndexChanged: (newIndex) {
+                                  ref
+                                      .read(
+                                        screenStateProvider(screenId).notifier,
+                                      )
+                                      .selectWorkspace(newIndex);
+                                },
+                                isSwipeEnabled:
+                                    screenId ==
+                                    ref.watch(focusedScreenProvider),
+                                children: screenState.workspaceList
+                                    .mapIndexed(
+                                      (index, workspaceId) => WorkspaceWidget(
+                                        workspaceId: workspaceId,
+                                        isSelected:
+                                            screenState.selectedIndex == index,
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                            ),
+                            const Material(elevation: 4, child: ScreenPanel()),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const OverviewWidget(),
-                if (ref.watch(devToolsEnabledProvider))
-                  const DevToolsOverview(),
-              ],
+                  const OverviewWidget(),
+                  if (ref.watch(devToolsEnabledProvider))
+                    const DevToolsOverview(),
+                ],
+              ),
             ),
           ),
         ),

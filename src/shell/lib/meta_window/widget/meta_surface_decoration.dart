@@ -6,6 +6,7 @@ import 'package:shell/meta_window/provider/meta_window_dragging_state.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/widget/shell_icon.dart';
+import 'package:shell/tile_grab/widget/tile_grab_region.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 
 class MetaSurfaceDecoration extends HookConsumerWidget {
@@ -112,6 +113,8 @@ class WindowTitleBar extends HookConsumerWidget {
       // triggers `onPanStart`, and by then that move's delta would already be
       // lost, making the window lag the pointer for the rest of the drag.
       onPointerDown: (event) {
+        // A Super-press holds the whole tile instead of moving the window.
+        if (TileGrabRegion.claims(context, event)) return;
         final moveStart = onMoveStart;
         if (moveStart != null) {
           // Floating tile: the compositor owns the move. Restrict it to the

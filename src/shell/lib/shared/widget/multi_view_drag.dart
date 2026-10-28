@@ -11,8 +11,78 @@ class ShellDragView extends StatefulWidget {
 
   static final _views = <_ShellDragViewState>{};
 
+  /// The view containing [global] (compositor-global logical coordinates),
+  /// other than [excluding], or `null` when no view does.
+  static _ShellDragViewState? _viewAt(
+    Offset global, {
+    _ShellDragViewState? excluding,
+  }) {
+    for (final view in _views) {
+      if (!view.mounted || identical(view, excluding)) continue;
+      final size =
+          View.of(view.context).physicalSize /
+          View.of(view.context).devicePixelRatio;
+      if ((view.widget.origin & size).contains(global)) return view;
+    }
+    return null;
+  }
+
+  /// Resolves [global] against every monitor view, or returns `null` when it
+  /// is outside all of them.
+  static ShellDragLocation? locate(Offset global) {
+    final view = _viewAt(global);
+    return view == null
+        ? null
+        : ShellDragLocation._(view, global - view.widget.origin);
+  }
+
   @override
   State<ShellDragView> createState() => _ShellDragViewState();
+}
+
+/// The view a held pointer started in.
+///
+/// Flutter keeps reporting a held pointer's positions in the coordinate space
+/// of the view it went down in, even once it is over another monitor.
+class ShellDragSource {
+  ShellDragSource._(this._view);
+
+  /// The source view of a pointer that went down inside [context].
+  static ShellDragSource? of(BuildContext context) {
+    final view = context.findAncestorStateOfType<_ShellDragViewState>();
+    return view == null ? null : ShellDragSource._(view);
+  }
+
+  final _ShellDragViewState _view;
+
+  bool get mounted => _view.mounted;
+
+  /// Converts a position reported by this view to global coordinates.
+  Offset toGlobal(Offset position) => position + _view.widget.origin;
+}
+
+/// A global position resolved to the monitor view under it.
+class ShellDragLocation {
+  ShellDragLocation._(this._view, this.position);
+
+  final _ShellDragViewState _view;
+
+  /// The position, local to the view.
+  final Offset position;
+
+  /// Converts a position local to this view to global coordinates.
+  Offset toGlobal(Offset viewPosition) => viewPosition + _view.widget.origin;
+
+  /// Hit-tests the view at [position]; the path runs innermost first.
+  Iterable<HitTestEntry> hitTest() {
+    final result = HitTestResult();
+    RendererBinding.instance.hitTestInView(
+      result,
+      position,
+      View.of(_view.context).viewId,
+    );
+    return result.path;
+  }
 }
 
 class _ShellDragViewState extends State<ShellDragView> {
@@ -125,17 +195,7 @@ class ShellDragSession {
     final source = _source;
     if (source == null || !source.mounted) return;
     final global = sourcePosition + source.widget.origin;
-    _ShellDragViewState? destination;
-    for (final view in ShellDragView._views) {
-      if (!view.mounted || identical(view, source)) continue;
-      final size =
-          View.of(view.context).physicalSize /
-          View.of(view.context).devicePixelRatio;
-      if ((view.widget.origin & size).contains(global)) {
-        destination = view;
-        break;
-      }
-    }
+    final destination = ShellDragView._viewAt(global, excluding: source);
     if (!identical(destination, _destination)) {
       _removePreview();
       _destination = destination;

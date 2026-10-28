@@ -237,6 +237,16 @@ class WorkspaceState extends _$WorkspaceState {
     state = state.copyWith(selectedIndex: index);
   }
 
+  /// Selects the tileable [delta] slots away (`-1` is the one on the left).
+  ///
+  /// The application launcher is the slot right after the windows, so it can
+  /// be selected too; a step past either end is a no-op.
+  void selectAdjacentTileable(int delta) {
+    final index = state.selectedIndex + delta;
+    if (index < 0 || index > state.tileableWindowList.length) return;
+    setSelectedIndex(index);
+  }
+
   /// Records the leading (leftmost/topmost) tile currently shown by the
   /// workspace's sliding container.
   ///

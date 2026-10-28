@@ -68,6 +68,11 @@ its handlers win over the screen's while it is displayed. The workspace nests
 inside the screen, so its horizontal handlers win and its vertical ones
 delegate upwards.
 
+While a tile is held with `Super` + drag, the shortcut manager hands every
+bound intent to the grab first: navigation acts on the screen under the
+pointer rather than the focused context, and `MoveIntent` and the overview
+toggle are swallowed. See [Tile grab](tile_grab.md).
+
 `Backspace` is bound inside the file pane to `ParentIntent` (go up a directory),
 so it goes up when a result row has focus but stays with the search field for
 editing text. Activation from the search field uses the current selection, or

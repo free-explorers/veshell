@@ -215,6 +215,14 @@ class ScreenState extends _$ScreenState {
     state = state.copyWith(selectedIndex: newIndex);
   }
 
+  /// Selects the workspace [delta] slots away (`-1` is the one above); a step
+  /// past either end of the list is a no-op.
+  void selectAdjacentWorkspace(int delta) {
+    final index = state.selectedIndex + delta;
+    if (index < 0 || index >= state.workspaceList.length) return;
+    selectWorkspace(index);
+  }
+
   /// Moves the workspace at [oldIndex] to [newIndex].
   ///
   /// The moved workspace stays selected.

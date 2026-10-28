@@ -8,6 +8,10 @@ import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/widget/saturation_filter.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
 import 'package:shell/shortcut_manager/model/navigation_intents.dart';
+import 'package:shell/tile_grab/model/tile_drop.dart';
+import 'package:shell/tile_grab/model/tile_grab_marker.dart';
+import 'package:shell/tile_grab/provider/tile_grab_controller.dart';
+import 'package:shell/tile_grab/widget/tile_drop_slot.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
@@ -96,10 +100,29 @@ class WorkspaceWidget extends HookConsumerWidget {
     final showsFocusIndicator = workspaceState.visibleLength > 1;
     final grayscaleUnfocused =
         showsFocusIndicator && focusIndicator == FocusIndicator.grayscale;
+    // The border marks a slot, not the tile sliding through it while a tile
+    // is held, so it is hidden meanwhile; it keeps its gap so no tile moves.
+    final (isGrabbing, landingGap) = ref.watch(
+      tileGrabControllerProvider.select(
+        (grab) => (
+          grab != null,
+          grab != null && grab.settling
+              ? tileGapIndex(
+                  workspaceId: workspaceId,
+                  windowList: workspaceState.tileableWindowList,
+                  heldWindowId: grab.windowId,
+                  target: grab.target,
+                )
+              : null,
+        ),
+      ),
+    );
     final selectionIndicator =
         showsFocusIndicator && focusIndicator == FocusIndicator.border
         ? SlidingSelectionIndicator(
-            color: Theme.of(context).colorScheme.primary,
+            color: isGrabbing
+                ? Colors.transparent
+                : Theme.of(context).colorScheme.primary,
           )
         : null;
     return CurrentWorkspaceId(
@@ -116,15 +139,9 @@ class WorkspaceWidget extends HookConsumerWidget {
               );
               switch (intent.direction) {
                 case NavigationDirection.left:
-                  final nextIndex = workspaceState.selectedIndex - 1;
-                  if (nextIndex >= 0) {
-                    notifier.setSelectedIndex(nextIndex);
-                  }
+                  notifier.selectAdjacentTileable(-1);
                 case NavigationDirection.right:
-                  final nextIndex = workspaceState.selectedIndex + 1;
-                  if (nextIndex < tileableList.length) {
-                    notifier.setSelectedIndex(nextIndex);
-                  }
+                  notifier.selectAdjacentTileable(1);
                 case NavigationDirection.up:
                 case NavigationDirection.down:
                   if (context.mounted) {
@@ -208,7 +225,10 @@ class WorkspaceWidget extends HookConsumerWidget {
                 ),
                 Expanded(
                   child: SlidingContainer(
-                    index: workspaceState.selectedIndex,
+                    // A released tile is landing here: bring its gap into
+                    // view (with a single tile shown, the shown one slides
+                    // out), so the tile is already shown once selected.
+                    index: landingGap ?? workspaceState.selectedIndex,
                     visible: workspaceState.visibleLength,
                     firstVisibleIndex: workspaceState.firstVisibleIndex,
                     onIndexChanged: (nextIndex) {
@@ -226,15 +246,36 @@ class WorkspaceWidget extends HookConsumerWidget {
                             ref.watch(focusedScreenProvider) &&
                         isSelected,
                     selectionIndicator: selectionIndicator,
+                    // A held tile finds its gap from the row's geometry.
+                    viewportMetaData: (scrollOffset) => TileRowMarker(
+                      workspaceId: workspaceId,
+                      visible: workspaceState.visibleLength,
+                      scrollOffset: scrollOffset,
+                    ),
+                    // Tiles sliding aside for a held tile may come from off
+                    // screen.
+                    buildsNeighbors: isGrabbing,
                     children: [
                       // Always wrapped, even when not filtering, so changing
                       // the setting or the selection never remounts a tile.
+                      // Keyed by window, so a tile keeps its state (and its
+                      // slide) when it is reordered.
                       for (final (index, tileable) in tileableList.indexed)
-                        _FocusSaturation(
-                          desaturated:
-                              grayscaleUnfocused &&
-                              index != workspaceState.selectedIndex,
-                          child: tileable,
+                        TileDropSlot(
+                          key: tileable is PersistentWindowTileable
+                              ? ValueKey(tileable.windowId)
+                              : const ValueKey('application-launcher'),
+                          workspaceId: workspaceId,
+                          index: index,
+                          windowId: tileable is PersistentWindowTileable
+                              ? tileable.windowId
+                              : null,
+                          child: _FocusSaturation(
+                            desaturated:
+                                grayscaleUnfocused &&
+                                index != workspaceState.selectedIndex,
+                            child: tileable,
+                          ),
                         ),
                     ],
                   ),

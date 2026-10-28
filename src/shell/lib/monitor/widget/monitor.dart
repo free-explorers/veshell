@@ -19,6 +19,7 @@ import 'package:shell/screen/widget/screen.dart';
 import 'package:shell/settings/widget/monitor_setting_change_confirmation_overlay.dart';
 import 'package:shell/shortcut_manager/widget/shortcut_manager.dart';
 import 'package:shell/shared/widget/multi_view_drag.dart';
+import 'package:shell/tile_grab/widget/tile_grab_preview.dart';
 import 'package:shell/theme/provider/theme.dart';
 
 /// Widget that represent the Monitor in the widget tree
@@ -131,12 +132,13 @@ class MonitorWidget extends HookConsumerWidget {
                 });
                 return null;
               }, [monitorName, monitorConfiguration.screenList]);
+              final origin =
+                  ref.watch(monitorByNameProvider(monitorName))?.location ??
+                  Offset.zero;
               return CurrentMonitorName(
                 name: monitorName,
                 child: ShellDragView(
-                  origin:
-                      ref.watch(monitorByNameProvider(monitorName))?.location ??
-                      Offset.zero,
+                  origin: origin,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
@@ -173,6 +175,7 @@ class MonitorWidget extends HookConsumerWidget {
                             ],
                           ],
                         ),
+                      TileGrabPreview(origin: origin),
                     ],
                   ),
                 ),
