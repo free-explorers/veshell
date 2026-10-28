@@ -104,11 +104,16 @@ class _Subsurfaces extends ConsumerWidget {
 
 enum _SubsurfaceLayer { below, above }
 
-/// Shows the `wp_viewport` [source] part of a buffer of [bufferSize] pixels,
-/// stretched over the space it is given; the whole buffer without a source.
+/// Paints the [source] part of a buffer of [bufferSize] pixels (the whole
+/// buffer without a `wp_viewport` source) over the box it is given.
 ///
-/// The texture is laid out at the size that puts [source] exactly over this
-/// widget's box, shifted by the source origin, and clipped.
+/// When the shown pixels are within one pixel of the box's physical size, they
+/// are painted 1:1 instead of stretched. A fractional-scale client renders a
+/// buffer of `round(logical * scale)` pixels: Chromium declares a 1018-pixel
+/// window at 1.2 and draws 1222 pixels, while the box is 1221.6 pixels.
+/// Stretching by that fraction resamples every pixel and softens all text;
+/// painting 1:1 lets the surface overhang its box by under a pixel and stays
+/// sharp. A real scale (a 2x buffer shown at 1.25) is still stretched.
 class ViewportCrop extends StatelessWidget {
   const ViewportCrop({
     required this.bufferSize,
@@ -123,35 +128,38 @@ class ViewportCrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final source = this.source;
-    if (source == null ||
-        source.isEmpty ||
-        bufferSize.isEmpty ||
-        source == Offset.zero & bufferSize) {
-      return child;
-    }
+    if (bufferSize.isEmpty) return child;
+    final source = (this.source == null || this.source!.isEmpty)
+        ? Offset.zero & bufferSize
+        : this.source!;
+    final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final box = constraints.biggest;
-        final scaleX = box.width / source.width;
-        final scaleY = box.height / source.height;
-        return ClipRect(
-          child: OverflowBox(
-            alignment: Alignment.topLeft,
-            minWidth: 0,
-            minHeight: 0,
-            maxWidth: double.infinity,
-            maxHeight: double.infinity,
-            child: Transform.translate(
-              offset: Offset(-source.left * scaleX, -source.top * scaleY),
-              child: SizedBox(
-                width: bufferSize.width * scaleX,
-                height: bufferSize.height * scaleY,
-                child: child,
-              ),
+        double pixelScale(double shown, double extent) =>
+            (shown - extent * devicePixelRatio).abs() < 1
+            ? 1 / devicePixelRatio
+            : extent / shown;
+        final scaleX = pixelScale(source.width, box.width);
+        final scaleY = pixelScale(source.height, box.height);
+        final cropped = source != Offset.zero & bufferSize;
+        final texture = OverflowBox(
+          alignment: Alignment.topLeft,
+          minWidth: 0,
+          minHeight: 0,
+          maxWidth: double.infinity,
+          maxHeight: double.infinity,
+          child: Transform.translate(
+            offset: Offset(-source.left * scaleX, -source.top * scaleY),
+            child: SizedBox(
+              width: bufferSize.width * scaleX,
+              height: bufferSize.height * scaleY,
+              child: child,
             ),
           ),
         );
+        // Only a crop needs clipping; the 1:1 overhang is under a pixel.
+        return cropped ? ClipRect(child: texture) : texture;
       },
     );
   }

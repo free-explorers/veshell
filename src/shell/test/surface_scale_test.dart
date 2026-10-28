@@ -66,6 +66,35 @@ void main() {
       );
     });
 
+    testWidgets('a near-1:1 buffer is painted 1:1, not stretched', (
+      tester,
+    ) async {
+      // Real Brave trace at 1.2: a 1018x658 window drawn into 1222x790 pixels,
+      // while the box is 1221.6x789.6 physical pixels.
+      tester.view.devicePixelRatio = 1.2;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 1018,
+              height: 658,
+              child: ViewportCrop(
+                bufferSize: const Size(1222, 790),
+                source: null,
+                child: const SizedBox.expand(key: childKey),
+              ),
+            ),
+          ),
+        ),
+      );
+      final size = tester.getSize(find.byKey(childKey)) * 1.2;
+      expect(size.width, closeTo(1222, 1e-6));
+      expect(size.height, closeTo(790, 1e-6));
+    });
+
     testWidgets('a source rectangle is stretched over the box', (tester) async {
       // Show buffer pixels (100, 50)..(300, 150) in a 100x50 box: half scale.
       await tester.pumpWidget(crop(const Rect.fromLTWH(100, 50, 200, 100)));
