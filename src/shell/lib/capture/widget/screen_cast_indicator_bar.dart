@@ -1,8 +1,10 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/capture/provider/recording_workspaces.dart';
 import 'package:shell/capture/provider/screen_cast_indicator.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 /// The persistent trusted indicator (capture specification section 8.3):
 /// one card per **orphan** cast, naming the shared target with a Stop action.
@@ -41,7 +43,7 @@ class ScreenCastIndicatorBar extends HookConsumerWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.screen_share),
+                  const ShellIcon(MdiIcons.monitorShare),
                   const SizedBox(width: 8),
                   // One stream shortcut naming the shared target.
                   Text(

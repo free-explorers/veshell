@@ -8,6 +8,7 @@ import 'package:shell/overview/helm/control_panel/media_player/widget/mpris_seek
 import 'package:shell/shared/mpris/model/mpris_loop_status.dart';
 import 'package:shell/shared/mpris/model/mpris_player.dart';
 import 'package:shell/shared/mpris/provider/mpris_manager.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 /// The media control card, or `null` when no player is on the session bus.
 ///
@@ -81,7 +82,7 @@ class _MediaHeader extends ConsumerWidget {
           dimension: 24,
           child: AppIconById(
             id: player.iconId,
-            fallback: Icon(
+            fallback: ShellIcon(
               MdiIcons.musicNote,
               color: theme.colorScheme.primary,
             ),
@@ -101,12 +102,12 @@ class _MediaHeader extends ConsumerWidget {
             tooltip: context.l10n.bringToFront,
             visualDensity: VisualDensity.compact,
             onPressed: () => ref.read(mprisManagerProvider.notifier).raise(),
-            icon: const Icon(MdiIcons.openInNew),
+            icon: const ShellIcon(MdiIcons.openInNew),
           ),
         if (players.length > 1)
           PopupMenuButton<String>(
             tooltip: context.l10n.switchPlayer,
-            icon: const Icon(MdiIcons.playlistMusic),
+            icon: const ShellIcon(MdiIcons.playlistMusic),
             initialValue: player.busName,
             onSelected: (busName) =>
                 ref.read(mprisManagerProvider.notifier).selectPlayer(busName),
@@ -116,7 +117,7 @@ class _MediaHeader extends ConsumerWidget {
                   value: candidate.busName,
                   child: Row(
                     children: [
-                      Icon(
+                      ShellIcon(
                         candidate.busName == player.busName
                             ? MdiIcons.check
                             : MdiIcons.musicNote,
@@ -205,12 +206,12 @@ class _TransportControls extends ConsumerWidget {
             tooltip: context.l10n.shuffle,
             isSelected: player.shuffle,
             onPressed: notifier.toggleShuffle,
-            icon: const Icon(MdiIcons.shuffle),
+            icon: const ShellIcon(MdiIcons.shuffle),
           ),
         IconButton(
           tooltip: context.l10n.previous,
           onPressed: enabled && player.canGoPrevious ? notifier.previous : null,
-          icon: const Icon(MdiIcons.skipPrevious),
+          icon: const ShellIcon(MdiIcons.skipPrevious),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -218,20 +219,20 @@ class _TransportControls extends ConsumerWidget {
             tooltip: player.isPlaying ? context.l10n.pause : context.l10n.play,
             iconSize: 32,
             onPressed: canToggle ? notifier.playPause : null,
-            icon: Icon(player.isPlaying ? MdiIcons.pause : MdiIcons.play),
+            icon: ShellIcon(player.isPlaying ? MdiIcons.pause : MdiIcons.play),
           ),
         ),
         IconButton(
           tooltip: context.l10n.next,
           onPressed: enabled && player.canGoNext ? notifier.next : null,
-          icon: const Icon(MdiIcons.skipNext),
+          icon: const ShellIcon(MdiIcons.skipNext),
         ),
         if (enabled)
           IconButton(
             tooltip: context.l10n.repeat,
             isSelected: player.loopStatus != MprisLoopStatus.none,
             onPressed: notifier.cycleLoopStatus,
-            icon: Icon(switch (player.loopStatus) {
+            icon: ShellIcon(switch (player.loopStatus) {
               MprisLoopStatus.none => MdiIcons.repeatOff,
               MprisLoopStatus.playlist => MdiIcons.repeat,
               MprisLoopStatus.track => MdiIcons.repeatOnce,

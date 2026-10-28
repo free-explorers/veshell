@@ -7,6 +7,7 @@ import 'package:shell/notification/provider/notification_list.dart';
 import 'package:shell/notification/provider/notification_manager.dart';
 import 'package:shell/notification/provider/notification_routing.dart';
 import 'package:shell/notification/widget/notification.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 class NotificationPanel extends HookConsumerWidget {
   const NotificationPanel({super.key});
@@ -24,7 +25,7 @@ class NotificationPanel extends HookConsumerWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                Icon(
+                ShellIcon(
                   MdiIcons.bullhornVariant,
                   color: Theme.of(context).colorScheme.primary,
                 ),
@@ -44,7 +45,7 @@ class NotificationPanel extends HookConsumerWidget {
                       : () => ref
                             .read(notificationManagerProvider.notifier)
                             .dismissAllNotifications(),
-                  icon: const Icon(MdiIcons.notificationClearAll),
+                  icon: const ShellIcon(MdiIcons.notificationClearAll),
                   style: IconButton.styleFrom(padding: const EdgeInsets.all(4)),
                 ),
               ],
@@ -113,7 +114,7 @@ class _EmptyNotifications extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
+            ShellIcon(
               MdiIcons.bullhornVariantOutline,
               size: 48,
               color: theme.colorScheme.onSurfaceVariant,

@@ -10,6 +10,8 @@ import 'package:shell/notification/model/notification.serializable.dart';
 import 'package:shell/notification/provider/notification_list.dart';
 import 'package:shell/overview/helm/notification_panel/widget/notification_panel.dart';
 
+import 'support/finders.dart';
+
 void main() {
   testWidgets('an empty notification list shows the empty state', (
     tester,
@@ -37,6 +39,6 @@ void main() {
       find.text('Your notification history is currently empty'),
       findsOneWidget,
     );
-    expect(find.byIcon(MdiIcons.bullhornVariantOutline), findsOneWidget);
+    expect(findIcon(MdiIcons.bullhornVariantOutline), findsOneWidget);
   });
 }

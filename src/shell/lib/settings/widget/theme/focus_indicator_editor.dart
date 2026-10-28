@@ -1,4 +1,5 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/widget/search/settings/setting_value_editor.dart';
@@ -6,6 +7,7 @@ import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/provider/settings_properties.dart';
 import 'package:shell/settings/provider/state/focus_indicator_setting.dart';
 import 'package:shell/shared/widget/expandable_container.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 /// The localized label for a focus indicator.
 String focusIndicatorLabel(AppLocalizations l10n, FocusIndicator value) =>
@@ -50,7 +52,9 @@ class FocusIndicatorEditor extends ConsumerWidget
         for (final indicator in FocusIndicator.values)
           ListTile(
             title: Text(focusIndicatorLabel(context.l10n, indicator)),
-            trailing: indicator == current ? const Icon(Icons.check) : null,
+            trailing: indicator == current
+                ? const ShellIcon(MdiIcons.check)
+                : null,
             onTap: () {
               ref
                   .read(settingsPropertiesProvider.notifier)

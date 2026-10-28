@@ -1,6 +1,8 @@
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 class NumberPicker extends HookConsumerWidget {
   const NumberPicker({
@@ -44,7 +46,7 @@ class NumberPicker extends HookConsumerWidget {
               }
               onValueChange(int.parse(textcontroller.text) - 1);
             },
-            icon: const Icon(Icons.remove),
+            icon: const ShellIcon(MdiIcons.minus),
             iconSize: 20,
             style: IconButton.styleFrom(shape: LinearBorder.none),
           ),
@@ -70,7 +72,7 @@ class NumberPicker extends HookConsumerWidget {
               }
               onValueChange(int.parse(textcontroller.text) + 1);
             },
-            icon: const Icon(Icons.add),
+            icon: const ShellIcon(MdiIcons.plus),
             iconSize: 20,
             style: IconButton.styleFrom(shape: LinearBorder.none),
           ),

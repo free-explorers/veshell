@@ -12,6 +12,7 @@ import 'package:shell/overview/helm/control_panel/network/wifi/widget/access_poi
 import 'package:shell/shared/nm/provider/nm_device.dart';
 import 'package:shell/shared/widget/expandable.dart';
 import 'package:shell/shared/widget/expandable_card.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 class AvailableAccessPointList extends HookConsumerWidget {
   const AvailableAccessPointList({required this.address, super.key});
@@ -65,7 +66,7 @@ class AvailableAccessPointTile extends HookConsumerWidget {
     final tile = ListTile(
       leading: AccessPointIcon(accessPoint: accessPoint.bestAccessPoint!),
       title: AccessPointLabel(accessPoint: accessPoint.bestAccessPoint!),
-      trailing: const Icon(MdiIcons.plus),
+      trailing: const ShellIcon(MdiIcons.plus),
       onTap: () {
         ref
             .read(singleExpandedProvider('AvailableAccessPointTile').notifier)
@@ -110,7 +111,7 @@ class AvailableAccessPointTile extends HookConsumerWidget {
                   const SizedBox(width: 16),
                   IconButton(
                     onPressed: onSubmitted,
-                    icon: const Icon(MdiIcons.wifiPlus),
+                    icon: const ShellIcon(MdiIcons.wifiPlus),
                   ),
                 ],
               ),

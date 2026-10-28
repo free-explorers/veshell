@@ -8,6 +8,7 @@ import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/provider/settings_properties.dart';
 import 'package:shell/settings/provider/util/json_value_by_path.dart';
 import 'package:shell/shared/widget/expandable_container.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 /// The one-line text editor shared by scalar settings.
 ///
@@ -111,7 +112,7 @@ class SettingValueField<T> extends HookWidget {
           ),
           IconButton(
             tooltip: context.l10n.apply,
-            icon: const Icon(MdiIcons.check),
+            icon: const ShellIcon(MdiIcons.check),
             onPressed: commit,
           ),
         ],

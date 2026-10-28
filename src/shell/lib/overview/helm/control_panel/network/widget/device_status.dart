@@ -5,6 +5,7 @@ import 'package:nm/nm.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/helm/control_panel/network/provider/device_transfer_monitoring.dart';
 import 'package:shell/shared/nm/provider/nm_device.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 class DeviceStatus extends ConsumerWidget {
   const DeviceStatus({required this.address, super.key});
@@ -41,7 +42,7 @@ class DeviceStatus extends ConsumerWidget {
               );
               return Row(
                 children: [
-                  const Icon(MdiIcons.arrowUp, size: 12),
+                  const ShellIcon(MdiIcons.arrowUp, size: 12),
                   const SizedBox(width: 4),
                   Text(
                     context.measurement(
@@ -52,7 +53,7 @@ class DeviceStatus extends ConsumerWidget {
                     style: Theme.of(context).textTheme.labelSmall,
                   ),
                   const SizedBox(width: 8),
-                  const Icon(MdiIcons.arrowDown, size: 12),
+                  const ShellIcon(MdiIcons.arrowDown, size: 12),
                   const SizedBox(width: 4),
                   Text(
                     context.measurement(

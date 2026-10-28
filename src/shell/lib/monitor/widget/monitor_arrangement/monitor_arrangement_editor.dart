@@ -1,5 +1,6 @@
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/monitor/provider/monitor_arrangement.dart';
@@ -7,6 +8,7 @@ import 'package:shell/monitor/provider/monitor_placement.dart';
 import 'package:shell/monitor/widget/monitor_arrangement/monitor_arrangement_canvas.dart';
 import 'package:shell/settings/provider/state/monitor_setting_state.dart';
 import 'package:shell/shared/widget/expandable_container.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 /// Editor to position monitors relative to each other, shown inline when the
 /// "Arrange Monitors" setting is expanded.
@@ -130,8 +132,8 @@ class MonitorArrangementEditor extends HookConsumerWidget {
                             ),
                             child: Row(
                               children: [
-                                Icon(
-                                  Icons.warning_amber,
+                                ShellIcon(
+                                  MdiIcons.alertOutline,
                                   color: theme.colorScheme.onErrorContainer,
                                 ),
                                 const SizedBox(width: 8),

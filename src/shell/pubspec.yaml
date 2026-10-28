@@ -39,6 +39,9 @@ dependencies:
 
   jovial_svg: ^1.1.15
   flutter_svg: ^2.0.9
+  # Parses SVG icons into flat drawing commands for grid fitting
+  # (lib/shared/icon/grid_fit.dart). Already used by flutter_svg.
+  vector_graphics_compiler: ^1.2.3
 
   arena_listener: ^0.0.2
   fast_immutable_collections: ^9.2.0
@@ -66,6 +69,7 @@ dependencies:
   defer_pointer: ^0.0.2
   upower: ^0.7.0
 
+  flutter_riverpod: any
 dev_dependencies:
   analyzer: ^14.4.0
   # The "flutter_lints" package below contains a set of recommended lints to

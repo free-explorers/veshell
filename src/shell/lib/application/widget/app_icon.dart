@@ -1,4 +1,3 @@
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
@@ -6,8 +5,9 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/icon_file_from_query.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/application/util/icon_size.dart';
-import 'package:shell/application/util/normalizing_svg_file_loader.dart';
+import 'package:shell/application/widget/grid_fit_svg_icon.dart';
 import 'package:shell/application/widget/letter_app_icon.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 class AppIconByPath extends StatelessWidget {
   const AppIconByPath({required this.path, this.title, super.key});
@@ -75,13 +75,16 @@ class AppIconByPath extends StatelessWidget {
     // RawImage using a provider-owned ui.Image can lose its handle when the
     // provider is rebuilt during icon-theme initialization at session start.
     if (iconFile.path.endsWith('.svg')) {
-      // The normalizing loader inlines `<style>`/`class` selectors, which
-      // flutter_svg ignores; without it themed icons that rely on them render
-      // as a solid black square.
-      return SvgPicture(NormalizingSvgFileLoader(iconFile));
+      // Grid-fitted, so the icon stays crisp at fractional scales; it falls
+      // back to flutter_svg (through the CSS-normalizing loader) for what the
+      // fitter cannot draw.
+      return GridFitSvgIcon(file: iconFile, size: logicalSize);
     }
     // `cacheWidth` is in physical pixels; the decoded frame lives in Flutter's
-    // global `ImageCache`, which outlives this widget and the provider.
+    // global `ImageCache`, which outlives this widget and the provider. A PNG
+    // cannot be grid-fitted: it is decoded at the next bucket up and scaled
+    // down with mipmaps (`Image`'s default medium filter quality), the
+    // sharpest a fixed-size image gets at a fractional scale.
     return Image.file(iconFile, cacheWidth: bucket);
   }
 }
@@ -90,7 +93,7 @@ class AppIconById extends ConsumerWidget {
   const AppIconById({
     required this.id,
     super.key,
-    this.fallback = const Icon(MdiIcons.helpCircle),
+    this.fallback = const ShellIcon(MdiIcons.helpCircle),
   });
 
   final String? id;

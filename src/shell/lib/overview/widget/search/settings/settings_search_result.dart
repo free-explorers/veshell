@@ -7,6 +7,7 @@ import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/model/setting_search.dart';
 import 'package:shell/settings/provider/settings_expanded_groups.dart';
 import 'package:shell/settings/provider/settings_properties.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 /// The settings tree for the given searchText, navigable by visible-row index.
 class SettingsSearchResult extends HookConsumerWidget {
@@ -94,7 +95,7 @@ class SettingGroupListSliver extends HookConsumerWidget {
     // and the chevron would suggest a toggle that does nothing.
     final trailing = isFiltering
         ? null
-        : Icon(isExpanded ? MdiIcons.chevronUp : MdiIcons.chevronDown);
+        : ShellIcon(isExpanded ? MdiIcons.chevronUp : MdiIcons.chevronDown);
     return SliverMainAxisGroup(
       slivers: [
         SliverAppBar(
@@ -114,7 +115,9 @@ class SettingGroupListSliver extends HookConsumerWidget {
                 : () => ref
                       .read(settingsExpandedGroupsProvider.notifier)
                       .toggle(path),
-            leading: settingGroup.icon != null ? Icon(settingGroup.icon) : null,
+            leading: settingGroup.icon != null
+                ? ShellIcon(settingGroup.icon)
+                : null,
             title: Text(
               settingGroup.name,
               style: settingGroup.description == null

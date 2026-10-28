@@ -9,6 +9,7 @@ import 'package:shell/overview/helm/control_panel/network/wifi/widget/access_poi
 import 'package:shell/overview/helm/control_panel/network/wifi/widget/access_point_label.dart';
 import 'package:shell/shared/nm/provider/nm_client.dart';
 import 'package:shell/shared/nm/provider/nm_device.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 class ConfiguredAccessPoint extends HookConsumerWidget {
   const ConfiguredAccessPoint({required this.address, super.key});
@@ -56,7 +57,7 @@ class ConfiguredAccesPointTile extends HookConsumerWidget {
 
     return ListTile(
       leading: isSelected
-          ? const Icon(MdiIcons.check)
+          ? const ShellIcon(MdiIcons.check)
           : AccessPointIcon(accessPoint: accessPoint.bestAccessPoint!),
       title: AccessPointLabel(accessPoint: accessPoint.bestAccessPoint!),
       onTap: isSelected
@@ -70,7 +71,10 @@ class ConfiguredAccesPointTile extends HookConsumerWidget {
                     connection: accessPoint.settingsConnection,
                   );
             },
-      trailing: IconButton(icon: const Icon(MdiIcons.pencil), onPressed: () {}),
+      trailing: IconButton(
+        icon: const ShellIcon(MdiIcons.pencil),
+        onPressed: () {},
+      ),
     );
   }
 }

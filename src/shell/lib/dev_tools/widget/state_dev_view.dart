@@ -1,5 +1,6 @@
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
@@ -8,6 +9,7 @@ import 'package:shell/meta_window/widget/meta_surface.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/monitor/provider/monitor_configuration_state.dart';
 import 'package:shell/screen/provider/screen_state.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
@@ -364,10 +366,10 @@ class ExpandableDataRow extends HookWidget {
               children: [
                 SizedBox(
                   width: 24,
-                  child: Icon(
+                  child: ShellIcon(
                     isExpandedState.value
-                        ? Icons.expand_less
-                        : Icons.expand_more,
+                        ? MdiIcons.chevronUp
+                        : MdiIcons.chevronDown,
                     size: 16,
                   ),
                 ),

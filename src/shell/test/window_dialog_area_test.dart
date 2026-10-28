@@ -53,6 +53,8 @@ import 'package:shell/window/widget/window.dart';
 import 'package:shell/window/widget/window_dialog_area.dart';
 import 'package:shell/window/widget/window_dialogs.dart';
 
+import 'support/finders.dart';
+
 const _parent = PersistentWindowId('parent');
 const _dialogA = DialogWindowId('a');
 const _dialogB = DialogWindowId('b');
@@ -404,8 +406,8 @@ void main() {
     expect(find.byType(PanelTab), findsNWidgets(2));
     // The close action lives in every pill. These dialogs' meta windows are
     // untracked, so neither counts as a regular toplevel and no extract shows.
-    expect(find.byIcon(MdiIcons.close), findsNWidgets(2));
-    expect(find.byIcon(MdiIcons.openInNew), findsNothing);
+    expect(findIcon(MdiIcons.close), findsNWidgets(2));
+    expect(findIcon(MdiIcons.openInNew), findsNothing);
     expect(
       container.read(selectedDialogMetaWindowForWindowProvider(_parent)),
       'meta-b',

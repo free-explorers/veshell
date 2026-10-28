@@ -2,6 +2,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/systemd/provider/session.dart';
 
 class SessionControls extends HookConsumerWidget {
@@ -31,7 +32,7 @@ class SessionControls extends HookConsumerWidget {
                   style: IconButton.styleFrom(
                     padding: const EdgeInsets.all(12),
                   ),
-                  icon: const Icon(MdiIcons.lock),
+                  icon: const ShellIcon(MdiIcons.lock),
                 ),
               ),
             if (availableActions.contains(SessionControlAction.logout))
@@ -46,7 +47,7 @@ class SessionControls extends HookConsumerWidget {
                   style: IconButton.styleFrom(
                     padding: const EdgeInsets.all(12),
                   ),
-                  icon: const Icon(MdiIcons.logout),
+                  icon: const ShellIcon(MdiIcons.logout),
                 ),
               ),
             if (availableActions.contains(SessionControlAction.sleep))
@@ -58,7 +59,7 @@ class SessionControls extends HookConsumerWidget {
                   onPressed: () {
                     ref.read(sessionProvider.notifier).sleep();
                   },
-                  icon: const Icon(MdiIcons.powerSleep),
+                  icon: const ShellIcon(MdiIcons.powerSleep),
                   style: IconButton.styleFrom(
                     padding: const EdgeInsets.all(12),
                   ),
@@ -93,7 +94,7 @@ class SessionControls extends HookConsumerWidget {
                       );
                     }
                   },
-                  icon: const Icon(MdiIcons.snowflake),
+                  icon: const ShellIcon(MdiIcons.snowflake),
                   style: IconButton.styleFrom(
                     padding: const EdgeInsets.all(12),
                   ),
@@ -108,7 +109,7 @@ class SessionControls extends HookConsumerWidget {
                   onPressed: () {
                     ref.read(sessionProvider.notifier).reboot();
                   },
-                  icon: const Icon(MdiIcons.restart),
+                  icon: const ShellIcon(MdiIcons.restart),
                   style: IconButton.styleFrom(
                     padding: const EdgeInsets.all(12),
                   ),
@@ -126,7 +127,7 @@ class SessionControls extends HookConsumerWidget {
                   style: IconButton.styleFrom(
                     padding: const EdgeInsets.all(12),
                   ),
-                  icon: const Icon(MdiIcons.power),
+                  icon: const ShellIcon(MdiIcons.power),
                 ),
               ),
           ],

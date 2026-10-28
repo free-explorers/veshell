@@ -1,9 +1,11 @@
 import 'package:flutter/gestures.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/meta_window/provider/meta_window_dragging_state.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/shared/util/logger.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 
 class MetaSurfaceDecoration extends HookConsumerWidget {
@@ -145,8 +147,8 @@ class WindowTitleBar extends HookConsumerWidget {
                 },
                 child: Padding(
                   padding: const EdgeInsets.all(12),
-                  child: Icon(
-                    Icons.close,
+                  child: ShellIcon(
+                    MdiIcons.close,
                     color: Theme.of(context).colorScheme.onSurface,
                     size: 16,
                   ),

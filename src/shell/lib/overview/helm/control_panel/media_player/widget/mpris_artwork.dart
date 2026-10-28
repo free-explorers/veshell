@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 /// The album art of the active MPRIS track.
 ///
@@ -62,7 +63,7 @@ class MprisArtwork extends StatelessWidget {
 
   Widget _fallback(BuildContext context) {
     return Center(
-      child: Icon(
+      child: ShellIcon(
         MdiIcons.musicNote,
         size: size * 0.5,
         color: Theme.of(context).colorScheme.onSurfaceVariant,

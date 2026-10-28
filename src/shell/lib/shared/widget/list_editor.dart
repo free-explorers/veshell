@@ -1,6 +1,7 @@
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 /// A reusable editor for a `List<String>` laid out as one field per row.
 ///
@@ -147,7 +148,7 @@ class _ListEditorState extends State<ListEditor> {
                       ),
                 ),
                 IconButton(
-                  icon: const Icon(MdiIcons.delete),
+                  icon: const ShellIcon(MdiIcons.delete),
                   tooltip: context.l10n.delete,
                   onPressed: () => _remove(entry),
                 ),
@@ -168,7 +169,7 @@ class _ListEditorState extends State<ListEditor> {
           children: [
             TextButton.icon(
               onPressed: _add,
-              icon: const Icon(MdiIcons.plus),
+              icon: const ShellIcon(MdiIcons.plus),
               label: Text(context.l10n.add),
             ),
             const Spacer(),

@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:nm/nm.dart';
 import 'package:shell/overview/helm/control_panel/network/wifi/widget/access_point_icon.dart';
 import 'package:shell/shared/nm/provider/nm_device.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 class WifiControlIcon extends ConsumerWidget {
   const WifiControlIcon(this.address, {super.key});
@@ -23,7 +24,7 @@ class WifiControlIcon extends ConsumerWidget {
             accessPoint: device.wireless!.activeAccessPoint!,
             color: Theme.of(context).colorScheme.primary,
           )
-        : Icon(
+        : ShellIcon(
             isDisconnected ? MdiIcons.wifiOff : MdiIcons.wifi,
             color: Theme.of(context).colorScheme.primary,
           );

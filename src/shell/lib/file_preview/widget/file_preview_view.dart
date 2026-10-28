@@ -11,6 +11,7 @@ import 'package:shell/file_explorer/model/directory_path.dart';
 import 'package:shell/file_preview/model/file_preview.dart';
 import 'package:shell/file_preview/provider/file_preview.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/theme/provider/theme.dart';
 
 /// Renders the preview of [path] in the overview's content slot.
@@ -229,7 +230,7 @@ class _NoPreview extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 64, color: theme.colorScheme.primary),
+            ShellIcon(icon, size: 64, color: theme.colorScheme.primary),
             const SizedBox(height: 16),
             Text(
               title,

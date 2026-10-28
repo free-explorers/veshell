@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/lock_screen/model/lock_screen_state/lock_screen_state.dart';
@@ -8,6 +9,8 @@ import 'package:shell/lock_screen/provider/lock_screen.dart';
 import 'package:shell/lock_screen/widget/lock_screen_overlay.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/provider/focused_monitor.dart';
+
+import 'support/finders.dart';
 
 class _Locked extends LockScreen {
   @override
@@ -94,12 +97,12 @@ void main() {
     EditableText field() => tester.widget<EditableText>(_passwordField);
     expect(field().obscureText, isTrue);
 
-    await tester.tap(find.byIcon(Icons.visibility_outlined));
+    await tester.tap(findIcon(MdiIcons.eyeOutline));
     await tester.pump();
     expect(field().obscureText, isFalse);
     expect(field().focusNode.hasPrimaryFocus, isTrue);
 
-    await tester.tap(find.byIcon(Icons.visibility_off_outlined));
+    await tester.tap(findIcon(MdiIcons.eyeOffOutline));
     await tester.pump();
     expect(field().obscureText, isTrue);
   });

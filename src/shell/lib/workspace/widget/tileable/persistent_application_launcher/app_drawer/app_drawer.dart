@@ -1,8 +1,10 @@
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/app_drawer.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/app_drawer/app_grid.dart';
 
 class AppDrawer extends HookConsumerWidget {
@@ -98,7 +100,7 @@ class _AppDrawerTextField extends HookConsumerWidget {
       decoration: InputDecoration(
         prefixIcon: const Padding(
           padding: EdgeInsets.fromLTRB(16, 0, 16, 0),
-          child: Icon(Icons.search),
+          child: ShellIcon(MdiIcons.magnify),
         ),
         hintText: context.l10n.searchApps,
         border: OutlineInputBorder(

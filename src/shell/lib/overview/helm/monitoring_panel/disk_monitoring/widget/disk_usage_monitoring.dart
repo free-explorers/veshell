@@ -3,6 +3,7 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/helm/monitoring_panel/disk_monitoring/provider/disk_space.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 class DiskUsageMonitoring extends HookConsumerWidget {
   const DiskUsageMonitoring({super.key});
@@ -22,7 +23,7 @@ class DiskUsageMonitoring extends HookConsumerWidget {
           children: [
             Row(
               children: [
-                Icon(
+                ShellIcon(
                   MdiIcons.harddisk,
                   color: Theme.of(context).colorScheme.primary,
                 ),

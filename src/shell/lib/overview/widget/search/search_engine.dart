@@ -15,6 +15,7 @@ import 'package:shell/overview/widget/search/search_input.dart';
 import 'package:shell/overview/widget/search/settings/settings_search_result.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/shared/util/logger.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/shared/widget/square_icon_button.dart';
 import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 
@@ -189,7 +190,7 @@ class SearchEngine extends HookConsumerWidget {
                       child: Column(
                         children: [
                           SquareIconButton(
-                            icon: const Icon(MdiIcons.playBox),
+                            icon: const ShellIcon(MdiIcons.playBox),
                             onSelected: () => overviewNotifier.setSearchMode(
                               SearchMode.application,
                             ),
@@ -197,14 +198,14 @@ class SearchEngine extends HookConsumerWidget {
                           ),
                           const SizedBox(height: 16),
                           SquareIconButton(
-                            icon: const Icon(MdiIcons.file),
+                            icon: const ShellIcon(MdiIcons.file),
                             onSelected: () =>
                                 overviewNotifier.setSearchMode(SearchMode.file),
                             isSelected: searchMode == SearchMode.file,
                           ),
                           const SizedBox(height: 16),
                           SquareIconButton(
-                            icon: const Icon(MdiIcons.cog),
+                            icon: const ShellIcon(MdiIcons.cog),
                             onSelected: () => overviewNotifier.setSearchMode(
                               SearchMode.settings,
                             ),

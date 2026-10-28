@@ -1,5 +1,7 @@
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/theme//provider/theme.dart';
 
 class SearchInput extends StatelessWidget {
@@ -28,7 +30,7 @@ class SearchInput extends StatelessWidget {
       decoration: InputDecoration(
         prefixIcon: const Padding(
           padding: EdgeInsets.fromLTRB(12, 12, 32, 12),
-          child: Icon(Icons.search, size: 28),
+          child: ShellIcon(MdiIcons.magnify, size: 28),
         ),
         hintText: context.l10n.search,
         fillColor: Theme.of(context).colorScheme.surface,

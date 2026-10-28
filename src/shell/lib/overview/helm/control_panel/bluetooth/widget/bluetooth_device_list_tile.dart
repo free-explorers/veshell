@@ -3,6 +3,7 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/overview/helm/control_panel/bluetooth/provider/bluetooth_device.dart';
 import 'package:shell/overview/helm/control_panel/bluetooth/widget/bluetooth_device_icon.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 class BluetoothDeviceListTile extends HookConsumerWidget {
   const BluetoothDeviceListTile(this.address, {super.key});
@@ -19,7 +20,7 @@ class BluetoothDeviceListTile extends HookConsumerWidget {
         title: Text(bluezDevice.alias),
         trailing: bluezDevice.connected
             ? IconButton(
-                icon: const Icon(MdiIcons.bluetoothOff),
+                icon: const ShellIcon(MdiIcons.bluetoothOff),
                 onPressed: bluezDevice.disconnect,
               )
             : Row(
@@ -36,13 +37,13 @@ class BluetoothDeviceListTile extends HookConsumerWidget {
                     )
                   else
                     IconButton(
-                      icon: const Icon(MdiIcons.bluetoothConnect),
+                      icon: const ShellIcon(MdiIcons.bluetoothConnect),
                       onPressed: ref
                           .read(bluetoothDeviceStateProvider(address).notifier)
                           .connect,
                     ),
                   IconButton(
-                    icon: const Icon(MdiIcons.delete),
+                    icon: const ShellIcon(MdiIcons.delete),
                     onPressed: () =>
                         bluezDevice.adapter.removeDevice(bluezDevice),
                   ),
@@ -62,7 +63,7 @@ class BluetoothDeviceListTile extends HookConsumerWidget {
                   height: 24,
                   child: CircularProgressIndicator(),
                 )
-              : const Icon(MdiIcons.plus),
+              : const ShellIcon(MdiIcons.plus),
         ),
       );
     }

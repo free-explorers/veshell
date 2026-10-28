@@ -16,6 +16,7 @@ import 'package:shell/platform/model/request/activate_window/activate_window.ser
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/widget/frosted_surface.dart';
 import 'package:shell/shared/widget/panel_tab.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/window/model/dialog_area_entry.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
@@ -524,7 +525,7 @@ class _DialogTab extends ConsumerWidget {
     return PanelTab(
       icon: const Padding(
         padding: EdgeInsets.all(4),
-        child: Icon(MdiIcons.folderOpen),
+        child: ShellIcon(MdiIcons.folderOpen),
       ),
       label: chooser != null && chooser.title.isNotEmpty
           ? chooser.title
@@ -567,7 +568,7 @@ class _PillActionButton extends StatelessWidget {
       visualDensity: VisualDensity.compact,
       tooltip: tooltip,
       onPressed: onPressed,
-      icon: Icon(icon, size: 16),
+      icon: ShellIcon(icon, size: 16),
     );
   }
 }

@@ -13,6 +13,7 @@ import 'package:shell/lock_screen/provider/lock_screen.dart';
 import 'package:shell/monitor/provider/focused_monitor.dart';
 import 'package:shell/shared/provider/now_date_time.dart';
 import 'package:shell/shared/widget/frosted_surface.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 /// Blur of the locked desktop. Strong enough that window text cannot be read.
 const _lockBlurSigma = 48.0;
@@ -310,10 +311,10 @@ class _UnlockPrompt extends HookConsumerWidget {
                                   ? context.l10n.lockScreenHidePassword
                                   : context.l10n.lockScreenShowPassword,
                               onPressed: () => revealed.value = !revealed.value,
-                              icon: Icon(
+                              icon: ShellIcon(
                                 revealed.value
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
+                                    ? MdiIcons.eyeOffOutline
+                                    : MdiIcons.eyeOutline,
                               ),
                             ),
                           ),
@@ -329,7 +330,7 @@ class _UnlockPrompt extends HookConsumerWidget {
                           IconButton(
                             tooltip: context.l10n.lockScreenUnlock,
                             onPressed: waiting ? submit : null,
-                            icon: const Icon(Icons.arrow_forward),
+                            icon: const ShellIcon(MdiIcons.arrowRight),
                           ),
                       ],
                     ),
@@ -385,7 +386,7 @@ class _NoticeLine extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (icon != null) ...[
-          Icon(icon, size: 18, color: color),
+          ShellIcon(icon, size: 18, color: color),
           const SizedBox(width: 8),
         ],
         Flexible(

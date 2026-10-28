@@ -8,6 +8,7 @@ import 'package:shell/file_explorer/widget/file_entry_icon.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/model/overview_content.dart';
 import 'package:shell/shared/widget/panel_tab.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
 
@@ -36,7 +37,7 @@ class OverviewContentTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (content) {
       HelmOverviewContent() => PanelTab(
-        icon: const Icon(MdiIcons.shipWheel),
+        icon: const ShellIcon(MdiIcons.shipWheel),
         label: context.l10n.helm,
         isSelected: isSelected,
         onTap: onSelect,
@@ -47,7 +48,7 @@ class OverviewContentTab extends StatelessWidget {
         onTap: onSelect,
       ),
       PreviewOverviewContent(:final entry) => PanelTab(
-        icon: Icon(iconForFileEntry(entry)),
+        icon: ShellIcon(iconForFileEntry(entry)),
         label: entry.name,
         isSelected: isSelected,
         onTap: onSelect,
@@ -111,7 +112,7 @@ class _CloseButton extends StatelessWidget {
       color: color,
       visualDensity: VisualDensity.compact,
       onPressed: onPressed,
-      icon: const Icon(MdiIcons.close, size: 16),
+      icon: const ShellIcon(MdiIcons.close, size: 16),
     );
   }
 }

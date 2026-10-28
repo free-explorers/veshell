@@ -11,6 +11,7 @@ import 'package:shell/overview/helm/control_panel/widget/session_controls.dart';
 import 'package:shell/overview/helm/monitoring_panel/widget/monitoring_panel.dart';
 import 'package:shell/overview/helm/notification_panel/widget/notification_panel.dart';
 import 'package:shell/overview/helm/widget/panel_column.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 /// Minimum width a single Helm column needs to lay out its cards comfortably.
 const _minPanelWidth = 380.0;
@@ -132,7 +133,7 @@ class _TabbedLayout extends ConsumerWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(MdiIcons.tuneVertical),
+                    const ShellIcon(MdiIcons.tuneVertical),
                     const SizedBox(width: 8),
                     Text(context.l10n.controls),
                   ],
@@ -145,7 +146,7 @@ class _TabbedLayout extends ConsumerWidget {
                     Badge(
                       isLabelVisible: notificationCount > 0,
                       label: Text('$notificationCount'),
-                      child: const Icon(MdiIcons.bullhornVariant),
+                      child: const ShellIcon(MdiIcons.bullhornVariant),
                     ),
                     const SizedBox(width: 8),
                     Text(context.l10n.notifications),
