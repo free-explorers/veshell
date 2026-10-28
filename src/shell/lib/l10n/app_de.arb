@@ -68,6 +68,8 @@
   "refreshRateDescription": "Bildwiederholrate des Monitors",
   "fractionalScale": "Gebrochene Skalierung",
   "fractionalScaleDescription": "Gebrochene Skalierung des Monitors",
+  "fractionalScaleExactValues": "Exakt bei {resolution}: {values}",
+  "fractionalScaleRecommended": "Empfohlen: {value}",
   "transform": "Transformation",
   "transformDescription": "Drehung und Spiegelung der Anzeige",
   "mirror": "Duplizieren",

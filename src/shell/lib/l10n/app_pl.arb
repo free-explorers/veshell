@@ -68,6 +68,8 @@
   "refreshRateDescription": "Częstotliwość odświeżania monitora",
   "fractionalScale": "Skalowanie ułamkowe",
   "fractionalScaleDescription": "Skalowanie ułamkowe monitora",
+  "fractionalScaleExactValues": "Dokładne przy {resolution}: {values}",
+  "fractionalScaleRecommended": "Zalecana: {value}",
   "transform": "Przekształcenie",
   "transformDescription": "Obrót i odbicie obrazu",
   "mirror": "Powiel",

@@ -68,6 +68,8 @@
   "refreshRateDescription": "मॉनिटर की रिफ़्रेश दर",
   "fractionalScale": "भिन्नात्मक स्केल",
   "fractionalScaleDescription": "मॉनिटर की भिन्नात्मक स्केलिंग",
+  "fractionalScaleExactValues": "{resolution} पर सटीक मान: {values}",
+  "fractionalScaleRecommended": "अनुशंसित: {value}",
   "transform": "रूपांतरण",
   "transformDescription": "डिस्प्ले का घुमाव और प्रतिबिंब",
   "mirror": "प्रतिरूप दिखाएँ",

@@ -68,6 +68,8 @@
   "refreshRateDescription": "Laju penyegaran monitor",
   "fractionalScale": "Skala pecahan",
   "fractionalScaleDescription": "Penskalaan pecahan monitor",
+  "fractionalScaleExactValues": "Tepat pada {resolution}: {values}",
+  "fractionalScaleRecommended": "Disarankan: {value}",
   "transform": "Transformasi",
   "transformDescription": "Rotasi dan pencerminan tampilan",
   "mirror": "Cerminkan",

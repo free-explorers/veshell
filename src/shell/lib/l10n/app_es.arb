@@ -68,6 +68,8 @@
   "refreshRateDescription": "Frecuencia de actualización del monitor",
   "fractionalScale": "Escala fraccionaria",
   "fractionalScaleDescription": "Escalado fraccionario del monitor",
+  "fractionalScaleExactValues": "Exactas en {resolution}: {values}",
+  "fractionalScaleRecommended": "Recomendada: {value}",
   "transform": "Transformación",
   "transformDescription": "Rotación y reflejo de la pantalla",
   "mirror": "Duplicar",

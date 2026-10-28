@@ -68,6 +68,8 @@
   "refreshRateDescription": "معدل تحديث جهاز العرض",
   "fractionalScale": "التحجيم الكسري",
   "fractionalScaleDescription": "التحجيم الكسري لجهاز العرض",
+  "fractionalScaleExactValues": "القيم الدقيقة عند {resolution}: {values}",
+  "fractionalScaleRecommended": "الموصى بها: {value}",
   "transform": "التحويل",
   "transformDescription": "تدوير العرض وعكسه",
   "mirror": "نسخ العرض",
