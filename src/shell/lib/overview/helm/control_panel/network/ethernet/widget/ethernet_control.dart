@@ -6,6 +6,7 @@ import 'package:shell/overview/helm/control_panel/network/widget/device_status.d
 import 'package:shell/shared/nm/provider/nm_client.dart';
 import 'package:shell/shared/nm/provider/nm_device.dart';
 import 'package:shell/shared/widget/expandable_card.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 class EthernetControl extends HookConsumerWidget {
   const EthernetControl(this.address, {super.key});
@@ -24,7 +25,7 @@ class EthernetControl extends HookConsumerWidget {
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  Icon(
+                  ShellIcon(
                     MdiIcons.ethernet,
                     color: Theme.of(context).colorScheme.primary,
                   ),

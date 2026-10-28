@@ -8,6 +8,7 @@ import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/available_screen_list.dart';
 import 'package:shell/screen/provider/screen_label.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 /// Fallback shown on a monitor that has no screens.
 ///
@@ -35,7 +36,7 @@ class EmptyMonitor extends HookConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(
+                ShellIcon(
                   MdiIcons.monitorOff,
                   size: 48,
                   color: theme.colorScheme.onSurfaceVariant,
@@ -55,7 +56,7 @@ class EmptyMonitor extends HookConsumerWidget {
                 const SizedBox(height: 16),
                 FilledButton.icon(
                   onPressed: () => _addScreen(ref),
-                  icon: const Icon(MdiIcons.plus),
+                  icon: const ShellIcon(MdiIcons.plus),
                   label: Text(context.l10n.createScreen),
                 ),
                 for (final screenId in availableScreens) ...[

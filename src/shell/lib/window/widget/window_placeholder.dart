@@ -13,6 +13,7 @@ import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/application/widget/logs_viewer.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/platform/provider/platform_event_recorder.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/widget/resume_context_summary.dart';
@@ -169,7 +170,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                         Directionality(
                           textDirection: Directionality.of(context),
                           child: MenuItemButton(
-                            trailingIcon: const Icon(MdiIcons.bug),
+                            trailingIcon: const ShellIcon(MdiIcons.bug),
                             onPressed: () {
                               ref
                                   .read(platformEventRecorderProvider.notifier)
@@ -184,7 +185,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                           Directionality(
                             textDirection: Directionality.of(context),
                             child: MenuItemButton(
-                              trailingIcon: const Icon(MdiIcons.eraser),
+                              trailingIcon: const ShellIcon(MdiIcons.eraser),
                               onPressed: () {
                                 forgetResumeContext();
                                 moreMenuController.close();
@@ -198,7 +199,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                         onPressed: () => controller.isOpen
                             ? controller.close()
                             : controller.open(),
-                        icon: const Icon(MdiIcons.dotsVertical),
+                        icon: const ShellIcon(MdiIcons.dotsVertical),
                       ),
                     ),
                   ),
@@ -351,7 +352,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                                       tooltip: context.l10n.closeLogs,
                                       onPressed: () =>
                                           launchFailed.value = false,
-                                      icon: const Icon(MdiIcons.close),
+                                      icon: const ShellIcon(MdiIcons.close),
                                     ),
                                   ),
                                 if (launchFailed.value)
@@ -446,7 +447,7 @@ class ExecCommandEditor extends HookWidget {
                       onSubmitted: (value) => submittedCb(),
                       enabled: isEditable.value,
                       decoration: InputDecoration(
-                        prefixIcon: const Icon(MdiIcons.chevronRight),
+                        prefixIcon: const ShellIcon(MdiIcons.chevronRight),
                         border: const OutlineInputBorder(
                           borderSide: BorderSide.none,
                         ),
@@ -456,7 +457,7 @@ class ExecCommandEditor extends HookWidget {
                         ),
                         suffixIcon: isEditable.value
                             ? null
-                            : const Icon(MdiIcons.pencil, size: 20),
+                            : const ShellIcon(MdiIcons.pencil, size: 20),
                       ),
                       controller: textController,
                       focusNode: focusNode,
@@ -467,7 +468,7 @@ class ExecCommandEditor extends HookWidget {
                   const SizedBox(width: 4),
                   IconButton(
                     onPressed: submittedCb,
-                    icon: const Icon(MdiIcons.check),
+                    icon: const ShellIcon(MdiIcons.check),
                   ),
                   const SizedBox(width: 4),
                 ],
@@ -482,7 +483,7 @@ class ExecCommandEditor extends HookWidget {
               onPressed: () {
                 onChanged?.call(null);
               },
-              icon: const Icon(MdiIcons.restore),
+              icon: const ShellIcon(MdiIcons.restore),
             ),
           ),
       ],
@@ -509,9 +510,9 @@ class DisplayModeRow extends StatelessWidget {
           .map((mode) {
             final selected = mode == selectedMode;
             final icon = switch (mode) {
-              DisplayMode.maximized => const Icon(MdiIcons.windowMaximize),
-              DisplayMode.fullscreen => const Icon(MdiIcons.fullscreen),
-              DisplayMode.game => const Icon(MdiIcons.controller),
+              DisplayMode.maximized => const ShellIcon(MdiIcons.windowMaximize),
+              DisplayMode.fullscreen => const ShellIcon(MdiIcons.fullscreen),
+              DisplayMode.game => const ShellIcon(MdiIcons.controller),
               DisplayMode.floating => SvgPicture.asset(
                 'assets/float-symbolic.svg',
                 width: 24,
@@ -593,12 +594,12 @@ class _ResumeActions extends StatelessWidget {
             children: [
               FilledButton.tonalIcon(
                 onPressed: onRetry,
-                icon: const Icon(MdiIcons.refresh),
+                icon: const ShellIcon(MdiIcons.refresh),
                 label: Text(retryLabel),
               ),
               TextButton.icon(
                 onPressed: onForget,
-                icon: const Icon(MdiIcons.eraser),
+                icon: const ShellIcon(MdiIcons.eraser),
                 label: Text(forgetLabel),
               ),
             ],

@@ -7,6 +7,7 @@ import 'package:shell/overview/helm/monitoring_panel/disk_monitoring/widget/disk
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_battery_device.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_client.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_devices.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:upower/upower.dart';
 
 class PowerIndicator extends HookConsumerWidget {
@@ -33,7 +34,7 @@ class PowerIndicator extends HookConsumerWidget {
           children: [
             Row(
               children: [
-                Icon(
+                ShellIcon(
                   MdiIcons.lightningBolt,
                   color: Theme.of(context).colorScheme.primary,
                 ),
@@ -60,15 +61,15 @@ class PowerIndicator extends HookConsumerWidget {
               child: SegmentedButton(
                 segments: const [
                   ButtonSegment(
-                    icon: Icon(MdiIcons.speedometerSlow),
+                    icon: ShellIcon(MdiIcons.speedometerSlow),
                     value: 'power_saver',
                   ),
                   ButtonSegment(
-                    icon: Icon(MdiIcons.speedometerMedium),
+                    icon: ShellIcon(MdiIcons.speedometerMedium),
                     value: 'balanced',
                   ),
                   ButtonSegment(
-                    icon: Icon(MdiIcons.speedometer),
+                    icon: ShellIcon(MdiIcons.speedometer),
                     value: 'performance',
                   ),
                 ],
@@ -100,53 +101,53 @@ class SystemBatteryIndicator extends HookWidget {
     );
   }
 
-  Icon get icon {
+  ShellIcon get icon {
     final isCharging = device.state == UPowerDeviceState.charging;
     if (isCharging) {
       switch (device.percentage) {
         case >= 90:
-          return const Icon(MdiIcons.batteryCharging100);
+          return const ShellIcon(MdiIcons.batteryCharging100);
         case >= 80:
-          return const Icon(MdiIcons.batteryCharging90);
+          return const ShellIcon(MdiIcons.batteryCharging90);
         case >= 70:
-          return const Icon(MdiIcons.batteryCharging80);
+          return const ShellIcon(MdiIcons.batteryCharging80);
         case >= 60:
-          return const Icon(MdiIcons.batteryCharging70);
+          return const ShellIcon(MdiIcons.batteryCharging70);
         case >= 50:
-          return const Icon(MdiIcons.batteryCharging60);
+          return const ShellIcon(MdiIcons.batteryCharging60);
         case >= 40:
-          return const Icon(MdiIcons.batteryCharging50);
+          return const ShellIcon(MdiIcons.batteryCharging50);
         case >= 30:
-          return const Icon(MdiIcons.batteryCharging40);
+          return const ShellIcon(MdiIcons.batteryCharging40);
         case >= 20:
-          return const Icon(MdiIcons.batteryCharging30);
+          return const ShellIcon(MdiIcons.batteryCharging30);
         case >= 10:
-          return const Icon(MdiIcons.batteryCharging20);
+          return const ShellIcon(MdiIcons.batteryCharging20);
         default:
-          return const Icon(MdiIcons.batteryCharging10);
+          return const ShellIcon(MdiIcons.batteryCharging10);
       }
     } else {
       switch (device.percentage) {
         case >= 90:
-          return const Icon(MdiIcons.battery);
+          return const ShellIcon(MdiIcons.battery);
         case >= 80:
-          return const Icon(MdiIcons.battery90);
+          return const ShellIcon(MdiIcons.battery90);
         case >= 70:
-          return const Icon(MdiIcons.battery80);
+          return const ShellIcon(MdiIcons.battery80);
         case >= 60:
-          return const Icon(MdiIcons.battery70);
+          return const ShellIcon(MdiIcons.battery70);
         case >= 50:
-          return const Icon(MdiIcons.battery60);
+          return const ShellIcon(MdiIcons.battery60);
         case >= 40:
-          return const Icon(MdiIcons.battery50);
+          return const ShellIcon(MdiIcons.battery50);
         case >= 30:
-          return const Icon(MdiIcons.battery40);
+          return const ShellIcon(MdiIcons.battery40);
         case >= 20:
-          return const Icon(MdiIcons.battery30);
+          return const ShellIcon(MdiIcons.battery30);
         case >= 10:
-          return const Icon(MdiIcons.battery20);
+          return const ShellIcon(MdiIcons.battery20);
         default:
-          return const Icon(MdiIcons.battery10);
+          return const ShellIcon(MdiIcons.battery10);
       }
     }
   }
@@ -169,23 +170,23 @@ class DeviceIndicator extends StatelessWidget {
     );
   }
 
-  Icon get icon {
+  ShellIcon get icon {
     switch (UpowerClient.getDeviceType(device)) {
       case UPowerDeviceType.unknown:
       case UPowerDeviceType.linePower:
       case UPowerDeviceType.battery:
       case UPowerDeviceType.ups:
-        return const Icon(MdiIcons.battery);
+        return const ShellIcon(MdiIcons.battery);
       case UPowerDeviceType.monitor:
-        return const Icon(MdiIcons.monitor);
+        return const ShellIcon(MdiIcons.monitor);
       case UPowerDeviceType.mouse:
-        return const Icon(MdiIcons.mouse);
+        return const ShellIcon(MdiIcons.mouse);
       case UPowerDeviceType.keyboard:
-        return const Icon(MdiIcons.keyboard);
+        return const ShellIcon(MdiIcons.keyboard);
       case UPowerDeviceType.pda:
-        return const Icon(MdiIcons.tablet);
+        return const ShellIcon(MdiIcons.tablet);
       case UPowerDeviceType.phone:
-        return const Icon(MdiIcons.cellphone);
+        return const ShellIcon(MdiIcons.cellphone);
     }
   }
 }
@@ -197,7 +198,7 @@ class BatteryIndicator extends StatelessWidget {
     required this.percentage,
     super.key,
   });
-  final Icon icon;
+  final ShellIcon icon;
   final String label;
   final double percentage;
   @override

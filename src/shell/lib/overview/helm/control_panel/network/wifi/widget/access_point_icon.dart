@@ -1,6 +1,7 @@
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:nm/nm.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 class AccessPointIcon extends StatelessWidget {
   const AccessPointIcon({required this.accessPoint, this.color, super.key});
@@ -13,7 +14,7 @@ class AccessPointIcon extends StatelessWidget {
     final isLock = accessPoint.flags.contains(
       NetworkManagerWifiAccessPointFlag.privacy,
     );
-    return Icon(switch (accessPoint.strength) {
+    return ShellIcon(switch (accessPoint.strength) {
       < 20 => isLock ? MdiIcons.wifiStrength1Lock : MdiIcons.wifiStrength1,
       < 40 => isLock ? MdiIcons.wifiStrength2Lock : MdiIcons.wifiStrength2,
       < 60 => isLock ? MdiIcons.wifiStrength3Lock : MdiIcons.wifiStrength3,

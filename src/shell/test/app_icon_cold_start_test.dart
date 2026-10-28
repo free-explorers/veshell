@@ -8,6 +8,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/icon_file_from_query.dart';
 import 'package:shell/application/widget/app_icon.dart';
+import 'package:shell/application/widget/grid_fit_svg_icon.dart';
 
 void main() {
   testWidgets('panel-sized SVG icon is displayed after a cold lookup', (
@@ -44,11 +45,12 @@ void main() {
         ),
       ),
     );
-    expect(find.byType(SvgPicture), findsNothing);
+    expect(find.byType(GridFitSvgIcon), findsNothing);
 
     lookup.complete(svg);
     await tester.pumpAndSettle();
-    expect(find.byType(SvgPicture), findsOneWidget);
+    // SVG icons are drawn grid-fitted (flutter_svg is their fallback).
+    expect(find.byType(GridFitSvgIcon), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

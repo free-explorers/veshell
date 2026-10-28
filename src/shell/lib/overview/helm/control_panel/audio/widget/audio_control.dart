@@ -12,6 +12,7 @@ import 'package:shell/shared/pulseaudio/provider/pulse_audio.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_sink_list.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_source_list.dart';
 import 'package:shell/shared/widget/expandable_card.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 enum OpenMode { output, input }
 
@@ -33,7 +34,7 @@ class AudioControl extends HookConsumerWidget {
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  Icon(
+                  ShellIcon(
                     MdiIcons.tuneVertical,
                     color: Theme.of(context).colorScheme.primary,
                   ),
@@ -99,7 +100,9 @@ class AudioOutputList extends HookConsumerWidget {
           itemBuilder: (context, index) {
             final sink = sinkList[index];
             return ListTile(
-              leading: sink == defaultSink ? const Icon(MdiIcons.check) : null,
+              leading: sink == defaultSink
+                  ? const ShellIcon(MdiIcons.check)
+                  : null,
               title: Text(sink.description),
               onTap: () {
                 ref
@@ -135,7 +138,7 @@ class AudioInputList extends HookConsumerWidget {
             final source = sourceList[index];
             return ListTile(
               leading: source == defaultSource
-                  ? const Icon(MdiIcons.check)
+                  ? const ShellIcon(MdiIcons.check)
                   : null,
               title: Text(source.description),
               onTap: () {
@@ -171,7 +174,7 @@ class AudioOutputControl extends HookConsumerWidget {
               .read(pulseClientProvider.notifier)
               .setSinkMute(defaultSink!.name, !defaultSink.mute);
         },
-        icon: Icon(
+        icon: ShellIcon(
           defaultSink?.mute ?? true ? MdiIcons.volumeOff : MdiIcons.volumeHigh,
         ),
       ),
@@ -193,7 +196,7 @@ class AudioOutputControl extends HookConsumerWidget {
       ),
       trailing: IconButton.filledTonal(
         onPressed: onTap,
-        icon: Icon(isExpanded ? MdiIcons.chevronUp : MdiIcons.chevronDown),
+        icon: ShellIcon(isExpanded ? MdiIcons.chevronUp : MdiIcons.chevronDown),
         style: IconButton.styleFrom(padding: EdgeInsets.zero),
         visualDensity: VisualDensity.compact,
       ),
@@ -220,7 +223,7 @@ class AudioInputControl extends HookConsumerWidget {
               .read(pulseClientProvider.notifier)
               .setSourceMute(defaultSource!.name, !defaultSource.mute);
         },
-        icon: Icon(
+        icon: ShellIcon(
           defaultSource?.mute ?? true
               ? MdiIcons.microphoneOff
               : MdiIcons.microphone,
@@ -246,7 +249,7 @@ class AudioInputControl extends HookConsumerWidget {
       ),
       trailing: IconButton.filledTonal(
         onPressed: onTap,
-        icon: Icon(isExpanded ? MdiIcons.chevronUp : MdiIcons.chevronDown),
+        icon: ShellIcon(isExpanded ? MdiIcons.chevronUp : MdiIcons.chevronDown),
         style: IconButton.styleFrom(padding: EdgeInsets.zero),
         visualDensity: VisualDensity.compact,
       ),

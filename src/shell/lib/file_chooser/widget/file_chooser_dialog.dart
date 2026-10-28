@@ -16,6 +16,7 @@ import 'package:shell/file_explorer/widget/file_explorer_view.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 
 /// Riverpod key the portal chooser uses for the (otherwise overview-owned)
@@ -197,7 +198,7 @@ class FileChooserDialog extends HookConsumerWidget {
                       IconButton(
                         tooltip: context.l10n.close,
                         onPressed: chooser.cancel,
-                        icon: const Icon(MdiIcons.close),
+                        icon: const ShellIcon(MdiIcons.close),
                       ),
                     ],
                   ),

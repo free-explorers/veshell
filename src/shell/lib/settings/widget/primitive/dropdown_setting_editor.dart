@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 /// Controlled dropdown with the same inline confirmation as text settings.
 /// Callers stage changes through [onChanged] and persist through [onConfirm].
@@ -96,7 +97,7 @@ class _DropdownSettingEditorState<T> extends State<DropdownSettingEditor<T>> {
                 height: 20,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : const Icon(MdiIcons.check),
+            : const ShellIcon(MdiIcons.check),
         onPressed: widget.saving ? null : widget.onConfirm,
       ),
     ],

@@ -10,6 +10,7 @@ import 'package:shell/capture/provider/screen_cast_indicator.dart';
 import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/widget/tile_popup_host.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
@@ -263,7 +264,7 @@ class PersistentWindowTileable extends Tileable {
                                     .stop(session);
                               }
                             },
-                            icon: const Icon(MdiIcons.stopCircleOutline),
+                            icon: const ShellIcon(MdiIcons.stopCircleOutline),
                           ),
                         ),
                       SizedBox(
@@ -281,7 +282,7 @@ class PersistentWindowTileable extends Tileable {
                                       )
                                       .closeWindow();
                                 },
-                                icon: const Icon(MdiIcons.close),
+                                icon: const ShellIcon(MdiIcons.close),
                               )
                             : null,
                       ),
@@ -306,7 +307,7 @@ class PersistentWindowTileable extends Tileable {
             ref.read(logsForPidProvider(pid).notifier).openLogsDialog(context);
           }
         },
-        leadingIcon: const Icon(MdiIcons.headCog),
+        leadingIcon: const ShellIcon(MdiIcons.headCog),
         child: Text(context.l10n.showExecutionLogs),
       ),
       Consumer(
@@ -321,11 +322,13 @@ class PersistentWindowTileable extends Tileable {
               ...DisplayMode.values.map(
                 (e) => MenuItemButton(
                   leadingIcon: switch (e) {
-                    DisplayMode.maximized => const Icon(
+                    DisplayMode.maximized => const ShellIcon(
                       MdiIcons.windowMaximize,
                     ),
-                    DisplayMode.fullscreen => const Icon(MdiIcons.fullscreen),
-                    DisplayMode.game => const Icon(MdiIcons.controller),
+                    DisplayMode.fullscreen => const ShellIcon(
+                      MdiIcons.fullscreen,
+                    ),
+                    DisplayMode.game => const ShellIcon(MdiIcons.controller),
                     DisplayMode.floating => SvgPicture.asset(
                       'assets/float-symbolic.svg',
                       width: 24,
@@ -367,7 +370,7 @@ class PersistentWindowTileable extends Tileable {
                   .read(persistentWindowStateProvider(windowId).notifier)
                   .forgetResumeContext();
             },
-            leadingIcon: const Icon(MdiIcons.eraser),
+            leadingIcon: const ShellIcon(MdiIcons.eraser),
             child: Text(context.l10n.forgetSavedContext),
           );
         },
@@ -378,7 +381,7 @@ class PersistentWindowTileable extends Tileable {
               .read(persistentWindowStateProvider(windowId).notifier)
               .closeWindow();
         },
-        leadingIcon: const Icon(MdiIcons.close),
+        leadingIcon: const ShellIcon(MdiIcons.close),
         child: Text(context.l10n.close),
       ),
     ];

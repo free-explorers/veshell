@@ -1,12 +1,13 @@
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 class BluetoothDeviceIcon extends StatelessWidget {
   const BluetoothDeviceIcon(this.icon, {super.key});
   final String icon;
   @override
   Widget build(BuildContext context) {
-    return Icon(switch (icon) {
+    return ShellIcon(switch (icon) {
       'ac-adapter' => MdiIcons.power,
       'audio-card' => MdiIcons.expansionCard,
       'audio-headphones' => MdiIcons.headphones,
@@ -32,7 +33,7 @@ class BluetoothDeviceIcon extends StatelessWidget {
       'input-tablet' => MdiIcons.tablet,
       'media-flash' => MdiIcons.usbFlashDrive,
       'media-floppy' => MdiIcons.floppy,
-      'media-optical' => Icons.album,
+      'media-optical' => MdiIcons.album,
       'media-removable' => MdiIcons.eject,
       'media-tape' => MdiIcons.tapeDrive,
       'multimedia-player' => MdiIcons.discPlayer,
@@ -45,7 +46,7 @@ class BluetoothDeviceIcon extends StatelessWidget {
       'video-display' => MdiIcons.monitor,
       'preferences-desktop-keyboard' => MdiIcons.keyboard,
       'thunderbolt' => MdiIcons.bolt,
-      String() => Icons.device_unknown,
+      String() => MdiIcons.helpCircleOutline,
     });
   }
 }

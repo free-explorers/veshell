@@ -10,6 +10,7 @@ import 'package:shell/overview/helm/control_panel/network/wifi/widget/wifi_contr
 import 'package:shell/shared/nm/provider/nm_client.dart';
 import 'package:shell/shared/nm/provider/nm_device.dart';
 import 'package:shell/shared/widget/expandable_card.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 class WifiControl extends HookConsumerWidget {
   const WifiControl(this.address, {super.key});
@@ -60,7 +61,7 @@ class WifiControl extends HookConsumerWidget {
                         ExpandableCard.of(context).expand();
                         ref.read(wifiManagerProvider(address).notifier).scan();
                       },
-                      icon: const Icon(MdiIcons.plus),
+                      icon: const ShellIcon(MdiIcons.plus),
                       iconSize: 20,
                       style: IconButton.styleFrom(
                         padding: const EdgeInsets.all(4),
@@ -88,7 +89,7 @@ class WifiControl extends HookConsumerWidget {
                                   .read(wifiManagerProvider(address).notifier)
                                   .scan();
                             },
-                            icon: const Icon(MdiIcons.refresh),
+                            icon: const ShellIcon(MdiIcons.refresh),
                             iconSize: 20,
                             style: IconButton.styleFrom(
                               padding: const EdgeInsets.all(4),

@@ -16,6 +16,7 @@ import 'package:shell/screen/provider/workspace_display_mode.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/shared/widget/cross_reorderable_list.dart';
 import 'package:shell/shared/widget/multi_view_drag.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/theme//provider/theme.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
@@ -317,7 +318,7 @@ class WorkspaceIcon extends HookConsumerWidget {
       [workspaceState.tileableWindowList],
     ).whereNotNull();
 
-    if (appIdList.isEmpty) return const Icon(MdiIcons.plus);
+    if (appIdList.isEmpty) return const ShellIcon(MdiIcons.plus);
 
     switch (workspaceDisplayMode) {
       case WorkspaceDisplayMode.hybrid:
@@ -369,35 +370,35 @@ class CategoryIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (category!) {
       case WorkspaceCategory.Game:
-        return const Icon(MdiIcons.gamepad);
+        return const ShellIcon(MdiIcons.gamepad);
       case WorkspaceCategory.Development:
-        return const Icon(MdiIcons.codeBraces);
+        return const ShellIcon(MdiIcons.codeBraces);
       case WorkspaceCategory.Video:
-        return const Icon(MdiIcons.movieOpen);
+        return const ShellIcon(MdiIcons.movieOpen);
       case WorkspaceCategory.Audio:
-        return const Icon(MdiIcons.music);
+        return const ShellIcon(MdiIcons.music);
       case WorkspaceCategory.AudioVideo:
-        return const Icon(MdiIcons.playCircleOutline);
+        return const ShellIcon(MdiIcons.playCircleOutline);
       case WorkspaceCategory.Graphics:
-        return const Icon(MdiIcons.palette);
+        return const ShellIcon(MdiIcons.palette);
       case WorkspaceCategory.Office:
-        return const Icon(MdiIcons.fileDocument);
+        return const ShellIcon(MdiIcons.fileDocument);
       case WorkspaceCategory.Science:
-        return const Icon(MdiIcons.flask);
+        return const ShellIcon(MdiIcons.flask);
       case WorkspaceCategory.Education:
-        return const Icon(MdiIcons.school);
+        return const ShellIcon(MdiIcons.school);
       case WorkspaceCategory.FileManager:
-        return const Icon(MdiIcons.folder);
+        return const ShellIcon(MdiIcons.folder);
       case WorkspaceCategory.InstantMessaging:
-        return const Icon(MdiIcons.forum);
+        return const ShellIcon(MdiIcons.forum);
       case WorkspaceCategory.Network:
-        return const Icon(MdiIcons.web);
+        return const ShellIcon(MdiIcons.web);
       case WorkspaceCategory.Settings:
-        return const Icon(MdiIcons.cog);
+        return const ShellIcon(MdiIcons.cog);
       case WorkspaceCategory.System:
-        return const Icon(MdiIcons.desktopClassic);
+        return const ShellIcon(MdiIcons.desktopClassic);
       case WorkspaceCategory.Utility:
-        return const Icon(MdiIcons.applicationCog);
+        return const ShellIcon(MdiIcons.applicationCog);
     }
   }
 }

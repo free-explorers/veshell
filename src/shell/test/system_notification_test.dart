@@ -20,6 +20,8 @@ import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:upower/upower.dart';
 
+import 'support/finders.dart';
+
 const _screenId = 'screen-1';
 
 model.Notification _systemNotification(int id) => model.Notification(
@@ -251,8 +253,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byIcon(MdiIcons.close), findsOneWidget);
-    await tester.tap(find.byIcon(MdiIcons.close));
+    expect(findIcon(MdiIcons.close), findsOneWidget);
+    await tester.tap(findIcon(MdiIcons.close));
     await tester.pumpAndSettle();
 
     expect(container.read(notificationChannelProvider(channel)), isEmpty);

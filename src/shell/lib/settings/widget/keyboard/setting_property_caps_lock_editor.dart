@@ -1,4 +1,5 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/widget/search/settings/setting_value_editor.dart';
@@ -6,6 +7,7 @@ import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/provider/settings_properties.dart';
 import 'package:shell/settings/provider/util/json_value_by_path.dart';
 import 'package:shell/shared/widget/expandable_container.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 /// The Caps Lock behaviors, in the order shown in the picker. The value is the
 /// settings string and matches `CapsLockBehavior` in the compositor.
@@ -68,7 +70,9 @@ class SettingPropertyCapsLockEditor extends ConsumerWidget
         for (final behavior in capsLockBehaviors)
           ListTile(
             title: Text(capsLockLabel(context.l10n, behavior)),
-            trailing: behavior == current ? const Icon(Icons.check) : null,
+            trailing: behavior == current
+                ? const ShellIcon(MdiIcons.check)
+                : null,
             onTap: () {
               ref
                   .read(settingsPropertiesProvider.notifier)

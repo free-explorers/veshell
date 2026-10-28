@@ -6,6 +6,7 @@ import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/screen/widget/screen_configuration_menu.dart';
 import 'package:shell/screen/widget/workspace_list.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/theme//provider/theme.dart';
 
 class ScreenPanel extends HookConsumerWidget implements PreferredSizeWidget {
@@ -44,7 +45,7 @@ class ScreenPanel extends HookConsumerWidget implements PreferredSizeWidget {
                       )
                       .toggle();
                 },
-                icon: const Icon(MdiIcons.shipWheel),
+                icon: const ShellIcon(MdiIcons.shipWheel),
               ),
             ),
             const Expanded(child: WorkspaceListView()),

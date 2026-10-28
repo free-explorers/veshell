@@ -16,6 +16,7 @@ final captureLog = logging.Logger('Capture');
 final fileExplorerLog = logging.Logger('FileExplorer');
 final monitoringLog = logging.Logger('Monitoring');
 final flutterLog = logging.Logger('Flutter');
+final iconLog = logging.Logger('Icon');
 
 final _simpleLogger = Logger(
   printer: HybridPrinter(

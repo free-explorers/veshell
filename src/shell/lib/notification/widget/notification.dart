@@ -8,6 +8,7 @@ import 'package:shell/notification/model/notification.serializable.dart' as Me;
 import 'package:shell/notification/model/notification_action.dart';
 import 'package:shell/notification/model/system_notification_category.dart';
 import 'package:shell/shared/util/relative_time.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 class NotificationWidget extends StatelessWidget {
   const NotificationWidget({
@@ -81,7 +82,7 @@ class NotificationWidget extends StatelessWidget {
           Row(
             children: [
               if (systemIcon != null)
-                Icon(systemIcon, size: 16)
+                ShellIcon(systemIcon, size: 16)
               else if (notification.appId != null)
                 SizedBox.square(
                   dimension: 16,
@@ -101,7 +102,7 @@ class NotificationWidget extends StatelessWidget {
                   ),
                 )
               else
-                const Icon(MdiIcons.bell, size: 16),
+                const ShellIcon(MdiIcons.bell, size: 16),
               const SizedBox(width: 8),
               Expanded(
                 child: Text.rich(
@@ -181,7 +182,7 @@ class NotificationWidget extends StatelessWidget {
             style: IconButton.styleFrom(padding: EdgeInsets.zero),
             visualDensity: VisualDensity.compact,
             iconSize: 20,
-            icon: const Icon(MdiIcons.close),
+            icon: const ShellIcon(MdiIcons.close),
             onPressed: onClose,
           ),
         ),

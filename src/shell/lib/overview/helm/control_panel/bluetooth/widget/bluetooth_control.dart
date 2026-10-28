@@ -9,6 +9,7 @@ import 'package:shell/overview/helm/control_panel/bluetooth/widget/bluetooth_dev
 import 'package:shell/shared/bluez/provider/bluez_device.dart';
 import 'package:shell/shared/bluez/provider/bluez_devices.dart';
 import 'package:shell/shared/widget/expandable_card.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 class BluetoothControl extends HookConsumerWidget {
   const BluetoothControl({super.key});
@@ -48,7 +49,7 @@ class BluetoothControl extends HookConsumerWidget {
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  Icon(
+                  ShellIcon(
                     MdiIcons.bluetooth,
                     color: Theme.of(context).colorScheme.primary,
                   ),

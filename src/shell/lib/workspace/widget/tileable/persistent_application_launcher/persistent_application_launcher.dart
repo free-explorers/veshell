@@ -3,6 +3,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/shared/util/logger.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/app_drawer/app_drawer.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/app_drawer/app_grid.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
@@ -76,7 +77,7 @@ class PersistentApplicationSelector extends Tileable {
   Widget buildPanelWidget(BuildContext context, WidgetRef removeSurface) {
     return const Padding(
       padding: EdgeInsets.symmetric(horizontal: 12),
-      child: Icon(MdiIcons.plus),
+      child: ShellIcon(MdiIcons.plus),
     );
   }
 

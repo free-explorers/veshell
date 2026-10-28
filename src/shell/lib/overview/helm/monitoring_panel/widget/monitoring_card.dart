@@ -9,6 +9,7 @@ import 'package:shell/overview/helm/monitoring_panel/model/process_ranking.dart'
 import 'package:shell/overview/helm/monitoring_panel/provider/process_name.dart';
 import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
 import 'package:shell/shared/widget/expandable_card.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 /// One line drawn by [MonitoringChart].
 class MonitoringSeries {
@@ -80,7 +81,7 @@ class MonitoringCard extends StatelessWidget {
                     padding: const EdgeInsets.all(16),
                     child: Row(
                       children: [
-                        Icon(
+                        ShellIcon(
                           icon,
                           color: Theme.of(context).colorScheme.primary,
                         ),
@@ -115,7 +116,7 @@ class MonitoringCard extends StatelessWidget {
                           onPressed: () {
                             ExpandableCard.of(context).toggle();
                           },
-                          icon: Icon(
+                          icon: ShellIcon(
                             isExpanded
                                 ? MdiIcons.chevronUp
                                 : MdiIcons.chevronDown,

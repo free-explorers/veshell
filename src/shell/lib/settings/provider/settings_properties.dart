@@ -34,6 +34,7 @@ import 'package:shell/settings/widget/theme/icon_theme_editor.dart';
 import 'package:shell/shared/util/file.dart';
 import 'package:shell/shared/util/json_converter/color.dart';
 import 'package:shell/shared/util/json_converter/logical_key_set.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 part 'settings_properties.g.dart';
 
@@ -114,9 +115,12 @@ class SettingsProperties extends _$SettingsProperties {
                   ExpandableSearchResult<void>(
                     path: path,
                     property: property,
-                    buildValue: (context, value, {required isExpanded}) => Icon(
-                      isExpanded ? MdiIcons.chevronUp : MdiIcons.chevronDown,
-                    ),
+                    buildValue: (context, value, {required isExpanded}) =>
+                        ShellIcon(
+                          isExpanded
+                              ? MdiIcons.chevronUp
+                              : MdiIcons.chevronDown,
+                        ),
                     buildEditor: (context, {required isExpanded}) =>
                         const MonitorArrangementEditor(),
                   ),

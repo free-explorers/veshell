@@ -14,6 +14,7 @@ import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/shared/widget/number_picker.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/theme/provider/theme.dart';
 
 class ScreenConfigurationMenu extends HookConsumerWidget {
@@ -91,7 +92,7 @@ class ScreenConfigurationMenu extends HookConsumerWidget {
                     ScreenDisplayMode.splitVertical => 0,
                     ScreenDisplayMode.splitHorizontal => 1,
                   },
-                  child: const Icon(MdiIcons.viewAgenda),
+                  child: const ShellIcon(MdiIcons.viewAgenda),
                 ),
               ),
             ],
@@ -138,7 +139,7 @@ class ScreenConfigurationMenu extends HookConsumerWidget {
         onPressed: () => menuController.isOpen
             ? menuController.close()
             : menuController.open(),
-        icon: const Icon(MdiIcons.monitorDashboard),
+        icon: const ShellIcon(MdiIcons.monitorDashboard),
       ),
     );
   }
@@ -160,7 +161,7 @@ class ScreenPicker extends HookConsumerWidget {
       itemBuilder: (context, index) {
         if (index == screenList.length) {
           return ListTile(
-            leading: const Icon(MdiIcons.plus),
+            leading: const ShellIcon(MdiIcons.plus),
             title: Text(context.l10n.createNewScreen),
             onTap: () {
               final newScreenId = ref
@@ -199,10 +200,10 @@ class ScreenListTile extends HookConsumerWidget {
     final monitorIdForScreen = ref.watch(monitorForScreenProvider(screenId));
     return ListTile(
       leading: selected
-          ? const Icon(MdiIcons.check)
+          ? const ShellIcon(MdiIcons.check)
           : monitorIdForScreen != null
-          ? const Icon(MdiIcons.swapVertical)
-          : const Icon(MdiIcons.radioboxBlank),
+          ? const ShellIcon(MdiIcons.swapVertical)
+          : const ShellIcon(MdiIcons.radioboxBlank),
       title: Text(screenLabel.value ?? ''),
       subtitle: monitorIdForScreen != null
           ? Text(
@@ -219,7 +220,7 @@ class ScreenListTile extends HookConsumerWidget {
           return [
             PopupMenuItem<void>(
               child: ListTile(
-                leading: const Icon(MdiIcons.pencil),
+                leading: const ShellIcon(MdiIcons.pencil),
                 title: Text(context.l10n.rename),
               ),
               onTap: () async {
@@ -234,7 +235,7 @@ class ScreenListTile extends HookConsumerWidget {
             ),
             PopupMenuItem<void>(
               child: ListTile(
-                leading: Icon(MdiIcons.delete),
+                leading: ShellIcon(MdiIcons.delete),
                 title: Text(context.l10n.delete),
               ),
               onTap: () {

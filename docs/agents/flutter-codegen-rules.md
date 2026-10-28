@@ -69,6 +69,18 @@ final key = (rect.left, rect.top, rect.right, rect.bottom);
 3. Rust: implement the handler under `platform_channel_callbacks/` and
    register it in that directory's `mod.rs`.
 
+## Icons
+
+- Use `ShellIcon` (`lib/shared/widget/shell_icon.dart`) instead of `Icon`. It
+  takes the same `IconData` and follows `IconTheme`, but draws the glyph
+  grid-fitted, so symbols stay crisp at fractional scales. Use Material Design
+  Icons (`MdiIcons`): Flutter's `Icons` font has CFF outlines, which
+  `ShellIcon` cannot read, so it would fall back to a soft `Icon`.
+- Reference icons as constants (`MdiIcons.plus`). A lookup by name, or a
+  non-const `IconData`, defeats icon-font tree-shaking in release builds.
+- In widget tests, find icons with `findIcon` (`test/support/finders.dart`),
+  not `find.byIcon`, which only matches `Icon`.
+
 ## Quick diagnosis
 
 - "Could not resolve annotation for `sealed class X`" → the freezed part file

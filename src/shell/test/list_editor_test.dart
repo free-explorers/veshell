@@ -4,6 +4,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/shared/widget/list_editor.dart';
 
+import 'support/finders.dart';
+
 void main() {
   late List<String>? saved;
 
@@ -51,7 +53,7 @@ void main() {
   ) async {
     await tester.pumpWidget(app(['us']));
 
-    await tester.tap(find.byIcon(MdiIcons.delete).first);
+    await tester.tap(findIcon(MdiIcons.delete).first);
     await tester.pump();
 
     expect(find.byType(TextField), findsNWidgets(1));

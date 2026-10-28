@@ -11,6 +11,7 @@ import 'package:shell/overview/widget/search/search_engine.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/shared/widget/clock.dart';
 import 'package:shell/shared/widget/frosted_surface.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/theme//provider/theme.dart';
 
 /// Minimum width the search engine is allowed to shrink to.
@@ -95,7 +96,7 @@ class OverviewWidget extends HookConsumerWidget {
                         onPressed: () => ref
                             .read(overviewStateProvider(screenId).notifier)
                             .toggle(),
-                        icon: const Icon(MdiIcons.close),
+                        icon: const ShellIcon(MdiIcons.close),
                         style: IconButton.styleFrom(
                           shape: const RoundedRectangleBorder(),
                           minimumSize: const Size.square(panelSize),

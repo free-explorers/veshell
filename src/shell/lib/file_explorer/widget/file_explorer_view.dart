@@ -14,6 +14,7 @@ import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/widget/overview_shortcuts.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/shared/widget/focus_highlight.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 
 /// Height of one file explorer row; fixed so the selection can be scrolled into
@@ -211,7 +212,7 @@ class _BreadcrumbBar extends HookWidget {
           IconButton(
             tooltip: context.l10n.up,
             onPressed: path.parent == null ? null : onOpenParent,
-            icon: const Icon(MdiIcons.arrowLeft),
+            icon: const ShellIcon(MdiIcons.arrowLeft),
           ),
           const SizedBox(width: 4),
           Expanded(
@@ -225,7 +226,8 @@ class _BreadcrumbBar extends HookWidget {
                     const _BreadcrumbSegment(label: '/', isCurrent: true)
                   else
                     for (var i = 0; i < crumbList.length; i++) ...[
-                      if (i > 0) const Icon(MdiIcons.chevronRight, size: 18),
+                      if (i > 0)
+                        const ShellIcon(MdiIcons.chevronRight, size: 18),
                       _BreadcrumbSegment(
                         label: crumbList[i].name,
                         isCurrent: i == crumbList.length - 1,
@@ -449,7 +451,7 @@ class _FileEntryRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
             children: [
-              Icon(iconForFileEntry(entry)),
+              ShellIcon(iconForFileEntry(entry)),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -458,7 +460,7 @@ class _FileEntryRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (entry.isDirectory) const Icon(MdiIcons.chevronRight),
+              if (entry.isDirectory) const ShellIcon(MdiIcons.chevronRight),
             ],
           ),
         ),
@@ -499,7 +501,7 @@ class _DirectoryError extends HookConsumerWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(MdiIcons.folderAlertOutline, size: 48),
+            const ShellIcon(MdiIcons.folderAlertOutline, size: 48),
             const SizedBox(height: 12),
             Text(
               context.l10n.cannotOpenPath(path.path),
@@ -517,7 +519,7 @@ class _DirectoryError extends HookConsumerWidget {
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: () => ref.invalidate(directoryListingProvider(path)),
-              icon: const Icon(MdiIcons.refresh),
+              icon: const ShellIcon(MdiIcons.refresh),
               label: Text(context.l10n.retry),
             ),
           ],
