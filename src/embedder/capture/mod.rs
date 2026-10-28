@@ -120,18 +120,13 @@ pub fn begin_capture_session<BackendData: Backend + 'static>(
         .space
         .outputs()
         .find_map(|output| {
-            state
-                .space
-                .output_geometry(output)
-                .map(|geometry| (output, geometry.to_f64()))
+            exact_output_geometry(state, output)
+                .map(|geometry| (output, geometry))
                 .filter(|(_, geometry)| geometry.contains(pointer_location))
         })
         .or_else(|| {
             state.space.outputs().next().and_then(|output| {
-                state
-                    .space
-                    .output_geometry(output)
-                    .map(|geometry| (output, geometry.to_f64()))
+                exact_output_geometry(state, output).map(|geometry| (output, geometry))
             })
         })
         .map(|(output, geometry)| (output.clone(), geometry))
@@ -634,11 +629,8 @@ pub fn capture_full_output<BackendData: Backend + 'static>(
     output: &Output,
 ) -> Result<(Size<i32, Physical>, Vec<u8>), String> {
     let snapshot = take_output_snapshot(state, output, false)?;
-    let geometry = state
-        .space
-        .output_geometry(output)
-        .ok_or_else(|| format!("Output {} has no geometry", output.name()))?
-        .to_f64();
+    let geometry = exact_output_geometry(state, output)
+        .ok_or_else(|| format!("Output {} has no geometry", output.name()))?;
     let captured = [CapturedOutput {
         geometry,
         size: snapshot.size,
@@ -670,11 +662,8 @@ pub fn take_portal_pending_snapshot<BackendData: Backend + 'static>(
     pointer: Point<f64, Logical>,
 ) -> Result<PendingPortalPixels, String> {
     let snapshot = take_output_snapshot(state, output, false)?;
-    let geometry = state
-        .space
-        .output_geometry(output)
-        .ok_or_else(|| format!("Output {} has no geometry", output.name()))?
-        .to_f64();
+    let geometry = exact_output_geometry(state, output)
+        .ok_or_else(|| format!("Output {} has no geometry", output.name()))?;
     let captured = [CapturedOutput {
         geometry,
         size: snapshot.size,
@@ -723,11 +712,8 @@ pub fn sample_output_pixel<BackendData: Backend + 'static>(
     location: Point<f64, Logical>,
 ) -> Result<(f64, f64, f64), String> {
     let snapshot = take_output_snapshot(state, output, false)?;
-    let geometry = state
-        .space
-        .output_geometry(output)
-        .ok_or_else(|| format!("Output {} has no geometry", output.name()))?
-        .to_f64();
+    let geometry = exact_output_geometry(state, output)
+        .ok_or_else(|| format!("Output {} has no geometry", output.name()))?;
     let rel_x = ((location.x - geometry.loc.x) / geometry.size.w.max(1e-6)).clamp(0.0, 1.0);
     let rel_y = ((location.y - geometry.loc.y) / geometry.size.h.max(1e-6)).clamp(0.0, 1.0);
     let px_x = ((rel_x * snapshot.size.w as f64) as usize).clamp(0, snapshot.size.w as usize - 1);
@@ -774,11 +760,8 @@ fn take_output_snapshot<BackendData: Backend + 'static>(
         .ok_or_else(|| format!("Output {} has no Flutter view", output.name()))?
         .view_id;
     let flutter_frame = latest_flutter_frame(state, view_id)?;
-    let geometry = state
-        .space
-        .output_geometry(output)
-        .ok_or_else(|| format!("Output {} has no geometry", output.name()))?
-        .to_f64();
+    let geometry = exact_output_geometry(state, output)
+        .ok_or_else(|| format!("Output {} has no geometry", output.name()))?;
     let output_name = output.name();
     let game_surface_list = state.game_mode_surfaces_for_output(&output_name);
     let cursor = include_cursor.then(|| CaptureCursor {
@@ -837,11 +820,8 @@ pub fn render_output_into_dmabuf<BackendData: Backend + 'static>(
         .ok_or_else(|| format!("Output {} has no Flutter view", output.name()))?
         .view_id;
     let flutter_frame = latest_flutter_frame(state, view_id)?;
-    let geometry = state
-        .space
-        .output_geometry(output)
-        .ok_or_else(|| format!("Output {} has no geometry", output.name()))?
-        .to_f64();
+    let geometry = exact_output_geometry(state, output)
+        .ok_or_else(|| format!("Output {} has no geometry", output.name()))?;
     let output_name = output.name();
     let game_surface_list = state.game_mode_surfaces_for_output(&output_name);
     let cursor = include_cursor.then(|| CaptureCursor {
@@ -1100,6 +1080,31 @@ fn blit_clipped(
     Ok(())
 }
 
+/// Tolerance for floating-point noise when logical sizes map back to pixels.
+const PIXEL_EPSILON: f64 = 1e-6;
+
+/// An output's logical geometry at its exact size: the mode divided by the
+/// fractional scale.
+///
+/// `Space::output_geometry` rounds the size up to whole logical pixels, so a
+/// 2560 px output at 1.2 (2133.33 logical) became 2134, which maps back to
+/// 2561 px: every screenshot and recording was resampled one pixel wider.
+pub(crate) fn exact_output_geometry<BackendData: Backend + 'static>(
+    state: &State<BackendData>,
+    output: &Output,
+) -> Option<Rectangle<f64, Logical>> {
+    let geometry = state.space.output_geometry(output)?.to_f64();
+    let Some(mode) = output.current_mode() else {
+        return Some(geometry);
+    };
+    let size = output
+        .current_transform()
+        .transform_size(mode.size)
+        .to_f64()
+        .to_logical(output.current_scale().fractional_scale());
+    Some(Rectangle::new(geometry.loc, size))
+}
+
 pub(crate) fn pixel_size(
     size: Size<f64, Logical>,
     scale: f64,
@@ -1107,8 +1112,10 @@ pub(crate) fn pixel_size(
     if !scale.is_finite() || scale <= 0. {
         return Err("Capture scale must be finite and positive".to_string());
     }
-    let width = (size.w * scale).ceil();
-    let height = (size.h * scale).ceil();
+    // Round up partial pixels, but not floating-point noise: 1600 px at 1.2
+    // maps back to 1600.0000000000002.
+    let width = (size.w * scale - PIXEL_EPSILON).ceil();
+    let height = (size.h * scale - PIXEL_EPSILON).ceil();
     if !width.is_finite()
         || !height.is_finite()
         || width <= 0.
@@ -1719,10 +1726,7 @@ fn deliver_recording_frame<BackendData: Backend + 'static>(
     let area = recording.area;
     let output_geometry = recording.output_geometry;
     let scale = recording.scale;
-    let expected = state
-        .space
-        .output_geometry(&output)
-        .map(|geometry| geometry.to_f64());
+    let expected = exact_output_geometry(state, &output);
     let scale_now = output.current_scale().fractional_scale();
     if expected != Some(output_geometry) || scale_now != scale {
         stop_recording(state, "the screen layout changed during the recording");
@@ -2027,6 +2031,50 @@ mod tests {
             pixels,
             [255, 0, 0, 255, 255, 0, 0, 255, 0, 0, 255, 255, 0, 0, 255, 255,]
         );
+    }
+
+    /// A full output at a scale that does not divide its mode (2560 px at 1.2
+    /// is 2133.33 logical) is captured at its exact size, copied 1:1. Space's
+    /// rounded-up geometry (2134) made every capture 2561 px wide, resampled.
+    #[test]
+    fn full_output_at_a_fractional_scale_is_copied_1_to_1() {
+        let (width, height) = (2560, 4);
+        let scale = 1.2;
+        let geometry = Rectangle::new(
+            (0., 0.).into(),
+            Size::<i32, Physical>::from((width, height))
+                .to_f64()
+                .to_logical(scale),
+        );
+        // A 1-pixel column pattern: any resampling breaks it.
+        let pixels: Vec<u8> = (0..width * height)
+            .flat_map(|index| {
+                let value = if index % 2 == 0 { 255 } else { 0 };
+                [value, value, value, 255]
+            })
+            .collect();
+        let outputs = [CapturedOutput {
+            geometry,
+            size: (width, height).into(),
+            pixels: pixels.clone(),
+        }];
+
+        let (size, composed) = compose_desktop_area(geometry, scale, &outputs).unwrap();
+
+        assert_eq!(size, (width, height).into());
+        assert!(composed == pixels, "the capture was resampled");
+    }
+
+    #[test]
+    fn pixel_size_ignores_floating_point_noise() {
+        // 1600 / 1.2 * 1.2 is 1600.0000000000002 in f64: a plain ceil made a
+        // 1600 px output 1601 px wide.
+        let size = Size::<i32, Physical>::from((1600, 3440))
+            .to_f64()
+            .to_logical(1.2);
+        assert_eq!(pixel_size(size, 1.2).unwrap(), (1600, 3440).into());
+        // A real partial pixel still rounds up.
+        assert_eq!(pixel_size((10.5, 1.).into(), 1.).unwrap(), (11, 1).into());
     }
 
     #[test]
