@@ -360,7 +360,10 @@ class FileChooserHost extends ConsumerWidget {
     if (owner is PersistentWindowId || owner is EphemeralWindowId) {
       return const SizedBox.shrink();
     }
-    return FileChooserModal(request: request);
+    // The monitor fallback sits beside the Navigator, so it lacks the
+    // Navigator's `Overlay`: the text fields, the filter dropdown and the
+    // tooltips need one.
+    return Overlay.wrap(child: FileChooserModal(request: request));
   }
 }
 
