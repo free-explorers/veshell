@@ -8,9 +8,11 @@ import 'package:vector_graphics_compiler/vector_graphics_compiler.dart' as vg;
 /// Draws [instructions] grid-fitted into a square of [size] logical pixels:
 /// at the exact size, with straight edges on whole physical pixels.
 ///
-/// The square starts on a whole physical pixel (`PhysicalPixelSnap`), which
-/// the fit assumes. A non-null [color] replaces the icon's own colours, as an
-/// `Icon` does for a symbol.
+/// The square is always [size], centred in whatever box the parent gives:
+/// a parent's tight constraints (a 48-pixel `InputDecoration` icon slot, a
+/// fixed-size button) never stretch the icon. The square starts on a whole
+/// physical pixel (`PhysicalPixelSnap`), which the fit assumes. A non-null
+/// [color] replaces the icon's own colours, as an `Icon` does for a symbol.
 class GridFittedVector extends StatelessWidget {
   const GridFittedVector({
     required this.instructions,
@@ -25,13 +27,19 @@ class GridFittedVector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PhysicalPixelSnap(
-      child: CustomPaint(
-        size: Size.square(size),
-        painter: _GridFitPainter(
-          instructions: instructions,
-          devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
-          color: color,
+    return Center(
+      child: SizedBox.square(
+        dimension: size,
+        child: PhysicalPixelSnap(
+          child: CustomPaint(
+            size: Size.square(size),
+            painter: _GridFitPainter(
+              instructions: instructions,
+              size: size,
+              devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+              color: color,
+            ),
+          ),
         ),
       ),
     );
@@ -41,17 +49,22 @@ class GridFittedVector extends StatelessWidget {
 class _GridFitPainter extends CustomPainter {
   _GridFitPainter({
     required this.instructions,
+    required this.size,
     required this.devicePixelRatio,
     required this.color,
   });
 
   final vg.VectorInstructions instructions;
+
+  /// The icon's size, in logical pixels: what is drawn, whatever box the
+  /// painter ends up with.
+  final double size;
   final double devicePixelRatio;
   final Color? color;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final pixels = size.shortestSide * devicePixelRatio;
+  void paint(Canvas canvas, Size box) {
+    final pixels = size * devicePixelRatio;
     if (pixels <= 0) return;
     final picture = _GridFitCache.picture(instructions, pixels, color);
     canvas
@@ -65,6 +78,7 @@ class _GridFitPainter extends CustomPainter {
   @override
   bool shouldRepaint(_GridFitPainter oldDelegate) =>
       !identical(oldDelegate.instructions, instructions) ||
+      oldDelegate.size != size ||
       oldDelegate.devicePixelRatio != devicePixelRatio ||
       oldDelegate.color != color;
 }

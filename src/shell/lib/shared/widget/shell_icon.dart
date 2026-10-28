@@ -68,12 +68,20 @@ class ShellIcon extends HookWidget {
         textDirection: textDirection,
       );
     } else {
+      // Like `Icon`: a box of the icon's size, the glyph centred in it at
+      // that size even when the parent forces the box larger or smaller.
       child = SizedBox.square(
         dimension: iconSize,
-        child: GridFittedVector(
-          instructions: instructions,
-          size: iconSize,
-          color: iconColor,
+        child: OverflowBox(
+          minWidth: iconSize,
+          maxWidth: iconSize,
+          minHeight: iconSize,
+          maxHeight: iconSize,
+          child: GridFittedVector(
+            instructions: instructions,
+            size: iconSize,
+            color: iconColor,
+          ),
         ),
       );
       final direction = textDirection ?? Directionality.maybeOf(context);
