@@ -15,6 +15,12 @@ pub struct SurfaceMessage {
     pub buffer_delta: Option<MyPoint<i32, Logical>>,
     pub buffer_size: Option<MySize<i32, BufferCoords>>,
     pub scale: i32,
+    /// `wp_viewport` destination: the surface's size in logical pixels,
+    /// whatever its buffer size and scale. Absent without a viewport.
+    pub viewport_size: Option<MySize<i32, Logical>>,
+    /// `wp_viewport` source crop, in buffer pixels. Absent when the whole
+    /// buffer is shown.
+    pub viewport_source: Option<MyRectangle<f64, BufferCoords>>,
     pub input_region: MyRectangle<i32, Logical>,
     pub subsurfaces_below: Vec<u64>,
     pub subsurfaces_above: Vec<u64>,

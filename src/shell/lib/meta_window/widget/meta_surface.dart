@@ -57,10 +57,10 @@ class MetaSurfaceWidget extends HookConsumerWidget {
     // (e.g. a fixed-size window) leaves the committed texture at its own size,
     // which shows up here as `match=false`. Logged only when the measured
     // tuple changes so a repainting client does not flood the log.
-    final (committedSurfaceSize, bufferScale) = ref.watch(
+    final (committedSurfaceSize, bufferScale, viewportSize) = ref.watch(
       wlSurfaceStateProvider(
         surfaceId,
-      ).select((v) => (v.texture?.size, v.scale)),
+      ).select((v) => (v.texture?.size, v.scale, v.viewportSize)),
     );
     final targetSize = metaWindow.geometry?.size;
     final logicalSize = committedSurfaceSize == null
@@ -69,6 +69,7 @@ class MetaSurfaceWidget extends HookConsumerWidget {
             committedSurfaceSize,
             bufferScale,
             metaWindow.scaleRatio,
+            viewportSize: viewportSize,
           );
     final lastSizingSignature = useRef<String?>(null);
     final sizingSignature =

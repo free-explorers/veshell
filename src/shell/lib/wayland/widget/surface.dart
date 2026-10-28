@@ -41,15 +41,21 @@ class SurfaceWidget extends ConsumerWidget {
             globalOffsetOverride: globalOffsetOverride,
             child: Consumer(
               builder: (BuildContext context, WidgetRef ref, Widget? child) {
-                final textureId = ref.watch(
-                  wlSurfaceStateProvider(
-                    surfaceId,
-                  ).select((v) => v.texture!.id),
+                final (textureId, bufferSize, viewportSource) = ref.watch(
+                  wlSurfaceStateProvider(surfaceId).select(
+                    (v) => (v.texture!.id, v.texture!.size, v.viewportSource),
+                  ),
                 );
                 // Keep the texture on the physical pixel grid: at a
                 // fractional scale a whole-logical-pixel origin is not enough
                 // to keep the buffer mapped 1:1 (see `PhysicalPixelSnap`).
-                return PhysicalPixelSnap(child: Texture(textureId: textureId));
+                return PhysicalPixelSnap(
+                  child: ViewportCrop(
+                    bufferSize: bufferSize,
+                    source: viewportSource,
+                    child: Texture(textureId: textureId),
+                  ),
+                );
               },
             ),
           ),
@@ -97,3 +103,56 @@ class _Subsurfaces extends ConsumerWidget {
 }
 
 enum _SubsurfaceLayer { below, above }
+
+/// Shows the `wp_viewport` [source] part of a buffer of [bufferSize] pixels,
+/// stretched over the space it is given; the whole buffer without a source.
+///
+/// The texture is laid out at the size that puts [source] exactly over this
+/// widget's box, shifted by the source origin, and clipped.
+class ViewportCrop extends StatelessWidget {
+  const ViewportCrop({
+    required this.bufferSize,
+    required this.source,
+    required this.child,
+    super.key,
+  });
+
+  final Size bufferSize;
+  final Rect? source;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final source = this.source;
+    if (source == null ||
+        source.isEmpty ||
+        bufferSize.isEmpty ||
+        source == Offset.zero & bufferSize) {
+      return child;
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final box = constraints.biggest;
+        final scaleX = box.width / source.width;
+        final scaleY = box.height / source.height;
+        return ClipRect(
+          child: OverflowBox(
+            alignment: Alignment.topLeft,
+            minWidth: 0,
+            minHeight: 0,
+            maxWidth: double.infinity,
+            maxHeight: double.infinity,
+            child: Transform.translate(
+              offset: Offset(-source.left * scaleX, -source.top * scaleY),
+              child: SizedBox(
+                width: bufferSize.width * scaleX,
+                height: bufferSize.height * scaleY,
+                child: child,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}

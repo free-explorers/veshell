@@ -62,7 +62,8 @@ class SurfaceManager extends _$SurfaceManager {
     geometryLog.info(
       'surface commit surface=${message.surfaceId} '
       'texture=${message.textureId} buffer=${message.bufferSize} '
-      'scale=${message.scale} role=${message.role} '
+      'scale=${message.scale} viewport=${message.viewportSize} '
+      'source=${message.viewportSource} role=${message.role} '
       'input=${message.inputRegion} '
       'below=${message.subsurfacesBelow} above=${message.subsurfacesAbove}',
     );
@@ -84,6 +85,8 @@ class SurfaceManager extends _$SurfaceManager {
           subsurfacesBelow: message.subsurfacesBelow,
           subsurfacesAbove: message.subsurfacesAbove,
           inputRegion: message.inputRegion,
+          viewportSize: message.viewportSize,
+          viewportSource: message.viewportSource,
         );
 
     final surfaceRole = message.role;

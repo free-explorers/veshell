@@ -58,6 +58,7 @@ use smithay::wayland::shell::xdg::{
 };
 use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::wayland::socket::ListeningSocketSource;
+use smithay::wayland::viewporter::{ViewportCachedState, ViewporterState};
 use smithay::wayland::xdg_activation::{XdgActivationState, XdgActivationToken};
 use smithay::wayland::xwayland_shell::{self, XWAYLAND_SHELL_ROLE};
 use smithay::xwayland::{X11Surface, X11Wm};
@@ -201,6 +202,10 @@ pub struct State<BackendData: Backend + 'static> {
     pub settings_manager: SettingsManager<BackendData>,
     pub xdg_decoration_state: XdgDecorationState,
     pub fractional_scale_manager_state: FractionalScaleManagerState,
+    /// wp_viewporter: lets a client give its surface a logical size apart from
+    /// its buffer. Fractional-scale clients (Qt 6, GTK 4, browsers) render at
+    /// the preferred scale and declare their logical size with it.
+    pub viewporter_state: ViewporterState,
     pub input_devices: HashSet<input::Device>,
     pub output_layout_revision: u64,
     /// Screensaver: idle stage machine driving the dim overlay and blanking.
@@ -550,6 +555,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let xdg_dialog_state = XdgDialogState::new::<Self>(&display_handle);
         let xdg_activation_state = XdgActivationState::new::<Self>(&display_handle);
         crate::wayland::xdg_foreign::XdgForeignState::register::<BackendData>(&display_handle);
+        let viewporter_state = ViewporterState::new::<Self>(&display_handle);
         let fractional_scale_manager_state =
             FractionalScaleManagerState::new::<Self>(&display_handle);
         let capture_state = crate::capture::CaptureState::new::<BackendData>(&loop_handle);
@@ -633,6 +639,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             settings_manager,
             xdg_decoration_state,
             fractional_scale_manager_state,
+            viewporter_state,
             input_devices: HashSet::new(),
             output_layout_revision: 0,
             capture_state,
@@ -744,13 +751,27 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let surface_id = get_surface_id(surface);
         let role = self.construct_surface_role_message(surface);
 
-        let (buffer_delta, buffer_scale, input_region) = with_states(surface, |surface_data| {
-            let mut binding = surface_data.cached_state.get::<SurfaceAttributes>();
-            let surface_state = binding.current();
-            let buffer_delta = surface_state.buffer_delta;
-            let buffer_scale = surface_state.buffer_scale;
-            let input_region = surface_state.input_region.clone();
-            (buffer_delta, buffer_scale, input_region)
+        let (buffer_delta, buffer_scale, input_region, viewport) =
+            with_states(surface, |surface_data| {
+                let mut binding = surface_data.cached_state.get::<SurfaceAttributes>();
+                let surface_state = binding.current();
+                let buffer_delta = surface_state.buffer_delta;
+                let buffer_scale = surface_state.buffer_scale;
+                let input_region = surface_state.input_region.clone();
+                let mut viewport = surface_data.cached_state.get::<ViewportCachedState>();
+                let viewport = viewport.current();
+                let viewport = (viewport.size(), viewport.src);
+                (buffer_delta, buffer_scale, input_region, viewport)
+            });
+        let (viewport_size, viewport_source) = viewport;
+        // The source is in surface-local coordinates, the buffer divided by
+        // its scale; the shell crops the texture, so send buffer pixels.
+        let viewport_source = viewport_source.map(|source| {
+            let scale = f64::from(buffer_scale.max(1));
+            Rectangle::<f64, BufferCoords>::new(
+                (source.loc.x * scale, source.loc.y * scale).into(),
+                (source.size.w * scale, source.size.h * scale).into(),
+            )
         });
 
         let (texture_id, buffer_size) = self
@@ -789,6 +810,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             buffer_delta: buffer_delta.map(|delta| delta.into()),
             buffer_size: buffer_size.map(|b| b.into()),
             scale: buffer_scale,
+            viewport_size: viewport_size.map(Into::into),
+            viewport_source: viewport_source.map(Into::into),
             input_region: input_region.into(),
             subsurfaces_below,
             subsurfaces_above,
@@ -799,6 +822,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             texture_id = message.texture_id,
             buffer_size = ?message.buffer_size,
             buffer_scale = message.scale,
+            viewport_size = ?message.viewport_size,
+            viewport_source = ?message.viewport_source,
             buffer_delta = ?message.buffer_delta,
             input_region = ?message.input_region,
             "Constructed surface geometry snapshot"

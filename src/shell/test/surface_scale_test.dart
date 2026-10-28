@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/shared/widget/physical_pixel_snap.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
+import 'package:shell/wayland/widget/surface.dart';
 
 void main() {
   group('surfaceLogicalSize', () {
@@ -18,6 +19,59 @@ void main() {
       expect(
         surfaceLogicalSize(const Size(800, 400), 2, 1.25),
         const Size(400, 200),
+      );
+    });
+
+    test('a viewport destination is the logical size', () {
+      // Qt 6 at 1.2 renders a 1.2x buffer and declares its window size with
+      // wp_viewport; its integer buffer scale (ceil(1.2) = 2) is ignored.
+      expect(
+        surfaceLogicalSize(
+          const Size(1200, 600),
+          2,
+          1.2,
+          viewportSize: const Size(1000, 500),
+        ),
+        const Size(1000, 500),
+      );
+    });
+  });
+
+  group('ViewportCrop', () {
+    const childKey = Key('child');
+
+    Widget crop(Rect? source) => Directionality(
+      textDirection: TextDirection.ltr,
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: SizedBox(
+          width: 100,
+          height: 50,
+          child: ViewportCrop(
+            bufferSize: const Size(400, 200),
+            source: source,
+            child: const SizedBox.expand(key: childKey),
+          ),
+        ),
+      ),
+    );
+
+    testWidgets('without a source the whole buffer fills the box', (
+      tester,
+    ) async {
+      await tester.pumpWidget(crop(null));
+      expect(
+        tester.getRect(find.byKey(childKey)),
+        Offset.zero & const Size(100, 50),
+      );
+    });
+
+    testWidgets('a source rectangle is stretched over the box', (tester) async {
+      // Show buffer pixels (100, 50)..(300, 150) in a 100x50 box: half scale.
+      await tester.pumpWidget(crop(const Rect.fromLTWH(100, 50, 200, 100)));
+      expect(
+        tester.getRect(find.byKey(childKey)),
+        const Rect.fromLTWH(-50, -25, 200, 100),
       );
     });
   });

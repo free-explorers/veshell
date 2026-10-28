@@ -20,19 +20,21 @@ class SurfaceSize extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final (surfaceSize, bufferScale) = ref.watch(
+    final (surfaceSize, bufferScale, viewportSize) = ref.watch(
       wlSurfaceStateProvider(
         surfaceId,
-      ).select((v) => (v.texture!.size, v.scale)),
+      ).select((v) => (v.texture!.size, v.scale, v.viewportSize)),
     );
     final logicalSize = surfaceLogicalSize(
       surfaceSize,
       bufferScale,
       scaleRatio,
+      viewportSize: viewportSize,
     );
     geometryLog.fine(
       'surface layout surface=$surfaceId texture=$surfaceSize '
       'outputScale=$scaleRatio bufferScale=$bufferScale '
+      'viewport=$viewportSize '
       'logicalSize=$logicalSize',
     );
     return SizedBox(
