@@ -69,11 +69,10 @@ void main() {
       expect(fit(5), closeTo(4.7, 1e-9));
     });
 
-    test('keeps a stem width consistent, rounded to whole pixels', () {
-      // Two bars 2.36 px wide: each keeps 2 px, wherever its edges round.
-      final fit = AxisFit({13.22: 13, 15.58: 16, 20.22: 20, 22.58: 23});
-      expect(fit(15.58) - fit(13.22), 2);
-      expect(fit(22.58) - fit(20.22), 2);
+    test('never folds over itself', () {
+      // A target behind the previous one is pushed forward.
+      final fit = AxisFit({10: 12, 14: 11});
+      expect(fit(14), greaterThan(fit(10)));
     });
 
     test('never collapses a visible gap', () {
@@ -96,18 +95,16 @@ void main() {
       }
     });
 
-    test('keeps the size: outer edges move at most half a pixel', () {
+    test('keeps the size: edges move at most a pixel', () {
       final fitted = GridFit(plus, 28.8);
       final exact = GridFit(plus, 28.8, fit: false);
       for (final vertical in [true, false]) {
         final a = _edges(fitted, vertical: vertical).toList()..sort();
         final b = _edges(exact, vertical: vertical).toList()..sort();
         expect(a.length, b.length);
-        // The icon's extent is its size: within half a pixel.
-        expect(a.first, closeTo(b.first, 0.5 + 1e-9));
-        expect(a.last, closeTo(b.last, 0.5 + 1e-9));
-        // Inner edges may move further so a stem keeps a whole-pixel width
-        // (a 2.36 px bar becomes 2 px), but never more than a pixel.
+        // Snapping moves an edge half a pixel at most, and centring the icon
+        // on a whole or half pixel up to half a pixel more: the extent, the
+        // icon's size, stays within a pixel, and so does every inner edge.
         for (var i = 0; i < a.length; i++) {
           expect(a[i], closeTo(b[i], 1 + 1e-9));
         }
@@ -167,6 +164,61 @@ void main() {
     setUp(() {
       TestWidgetsFlutterBinding.ensureInitialized();
       GlyphOutlines.instance.reset();
+    });
+
+    /// The fitted edges of [icon] at [pixels] on one axis, ascending.
+    Future<List<double>> fittedEdges(
+      IconData icon,
+      double pixels, {
+      required bool vertical,
+    }) async {
+      final glyph = (await GlyphOutlines.instance.outline(icon))!;
+      return _edges(GridFit(glyph, pixels), vertical: vertical).toList()
+        ..sort();
+    }
+
+    List<double> widths(List<double> edges) => [
+      for (var i = 0; i + 1 < edges.length; i++) edges[i + 1] - edges[i],
+    ];
+
+    test('the CPU chip keeps its slots and bars even at 1.2', () async {
+      // MdiIcons.chip: three 1-unit slots separated by 1-unit bars, 1.2 px
+      // each at 28.8 px. Uneven rounding made them 1, 2 and 2 px.
+      final xs = await fittedEdges(MdiIcons.chip, 28.8, vertical: true);
+      final slots = xs.where((x) => x > 14 && x < 21).toList();
+      expect(widths(slots).toSet(), {1});
+    });
+
+    test('the memory chip keeps one ink width and its symmetry', () async {
+      // MdiIcons.memory: frame, gap, inner ring, hole, ring, gap, frame, all
+      // 2.4 px at 28.8 px. Ink must stay one width; gaps absorb the rest.
+      for (final pixels in [28.8, 30.0]) {
+        final xs = await fittedEdges(MdiIcons.memory, pixels, vertical: true);
+        final sizes = widths(xs);
+        // Mirrored pieces have mirrored widths.
+        expect(sizes, sizes.reversed.toList(), reason: 'at $pixels px');
+      }
+      final xs = await fittedEdges(MdiIcons.memory, 28.8, vertical: true);
+      // Frame, ring, ring, frame: the ink pieces of the chain.
+      final sizes = widths(xs);
+      expect({sizes[1], sizes[3], sizes[5], sizes[7]}, {2});
+    });
+
+    test('a plus keeps equal bars and arms at fractional scales', () async {
+      for (final pixels in [28.8, 30.0, 36.0]) {
+        for (final vertical in [true, false]) {
+          final edges = await fittedEdges(
+            MdiIcons.plus,
+            pixels,
+            vertical: vertical,
+          );
+          final sizes = widths(edges);
+          expect(sizes.first, sizes.last, reason: 'arms at $pixels px');
+        }
+        final xs = await fittedEdges(MdiIcons.plus, pixels, vertical: true);
+        final ys = await fittedEdges(MdiIcons.plus, pixels, vertical: false);
+        expect(xs[2] - xs[1], ys[2] - ys[1], reason: 'bars at $pixels px');
+      }
     });
 
     test('reads a glyph from the icon font', () async {
