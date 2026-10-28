@@ -1,5 +1,6 @@
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/shared/widget/physical_pixel_snap.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/subsurface_state.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
@@ -26,7 +27,7 @@ class SurfaceWidget extends ConsumerWidget {
     return SurfaceSize(
       surfaceId: surfaceId,
       scaleRatio: scaleRatio,
-      child: Stack(
+      builder: (context, logicalSize) => Stack(
         clipBehavior: Clip.none,
         children: [
           _Subsurfaces(
@@ -36,6 +37,7 @@ class SurfaceWidget extends ConsumerWidget {
           ),
           ViewInputListener(
             surfaceId: surfaceId,
+            surfaceSize: logicalSize,
             globalOffsetOverride: globalOffsetOverride,
             child: Consumer(
               builder: (BuildContext context, WidgetRef ref, Widget? child) {
@@ -44,7 +46,10 @@ class SurfaceWidget extends ConsumerWidget {
                     surfaceId,
                   ).select((v) => v.texture!.id),
                 );
-                return Texture(textureId: textureId);
+                // Keep the texture on the physical pixel grid: at a
+                // fractional scale a whole-logical-pixel origin is not enough
+                // to keep the buffer mapped 1:1 (see `PhysicalPixelSnap`).
+                return PhysicalPixelSnap(child: Texture(textureId: textureId));
               },
             ),
           ),

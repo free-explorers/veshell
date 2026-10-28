@@ -8,6 +8,7 @@ import 'package:shell/meta_window/widget/meta_surface_decoration.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/shared/util/logger.dart';
+import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/wayland/widget/surface.dart';
 import 'package:shell/wayland/widget/surface/pointer_listener.dart';
@@ -56,15 +57,18 @@ class MetaSurfaceWidget extends HookConsumerWidget {
     // (e.g. a fixed-size window) leaves the committed texture at its own size,
     // which shows up here as `match=false`. Logged only when the measured
     // tuple changes so a repainting client does not flood the log.
-    final committedSurfaceSize = ref.watch(
-      wlSurfaceStateProvider(surfaceId).select((v) => v.texture?.size),
+    final (committedSurfaceSize, bufferScale) = ref.watch(
+      wlSurfaceStateProvider(
+        surfaceId,
+      ).select((v) => (v.texture?.size, v.scale)),
     );
     final targetSize = metaWindow.geometry?.size;
     final logicalSize = committedSurfaceSize == null
         ? null
-        : Size(
-            committedSurfaceSize.width / metaWindow.scaleRatio,
-            committedSurfaceSize.height / metaWindow.scaleRatio,
+        : surfaceLogicalSize(
+            committedSurfaceSize,
+            bufferScale,
+            metaWindow.scaleRatio,
           );
     final lastSizingSignature = useRef<String?>(null);
     final sizingSignature =
