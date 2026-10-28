@@ -418,14 +418,36 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         self.meta_window_state
             .meta_window_id_per_surface_id
             .retain(|_, id| id != meta_window_id);
-        if self
+        if !self
             .meta_window_state
             .meta_windows
-            .remove(meta_window_id)
-            .is_none()
+            .contains_key(meta_window_id)
         {
             return;
         }
+
+        // A game that closes itself is torn down through this path, not through
+        // an `UpdateGameModeActivated(false)` patch. Without that deactivation
+        // the shell never pops its gaming route, which keeps covering the
+        // screen and swallowing every click, and the compositor keeps the
+        // pointer focus it set on entry. Deactivate while the MetaWindow still
+        // exists: the patch handler ignores an unknown window and would then
+        // never forward the patch to the shell. This clears the
+        // compositor-set pointer focus, hands the output back its fixed
+        // cadence, drops the forwarded keys and tells the shell to leave the
+        // mode.
+        if self.meta_window_state.meta_window_in_gaming_mode.as_deref()
+            == Some(meta_window_id.as_str())
+        {
+            self.patch_meta_window(
+                MetaWindowPatch::UpdateGameModeActivated {
+                    id: meta_window_id.clone(),
+                    value: false,
+                },
+                true,
+            );
+        }
+        self.meta_window_state.meta_windows.remove(meta_window_id);
 
         // Popups are independent surfaces. A client that tears down its
         // toplevel without destroying its override-redirect children must not
@@ -439,26 +461,6 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .collect();
         for popup_id in popup_ids {
             self.remove_meta_popup(&popup_id);
-        }
-
-        // A game that closes itself is torn down through this path, not through
-        // an `UpdateGameModeActivated(false)` patch. Without that deactivation
-        // the shell never pops its gaming route and the compositor keeps the
-        // pointer focus it set on entry, now targeting a freed surface, so
-        // Flutter never gets its pointer events back. Deactivate first so both
-        // release cleanly: this clears the compositor-set pointer focus, hands
-        // the output back its fixed cadence, drops the forwarded keys and tells
-        // the shell to leave the mode.
-        if self.meta_window_state.meta_window_in_gaming_mode.as_deref()
-            == Some(meta_window_id.as_str())
-        {
-            self.patch_meta_window(
-                MetaWindowPatch::UpdateGameModeActivated {
-                    id: meta_window_id.clone(),
-                    value: false,
-                },
-                true,
-            );
         }
 
         // Drop it from the focus order too: a removed window can no longer be
@@ -984,6 +986,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         let new_size = value.as_ref().map(|rect| rect.0.size);
                         let is_floating = meta_window.is_floating();
                         let current_position = meta_window.position.clone();
+                        let current_output = meta_window.current_output.clone();
                         let role = with_states(&wl_surface, |states| states.role);
                         match role {
                             Some(XDG_TOPLEVEL_ROLE) => {
@@ -1012,9 +1015,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                                 };
 
                                 // Geometry is surface-local. The shell owns the
-                                // root position for every non-floating window;
-                                // a floating window's position is changed only
-                                // through SetWindowRect.
+                                // root position for every non-floating window
+                                // (the synthetic tiled root); a floating
+                                // window's position is changed only through
+                                // SetWindowRect.
                                 let mut configure = x11_surface.last_configure();
                                 if let Some(new_size) = new_size {
                                     configure.size = new_size;
@@ -1024,7 +1028,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                                         .map(|position| position.0)
                                         .unwrap_or(configure.loc)
                                 } else {
-                                    Point::from((0, 0))
+                                    self.tiled_x11_root(current_output.as_deref())
                                 };
                                 if let Err(err) = x11_surface.configure(configure) {
                                     warn!(
@@ -1212,6 +1216,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         return;
                     }
                     meta_window.current_output = value.clone();
+                    let tiled_surface_id =
+                        (!meta_window.is_floating()).then_some(meta_window.surface_id);
                     let scale = value
                         .as_deref()
                         .and_then(|name| self.output_scale_for_name(name));
@@ -1223,6 +1229,22 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                             },
                             true,
                         );
+                    }
+                    // A tiled X11 window keeps its synthetic root on the output
+                    // it is shown on; see `tiled_x11_root`.
+                    let x11_surface = tiled_surface_id
+                        .and_then(|surface_id| self.surfaces.get(&surface_id))
+                        .and_then(|surface| self.x11_surface_per_wl_surface.get(surface))
+                        .cloned();
+                    if let Some(x11_surface) = x11_surface {
+                        let mut configure = x11_surface.last_configure();
+                        let root = self.tiled_x11_root(value.as_deref());
+                        if configure.loc != root {
+                            configure.loc = root;
+                            if let Err(err) = x11_surface.configure(configure) {
+                                warn!(?err, "failed to move tiled X11 window to its output");
+                            }
+                        }
                     }
                 }
             }

@@ -214,7 +214,8 @@ impl MetaWindowState {
     /// X11 popups are independent top-level windows reported in root
     /// coordinates, but the parent's native root is not the parent's rendered
     /// origin for a tiled window (the X11 adapter deliberately keeps tiled
-    /// parents at root `(0,0)`). Subtract the parent's native root first, then
+    /// parents at a synthetic root, see `tiled_x11_root`). Subtract the
+    /// parent's native root first, then
     /// use the shared parent-box conversion.
     pub fn x11_popup_tile_position(
         &self,
@@ -468,6 +469,31 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .or_else(|| self.space.outputs().next())
             .map(|output| output.current_scale().fractional_scale())
             .unwrap_or(1.0)
+    }
+
+    /// The synthetic X11 root position of a tiled X11 window: the origin of
+    /// the output it is shown on.
+    ///
+    /// Tiled X11 windows are isolated in their tile, so the client never sees
+    /// its rendered position. The synthetic root must still lie on an output:
+    /// Xwayland's RandR confines the X cursor to the monitor areas, and at a
+    /// root no output covers (`(0,0)` when no monitor starts at the layout
+    /// origin) the pointer is clamped outside the window and the client gets
+    /// no motion at all. A tile never exceeds its output, so the output origin
+    /// keeps the whole window reachable. Without a known output, the same
+    /// fallback as [`Self::fallback_scale_ratio`] applies.
+    pub fn tiled_x11_root(&self, current_output: Option<&str>) -> Point<i32, Logical> {
+        current_output
+            .and_then(|name| self.space.outputs().find(|output| output.name() == name))
+            .or_else(|| {
+                self.space
+                    .output_under(self.pointer.current_location())
+                    .next()
+            })
+            .or_else(|| self.space.outputs().next())
+            .and_then(|output| self.space.output_geometry(output))
+            .map(|geometry| geometry.loc)
+            .unwrap_or_else(|| Point::from((0, 0)))
     }
 
     pub fn new_meta_window_for_toplevel(&mut self, surface: ToplevelSurface) -> MetaWindow {
@@ -892,7 +918,7 @@ mod tests {
     fn x11_popup_position_uses_the_parent_native_root() {
         let mut tiled_parent = window("tiled-parent", 1, Some("org.example.Parent"));
         tiled_parent.display_mode = Some(DisplayMode::Maximized);
-        // Tiled X11 windows deliberately keep their native root at (0,0)
+        // Tiled X11 windows deliberately keep a synthetic native root
         // while Flutter renders them at the tile origin.
         tiled_parent.position = Some(Point::from((0, 0)).into());
         tiled_parent.render_origin = Some(Point::from((1000, 100)).into());
