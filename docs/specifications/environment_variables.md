@@ -33,7 +33,32 @@ hand-edited `settings.json` cannot inject shell syntax.
 | Merging user variables into the launch environment | Compositor |
 | Applying them to the compositor process and importing them into the session | Compositor (DRM backend) |
 | Starting applications with that environment | Shell (Flutter), `AppLaunch` |
-| Built-in session variables (`WAYLAND_DISPLAY`, `DISPLAY`, `XDG_*`, `GDK_BACKEND`, `QT_QPA_PLATFORM`) | Compositor |
+| Built-in session variables (`WAYLAND_DISPLAY`, `DISPLAY`, `XDG_*`, `DESKTOP_SESSION`, `GDK_BACKEND`, `QT_QPA_PLATFORM`) | Compositor |
+
+## Desktop identity
+
+`XDG_CURRENT_DESKTOP` stays `veshell`: xdg-desktop-portal picks the first
+`${desktop}-portals.conf` found, and it must keep using
+`veshell-portals.conf` rather than another desktop's configuration.
+
+Electron and Chromium do not query the Secret Service to find a keyring. They
+guess a backend from the desktop environment and only recognise a fixed list of
+names. `XDG_CURRENT_DESKTOP` takes precedence, with `DESKTOP_SESSION` as the
+legacy fallback, so Veshell also exports `DESKTOP_SESSION=gnome`. That selects
+their **libsecret** backend, not a GNOME-specific keyring: libsecret talks to
+whatever implements `org.freedesktop.secrets` — gnome-keyring, KWallet, oo7, and
+so on. Without the hint Electron selects `unknown`/`basic_text`, and Element
+refuses to open with "Your system has an unsupported keyring".
+
+A user who needs a native desktop backend instead of libsecret can override
+`XDG_CURRENT_DESKTOP` in the environment-variable settings (for example
+`veshell:KDE` together with `KDE_SESSION_VERSION=6`); the user value wins over
+the built-in.
+
+The shipped `veshell-portals.conf` also lists both Secret portal backends,
+`gnome-keyring` first and `kwallet` as the fallback, so sandboxed applications
+that use `org.freedesktop.portal.Secret` work on both GNOME- and KDE-based
+systems.
 
 ## Precedence
 
@@ -82,10 +107,11 @@ covered alike:
   `XDG_SESSION_DESKTOP`, `DESKTOP_SESSION`) is reset to empty in the D-Bus
   activation environment.
 
-A leftover `XDG_CURRENT_DESKTOP=veshell` is not harmless: the next desktop's
-xdg-desktop-portal selects `veshell-portals.conf` from it, forwards
-`FileChooser` to the Veshell backend, which is not running there, and every
-file picker fails until the portal is restarted. `veshell.portal` is scoped
+A leftover Veshell identity (an `XDG_CURRENT_DESKTOP` starting with `veshell`)
+is not harmless: the next desktop's xdg-desktop-portal selects
+`veshell-portals.conf` from it, forwards `FileChooser` to the Veshell backend,
+which is not running there, and every file picker fails until the portal is
+restarted. `veshell.portal` is scoped
 with `UseIn=veshell` so the backend is never offered to another desktop either.
 
 ## Invariants
@@ -97,8 +123,8 @@ with `UseIn=veshell` so the backend is never offered to another desktop either.
   are forwarded to the launch environment or the session import.
 - A variable removed from the settings is unset from the compositor's
   environment and from the systemd user manager; a removed override of a
-  built-in variable (`XDG_*`, `GDK_BACKEND`, `QT_QPA_PLATFORM`) is restored to
-  its default instead.
+  built-in variable (`XDG_*`, `DESKTOP_SESSION`, `GDK_BACKEND`,
+  `QT_QPA_PLATFORM`) is restored to its default instead.
 - A settings change never mutates the environment of an already-running
   application or service.
 - The nested backend does not touch the host session's environment.

@@ -10,7 +10,10 @@ use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 
 use crate::backend::Backend;
-use crate::settings::{is_valid_environment_variable_name, SESSION_DERIVED_ENVIRONMENT_VARIABLES};
+use crate::settings::{
+    is_valid_environment_variable_name, CURRENT_DESKTOP, LEGACY_DESKTOP_SESSION,
+    SESSION_DERIVED_ENVIRONMENT_VARIABLES,
+};
 
 /// The user-configured variables that may override the launch environment,
 /// as `(name, value)` pairs.
@@ -54,7 +57,8 @@ pub fn get_environment_variables<BackendData: Backend + 'static>(
     let mut environment_variables = HashMap::from([
         ("WAYLAND_DISPLAY", wayland_socket_name.as_deref()),
         ("DISPLAY", xwayland_display.as_deref()),
-        ("XDG_CURRENT_DESKTOP", Some("veshell")),
+        ("XDG_CURRENT_DESKTOP", Some(CURRENT_DESKTOP)),
+        ("DESKTOP_SESSION", Some(LEGACY_DESKTOP_SESSION)),
         ("XDG_SESSION_TYPE", Some("wayland")),
         ("GDK_BACKEND", Some("wayland")),
         ("QT_QPA_PLATFORM", Some("wayland")),
@@ -113,6 +117,17 @@ mod tests {
         assert!(!overrides.contains_key("WAYLAND_DISPLAY"));
         assert!(!overrides.contains_key("DISPLAY"));
         assert_eq!(overrides.get("QT_QPA_PLATFORM"), Some(&"xcb"));
+    }
+
+    #[test]
+    fn current_desktop_stays_veshell_with_a_legacy_keyring_hint() {
+        // `XDG_CURRENT_DESKTOP` selects the portal config and must stay
+        // `veshell`. Electron/Chromium only fall back to `DESKTOP_SESSION`
+        // when they do not recognise the former; `gnome` there selects
+        // libsecret, which is provider-agnostic.
+        assert_eq!(CURRENT_DESKTOP, "veshell");
+        assert_eq!(LEGACY_DESKTOP_SESSION, "gnome");
+        assert!(!CURRENT_DESKTOP.contains("GNOME"));
     }
 
     #[test]

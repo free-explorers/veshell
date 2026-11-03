@@ -51,6 +51,8 @@ for prefix in /usr '/opt/veshell prefix&pipe|' '/opt/percent%quote"back\ dollar$
     test -f "$root/share/xdg-desktop-portal/veshell-portals.conf"
     test -f "$root/share/xdg-desktop-portal/portals/veshell.portal"
     grep -Fx 'UseIn=veshell' "$root/share/xdg-desktop-portal/portals/veshell.portal"
+    grep -Fx 'org.freedesktop.impl.portal.Secret=gnome-keyring;kwallet;' \
+        "$root/share/xdg-desktop-portal/veshell-portals.conf"
     test -f "$root/lib/systemd/user/veshell-shutdown.target"
     # PAM reads services from /etc/pam.d only, whatever the prefix.
     cmp "$repo/extra/assets/pam.d/veshell" "$tmp/root/etc/pam.d/veshell"

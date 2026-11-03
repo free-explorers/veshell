@@ -80,7 +80,8 @@ use crate::meta_window_state::meta_window::MetaWindowPatch;
 use crate::meta_window_state::MetaWindowState;
 use crate::settings::{
     is_valid_environment_variable_name, EnvironmentSettings, MonitorConfiguration, SettingsManager,
-    VeshellSettings, SESSION_DERIVED_ENVIRONMENT_VARIABLES,
+    VeshellSettings, CURRENT_DESKTOP, LEGACY_DESKTOP_SESSION,
+    SESSION_DERIVED_ENVIRONMENT_VARIABLES,
 };
 use crate::texture_swap_chain::TextureSwapChain;
 use crate::wayland::wayland::{get_direct_subsurfaces, get_surface_id};
@@ -409,8 +410,9 @@ fn restore_or_unset(name: &str) {
 /// The built-in non-session variables [`State::new`] sets, restored when a user
 /// override is removed. `WAYLAND_DISPLAY` and `DISPLAY` are excluded: they are
 /// session-derived and never user-overridable.
-const BUILTIN_ENVIRONMENT_DEFAULTS: [(&str, &str); 4] = [
-    ("XDG_CURRENT_DESKTOP", "veshell"),
+const BUILTIN_ENVIRONMENT_DEFAULTS: [(&str, &str); 5] = [
+    ("XDG_CURRENT_DESKTOP", CURRENT_DESKTOP),
+    ("DESKTOP_SESSION", LEGACY_DESKTOP_SESSION),
     ("XDG_SESSION_TYPE", "wayland"),
     ("GDK_BACKEND", "wayland"),
     ("QT_QPA_PLATFORM", "wayland"),
@@ -504,8 +506,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         // Set WAYLAND_DISPLAY for children.
 
         std::env::set_var("WAYLAND_DISPLAY", socket_name.clone());
-        // Set the current desktop for xdg-desktop-portal.
-        std::env::set_var("XDG_CURRENT_DESKTOP", "veshell");
+        // Set the current desktop for xdg-desktop-portal, and the legacy
+        // desktop-session hint Electron needs to select libsecret.
+        std::env::set_var("XDG_CURRENT_DESKTOP", CURRENT_DESKTOP);
+        std::env::set_var("DESKTOP_SESSION", LEGACY_DESKTOP_SESSION);
         // Ensure the session type is set to Wayland for xdg-autostart and Qt apps.
         std::env::set_var("XDG_SESSION_TYPE", "wayland");
         std::env::set_var("GDK_BACKEND", "wayland"); // Force GTK apps to run on Wayland.

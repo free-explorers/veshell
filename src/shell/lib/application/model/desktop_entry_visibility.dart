@@ -37,20 +37,18 @@ bool shownInCurrentDesktop(
 
 /// The desktop names of the running session, lowercased.
 ///
-/// `XDG_CURRENT_DESKTOP` is the spec's source and is a colon-separated list;
-/// `XDG_SESSION_DESKTOP` and `DESKTOP_SESSION` are added because some sessions
-/// only set those.
+/// `XDG_CURRENT_DESKTOP` is the spec's source and is a colon-separated list.
+/// `XDG_SESSION_DESKTOP` and `DESKTOP_SESSION` are only used as fallbacks when
+/// the former is unset or empty: sessions that set it may still carry a
+/// legacy value in one of the others (Veshell exports
+/// `DESKTOP_SESSION=gnome` for Electron's keyring detection, for example).
 Set<String> currentDesktopNames([Map<String, String>? environment]) {
   final env = environment ?? Platform.environment;
   final names = <String>{};
-  for (final key in const [
-    'XDG_CURRENT_DESKTOP',
-    'XDG_SESSION_DESKTOP',
-    'DESKTOP_SESSION',
-  ]) {
-    final value = env[key];
+
+  void addNames(String? value) {
     if (value == null) {
-      continue;
+      return;
     }
     for (final part in value.split(':')) {
       final name = part.trim().toLowerCase();
@@ -59,6 +57,15 @@ Set<String> currentDesktopNames([Map<String, String>? environment]) {
       }
     }
   }
+
+  final current = env['XDG_CURRENT_DESKTOP'];
+  if (current != null && current.trim().isNotEmpty) {
+    addNames(current);
+    return names;
+  }
+
+  addNames(env['XDG_SESSION_DESKTOP']);
+  addNames(env['DESKTOP_SESSION']);
   return names;
 }
 
