@@ -52,6 +52,13 @@ pub struct MetaWindowState {
     /// [`Self::new_meta_window_for_toplevel`] so the relation is available as
     /// [`MetaWindow::activated_by`] before the window is mapped.
     pub pending_activation_parent: HashMap<u64, String>,
+    /// `xdg-foreign` parent relations (`zxdg_imported.set_parent_of`) for child
+    /// surfaces whose meta window does not exist yet: child surface id → the
+    /// exported parent surface id. Consumed in
+    /// [`Self::new_meta_window_for_toplevel`] so an out-of-process dialog — a
+    /// GTK dialog embedded in a Chromium/Electron application — attaches to the
+    /// window that exported the handle before the dialog is mapped.
+    pub pending_foreign_parent: HashMap<u64, u64>,
 }
 
 impl MetaWindowState {
@@ -64,6 +71,7 @@ impl MetaWindowState {
             meta_window_in_gaming_mode: None,
             focus_order: Vec::new(),
             pending_activation_parent: HashMap::new(),
+            pending_foreign_parent: HashMap::new(),
         }
     }
 
@@ -560,9 +568,25 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             None => None,
         };
 
+        // An out-of-process dialog (Electron's GTK message boxes) declares its
+        // parent through `xdg-foreign`, not `xdg_toplevel.set_parent`. When the
+        // importer ran before this toplevel existed, the exported parent
+        // surface id is waiting here; resolve it now, exactly like a
+        // client-declared parent.
+        let foreign_parent = self
+            .meta_window_state
+            .pending_foreign_parent
+            .remove(&surface_id)
+            .and_then(|parent_surface_id| {
+                self.meta_window_state
+                    .meta_window_id_per_surface_id
+                    .get(&parent_surface_id)
+                    .cloned()
+            });
+
         // A client-declared parent and an activation "opened from" hint are
         // independent signals and are recorded separately.
-        let meta_window_parent = xdg_parent;
+        let meta_window_parent = xdg_parent.or(foreign_parent);
         let activated_by = activation_parent;
 
         let is_decorated = surface.with_cached_state(|state| {

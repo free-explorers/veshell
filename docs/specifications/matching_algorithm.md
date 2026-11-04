@@ -85,8 +85,9 @@ None of these signals is authoritative on its own, and every one may be absent, 
   - Source: Wayland client credentials; X11.
   - Notes: multi-process applications report helper pids and the launched pid usually differs from the window pid. Mainly used to join the process-based signals below.
 - **Parent (`parent`)** — only when the client sets it; authoritative when present.
-  - Source: `xdg_toplevel.set_parent`; X11 transient.
-  - Notes: declares the owning toplevel and marks the window as a dialog of that owner's tile. Many toolkits (Electron) never set it. Kept strictly separate from `activatedBy`.
+  - Source: `xdg_toplevel.set_parent`; X11 transient; `xdg-foreign`
+    (`zxdg_imported.set_parent_of`).
+  - Notes: declares the owning toplevel and marks the window as a dialog of that owner's tile. Many toolkits (Electron) never set `xdg_toplevel.set_parent`. Out-of-process dialogs declare it through `xdg-foreign` instead: Chromium/Electron renders its native GTK dialogs (About, message boxes) in GTK, exports its toplevel, and GTK imports that handle and calls `set_parent_of`. The compositor advertises both the v1 and v2 importer so that relation reaches matching as a client-declared `parent`, exactly like an in-process one. Kept strictly separate from `activatedBy`.
 - **Activated by (`activatedBy`)** — only when the client uses the protocol; high reliability as an "opened from" hint, none as a dialog signal.
   - Source: `xdg_activation_v1` token (`surface`, `serial`).
   - Notes: the surface the requesting client **declared** as the opener of this window, often its owner. Used only to pick a dialog's owner, never to turn a regular toplevel into a dialog. Recorded independently of `parent`, so a window can have both. Not universal.
@@ -260,7 +261,13 @@ A window is routed to a dialog before ordinary matching when it has a
 client-declared `parent`, a modal hint (`xdg_wm_dialog_v1` Modal / X11 motif
 modal), or a fixed size **with a resolvable owner relation** (parent,
 tracked-launch provenance or process sibling) — a lone fixed size never turns a
-regular toplevel into a dialog. The activation relation (`activatedBy`) is not a
+regular toplevel into a dialog. `xdg-foreign` counts as a client-declared
+`parent`: when Chromium/Electron shows a native GTK dialog, GTK imports the
+exported toplevel handle and calls `zxdg_imported.set_parent_of`, and the
+compositor records the relation on the dialog (`xdg_foreign.rs`), so an About
+box opened from one of several windows of a single-instance application attaches
+to that window's tile instead of being guessed from the shared process. The
+activation relation (`activatedBy`) is not a
 dialog marker while the launch burst is gathering: during the burst it only says
 the window was opened from another, so the window goes through normal matching
 and the burst can collect and redistribute first. **Once the burst has settled,
