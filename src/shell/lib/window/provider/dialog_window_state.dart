@@ -77,6 +77,29 @@ class DialogWindowState extends _$DialogWindowState
     removeWindow();
   }
 
+  /// Moves this dialog under another owner tile.
+  ///
+  /// A client-declared parent can arrive after the dialog mapped — Electron
+  /// exports the parent toplevel asynchronously, so the About dialog is
+  /// briefly matched by process sibling. The authoritative parent must win
+  /// over that guess, so the dialog follows it instead of staying on the tile
+  /// the matcher picked. Its meta window and selection are unchanged; only the
+  /// owning tile changes.
+  void reparent(WindowId newParent) {
+    final oldParent = state.parentWindowId;
+    if (oldParent == newParent) {
+      return;
+    }
+    matchingLog.info(
+      'Reparenting dialog $windowId from $oldParent to $newParent',
+    );
+    state = state.copyWith(parentWindowId: newParent);
+    ref.read(dialogSetForWindowProvider(oldParent).notifier).remove(windowId);
+    ref.read(dialogSetForWindowProvider(newParent).notifier).add(windowId);
+    // Re-apply the new owner's presentation (floating vs tiled).
+    onCurrentlyDisplayedMetaWindowChanged(state.metaWindowId);
+  }
+
   @override
   void onCurrentlyDisplayedMetaWindowChanged(MetaWindowId? metaWindowId) {
     if (metaWindowId == null) {

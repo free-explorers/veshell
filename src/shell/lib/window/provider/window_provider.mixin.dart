@@ -85,6 +85,10 @@ mixin WindowProviderMixin<T extends Window> {
   final Map<MetaWindowId, ProviderSubscription<MetaWindow>>
   _metaWindowSubscriptions = {};
 
+  /// When each owned native window was first attached to this tile, used to
+  /// bound title re-association ([MAX_TITLE_REASSOCIATION_TIME_MS]).
+  final Map<MetaWindowId, DateTime> _ownedAt = {};
+
   MetaWindowId? _displayedMetaWindowId;
 
   /// Whether the matcher created this tile for a single native window rather
@@ -138,6 +142,7 @@ mixin WindowProviderMixin<T extends Window> {
     // A native window was attributed to this tile: its launch is no longer a
     // pending startup that closing the tile may cancel.
     ref.read(appLaunchProvider.notifier).markProducedWindow(state.windowId);
+    _ownedAt.putIfAbsent(metaWindowId, DateTime.now);
     if (_launchOrigin) {
       _everOwnedWindow = true;
       if (!ref.read(metaWindowStateProvider(metaWindowId)).isFixedSized) {
@@ -356,10 +361,15 @@ mixin WindowProviderMixin<T extends Window> {
   /// The tile's own desktop-entry `appId` and the gather `waitingForAppSince`
   /// are preserved: a tile keeps its application identity and, while it is
   /// empty, the identity of the last window it displayed (so a relaunch finds
-  /// it again).
+  /// it again). A generic startup title (the application name before the
+  /// renderer restored the document) is never adopted over a specific stored
+  /// title: it carries no durable identity and would erase the discriminator
+  /// the late title re-association needs.
   void _syncMatchingInfo(MetaWindow metaWindow) {
     _matchingInfo = _matchingInfo.copyWith(
-      title: metaWindow.title,
+      title: isGenericTitle(metaWindow.title, _matchingInfo.title)
+          ? _matchingInfo.title
+          : metaWindow.title,
       windowClass: metaWindow.windowClass,
       startupId: metaWindow.startupId,
       pid: metaWindow.pid,
@@ -521,6 +531,20 @@ mixin WindowProviderMixin<T extends Window> {
     }
   }
 
+  /// Moves one of this tile's native windows to [destination].
+  ///
+  /// Public entry point for the matcher's late title re-association: like the
+  /// settle redistribution, the window is detached silently (the destination
+  /// takes ownership immediately) so the move is never routed back here.
+  void moveMetaWindowTo(
+    MetaWindowId metaWindowId,
+    WindowId destination, {
+    required String reason,
+    MatchingCost? cost,
+  }) {
+    _moveMetaWindow(metaWindowId, destination, reason: reason, cost: cost);
+  }
+
   void _moveMetaWindow(
     MetaWindowId metaWindowId,
     WindowId destination, {
@@ -568,6 +592,7 @@ mixin WindowProviderMixin<T extends Window> {
 
   void removeMetaWindow(MetaWindowId metaWindowId, {bool shouldNotify = true}) {
     _closeMetaWindowSubscription(metaWindowId);
+    _ownedAt.remove(metaWindowId);
     ref.read(metaWindowWindowMapProvider.notifier).unset(metaWindowId);
     if (shouldNotify) {
       _onMetaWindowsChanges();
@@ -615,6 +640,15 @@ mixin WindowProviderMixin<T extends Window> {
     _metaWindowSubscriptions[surfaceId] = ref.listen(
       metaWindowStateProvider(surfaceId),
       (previous, next) {
+        // A restored window reports the application name first and its
+        // document/workspace title seconds later. Re-decide ownership on that
+        // title change before the tile adopts anything, while the specific
+        // stored identities are still available.
+        if (previous != null &&
+            previous.title != next.title &&
+            surfaceId == _displayedMetaWindowId) {
+          _maybeReassociateAfterTitleChange(surfaceId);
+        }
         if (previous == null ||
             previous.appId != next.appId ||
             previous.title != next.title ||
@@ -626,11 +660,33 @@ mixin WindowProviderMixin<T extends Window> {
             previous.activatedBy != next.activatedBy) {
           _onMetaWindowsChanges();
         }
-        if (surfaceId == _displayedMetaWindowId) {
+        // The re-association above may have moved this window to a sibling.
+        if (surfaceId == _displayedMetaWindowId &&
+            ref.read(metaWindowWindowMapProvider).get(surfaceId) ==
+                state.windowId) {
           onMetaWindowDisplayedPropertiesChanged(next);
         }
       },
     );
+  }
+
+  /// Re-runs the by-title ownership decision for a displayed window whose
+  /// title just changed, while the association is still recent.
+  ///
+  /// The launch burst may have spread the window before its renderer restored
+  /// the specific title (VS Code opens every restored window as `Code - OSS`
+  /// first). Moving it now lands it on the tile whose stored title matches;
+  /// the destination's own settle redistributes whatever it was displaying.
+  void _maybeReassociateAfterTitleChange(MetaWindowId metaWindowId) {
+    final ownedAt = _ownedAt[metaWindowId];
+    if (ownedAt == null ||
+        DateTime.now().difference(ownedAt).inMilliseconds >
+            MAX_TITLE_REASSOCIATION_TIME_MS) {
+      return;
+    }
+    ref
+        .read(matchingEngineProvider.notifier)
+        .reassociateMetaWindow(metaWindowId);
   }
 
   /// Launches the desktop entry this tile stands for, attributing anything

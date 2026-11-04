@@ -80,7 +80,7 @@ None of these signals is authoritative on its own, and every one may be absent, 
   - Notes: can be hollow or a helper identity (`electron`, runtime names) and can change after the window is mapped. Normalised to a desktop-entry id when possible (Flatpak/Snap, desktop database, binary name, case-insensitive `StartupWMClass`). Primary application-level identity.
 - **Window title (`title`)** — usually available, but often only after the first commit; high reliability when specific, none when generic.
   - Source: `xdg_toplevel.title`; X11 title.
-  - Notes: frequently the only signal that distinguishes several tiles of the same application (see [parallel windows](#parallel-windows)). Generic during startup (`Code - OSS`), then becomes specific; can change repeatedly. The cost is graded by the longest common substring relative to the shorter title, so a title that only changed in its volatile parts (an unread count, a collapsed page title) still counts as a near match, while a short or generic title stays a weak signal.
+  - Notes: frequently the only signal that distinguishes several tiles of the same application (see [parallel windows](#parallel-windows)). Generic during startup (`Code - OSS`), then becomes specific; can change repeatedly. The cost is graded by the longest common substring relative to the shorter title, so a title that only changed in its volatile parts (an unread count, a collapsed page title) still counts as a near match, while a short or generic title stays a weak signal. A title that covers less than half of the stored title and is contained in it is the application name, not an instance identity: it never replaces a tile's durable stored title and cannot outrank a sibling's specific match. A restored session can keep reporting the generic title for several seconds while its renderer restores the document/workspace (see [Settle](#flow)); when the specific title finally arrives, the window is re-associated within `MAX_TITLE_REASSOCIATION_TIME_MS`.
 - **Process ID (`pid`)** — always available; weak as an identity, strong as a join key.
   - Source: Wayland client credentials; X11.
   - Notes: multi-process applications report helper pids and the launched pid usually differs from the window pid. Mainly used to join the process-based signals below.
@@ -231,6 +231,19 @@ All of these are observed on the live surfaces and, where meaningful, mirrored o
    [Dialog routing](#dialog-routing)). The deferral is bounded (currently 2 s)
    so a genuinely fixed-size final surface still settles as the tile's own
    window rather than becoming a dialog.
+
+   A restored session can keep the generic application title for longer than
+   the debounce: VS Code maps every restored window as `Code - OSS` and only
+   reports the workspace/document title once its renderer has restored it,
+   several seconds later. The burst still settles and spreads windows so they
+   are all visible, but ownership stays provisional for
+   `MAX_TITLE_REASSOCIATION_TIME_MS` after a window is first owned. A title
+   change in that window re-runs the by-title comparison against the tiles'
+   stored identities and moves the window to a strictly better sibling; the
+   destination redistributes whatever it was displaying. Generic startup
+   titles are never adopted over a stored specific title, so the discriminator
+   is still available when the real title arrives, and after the window
+   expires a renamed document no longer moves the window between tiles.
 3. **Redistribute by identity, displayed window included.** For each owned
    window, a sibling whose match cost is strictly lower (principally a stored
    title match; provenance/process-sibling recovery also counts) wins it,
@@ -279,7 +292,11 @@ sibling, falling back to the ordinary best candidate only for an authoritative
 hint. Owner resolution always walks dialog chains up to the owning tile, so a
 native window is never nested under another dialog. A parent, modal or activation
 hint that arrives after mapping re-routes the already-matched window while it is
-still inside its settle window. Re-routing detaches the window from the tile
+still inside its settle window. When the matcher had already turned the window
+into a dialog of the wrong tile — an out-of-process GTK dialog is created before
+its `xdg-foreign` parent arrives — the dialog is re-parented to the authoritative
+owner instead of being left behind; it is the same native window and selection,
+only its owning tile changes. Otherwise re-routing detaches the window from the tile
 that had matched it first, which drops it from that tile's displayed set: a
 native window is never rendered by two shell windows at once. The previous tile
 falls back to its placeholder, and when the matcher had created it for that very

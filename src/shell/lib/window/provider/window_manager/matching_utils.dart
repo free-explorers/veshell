@@ -103,6 +103,16 @@ int titleMatchingCost(String? storedTitle, String? windowTitle) {
   if (stored.isEmpty || window.isEmpty) {
     return _titleMismatchCost;
   }
+  // A generic startup title — `Code - OSS` against
+  // `opencode - veshell - Code - OSS` — is contained in the specific title and
+  // would otherwise score a perfect match on longest-common-substring alone.
+  // It carries no instance identity, so it must stay weak in both directions:
+  // it neither lets a half-restored window steal a specific sibling's tile nor
+  // lets an empty app-name placeholder outrank a specific match.
+  if (isGenericTitle(windowTitle, storedTitle) ||
+      isGenericTitle(storedTitle, windowTitle)) {
+    return _titleMismatchCost;
+  }
   final overlap = _longestCommonSubstringLength(stored, window);
   final shortest = stored.length < window.length
       ? stored.length
@@ -117,6 +127,26 @@ int titleMatchingCost(String? storedTitle, String? windowTitle) {
   );
 }
 
+/// Whether [title] is an application-level (generic) title rather than a
+/// specific window title, relative to [against].
+///
+/// A generic title covers only a small part of the reference and is contained
+/// in it: the application name a client reports before its renderer restores
+/// the document or workspace (`Code - OSS`, `Firefox`). Equal titles are not
+/// generic (that is a real match), and a title that differs only in its
+/// volatile parts is long enough to keep the graded comparison.
+bool isGenericTitle(String? title, String? against) {
+  final candidate = _normalizeTitle(title ?? '');
+  final reference = _normalizeTitle(against ?? '');
+  if (candidate.isEmpty || reference.isEmpty || candidate == reference) {
+    return false;
+  }
+  if (candidate.length * 2 >= reference.length) {
+    return false;
+  }
+  return reference.contains(candidate);
+}
+
 /// After a meta window has been associated with an MsWindow, we allow this association to change
 /// for a small amount of time.
 ///
@@ -125,6 +155,20 @@ int titleMatchingCost(String? storedTitle, String? windowTitle) {
 /// In those cases multiple windows may open with initially identical window titles, but once the documents
 /// have loaded the window titles change and we might be able to make better associations.
 const MAX_WINDOW_REASSOCIATION_TIME_MS = 3000;
+
+/// How long after a native window is first owned its title may still move it to
+/// a better same-app tile.
+///
+/// Restored sessions (VS Code, browsers, editors) map every window with the
+/// generic application name and only report the document/workspace title once
+/// the renderer has restored it — several seconds later. The launch burst
+/// cannot stay open that long without hiding the extra windows, so the initial
+/// spread is provisional. A title change within this window re-runs the
+/// by-title comparison against the tiles' stored identities, which generic
+/// titles never overwrite. This is longer than
+/// [MAX_WINDOW_REASSOCIATION_TIME_MS]: it covers a slow renderer restore rather
+/// than a relation that arrives slightly after mapping.
+const MAX_TITLE_REASSOCIATION_TIME_MS = 10000;
 
 /// Upper bound on how long a launch burst keeps gathering while the only
 /// windows it has produced are fixed-size (a splash or updater).

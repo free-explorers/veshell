@@ -116,4 +116,42 @@ void main() {
       expect(waited.total, notWaited.total);
     });
   });
+
+  group('titleMatchingCost generic titles', () {
+    const specific = 'opencode - veshell - Code - OSS';
+    const video = 'opencode - veshell_video - Code - OSS';
+
+    test('an application-name startup title is not a perfect match', () {
+      // The shorter title is fully contained in the stored specific title, but
+      // it carries no instance identity: it must stay a weak signal.
+      expect(titleMatchingCost(specific, 'Code - OSS'), 50);
+      expect(titleMatchingCost('Code - OSS', specific), 50);
+      expect(isGenericTitle('Code - OSS', specific), isTrue);
+      // The helper is directional: a specific title is not generic relative to
+      // the shorter application name.
+      expect(isGenericTitle(specific, 'Code - OSS'), isFalse);
+    });
+
+    test('a restored workspace title keeps the graded near match', () {
+      final cost = titleMatchingCost(
+        video,
+        'Navigation2.mp4 - veshell_video - Code - OSS',
+      );
+      expect(cost, lessThan(25));
+      expect(
+        isGenericTitle('Navigation2.mp4 - veshell_video - Code - OSS', video),
+        isFalse,
+      );
+    });
+
+    test('a short but specific title is not generic', () {
+      expect(isGenericTitle('Downloads', 'Downloads — Files'), isFalse);
+      expect(titleMatchingCost('Downloads', 'Downloads — Files'), lessThan(5));
+    });
+
+    test('equal titles are an exact match, not a generic one', () {
+      expect(isGenericTitle(specific, specific), isFalse);
+      expect(titleMatchingCost(specific, specific), 0);
+    });
+  });
 }
