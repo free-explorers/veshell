@@ -47,6 +47,7 @@ in
       extraPortals = [ cfg.package pkgs.xdg-desktop-portal-gtk ];
       config.veshell = {
         default = [ "gtk" ];
+        "org.freedesktop.impl.portal.Secret" = [ "gnome-keyring" "kwallet" ];
         "org.freedesktop.impl.portal.ScreenCast" = [ "veshell" ];
         "org.freedesktop.impl.portal.Screenshot" = [ "veshell" ];
         "org.freedesktop.impl.portal.FileChooser" = [ "veshell" ];

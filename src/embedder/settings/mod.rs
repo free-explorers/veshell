@@ -267,6 +267,33 @@ pub struct EnvironmentSettings {
 /// compositor's own process environment keep the session-derived values.
 pub const SESSION_DERIVED_ENVIRONMENT_VARIABLES: [&str; 2] = ["WAYLAND_DISPLAY", "DISPLAY"];
 
+/// The `XDG_CURRENT_DESKTOP` advertised to applications and the session.
+///
+/// This stays Veshell's own name: xdg-desktop-portal picks the first
+/// `${desktop}-portals.conf` it finds, and it must keep using
+/// `veshell-portals.conf` rather than another desktop's configuration.
+pub const CURRENT_DESKTOP: &str = "veshell";
+
+/// The legacy `DESKTOP_SESSION` value exposed to applications.
+///
+/// Electron and Chromium do not query the Secret Service; they guess a keyring
+/// backend from the desktop environment and only recognise a fixed list of
+/// desktops. `XDG_CURRENT_DESKTOP` always takes precedence, so they fall back
+/// to this variable when they see `veshell`, and `gnome` selects their
+/// **libsecret** backend.
+///
+/// That is not a claim that the session is GNOME: libsecret is
+/// provider-agnostic and talks to whatever implements
+/// `org.freedesktop.secrets` — gnome-keyring, KWallet, oo7, and so on. Without
+/// the hint Electron selects `unknown`/`basic_text`, and Element aborts with
+/// "Your system has an unsupported keyring".
+///
+/// Users who need a native desktop backend instead of libsecret can override
+/// `XDG_CURRENT_DESKTOP` (for example `veshell:KDE` with
+/// `KDE_SESSION_VERSION=6`) in the environment-variable settings; the user
+/// value wins over this built-in.
+pub const LEGACY_DESKTOP_SESSION: &str = "gnome";
+
 /// Whether `name` is a portable POSIX environment variable name
 /// (`[A-Za-z_][A-Za-z0-9_]*`).
 ///
@@ -780,10 +807,9 @@ mod keyboard_settings_tests {
 
     #[test]
     fn unknown_caps_lock_falls_back_to_the_default() {
-        let settings: KeyboardSettings = serde_json::from_str(
-            r#"{"layout":"us","swapAltAndWin":false,"capsLock":"nonsense"}"#,
-        )
-        .unwrap();
+        let settings: KeyboardSettings =
+            serde_json::from_str(r#"{"layout":"us","swapAltAndWin":false,"capsLock":"nonsense"}"#)
+                .unwrap();
         assert_eq!(settings.caps_lock, CapsLockBehavior::Default);
     }
 }

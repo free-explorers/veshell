@@ -53,4 +53,18 @@ void main() {
   test('currentDesktopNames reads the session fallbacks', () {
     expect(currentDesktopNames({'DESKTOP_SESSION': 'plasma'}), {'plasma'});
   });
+
+  test(
+    'currentDesktopNames ignores fallbacks when XDG_CURRENT_DESKTOP is set',
+    () {
+      expect(
+        currentDesktopNames({
+          'XDG_CURRENT_DESKTOP': 'veshell',
+          'XDG_SESSION_DESKTOP': 'veshell',
+          'DESKTOP_SESSION': 'gnome',
+        }),
+        {'veshell'},
+      );
+    },
+  );
 }

@@ -139,6 +139,9 @@ the prepared shell and engine instead; see [building and packaging](building.md)
   `gstreamer1.0-plugins-base`/`gstreamer1.0-plugins-good` on Debian.
 - XWayland for X11 applications and an xdg-desktop-portal frontend/fallback
   backend for portal integration.
+- A Secret Service provider for Electron/Chromium `safeStorage` and the portal
+  `Secret` interface: gnome-keyring or KWallet. The shipped
+  `veshell-portals.conf` prefers gnome-keyring and falls back to kwallet.
 - libxkbregistry for the keyboard-layout picker (Debian: `libxkbregistry0`;
   bundled with `libxkbcommon` on Arch, Fedora and Nix). The compositor also
   needs `xkeyboard-config` at run time to compile any layout.

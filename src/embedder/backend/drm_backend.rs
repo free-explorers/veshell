@@ -2254,10 +2254,11 @@ fn notify_fd() -> Result<(), Box<dyn std::error::Error>> {
 
 /// The built-in session variables the compositor forwards to the systemd user
 /// manager and the D-Bus activation environment, before the user's own.
-const SESSION_IMPORTED_VARIABLES: [&str; 4] = [
+const SESSION_IMPORTED_VARIABLES: [&str; 5] = [
     "WAYLAND_DISPLAY",
     "DISPLAY",
     "XDG_CURRENT_DESKTOP",
+    "DESKTOP_SESSION",
     "XDG_SESSION_TYPE",
 ];
 

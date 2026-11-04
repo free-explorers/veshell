@@ -85,9 +85,9 @@ if hash systemctl &> /dev/null; then
     # manager and the D-Bus activation environment both outlive the login, so
     # any value left behind is visible to the next session. XDG_CURRENT_DESKTOP
     # is the one xdg-desktop-portal uses to pick ${desktop}-portals.conf: left
-    # as "veshell", the next desktop's portal loads veshell-portals.conf and
-    # forwards FileChooser to a backend that is not running there, breaking
-    # every file picker until the portal is restarted.
+    # starting with "veshell", the next desktop's portal loads
+    # veshell-portals.conf and forwards FileChooser to a backend that is not
+    # running there, breaking every file picker until the portal is restarted.
     SESSION_ENVIRONMENT='WAYLAND_DISPLAY DISPLAY WAYLAND_SOCKET XDG_SESSION_TYPE XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP DESKTOP_SESSION'
 
     # Session teardown shared by the normal exit path and the signal trap

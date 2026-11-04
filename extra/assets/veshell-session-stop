@@ -21,9 +21,10 @@ systemctl --user start --job-mode=replace-irreversibly veshell-shutdown.target
 # outlive the login. DISPLAY and WAYLAND_SOCKET included: GDM re-propagates
 # them for the next session, so a stale value must not survive the dead one.
 # XDG_CURRENT_DESKTOP is what xdg-desktop-portal uses to pick
-# ${desktop}-portals.conf: left as "veshell", the next desktop's portal selects
-# veshell-portals.conf and forwards FileChooser to a backend that is not
-# running there, breaking every file picker until the portal is restarted.
+# ${desktop}-portals.conf: left starting with "veshell", the next desktop's
+# portal selects veshell-portals.conf and forwards FileChooser to a backend
+# that is not running there, breaking every file picker until the portal is
+# restarted.
 systemctl --user unset-environment \
     WAYLAND_DISPLAY DISPLAY WAYLAND_SOCKET XDG_SESSION_TYPE \
     XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP DESKTOP_SESSION
