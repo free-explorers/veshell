@@ -9,6 +9,6 @@ pub fn lock_session<BackendData: Backend + 'static>(
     mut result: Box<dyn MethodResult<serde_json::Value>>,
     data: &mut State<BackendData>,
 ) {
-    crate::lock::lock(data);
+    crate::lock::lock(data, true);
     result.success(None);
 }

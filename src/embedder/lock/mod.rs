@@ -14,6 +14,7 @@ use std::time::Duration;
 use serde_json::json;
 use smithay::reexports::calloop::channel;
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
+use smithay::reexports::calloop::RegistrationToken;
 use smithay::utils::{IsAlive, Logical, Point, SERIAL_COUNTER};
 use tracing::{info, warn};
 
@@ -34,6 +35,12 @@ const FINGERPRINT_ATTEMPTS: u32 = 3;
 /// Grace between the shell reporting the lock screen drawn and the suspend
 /// going ahead, so the frame reaches the panel first.
 const SLEEP_RELEASE_DELAY: Duration = Duration::from_millis(150);
+
+/// Upper bound on how long a pending suspend waits for the shell to draw the
+/// lock screen. The compositor owns the lock, so a blanked panel, a slow frame
+/// or a restarting shell must not spend logind's whole `InhibitDelayMaxSec`
+/// before the machine may sleep.
+const SLEEP_DRAW_GRACE: Duration = Duration::from_millis(500);
 
 pub struct LockState {
     locked: bool,
@@ -58,10 +65,19 @@ pub struct LockState {
     fingerprint_running: bool,
     fingerprint_failures: u32,
     fingerprint_message: Option<(String, String)>,
+    /// Whether a usable fingerprint reader exists, once a transaction has
+    /// found out. `Some(false)` keeps a machine without one from D-Bus
+    /// activating fprintd on every lock.
+    fingerprint_available: Option<bool>,
     /// The shell has drawn the lock screen of this generation.
     shown: bool,
-    /// A suspend is waiting for the lock screen to be drawn.
+    /// A suspend is waiting for the lock screen, bounded by
+    /// [`SLEEP_DRAW_GRACE`].
     sleep_pending: bool,
+    /// The timer that will release logind's sleep inhibitor if the shell
+    /// never draws the lock screen. Cancelled when the shell reports the
+    /// screen drawn first, so it cannot release a later suspend's inhibitor.
+    sleep_release_token: Option<RegistrationToken>,
     auth_events: channel::Sender<AuthMessage>,
     dbus: Option<async_channel::Sender<LockDbusCommand>>,
 }
@@ -105,8 +121,10 @@ impl LockState {
             fingerprint_running: false,
             fingerprint_failures: 0,
             fingerprint_message: None,
+            fingerprint_available: None,
             shown: false,
             sleep_pending: false,
+            sleep_release_token: None,
             auth_events,
             dbus,
         }
@@ -159,7 +177,13 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 }
 
 /// Locks the session. Idempotent.
-pub fn lock<BackendData: Backend + 'static>(state: &mut State<BackendData>) {
+///
+/// `authenticate` starts the PAM stacks. A sleep-triggered lock passes
+/// `false`: the machine is about to suspend, so the readers start after the
+/// resume instead (see [`on_resume`]). Opening them on the way into suspend
+/// would be frozen with the rest of the machine and can wake it right back up,
+/// as fingerprint readers are often wakeup devices.
+pub fn lock<BackendData: Backend + 'static>(state: &mut State<BackendData>, authenticate: bool) {
     if state.lock.locked {
         return;
     }
@@ -184,8 +208,15 @@ pub fn lock<BackendData: Backend + 'static>(state: &mut State<BackendData>) {
     keyboard.set_focus(state, None, SERIAL_COUNTER.next_serial());
     state.refresh_pointer_focus();
 
-    start_password(state);
-    start_fingerprint(state);
+    if authenticate {
+        start_password(state);
+        start_fingerprint(state);
+    } else {
+        // No transaction while the machine is on its way to sleep: it would
+        // be frozen with the rest of userspace and unusable on resume.
+        state.lock.password = None;
+        state.lock.pending_prompt = None;
+    }
     notify_lock_state(state);
     state.lock.command(LockDbusCommand::SetLockedHint(true));
     state.request_render();
@@ -209,6 +240,7 @@ fn unlock<BackendData: Backend + 'static>(state: &mut State<BackendData>) {
     state.lock.fingerprint_running = false;
     state.lock.fingerprint_message = None;
     state.lock.sleep_pending = false;
+    cancel_sleep_release(state);
 
     // A game takes the keys straight from here on: Flutter must not keep
     // believing the keys it saw on the lock screen are held.
@@ -241,9 +273,11 @@ fn start_password<BackendData: Backend + 'static>(state: &mut State<BackendData>
 }
 
 fn start_fingerprint<BackendData: Backend + 'static>(state: &mut State<BackendData>) {
-    if state.lock.fingerprint_running
-        || state.lock.fingerprint_failures >= FINGERPRINT_ATTEMPTS
-        || !service_installed(pam::FINGERPRINT_SERVICE)
+    if !fingerprint_allowed(
+        state.lock.fingerprint_available,
+        state.lock.fingerprint_running,
+        state.lock.fingerprint_failures,
+    ) || !service_installed(pam::FINGERPRINT_SERVICE)
     {
         return;
     }
@@ -256,6 +290,13 @@ fn start_fingerprint<BackendData: Backend + 'static>(state: &mut State<BackendDa
         state.lock.generation,
         state.lock.auth_events.clone(),
     ));
+}
+
+/// Whether a new fingerprint transaction may start: a reader exists (or the
+/// question has not been answered yet), none is running, and the attempt
+/// budget is not spent.
+fn fingerprint_allowed(available: Option<bool>, running: bool, failures: u32) -> bool {
+    available != Some(false) && !running && failures < FINGERPRINT_ATTEMPTS
 }
 
 /// The password stack's PAM service. Without our own file (a development
@@ -310,20 +351,59 @@ pub fn on_shown<BackendData: Backend + 'static>(state: &mut State<BackendData>) 
     state.lock.shown = true;
     if state.lock.sleep_pending {
         state.lock.sleep_pending = false;
-        release_sleep_after_delay(state);
+        release_sleep_after(state, SLEEP_RELEASE_DELAY);
     }
 }
 
-fn release_sleep_after_delay<BackendData: Backend + 'static>(state: &mut State<BackendData>) {
-    let result = state.loop_handle.insert_source(
-        Timer::from_duration(SLEEP_RELEASE_DELAY),
+/// Releases logind's sleep delay inhibitor after `delay`, clearing the pending
+/// flag. Cancels a previous grace timer first: a release must not outlive the
+/// sleep it was armed for, or it would release the inhibitor taken after the
+/// next resume.
+fn release_sleep_after<BackendData: Backend + 'static>(
+    state: &mut State<BackendData>,
+    delay: Duration,
+) {
+    cancel_sleep_release(state);
+    let scheduled = state.loop_handle.insert_source(
+        Timer::from_duration(delay),
         |_, _, state: &mut State<BackendData>| {
+            state.lock.sleep_release_token = None;
+            state.lock.sleep_pending = false;
             state.lock.command(LockDbusCommand::ReleaseSleepInhibitor);
             TimeoutAction::Drop
         },
     );
-    if result.is_err() {
-        state.lock.command(LockDbusCommand::ReleaseSleepInhibitor);
+    match scheduled {
+        Ok(token) => state.lock.sleep_release_token = Some(token),
+        Err(_) => {
+            state.lock.sleep_pending = false;
+            state.lock.command(LockDbusCommand::ReleaseSleepInhibitor);
+        }
+    }
+}
+
+/// Cancels the pending draw-grace release, if any.
+fn cancel_sleep_release<BackendData: Backend + 'static>(state: &mut State<BackendData>) {
+    if let Some(token) = state.lock.sleep_release_token.take() {
+        state.loop_handle.remove(token);
+    }
+}
+
+/// What a `PrepareForSleep` does about logind's delay inhibitor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SleepRelease {
+    /// The lock screen is already on screen: let the suspend go ahead.
+    Immediate,
+    /// Lock without starting PAM and give the shell the draw grace to put the
+    /// lock screen on screen, then release the inhibitor regardless.
+    AfterDrawGrace,
+}
+
+fn sleep_release(locked: bool, shown: bool) -> SleepRelease {
+    if locked && shown {
+        SleepRelease::Immediate
+    } else {
+        SleepRelease::AfterDrawGrace
     }
 }
 
@@ -332,17 +412,45 @@ fn on_dbus_event<BackendData: Backend + 'static>(
     event: LockDbusEvent,
 ) {
     match event {
-        LockDbusEvent::Lock => lock(state),
+        LockDbusEvent::Lock => lock(state, true),
         LockDbusEvent::Unlock => unlock(state),
         LockDbusEvent::PrepareForSleep => {
-            if state.lock.locked && state.lock.shown {
-                state.lock.command(LockDbusCommand::ReleaseSleepInhibitor);
-            } else {
-                state.lock.sleep_pending = true;
-                lock(state);
+            match sleep_release(state.lock.locked, state.lock.shown) {
+                SleepRelease::Immediate => {
+                    state.lock.sleep_pending = false;
+                    cancel_sleep_release(state);
+                    state.lock.command(LockDbusCommand::ReleaseSleepInhibitor);
+                }
+                SleepRelease::AfterDrawGrace => {
+                    state.lock.sleep_pending = true;
+                    lock(state, false);
+                    release_sleep_after(state, SLEEP_DRAW_GRACE);
+                }
             }
         }
+        LockDbusEvent::Resumed => on_resume(state),
     }
+}
+
+/// logind resumed from suspend.
+///
+/// The logind thread has already re-armed the sleep inhibitor, so clear the
+/// pending flag: a stale one would release that fresh inhibitor on the next
+/// `lock_screen_shown`.
+fn on_resume<BackendData: Backend + 'static>(state: &mut State<BackendData>) {
+    state.lock.sleep_pending = false;
+    cancel_sleep_release(state);
+    if !state.lock.locked {
+        return;
+    }
+    // A sleep-triggered lock skipped PAM; start it now, or the lock screen
+    // would have no way to authenticate. A transaction that was already
+    // running (a manual lock before the suspend) is left alone so its pending
+    // prompt is not replaced.
+    if state.lock.password.is_none() {
+        start_password(state);
+    }
+    start_fingerprint(state);
 }
 
 fn on_auth_message<BackendData: Backend + 'static>(
@@ -407,6 +515,11 @@ fn on_auth_message<BackendData: Backend + 'static>(
         }
         (AuthSource::Fingerprint, AuthEvent::Finished(outcome)) => {
             state.lock.fingerprint_running = false;
+            // A transaction that got past the enrollment probe proves a reader
+            // exists; `Unavailable` proves the opposite. Remembering the
+            // latter stops a machine without one from D-Bus activating fprintd
+            // on every lock.
+            state.lock.fingerprint_available = Some(outcome != AuthOutcome::Unavailable);
             match outcome {
                 AuthOutcome::Success => unlock(state),
                 AuthOutcome::Unavailable => {
@@ -481,5 +594,46 @@ pub fn replay_to_shell<BackendData: Backend + 'static>(state: &mut State<Backend
     }
     if let Some((kind, message)) = state.lock.fingerprint_message.clone() {
         send_auth_message(state, AuthSource::Fingerprint, &kind, &message, false);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{fingerprint_allowed, sleep_release, SleepRelease, FINGERPRINT_ATTEMPTS};
+
+    #[test]
+    fn a_drawn_lock_screen_lets_a_suspend_go_immediately() {
+        assert_eq!(sleep_release(true, true), SleepRelease::Immediate);
+    }
+
+    #[test]
+    fn a_suspend_waits_for_the_shell_only_until_the_draw_grace() {
+        // Not locked yet: lock and give the shell the grace to draw.
+        assert_eq!(sleep_release(false, false), SleepRelease::AfterDrawGrace);
+        // Locked but not redrawn (a blanked panel, a restarting shell): same
+        // deadline, or logind waits its whole `InhibitDelayMaxSec`.
+        assert_eq!(sleep_release(true, false), SleepRelease::AfterDrawGrace);
+    }
+
+    #[test]
+    fn a_readerless_machine_never_starts_another_fingerprint_transaction() {
+        assert!(!fingerprint_allowed(Some(false), false, 0));
+        assert!(fingerprint_allowed(None, false, 0));
+        assert!(fingerprint_allowed(Some(true), false, 0));
+    }
+
+    #[test]
+    fn a_running_or_exhausted_fingerprint_stack_is_left_alone() {
+        assert!(!fingerprint_allowed(Some(true), true, 0));
+        assert!(!fingerprint_allowed(
+            Some(true),
+            false,
+            FINGERPRINT_ATTEMPTS
+        ));
+        assert!(fingerprint_allowed(
+            Some(true),
+            false,
+            FINGERPRINT_ATTEMPTS - 1
+        ));
     }
 }
