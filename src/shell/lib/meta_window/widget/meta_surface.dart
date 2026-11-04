@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
+import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/meta_window/widget/meta_surface_decoration.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
@@ -13,6 +14,11 @@ import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/wayland/widget/surface.dart';
 import 'package:shell/wayland/widget/surface/pointer_listener.dart';
 import 'package:shell/wayland/widget/surface/surface_focus.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
+import 'package:shell/window/provider/dialog_window_state.dart';
+import 'package:shell/window/provider/ephemeral_window_state.dart';
+import 'package:shell/window/provider/persistent_window_state.dart';
+import 'package:shell/window/provider/window_manager/title_reassociation.dart';
 
 class MetaSurfaceWidget extends HookConsumerWidget {
   const MetaSurfaceWidget({
@@ -109,40 +115,67 @@ class MetaSurfaceWidget extends HookConsumerWidget {
       }
       return null;
     }, [currentMonitor]);
+    // Input means the user is working in this window: a restored window's late
+    // title must not move it to another tile from under them. Input to a
+    // dialog counts for the window its tile displays, too.
+    void endProvisionalOwnership() {
+      final reassociation = ref.read(titleReassociationProvider.notifier)
+        ..markInteracted(metaWindowId);
+      final owner = ref.read(metaWindowWindowMapProvider).get(metaWindowId);
+      if (owner is! DialogWindowId) {
+        return;
+      }
+      final parent = ref.read(dialogWindowStateProvider(owner)).parentWindowId;
+      final displayed = switch (parent) {
+        PersistentWindowId() =>
+          ref.read(persistentWindowStateProvider(parent)).metaWindowId,
+        EphemeralWindowId() =>
+          ref.read(ephemeralWindowStateProvider(parent)).metaWindowId,
+        DialogWindowId() => null,
+      };
+      if (displayed != null) {
+        reassociation.markInteracted(displayed);
+      }
+    }
+
     return Center(
       child: SurfaceFocus(
         focusNode: focusNode,
-        child: ActivateSurfaceOnPointerDown(
-          surfaceId: surfaceId,
-          // Be sure to not put pointer listener behind the DeferredPointerHandler
-          // Since Hit detection between DeferPointer and the handler are bypassed
-          child: DeferredPointerHandler(
-            child: Stack(
-              clipBehavior: Clip.none,
-              alignment: AlignmentDirectional.center,
-              children: [
-                Positioned(
-                  left: offset.dx,
-                  top: offset.dy,
-                  child: MetaSurfaceDecoration(
-                    metaWindowId: metaWindowId,
-                    enabled: decorated,
-                    onTitleBarMoveStart: onTitleBarMoveStart,
-                    child: SurfaceWidget(
-                      surfaceId: surfaceId,
-                      scaleRatio: metaWindow.scaleRatio,
-                      // A floating window's surface origin is the
-                      // authoritative pointer basis. X11 clients can move
-                      // themselves (Zoom's panels) and the compositor can move
-                      // them; deriving the basis from the lagging render box
-                      // feeds that lag back into the client's drag. Wayland
-                      // clients subtract their CSD geometry margin so the
-                      // basis is the surface buffer, not the window box.
-                      globalOffsetOverride: metaWindow.floatingSurfaceOrigin,
+        onClientKey: endProvisionalOwnership,
+        child: Listener(
+          onPointerDown: (_) => endProvisionalOwnership(),
+          child: ActivateSurfaceOnPointerDown(
+            surfaceId: surfaceId,
+            // Be sure to not put pointer listener behind the DeferredPointerHandler
+            // Since Hit detection between DeferPointer and the handler are bypassed
+            child: DeferredPointerHandler(
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: AlignmentDirectional.center,
+                children: [
+                  Positioned(
+                    left: offset.dx,
+                    top: offset.dy,
+                    child: MetaSurfaceDecoration(
+                      metaWindowId: metaWindowId,
+                      enabled: decorated,
+                      onTitleBarMoveStart: onTitleBarMoveStart,
+                      child: SurfaceWidget(
+                        surfaceId: surfaceId,
+                        scaleRatio: metaWindow.scaleRatio,
+                        // A floating window's surface origin is the
+                        // authoritative pointer basis. X11 clients can move
+                        // themselves (Zoom's panels) and the compositor can move
+                        // them; deriving the basis from the lagging render box
+                        // feeds that lag back into the client's drag. Wayland
+                        // clients subtract their CSD geometry margin so the
+                        // basis is the surface buffer, not the window box.
+                        globalOffsetOverride: metaWindow.floatingSurfaceOrigin,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

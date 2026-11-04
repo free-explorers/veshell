@@ -21,6 +21,7 @@ import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/matching_decision_recorder.dart';
 import 'package:shell/window/provider/window_manager/matching_engine.dart';
 import 'package:shell/window/provider/window_manager/matching_utils.dart';
+import 'package:shell/window/provider/window_manager/title_reassociation.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/window/provider/window_provider.mixin.dart';
 
@@ -395,6 +396,7 @@ class MetaWindowManager extends _$MetaWindowManager {
     }
     _mappedSubscriptions.remove(id)?.close();
     _mappedAt.remove(id);
+    ref.read(titleReassociationProvider.notifier).forget(id);
     state = state.remove(id);
 
     // During this removal, MetaWindowState.create may still be awaiting in

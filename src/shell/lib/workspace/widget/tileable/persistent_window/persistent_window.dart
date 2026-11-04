@@ -9,6 +9,7 @@ import 'package:shell/capture/provider/recording_workspaces.dart';
 import 'package:shell/capture/provider/screen_cast_indicator.dart';
 import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/widget/tile_popup_host.dart';
 import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/tile_grab/widget/tile_grab_region.dart';
@@ -205,8 +206,18 @@ class PersistentWindowTileable extends Tileable {
   Widget buildPanelWidget(BuildContext context, WidgetRef ref) {
     final window = ref.watch(persistentWindowStateProvider(windowId));
     final isRunning = window.metaWindowId != null;
-    final title = window.properties.title;
     final metaWindowId = window.metaWindowId;
+    // The tab shows the live window title. `properties.title` is the tile's
+    // durable identity and deliberately keeps a specific title while the
+    // window still reports its generic startup title.
+    final liveTitle = metaWindowId == null
+        ? null
+        : ref.watch(
+            metaWindowStateProvider(metaWindowId).select((w) => w.title),
+          );
+    final title = (liveTitle == null || liveTitle.trim().isEmpty)
+        ? window.properties.title
+        : liveTitle;
     final recordingSessions = metaWindowId == null
         ? const <String>{}
         : ref.watch(recordingSessionsForMetaWindowProvider(metaWindowId));

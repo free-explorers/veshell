@@ -106,11 +106,13 @@ int titleMatchingCost(String? storedTitle, String? windowTitle) {
   // A generic startup title — `Code - OSS` against
   // `opencode - veshell - Code - OSS` — is contained in the specific title and
   // would otherwise score a perfect match on longest-common-substring alone.
-  // It carries no instance identity, so it must stay weak in both directions:
-  // it neither lets a half-restored window steal a specific sibling's tile nor
-  // lets an empty app-name placeholder outrank a specific match.
-  if (isGenericTitle(windowTitle, storedTitle) ||
-      isGenericTitle(storedTitle, windowTitle)) {
+  // It carries no instance identity, so a half-restored window must not steal
+  // a specific sibling's tile with it. The opposite direction (a stored
+  // application name, such as a fresh tile's desktop-entry name, against a
+  // specific window title) keeps the graded near match: it is the tile the
+  // user launched, and penalizing it would hand its windows to siblings that
+  // merely share the application suffix.
+  if (isGenericTitle(windowTitle, storedTitle)) {
     return _titleMismatchCost;
   }
   final overlap = _longestCommonSubstringLength(stored, window);
@@ -156,19 +158,17 @@ bool isGenericTitle(String? title, String? against) {
 /// have loaded the window titles change and we might be able to make better associations.
 const MAX_WINDOW_REASSOCIATION_TIME_MS = 3000;
 
-/// How long after a native window is first owned its title may still move it to
-/// a better same-app tile.
+/// How long after a launch burst settles a window it dispatched may still move
+/// to a better tile of the same burst when its generic title becomes specific.
 ///
-/// Restored sessions (VS Code, browsers, editors) map every window with the
-/// generic application name and only report the document/workspace title once
-/// the renderer has restored it — several seconds later. The launch burst
-/// cannot stay open that long without hiding the extra windows, so the initial
-/// spread is provisional. A title change within this window re-runs the
-/// by-title comparison against the tiles' stored identities, which generic
-/// titles never overwrite. This is longer than
-/// [MAX_WINDOW_REASSOCIATION_TIME_MS]: it covers a slow renderer restore rather
-/// than a relation that arrives slightly after mapping.
-const MAX_TITLE_REASSOCIATION_TIME_MS = 10000;
+/// Restored sessions (VS Code) map every window with the generic application
+/// name and only report the workspace title once the renderer has restored it,
+/// after the burst has settled; that title change lands within 3 s. The launch
+/// burst cannot stay open that long without hiding the extra windows, so the
+/// initial spread is provisional. Only windows whose title was still generic
+/// at the settle are eligible, only among the burst's own tiles, and any user
+/// input to the window ends it (see `TitleReassociation`).
+const MAX_TITLE_REASSOCIATION_TIME_MS = 3000;
 
 /// Upper bound on how long a launch burst keeps gathering while the only
 /// windows it has produced are fixed-size (a splash or updater).

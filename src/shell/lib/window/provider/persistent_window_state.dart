@@ -368,9 +368,12 @@ class PersistentWindowState extends _$PersistentWindowState
       return;
     }
     // Keep the appId defined by the desktop entry: the displayed native window
-    // may belong to a helper process with a different or unknown app id. A
-    // generic startup title is not durable either: keep the specific stored
-    // title until the renderer restores the document/workspace one.
+    // may belong to a helper process with a different or unknown app id. The
+    // stored title is the durable identity persisted across shell restarts: a
+    // generic startup title (the application name before the renderer
+    // restored the workspace) never replaces a specific one, so a restart in
+    // the middle of a restore still finds the right tile. The tab renders the
+    // live window title instead.
     state = state.copyWith(
       properties: state.properties.copyWith(
         title: isGenericTitle(metaWindow.title, state.properties.title)

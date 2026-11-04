@@ -25,6 +25,7 @@ import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/matching_decision_recorder.dart';
+import 'package:shell/window/provider/window_manager/title_reassociation.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:uuid/uuid.dart';
 
@@ -177,6 +178,9 @@ class WindowManager extends _$WindowManager {
     // create a new window
     final windowId = DialogWindowId(_uuidGenerator.v4());
     final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+    // A dialog is no longer a tile's own window: a late title must not try to
+    // move it between tiles.
+    ref.read(titleReassociationProvider.notifier).cancel(metaWindowId);
 
     _log.info('Creating new DialogWindow $windowId for MetaWindow $metaWindow');
 

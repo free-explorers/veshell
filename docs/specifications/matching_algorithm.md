@@ -80,7 +80,7 @@ None of these signals is authoritative on its own, and every one may be absent, 
   - Notes: can be hollow or a helper identity (`electron`, runtime names) and can change after the window is mapped. Normalised to a desktop-entry id when possible (Flatpak/Snap, desktop database, binary name, case-insensitive `StartupWMClass`). Primary application-level identity.
 - **Window title (`title`)** — usually available, but often only after the first commit; high reliability when specific, none when generic.
   - Source: `xdg_toplevel.title`; X11 title.
-  - Notes: frequently the only signal that distinguishes several tiles of the same application (see [parallel windows](#parallel-windows)). Generic during startup (`Code - OSS`), then becomes specific; can change repeatedly. The cost is graded by the longest common substring relative to the shorter title, so a title that only changed in its volatile parts (an unread count, a collapsed page title) still counts as a near match, while a short or generic title stays a weak signal. A title that covers less than half of the stored title and is contained in it is the application name, not an instance identity: it never replaces a tile's durable stored title and cannot outrank a sibling's specific match. A restored session can keep reporting the generic title for several seconds while its renderer restores the document/workspace (see [Settle](#flow)); when the specific title finally arrives, the window is re-associated within `MAX_TITLE_REASSOCIATION_TIME_MS`.
+  - Notes: frequently the only signal that distinguishes several tiles of the same application (see [parallel windows](#parallel-windows)). Generic during startup (`Code - OSS`), then becomes specific; can change repeatedly. The cost is graded by the longest common substring relative to the shorter title, so a title that only changed in its volatile parts (an unread count, a collapsed page title) still counts as a near match, while a short or generic title stays a weak signal. A window title that covers less than half of the stored title and is contained in it is the application name, not an instance identity: it never replaces a tile's stored matching title and cannot outrank a sibling's specific match. The reverse is not penalized: a tile that only stores its desktop-entry name keeps the graded near match against a specific window title, so a fresh tile does not lose its windows to siblings sharing the application suffix. The tile's displayed title always follows the live window. A restored session can keep reporting the generic title for a few seconds while its renderer restores the workspace (see [Settle](#flow)); when the specific title arrives, the window may be re-associated within its launch burst.
 - **Process ID (`pid`)** — always available; weak as an identity, strong as a join key.
   - Source: Wayland client credentials; X11.
   - Notes: multi-process applications report helper pids and the launched pid usually differs from the window pid. Mainly used to join the process-based signals below.
@@ -234,16 +234,30 @@ All of these are observed on the live surfaces and, where meaningful, mirrored o
 
    A restored session can keep the generic application title for longer than
    the debounce: VS Code maps every restored window as `Code - OSS` and only
-   reports the workspace/document title once its renderer has restored it,
-   several seconds later. The burst still settles and spreads windows so they
-   are all visible, but ownership stays provisional for
-   `MAX_TITLE_REASSOCIATION_TIME_MS` after a window is first owned. A title
-   change in that window re-runs the by-title comparison against the tiles'
-   stored identities and moves the window to a strictly better sibling; the
-   destination redistributes whatever it was displaying. Generic startup
-   titles are never adopted over a stored specific title, so the discriminator
-   is still available when the real title arrives, and after the window
-   expires a renamed document no longer moves the window between tiles.
+   reports the workspace title once its renderer has restored it, a few
+   seconds later (within 3 s of the settle). The burst
+   still settles and spreads windows so they are all visible, but the
+   ownership of a window that cannot be told apart yet stays provisional,
+   under strict conditions:
+   - only windows whose title at the settle is empty or generic relative to
+     another burst tile's stored title (so a fresh tile storing the
+     application name still qualifies), only among the tiles the burst
+     settled across, and only while the window is still displayed directly by
+     one of them (never once it became a dialog or was moved elsewhere);
+   - only after the gather has finished, and for at most
+     `MAX_TITLE_REASSOCIATION_TIME_MS` after the settle;
+   - never once the user has clicked, tapped or typed into the window or a
+     dialog of its tile, including before the settle.
+
+   Under those conditions every title change re-runs the comparison, and the
+   window moves to a strictly better burst tile; the destination redistributes
+   whatever it was displaying. A comparison that does not move the window
+   keeps it pending, since the first specific title can be transient. Generic
+   startup titles are never adopted into a tile's matching title, so the
+   discriminator is still available when the real title arrives. A window
+   whose title was already specific at the settle (a terminal changing
+   directory, a browser navigating, a renamed document) never moves between
+   tiles on a title change.
 3. **Redistribute by identity, displayed window included.** For each owned
    window, a sibling whose match cost is strictly lower (principally a stored
    title match; provenance/process-sibling recovery also counts) wins it,

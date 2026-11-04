@@ -125,8 +125,13 @@ void main() {
       // The shorter title is fully contained in the stored specific title, but
       // it carries no instance identity: it must stay a weak signal.
       expect(titleMatchingCost(specific, 'Code - OSS'), 50);
-      expect(titleMatchingCost('Code - OSS', specific), 50);
       expect(isGenericTitle('Code - OSS', specific), isTrue);
+    });
+
+    test('a stored application name keeps the near match', () {
+      // A fresh tile stores its desktop-entry name: it must not lose the
+      // window it launched to a sibling sharing only the app suffix.
+      expect(titleMatchingCost('Code - OSS', specific), 1);
       // The helper is directional: a specific title is not generic relative to
       // the shorter application name.
       expect(isGenericTitle(specific, 'Code - OSS'), isFalse);
