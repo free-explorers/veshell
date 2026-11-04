@@ -25,10 +25,13 @@ relays what the user types.
 - logind's `Lock` signal on this session (`loginctl lock-session`, other
   tools).
 - logind's `PrepareForSleep(true)`: the compositor holds a `sleep` delay
-  inhibitor, locks, and releases the inhibitor once the shell reports the lock
-  screen drawn (`lock_screen_shown`), so the machine never resumes on an open
-  desktop. logind proceeds anyway after `InhibitDelayMaxSec`. The inhibitor is
-  taken again on resume.
+  inhibitor and locks. The inhibitor is released once the shell reports the
+  lock screen drawn (`lock_screen_shown`), and in any case after the draw
+  grace, so a blanked panel, a slow frame or a restarting shell cannot spend
+  logind's whole `InhibitDelayMaxSec`. The compositor owns the lock either way,
+  so the machine never resumes on an open desktop. PAM does not start on the
+  way in: the readers stay idle across suspend and authenticate after the
+  resume. The inhibitor is taken again on resume.
 
 The session is the one named by `XDG_SESSION_ID` (imported into the user
 manager by `veshell-session`), or else the user's logind display session. The
@@ -74,6 +77,12 @@ session management are left alone, like other lock screens.
 - PAM text and error messages are shown as they come. An empty `failed`
   message means the credentials were rejected; the shell shows its own
   localized text.
+- Authentication starts after a resume, not on the sleep-triggered lock: the
+  transaction would be frozen with the machine, and opening the readers as it
+  suspends can wake it straight back up (readers are often wakeup devices).
+- A lock that finds no usable reader (no device, no enrolled finger) remembers
+  it for the session, so a machine without one does not D-Bus activate fprintd
+  on every lock.
 
 ## Platform channel
 

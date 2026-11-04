@@ -27,6 +27,8 @@ pub enum LockDbusEvent {
     Unlock,
     /// The system is about to suspend: lock now, then release the inhibitor.
     PrepareForSleep,
+    /// The system resumed from suspend: authentication may start.
+    Resumed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -109,11 +111,12 @@ async fn run(
             Item::Unlock => Some(LockDbusEvent::Unlock),
             Item::PrepareForSleep(true) => Some(LockDbusEvent::PrepareForSleep),
             Item::PrepareForSleep(false) => {
-                // Resumed: arm the next suspend.
+                // Resumed: arm the next suspend and let the compositor start
+                // the PAM stacks it skipped on the way in.
                 if inhibitor.is_none() {
                     inhibitor = take_sleep_inhibitor(&manager).await;
                 }
-                None
+                Some(LockDbusEvent::Resumed)
             }
             Item::Command(LockDbusCommand::SetLockedHint(locked)) => {
                 if let Some(session) = &session {
