@@ -30,26 +30,60 @@ use crate::wayland::wayland::get_surface_id;
 
 /// Bounding box of a set of output geometries, in global logical coordinates.
 ///
-/// The pointer is confined to this box. It is derived from the actual output
-/// geometry instead of assuming a layout anchored at `(0, 0)` in a single
-/// horizontal row, so arbitrary arrangements (vertical stacks, gaps, negative
-/// origins) keep every monitor reachable.
+/// Absolute pointer devices map onto this box (the result is then confined to
+/// the outputs themselves, see [`confine_to_outputs`]). It is derived from the
+/// actual output geometry instead of assuming a layout anchored at `(0, 0)` in
+/// a single horizontal row, so arbitrary arrangements (vertical stacks, gaps,
+/// negative origins) keep every monitor reachable.
 fn output_bounds_from(
     geometries: impl Iterator<Item = Rectangle<i32, Logical>>,
 ) -> Option<Rectangle<i32, Logical>> {
     geometries.reduce(|bounds, geometry| bounds.merge(geometry))
 }
 
-/// Confines `pos` to `bounds`.
-fn clamp_to_bounds(
-    pos: Point<f64, Logical>,
-    bounds: Rectangle<i32, Logical>,
-) -> Point<f64, Logical> {
-    let min_x = bounds.loc.x as f64;
-    let min_y = bounds.loc.y as f64;
-    let max_x = (bounds.loc.x + bounds.size.w) as f64;
-    let max_y = (bounds.loc.y + bounds.size.h) as f64;
+/// Closest point to `pos` that lies inside `geometry`.
+///
+/// Output geometries are half-open (`Rectangle::contains`, and therefore
+/// `Space::output_under`, exclude the far edge), so the far edge is clamped
+/// to the largest `f64` strictly below it: clamping onto `loc + size` would
+/// leave the pointer on no output at all.
+fn clamp_into(pos: Point<f64, Logical>, geometry: Rectangle<i32, Logical>) -> Point<f64, Logical> {
+    let min_x = geometry.loc.x as f64;
+    let min_y = geometry.loc.y as f64;
+    let max_x = ((geometry.loc.x + geometry.size.w) as f64)
+        .next_down()
+        .max(min_x);
+    let max_y = ((geometry.loc.y + geometry.size.h) as f64)
+        .next_down()
+        .max(min_y);
     (pos.x.clamp(min_x, max_x), pos.y.clamp(min_y, max_y)).into()
+}
+
+/// Confines `pos` to the union of `geometries`.
+///
+/// A position already on an output is kept as is; otherwise it is moved to
+/// the nearest point of the nearest output. Confining to the outputs
+/// themselves rather than to their bounding box keeps the pointer out of the
+/// holes of mixed-size layouts, where it would sit on no output and the
+/// compositor would lose track of the focused monitor. Returns `pos`
+/// unchanged when there is no output.
+fn confine_to_outputs(
+    pos: Point<f64, Logical>,
+    geometries: impl IntoIterator<Item = Rectangle<i32, Logical>>,
+) -> Point<f64, Logical> {
+    let mut nearest: Option<(f64, Point<f64, Logical>)> = None;
+    for geometry in geometries {
+        if geometry.to_f64().contains(pos) {
+            return pos;
+        }
+        let candidate = clamp_into(pos, geometry);
+        let (dx, dy) = (candidate.x - pos.x, candidate.y - pos.y);
+        let distance = dx * dx + dy * dy;
+        if nearest.is_none_or(|(best, _)| distance < best) {
+            nearest = Some((distance, candidate));
+        }
+    }
+    nearest.map_or(pos, |(_, point)| point)
 }
 
 /// Wheel detents covered by one axis of an [`AxisFrame`].
@@ -780,10 +814,7 @@ impl<BackendData: Backend> State<BackendData> {
 
     /// Bounding box of every mapped output, in global logical coordinates.
     ///
-    /// The pointer is confined to this box. It is derived from the actual
-    /// output geometry instead of assuming a layout anchored at `(0, 0)` in a
-    /// single horizontal row, so arbitrary arrangements (vertical stacks,
-    /// gaps, negative origins) keep every monitor reachable.
+    /// Absolute pointer devices map onto this box; see [`output_bounds_from`].
     fn output_bounds(&self) -> Option<Rectangle<i32, Logical>> {
         output_bounds_from(
             self.space
@@ -799,11 +830,15 @@ impl<BackendData: Backend> State<BackendData> {
         // While a game owns the pointer it stays on the game's output: letting
         // it cross to another monitor would re-show the cursor there and hand
         // the other desktop a stray pointer.
-        let bounds = self.gaming_output_bounds().or_else(|| self.output_bounds());
-        match bounds {
-            Some(bounds) => clamp_to_bounds(pos, bounds),
-            None => pos,
+        if let Some(bounds) = self.gaming_output_bounds() {
+            return confine_to_outputs(pos, [bounds]);
         }
+        confine_to_outputs(
+            pos,
+            self.space
+                .outputs()
+                .filter_map(|output| self.space.output_geometry(output)),
+        )
     }
 
     /// Geometry of the output the active game owns, if any.
@@ -883,9 +918,16 @@ impl<BackendData: Backend> State<BackendData> {
     /// pointer onto a monitor focuses it even when no Flutter widget focus
     /// transition happens, so trusted prompts and window placement follow the
     /// pointer. The engine is only notified when the view actually changes.
+    ///
+    /// A pointer over no output (outputs not mapped yet, or a stale position
+    /// right after an output went away) keeps the current focus: unfocusing
+    /// every view would make Flutter park focus on its root scope, leaving no
+    /// widget to receive keystrokes or the shell's hotkeys.
     pub(crate) fn focus_view_under_pointer(&mut self) {
-        let view_id = self.view_id_under_pointer();
-        self.flutter_engine_mut().set_focused_view(view_id);
+        let Some(view_id) = self.view_id_under_pointer() else {
+            return;
+        };
+        self.flutter_engine_mut().set_focused_view(Some(view_id));
     }
 
     fn send_motion_event(&mut self, device_id: i32, view_id: i64)
@@ -1035,27 +1077,92 @@ mod tests {
         assert_eq!(output_bounds_from([].into_iter()), None);
     }
 
-    #[test]
-    fn clamp_keeps_a_vertical_stack_reachable() {
-        let bounds = rect(0, 0, 1920, 2160);
-
-        assert_eq!(
-            clamp_to_bounds((500.0, 2000.0).into(), bounds),
-            (500.0, 2000.0).into()
-        );
-        assert_eq!(
-            clamp_to_bounds((500.0, 5000.0).into(), bounds),
-            (500.0, 2160.0).into()
-        );
+    fn on_some_output(pos: Point<f64, Logical>, outputs: &[Rectangle<i32, Logical>]) -> bool {
+        outputs
+            .iter()
+            .any(|geometry| geometry.to_f64().contains(pos))
     }
 
     #[test]
-    fn clamp_respects_a_negative_origin() {
-        let bounds = rect(-1920, 0, 3840, 1080);
+    fn confine_keeps_a_vertical_stack_reachable() {
+        let outputs = [rect(0, 0, 1920, 1080), rect(0, 1080, 1920, 1080)];
 
         assert_eq!(
-            clamp_to_bounds((-5000.0, 100.0).into(), bounds),
+            confine_to_outputs((500.0, 2000.0).into(), outputs),
+            (500.0, 2000.0).into()
+        );
+        let confined = confine_to_outputs((500.0, 5000.0).into(), outputs);
+        assert_eq!(confined.x, 500.0);
+        assert!(confined.y < 2160.0 && confined.y > 2159.0);
+        assert!(on_some_output(confined, &outputs));
+    }
+
+    #[test]
+    fn confine_respects_a_negative_origin() {
+        let outputs = [rect(-1920, 0, 1920, 1080), rect(0, 0, 1920, 1080)];
+
+        assert_eq!(
+            confine_to_outputs((-5000.0, 100.0).into(), outputs),
             (-1920.0, 100.0).into()
+        );
+    }
+
+    /// Regression for #218: the right and bottom edges are exclusive, so the
+    /// pointer pushed against them must stay on the output instead of landing
+    /// on `loc + size`, which is on no output.
+    #[test]
+    fn confine_keeps_right_and_bottom_edges_on_the_output() {
+        let outputs = [rect(0, 0, 1920, 1080)];
+
+        for pos in [
+            (5000.0, 500.0),
+            (500.0, 5000.0),
+            (5000.0, 5000.0),
+            (1920.0, 1080.0),
+        ] {
+            let confined = confine_to_outputs(pos.into(), outputs);
+            assert!(
+                on_some_output(confined, &outputs),
+                "{pos:?} -> {confined:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn confine_keeps_the_pointer_out_of_layout_holes() {
+        // A 1080p monitor next to a taller 1440p one leaves a hole below the
+        // smaller monitor inside the bounding box.
+        let outputs = [rect(0, 0, 1920, 1080), rect(1920, 0, 2560, 1440)];
+
+        let confined = confine_to_outputs((500.0, 1300.0).into(), outputs);
+        assert_eq!(confined.x, 500.0);
+        assert!(confined.y < 1080.0 && confined.y > 1079.0);
+
+        // Closer to the tall monitor than to the bottom of the small one.
+        let confined = confine_to_outputs((1900.0, 1400.0).into(), outputs);
+        assert_eq!(confined, (1920.0, 1400.0).into());
+    }
+
+    #[test]
+    fn confine_leaves_positions_on_an_output_alone() {
+        let outputs = [rect(0, 0, 1920, 1080), rect(1920, 0, 2560, 1440)];
+
+        for pos in [
+            (0.0, 0.0),
+            (1919.5, 1079.5),
+            (1920.0, 0.0),
+            (4000.0, 1300.0),
+        ] {
+            assert_eq!(confine_to_outputs(pos.into(), outputs), pos.into());
+        }
+    }
+
+    #[test]
+    fn confine_without_outputs_is_a_no_op() {
+        let outputs: [Rectangle<i32, Logical>; 0] = [];
+        assert_eq!(
+            confine_to_outputs((123.0, 456.0).into(), outputs),
+            (123.0, 456.0).into()
         );
     }
 
