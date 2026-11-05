@@ -21,6 +21,7 @@ import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/matching_decision_recorder.dart';
 import 'package:shell/window/provider/window_manager/matching_engine.dart';
 import 'package:shell/window/provider/window_manager/matching_utils.dart';
+import 'package:shell/window/provider/window_manager/title_reassociation.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/window/provider/window_provider.mixin.dart';
 
@@ -325,11 +326,11 @@ class MetaWindowManager extends _$MetaWindowManager {
     }
 
     final currentOwner = ref.read(metaWindowWindowMapProvider).get(id);
-    if (currentOwner == null || currentOwner is DialogWindowId) {
+    if (currentOwner == null) {
       return;
     }
     final rootOwner = engine.rootTileFor(owner);
-    if (rootOwner == currentOwner) {
+    if (engine.rootTileFor(currentOwner) == rootOwner) {
       return;
     }
     recordMatchingDecision(
@@ -345,6 +346,17 @@ class MetaWindowManager extends _$MetaWindowManager {
             : 'activation',
       ),
     );
+    // The window may already be a dialog of the tile the matcher guessed: an
+    // out-of-process dialog (Electron's GTK About box) is created before its
+    // xdg-foreign parent relation arrives. Re-parent it instead of leaving it
+    // on the wrong tile. `detachForReroute` below only applies to a tile that
+    // displays the window directly.
+    if (currentOwner is DialogWindowId) {
+      ref
+          .read(dialogWindowStateProvider(currentOwner).notifier)
+          .reparent(rootOwner);
+      return;
+    }
     // The tile that briefly matched the window only existed to show it: detach
     // the window and dispose the tile when the matcher created it, so the
     // reroute does not leave a stray empty placeholder. The dialog created just
@@ -384,6 +396,7 @@ class MetaWindowManager extends _$MetaWindowManager {
     }
     _mappedSubscriptions.remove(id)?.close();
     _mappedAt.remove(id);
+    ref.read(titleReassociationProvider.notifier).forget(id);
     state = state.remove(id);
 
     // During this removal, MetaWindowState.create may still be awaiting in

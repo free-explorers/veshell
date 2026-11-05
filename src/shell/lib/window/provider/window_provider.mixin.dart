@@ -20,6 +20,7 @@ import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/matching_decision_recorder.dart';
 import 'package:shell/window/provider/window_manager/matching_engine.dart';
 import 'package:shell/window/provider/window_manager/matching_utils.dart';
+import 'package:shell/window/provider/window_manager/title_reassociation.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
 
 /// Shared behavior of the shell's window containers (persistent, dialog,
@@ -356,10 +357,15 @@ mixin WindowProviderMixin<T extends Window> {
   /// The tile's own desktop-entry `appId` and the gather `waitingForAppSince`
   /// are preserved: a tile keeps its application identity and, while it is
   /// empty, the identity of the last window it displayed (so a relaunch finds
-  /// it again).
+  /// it again). A generic startup title (the application name before the
+  /// renderer restored the document) is never adopted over a specific stored
+  /// title: it carries no durable identity and would erase the discriminator
+  /// the late title re-association needs.
   void _syncMatchingInfo(MetaWindow metaWindow) {
     _matchingInfo = _matchingInfo.copyWith(
-      title: metaWindow.title,
+      title: isGenericTitle(metaWindow.title, _matchingInfo.title)
+          ? _matchingInfo.title
+          : metaWindow.title,
       windowClass: metaWindow.windowClass,
       startupId: metaWindow.startupId,
       pid: metaWindow.pid,
@@ -383,7 +389,9 @@ mixin WindowProviderMixin<T extends Window> {
     // gathering forever; the reopen branch below re-arms it when needed.
     _launchOrigin = false;
     _launchGatherStartedAt = null;
+    final burstWindows = _metaWindowSubscriptions.keys.toList();
     _redistributeOwnedMetaWindows();
+    _registerBurstForTitleReassociation(burstWindows);
     recordMatchingDecision(
       ref,
       () => MatchingDecision.burst(
@@ -419,6 +427,53 @@ mixin WindowProviderMixin<T extends Window> {
     }
     _everOwnedWindow = false;
     _everOwnedResizableWindow = false;
+  }
+
+  /// Records where the settled burst spread its windows, so a window whose
+  /// title is still generic may move among these tiles once its specific title
+  /// arrives (see [TitleReassociation]).
+  ///
+  /// Only windows that cannot be told apart yet are registered: an empty
+  /// title, or one that is generic relative to another burst tile's stored
+  /// title (`Code - OSS` against `opencode - veshell - Code - OSS`). The check
+  /// is against the *other* tiles, so a window on a fresh tile that stores the
+  /// same application name still qualifies. A window that already has a
+  /// specific title, or that became a dialog, is left out.
+  void _registerBurstForTitleReassociation(List<MetaWindowId> burstWindows) {
+    final windowMap = ref.read(metaWindowWindowMapProvider);
+    final engine = ref.read(matchingEngineProvider.notifier);
+    final placed = <MetaWindowId, WindowId>{};
+    final tiles = <WindowId>{state.windowId};
+    for (final metaWindowId in burstWindows) {
+      final owner = windowMap.get(metaWindowId);
+      if (owner == null || owner is DialogWindowId) {
+        continue;
+      }
+      placed[metaWindowId] = owner;
+      tiles.add(owner);
+    }
+    if (tiles.length < 2) {
+      return;
+    }
+    final storedTitles = {
+      for (final tile in tiles) tile: engine.matchingInfoFor(tile).title,
+    };
+    final undecided = placed.entries
+        .where((entry) {
+          final title = ref.read(metaWindowStateProvider(entry.key)).title;
+          if (title == null || title.trim().isEmpty) {
+            return true;
+          }
+          return storedTitles.entries.any(
+            (stored) =>
+                stored.key != entry.value &&
+                isGenericTitle(title, stored.value),
+          );
+        })
+        .map((entry) => entry.key);
+    ref
+        .read(titleReassociationProvider.notifier)
+        .registerBurst(undecided, tiles);
   }
 
   /// Redistributes the native windows this tile owns so each lands on its best
@@ -521,6 +576,23 @@ mixin WindowProviderMixin<T extends Window> {
     }
   }
 
+  /// Moves one of this tile's native windows to [destination].
+  ///
+  /// Public entry point for the matcher's late title re-association: like the
+  /// settle redistribution, the window is detached silently (the destination
+  /// takes ownership immediately) so the move is never routed back here.
+  void moveMetaWindowTo(
+    MetaWindowId metaWindowId,
+    WindowId destination, {
+    required String reason,
+    MatchingCost? cost,
+  }) {
+    _moveMetaWindow(metaWindowId, destination, reason: reason, cost: cost);
+    // Unlike the redistribution, nothing re-runs the display selection here:
+    // without it this tile would keep rendering the window it just gave away.
+    _onMetaWindowsChanges();
+  }
+
   void _moveMetaWindow(
     MetaWindowId metaWindowId,
     WindowId destination, {
@@ -615,6 +687,16 @@ mixin WindowProviderMixin<T extends Window> {
     _metaWindowSubscriptions[surfaceId] = ref.listen(
       metaWindowStateProvider(surfaceId),
       (previous, next) {
+        // A restored window reports the application name first and its
+        // workspace title seconds later. Re-decide ownership on that title
+        // change before the tile adopts anything, while the specific stored
+        // identities are still available.
+        if (previous != null &&
+            previous.title != next.title &&
+            surfaceId == _displayedMetaWindowId &&
+            !_launchOrigin) {
+          _maybeReassociateAfterTitleChange(surfaceId);
+        }
         if (previous == null ||
             previous.appId != next.appId ||
             previous.title != next.title ||
@@ -626,11 +708,46 @@ mixin WindowProviderMixin<T extends Window> {
             previous.activatedBy != next.activatedBy) {
           _onMetaWindowsChanges();
         }
-        if (surfaceId == _displayedMetaWindowId) {
+        // The re-association above may have moved this window to a sibling.
+        if (surfaceId == _displayedMetaWindowId &&
+            ref.read(metaWindowWindowMapProvider).get(surfaceId) ==
+                state.windowId) {
           onMetaWindowDisplayedPropertiesChanged(next);
         }
       },
     );
+  }
+
+  /// Re-runs the by-title ownership decision for a displayed burst window
+  /// whose title changed while its ownership is still provisional.
+  ///
+  /// The launch burst may have spread the window before its renderer restored
+  /// the specific title (VS Code opens every restored window as `Code - OSS`
+  /// first). Only windows registered with a generic title at the settle are
+  /// pending (see [_registerBurstForTitleReassociation]); a window whose title
+  /// was already specific, or that the user worked in, never moves.
+  ///
+  /// The entry survives a comparison that does not move the window: the first
+  /// specific title can be transient (`zsh - veshell - Code - OSS` before
+  /// `opencode - veshell - Code - OSS`), so later titles keep their chance
+  /// until the window expires.
+  void _maybeReassociateAfterTitleChange(MetaWindowId metaWindowId) {
+    final pending = ref.read(titleReassociationProvider.notifier);
+    final burstTiles = pending.pendingTilesFor(metaWindowId);
+    if (burstTiles == null) {
+      return;
+    }
+    final title = ref.read(metaWindowStateProvider(metaWindowId)).title;
+    if (title == null || isGenericTitle(title, _matchingInfo.title)) {
+      // Still the application name: nothing to discriminate on yet.
+      return;
+    }
+    final moved = ref
+        .read(matchingEngineProvider.notifier)
+        .reassociateMetaWindow(metaWindowId, burstTiles: burstTiles);
+    if (moved) {
+      pending.cancel(metaWindowId);
+    }
   }
 
   /// Launches the desktop entry this tile stands for, attributing anything

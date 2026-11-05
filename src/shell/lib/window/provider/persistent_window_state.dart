@@ -21,6 +21,7 @@ import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/resume_context_capture.dart';
+import 'package:shell/window/provider/window_manager/matching_utils.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/window/provider/window_provider.mixin.dart';
 import 'package:shell/workspace/provider/window_workspace_map.dart';
@@ -367,10 +368,17 @@ class PersistentWindowState extends _$PersistentWindowState
       return;
     }
     // Keep the appId defined by the desktop entry: the displayed native window
-    // may belong to a helper process with a different or unknown app id.
+    // may belong to a helper process with a different or unknown app id. The
+    // stored title is the durable identity persisted across shell restarts: a
+    // generic startup title (the application name before the renderer
+    // restored the workspace) never replaces a specific one, so a restart in
+    // the middle of a restore still finds the right tile. The tab renders the
+    // live window title instead.
     state = state.copyWith(
       properties: state.properties.copyWith(
-        title: metaWindow.title,
+        title: isGenericTitle(metaWindow.title, state.properties.title)
+            ? state.properties.title
+            : metaWindow.title,
         windowClass: metaWindow.windowClass,
         startupId: metaWindow.startupId,
         pid: metaWindow.pid,

@@ -34,8 +34,17 @@ final _clientOwnedKeys = <LogicalKeyboardKey>{
 /// because the overview binds some of them locally rather than through the
 /// hotkey settings.
 class SurfaceFocus extends HookConsumerWidget {
-  const SurfaceFocus({required this.child, this.focusNode, super.key});
+  const SurfaceFocus({
+    required this.child,
+    this.focusNode,
+    this.onClientKey,
+    super.key,
+  });
   final FocusNode? focusNode;
+
+  /// Called for every key press left to the client (not a shell chord), i.e.
+  /// when the user types into the window.
+  final VoidCallback? onClientKey;
 
   final Widget child;
 
@@ -68,6 +77,7 @@ class SurfaceFocus extends HookConsumerWidget {
         // Plain keys that a client always expects, even when configured as a
         // shell action (`navigation.activate` is Enter by default).
         if (!hasModifier && _clientOwnedKeys.contains(event.logicalKey)) {
+          onClientKey?.call();
           return KeyEventResult.skipRemainingHandlers;
         }
 
@@ -76,9 +86,11 @@ class SurfaceFocus extends HookConsumerWidget {
             shellShortcuts.keys.any(
               (activator) => activator.accepts(event, keyboard),
             );
-        return isShellChord
-            ? KeyEventResult.ignored
-            : KeyEventResult.skipRemainingHandlers;
+        if (isShellChord) {
+          return KeyEventResult.ignored;
+        }
+        onClientKey?.call();
+        return KeyEventResult.skipRemainingHandlers;
       },
       child: child,
     );

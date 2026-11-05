@@ -320,9 +320,12 @@ class MatchingEngine extends _$MatchingEngine {
   /// `includeWaiting: false`): it is a dispatch-time signal, and a sibling that
   /// is merely still gathering must not outrank the tile that has just settled
   /// — that would make the window bounce from one settling tile to the next.
+  ///
+  /// [onlyAmong], when given, restricts the candidates to those tiles.
   (WindowId?, MatchingCost?) findBestOrdinarySiblingFor(
     MetaWindowId metaWindowId, {
     List<WindowId> excludedWindowIds = const [],
+    ISet<WindowId>? onlyAmong,
   }) {
     final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
     final metaWindowMatchInfo = MatchingInfo.fromMetaWindow(metaWindow);
@@ -330,6 +333,7 @@ class MatchingEngine extends _$MatchingEngine {
       windowId,
     ) {
       if (excludedWindowIds.contains(windowId)) return false;
+      if (onlyAmong != null && !onlyAmong.contains(windowId)) return false;
       if (windowId is DialogWindowId) return false;
       return _sameApplication(
         _getWindowState(windowId).properties.appId,
@@ -346,6 +350,88 @@ class MatchingEngine extends _$MatchingEngine {
     );
     final bestIndex = _bestMatchingIndex(candidates, costs);
     return (candidates[bestIndex], costs[bestIndex]);
+  }
+
+  /// Re-decides [metaWindowId]'s tile after its generic title became specific.
+  ///
+  /// Restored sessions map every window with the generic application title
+  /// (`Code - OSS`) and only report the workspace title once the renderer has
+  /// restored it, seconds later. The launch burst has already spread the
+  /// windows by then, so this compares the now-specific title against the
+  /// stored identities of the other [burstTiles] — the tiles the same burst
+  /// settled across, never unrelated tiles of the application — and moves the
+  /// window to a strictly better one. Generic titles never overwrite a tile's
+  /// stored matching title, so the discriminator is still there. The
+  /// destination's own settle redistributes whatever it was displaying.
+  ///
+  /// The caller gates this (see `TitleReassociation`): only within
+  /// [MAX_TITLE_REASSOCIATION_TIME_MS] of the burst settle, only for a window
+  /// whose title was generic at the settle, and never once the user interacted
+  /// with the window. The window must still be displayed directly by one of
+  /// the burst tiles: a window that became a dialog, or that a later
+  /// redistribution moved elsewhere, is left alone.
+  ///
+  /// Returns whether the window moved.
+  bool reassociateMetaWindow(
+    MetaWindowId metaWindowId, {
+    required ISet<WindowId> burstTiles,
+  }) {
+    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+    // The raw owner, not its root tile: a dialog's root is its parent tile,
+    // which does not own the native window and cannot move it.
+    final owner = ref.read(metaWindowWindowMapProvider).get(metaWindowId);
+    if (owner == null ||
+        owner is DialogWindowId ||
+        !burstTiles.contains(owner)) {
+      return false;
+    }
+
+    final (other, otherCost) = findBestOrdinarySiblingFor(
+      metaWindowId,
+      excludedWindowIds: [owner],
+      onlyAmong: burstTiles,
+    );
+    if (other == null || otherCost == null) {
+      return false;
+    }
+    final ownerCost = windowMatchingCost(
+      MatchingInfo.fromMetaWindow(metaWindow),
+      _getWindowMatchingInfo(owner),
+      _getWindowState(owner),
+      includeWaiting: false,
+    );
+    if (otherCost.total >= ownerCost.total) {
+      return false;
+    }
+
+    matchingLog.info(
+      'Title re-association: ${metaWindow.id} '
+      '(title="${metaWindow.title}") '
+      '$owner -> $other owner=$ownerCost sibling=$otherCost',
+    );
+    switch (owner) {
+      case PersistentWindowId():
+        ref
+            .read(persistentWindowStateProvider(owner).notifier)
+            .moveMetaWindowTo(
+              metaWindowId,
+              other,
+              reason: 'titleReassociation',
+              cost: otherCost,
+            );
+      case EphemeralWindowId():
+        ref
+            .read(ephemeralWindowStateProvider(owner).notifier)
+            .moveMetaWindowTo(
+              metaWindowId,
+              other,
+              reason: 'titleReassociation',
+              cost: otherCost,
+            );
+      case DialogWindowId():
+        return false;
+    }
+    return true;
   }
 
   /// Matching identity stored for [windowId], for telemetry only.
