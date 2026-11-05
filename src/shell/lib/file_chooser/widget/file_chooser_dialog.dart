@@ -349,7 +349,6 @@ class FileChooserDialog extends HookConsumerWidget {
                       decoration: BoxDecoration(
                         color: colorScheme.surfaceContainerLowest,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: colorScheme.outlineVariant),
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
@@ -377,6 +376,10 @@ class FileChooserDialog extends HookConsumerWidget {
                             child: TextField(
                               controller: nameController,
                               focusNode: nameFocusNode,
+                              // Desktop fields select all on focus, which
+                              // would also select the extension: keep the
+                              // base-name selection made on open instead.
+                              selectAllOnFocus: false,
                               onChanged: (value) => nameText.value = value,
                               onSubmitted: (_) => accept(),
                               decoration: _fieldDecoration(

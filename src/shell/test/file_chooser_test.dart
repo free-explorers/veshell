@@ -272,31 +272,35 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('the save dialog focuses the name with its base selected', (
-      tester,
-    ) async {
-      await pumpChooser(tester, _saveRequest());
+    testWidgets(
+      'the save dialog focuses the name with its base selected',
+      (tester) async {
+        await pumpChooser(tester, _saveRequest());
 
-      final field = tester.widget<TextField>(
-        find.widgetWithText(TextField, 'report.pdf'),
-      );
-      expect(field.focusNode!.hasFocus, isTrue);
-      expect(
-        field.controller!.selection,
-        const TextSelection(baseOffset: 0, extentOffset: 6),
-      );
+        final field = tester.widget<TextField>(
+          find.widgetWithText(TextField, 'report.pdf'),
+        );
+        expect(field.focusNode!.hasFocus, isTrue);
+        expect(
+          field.controller!.selection,
+          const TextSelection(baseOffset: 0, extentOffset: 6),
+        );
 
-      // Typing replaces the base name and keeps the extension.
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyX);
-      tester.testTextInput.updateEditingValue(
-        const TextEditingValue(
-          text: 'invoice.pdf',
-          selection: TextSelection.collapsed(offset: 7),
-        ),
-      );
-      await tester.pump();
-      expect(find.text('invoice.pdf'), findsOneWidget);
-    });
+        // Typing replaces the base name and keeps the extension.
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyX);
+        tester.testTextInput.updateEditingValue(
+          const TextEditingValue(
+            text: 'invoice.pdf',
+            selection: TextSelection.collapsed(offset: 7),
+          ),
+        );
+        await tester.pump();
+        expect(find.text('invoice.pdf'), findsOneWidget);
+      },
+      // Desktop text fields select all on focus: the extension must still be
+      // left out.
+      variant: TargetPlatformVariant.only(TargetPlatform.linux),
+    );
 
     testWidgets('the open dialog searches and opens with the keyboard', (
       tester,
