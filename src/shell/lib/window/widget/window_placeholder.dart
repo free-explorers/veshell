@@ -18,6 +18,13 @@ import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/widget/resume_context_summary.dart';
 
+/// Fraction of the tile's width and height between each side of the tile and
+/// the placeholder's centered card.
+///
+/// The window opening animation starts from this card, so it must match the
+/// card's actual rect.
+const placeholderCardInset = 0.2;
+
 class WindowPlaceholder extends HookConsumerWidget {
   const WindowPlaceholder({
     required this.isSelected,
@@ -316,10 +323,10 @@ class WindowPlaceholder extends HookConsumerWidget {
               ),
             ),
             Positioned.fill(
-              left: constraints.biggest.width * 0.2,
-              right: constraints.biggest.width * 0.2,
-              top: constraints.biggest.height * 0.2,
-              bottom: constraints.biggest.height * 0.2,
+              left: constraints.biggest.width * placeholderCardInset,
+              right: constraints.biggest.width * placeholderCardInset,
+              top: constraints.biggest.height * placeholderCardInset,
+              bottom: constraints.biggest.height * placeholderCardInset,
               child: AnimatedOpacity(
                 duration: const Duration(milliseconds: 200),
                 opacity: isFocused ? 1 : 0.8,

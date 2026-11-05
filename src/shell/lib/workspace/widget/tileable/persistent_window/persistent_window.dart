@@ -22,6 +22,7 @@ import 'package:shell/window/widget/floating_window_area.dart';
 import 'package:shell/window/widget/visible_popup_meta_windows.dart';
 import 'package:shell/window/widget/window.dart';
 import 'package:shell/window/widget/window_dialog_area.dart';
+import 'package:shell/window/widget/window_open_transition.dart';
 import 'package:shell/window/widget/window_placeholder.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/current_workspace_id.dart';
@@ -124,8 +125,14 @@ class PersistentWindowTileable extends Tileable {
       },
     );
 
+    // The placeholder's card opens onto the window behind it and expands to
+    // uncover it. Both directions share one duration so the outgoing
+    // placeholder stays painted around the opening until it covers the tile.
     final content = AnimatedSwitcher(
-      duration: const Duration(milliseconds: 200),
+      duration: windowOpenTransitionDuration,
+      transitionBuilder: (child, animation) => child is WindowWidget
+          ? WindowOpenTransition(animation: animation, child: child)
+          : PlaceholderSwapTransition(animation: animation, child: child),
       child: metaWindowId != null
           ? WindowWidget(
               metaWindowId: metaWindowId,
