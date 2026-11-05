@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/widget/logs_viewer.dart';
 import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
 import 'package:shell/meta_window/widget/tile_popup_host.dart';
+import 'package:shell/window/model/dialog_area_entry.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/ephemeral_window_state.dart';
@@ -54,6 +55,15 @@ class EphemeralWindowWidget extends HookConsumerWidget {
     );
     final chooserVisible =
         ref.watch(fileChooserForWindowProvider(windowId)) != null;
+    // While the shell's file chooser is shown it owns the keyboard; once it
+    // closes, hand the keyboard back to the window.
+    ref.listen(fileChooserForWindowProvider(windowId), (previous, next) {
+      if (previous != null && next == null) {
+        activeFocusNode.requestFocus();
+      }
+    });
+    final chooserSelected =
+        chooserVisible && selectedDialogEntry is FileChooserEntry;
     final content = metaWindowId != null
         ? WindowDialogArea(
             parentWindowId: windowId,
@@ -95,7 +105,13 @@ class EphemeralWindowWidget extends HookConsumerWidget {
     // so a click after the launch is what `Enter`/`Space` follow.
     return Listener(
       behavior: HitTestBehavior.translucent,
-      onPointerDown: (_) => activeFocusNode.requestFocus(),
+      // A click inside the shell's file chooser keeps the keyboard on the
+      // chooser: its search and name fields own it, not the window behind.
+      onPointerDown: (_) {
+        if (!chooserSelected) {
+          activeFocusNode.requestFocus();
+        }
+      },
       child: Stack(
         fit: StackFit.expand,
         children: [

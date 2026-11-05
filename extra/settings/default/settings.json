@@ -47,6 +47,13 @@
         "touchpadNaturalScrolling": true,
         "wheelScrollFactor": 1.0
     },
+    "files": {
+        "showHidden": false,
+        "sortBy": "name",
+        "sortDescending": false,
+        "foldersFirst": true,
+        "showDetails": false
+    },
     "theme": {
         "color": "0xFF006888",
         "focusIndicator": "grayscale"

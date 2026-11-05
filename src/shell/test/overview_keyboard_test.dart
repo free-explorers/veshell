@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/file_explorer/model/file_explorer_settings.dart';
+import 'package:shell/file_explorer/provider/file_explorer_settings.dart';
 import 'package:shell/file_explorer/model/directory_path.dart';
 import 'package:shell/file_explorer/model/file_entry.dart';
 import 'package:shell/file_explorer/provider/directory_listing.dart';
@@ -68,6 +70,9 @@ void main() {
     final parent = home.parent;
     final container = ProviderContainer(
       overrides: [
+        fileExplorerSettingsProvider.overrideWithValue(
+          const FileExplorerSettings(showHidden: true),
+        ),
         directoryListingProvider(home).overrideWith((ref) async => entryList),
         // Navigation up in the tests stays deterministic.
         if (parent != null)
@@ -157,6 +162,9 @@ void main() {
     final parent = home.parent;
     final container = ProviderContainer(
       overrides: [
+        fileExplorerSettingsProvider.overrideWithValue(
+          const FileExplorerSettings(showHidden: true),
+        ),
         directoryListingProvider(home).overrideWith((ref) async => entryList),
         // Navigation up in the tests stays deterministic.
         if (parent != null)
@@ -257,6 +265,9 @@ void main() {
     final child = DirectoryPath('${home.path}/child');
     final container = ProviderContainer(
       overrides: [
+        fileExplorerSettingsProvider.overrideWithValue(
+          const FileExplorerSettings(showHidden: true),
+        ),
         // The first entry (directories sort first) is a directory, so the
         // activation is observable as a directory change without a file opener.
         directoryListingProvider(home).overrideWith(

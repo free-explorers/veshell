@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/file_chooser/model/file_chooser_request/file_chooser_request.serializable.dart';
+import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/window/model/dialog_area_entry.dart';
@@ -147,6 +149,44 @@ void main() {
       local.read(selectedDialogMetaWindowForWindowProvider(_parent)),
       'meta-a',
       reason: 'the modal floats on top of the newer dialog',
+    );
+  });
+
+  test('a shown chooser wins the keyboard over a floating dialog', () {
+    final local = ProviderContainer(
+      overrides: [
+        dialogWindowStateProvider(
+          _dialogA,
+        ).overrideWith(() => _FixedDialogState(_dialog(_dialogA, 'meta-a'))),
+        metaWindowStateProvider('meta-a').overrideWith(
+          () => _FixedMetaWindowState(_metaWindow('meta-a', isModal: true)),
+        ),
+        fileChooserForWindowProvider(_parent).overrideWithValue(
+          FileChooserRequestMessage(
+            requestHandle: '/request/1',
+            consentToken: 1,
+            appName: 'app',
+            title: '',
+            mode: FileChooserMode.open,
+            multiple: false,
+            directory: false,
+            files: const [],
+            filters: const [],
+          ),
+        ),
+      ],
+    );
+    addTearDown(local.dispose);
+
+    local.read(dialogSetForWindowProvider(_parent).notifier).add(_dialogA);
+    local
+        .read(selectedDialogForWindowProvider(_parent).notifier)
+        .select(const FileChooserEntry());
+
+    expect(
+      local.read(selectedDialogMetaWindowForWindowProvider(_parent)),
+      isNull,
+      reason: 'the chooser is drawn above the modal and owns the keyboard',
     );
   });
 

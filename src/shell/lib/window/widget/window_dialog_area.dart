@@ -173,17 +173,15 @@ class WindowDialogArea extends HookConsumerWidget {
     }
     final panel = panelState.value;
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        _DialogAreaBackdrop(
-          animation: frostAnimation,
-          // The frosted backdrop is not interactive: clicks belong to the
-          // panel, not to the window behind it.
-          child: IgnorePointer(ignoring: isOpen, child: child),
-        ),
-        if (panel != null)
-          AnimatedBuilder(
+    // The chooser is modal for the window that asked for it, which is often a
+    // floating dialog (always so when the tile displays no main window): while
+    // it is selected its panel goes above the floating dialogs, which stop
+    // taking clicks, instead of opening behind its own requester.
+    final chooserOnTop = isOpen && selected is FileChooserEntry;
+
+    final panelLayer = panel == null
+        ? null
+        : AnimatedBuilder(
             animation: frostAnimation,
             builder: (context, child) {
               final progress = frostAnimation.value;
@@ -209,17 +207,32 @@ class WindowDialogArea extends HookConsumerWidget {
                 _activateEntry(ref, entry);
               },
             ),
-          ),
-        // A floating dialog stays on top of everything, exactly as it did
-        // before the dialog area existed: the tile dims and the dialog floats
-        // at its own size.
+          );
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _DialogAreaBackdrop(
+          animation: frostAnimation,
+          // The frosted backdrop is not interactive: clicks belong to the
+          // panel, not to the window behind it.
+          child: IgnorePointer(ignoring: isOpen, child: child),
+        ),
+        if (panelLayer != null && !chooserOnTop) panelLayer,
+        // A floating dialog otherwise stays on top of everything, exactly as it
+        // did before the dialog area existed: the tile dims and the dialog
+        // floats at its own size.
         if (floatingMetaWindowIds.isNotEmpty) ...[
           const Positioned.fill(child: ColoredBox(color: Colors.black38)),
-          WindowDialogs(
-            metaWindowIds: floatingMetaWindowIds,
-            maxSizeFactor: 0.9,
+          IgnorePointer(
+            ignoring: chooserOnTop,
+            child: WindowDialogs(
+              metaWindowIds: floatingMetaWindowIds,
+              maxSizeFactor: 0.9,
+            ),
           ),
         ],
+        if (panelLayer != null && chooserOnTop) panelLayer,
       ],
     );
   }

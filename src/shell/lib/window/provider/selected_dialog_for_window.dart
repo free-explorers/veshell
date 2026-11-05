@@ -1,4 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/window/model/dialog_area_entry.dart';
@@ -29,9 +30,12 @@ class SelectedDialogForWindow extends _$SelectedDialogForWindow {
 /// hands the keyboard to, or `null` when no client should be activated (no
 /// dialog, or the chooser is selected).
 ///
+/// A selected chooser is drawn above every dialog, floating ones included, so
+/// it always wins: no client is activated while it is shown.
+///
 /// A floating dialog — one the client declares a dialog, see
-/// `isFloatingDialog` — floats over the tile and sits above everything, so it
-/// keeps the keyboard even when a tabbed-area dialog is the one selected; the
+/// `isFloatingDialog` — floats over the tile and sits above everything else, so
+/// it keeps the keyboard even when a tabbed-area dialog is the one selected; the
 /// newest such dialog wins, being on top of the others. Otherwise the selected
 /// tab's dialog is activated, defaulting to the newest dialog, which is what the
 /// old floating stack always raised.
@@ -42,12 +46,17 @@ MetaWindowId? selectedDialogMetaWindowForWindow(Ref ref, WindowId parentId) {
     return null;
   }
 
+  final stored = ref.watch(selectedDialogForWindowProvider(parentId));
+  if (stored is FileChooserEntry &&
+      ref.watch(fileChooserForWindowProvider(parentId)) != null) {
+    return null;
+  }
+
   final floating = _newestFloatingMetaWindowId(ref, dialogIds);
   if (floating != null) {
     return floating;
   }
 
-  final stored = ref.watch(selectedDialogForWindowProvider(parentId));
   if (stored is FileChooserEntry) {
     return null;
   }

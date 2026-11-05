@@ -1,5 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:shell/file_explorer/model/directory_path.dart';
+import 'package:shell/file_explorer/model/file_kind.dart';
 
 part 'file_entry.freezed.dart';
 
@@ -11,5 +12,15 @@ abstract class FileEntry with _$FileEntry {
     required DirectoryPath path,
     required bool isDirectory,
     required int size,
+
+    /// Last modification time, or `null` when it is unknown.
+    DateTime? modified,
   }) = _FileEntry;
+  const FileEntry._();
+
+  /// Dotfiles are hidden unless the explorer is set to show them.
+  bool get isHidden => name.startsWith('.');
+
+  /// The entry's broad type.
+  FileKind get kind => isDirectory ? FileKind.folder : fileKindForName(name);
 }

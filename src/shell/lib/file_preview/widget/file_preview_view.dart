@@ -11,6 +11,7 @@ import 'package:shell/file_explorer/model/directory_path.dart';
 import 'package:shell/file_preview/model/file_preview.dart';
 import 'package:shell/file_preview/provider/file_preview.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/shared/util/format_bytes.dart';
 import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/theme/provider/theme.dart';
 
@@ -132,7 +133,7 @@ class _BinaryPreview extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _InfoBar(label: context.l10n.binarySize(_formatBytes(context, size))),
+        _InfoBar(label: context.l10n.binarySize(formatBytes(context, size))),
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -164,7 +165,7 @@ class _MetadataPreview extends StatelessWidget {
       icon: MdiIcons.fileOutline,
       title: name,
       lines: [
-        _formatBytes(context, size),
+        formatBytes(context, size),
         context.l10n.modifiedAt(
           DateFormat.yMMMd(
             context.l10n.localeName,
@@ -268,16 +269,4 @@ class _InfoBar extends StatelessWidget {
       ),
     );
   }
-}
-
-String _formatBytes(BuildContext context, int bytes) {
-  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
-  var value = bytes.toDouble();
-  var unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex++;
-  }
-  final digits = value >= 10 || unitIndex == 0 ? 0 : 1;
-  return context.measurement(value, units[unitIndex], decimalDigits: digits);
 }

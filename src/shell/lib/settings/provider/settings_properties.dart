@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/file_explorer/widget/file_sort_editor.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
@@ -426,6 +427,42 @@ class SettingsProperties extends _$SettingsProperties {
           'batteryCriticalThreshold': SettingProperty<int>(
             name: l10n.criticalBatteryWarning,
             description: l10n.criticalBatteryWarningDescription,
+          ),
+        },
+      ),
+      'files': SettingGroup(
+        name: l10n.files,
+        description: null,
+        icon: MdiIcons.folder,
+        children: {
+          'showHidden': SettingProperty<bool>(
+            name: l10n.showHiddenFiles,
+            description: l10n.showHiddenFilesDescription,
+          ),
+          'sortBy': SettingProperty<String>(
+            name: l10n.sortBy,
+            description: l10n.sortByDescription,
+            buildSearchResult: (context, path, property) =>
+                ExpandableSearchResult<String>(
+                  path: path,
+                  property: property,
+                  buildValue: (context, value, {required isExpanded}) =>
+                      const FileSortKeyValue(),
+                  buildEditor: (context, {required isExpanded}) =>
+                      FileSortKeyEditor(path: path, property: property),
+                ),
+          ),
+          'sortDescending': SettingProperty<bool>(
+            name: l10n.sortDescending,
+            description: l10n.sortDescendingDescription,
+          ),
+          'foldersFirst': SettingProperty<bool>(
+            name: l10n.foldersFirst,
+            description: l10n.foldersFirstDescription,
+          ),
+          'showDetails': SettingProperty<bool>(
+            name: l10n.showFileDetails,
+            description: l10n.showFileDetailsDescription,
           ),
         },
       ),

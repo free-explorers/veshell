@@ -29,6 +29,10 @@ const _fileChooserScreenId = '__file_chooser__';
 /// It reuses the shell's file explorer to browse the filesystem and answers
 /// the portal request with the chosen `file://` URI(s). Browse state is
 /// local to the chooser: the overview's Files pane is untouched.
+///
+/// The dialog takes the keyboard as soon as it opens: the save name is focused
+/// with its base name selected, ready to be retyped, and the other modes focus
+/// the search field, whose arrows move the selection and `Enter` opens it.
 class FileChooserDialog extends HookConsumerWidget {
   /// constructor
   const FileChooserDialog({required this.request, super.key});
@@ -40,49 +44,102 @@ class FileChooserDialog extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     const screenId = _fileChooserScreenId;
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final explorer = ref.watch(fileExplorerStateProvider(screenId));
     final entryListAsync = ref.watch(filteredEntryListProvider(screenId));
     final entryList = entryListAsync.value ?? const <FileEntry>[];
 
-    final selectedIndex = useState<int?>(null);
+    final isSave = request.mode == FileChooserMode.save;
+    final isFolderPicker =
+        request.mode == FileChooserMode.open && request.directory;
+
+    // The selection is kept by path, not by index: filtering or re-sorting the
+    // listing must never move the highlight onto another entry.
+    final selectedPath = useState<DirectoryPath?>(null);
     final nameText = useState(_initialName(request));
     final searchText = useState('');
-    final selectedFilter = useState<int?>(null);
+    final selectedFilter = useState<int?>(request.filters.isEmpty ? null : 0);
     final nameController = useTextEditingController(text: nameText.value);
     final searchController = useTextEditingController();
+    final nameFocusNode = useFocusNode(debugLabel: 'FileChooserName');
+    final searchFocusNode = useFocusNode(debugLabel: 'FileChooserSearch');
+
+    final notifier = ref.read(fileExplorerStateProvider(screenId).notifier);
+    final chooser = ref.read(fileChooserRequestProvider.notifier);
 
     // Seed the browser once per request: land on the requested folder (or
-    // its fallback) without a surprise selection, and prefill the save name.
+    // its fallback) without a surprise selection, prefill the save name, apply
+    // the default type filter and take the keyboard.
     useEffect(() {
-      final notifier = ref.read(fileExplorerStateProvider(screenId).notifier);
-      selectedIndex.value = null;
+      selectedPath.value = null;
       nameText.value = _initialName(request);
       nameController.text = nameText.value;
       searchText.value = '';
       searchController.clear();
-      selectedFilter.value = null;
+      selectedFilter.value = request.filters.isEmpty ? null : 0;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        notifier.setInitialLocation(
-          DirectoryPath(_initialDirectory(request)),
-          selected: _initialSelection(request),
-        );
+        notifier
+          ..setInitialLocation(
+            DirectoryPath(_initialDirectory(request)),
+            selected: _initialSelection(request),
+          )
+          ..setDirectoryOnly(isDirectoryOnly: isFolderPicker)
+          ..setTypePatternList(
+            request.filters.isEmpty
+                ? const []
+                : _patternsForFilter(request.filters.first),
+          );
+        if (!context.mounted) {
+          return;
+        }
+        // The hosting tile keeps its own node focused, so `autofocus` would
+        // never fire here: request the focus explicitly.
+        if (isSave) {
+          nameFocusNode.requestFocus();
+          nameController.selection = _baseNameSelection(nameController.text);
+        } else {
+          searchFocusNode.requestFocus();
+        }
       });
       return null;
     }, [request.consentToken]);
 
-    // A stale index never highlights a row after the directory changes.
+    // A stale selection never survives a change of directory.
     useEffect(() {
-      selectedIndex.value = null;
+      selectedPath.value = null;
       return null;
     }, [explorer.path]);
 
-    final selectedEntry =
-        selectedIndex.value != null && selectedIndex.value! < entryList.length
-        ? entryList[selectedIndex.value!]
-        : null;
+    final selectedIndexOrMinus = selectedPath.value == null
+        ? -1
+        : entryList.indexWhere((entry) => entry.path == selectedPath.value);
+    final selectedIndex = selectedIndexOrMinus < 0
+        ? null
+        : selectedIndexOrMinus;
+    final selectedEntry = selectedIndex == null
+        ? null
+        : entryList[selectedIndex];
 
-    final notifier = ref.read(fileExplorerStateProvider(screenId).notifier);
-    final chooser = ref.read(fileChooserRequestProvider.notifier);
+    void setName(String name) {
+      nameText.value = name;
+      nameController
+        ..text = name
+        ..selection = _baseNameSelection(name);
+    }
+
+    void select(int index) {
+      if (index < 0 || index >= entryList.length) {
+        return;
+      }
+      final entry = entryList[index];
+      selectedPath.value = entry.path;
+      if (isSave && !entry.isDirectory) {
+        setName(entry.name);
+      }
+    }
+
+    void approveFolder(DirectoryPath path) =>
+        chooser.approve([_fileUri(path.path)]);
 
     void activate(int index) {
       if (index < 0 || index >= entryList.length) {
@@ -90,36 +147,44 @@ class FileChooserDialog extends HookConsumerWidget {
       }
       final entry = entryList[index];
       if (entry.isDirectory) {
-        selectedIndex.value = null;
+        selectedPath.value = null;
         // Enter the folder without auto-selecting its first entry: the
-        // chooser's save name must not change just from navigating.
+        // chooser's save name must not change just from navigating. The
+        // search is cleared so the new folder is shown unfiltered.
+        searchText.value = '';
+        searchController.clear();
         notifier.setInitialLocation(entry.path);
         return;
       }
-      if (request.mode == FileChooserMode.save) {
-        selectedIndex.value = index;
-        nameText.value = entry.name;
-        nameController.text = entry.name;
+      if (isSave) {
+        select(index);
+        nameFocusNode.requestFocus();
         return;
       }
       chooser.approve([_fileUri(entry.path.path)]);
     }
 
-    void select(int index) {
-      selectedIndex.value = index;
-      if (request.mode == FileChooserMode.save &&
-          index < entryList.length &&
-          !entryList[index].isDirectory) {
-        nameText.value = entryList[index].name;
-        nameController.text = entryList[index].name;
+    /// Moves the selection by [delta] rows, from the top when none is set.
+    void moveSelection(int delta) {
+      if (entryList.isEmpty) {
+        return;
       }
+      final current = selectedIndex;
+      final next = current == null
+          ? (delta > 0 ? 0 : entryList.length - 1)
+          : (current + delta).clamp(0, entryList.length - 1);
+      select(next);
     }
 
     void accept() {
       switch (request.mode) {
         case FileChooserMode.open:
           if (request.directory) {
-            chooser.approve([_fileUri(explorer.path.path)]);
+            approveFolder(
+              selectedEntry != null && selectedEntry.isDirectory
+                  ? selectedEntry.path
+                  : explorer.path,
+            );
           } else if (selectedEntry != null && !selectedEntry.isDirectory) {
             chooser.approve([_fileUri(selectedEntry.path.path)]);
           }
@@ -149,6 +214,7 @@ class FileChooserDialog extends HookConsumerWidget {
     };
     final acceptLabel = switch (request.acceptLabel) {
       final label? when label.isNotEmpty => label,
+      _ when isFolderPicker => context.l10n.selectFolder,
       _ =>
         request.mode == FileChooserMode.open
             ? context.l10n.open
@@ -157,13 +223,80 @@ class FileChooserDialog extends HookConsumerWidget {
     final title = request.title.isNotEmpty
         ? request.title
         : switch (request.mode) {
+            FileChooserMode.open when request.directory =>
+              context.l10n.selectFolder,
             FileChooserMode.open => context.l10n.openFile,
             FileChooserMode.save => context.l10n.saveFile,
             FileChooserMode.saveFiles => context.l10n.saveFiles,
           };
 
+    final searchField = CallbackShortcuts(
+      // Bound on the field itself so they win over the shell-wide bindings
+      // (`Enter` is the global "activate" key).
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
+            moveSelection(1),
+        const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
+            moveSelection(-1),
+        const SingleActivator(LogicalKeyboardKey.enter): () {
+          if (selectedIndex != null) {
+            activate(selectedIndex);
+          } else if (entryList.isNotEmpty) {
+            activate(0);
+          }
+        },
+      },
+      child: TextField(
+        controller: searchController,
+        focusNode: searchFocusNode,
+        onChanged: (value) {
+          searchText.value = value;
+          // Typing narrows the list: start the keyboard from the first match.
+          selectedPath.value = null;
+        },
+        decoration: _fieldDecoration(
+          colorScheme,
+          hintText: context.l10n.search,
+          prefixIcon: const ShellIcon(MdiIcons.magnify, size: 20),
+        ),
+      ),
+    );
+
+    final typeFilter = request.filters.isEmpty
+        ? null
+        : SizedBox(
+            width: 200,
+            child: DropdownButtonFormField<int?>(
+              initialValue: selectedFilter.value,
+              isExpanded: true,
+              decoration: _fieldDecoration(
+                colorScheme,
+                prefixIcon: const ShellIcon(MdiIcons.filterVariant, size: 20),
+              ),
+              items: [
+                for (var i = 0; i < request.filters.length; i++)
+                  DropdownMenuItem<int?>(
+                    value: i,
+                    child: Text(
+                      request.filters[i].name,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                DropdownMenuItem<int?>(child: Text(context.l10n.allFiles)),
+              ],
+              onChanged: (index) {
+                selectedFilter.value = index;
+                notifier.setTypePatternList(
+                  index == null
+                      ? const []
+                      : _patternsForFilter(request.filters[index]),
+                );
+              },
+            ),
+          );
+
     return Card(
-      color: theme.colorScheme.surfaceContainer,
+      color: colorScheme.surfaceContainer,
       child: CurrentScreenId(
         screenId: screenId,
         child: CallbackShortcuts(
@@ -171,118 +304,103 @@ class FileChooserDialog extends HookConsumerWidget {
             const SingleActivator(LogicalKeyboardKey.escape): chooser.cancel,
           },
           child: Focus(
-            autofocus: true,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  _ChooserHeader(
+                    title: title,
+                    appName: request.appName,
+                    icon: switch (request.mode) {
+                      FileChooserMode.open when request.directory =>
+                        MdiIcons.folderOpen,
+                      FileChooserMode.open => MdiIcons.fileSearch,
+                      FileChooserMode.save ||
+                      FileChooserMode.saveFiles => MdiIcons.contentSave,
+                    },
+                    onClose: chooser.cancel,
+                  ),
+                  const SizedBox(height: 16),
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(title, style: theme.textTheme.titleLarge),
-                            if (request.appName.isNotEmpty)
-                              Text(
-                                request.appName,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: context.l10n.close,
-                        onPressed: chooser.cancel,
-                        icon: const ShellIcon(MdiIcons.close),
-                      ),
+                      Expanded(child: searchField),
+                      if (typeFilter != null) ...[
+                        const SizedBox(width: 8),
+                        typeFilter,
+                      ],
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  if (request.mode == FileChooserMode.open) ...[
-                    if (request.filters.isNotEmpty) ...[
-                      DropdownButtonFormField<int?>(
-                        initialValue: selectedFilter.value,
-                        decoration: InputDecoration(
-                          labelText: context.l10n.fileType,
-                          border: const OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                        items: [
-                          DropdownMenuItem<int?>(
-                            child: Text(context.l10n.allFiles),
-                          ),
-                          for (var i = 0; i < request.filters.length; i++)
-                            DropdownMenuItem<int?>(
-                              value: i,
-                              child: Text(request.filters[i].name),
-                            ),
-                        ],
-                        onChanged: (index) {
-                          selectedFilter.value = index;
-                          final query = index == null
-                              ? ''
-                              : _searchForFilter(request.filters[index]);
-                          searchText.value = query;
-                          searchController.text = query;
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                    TextField(
-                      controller: searchController,
-                      onChanged: (value) => searchText.value = value,
-                      decoration: InputDecoration(
-                        labelText: context.l10n.search,
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
                   if (request.mode == FileChooserMode.saveFiles &&
                       request.files.isNotEmpty) ...[
+                    const SizedBox(height: 8),
                     Text(
                       request.files.join(', '),
-                      style: theme.textTheme.bodySmall,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 8),
                   ],
+                  const SizedBox(height: 12),
                   Expanded(
-                    child: FileExplorerView(
-                      searchText: searchText.value,
-                      selectedIndex: selectedIndex.value,
-                      onSelect: select,
-                      onActivate: activate,
-                      onOpenDirectory: notifier.openBreadcrumb,
-                      onOpenParent: notifier.openParentDirectory,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerLowest,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: FileExplorerView(
+                          searchText: searchText.value,
+                          selectedIndex: selectedIndex,
+                          onSelect: select,
+                          onActivate: activate,
+                          onOpenDirectory: notifier.openBreadcrumb,
+                          onOpenParent: notifier.openParentDirectory,
+                        ),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   Row(
                     children: [
-                      if (request.mode == FileChooserMode.save) ...[
+                      if (isSave) ...[
                         Expanded(
-                          child: TextField(
-                            controller: nameController,
-                            autofocus: true,
-                            onChanged: (value) => nameText.value = value,
-                            decoration: InputDecoration(
-                              labelText: context.l10n.fileName,
-                              border: const OutlineInputBorder(),
-                              isDense: true,
+                          child: CallbackShortcuts(
+                            bindings: {
+                              const SingleActivator(LogicalKeyboardKey.enter):
+                                  accept,
+                            },
+                            child: TextField(
+                              controller: nameController,
+                              focusNode: nameFocusNode,
+                              // Desktop fields select all on focus, which
+                              // would also select the extension: keep the
+                              // base-name selection made on open instead.
+                              selectAllOnFocus: false,
+                              onChanged: (value) => nameText.value = value,
+                              onSubmitted: (_) => accept(),
+                              decoration: _fieldDecoration(
+                                colorScheme,
+                                labelText: context.l10n.fileName,
+                                prefixIcon: const ShellIcon(
+                                  MdiIcons.formTextbox,
+                                  size: 20,
+                                ),
+                              ),
                             ),
                           ),
                         ),
                         const SizedBox(width: 12),
                       ] else
                         const Spacer(),
+                      TextButton(
+                        onPressed: chooser.cancel,
+                        child: Text(context.l10n.cancel),
+                      ),
+                      const SizedBox(width: 8),
                       FilledButton(
                         onPressed: acceptEnabled ? accept : null,
                         child: Text(acceptLabel),
@@ -297,6 +415,104 @@ class FileChooserDialog extends HookConsumerWidget {
       ),
     );
   }
+}
+
+/// The chooser's title row: a mode glyph, the title and requesting app, and
+/// the close button.
+class _ChooserHeader extends StatelessWidget {
+  const _ChooserHeader({
+    required this.title,
+    required this.appName,
+    required this.icon,
+    required this.onClose,
+  });
+
+  final String title;
+  final String appName;
+  final IconData icon;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          alignment: Alignment.center,
+          child: ShellIcon(icon, color: colorScheme.onPrimaryContainer),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: theme.textTheme.titleLarge,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (appName.isNotEmpty)
+                Text(
+                  appName,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        IconButton(
+          tooltip: context.l10n.close,
+          onPressed: onClose,
+          icon: const ShellIcon(MdiIcons.close),
+        ),
+      ],
+    );
+  }
+}
+
+/// The chooser's filled, rounded field style.
+InputDecoration _fieldDecoration(
+  ColorScheme colorScheme, {
+  String? hintText,
+  String? labelText,
+  Widget? prefixIcon,
+}) {
+  return InputDecoration(
+    hintText: hintText,
+    labelText: labelText,
+    prefixIcon: prefixIcon,
+    isDense: true,
+    filled: true,
+    fillColor: colorScheme.surfaceContainerHighest,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: colorScheme.primary, width: 2),
+    ),
+  );
+}
+
+/// Selects the name without its extension (`report` in `report.pdf`), so
+/// typing replaces the name and keeps the type; a name without an extension is
+/// selected whole.
+TextSelection _baseNameSelection(String name) {
+  final dotIndex = name.lastIndexOf('.');
+  return TextSelection(
+    baseOffset: 0,
+    extentOffset: dotIndex > 0 ? dotIndex : name.length,
+  );
 }
 
 /// The chooser drawn as a modal over its host: a scrim plus the dialog card.
@@ -413,14 +629,8 @@ String _initialName(FileChooserRequestMessage request) {
   return '';
 }
 
-/// A live-list filter derived from a filter's first glob pattern (`*.png`
-/// becomes the `.png` substring the explorer's filter matches); non-glob
-/// filters leave the listing unfiltered.
-String _searchForFilter(FileChooserFilterMessage filter) {
-  for (final pattern in filter.patterns) {
-    if (pattern.kind == 0 && pattern.pattern.startsWith('*.')) {
-      return pattern.pattern.substring(1);
-    }
-  }
-  return '';
-}
+/// The explorer type patterns of a portal filter: its globs as-is and its
+/// MIME types, both understood by the explorer's type matcher.
+List<String> _patternsForFilter(FileChooserFilterMessage filter) => [
+  for (final pattern in filter.patterns) pattern.pattern,
+];
