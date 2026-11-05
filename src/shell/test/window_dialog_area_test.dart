@@ -7,8 +7,16 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:hooks_riverpod/misc.dart' show Override;
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/file_chooser/model/file_chooser_request/file_chooser_request.serializable.dart';
+import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
+import 'package:shell/file_chooser/widget/file_chooser_dialog.dart';
+import 'package:shell/file_explorer/model/file_entry.dart';
+import 'package:shell/file_explorer/model/file_explorer_settings.dart';
+import 'package:shell/file_explorer/provider/directory_listing.dart';
+import 'package:shell/file_explorer/provider/file_explorer_settings.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/model/meta_popup.serializable.dart';
@@ -269,6 +277,7 @@ Future<ProviderContainer> _pumpFloatingDialogArea(
   required Size surfaceSize,
   MetaWindow? metaWindow,
   bool settle = true,
+  List<Override> extraOverrides = const [],
 }) async {
   final container = ProviderContainer(
     overrides: [
@@ -297,6 +306,7 @@ Future<ProviderContainer> _pumpFloatingDialogArea(
       localizedDesktopEntryForIdProvider(
         'org.example.App',
       ).overrideWith(_NoDesktopEntry.new),
+      ...extraOverrides,
     ],
   );
   addTearDown(container.dispose);
@@ -488,6 +498,56 @@ void main() {
       container.read(selectedDialogMetaWindowForWindowProvider(_parent)),
       _floatingMetaWindowId,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the chooser opens above the floating dialog that asked for it', (
+    tester,
+  ) async {
+    final request = FileChooserRequestMessage(
+      requestHandle: '/request/1',
+      consentToken: 7,
+      appName: 'App',
+      title: 'Pick a file',
+      mode: FileChooserMode.open,
+      multiple: false,
+      directory: false,
+      files: const [],
+      filters: const [],
+      currentFolder: '/home/user',
+    );
+    await _pumpFloatingDialogArea(
+      tester,
+      surfaceSize: const Size(320, 240),
+      extraOverrides: [
+        fileChooserForWindowProvider(_parent).overrideWithValue(request),
+        fileExplorerSettingsProvider.overrideWithValue(
+          const FileExplorerSettings(),
+        ),
+        directoryListingProvider.overrideWith(
+          (ref, path) async => const <FileEntry>[],
+        ),
+      ],
+    );
+
+    expect(find.byType(FileChooserDialog), findsOneWidget);
+    expect(find.byType(WindowDialogs), findsOneWidget);
+
+    // Painted after (so above) the floating dialog, which takes no clicks
+    // while the chooser is shown.
+    final elements = tester.allElements.toList();
+    int indexOf(Type type) =>
+        elements.indexWhere((element) => element.widget.runtimeType == type);
+    expect(indexOf(FileChooserDialog), greaterThan(indexOf(WindowDialogs)));
+    final dialogsBlocker = tester.widget<IgnorePointer>(
+      find
+          .ancestor(
+            of: find.byType(WindowDialogs),
+            matching: find.byType(IgnorePointer),
+          )
+          .first,
+    );
+    expect(dialogsBlocker.ignoring, isTrue);
     expect(tester.takeException(), isNull);
   });
 
