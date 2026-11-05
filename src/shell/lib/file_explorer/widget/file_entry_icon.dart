@@ -1,104 +1,86 @@
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/file_explorer/model/file_entry.dart';
+import 'package:shell/file_explorer/model/file_kind.dart';
+import 'package:shell/shared/widget/shell_icon.dart';
 
 /// A glyph for [entry]: a folder for directories, otherwise a type icon picked
 /// from the file extension with a generic file glyph as fallback.
-IconData iconForFileEntry(FileEntry entry) {
-  if (entry.isDirectory) {
-    return MdiIcons.folder;
+IconData iconForFileEntry(FileEntry entry) => iconForFileKind(entry.kind);
+
+/// The glyph of one [FileKind].
+IconData iconForFileKind(FileKind kind) => switch (kind) {
+  FileKind.folder => MdiIcons.folder,
+  FileKind.image => MdiIcons.fileImage,
+  FileKind.video => MdiIcons.fileVideo,
+  FileKind.audio => MdiIcons.fileMusic,
+  FileKind.pdf => MdiIcons.filePdfBox,
+  FileKind.document => MdiIcons.fileWord,
+  FileKind.spreadsheet => MdiIcons.fileExcel,
+  FileKind.table => MdiIcons.fileTable,
+  FileKind.presentation => MdiIcons.filePowerpoint,
+  FileKind.text => MdiIcons.fileDocument,
+  FileKind.archive => MdiIcons.folderZip,
+  FileKind.diskImage => MdiIcons.fileCabinet,
+  FileKind.code => MdiIcons.fileCode,
+  FileKind.executable => MdiIcons.application,
+  FileKind.other => MdiIcons.file,
+};
+
+/// The accent of one [FileKind], so the listing can be scanned by type at a
+/// glance instead of reading every name.
+///
+/// Folders take the theme's primary color; file kinds use a fixed hue each,
+/// lightened on a dark surface and darkened on a light one so the glyph keeps
+/// its contrast whatever the theme.
+Color colorForFileKind(FileKind kind, ColorScheme colorScheme) {
+  if (kind == FileKind.folder) {
+    return colorScheme.primary;
   }
-  final dotIndex = entry.name.lastIndexOf('.');
-  if (dotIndex <= 0 || dotIndex == entry.name.length - 1) {
-    return MdiIcons.file;
+  if (kind == FileKind.other) {
+    return colorScheme.onSurfaceVariant;
   }
-  final extension = entry.name.substring(dotIndex + 1).toLowerCase();
-  return _iconByExtension[extension] ?? MdiIcons.file;
+  final hue = switch (kind) {
+    FileKind.image => 290.0,
+    FileKind.video => 340.0,
+    FileKind.audio => 25.0,
+    FileKind.pdf => 0.0,
+    FileKind.document => 215.0,
+    FileKind.spreadsheet || FileKind.table => 140.0,
+    FileKind.presentation => 15.0,
+    FileKind.text => 200.0,
+    FileKind.archive => 45.0,
+    FileKind.diskImage => 30.0,
+    FileKind.code => 170.0,
+    FileKind.executable => 260.0,
+    FileKind.folder || FileKind.other => 0.0,
+  };
+  final isDark = colorScheme.brightness == Brightness.dark;
+  return HSLColor.fromAHSL(1, hue, 0.6, isDark ? 0.72 : 0.42).toColor();
 }
 
-/// Extension to glyph map for the common file types. Deliberately small: the
-/// list only needs a recognisable hint, not an accurate MIME database.
-const Map<String, IconData> _iconByExtension = {
-  'png': MdiIcons.fileImage,
-  'jpg': MdiIcons.fileImage,
-  'jpeg': MdiIcons.fileImage,
-  'gif': MdiIcons.fileImage,
-  'bmp': MdiIcons.fileImage,
-  'webp': MdiIcons.fileImage,
-  'svg': MdiIcons.fileImage,
-  'ico': MdiIcons.fileImage,
-  'tiff': MdiIcons.fileImage,
-  'heic': MdiIcons.fileImage,
-  'mp4': MdiIcons.fileVideo,
-  'mkv': MdiIcons.fileVideo,
-  'webm': MdiIcons.fileVideo,
-  'avi': MdiIcons.fileVideo,
-  'mov': MdiIcons.fileVideo,
-  'm4v': MdiIcons.fileVideo,
-  'wmv': MdiIcons.fileVideo,
-  'mp3': MdiIcons.fileMusic,
-  'flac': MdiIcons.fileMusic,
-  'wav': MdiIcons.fileMusic,
-  'ogg': MdiIcons.fileMusic,
-  'oga': MdiIcons.fileMusic,
-  'm4a': MdiIcons.fileMusic,
-  'aac': MdiIcons.fileMusic,
-  'opus': MdiIcons.fileMusic,
-  'pdf': MdiIcons.filePdfBox,
-  'doc': MdiIcons.fileWord,
-  'docx': MdiIcons.fileWord,
-  'odt': MdiIcons.fileWord,
-  'xls': MdiIcons.fileExcel,
-  'xlsx': MdiIcons.fileExcel,
-  'ods': MdiIcons.fileExcel,
-  'csv': MdiIcons.fileTable,
-  'ppt': MdiIcons.filePowerpoint,
-  'pptx': MdiIcons.filePowerpoint,
-  'odp': MdiIcons.filePowerpoint,
-  'txt': MdiIcons.fileDocument,
-  'md': MdiIcons.fileDocument,
-  'rtf': MdiIcons.fileDocument,
-  'zip': MdiIcons.folderZip,
-  'tar': MdiIcons.folderZip,
-  'gz': MdiIcons.folderZip,
-  'tgz': MdiIcons.folderZip,
-  'xz': MdiIcons.folderZip,
-  'bz2': MdiIcons.folderZip,
-  '7z': MdiIcons.folderZip,
-  'rar': MdiIcons.folderZip,
-  'zst': MdiIcons.folderZip,
-  'iso': MdiIcons.fileCabinet,
-  'img': MdiIcons.fileCabinet,
-  'dart': MdiIcons.fileCode,
-  'js': MdiIcons.fileCode,
-  'ts': MdiIcons.fileCode,
-  'jsx': MdiIcons.fileCode,
-  'tsx': MdiIcons.fileCode,
-  'py': MdiIcons.fileCode,
-  'rs': MdiIcons.fileCode,
-  'go': MdiIcons.fileCode,
-  'c': MdiIcons.fileCode,
-  'h': MdiIcons.fileCode,
-  'cpp': MdiIcons.fileCode,
-  'hpp': MdiIcons.fileCode,
-  'java': MdiIcons.fileCode,
-  'kt': MdiIcons.fileCode,
-  'swift': MdiIcons.fileCode,
-  'rb': MdiIcons.fileCode,
-  'php': MdiIcons.fileCode,
-  'sh': MdiIcons.fileCode,
-  'bash': MdiIcons.fileCode,
-  'zsh': MdiIcons.fileCode,
-  'json': MdiIcons.fileCode,
-  'yaml': MdiIcons.fileCode,
-  'yml': MdiIcons.fileCode,
-  'toml': MdiIcons.fileCode,
-  'xml': MdiIcons.fileCode,
-  'html': MdiIcons.fileCode,
-  'css': MdiIcons.fileCode,
-  'sql': MdiIcons.fileCode,
-  'desktop': MdiIcons.application,
-  'appimage': MdiIcons.application,
-  'exe': MdiIcons.application,
-  'bin': MdiIcons.application,
-};
+/// The type glyph in its kind's accent color.
+class FileKindIcon extends StatelessWidget {
+  const FileKindIcon({
+    required this.kind,
+    this.size = 24,
+    this.isDimmed = false,
+    super.key,
+  });
+
+  final FileKind kind;
+  final double size;
+
+  /// Hidden entries are drawn faded so the visible ones stand out.
+  final bool isDimmed;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = colorForFileKind(kind, Theme.of(context).colorScheme);
+    return ShellIcon(
+      iconForFileKind(kind),
+      size: size,
+      color: isDimmed ? accent.withValues(alpha: 0.5) : accent,
+    );
+  }
+}

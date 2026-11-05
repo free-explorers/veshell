@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/file_explorer/model/file_explorer_settings.dart';
+import 'package:shell/file_explorer/provider/file_explorer_settings.dart';
 import 'package:shell/application/provider/app_drawer.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/model/search_mode.dart';
@@ -58,6 +60,9 @@ void main() {
     };
     final container = ProviderContainer(
       overrides: [
+        fileExplorerSettingsProvider.overrideWithValue(
+          const FileExplorerSettings(),
+        ),
         for (final text in filteredTexts)
           appDrawerFilteredDesktopEntriesProvider(
             text,

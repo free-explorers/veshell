@@ -99,6 +99,18 @@ class PersistentWindowTileable extends Tileable {
     );
     final chooserVisible =
         ref.watch(fileChooserForWindowProvider(windowId)) != null;
+    // The shell's file chooser takes the keyboard while it is shown; once it
+    // closes, hand the keyboard back to the selected tile's window.
+    ref.listen(fileChooserForWindowProvider(windowId), (previous, next) {
+      if (previous == null || next != null || !isSelected) {
+        return;
+      }
+      if (window.displayMode == DisplayMode.floating) {
+        floatingFocusNode.requestFocus();
+      } else if (window.displayMode != DisplayMode.game) {
+        primaryFocusNode.requestFocus();
+      }
+    });
 
     final placeholder = WindowPlaceholder(
       isSelected: isSelected,

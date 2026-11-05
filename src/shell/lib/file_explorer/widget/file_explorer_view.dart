@@ -1,25 +1,38 @@
+import 'dart:io';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/file_explorer/model/directory_path.dart';
 import 'package:shell/file_explorer/model/file_entry.dart';
+import 'package:shell/file_explorer/model/file_explorer_settings.dart';
+import 'package:shell/file_explorer/provider/directory_item_count.dart';
 import 'package:shell/file_explorer/provider/directory_listing.dart';
+import 'package:shell/file_explorer/provider/file_explorer_settings.dart';
 import 'package:shell/file_explorer/provider/file_explorer_state.dart';
 import 'package:shell/file_explorer/provider/filtered_entry_list.dart';
 import 'package:shell/file_explorer/widget/file_entry_icon.dart';
+import 'package:shell/file_explorer/widget/file_sort_editor.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/widget/overview_shortcuts.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
+import 'package:shell/shared/util/format_bytes.dart';
 import 'package:shell/shared/widget/focus_highlight.dart';
 import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 
-/// Height of one file explorer row; fixed so the selection can be scrolled into
-/// view by index.
-const fileEntryRowHeight = 48.0;
+/// Height of the header holding the up button, the breadcrumb and the view
+/// options.
+const fileExplorerHeaderHeight = 52.0;
+
+/// Height of one file explorer row; fixed per layout so the selection can be
+/// scrolled into view by index. Rows are taller when they show details.
+double fileEntryRowExtent({required bool showDetails}) =>
+    showDetails ? 56.0 : 48.0;
 
 /// The overview's Files pane: a single list of the current directory, with a
 /// breadcrumb and an up action to move around.
@@ -56,6 +69,9 @@ class FileExplorerView extends HookConsumerWidget {
     final screenId = CurrentScreenId.of(context);
     final fileExplorer = ref.watch(fileExplorerStateProvider(screenId));
     final entryListAsync = ref.watch(filteredEntryListProvider(screenId));
+    final showDetails = ref.watch(
+      fileExplorerSettingsProvider.select((settings) => settings.showDetails),
+    );
 
     useEffect(() {
       // The mutation is deferred: hooks effects run during build, and providers
@@ -137,17 +153,16 @@ class FileExplorerView extends HookConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // The breadcrumb is clicked, never reached by directional focus:
+            // The header is clicked, never reached by directional focus:
             // keeping it out of the focus order lets `down` from the search
             // field land on the first file instead of the breadcrumb.
             ExcludeFocus(
-              child: _BreadcrumbBar(
+              child: _ExplorerHeader(
                 path: fileExplorer.path,
                 onOpenDirectory: onOpenDirectory,
                 onOpenParent: onOpenParent,
               ),
             ),
-            const Divider(height: 1),
             Expanded(
               child: entryListAsync.when(
                 data: (entryList) => entryList.isEmpty
@@ -156,6 +171,7 @@ class FileExplorerView extends HookConsumerWidget {
                       )
                     : _FileEntryList(
                         entryList: entryList,
+                        showDetails: showDetails,
                         selectedIndex: selectedIndex,
                         onSelect: onSelect,
                         onActivate: onActivate,
@@ -173,13 +189,9 @@ class FileExplorerView extends HookConsumerWidget {
   }
 }
 
-/// Up action and the path as a clickable breadcrumb.
-///
-/// The crumbs are laid out from the left, next to the up button, and the view
-/// scrolls to the end so the current directory stays visible when the path is
-/// too long to fit.
-class _BreadcrumbBar extends HookWidget {
-  const _BreadcrumbBar({
+/// The up button, the path as a breadcrumb and the view options menu.
+class _ExplorerHeader extends StatelessWidget {
+  const _ExplorerHeader({
     required this.path,
     this.onOpenDirectory,
     this.onOpenParent,
@@ -191,7 +203,49 @@ class _BreadcrumbBar extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
-    final crumbList = path.breadcrumb;
+    return SizedBox(
+      height: fileExplorerHeaderHeight,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        child: Row(
+          children: [
+            IconButton(
+              tooltip: context.l10n.up,
+              onPressed: path.parent == null ? null : onOpenParent,
+              icon: const ShellIcon(MdiIcons.arrowLeft),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: _Breadcrumb(path: path, onOpenDirectory: onOpenDirectory),
+            ),
+            const SizedBox(width: 4),
+            const _ViewOptionsButton(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One clickable breadcrumb segment.
+typedef _Crumb = ({String label, IconData? icon, DirectoryPath path});
+
+/// The path as clickable segments on a rounded track.
+///
+/// A path inside `$HOME` starts at a "Home" crumb instead of spelling out
+/// `/home/<user>`. The crumbs are laid out from the left and the view scrolls
+/// to the end so the current directory stays visible when the path is too long
+/// to fit.
+class _Breadcrumb extends HookWidget {
+  const _Breadcrumb({required this.path, this.onOpenDirectory});
+
+  final DirectoryPath path;
+  final ValueChanged<DirectoryPath>? onOpenDirectory;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final crumbList = _crumbsFor(path, homeLabel: context.l10n.home);
     final scrollController = useScrollController();
 
     useEffect(() {
@@ -204,76 +258,177 @@ class _BreadcrumbBar extends HookWidget {
       return null;
     }, [path]);
 
-    return SizedBox(
-      height: fileEntryRowHeight,
-      child: Row(
-        children: [
-          const SizedBox(width: 4),
-          IconButton(
-            tooltip: context.l10n.up,
-            onPressed: path.parent == null ? null : onOpenParent,
-            icon: const ShellIcon(MdiIcons.arrowLeft),
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: SingleChildScrollView(
-              key: const ValueKey('file-explorer-breadcrumb'),
-              controller: scrollController,
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  if (crumbList.isEmpty)
-                    const _BreadcrumbSegment(label: '/', isCurrent: true)
-                  else
-                    for (var i = 0; i < crumbList.length; i++) ...[
-                      if (i > 0)
-                        const ShellIcon(MdiIcons.chevronRight, size: 18),
-                      _BreadcrumbSegment(
-                        label: crumbList[i].name,
-                        isCurrent: i == crumbList.length - 1,
-                        onTap: onOpenDirectory == null
-                            ? null
-                            : () => onOpenDirectory!(crumbList[i].path),
-                      ),
-                    ],
-                ],
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: SingleChildScrollView(
+        key: const ValueKey('file-explorer-breadcrumb'),
+        controller: scrollController,
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (var i = 0; i < crumbList.length; i++) ...[
+              if (i > 0)
+                ShellIcon(
+                  MdiIcons.chevronRight,
+                  size: 16,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              _BreadcrumbSegment(
+                crumb: crumbList[i],
+                isCurrent: i == crumbList.length - 1,
+                onTap: onOpenDirectory == null
+                    ? null
+                    : () => onOpenDirectory!(crumbList[i].path),
               ),
-            ),
-          ),
-        ],
+            ],
+          ],
+        ),
       ),
     );
   }
 }
 
+/// The breadcrumb of [path]: `Home` then the segments below `$HOME`, or every
+/// segment from the root.
+List<_Crumb> _crumbsFor(DirectoryPath path, {required String homeLabel}) {
+  final home = Platform.environment['HOME'];
+  final crumbList = path.breadcrumb;
+  if (home != null && home.length > 1) {
+    final homePath = DirectoryPath(home);
+    final homeDepth = homePath.breadcrumb.length;
+    final isUnderHome = path.path == home || path.path.startsWith('$home/');
+    if (isUnderHome) {
+      return [
+        (label: homeLabel, icon: MdiIcons.home, path: homePath),
+        for (final crumb in crumbList.skip(homeDepth))
+          (label: crumb.name, icon: null, path: crumb.path),
+      ];
+    }
+  }
+  return [
+    (label: '/', icon: MdiIcons.harddisk, path: const DirectoryPath('/')),
+    for (final crumb in crumbList)
+      (label: crumb.name, icon: null, path: crumb.path),
+  ];
+}
+
 class _BreadcrumbSegment extends StatelessWidget {
   const _BreadcrumbSegment({
-    required this.label,
+    required this.crumb,
     required this.isCurrent,
     this.onTap,
   });
 
-  final String label;
+  final _Crumb crumb;
   final bool isCurrent;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final color = isCurrent ? colorScheme.onSurface : colorScheme.primary;
+    final label = Text(
+      crumb.label,
+      style: theme.textTheme.bodyMedium?.copyWith(
+        fontWeight: isCurrent ? FontWeight.w600 : null,
+        color: color,
+      ),
+    );
     return TextButton(
       onPressed: isCurrent ? null : onTap,
       style: TextButton.styleFrom(
-        minimumSize: Size.zero,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        minimumSize: const Size(0, 32),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        foregroundColor: theme.colorScheme.primary,
+        shape: const StadiumBorder(),
       ),
-      child: Text(
-        label,
-        style: theme.textTheme.bodyMedium?.copyWith(
-          fontWeight: isCurrent ? FontWeight.w600 : null,
-          color: isCurrent ? theme.colorScheme.onSurface : null,
+      child: crumb.icon == null
+          ? label
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ShellIcon(crumb.icon, size: 18, color: color),
+                const SizedBox(width: 6),
+                label,
+              ],
+            ),
+    );
+  }
+}
+
+/// The top-right menu of persisted view options: hidden files, sort order,
+/// folders first and the details line.
+class _ViewOptionsButton extends ConsumerWidget {
+  const _ViewOptionsButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(fileExplorerSettingsProvider);
+    final l10n = context.l10n;
+    final textTheme = Theme.of(context).textTheme;
+
+    void set(String path, Object value) =>
+        updateFileExplorerSetting(ref, path, value);
+
+    return MenuAnchor(
+      alignmentOffset: const Offset(-180, 4),
+      menuChildren: [
+        CheckboxMenuButton(
+          value: settings.showHidden,
+          closeOnActivate: false,
+          onChanged: (value) => set(fileExplorerShowHiddenPath, value ?? false),
+          child: Text(l10n.showHiddenFiles),
         ),
+        CheckboxMenuButton(
+          value: settings.foldersFirst,
+          closeOnActivate: false,
+          onChanged: (value) =>
+              set(fileExplorerFoldersFirstPath, value ?? false),
+          child: Text(l10n.foldersFirst),
+        ),
+        CheckboxMenuButton(
+          value: settings.showDetails,
+          closeOnActivate: false,
+          onChanged: (value) =>
+              set(fileExplorerShowDetailsPath, value ?? false),
+          child: Text(l10n.showFileDetails),
+        ),
+        const Divider(height: 8),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: Text(l10n.sortBy, style: textTheme.labelMedium),
+        ),
+        for (final key in FileSortKey.values)
+          MenuItemButton(
+            closeOnActivate: false,
+            leadingIcon: SizedBox(
+              width: 24,
+              child: key == settings.sortBy
+                  ? const ShellIcon(MdiIcons.check, size: 18)
+                  : null,
+            ),
+            onPressed: () => set(fileExplorerSortByPath, key),
+            child: Text(fileSortKeyLabel(l10n, key)),
+          ),
+        const Divider(height: 8),
+        CheckboxMenuButton(
+          value: settings.sortDescending,
+          closeOnActivate: false,
+          onChanged: (value) =>
+              set(fileExplorerSortDescendingPath, value ?? false),
+          child: Text(l10n.sortDescending),
+        ),
+      ],
+      builder: (context, controller, child) => IconButton(
+        tooltip: l10n.viewOptions,
+        isSelected: controller.isOpen,
+        onPressed: () =>
+            controller.isOpen ? controller.close() : controller.open(),
+        icon: const ShellIcon(MdiIcons.cog),
       ),
     );
   }
@@ -283,6 +438,7 @@ class _BreadcrumbSegment extends StatelessWidget {
 class _FileEntryList extends HookConsumerWidget {
   const _FileEntryList({
     required this.entryList,
+    required this.showDetails,
     this.selectedIndex,
     this.onSelect,
     this.onActivate,
@@ -290,6 +446,7 @@ class _FileEntryList extends HookConsumerWidget {
   });
 
   final List<FileEntry> entryList;
+  final bool showDetails;
   final int? selectedIndex;
   final ValueChanged<int>? onSelect;
   final ValueChanged<int>? onActivate;
@@ -298,6 +455,7 @@ class _FileEntryList extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scrollController = useScrollController();
+    final rowExtent = fileEntryRowExtent(showDetails: showDetails);
     // Select on the first tap and activate on a second tap within the
     // double-tap window. Flutter delays `onTap` by that whole window when an
     // `onDoubleTap` handler is present, which makes selection feel laggy.
@@ -325,8 +483,8 @@ class _FileEntryList extends HookConsumerWidget {
           return;
         }
         final position = scrollController.position;
-        final itemStart = index * fileEntryRowHeight;
-        final itemEnd = itemStart + fileEntryRowHeight;
+        final itemStart = index * rowExtent;
+        final itemEnd = itemStart + rowExtent;
         if (itemStart < position.pixels) {
           scrollController.jumpTo(itemStart);
         } else if (itemEnd > position.pixels + position.viewportDimension) {
@@ -334,17 +492,25 @@ class _FileEntryList extends HookConsumerWidget {
         }
       });
       return null;
-    }, [selectedIndex]);
+    }, [selectedIndex, rowExtent]);
+
+    // Formatting needs the locale's date symbols; computed once per build.
+    final locale = Localizations.localeOf(context).toString();
+    final now = DateTime.now();
 
     final focus = resultFocus;
     final list = ListView.builder(
       controller: scrollController,
-      itemExtent: fileEntryRowHeight,
+      itemExtent: rowExtent,
       itemCount: entryList.length,
       itemBuilder: (context, index) {
         final entry = entryList[index];
         return _FileEntryRow(
           entry: entry,
+          showDetails: showDetails,
+          modifiedLabel: entry.modified == null
+              ? null
+              : formatModifiedDate(entry.modified!, now: now, locale: locale),
           isSelected: index == selectedIndex,
           focusNode: focus?.rowNode(index),
           onFocus: (focus == null || onSelect == null)
@@ -404,10 +570,33 @@ class _FileEntryList extends HookConsumerWidget {
   }
 }
 
+/// When a file changed, as compact as it can be read: the time for today, the
+/// day and month for this year, the full date otherwise.
+String formatModifiedDate(
+  DateTime modified, {
+  required DateTime now,
+  required String locale,
+}) {
+  final local = modified.toLocal();
+  final DateFormat format;
+  if (local.year == now.year &&
+      local.month == now.month &&
+      local.day == now.day) {
+    format = DateFormat.Hm(locale);
+  } else if (local.year == now.year) {
+    format = DateFormat.MMMd(locale);
+  } else {
+    format = DateFormat.yMMMd(locale);
+  }
+  return format.format(local);
+}
+
 class _FileEntryRow extends StatelessWidget {
   const _FileEntryRow({
     required this.entry,
     required this.isSelected,
+    this.showDetails = false,
+    this.modifiedLabel,
     this.focusNode,
     this.onFocus,
     this.onTap,
@@ -415,6 +604,12 @@ class _FileEntryRow extends StatelessWidget {
 
   final FileEntry entry;
   final bool isSelected;
+
+  /// Whether the row shows the details line under the name.
+  final bool showDetails;
+
+  /// When the entry changed, already formatted, or `null` when unknown.
+  final String? modifiedLabel;
   final FocusNode? focusNode;
   final VoidCallback? onFocus;
   final VoidCallback? onTap;
@@ -439,7 +634,25 @@ class _FileEntryRow extends StatelessWidget {
   }
 
   Widget _buildRow(BuildContext context, {required bool highlighted}) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final nameColor = highlighted
+        ? colorScheme.onPrimaryContainer
+        : colorScheme.onSurface;
+    // The details line stays in the background: readable when looked for,
+    // never competing with the name.
+    final detailColor = highlighted
+        ? colorScheme.onPrimaryContainer.withValues(alpha: 0.6)
+        : colorScheme.onSurfaceVariant.withValues(alpha: 0.7);
+    final name = Text(
+      entry.name,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: theme.textTheme.bodyMedium?.copyWith(
+        color: entry.isHidden ? nameColor.withValues(alpha: 0.6) : nameColor,
+      ),
+    );
+
     return Material(
       color: highlighted ? colorScheme.primaryContainer : Colors.transparent,
       child: InkWell(
@@ -451,20 +664,70 @@ class _FileEntryRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
             children: [
-              ShellIcon(iconForFileEntry(entry)),
+              FileKindIcon(kind: entry.kind, isDimmed: entry.isHidden),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  entry.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                child: !showDetails
+                    ? name
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          name,
+                          const SizedBox(height: 2),
+                          _EntryDetails(
+                            entry: entry,
+                            modifiedLabel: modifiedLabel,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: detailColor,
+                            ),
+                          ),
+                        ],
+                      ),
               ),
               if (entry.isDirectory) const ShellIcon(MdiIcons.chevronRight),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The details line of a row: the size of a file or the item count of a
+/// folder, then when it changed.
+class _EntryDetails extends ConsumerWidget {
+  const _EntryDetails({
+    required this.entry,
+    required this.modifiedLabel,
+    required this.style,
+  });
+
+  final FileEntry entry;
+  final String? modifiedLabel;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final String? what;
+    if (entry.isDirectory) {
+      final includeHidden = ref.watch(
+        fileExplorerSettingsProvider.select((settings) => settings.showHidden),
+      );
+      // Unknown until counted, and left out for an unreadable folder.
+      final count = ref
+          .watch(directoryItemCountProvider(entry.path, includeHidden))
+          .value;
+      what = count == null ? null : context.l10n.folderItemCount(count);
+    } else {
+      what = formatBytes(context, entry.size);
+    }
+    final text = [?what, ?modifiedLabel].join('  ·  ');
+    return Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: style,
     );
   }
 }
@@ -477,10 +740,27 @@ class _EmptyDirectory extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.onSurfaceVariant;
     return Center(
-      child: Text(
-        isFiltered ? context.l10n.noMatchingItems : context.l10n.folderEmpty,
-        style: Theme.of(context).textTheme.bodyLarge,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ShellIcon(
+            isFiltered
+                ? MdiIcons.fileSearchOutline
+                : MdiIcons.folderOpenOutline,
+            size: 48,
+            color: color.withValues(alpha: 0.6),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            isFiltered
+                ? context.l10n.noMatchingItems
+                : context.l10n.folderEmpty,
+            style: theme.textTheme.bodyLarge?.copyWith(color: color),
+          ),
+        ],
       ),
     );
   }
@@ -495,18 +775,23 @@ class _DirectoryError extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const ShellIcon(MdiIcons.folderAlertOutline, size: 48),
+            ShellIcon(
+              MdiIcons.folderAlertOutline,
+              size: 48,
+              color: theme.colorScheme.error,
+            ),
             const SizedBox(height: 12),
             Text(
               context.l10n.cannotOpenPath(path.path),
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium,
+              style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 4),
             Text(
@@ -514,7 +799,9 @@ class _DirectoryError extends HookConsumerWidget {
               textAlign: TextAlign.center,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 16),
             FilledButton.icon(

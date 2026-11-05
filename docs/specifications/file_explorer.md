@@ -27,18 +27,42 @@ shares, accurate MIME) is all out of scope for a plain local listing.
 
 A single scrollable list inside the same card as the other search modes.
 
-- A header row with an **up** button (left arrow) and the **breadcrumb**: the
-  path segments as clickable labels separated by chevrons, the current segment
-  emphasised, scrolling horizontally from the current directory.
-- The **listing**: one row per entry with an icon and the name. Directories
-  sort before files, then alphabetically. Directories show a folder glyph; files
-  show a glyph picked from a small extension→icon table, with a generic file
-  glyph as fallback.
-- The **selected** row is highlighted; selecting an entry opens it in the
-  overview's preview tab (see
+- A header row with an **up** button, the **breadcrumb** and the **view
+  options** button (top right).
+  - The breadcrumb sits on a rounded track: the path segments as clickable
+    labels separated by chevrons, the current segment emphasised, scrolling
+    horizontally from the current directory. A path inside `$HOME` starts at a
+    **Home** crumb instead of spelling out `/home/<user>`; any other path starts
+    at a `/` crumb.
+  - The view options menu edits the [preferences](#view-options) in place; the
+    menu stays open while toggling so several options can be changed at once.
+- The **listing**: one full-width row per entry. Each row shows a type glyph
+  in the type's accent colour (folders use the theme's primary colour), the
+  name, and — when details are on — a second line
+  with the size of a file or the item count of a folder (`Empty`, `1 item`,
+  `12 items`; dotfiles counted only when hidden files are shown, and counted
+  lazily for the rows on screen), then the modification date (time for today, day
+  and month this year, full date otherwise). Folders end with a chevron.
+  Hidden entries are drawn faded.
+- The **selected** row is a full-width `primaryContainer` fill; selecting an entry
+  opens it in the overview's preview tab (see
   [`design/file_preview.md`](../design/file_preview.md)).
 
-There is no locations column, no grid, no sort menu and no properties pane.
+There is no locations column, no grid and no properties pane.
+
+## View options
+
+Persisted in `settings.json` under `files` (the shell Settings list them under
+**Files** too) and shared by the overview's Files pane and the portal file
+chooser:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `showHidden` | `false` | List dotfiles. |
+| `sortBy` | `name` | `name` (natural, case-insensitive: `file2` before `file10`), `modified`, `size` (folders keep their name order) or `type` (broad type, then extension). Ties fall back to the name. |
+| `sortDescending` | `false` | Reverse the order. |
+| `foldersFirst` | `true` | Folders before files whatever the sort; reversing applies within each group. |
+| `showDetails` | `false` | Two-line rows with size/type and date; off gives the regular one-line rows. |
 
 ## Model
 
@@ -46,14 +70,20 @@ There is no locations column, no grid, no sort menu and no properties pane.
 
 - `DirectoryPath path` — the directory currently listed.
 - `String filterText` — the live filter from the shared search input.
-- `bool isShowingHidden` — default **true**: dotfiles are listed. There is no
-  toggle in the minimal version; surfacing it as an option comes later.
+- `List<String> typePatternList` — the portal chooser's type filter: globs
+  (`*.png`, matched case-insensitively on the whole name) or MIME types
+  (`image/*`, `image/png`, approximated from the extension; an unknown MIME
+  type filters nothing). Empty lists every file; folders always pass.
+- `bool isDirectoryOnly` — list folders only (the portal's folder picker).
+
+The hidden-files flag is a [view option](#view-options), not pane state.
 
 `FileEntry` is the immutable row model:
 
 - `String name`, `DirectoryPath path`;
 - `bool isDirectory`;
-- `int size` (files only; sentinel for directories).
+- `int size` (files only; sentinel for directories);
+- `DateTime? modified`.
 
 `DirectoryPath` is the shell's path value type (normalised absolute path) so
 providers can be keyed by it and equality works.
@@ -64,8 +94,9 @@ providers can be keyed by it and equality works.
   `ScreenId` because the overview is per screen.
 - `directoryListingProvider(DirectoryPath)` — async family that enumerates one
   directory; `autoDispose`, cancelled on navigation.
-- `filteredEntryListProvider` — derived list applying `filterText` and
-  `isShowingHidden`, with directories first.
+- `fileExplorerSettingsProvider` — the persisted [view options](#view-options).
+- `filteredEntryListProvider` — derived list applying `filterText`, the type
+  filter and the view options.
 - **Selection** is not held by the pane: it lives on the screen's `Overview` as
   `selectedIndex`, an index into the active mode's result list. The pane is
   presentational — it receives `selectedIndex` and click/keyboard callbacks —
@@ -136,14 +167,14 @@ glyph. No MIME database, no themed-icon lookup.
   undo.
 - **Recursive search** — the original intent of the file search mode; the
   filter only narrows the current directory.
-- Locations column, grid view, sort menu, size/modified columns.
+- Locations column, grid view.
 - `open with` chooser, running `.desktop` files, a *Properties* dialog.
 - Multi-selection, drag & drop, clipboard, share/export.
 - Thumbnails and content previews, archives, tags/ratings (previews are
   explored in [`design/file_preview.md`](../design/file_preview.md)).
 - Trash, removable volumes/device browsing, network shares, *Recent* — all the
   places where GIO (gvfs/`gio`) would be worth adding.
-- Persisting the last path, view mode and sort order across shell restarts.
+- Persisting the last path across shell restarts.
 
 ## Milestones
 
@@ -159,10 +190,37 @@ glyph. No MIME database, no themed-icon lookup.
    ([`design/file_preview.md`](../design/file_preview.md)) for the phase-1 types
    (text, raster image, SVG, binary hex, metadata fallback). *(landed)*
 
-> **Status:** M1–M3 landed, and the selection/keyboard layer now covers the
+4. **M4 — view options and readability.** The persisted view options menu
+   (hidden files, sort key and direction, folders first, details), coloured
+   type glyphs, two-line rows and the Home breadcrumb. *(landed)*
+
+> **Status:** M1–M4 landed, and the selection/keyboard layer now covers the
 > application, file and settings modes. Still to build: the preview's external
 > backends (PDF via poppler, video poster / audio metadata via ffmpeg, office,
 > archives, playback).
 
 Each milestone must pass `cargo check` (Rust + full Dart build),
 `../.flutter_sdk/bin/flutter test` for new tests, and `cargo fmt`.
+
+## Portal file chooser
+
+The trusted FileChooser dialog (`file_chooser/`) embeds the same explorer with
+its own browse state.
+
+- **It takes the keyboard on open.** The hosting tile keeps its own focus node
+  focused, so the dialog requests focus explicitly rather than relying on
+  `autofocus`: a save dialog focuses the file name with the base name selected
+  (`report` in `report.pdf`), ready to be retyped; the other modes focus the
+  search field. A click inside the chooser keeps the keyboard there, and the
+  tile's window gets it back when the chooser closes.
+- The search field filters the current folder live; `↑`/`↓` move the selection
+  and `Enter` opens the selected (or first) entry. Entering a folder clears the
+  search. In a save dialog, picking a file copies its name to the name field
+  and `Enter` in that field saves.
+- The application's filters are offered in a type menu next to the search,
+  the **first filter applied by default**, then *All files*. They filter the
+  listing through `typePatternList`, independently of the search text.
+- The folder picker lists folders only and returns the selected folder, or the
+  current one when none is selected.
+- The selection is tracked by path, so filtering or re-sorting never moves it
+  onto another entry.

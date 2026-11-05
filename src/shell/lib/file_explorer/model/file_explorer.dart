@@ -11,7 +11,14 @@ abstract class FileExplorer with _$FileExplorer {
     required ScreenId screenId,
     required DirectoryPath path,
     @Default('') String filterText,
-    @Default(true) bool isShowingHidden,
+
+    /// File-type patterns a file must match to be listed: globs such as
+    /// `*.png` or MIME types such as `image/*` (the portal chooser's filters).
+    /// Empty lists every file; folders are always listed.
+    @Default(<String>[]) List<String> typePatternList,
+
+    /// Whether only folders are listed (the portal's folder picker).
+    @Default(false) bool isDirectoryOnly,
 
     /// An entry to select once the listing of [path] loads — for example the
     /// directory we came from when navigating up. Cleared once applied.

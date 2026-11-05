@@ -34,6 +34,7 @@ Future<List<FileEntry>> directoryListing(Ref ref, DirectoryPath path) async {
         path: DirectoryPath(entity.path),
         isDirectory: isDirectory,
         size: isDirectory ? 0 : stat.size,
+        modified: stat.modified,
       ),
     );
   }

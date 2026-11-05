@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/file_explorer/model/file_explorer_settings.dart';
+import 'package:shell/file_explorer/provider/file_explorer_settings.dart';
 import 'package:shell/file_explorer/model/directory_path.dart';
 import 'package:shell/file_explorer/model/file_entry.dart';
 import 'package:shell/file_explorer/provider/directory_listing.dart';
@@ -26,6 +28,9 @@ void main() {
     ];
     final container = ProviderContainer(
       overrides: [
+        fileExplorerSettingsProvider.overrideWithValue(
+          const FileExplorerSettings(showHidden: true),
+        ),
         directoryListingProvider(home).overrideWith((ref) async => entryList),
       ],
     );
@@ -86,6 +91,9 @@ void main() {
     ];
     final container = ProviderContainer(
       overrides: [
+        fileExplorerSettingsProvider.overrideWithValue(
+          const FileExplorerSettings(showHidden: true),
+        ),
         directoryListingProvider(
           home,
         ).overrideWith((ref) async => <FileEntry>[]),
@@ -128,6 +136,9 @@ void main() {
     );
     final container = ProviderContainer(
       overrides: [
+        fileExplorerSettingsProvider.overrideWithValue(
+          const FileExplorerSettings(showHidden: true),
+        ),
         directoryListingProvider(
           deep,
         ).overrideWith((ref) async => <FileEntry>[]),

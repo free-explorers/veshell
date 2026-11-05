@@ -105,6 +105,20 @@ class FileExplorerState extends _$FileExplorerState {
     return DirectoryPath('$prefix$firstSegment');
   }
 
+  /// Restricts the listed files to [typePatternList] (globs or MIME types);
+  /// an empty list lists every file.
+  void setTypePatternList(List<String> typePatternList) {
+    state = state.copyWith(typePatternList: typePatternList);
+  }
+
+  /// Lists only folders, for the portal's folder picker.
+  void setDirectoryOnly({required bool isDirectoryOnly}) {
+    if (state.isDirectoryOnly == isDirectoryOnly) {
+      return;
+    }
+    state = state.copyWith(isDirectoryOnly: isDirectoryOnly);
+  }
+
   /// Applies the live filter typed in the overview search input.
   void setFilterText(String filterText) {
     if (state.filterText == filterText) {

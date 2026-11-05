@@ -161,6 +161,33 @@
             },
             "additionalProperties": false
         },
+        "files": {
+            "type": "object",
+            "properties": {
+                "showHidden": {
+                    "type": "boolean"
+                },
+                "sortBy": {
+                    "type": "string",
+                    "enum": [
+                        "name",
+                        "modified",
+                        "size",
+                        "type"
+                    ]
+                },
+                "sortDescending": {
+                    "type": "boolean"
+                },
+                "foldersFirst": {
+                    "type": "boolean"
+                },
+                "showDetails": {
+                    "type": "boolean"
+                }
+            },
+            "additionalProperties": false
+        },
         "theme": {
             "type": "object",
             "properties": {
