@@ -17,6 +17,7 @@ enum PersistenceStore {
   monitor,
   windowManager,
   notification,
+  appLaunchHistory,
   other,
 }
 
@@ -38,7 +39,7 @@ extension PersistenceStoreSchema on PersistenceStore {
 /// Keys are the stable names chosen by the state providers:
 /// `persistent_window_<uuid>`, `workspace_<id>`, `screen_<id>`,
 /// `ScreenManager`, `MonitorManager`, `MonitorConfigurationState(<id>)`,
-/// `WindowManager` and `NotificationManager`.
+/// `WindowManager`, `NotificationManager` and `app_launch_history`.
 PersistenceStore persistenceStoreForKey(String key) {
   if (key == 'WindowManager' || key == 'window_manager') {
     return PersistenceStore.windowManager;
@@ -62,6 +63,9 @@ PersistenceStore persistenceStoreForKey(String key) {
   }
   if (key == 'NotificationManager' || key.startsWith('notification')) {
     return PersistenceStore.notification;
+  }
+  if (key == 'app_launch_history') {
+    return PersistenceStore.appLaunchHistory;
   }
   return PersistenceStore.other;
 }

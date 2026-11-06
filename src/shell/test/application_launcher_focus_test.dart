@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/app_drawer.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/persistent_application_launcher.dart';
 
 void main() {
@@ -24,7 +25,7 @@ void main() {
       overrides: [
         appDrawerFilteredDesktopEntriesProvider(
           '',
-        ).overrideWith((ref) async => appEntries()),
+        ).overrideWith((ref) => AsyncData(appEntries())),
       ],
     );
     addTearDown(container.dispose);
@@ -41,9 +42,9 @@ void main() {
             body: ValueListenableBuilder<bool>(
               valueListenable: selected,
               builder: (context, isSelected, _) =>
-                  PersistentApplicationSelector(
+                  PersistentApplicationLauncher(
                     isSelected: isSelected,
-                    onSelect: (_) {},
+                    onSelect: (_) => const PersistentWindowId('test'),
                   ),
             ),
           ),

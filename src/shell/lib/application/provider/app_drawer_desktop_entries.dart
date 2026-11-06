@@ -12,6 +12,11 @@ Future<Iterable<LocalizedDesktopEntry>> appDrawerDesktopEntries(Ref ref) async {
   );
   return localizedDesktopEntries.values.where(
     (element) =>
-        !element.desktopEntry.isHidden() && shownInCurrentDesktop(element),
+        // `Name` is required by the Desktop Entry spec; an entry without one
+        // is broken and has nothing to show or search by.
+        (element.entries[DesktopEntryKey.name.string]?.trim().isNotEmpty ??
+            false) &&
+        !element.desktopEntry.isHidden() &&
+        shownInCurrentDesktop(element),
   );
 }

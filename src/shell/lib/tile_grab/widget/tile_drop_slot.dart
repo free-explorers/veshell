@@ -4,10 +4,17 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/tile_grab/model/tile_drop.dart';
 import 'package:shell/tile_grab/provider/tile_grab_controller.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
+import 'package:shell/workspace/provider/launch_morphs.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
+import 'package:shell/workspace/widget/tileable/persistent_application_launcher/launch_morph.dart';
 
 /// How long a tile takes to slide to a new slot.
 const _slideDuration = Duration(milliseconds: 240);
+
+/// How the launcher moves aside for a launched tile, over the launch morph:
+/// it holds still while the launched item lifts out of it as a card, then
+/// slides away, arriving as the card lands.
+const _launchSlideCurve = Interval(0.35, 1, curve: Curves.easeInOutCubic);
 
 /// Width of the bar marking where a held tile would be inserted.
 const _insertionBarWidth = 4.0;
@@ -61,7 +68,11 @@ class TileDropSlot extends HookConsumerWidget {
         workspaceId,
       ).select((w) => (w.tileableWindowList, w.visibleLength)),
     );
-    final slides = tileRowOpensGap(visibleLength, settling: isSettling);
+    // The launcher also slides when a launched tile takes its place, even in
+    // a workspace showing a single tile: it moves aside under the new tile.
+    final slides =
+        tileRowOpensGap(visibleLength, settling: isSettling) ||
+        windowId == null;
     final displayIndex = tileDisplayIndex(
       workspaceId: workspaceId,
       windowList: windowList,
@@ -71,6 +82,14 @@ class TileDropSlot extends HookConsumerWidget {
       opensGap: slides,
     ).toDouble();
     final isHeld = windowId != null && windowId == heldWindowId;
+    // The launcher is moving aside for a tile launched from it.
+    final makesWayForLaunch =
+        windowId == null &&
+        ref.watch(
+          launchMorphsProvider.select(
+            (morphs) => windowList.any(morphs.containsKey),
+          ),
+        );
     final position = useAnimationController(
       lowerBound: double.negativeInfinity,
       upperBound: double.infinity,
@@ -82,6 +101,12 @@ class TileDropSlot extends HookConsumerWidget {
       // single tile only shows tiles sliding to make room for a released one.
       if (isHeld || !slides) {
         position.value = displayIndex;
+      } else if (makesWayForLaunch) {
+        position.animateTo(
+          displayIndex,
+          duration: launchMorphDuration,
+          curve: _launchSlideCurve,
+        );
       } else {
         position.animateTo(displayIndex, curve: Curves.easeOutCubic);
       }

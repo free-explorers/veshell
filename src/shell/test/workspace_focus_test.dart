@@ -103,7 +103,7 @@ void main() {
         ).overrideWith(_FakeWorkspaceState.new),
         appDrawerFilteredDesktopEntriesProvider(
           '',
-        ).overrideWith((ref) async => <LocalizedDesktopEntry>[]),
+        ).overrideWith((ref) => const AsyncData(<LocalizedDesktopEntry>[])),
       ],
     );
     addTearDown(container.dispose);
@@ -158,7 +158,7 @@ void main() {
     // launcher search field is still reachable and can take focus.
     await tester.tap(
       find.descendant(
-        of: find.byType(PersistentApplicationSelector),
+        of: find.byType(PersistentApplicationLauncher),
         matching: find.byType(TextField),
       ),
     );
@@ -185,7 +185,7 @@ void main() {
         ).overrideWith(_FakeWorkspaceState.new),
         appDrawerFilteredDesktopEntriesProvider(
           '',
-        ).overrideWith((ref) async => <LocalizedDesktopEntry>[]),
+        ).overrideWith((ref) => const AsyncData(<LocalizedDesktopEntry>[])),
       ],
     );
     addTearDown(container.dispose);
@@ -264,7 +264,7 @@ void main() {
         ).overrideWith(_FakeWorkspaceState.new),
         appDrawerFilteredDesktopEntriesProvider(
           '',
-        ).overrideWith((ref) async => <LocalizedDesktopEntry>[]),
+        ).overrideWith((ref) => const AsyncData(<LocalizedDesktopEntry>[])),
         monitorByViewIdProvider(7).overrideWithValue('DP-1'),
         screenForViewProvider(7).overrideWithValue(screenA),
         monitorByViewIdProvider(8).overrideWithValue('HDMI-1'),

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/application/provider/app_drawer.dart';
+import 'package:shell/application/provider/app_launch_history.dart';
 import 'package:shell/file_explorer/model/directory_path.dart';
 import 'package:shell/file_explorer/model/file_entry.dart';
 import 'package:shell/file_explorer/provider/file_explorer_state.dart';
@@ -229,6 +230,9 @@ void activateOverviewApplicationAt(WidgetRef ref, String screenId, int index) {
   if (entryList == null || index < 0 || index >= entryList.length) {
     return;
   }
+  ref
+      .read(appLaunchHistoryStateProvider.notifier)
+      .recordLaunch(entryList[index]);
   ref
       .read(overviewStateProvider(screenId).notifier)
       .startEphemeralApplication(entryList[index]);

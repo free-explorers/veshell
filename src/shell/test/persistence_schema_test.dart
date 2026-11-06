@@ -48,6 +48,10 @@ void main() {
         persistenceStoreForKey('NotificationManager'),
         PersistenceStore.notification,
       );
+      expect(
+        persistenceStoreForKey('app_launch_history'),
+        PersistenceStore.appLaunchHistory,
+      );
       expect(persistenceStoreForKey('unknown'), PersistenceStore.other);
     });
   });
