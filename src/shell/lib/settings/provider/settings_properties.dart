@@ -520,6 +520,10 @@ class SettingsProperties extends _$SettingsProperties {
                       CursorSizeEditor(path: path, property: property),
                 ),
           ),
+          'animationSpeed': SettingProperty<double>(
+            name: l10n.animationSpeed,
+            description: l10n.animationSpeedDescription,
+          ),
           'focusIndicator': SettingProperty<String>(
             name: l10n.focusIndicator,
             description: l10n.focusIndicatorDescription,

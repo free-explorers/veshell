@@ -58,7 +58,8 @@
         "color": "0xFF006888",
         "cursorTheme": "",
         "cursorSize": 24,
-        "focusIndicator": "grayscale"
+        "focusIndicator": "grayscale",
+        "animationSpeed": 1
     },
     "idle": {
         "dimTimeoutSeconds": 60,

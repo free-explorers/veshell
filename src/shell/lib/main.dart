@@ -1,6 +1,7 @@
 import 'dart:ui' show ViewFocusEvent, ViewFocusState;
 
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart' show timeDilation;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
@@ -29,6 +30,7 @@ import 'package:shell/platform/provider/environment_variables.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/polkit/provider/authentication_agent.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
+import 'package:shell/settings/provider/state/animation_speed_setting.dart';
 import 'package:shell/shared/provider/persistent_storage_state.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_audio.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_server_info.dart';
@@ -102,6 +104,13 @@ class _VeshellState extends ConsumerState<Veshell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    // One knob for every animation of the shell (see `theme.animationSpeed`).
+    ref.listenManual(
+      animationSpeedSettingProvider,
+      (_, speed) => timeDilation = timeDilationForAnimationSpeed(speed),
+      fireImmediately: true,
+    );
 
     ref.read(platformManagerProvider.notifier)
       ..request(
