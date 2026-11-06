@@ -128,7 +128,13 @@ class PersistentWindowTileable extends Tileable {
     // The placeholder's card opens onto the window behind it and expands to
     // uncover it. Both directions share one duration so the outgoing
     // placeholder stays painted around the opening until it covers the tile.
+    // Only the tile's own launch plays the opening: a window that replaces
+    // another one shows at once.
     final content = AnimatedSwitcher(
+      key: useWindowSwitcherKey(
+        hasWindow: metaWindowId != null,
+        launching: window.isWaitingForSurface || window.resumeTimedOut,
+      ),
       duration: windowOpenTransitionDuration,
       transitionBuilder: (child, animation) => child is WindowWidget
           ? WindowOpenTransition(animation: animation, child: child)

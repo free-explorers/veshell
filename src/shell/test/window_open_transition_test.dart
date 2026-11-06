@@ -1,3 +1,4 @@
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/window/widget/window_open_transition.dart';
@@ -78,5 +79,44 @@ void main() {
     expect(openingRect(), Offset.zero & tileSize);
     expect(tester.widget<Opacity>(find.byType(Opacity)).opacity, 1);
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('only a launch plays the opening, not a window swap', (
+    tester,
+  ) async {
+    Key? key;
+    Future<void> build({required bool hasWindow, bool launching = false}) =>
+        tester.pumpWidget(
+          HookBuilder(
+            builder: (context) {
+              key = useWindowSwitcherKey(
+                hasWindow: hasWindow,
+                launching: launching,
+              );
+              return const SizedBox();
+            },
+          ),
+        );
+
+    // A launch from the placeholder keeps the switcher, so it animates.
+    await build(hasWindow: false);
+    final initial = key;
+    await build(hasWindow: false, launching: true);
+    await build(hasWindow: true);
+    expect(key, initial);
+
+    // Closing keeps it too: the placeholder fades in over the window.
+    await build(hasWindow: false);
+    expect(key, initial);
+
+    // A window that shows up with no launch pending is a swap: the switcher
+    // is remounted and shows it at once.
+    await build(hasWindow: true);
+    final swapped = key;
+    expect(swapped, isNot(initial));
+
+    // Further updates of the shown window keep the switcher.
+    await build(hasWindow: true);
+    expect(key, swapped);
   });
 }

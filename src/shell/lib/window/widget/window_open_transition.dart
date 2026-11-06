@@ -1,9 +1,36 @@
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/theme/provider/theme.dart';
 import 'package:shell/window/widget/window_placeholder.dart';
 
 /// How long a persistent tile takes to swap its placeholder for its window.
 const windowOpenTransitionDuration = Duration(milliseconds: 550);
+
+/// Key for a tile's placeholder/window switcher that keeps the opening
+/// animation for the tile's own launches.
+///
+/// The tile's displayed window can change without any launch: a splash hands
+/// over to the real window, an application recreates its surface, a dialog is
+/// promoted. Each of these goes through a moment with no window, so the
+/// switcher would replay the opening as if the tile had just been launched.
+///
+/// [launching] tells whether the placeholder is showing a launch that has not
+/// produced its window yet. When a window appears without one, the key
+/// changes: the switcher is remounted and shows the window at once, dropping
+/// any placeholder that had started to fade in over the previous window.
+Key useWindowSwitcherKey({required bool hasWindow, required bool launching}) {
+  final generation = useRef(0);
+  final hadWindow = useRef(hasWindow);
+  final launchPending = useRef(false);
+
+  if (hasWindow && !hadWindow.value && !launchPending.value) {
+    generation.value++;
+  }
+  hadWindow.value = hasWindow;
+  launchPending.value = !hasWindow && launching;
+
+  return ValueKey(generation.value);
+}
 
 /// Uncovers a tile's first window through its placeholder's centered card.
 ///
