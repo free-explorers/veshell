@@ -51,3 +51,17 @@ jobs:
       - name: Check formatting
         run: dart format --output=none --set-exit-if-changed lib test
         working-directory: src/shell
+
+      # The probe (extra/probe) is a package of its own: same formatter, its
+      # own dependencies, plus its analyzer and tests (no instance needed).
+      - name: Install the probe's dependencies
+        run: dart pub get
+        working-directory: extra/probe
+
+      - name: Check the probe's formatting
+        run: dart format --output=none --set-exit-if-changed bin lib test
+        working-directory: extra/probe
+
+      - name: Analyze and test the probe
+        run: dart analyze && dart test
+        working-directory: extra/probe

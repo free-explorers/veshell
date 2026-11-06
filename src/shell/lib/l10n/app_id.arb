@@ -316,6 +316,7 @@
   "sleep": "Tidur",
   "hibernate": "Hibernasi",
   "unableToHibernate": "Tidak dapat hibernasi",
+  "sessionActionFailed": "{action}: gagal",
   "reboot": "Mulai ulang",
   "shutDown": "Matikan",
   "unavailable": "Tidak tersedia",

@@ -570,6 +570,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         // state only holds the global's id, which lives as long as the display.
         let _ = CursorShapeManagerState::new::<Self>(&display_handle);
         let capture_state = crate::capture::CaptureState::new::<BackendData>(&loop_handle);
+        #[cfg(debug_assertions)]
+        crate::probe::install::<BackendData>(&loop_handle, &socket_name);
         let portal_state = crate::portal::PortalState::new::<BackendData>(&loop_handle);
         let notification_state =
             crate::notification::NotificationState::new::<BackendData>(&loop_handle);

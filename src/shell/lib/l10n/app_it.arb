@@ -316,6 +316,7 @@
   "sleep": "Sospendi",
   "hibernate": "Iberna",
   "unableToHibernate": "Impossibile ibernare",
+  "sessionActionFailed": "{action}: non riuscito",
   "reboot": "Riavvia",
   "shutDown": "Spegni",
   "unavailable": "Non disponibile",

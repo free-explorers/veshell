@@ -316,6 +316,7 @@
   "sleep": "स्लीप",
   "hibernate": "हाइबरनेट करें",
   "unableToHibernate": "हाइबरनेट नहीं किया जा सका",
+  "sessionActionFailed": "{action}: विफल",
   "reboot": "फिर से शुरू करें",
   "shutDown": "सिस्टम बंद करें",
   "unavailable": "अनुपलब्ध",

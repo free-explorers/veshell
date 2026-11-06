@@ -316,6 +316,7 @@
   "sleep": "تعليق",
   "hibernate": "إسبات",
   "unableToHibernate": "تعذر الإسبات",
+  "sessionActionFailed": "{action}: فشل",
   "reboot": "إعادة التشغيل",
   "shutDown": "إيقاف التشغيل",
   "unavailable": "غير متاح",

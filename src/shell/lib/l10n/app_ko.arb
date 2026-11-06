@@ -316,6 +316,7 @@
   "sleep": "절전",
   "hibernate": "최대 절전",
   "unableToHibernate": "최대 절전 모드로 전환할 수 없음",
+  "sessionActionFailed": "{action}: 실패",
   "reboot": "다시 시작",
   "shutDown": "종료",
   "unavailable": "사용 불가",

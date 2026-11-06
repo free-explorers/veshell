@@ -39,6 +39,9 @@ mod meta_window_state;
 mod mouse_button_tracker;
 mod notification;
 mod portal;
+// `veshell-probe`'s control socket: debug builds only.
+#[cfg(debug_assertions)]
+mod probe;
 mod settings;
 mod state;
 mod texture_swap_chain;

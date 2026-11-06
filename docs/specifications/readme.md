@@ -38,3 +38,8 @@ answer. Each service specification records its exact split.
 - [MediaPlayer](/specifications/media_player.md)
 - [Monitoring](/specifications/monitoring.md)
 - [StateManager](/specifications/state_manager.md)
+
+## Developer tooling
+
+- [Veshell probe](/specifications/veshell_probe.md): see, measure, drive and
+  verify a running Veshell

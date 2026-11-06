@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# veshell-probe: see, measure, drive and verify a running Veshell.
+# Runs with the repository's pinned Dart SDK (see AGENTS.md).
+#
+# The probe runs as a compiled binary, cached in .dart_tool and rebuilt when
+# its sources change: `dart run` would compile it again on every call (about
+# 2 s, against a few milliseconds).
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+dart="$here/../../.flutter_sdk/bin/dart"
+if [[ ! -f "$here/.dart_tool/package_config.json" || "$here/pubspec.yaml" -nt "$here/.dart_tool/package_config.json" ]]; then
+  "$dart" pub get --directory "$here" >&2
+fi
+binary="$here/.dart_tool/veshell-probe"
+stale() {
+  [[ ! -x "$binary" ]] && return 0
+  [[ -n "$(find "$here/bin" "$here/lib" "$here/pubspec.lock" "$here/../../.flutter_sdk/version" -newer "$binary" -print -quit 2>/dev/null)" ]]
+}
+if stale; then
+  # Built aside then moved, so a concurrent call never runs a partial file.
+  partial="$binary.$$"
+  if "$dart" compile exe --verbosity=error -o "$partial" "$here/bin/veshell_probe.dart" >&2; then
+    mv -f "$partial" "$binary"
+  else
+    rm -f "$partial"
+    exec "$dart" run "$here/bin/veshell_probe.dart" "$@"
+  fi
+fi
+exec "$binary" "$@"

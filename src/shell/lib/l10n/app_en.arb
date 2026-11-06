@@ -359,6 +359,8 @@
   "sleep": "Sleep",
   "hibernate": "Hibernate",
   "unableToHibernate": "Unable to hibernate",
+  "sessionActionFailed": "{action}: failed",
+  "@sessionActionFailed": {"description": "Title of the dialog shown when a session control (log out, sleep, reboot, shut down) fails; action is that control's label", "placeholders": {"action": {"type": "String"}}},
   "reboot": "Reboot",
   "shutDown": "Shut down",
   "unavailable": "Unavailable",

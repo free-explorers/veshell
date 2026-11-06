@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/capture/provider/screen_cast_consent.dart';
 import 'package:shell/capture/provider/screen_cast_indicator.dart';
 import 'package:shell/capture/provider/screenshot_prompt.dart';
+import 'package:shell/dev_tools/probe/probe_service.dart';
 import 'package:shell/file_chooser/provider/file_chooser_request.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/provider/meta_window_manager.dart';
@@ -111,6 +112,10 @@ class _VeshellState extends ConsumerState<Veshell> with WidgetsBindingObserver {
       (_, speed) => timeDilation = timeDilationForAnimationSpeed(speed),
       fireImmediately: true,
     );
+
+    // `veshell-probe`'s service extensions; registers nothing outside debug
+    // builds.
+    registerProbeExtensions(ProviderScope.containerOf(context, listen: false));
 
     ref.read(platformManagerProvider.notifier)
       ..request(

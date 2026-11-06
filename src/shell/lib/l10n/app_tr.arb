@@ -316,6 +316,7 @@
   "sleep": "Uyku",
   "hibernate": "Hazırda beklet",
   "unableToHibernate": "Hazırda bekletilemiyor",
+  "sessionActionFailed": "{action}: başarısız",
   "reboot": "Yeniden başlat",
   "shutDown": "Bilgisayarı kapat",
   "unavailable": "Kullanılamıyor",
