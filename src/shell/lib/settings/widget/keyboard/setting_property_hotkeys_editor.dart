@@ -148,6 +148,7 @@ class _HotkeyCaptureField extends HookWidget {
         return KeyEventResult.handled;
       },
       child: InkWell(
+        mouseCursor: WidgetStateMouseCursor.clickable,
         onTap: focusNode.requestFocus,
         child: InputDecorator(
           decoration: InputDecoration(

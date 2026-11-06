@@ -2254,12 +2254,16 @@ fn notify_fd() -> Result<(), Box<dyn std::error::Error>> {
 
 /// The built-in session variables the compositor forwards to the systemd user
 /// manager and the D-Bus activation environment, before the user's own.
-const SESSION_IMPORTED_VARIABLES: [&str; 5] = [
+const SESSION_IMPORTED_VARIABLES: [&str; 7] = [
     "WAYLAND_DISPLAY",
     "DISPLAY",
     "XDG_CURRENT_DESKTOP",
     "DESKTOP_SESSION",
     "XDG_SESSION_TYPE",
+    // The cursor from `theme.cursorTheme`/`theme.cursorSize`, exported by
+    // `CursorStateInner` so toolkits started outside the shell match it.
+    "XCURSOR_THEME",
+    "XCURSOR_SIZE",
 ];
 
 /// The names to import: the built-in session variables plus the user's valid

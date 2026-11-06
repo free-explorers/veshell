@@ -12,6 +12,7 @@ use smithay::desktop::{Space, Window};
 use smithay::input::dnd::{DnDGrab, DndGrabHandler, GrabType, Source};
 use smithay::input::keyboard::{KeyboardHandle, LedState, XkbConfig};
 use smithay::input::pointer::{CursorImageStatus, Focus, PointerHandle};
+use smithay::input::tablet::TabletSeatHandler;
 use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::output::{Output, Scale};
 use smithay::reexports::calloop::generic::Generic;
@@ -32,6 +33,7 @@ use smithay::wayland::compositor::{self, get_parent, RectangleKind};
 use smithay::wayland::compositor::{
     with_states, CompositorState, SubsurfaceCachedState, SurfaceAttributes,
 };
+use smithay::wayland::cursor_shape::CursorShapeManagerState;
 use smithay::wayland::dmabuf::DmabufState;
 use smithay::wayland::fractional_scale::{
     with_fractional_scale, FractionalScaleHandler, FractionalScaleManagerState,
@@ -65,7 +67,7 @@ use smithay::xwayland::{X11Surface, X11Wm};
 use tracing::{info, warn};
 use xkbcommon::xkb::Keycode;
 
-use crate::cursor::CursorState;
+use crate::cursor::{CursorState, CursorStateInner};
 use crate::flutter_engine::view::OutputViewIdWrapper;
 use crate::flutter_engine::wayland_messages::{
     PopupMessage, SubsurfaceMessage, SurfaceMessage, SurfaceRole, ToplevelMessage,
@@ -562,6 +564,11 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let viewporter_state = ViewporterState::new::<Self>(&display_handle);
         let fractional_scale_manager_state =
             FractionalScaleManagerState::new::<Self>(&display_handle);
+        // `wp_cursor_shape_v1`: clients name a shape and the compositor draws it
+        // from the configured theme and size (`theme.cursorTheme`/`cursorSize`),
+        // so a settings change reaches running clients without a restart. The
+        // state only holds the global's id, which lives as long as the display.
+        let _ = CursorShapeManagerState::new::<Self>(&display_handle);
         let capture_state = crate::capture::CaptureState::new::<BackendData>(&loop_handle);
         let portal_state = crate::portal::PortalState::new::<BackendData>(&loop_handle);
         let notification_state =
@@ -638,7 +645,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             popup_pointer_grab: None,
             floating_move: None,
             floating_resize: None,
-            cursor_state: CursorState::default(),
+            cursor_state: CursorState::new(CursorStateInner::new(
+                &settings.theme.cursor_theme,
+                settings.theme.cursor_size,
+            )),
             cursor_image_status: Mutex::new(CursorImageStatus::default_named()),
             settings_manager,
             xdg_decoration_state,
@@ -748,6 +758,19 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             settings.keyboard.repeat_delay_ms,
             settings.keyboard.effective_repeat_rate(),
         );
+        let cursor_changed = self
+            .cursor_state
+            .lock()
+            .unwrap()
+            .set_theme(&settings.theme.cursor_theme, settings.theme.cursor_size);
+        if cursor_changed {
+            self.request_render();
+            self.refresh_xwayland_cursor();
+            // `XCURSOR_*` changed in the process environment; report it as an
+            // environment change (nothing removed) so the session import
+            // forwards the new values to services and autostarted apps.
+            return environment_changed.or(Some(Vec::new()));
+        }
         environment_changed
     }
 
@@ -1070,6 +1093,13 @@ impl<BackendData: Backend> ShmHandler for State<BackendData> {
     }
 }
 
+/// Required by `wp_cursor_shape_v1`, whose devices can also be created for
+/// tablet tools. The compositor exposes no tablet seat, so no tool ever gets
+/// focus; the type only satisfies the protocol's bounds.
+impl<BackendData: Backend> TabletSeatHandler for State<BackendData> {
+    type ToolFocus = WlSurface;
+}
+
 impl<BackendData: Backend> SeatHandler for State<BackendData> {
     type KeyboardFocus = KeyboardFocusTarget;
     type PointerFocus = PointerFocusTarget;
@@ -1089,6 +1119,9 @@ impl<BackendData: Backend> SeatHandler for State<BackendData> {
 
     fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {
         *self.cursor_image_status.lock().unwrap() = image;
+        // A named client cursor (cursor-shape protocol) changes without any
+        // surface commit, so nothing else would repaint it.
+        self.request_render();
     }
 
     fn led_state_changed(&mut self, _seat: &Seat<Self>, led_state: LedState) {

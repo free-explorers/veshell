@@ -119,10 +119,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             initial_pointer: pointer,
             initial_placement: placement,
         });
-        self.cursor_state
-            .lock()
-            .expect("cursor state lock")
-            .set_shape(resize_cursor(edge));
+        self.set_grab_cursor(Some(resize_cursor(edge)));
         true
     }
 
@@ -137,11 +134,11 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .get(&resize.meta_window_id)
             .cloned()
         else {
-            self.floating_resize = None;
+            self.end_floating_resize();
             return;
         };
         if !meta_window.is_floating() {
-            self.floating_resize = None;
+            self.end_floating_resize();
             return;
         }
 
@@ -163,10 +160,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
     /// Ends the active resize, if any.
     pub fn end_floating_resize(&mut self) {
         if self.floating_resize.take().is_some() {
-            self.cursor_state
-                .lock()
-                .expect("cursor state lock")
-                .unset_shape();
+            self.set_grab_cursor(None);
         }
     }
 
@@ -235,6 +229,9 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             meta_window_id,
             grab_offset: pointer - Point::from((f64::from(origin.0.x), f64::from(origin.0.y))),
         });
+        // The title bar's own cursor was resolved before the press; the move
+        // is compositor-owned, so the compositor shows that a drag is held.
+        self.set_grab_cursor(Some(CursorIcon::Grabbing));
         true
     }
 
@@ -251,11 +248,11 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .get(&move_.meta_window_id)
             .cloned()
         else {
-            self.floating_move = None;
+            self.end_floating_move();
             return;
         };
         if !meta_window.is_floating() {
-            self.floating_move = None;
+            self.end_floating_move();
             return;
         }
 
@@ -266,7 +263,24 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 
     /// Ends the current move, if any.
     pub fn end_floating_move(&mut self) {
-        self.floating_move = None;
+        if self.floating_move.take().is_some() {
+            self.set_grab_cursor(None);
+        }
+    }
+
+    /// Sets (or with `None`, clears) the cursor shown for a compositor-owned
+    /// grab, repainting when the visible shape changes.
+    fn set_grab_cursor(&mut self, shape: Option<CursorIcon>) {
+        let changed = {
+            let mut cursor_state = self.cursor_state.lock().expect("cursor state lock");
+            match shape {
+                Some(shape) => cursor_state.set_grab_shape(shape),
+                None => cursor_state.clear_grab_shape(),
+            }
+        };
+        if changed {
+            self.request_render();
+        }
     }
 
     /// Clamps an explicitly placed floating window inside its tile.

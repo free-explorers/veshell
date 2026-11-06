@@ -26,6 +26,8 @@ class AccessPointConnectionDialog extends HookConsumerWidget {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               DropdownButtonFormField<String>(
+                mouseCursor: WidgetStateMouseCursor.clickable,
+                dropdownMenuItemMouseCursor: WidgetStateMouseCursor.clickable,
                 initialValue: 'WPA-PSK',
                 items:
                     <String>[

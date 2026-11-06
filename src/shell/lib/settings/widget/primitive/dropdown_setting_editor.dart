@@ -78,6 +78,8 @@ class _DropdownSettingEditorState<T> extends State<DropdownSettingEditor<T>> {
           skipTraversal: true,
           onKeyEvent: _handleKeyEvent,
           child: DropdownButtonFormField<T>(
+            mouseCursor: WidgetStateMouseCursor.clickable,
+            dropdownMenuItemMouseCursor: WidgetStateMouseCursor.clickable,
             key: widget.dropdownKey ?? ValueKey(widget.value),
             initialValue: widget.value,
             isExpanded: true,

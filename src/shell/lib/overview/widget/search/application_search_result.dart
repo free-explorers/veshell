@@ -180,6 +180,7 @@ class _ApplicationRow extends StatelessWidget {
     return Material(
       color: highlighted ? colorScheme.primaryContainer : Colors.transparent,
       child: InkWell(
+        mouseCursor: WidgetStateMouseCursor.clickable,
         onTap: onTap,
         // The row's `Focus` node owns keyboard focus; the ink response only
         // provides the pointer affordance and its action.

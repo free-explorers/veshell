@@ -32,6 +32,7 @@ import 'package:shell/settings/widget/monitor/monitor_resolution_editor.dart';
 import 'package:shell/settings/widget/monitor/monitor_resolution_value.dart';
 import 'package:shell/settings/widget/monitor/monitor_transform_editor.dart';
 import 'package:shell/settings/widget/monitor/monitor_transform_value.dart';
+import 'package:shell/settings/widget/theme/cursor_theme_editor.dart';
 import 'package:shell/settings/widget/theme/focus_indicator_editor.dart';
 import 'package:shell/settings/widget/theme/icon_theme_editor.dart';
 import 'package:shell/shared/util/file.dart';
@@ -491,6 +492,32 @@ class SettingsProperties extends _$SettingsProperties {
                       IconThemeValue(path: path),
                   buildEditor: (context, {required isExpanded}) =>
                       IconThemeEditor(path: path, property: property),
+                ),
+          ),
+          'cursorTheme': SettingProperty<String>(
+            name: l10n.cursorTheme,
+            description: l10n.cursorThemeDescription,
+            buildSearchResult: (context, path, property) =>
+                ExpandableSearchResult<String>(
+                  path: path,
+                  property: property,
+                  buildValue: (context, value, {required isExpanded}) =>
+                      CursorThemeValue(path: path),
+                  buildEditor: (context, {required isExpanded}) =>
+                      CursorThemeEditor(path: path, property: property),
+                ),
+          ),
+          'cursorSize': SettingProperty<int>(
+            name: l10n.cursorSize,
+            description: l10n.cursorSizeDescription,
+            buildSearchResult: (context, path, property) =>
+                ExpandableSearchResult<int>(
+                  path: path,
+                  property: property,
+                  buildValue: (context, value, {required isExpanded}) =>
+                      CursorSizeValue(path: path),
+                  buildEditor: (context, {required isExpanded}) =>
+                      CursorSizeEditor(path: path, property: property),
                 ),
           ),
           'focusIndicator': SettingProperty<String>(

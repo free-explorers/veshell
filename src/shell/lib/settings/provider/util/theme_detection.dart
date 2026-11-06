@@ -103,6 +103,48 @@ Set<String> installedIconThemes({Map<String, String>? environment}) {
   return themes;
 }
 
+/// All Xcursor themes installed in the standard XDG locations: the theme
+/// directories holding a `cursors` directory.
+///
+/// A theme that only inherits another one (such as `default`) has no
+/// `cursors` directory of its own and is left out; the empty setting already
+/// stands for the session default.
+Set<String> installedCursorThemes({Map<String, String>? environment}) {
+  final env = environment ?? Platform.environment;
+  final themes = <String>{};
+
+  for (final directory in _iconThemeDirectories(env)) {
+    if (!Directory(directory).existsSync()) continue;
+    for (final entity in Directory(directory).listSync()) {
+      if (Directory(path.join(entity.path, 'cursors')).existsSync()) {
+        themes.add(path.basename(entity.path));
+      }
+    }
+  }
+
+  return themes;
+}
+
+/// The themes [theme] inherits from, per its `index.theme`, searched in
+/// [baseDirectories] order.
+List<String> themeInherits(String theme, List<String> baseDirectories) {
+  for (final base in baseDirectories) {
+    final value = _readIniValue(
+      path.join(base, theme, 'index.theme'),
+      section: 'Icon Theme',
+      key: 'Inherits',
+    );
+    if (value != null) {
+      return value
+          .split(',')
+          .map((name) => name.trim())
+          .where((name) => name.isNotEmpty)
+          .toList();
+    }
+  }
+  return const [];
+}
+
 /// All GTK themes installed in the standard XDG locations.
 Set<String> installedGtkThemes({Map<String, String>? environment}) {
   final env = environment ?? Platform.environment;

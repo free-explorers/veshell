@@ -1,5 +1,9 @@
 use std::env;
-use std::{collections::HashMap, io::Read, sync::Mutex};
+use std::{
+    collections::HashMap,
+    io::Read,
+    sync::{Mutex, OnceLock},
+};
 
 use smithay::backend::renderer::RendererSuper;
 use smithay::output::Scale;
@@ -116,9 +120,18 @@ fn load_icon(theme: &CursorTheme, shape: CursorIcon) -> Result<Vec<Image>, Error
 
 pub type CursorState = Mutex<CursorStateInner>;
 pub struct CursorStateInner {
-    current_cursor: Option<CursorIcon>,
+    /// Last shape requested by Flutter through `flutter/mousecursor`.
+    flutter_cursor: Option<CursorIcon>,
+    /// Shape forced by a compositor-owned grab (floating move or resize).
+    ///
+    /// Kept apart from [`Self::flutter_cursor`]: Flutter keeps receiving motion
+    /// during the grab and may report its own cursor, which must not replace
+    /// the grab feedback, and ending the grab must restore Flutter's shape
+    /// rather than forget it.
+    grab_cursor: Option<CursorIcon>,
 
     cursor_theme: CursorTheme,
+    cursor_theme_name: String,
     cursor_size: u32,
 
     cursors: HashMap<CursorIcon, Cursor>,
@@ -127,12 +140,45 @@ pub struct CursorStateInner {
 }
 
 impl CursorStateInner {
-    pub fn set_shape(&mut self, shape: CursorIcon) {
-        self.current_cursor = Some(shape);
+    /// Records the shape Flutter asked for. Returns whether the displayed
+    /// cursor changed, so the caller knows to schedule a render.
+    pub fn set_flutter_shape(&mut self, shape: CursorIcon) -> bool {
+        let before = self.shape();
+        self.flutter_cursor = Some(shape);
+        before != self.shape()
     }
 
-    pub fn unset_shape(&mut self) {
-        self.current_cursor = None;
+    /// Forces `shape` for the duration of a compositor-owned grab.
+    pub fn set_grab_shape(&mut self, shape: CursorIcon) -> bool {
+        let before = self.shape();
+        self.grab_cursor = Some(shape);
+        before != self.shape()
+    }
+
+    /// Ends the grab override; Flutter's last shape shows again.
+    pub fn clear_grab_shape(&mut self) -> bool {
+        let before = self.shape();
+        self.grab_cursor = None;
+        before != self.shape()
+    }
+
+    /// The shell-chosen shape currently displayed, if any.
+    pub fn shape(&self) -> Option<CursorIcon> {
+        self.grab_cursor.or(self.flutter_cursor)
+    }
+
+    /// Whether the shell deliberately claims the cursor over client surfaces.
+    ///
+    /// Over a client surface Flutter has no cursor of its own and reports the
+    /// default arrow, which defers to the client's cursor image. Any other
+    /// shape comes from a shell region placed over the surface on purpose (a
+    /// Super-hover tile grab, a resize edge) or from a compositor grab, and
+    /// must show instead of whatever the client set.
+    pub fn overrides_clients(&self) -> bool {
+        self.grab_cursor.is_some()
+            || self
+                .flutter_cursor
+                .is_some_and(|c| c != CursorIcon::Default)
     }
 
     pub fn get_named_cursor(&mut self, shape: CursorIcon) -> &Cursor {
@@ -142,36 +188,149 @@ impl CursorStateInner {
     }
 }
 
-pub fn load_cursor_theme() -> (CursorTheme, u32) {
-    let name = std::env::var("XCURSOR_THEME")
-        .ok()
-        .unwrap_or_else(|| "default".into());
-    let size = std::env::var("XCURSOR_SIZE")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(24);
+/// Size used when neither the setting nor the environment chooses one.
+pub const DEFAULT_CURSOR_SIZE: u32 = 24;
 
-    // Set the common XCURSOR env variables.
-    env::set_var("XCURSOR_THEME", name.clone());
-    env::set_var("XCURSOR_SIZE", size.to_string());
-
-    (CursorTheme::load(&name), size)
+/// The cursor theme and size the session asked for before Veshell applied its
+/// own setting (`XCURSOR_THEME`/`XCURSOR_SIZE`, else `default`/24).
+///
+/// Read once: applying the setting rewrites those variables, so later reads
+/// would only see Veshell's own value and clearing the setting could never go
+/// back to the session's choice.
+fn session_cursor_defaults() -> &'static (String, u32) {
+    static DEFAULTS: OnceLock<(String, u32)> = OnceLock::new();
+    DEFAULTS.get_or_init(|| {
+        let name = env::var("XCURSOR_THEME")
+            .ok()
+            .filter(|name| !name.is_empty())
+            .unwrap_or_else(|| "default".into());
+        let size = env::var("XCURSOR_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .filter(|size| *size > 0)
+            .unwrap_or(DEFAULT_CURSOR_SIZE);
+        (name, size)
+    })
 }
 
-impl Default for CursorStateInner {
-    fn default() -> CursorStateInner {
-        let (theme, size) = load_cursor_theme();
-        CursorStateInner {
-            current_cursor: None,
+/// The effective cursor theme name and nominal size for the `theme.cursorTheme`
+/// and `theme.cursorSize` settings. An empty theme or a zero size keeps the
+/// session's value.
+pub fn resolve_cursor_config(theme: &str, size: u32) -> (String, u32) {
+    let (session_theme, session_size) = session_cursor_defaults();
+    let theme = theme.trim();
+    (
+        if theme.is_empty() {
+            session_theme.clone()
+        } else {
+            theme.to_owned()
+        },
+        if size == 0 { *session_size } else { size },
+    )
+}
 
+/// Exports the effective cursor to the compositor's environment, which
+/// children spawned directly inherit and the session import forwards.
+fn export_cursor_environment(name: &str, size: u32) {
+    env::set_var("XCURSOR_THEME", name);
+    env::set_var("XCURSOR_SIZE", size.to_string());
+}
+
+impl CursorStateInner {
+    /// Builds the cursor state for the configured theme and size.
+    pub fn new(theme: &str, size: u32) -> Self {
+        let (name, size) = resolve_cursor_config(theme, size);
+        export_cursor_environment(&name, size);
+        CursorStateInner {
+            flutter_cursor: None,
+            grab_cursor: None,
+
+            cursor_theme: CursorTheme::load(&name),
+            cursor_theme_name: name,
             cursor_size: size,
-            cursor_theme: theme,
 
             cursors: HashMap::new(),
             current_image: None,
 
             image_cache: Vec::new(),
         }
+    }
+
+    /// Switches to another theme or size. Returns whether anything changed;
+    /// the caller then repaints and refreshes Xwayland.
+    pub fn set_theme(&mut self, theme: &str, size: u32) -> bool {
+        let (name, size) = resolve_cursor_config(theme, size);
+        if name == self.cursor_theme_name && size == self.cursor_size {
+            return false;
+        }
+        export_cursor_environment(&name, size);
+        self.cursor_theme = CursorTheme::load(&name);
+        self.cursor_theme_name = name;
+        self.cursor_size = size;
+        // Loaded shapes and their uploaded frames belong to the old theme.
+        self.cursors.clear();
+        self.image_cache.clear();
+        self.current_image = None;
+        true
+    }
+
+    /// The effective theme name, as exported in `XCURSOR_THEME`.
+    pub fn theme_name(&self) -> &str {
+        &self.cursor_theme_name
+    }
+
+    /// The effective nominal size, as exported in `XCURSOR_SIZE`.
+    pub fn size(&self) -> u32 {
+        self.cursor_size
+    }
+
+    /// The default arrow of the current theme.
+    pub fn default_cursor(&mut self) -> &Cursor {
+        self.get_named_cursor(CursorIcon::Default)
+    }
+}
+
+impl Default for CursorStateInner {
+    /// The session's cursor, before any setting applies.
+    fn default() -> CursorStateInner {
+        CursorStateInner::new("", 0)
+    }
+}
+
+/// What the pointer shows.
+#[derive(Debug, PartialEq)]
+enum CursorChoice {
+    /// A client-drawn cursor surface.
+    Surface(WlSurface),
+    /// A shape drawn from the configured theme and size.
+    Named(CursorIcon),
+    Hidden,
+}
+
+/// Picks the cursor from the client's request and the shell's shape.
+///
+/// When the client owns the cursor (it is under the pointer and the shell does
+/// not claim it, or a game owns the output) its request is honoured as is: a
+/// surface it draws, a shape it named through `wp_cursor_shape_v1` (drawn from
+/// the configured theme, so theme and size settings reach it live), or no
+/// cursor at all. The shell's arrow must not cover a named shape there: Flutter
+/// reports `basic` over every client surface. Elsewhere the shell's shape wins,
+/// falling back to a named client shape and then to nothing.
+fn choose_cursor(
+    client: CursorImageStatus,
+    shell: Option<CursorIcon>,
+    client_owns_cursor: bool,
+) -> CursorChoice {
+    if client_owns_cursor {
+        return match client {
+            CursorImageStatus::Surface(surface) => CursorChoice::Surface(surface),
+            CursorImageStatus::Named(icon) => CursorChoice::Named(icon),
+            CursorImageStatus::Hidden => CursorChoice::Hidden,
+        };
+    }
+    match (shell, client) {
+        (Some(icon), _) | (None, CursorImageStatus::Named(icon)) => CursorChoice::Named(icon),
+        _ => CursorChoice::Hidden,
     }
 }
 
@@ -203,36 +362,22 @@ where
     let mut state_ref = cursor_state.lock().unwrap();
     let state = &mut *state_ref;
 
-    // While a game owns the output it is the only pointer target, so its cursor
-    // image is authoritative. The shell's own cursor (set from Flutter's
-    // `MouseRegion`s) must not override it: a game that draws a custom cursor
-    // would otherwise show the shell's arrow, and one that hides the cursor
-    // would still show it. Outside gaming mode the shell keeps priority, so the
-    // desktop cursor is unchanged.
-    let named_cursor = if gaming_mode {
-        match cursor_status {
-            CursorImageStatus::Named(named_cursor) => Some(named_cursor),
-            _ => None,
-        }
-    } else {
-        state.current_cursor.or(match cursor_status {
-            CursorImageStatus::Named(named_cursor) => Some(named_cursor),
-            _ => None,
-        })
-    };
-
-    if let CursorImageStatus::Surface(ref wl_surface) = cursor_status {
-        // The game is under the pointer by definition while it owns the output,
-        // even though the shell stops reporting a surface under the cursor.
-        if gaming_mode || is_surface_under_pointer {
+    // The game is under the pointer by definition while it owns the output,
+    // even though the shell stops reporting a surface under the cursor.
+    let client_owns_cursor =
+        gaming_mode || (is_surface_under_pointer && !state.overrides_clients());
+    let named_cursor = match choose_cursor(cursor_status, state.shape(), client_owns_cursor) {
+        CursorChoice::Surface(wl_surface) => {
             return draw_surface_cursor(
                 renderer,
-                wl_surface,
+                &wl_surface,
                 location.to_i32_round(),
                 scale.fractional_scale().into(),
             );
         }
-    }
+        CursorChoice::Named(icon) => Some(icon),
+        CursorChoice::Hidden => None,
+    };
     if let Some(current_cursor) = named_cursor {
         let integer_scale = scale.integer_scale();
         let frame = state
@@ -320,4 +465,93 @@ where
     .into_iter()
     .map(|elem| (elem, h))
     .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn configured_cursor_wins_and_empty_keeps_the_session() {
+        assert_eq!(
+            resolve_cursor_config(" Breeze_Snow ", 48),
+            ("Breeze_Snow".to_owned(), 48)
+        );
+        assert_eq!(
+            resolve_cursor_config("", 0),
+            session_cursor_defaults().clone()
+        );
+    }
+
+    #[test]
+    fn set_theme_reports_only_real_changes() {
+        let mut state = CursorStateInner::new("Breeze_Snow", 32);
+        assert!(!state.set_theme("Breeze_Snow", 32));
+        assert!(state.set_theme("Breeze_Snow", 48));
+        assert_eq!(state.size(), 48);
+        assert!(state.set_theme("Adwaita", 48));
+        assert_eq!(state.theme_name(), "Adwaita");
+    }
+
+    #[test]
+    fn a_client_owning_the_cursor_keeps_its_named_shape() {
+        // Flutter reports `basic` over every client surface; it must not
+        // cover a shape the client named through `wp_cursor_shape_v1`.
+        assert_eq!(
+            choose_cursor(
+                CursorImageStatus::Named(CursorIcon::Text),
+                Some(CursorIcon::Default),
+                true,
+            ),
+            CursorChoice::Named(CursorIcon::Text)
+        );
+        assert_eq!(
+            choose_cursor(CursorImageStatus::Hidden, Some(CursorIcon::Default), true),
+            CursorChoice::Hidden
+        );
+    }
+
+    #[test]
+    fn the_shell_shape_wins_where_the_client_does_not_own_the_cursor() {
+        assert_eq!(
+            choose_cursor(
+                CursorImageStatus::Named(CursorIcon::Text),
+                Some(CursorIcon::Grab),
+                false,
+            ),
+            CursorChoice::Named(CursorIcon::Grab)
+        );
+        assert_eq!(
+            choose_cursor(CursorImageStatus::Named(CursorIcon::Text), None, false),
+            CursorChoice::Named(CursorIcon::Text)
+        );
+        assert_eq!(
+            choose_cursor(CursorImageStatus::Hidden, None, false),
+            CursorChoice::Hidden
+        );
+    }
+
+    #[test]
+    fn default_flutter_cursor_defers_to_clients() {
+        let mut state = CursorStateInner::default();
+        assert!(!state.overrides_clients());
+        state.set_flutter_shape(CursorIcon::Default);
+        assert!(!state.overrides_clients());
+    }
+
+    #[test]
+    fn deliberate_shell_cursors_override_clients() {
+        let mut state = CursorStateInner::default();
+        state.set_flutter_shape(CursorIcon::Grab);
+        assert!(state.overrides_clients());
+
+        state.set_flutter_shape(CursorIcon::Default);
+        state.set_grab_shape(CursorIcon::Grabbing);
+        assert!(state.overrides_clients());
+        assert_eq!(state.shape(), Some(CursorIcon::Grabbing));
+
+        state.clear_grab_shape();
+        assert!(!state.overrides_clients());
+        assert_eq!(state.shape(), Some(CursorIcon::Default));
+    }
 }

@@ -200,6 +200,15 @@
                 "iconTheme": {
                     "type": "string"
                 },
+                "cursorTheme": {
+                    "type": "string",
+                    "description": "Xcursor theme name; empty keeps the session's XCURSOR_THEME"
+                },
+                "cursorSize": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Nominal cursor size in logical pixels; 0 keeps the session's XCURSOR_SIZE"
+                },
                 "focusIndicator": {
                     "type": "string",
                     "enum": [

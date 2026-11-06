@@ -359,6 +359,7 @@ class ExpandableDataRow extends HookWidget {
     return Column(
       children: [
         InkWell(
+          mouseCursor: WidgetStateMouseCursor.clickable,
           onTap: () => isExpandedState.value = !isExpandedState.value,
           child: SizedBox(
             height: 24,

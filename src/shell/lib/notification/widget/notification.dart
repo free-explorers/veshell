@@ -172,7 +172,11 @@ class NotificationWidget extends StatelessWidget {
     final card = Stack(
       children: [
         if (onBodyTap != null)
-          InkWell(onTap: onBodyTap, child: content)
+          InkWell(
+            mouseCursor: WidgetStateMouseCursor.clickable,
+            onTap: onBodyTap,
+            child: content,
+          )
         else
           content,
         Positioned(

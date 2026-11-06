@@ -51,6 +51,16 @@ pub fn get_environment_variables<BackendData: Backend + 'static>(
 
     let user_variables = data.settings_manager.get_settings().environment.variables;
 
+    // The cursor from the theme settings, so launched toolkits draw the same
+    // cursor as the compositor.
+    let (cursor_theme, cursor_size) = {
+        let cursor_state = data.cursor_state.lock().unwrap();
+        (
+            cursor_state.theme_name().to_owned(),
+            cursor_state.size().to_string(),
+        )
+    };
+
     // Environment shared with application launched by the shell.
     // Tracked launches go through the systemd user manager, which has its own
     // session environment, so these values must be forwarded explicitly.
@@ -62,6 +72,8 @@ pub fn get_environment_variables<BackendData: Backend + 'static>(
         ("XDG_SESSION_TYPE", Some("wayland")),
         ("GDK_BACKEND", Some("wayland")),
         ("QT_QPA_PLATFORM", Some("wayland")),
+        ("XCURSOR_THEME", Some(cursor_theme.as_str())),
+        ("XCURSOR_SIZE", Some(cursor_size.as_str())),
     ]);
 
     // User settings override the defaults above, except the session-derived

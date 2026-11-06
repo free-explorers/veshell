@@ -59,6 +59,7 @@ class TileableListView extends HookConsumerWidget {
           return SizedBox(
             height: double.infinity,
             child: InkWell(
+              mouseCursor: WidgetStateMouseCursor.clickable,
               onTap: index < 0
                   ? null
                   : () => ref

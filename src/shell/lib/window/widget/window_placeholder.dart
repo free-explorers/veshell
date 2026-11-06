@@ -307,6 +307,7 @@ class WindowPlaceholder extends HookConsumerWidget {
             Positioned.fill(child: _PlaceholderBackground(iconPath: iconPath)),
             Positioned.fill(
               child: InkWell(
+                mouseCursor: WidgetStateMouseCursor.clickable,
                 focusNode: backgroundFocusNode,
                 canRequestFocus: false,
                 onTap: canLaunch && !showLaunchLogs ? launch : null,
@@ -327,6 +328,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                   clipBehavior: Clip.antiAlias,
                   color: Theme.of(context).colorScheme.surface.withAlpha(150),
                   child: InkWell(
+                    mouseCursor: WidgetStateMouseCursor.clickable,
                     canRequestFocus: false,
                     onTap: canLaunch && !showLaunchLogs ? launch : null,
                     splashColor: Theme.of(
@@ -427,6 +429,7 @@ class ExecCommandEditor extends HookWidget {
           color: Colors.white.withAlpha(12),
           borderRadius: const BorderRadius.all(Radius.circular(48)),
           child: InkWell(
+            mouseCursor: WidgetStateMouseCursor.clickable,
             onTap: () {
               if (isEditable.value) return;
               isEditable.value = true;
@@ -527,6 +530,7 @@ class DisplayModeRow extends StatelessWidget {
                     ? Theme.of(context).colorScheme.primaryContainer
                     : Theme.of(context).colorScheme.surfaceContainerHighest,
                 child: InkWell(
+                  mouseCursor: WidgetStateMouseCursor.clickable,
                   onTap: selected ? null : () => onSelectionChanged?.call(mode),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
