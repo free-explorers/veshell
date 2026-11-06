@@ -314,6 +314,7 @@
   "sleep": "Suspender",
   "hibernate": "Hibernar",
   "unableToHibernate": "No se puede hibernar",
+  "sessionActionFailed": "{action}: falló",
   "reboot": "Reiniciar",
   "shutDown": "Apagar",
   "unavailable": "No disponible",

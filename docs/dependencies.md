@@ -107,10 +107,16 @@ the prepared shell and engine instead; see [building and packaging](building.md)
       <td>libgstreamer1.0-dev, libgstreamer-plugins-base1.0-dev</td>
     </tr>
     <tr>
-      <td>dbus-daemon session bus (tests + portal frontend)</td>
+      <td>dbus-daemon session bus (tests, portal frontend, veshell-probe's private bus)</td>
       <td>dbus</td>
       <td>dbus</td>
       <td>dbus</td>
+    </tr>
+    <tr>
+      <td>Weston, headless backend with GL (optional: veshell-probe's headless instances and scenarios)</td>
+      <td>weston</td>
+      <td>weston</td>
+      <td>weston</td>
     </tr>
     <tr>
       <td>libnvidia-ml (optional: NVIDIA GPU monitoring, shipped with the NVIDIA driver; the GPU card is omitted when absent)</td>

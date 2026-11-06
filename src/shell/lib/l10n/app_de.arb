@@ -314,6 +314,7 @@
   "sleep": "Bereitschaft",
   "hibernate": "Ruhezustand",
   "unableToHibernate": "Ruhezustand nicht möglich",
+  "sessionActionFailed": "{action}: fehlgeschlagen",
   "reboot": "Neustarten",
   "shutDown": "Herunterfahren",
   "unavailable": "Nicht verfügbar",

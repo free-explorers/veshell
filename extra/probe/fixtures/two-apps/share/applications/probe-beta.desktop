@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Beta
+Comment=A veshell-probe fixture application
+Exec=true
+Categories=Utility;

@@ -1331,7 +1331,7 @@ fn orient_pixels(
     Ok((target_size, pixels))
 }
 
-fn encode_and_write_png(
+pub(crate) fn encode_and_write_png(
     size: Size<i32, Physical>,
     pixels: &[u8],
     path: &Path,

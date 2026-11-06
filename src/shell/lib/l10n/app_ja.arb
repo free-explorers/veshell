@@ -314,6 +314,7 @@
   "sleep": "サスペンド",
   "hibernate": "休止状態",
   "unableToHibernate": "休止状態にできません",
+  "sessionActionFailed": "{action}: 失敗しました",
   "reboot": "再起動",
   "shutDown": "シャットダウン",
   "unavailable": "利用不可",

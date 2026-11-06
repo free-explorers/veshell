@@ -314,6 +314,7 @@
   "sleep": "Спящий режим",
   "hibernate": "Гибернация",
   "unableToHibernate": "Не удалось перейти в гибернацию",
+  "sessionActionFailed": "{action}: не удалось",
   "reboot": "Перезагрузить",
   "shutDown": "Выключить",
   "unavailable": "Недоступно",

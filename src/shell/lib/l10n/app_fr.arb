@@ -314,6 +314,7 @@
   "sleep": "Mettre en veille",
   "hibernate": "Hiberner",
   "unableToHibernate": "Impossible d’hiberner",
+  "sessionActionFailed": "{action} : échec",
   "reboot": "Redémarrer",
   "shutDown": "Éteindre",
   "unavailable": "Indisponible",

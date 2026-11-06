@@ -33,6 +33,13 @@ version-free; every versionable fact is anchored in a project file.
    (`--set-exit-if-changed`); a `dart` from the generic `PATH` may format
    differently, so never use one for the shell.
 
+## Tests and user directories
+
+Tests must never write to the user's directories (videos, config, data): give
+the code under test a temporary directory instead. The recording tests used to
+publish into `~/Videos`, leaving hundreds of header-only files there across
+`cargo test` runs.
+
 ## Diagnosing Dart-side problems directly
 
 Run from `src/shell/`, using `../../.flutter_sdk/bin/dart` (the SDK lives at
@@ -51,6 +58,35 @@ project SDK from `src/shell/`:
 
 - `../../.flutter_sdk/bin/flutter test` (all tests), or
 - `../../.flutter_sdk/bin/flutter test test/<file>_test.dart` (one file).
+
+## Seeing the running shell: `veshell-probe`
+
+`extra/probe/veshell-probe` (also `veshell-probe serve`, JSON-RPC tools on
+stdio) sees, measures and drives a running **debug**
+build (`cargo run`, or the VS Code "Run Veshell as Window" launch), found on its
+VM service (ports 12345+). See `docs/specifications/veshell_probe.md`.
+
+- `find` gives a widget's global rect, the part ancestor clips leave in view,
+  and its opacity; `screenshot` captures what was actually painted; `tap`,
+  `key`, `type` drive it; `state` snapshots screens, workspaces and windows.
+- `start` runs an isolated instance in a headless display (its own config,
+  data and user directories, the applications of `extra/probe/fixtures/`),
+  used by default until `stop`; prefer it to probing the developer's own
+  instance. Input goes through the compositor as a device's would.
+- `scenario FILE` replays a check from `extra/probe/scenarios/` and compares
+  its screenshots with references; turn a reproduced bug into a scenario.
+- `animate` freezes the clock, plays an action and steps through exact,
+  evenly spaced instants: a contact sheet, and the tracked widgets' geometry
+  on each frame. `find` says whether a widget is `painted`, not only where
+  it is laid out.
+- `verify` is the gate below in one call, comparing `flutter test` with
+  `extra/probe/known_failures.txt` (update that list when a known failure is
+  fixed, never to hide a new one).
+
+For a visual bug: reproduce it with `find`/`animate` first, and check that the
+probe shows the fault before fixing it; after the fix, run the same probe
+again, then `verify`. The instance must be rebuilt and restarted to pick up
+Dart changes.
 
 ## Where things live
 

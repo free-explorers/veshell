@@ -154,17 +154,24 @@ fn vp8_target_bitrate(geometry: &RecordingGeometry) -> i32 {
 /// [`RecordingHandle::push_frame`] and finish with
 /// [`RecordingHandle::stop`]; exactly one [`RecordingEvent`] follows on
 /// the events channel per session.
+///
+/// The recording is written to the user's videos directory.
 pub fn spawn_recording_worker(
     geometry: RecordingGeometry,
     events: smithay::reexports::calloop::channel::Sender<RecordingEvent>,
 ) -> Result<RecordingHandle, String> {
-    spawn_recording_worker_with_timeout(geometry, events, EOS_COMPLETION_TIMEOUT)
+    spawn_recording_worker_with_timeout(geometry, events, EOS_COMPLETION_TIMEOUT, None)
 }
 
+/// [`spawn_recording_worker`], writing into `directory` (the user's
+/// videos directory when `None`) with the given EOS playout timeout.
+/// Tests pass a directory of their own: they must not leave files in
+/// the user's videos.
 fn spawn_recording_worker_with_timeout(
     geometry: RecordingGeometry,
     events: smithay::reexports::calloop::channel::Sender<RecordingEvent>,
     eos_timeout: Duration,
+    directory: Option<PathBuf>,
 ) -> Result<RecordingHandle, String> {
     let frame_len = frame_len(&geometry)?;
     let (commands, receiver) = sync_channel::<RecordingCommand>(FRAME_QUEUE_DEPTH);
@@ -177,6 +184,7 @@ fn spawn_recording_worker_with_timeout(
             events,
             generation,
             eos_timeout,
+            directory,
         );
     });
     Ok(RecordingHandle {
@@ -276,6 +284,7 @@ fn build_recording_pipeline(
     geometry: &RecordingGeometry,
     frame_len: usize,
     generation: u64,
+    directory: Option<&Path>,
 ) -> Result<RunningPipeline, String> {
     gst::init().map_err(|error| format!("GStreamer is unavailable: {error}"))?;
 
@@ -333,7 +342,7 @@ fn build_recording_pipeline(
         .ok_or_else(|| "Recording buffer is too large".to_string())?;
     appsrc.set_max_bytes(queue_limit);
 
-    let (destination, part_path) = recording_destination()?;
+    let (destination, part_path) = recording_destination(directory)?;
     sink.set_property("location", part_path.clone());
     sink.set_property("sync", false);
 
@@ -375,8 +384,11 @@ fn build_recording_pipeline(
 /// partial file written while the recording runs. The destination is
 /// created atomically (`create_new`) so concurrent sessions never pick
 /// the same pair; the encoder overwrites (its own) empty placeholder.
-fn recording_destination() -> Result<(PathBuf, PathBuf), String> {
-    let directory = super::recording_directory()?;
+fn recording_destination(directory: Option<&Path>) -> Result<(PathBuf, PathBuf), String> {
+    let directory = match directory {
+        Some(directory) => directory.to_path_buf(),
+        None => super::recording_directory()?,
+    };
     let now = chrono::Local::now()
         .format("%Y-%m-%d %H-%M-%S%.3f")
         .to_string();
@@ -427,20 +439,22 @@ fn run_recording_worker(
     events: smithay::reexports::calloop::channel::Sender<RecordingEvent>,
     generation: u64,
     eos_timeout: Duration,
+    directory: Option<PathBuf>,
 ) {
     let started = Instant::now();
 
-    let running = match build_recording_pipeline(&geometry, frame_len, generation) {
-        Ok(running) => running,
-        Err(message) => {
-            let _ = events.send(RecordingEvent::Failed {
-                generation,
-                message,
-                partial: None,
-            });
-            return;
-        }
-    };
+    let running =
+        match build_recording_pipeline(&geometry, frame_len, generation, directory.as_deref()) {
+            Ok(running) => running,
+            Err(message) => {
+                let _ = events.send(RecordingEvent::Failed {
+                    generation,
+                    message,
+                    partial: None,
+                });
+                return;
+            }
+        };
 
     let mut frames = 0u64;
     let mut dropped = 0u64;
@@ -592,6 +606,45 @@ mod tests {
         RecordingGeometry { size, fps: 30 }
     }
 
+    /// A directory of the test's own under the system temp directory,
+    /// removed with everything in it when dropped (a failing test too):
+    /// recording tests must not write into the user's videos.
+    struct TestDirectory(PathBuf);
+
+    impl TestDirectory {
+        fn new(name: &str) -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "veshell-recording-{name}-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::create_dir_all(&path).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// Spawns a worker recording into [`TestDirectory`] `directory`.
+    fn spawn_test_worker(
+        directory: &TestDirectory,
+        size: Size<i32, Physical>,
+        events: channel::Sender<RecordingEvent>,
+    ) -> RecordingHandle {
+        spawn_recording_worker_with_timeout(
+            recording_geometry(size),
+            events,
+            EOS_COMPLETION_TIMEOUT,
+            Some(directory.0.clone()),
+        )
+        .unwrap()
+    }
+
     /// The derived bitrate must scale with both resolution and rate, be
     /// clamped at the ends, and never collapse to the encoder's
     /// resolution-independent default.
@@ -645,7 +698,8 @@ mod tests {
     fn recording_completes_after_stop_with_playable_file() {
         let size: Size<i32, Physical> = (16, 16).into();
         let (events_sender, events_receiver) = channel::channel::<RecordingEvent>();
-        let mut recorder = spawn_recording_worker(recording_geometry(size), events_sender).unwrap();
+        let directory = TestDirectory::new("session");
+        let mut recorder = spawn_test_worker(&directory, size, events_sender);
         let generation = recorder.generation();
         for frame_index in 0..5u8 {
             assert!(
@@ -680,7 +734,10 @@ mod tests {
             &[0x1A, 0x45, 0xDF, 0xA3],
             "the published file is a WebM container"
         );
-        std::fs::remove_file(path).ok();
+        assert!(
+            path.starts_with(&directory.0),
+            "the recording lands in the directory it was given, not in the user's videos"
+        );
     }
 
     /// The EOS playout window opens at the Stop, not at the session
@@ -692,10 +749,12 @@ mod tests {
     fn long_session_still_plays_out_after_stop() {
         let size: Size<i32, Physical> = (64, 64).into();
         let (events_sender, events_receiver) = channel::channel::<RecordingEvent>();
+        let directory = TestDirectory::new("long-session");
         let mut recorder = spawn_recording_worker_with_timeout(
             recording_geometry(size),
             events_sender,
             Duration::from_millis(300),
+            Some(directory.0.clone()),
         )
         .unwrap();
         let frame = rgba_frame(size, 60);
@@ -748,7 +807,8 @@ mod tests {
     fn real_size_recording_encodes_beyond_the_header() {
         let size: Size<i32, Physical> = (1494, 1021).into();
         let (events_sender, events_receiver) = channel::channel::<RecordingEvent>();
-        let mut recorder = spawn_recording_worker(recording_geometry(size), events_sender).unwrap();
+        let directory = TestDirectory::new("session");
+        let mut recorder = spawn_test_worker(&directory, size, events_sender);
         let frame = rgba_frame(size, 60);
         for _ in 0..30 {
             assert!(
@@ -776,7 +836,6 @@ mod tests {
             "encoded payload expected, got {} bytes (a bare header means zero frames encoded)",
             finished.len()
         );
-        std::fs::remove_file(path).ok();
     }
 
     /// The even-rounded real-size geometry (what the compositor loop now
@@ -786,7 +845,8 @@ mod tests {
     fn even_real_size_recording_encodes_beyond_the_header() {
         let size: Size<i32, Physical> = (1494, 1020).into();
         let (events_sender, events_receiver) = channel::channel::<RecordingEvent>();
-        let mut recorder = spawn_recording_worker(recording_geometry(size), events_sender).unwrap();
+        let directory = TestDirectory::new("session");
+        let mut recorder = spawn_test_worker(&directory, size, events_sender);
         let frame = rgba_frame(size, 60);
         for _ in 0..30 {
             assert!(
@@ -814,7 +874,6 @@ mod tests {
             "encoded payload expected, got {} bytes (a bare header means zero frames encoded)",
             finished.len()
         );
-        std::fs::remove_file(path).ok();
     }
 
     /// Backpressure evidence: a producer that floods the handoff (no
@@ -826,7 +885,8 @@ mod tests {
     fn saturating_burst_drops_under_backpressure_and_stays_playable() {
         let size: Size<i32, Physical> = (1494, 1020).into();
         let (events_sender, events_receiver) = channel::channel::<RecordingEvent>();
-        let mut recorder = spawn_recording_worker(recording_geometry(size), events_sender).unwrap();
+        let directory = TestDirectory::new("session");
+        let mut recorder = spawn_test_worker(&directory, size, events_sender);
 
         // Alternating colors force the encoder to really spend time on
         // every accepted frame instead of short-circuiting a static
@@ -873,6 +933,5 @@ mod tests {
             "encoded payload expected, got {} bytes",
             finished.len()
         );
-        std::fs::remove_file(path).ok();
     }
 }

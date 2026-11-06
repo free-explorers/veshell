@@ -1,0 +1,11 @@
+# Flutter tests failing on main, one per line (file under test/: test name).
+# `veshell-probe verify` fails on any other failure, and reports a listed test
+# that passes again, so it can be removed.
+ephemeral_window_focus_test.dart: clicking the window hands it the keyboard
+ephemeral_window_focus_test.dart: selecting the displayed window tab hands it the keyboard
+ephemeral_window_focus_test.dart: the surface takes the keyboard once the window is matched
+gaming_overlay_frost_test.dart: the paused game is frosted instead of dimmed
+# Intermittent: passes alone and in some full runs.
+veshell_language_test.dart: picker lists only shipped catalogs and persists immediately
+window_tile_resize_test.dart: every tile-count change re-asserts the size, not just the first one
+window_tile_resize_test.dart: restoring the displayed tile count resizes the window back to full

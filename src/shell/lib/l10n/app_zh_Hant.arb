@@ -314,6 +314,7 @@
   "sleep": "暫停",
   "hibernate": "休眠",
   "unableToHibernate": "無法休眠",
+  "sessionActionFailed": "{action}：失敗",
   "reboot": "重新啟動",
   "shutDown": "關機",
   "unavailable": "無法使用",
