@@ -216,6 +216,12 @@
                         "grayscale",
                         "none"
                     ]
+                },
+                "animationSpeed": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 10,
+                    "description": "Speed of the shell's animations: 1 as designed, 0.5 at half speed, 2 at double speed"
                 }
             },
             "additionalProperties": false

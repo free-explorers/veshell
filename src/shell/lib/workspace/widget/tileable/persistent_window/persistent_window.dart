@@ -24,6 +24,7 @@ import 'package:shell/window/widget/window.dart';
 import 'package:shell/window/widget/window_dialog_area.dart';
 import 'package:shell/window/widget/window_open_transition.dart';
 import 'package:shell/window/widget/window_placeholder.dart';
+import 'package:shell/workspace/provider/launch_morphs.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/current_workspace_id.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
@@ -168,6 +169,16 @@ class PersistentWindowTileable extends Tileable {
             child: content,
           );
 
+    // Launched from the tiled launcher: the tile opens with the launched item
+    // morphing into its placeholder, drawn by the workspace above its tile
+    // row and linked here. The tile's own content stays mounted — it holds
+    // the keyboard — but is not painted under the morph, whose last frame is
+    // what it looks like.
+    final launchMorph = ref.watch(
+      launchMorphsProvider.select((morphs) => morphs[windowId]),
+    );
+    final idleLink = useMemoized(LayerLink.new);
+
     final dialogWindowIds = ref.watch(dialogSetForWindowProvider(windowId));
     final popupMetaWindowIds = visiblePopupMetaWindowIds(
       ref: ref,
@@ -179,49 +190,63 @@ class PersistentWindowTileable extends Tileable {
       chooserVisible: chooserVisible,
     );
 
-    return TileGrabRegion(
-      windowId: windowId,
-      // A game tile hands the pointer straight to the client.
-      enabled: window.displayMode != DisplayMode.game,
-      child: ClipRect(
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Listener(
-              onPointerDown: (event) {
-                final currentWorkspaceId = CurrentWorkspaceId.of(context);
-                ref
-                    .read(workspaceStateProvider(currentWorkspaceId).notifier)
-                    .selectWindow(windowId);
-              },
-              child: FocusScope(
-                node: persistentFocusNode,
-                autofocus: true,
-                onFocusChange: (value) {
-                  // In game mode the overlay never builds `primaryFocusNode`,
-                  // so it is detached. Re-autofocusing it here would reparent
-                  // it and make the defunct node the primary focus again, which
-                  // breaks the shell's hotkeys while the pause overlay shows.
-                  if (value && window.displayMode != DisplayMode.game) {
-                    persistentFocusNode.autofocus(
-                      window.displayMode == DisplayMode.floating
-                          ? floatingFocusNode
-                          : primaryFocusNode,
-                    );
-                  }
-                },
-                // The dialog area owns the tile's dialogs and the trusted file
-                // chooser: it presents them as a tabbed panel over a blurred
-                // tile and keeps the selection. Native dialogs stay out of the
-                // area in game mode (the overlay must not be covered). Floating
-                // tiles bypass it entirely and float every native child instead.
-                child: area,
+    return CompositedTransformTarget(
+      link: launchMorph?.link ?? idleLink,
+      child: TileGrabRegion(
+        windowId: windowId,
+        // A game tile hands the pointer straight to the client.
+        enabled: window.displayMode != DisplayMode.game,
+        child: ClipRect(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Always wrapped, so the morph's end does not remount the tile.
+              Opacity(
+                opacity: launchMorph == null ? 1 : 0,
+                child: IgnorePointer(
+                  ignoring: launchMorph != null,
+                  child: Listener(
+                    onPointerDown: (event) {
+                      final currentWorkspaceId = CurrentWorkspaceId.of(context);
+                      ref
+                          .read(
+                            workspaceStateProvider(currentWorkspaceId).notifier,
+                          )
+                          .selectWindow(windowId);
+                    },
+                    child: FocusScope(
+                      node: persistentFocusNode,
+                      autofocus: true,
+                      onFocusChange: (value) {
+                        // In game mode the overlay never builds
+                        // `primaryFocusNode`, so it is detached. Re-autofocusing
+                        // it here would reparent it and make the defunct node
+                        // the primary focus again, which breaks the shell's
+                        // hotkeys while the pause overlay shows.
+                        if (value && window.displayMode != DisplayMode.game) {
+                          persistentFocusNode.autofocus(
+                            window.displayMode == DisplayMode.floating
+                                ? floatingFocusNode
+                                : primaryFocusNode,
+                          );
+                        }
+                      },
+                      // The dialog area owns the tile's dialogs and the trusted
+                      // file chooser: it presents them as a tabbed panel over a
+                      // blurred tile and keeps the selection. Native dialogs
+                      // stay out of the area in game mode (the overlay must not
+                      // be covered). Floating tiles bypass it entirely and float
+                      // every native child instead.
+                      child: area,
+                    ),
+                  ),
+                ),
               ),
-            ),
-            Positioned.fill(
-              child: TilePopupHost(metaWindowIds: popupMetaWindowIds),
-            ),
-          ],
+              Positioned.fill(
+                child: TilePopupHost(metaWindowIds: popupMetaWindowIds),
+              ),
+            ],
+          ),
         ),
       ),
     );

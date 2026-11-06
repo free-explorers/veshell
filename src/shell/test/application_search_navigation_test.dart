@@ -66,7 +66,7 @@ void main() {
         for (final text in filteredTexts)
           appDrawerFilteredDesktopEntriesProvider(
             text,
-          ).overrideWith((ref) async => entryList),
+          ).overrideWith((ref) => AsyncData(entryList)),
         hotkeysActivatorProvider.overrideWithValue(navigation),
       ],
     );

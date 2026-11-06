@@ -25,15 +25,52 @@ import 'package:shell/window/widget/resume_context_summary.dart';
 /// card's actual rect.
 const placeholderCardInset = 0.2;
 
+/// A layer of a [WindowPlaceholder], for the launcher's opening morph, which
+/// animates the card's surface, icon and title itself.
+enum PlaceholderPart {
+  /// The backdrop: the blurred icon wash and its scrim, without the card.
+  background,
+
+  /// The card's content at its place, without the card's surface; the icon
+  /// and the title keep their room but are not painted.
+  cardContent,
+}
+
+/// The opacity of an unfocused placeholder's card.
+const placeholderUnfocusedCardOpacity = 0.8;
+
+/// The alpha of the placeholder card's surface color.
+const placeholderCardAlpha = 150;
+
 class WindowPlaceholder extends HookConsumerWidget {
   const WindowPlaceholder({
     required this.isSelected,
     required this.window,
     this.focusNode,
     this.onLaunch,
+    this.iconKey,
+    this.part,
+    this.cardKey,
+    this.titleKey,
+    this.displayFocused,
     super.key,
   });
   final FocusNode? focusNode;
+
+  /// Put on the application icon, so the launcher's opening morph can find
+  /// where the icon sits and fly the launched item's icon onto it.
+  final Key? iconKey;
+
+  /// Paints only this layer; `null` paints the whole placeholder.
+  final PlaceholderPart? part;
+
+  /// Put on the card and the title, for the opening morph (see [iconKey]).
+  final Key? cardKey;
+  final Key? titleKey;
+
+  /// Draws the focused (or unfocused) look regardless of [focusNode], for the
+  /// opening morph, which draws the tile as it will look once focused.
+  final bool? displayFocused;
   final bool isSelected;
   final PersistentWindow window;
 
@@ -44,12 +81,17 @@ class WindowPlaceholder extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // The morph flies the icon and the title itself.
+    Widget hideMorphed(Widget child) => part == PlaceholderPart.cardContent
+        ? Opacity(opacity: 0, child: child)
+        : child;
+
     final appId = window.properties.appId;
     final entry = ref.watch(localizedDesktopEntryForIdProvider(appId)).value;
     final iconPath = entry?.entries[DesktopEntryKey.icon.string];
 
     useListenable(focusNode ?? Listenable.merge([]));
-    final isFocused = focusNode?.hasFocus ?? false;
+    final isFocused = displayFocused ?? focusNode?.hasFocus ?? false;
     final backgroundFocusNode = useFocusNode(debugLabel: 'background InkWell');
     final moreMenuController = useMemoized(MenuController.new);
     final moreMenuLabel = context.l10n.launchAndRecord;
@@ -225,9 +267,10 @@ class WindowPlaceholder extends HookConsumerWidget {
                   spacing: magicSpacing,
                   children: [
                     SizedBox(
+                      key: iconKey,
                       height: iconHeight,
                       width: iconWidth,
-                      child: AppIconById(id: appId),
+                      child: hideMorphed(AppIconById(id: appId)),
                     ),
                     Flexible(
                       child: Column(
@@ -236,12 +279,15 @@ class WindowPlaceholder extends HookConsumerWidget {
                             ? CrossAxisAlignment.start
                             : CrossAxisAlignment.center,
                         children: [
-                          Text(
-                            placeholderTitle,
-                            style: Theme.of(context).textTheme.displayMedium,
-                            textAlign: TextAlign.center,
-                            softWrap: false,
-                            overflow: TextOverflow.ellipsis,
+                          hideMorphed(
+                            Text(
+                              placeholderTitle,
+                              key: titleKey,
+                              style: Theme.of(context).textTheme.displayMedium,
+                              textAlign: TextAlign.center,
+                              softWrap: false,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                           const SizedBox(height: 16),
                           ExecCommandEditor(
@@ -300,92 +346,105 @@ class WindowPlaceholder extends HookConsumerWidget {
           ],
         );
 
+        final showBackground = part != PlaceholderPart.cardContent;
+        final showCard = part != PlaceholderPart.background;
         return Stack(
           children: [
-            // Dark base for a placeholder without an icon wash. A matched
-            // desktop entry paints its blurred icon over this layer, hiding it;
-            // an unknown app keeps the dark background instead of showing the
-            // workspace through the translucent scrim.
-            Positioned.fill(
-              child: ColoredBox(
-                color: Theme.of(context).colorScheme.surfaceContainerLowest,
-              ),
-            ),
-            Positioned.fill(child: _PlaceholderBackground(iconPath: iconPath)),
-            Positioned.fill(
-              child: InkWell(
-                mouseCursor: WidgetStateMouseCursor.clickable,
-                focusNode: backgroundFocusNode,
-                canRequestFocus: false,
-                onTap: canLaunch && !showLaunchLogs ? launch : null,
+            if (showBackground) ...[
+              // Dark base for a placeholder without an icon wash. A matched
+              // desktop entry paints its blurred icon over this layer, hiding
+              // it; an unknown app keeps the dark background instead of
+              // showing the workspace through the translucent scrim.
+              Positioned.fill(
                 child: ColoredBox(
-                  color: Theme.of(context).colorScheme.surface.withAlpha(150),
+                  color: Theme.of(context).colorScheme.surfaceContainerLowest,
                 ),
               ),
-            ),
-            Positioned.fill(
-              left: constraints.biggest.width * placeholderCardInset,
-              right: constraints.biggest.width * placeholderCardInset,
-              top: constraints.biggest.height * placeholderCardInset,
-              bottom: constraints.biggest.height * placeholderCardInset,
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 200),
-                opacity: isFocused ? 1 : 0.8,
-                child: Card(
-                  clipBehavior: Clip.antiAlias,
-                  color: Theme.of(context).colorScheme.surface.withAlpha(150),
-                  child: InkWell(
-                    mouseCursor: WidgetStateMouseCursor.clickable,
-                    canRequestFocus: false,
-                    onTap: canLaunch && !showLaunchLogs ? launch : null,
-                    splashColor: Theme.of(
-                      context,
-                    ).colorScheme.primary.withAlpha(32),
-                    focusColor: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerLow.withAlpha(125),
-                    child: Focus(
-                      focusNode: focusNode,
-                      autofocus: true,
-                      child: showLaunchLogs
-                          ? Stack(
-                              children: [
-                                Positioned.fill(
-                                  child: LogsViewer(pid: window.pid!),
-                                ),
-                                if (launchFailed.value)
-                                  Positioned(
-                                    top: 8,
-                                    right: 8,
-                                    child: IconButton(
-                                      tooltip: context.l10n.closeLogs,
-                                      onPressed: () =>
-                                          launchFailed.value = false,
-                                      icon: const ShellIcon(MdiIcons.close),
-                                    ),
+              Positioned.fill(
+                child: _PlaceholderBackground(iconPath: iconPath),
+              ),
+              Positioned.fill(
+                child: InkWell(
+                  mouseCursor: WidgetStateMouseCursor.clickable,
+                  focusNode: backgroundFocusNode,
+                  canRequestFocus: false,
+                  onTap: canLaunch && !showLaunchLogs ? launch : null,
+                  child: ColoredBox(
+                    color: Theme.of(context).colorScheme.surface.withAlpha(150),
+                  ),
+                ),
+              ),
+            ],
+            if (showCard)
+              Positioned.fill(
+                key: cardKey,
+                left: constraints.biggest.width * placeholderCardInset,
+                right: constraints.biggest.width * placeholderCardInset,
+                top: constraints.biggest.height * placeholderCardInset,
+                bottom: constraints.biggest.height * placeholderCardInset,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  opacity: isFocused ? 1 : placeholderUnfocusedCardOpacity,
+                  child: Card(
+                    clipBehavior: Clip.antiAlias,
+                    // The morph paints the card's surface itself.
+                    color: part == PlaceholderPart.cardContent
+                        ? Colors.transparent
+                        : Theme.of(
+                            context,
+                          ).colorScheme.surface.withAlpha(placeholderCardAlpha),
+                    child: InkWell(
+                      mouseCursor: WidgetStateMouseCursor.clickable,
+                      canRequestFocus: false,
+                      onTap: canLaunch && !showLaunchLogs ? launch : null,
+                      splashColor: Theme.of(
+                        context,
+                      ).colorScheme.primary.withAlpha(32),
+                      focusColor: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerLow.withAlpha(125),
+                      child: Focus(
+                        focusNode: focusNode,
+                        autofocus: true,
+                        child: showLaunchLogs
+                            ? Stack(
+                                children: [
+                                  Positioned.fill(
+                                    child: LogsViewer(pid: window.pid!),
                                   ),
-                                if (launchFailed.value)
-                                  Positioned(
-                                    left: 8,
-                                    right: 8,
-                                    bottom: 8,
-                                    child: _ResumeActions(
-                                      message: context.l10n.resumeFailed,
-                                      retryLabel: context.l10n.retry,
-                                      forgetLabel:
-                                          context.l10n.forgetSavedContext,
-                                      onRetry: retry,
-                                      onForget: forgetResumeContext,
+                                  if (launchFailed.value)
+                                    Positioned(
+                                      top: 8,
+                                      right: 8,
+                                      child: IconButton(
+                                        tooltip: context.l10n.closeLogs,
+                                        onPressed: () =>
+                                            launchFailed.value = false,
+                                        icon: const ShellIcon(MdiIcons.close),
+                                      ),
                                     ),
-                                  ),
-                              ],
-                            )
-                          : buildLaunchContent(),
+                                  if (launchFailed.value)
+                                    Positioned(
+                                      left: 8,
+                                      right: 8,
+                                      bottom: 8,
+                                      child: _ResumeActions(
+                                        message: context.l10n.resumeFailed,
+                                        retryLabel: context.l10n.retry,
+                                        forgetLabel:
+                                            context.l10n.forgetSavedContext,
+                                        onRetry: retry,
+                                        onForget: forgetResumeContext,
+                                      ),
+                                    ),
+                                ],
+                              )
+                            : buildLaunchContent(),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
           ],
         );
       },

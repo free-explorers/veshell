@@ -14,8 +14,10 @@ import 'package:shell/tile_grab/provider/tile_grab_controller.dart';
 import 'package:shell/tile_grab/widget/tile_drop_slot.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
+import 'package:shell/workspace/provider/launch_morphs.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/current_workspace_id.dart';
+import 'package:shell/workspace/widget/launch_morph_layer.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/persistent_application_launcher.dart';
 import 'package:shell/workspace/widget/tileable/persistent_window/persistent_window.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
@@ -66,7 +68,7 @@ class WorkspaceWidget extends HookConsumerWidget {
       return null;
     }, [workspaceCanFocus]);
 
-    final appLauncher = PersistentApplicationSelector(
+    final appLauncher = PersistentApplicationLauncher(
       isSelected:
           workspaceState.selectedIndex ==
           workspaceState.tileableWindowList.length,
@@ -78,6 +80,7 @@ class WorkspaceWidget extends HookConsumerWidget {
         ref
             .read(workspaceStateProvider(workspaceId).notifier)
             .addWindow(newWindowId, selectWindow: true);
+        return newWindowId;
       },
     );
 
@@ -115,6 +118,12 @@ class WorkspaceWidget extends HookConsumerWidget {
                 )
               : null,
         ),
+      ),
+    );
+    // A tile of this workspace is opening with a launch morph.
+    final isLaunching = ref.watch(
+      launchMorphsProvider.select(
+        (morphs) => workspaceState.tileableWindowList.any(morphs.containsKey),
       ),
     );
     final selectionIndicator =
@@ -224,59 +233,75 @@ class WorkspaceWidget extends HookConsumerWidget {
                   ),
                 ),
                 Expanded(
-                  child: SlidingContainer(
-                    // A released tile is landing here: bring its gap into
-                    // view (with a single tile shown, the shown one slides
-                    // out), so the tile is already shown once selected.
-                    index: landingGap ?? workspaceState.selectedIndex,
-                    visible: workspaceState.visibleLength,
-                    firstVisibleIndex: workspaceState.firstVisibleIndex,
-                    onIndexChanged: (nextIndex) {
-                      ref
-                          .read(workspaceStateProvider(workspaceId).notifier)
-                          .setSelectedIndex(nextIndex);
-                    },
-                    onFirstVisibleIndexChanged: (firstVisibleIndex) {
-                      ref
-                          .read(workspaceStateProvider(workspaceId).notifier)
-                          .setFirstVisibleIndex(firstVisibleIndex);
-                    },
-                    isSwipeEnabled:
-                        CurrentScreenId.of(context) ==
-                            ref.watch(focusedScreenProvider) &&
-                        isSelected,
-                    selectionIndicator: selectionIndicator,
-                    // A held tile finds its gap from the row's geometry.
-                    viewportMetaData: (scrollOffset) => TileRowMarker(
-                      workspaceId: workspaceId,
-                      visible: workspaceState.visibleLength,
-                      scrollOffset: scrollOffset,
-                    ),
-                    // Tiles sliding aside for a held tile may come from off
-                    // screen.
-                    buildsNeighbors: isGrabbing,
+                  child: Stack(
+                    fit: StackFit.expand,
                     children: [
-                      // Always wrapped, even when not filtering, so changing
-                      // the setting or the selection never remounts a tile.
-                      // Keyed by window, so a tile keeps its state (and its
-                      // slide) when it is reordered.
-                      for (final (index, tileable) in tileableList.indexed)
-                        TileDropSlot(
-                          key: tileable is PersistentWindowTileable
-                              ? ValueKey(tileable.windowId)
-                              : const ValueKey('application-launcher'),
+                      SlidingContainer(
+                        // A released tile is landing here: bring its gap into
+                        // view (with a single tile shown, the shown one slides
+                        // out), so the tile is already shown once selected.
+                        index: landingGap ?? workspaceState.selectedIndex,
+                        visible: workspaceState.visibleLength,
+                        firstVisibleIndex: workspaceState.firstVisibleIndex,
+                        onIndexChanged: (nextIndex) {
+                          ref
+                              .read(
+                                workspaceStateProvider(workspaceId).notifier,
+                              )
+                              .setSelectedIndex(nextIndex);
+                        },
+                        onFirstVisibleIndexChanged: (firstVisibleIndex) {
+                          ref
+                              .read(
+                                workspaceStateProvider(workspaceId).notifier,
+                              )
+                              .setFirstVisibleIndex(firstVisibleIndex);
+                        },
+                        isSwipeEnabled:
+                            CurrentScreenId.of(context) ==
+                                ref.watch(focusedScreenProvider) &&
+                            isSelected,
+                        selectionIndicator: selectionIndicator,
+                        // A held tile finds its gap from the row's geometry.
+                        viewportMetaData: (scrollOffset) => TileRowMarker(
                           workspaceId: workspaceId,
-                          index: index,
-                          windowId: tileable is PersistentWindowTileable
-                              ? tileable.windowId
-                              : null,
-                          child: _FocusSaturation(
-                            desaturated:
-                                grayscaleUnfocused &&
-                                index != workspaceState.selectedIndex,
-                            child: tileable,
-                          ),
+                          visible: workspaceState.visibleLength,
+                          scrollOffset: scrollOffset,
                         ),
+                        // Tiles sliding aside for a held tile may come from
+                        // off screen, and the launcher slides off it when a
+                        // launched tile takes its place.
+                        buildsNeighbors: isGrabbing || isLaunching,
+                        children: [
+                          // Always wrapped, even when not filtering, so
+                          // changing the setting or the selection never
+                          // remounts a tile. Keyed by window, so a tile keeps
+                          // its state (and its slide) when it is reordered.
+                          for (final (index, tileable) in tileableList.indexed)
+                            TileDropSlot(
+                              key: tileable is PersistentWindowTileable
+                                  ? ValueKey(tileable.windowId)
+                                  : const ValueKey('application-launcher'),
+                              workspaceId: workspaceId,
+                              index: index,
+                              windowId: tileable is PersistentWindowTileable
+                                  ? tileable.windowId
+                                  : null,
+                              child: _FocusSaturation(
+                                desaturated:
+                                    grayscaleUnfocused &&
+                                    index != workspaceState.selectedIndex,
+                                child: tileable,
+                              ),
+                            ),
+                        ],
+                      ),
+                      // Above the row: the launcher slides aside under it.
+                      Positioned.fill(
+                        child: LaunchMorphLayer(
+                          windowIds: workspaceState.tileableWindowList,
+                        ),
+                      ),
                     ],
                   ),
                 ),

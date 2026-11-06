@@ -7,6 +7,12 @@ import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
 
+/// The container's pages: the scrollable a `PageView` would build.
+final _pages = find.descendant(
+  of: find.byType(SlidingContainer),
+  matching: find.byType(Scrollable),
+);
+
 /// Renders a [SlidingContainer] in a fixed viewport and returns the size of the
 /// page view it laid out.
 Future<Size> _pageViewSize(
@@ -39,7 +45,7 @@ Future<Size> _pageViewSize(
       ),
     ),
   );
-  return tester.getSize(find.byType(PageView));
+  return tester.getSize(_pages);
 }
 
 /// Renders a [SlidingContainer] and returns the page it settled on, i.e. the
@@ -80,7 +86,7 @@ Future<double?> _leadingPage(
     ),
   );
   await tester.pumpAndSettle();
-  return tester.widget<PageView>(find.byType(PageView)).controller?.page;
+  return (tester.widget<Scrollable>(_pages).controller! as PageController).page;
 }
 
 void main() {

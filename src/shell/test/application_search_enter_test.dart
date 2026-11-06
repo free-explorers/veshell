@@ -93,7 +93,7 @@ void main() {
         for (final text in ['', 'a'])
           appDrawerFilteredDesktopEntriesProvider(
             text,
-          ).overrideWith((ref) async => entryList),
+          ).overrideWith((ref) => AsyncData(entryList)),
         hotkeysActivatorProvider.overrideWithValue(navigation),
         windowManagerProvider.overrideWith(() => manager),
         ephemeralWindowStateProvider.overrideWith(
