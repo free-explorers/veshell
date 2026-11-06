@@ -14,7 +14,7 @@ fi
 binary="$here/.dart_tool/veshell-probe"
 stale() {
   [[ ! -x "$binary" ]] && return 0
-  [[ -n "$(find "$here/bin" "$here/lib" "$here/pubspec.lock" "$here/../../.flutter_sdk/version" -newer "$binary" -print -quit 2>/dev/null)" ]]
+  [[ -n "$(find "$here/bin" "$here/lib" "$here/pubspec.lock" "$here/../../.flutter_sdk/bin/cache/flutter.version.json" -newer "$binary" -print -quit 2>/dev/null)" ]]
 }
 if stale; then
   # Built aside then moved, so a concurrent call never runs a partial file.

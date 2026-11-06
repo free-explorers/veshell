@@ -9,7 +9,7 @@ version-free; every versionable fact is anchored in a project file.
 - The Flutter SDK is **project-managed**: the pin lives in the root
   `Cargo.toml` under `[package.metadata] flutter_version`, and
   `extra/build/flutter_sdk.rs` clones/checks-out `.flutter_sdk` to match it,
-  comparing against `.flutter_sdk/version`. Do not hardcode versions anywhere
+  verifying the checkout's exact git tag. Do not hardcode versions anywhere
   else, and go through these project files when the pin needs to move.
 - The shell build pipeline is `extra/build/shell.rs`: it runs
   `flutter pub get`, `dart run build_runner build`, and

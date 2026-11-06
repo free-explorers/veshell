@@ -6,7 +6,6 @@ pub const FLUTTER_REPO_DIR: &str = ".flutter_sdk";
 
 pub fn install_flutter_sdk() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=extra/build/flutter_sdk.rs");
-    println!("cargo:rerun-if-changed=.flutter_sdk/version");
 
     // Clone the flutter repo if it doesn't exist
     if !std::path::Path::new(FLUTTER_REPO_DIR).exists() {
@@ -38,15 +37,13 @@ pub fn install_flutter_sdk() -> Result<(), Box<dyn std::error::Error>> {
         .as_str()
         .unwrap();
 
-    // Check if version is different
-    let current_version = match std::fs::read_to_string(".flutter_sdk/version") {
-        Ok(version) => version,
-        Err(_) => {
-            println!("Version file not found, assuming fresh install.");
-            "".to_string()
-        }
-    };
-    if current_version.trim() == flutter_version {
+    // Check if version is different. The checkout is the source of truth: the
+    // `.flutter_sdk/version` file this used to read no longer ships with
+    // Flutter, and a missing `rerun-if-changed` file made cargo treat the
+    // package as dirty on every build (rerunning this script, the Flutter
+    // build and the Rust compile behind it).
+    let current_version = checked_out_version().unwrap_or_default();
+    if current_version == flutter_version {
         return Ok(());
     }
     println!(
@@ -97,4 +94,26 @@ pub fn install_flutter_sdk() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+/// The tag the SDK checkout sits on, when it sits exactly on a tag.
+///
+/// A branch or untagged commit yields `None`, which makes the caller check out
+/// the pinned tag instead of silently using whatever revision is checked out.
+fn checked_out_version() -> Option<String> {
+    let output = std::process::Command::new("git")
+        .args([
+            "-C",
+            FLUTTER_REPO_DIR,
+            "describe",
+            "--tags",
+            "--exact-match",
+        ])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let version = String::from_utf8(output.stdout).ok()?;
+    Some(version.trim().to_string())
 }
