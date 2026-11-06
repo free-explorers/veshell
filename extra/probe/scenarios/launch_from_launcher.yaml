@@ -1,0 +1,33 @@
+# Launching an application from the tiled launcher opens its tile.
+name: Launching from the launcher opens the application's tile
+fixture: two-apps
+size: 1280x800
+steps:
+  # The applications load asynchronously: wait for them, not for a time.
+  - wait_for: {find: text=Beta, visible: true}
+  - screenshot: launcher
+  - type: be
+  - wait_for: {find: text=Alpha, count: 0}
+  - screenshot: filtered
+  - animate:
+      for: 240
+      frames: 5
+      key: Enter
+      track: [type=PersistentWindowTileable]
+  - screenshot: tile
+expect:
+  # The search narrowed the grid to Beta.
+  - find: text=Alpha
+    count: 0
+  # Enter opened exactly one tile, shown on every frame of its opening, in
+  # place.
+  - find: type=PersistentWindowTileable
+    count: 1
+  - animation: 0
+    frames: all
+    find: type=PersistentWindowTileable
+    visible: true
+    unchanged: [left, top]
+  - golden: launcher
+  - golden: filtered
+  - golden: tile

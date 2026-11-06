@@ -1,0 +1,70 @@
+name: Probe Scenarios
+
+# Runs the veshell-probe scenarios (extra/probe/scenarios/*.yaml) on a debug
+# build nested in a headless Weston: their steps, and their expectations on the
+# shell's widgets and on the frames of its animations. Reference frames are
+# recorded per environment (fonts render differently across distributions), so
+# they are not compared here; every screenshot is uploaded for review instead.
+#
+# Manual for now: enable it on pull requests once a run has validated the
+# runner setup (see docs/specifications/veshell_probe.md, milestone 3).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scenarios:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install build and runtime dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          # Build (docs/dependencies.md), then what the shell awaits or uses
+          # at startup (session bus, UPower, a PulseAudio server, fonts), and
+          # the headless display it nests in (Weston, Mesa's software GL).
+          sudo apt-get install -y --no-install-recommends \
+            clang cmake ninja-build pkg-config libgtk-3-dev libudev-dev \
+            libseat-dev libinput-dev libxkbregistry-dev libgbm-dev libssl-dev \
+            libpam0g-dev libstdc++-12-dev libpipewire-0.3-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            dbus dbus-user-session upower pipewire pipewire-pulse wireplumber \
+            weston libegl-mesa0 libgl1-mesa-dri xkb-data \
+            fontconfig fonts-roboto fonts-noto-core
+
+      - name: Build
+        run: cargo build
+
+      - name: Run the scenarios
+        run: |
+          set -euo pipefail
+          sudo systemctl start upower || true
+          export XDG_RUNTIME_DIR="$(mktemp -d)"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          dbus-run-session -- bash -euo pipefail -c '
+            pipewire & pipewire-pulse & wireplumber &
+            sleep 2
+            status=0
+            for scenario in extra/probe/scenarios/*.yaml; do
+              echo "::group::$scenario"
+              ./extra/probe/veshell-probe scenario "$scenario" --no-goldens || status=1
+              echo "::endgroup::"
+            done
+            exit "$status"
+          '
+
+      - name: Upload the reports and screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: probe-reports
+          path: build/probe/
+          if-no-files-found: warn

@@ -13,3 +13,6 @@ target
 
 # CI scratch
 __pycache__/
+
+# veshell-probe package state
+extra/probe/.dart_tool/
