@@ -1,4 +1,5 @@
 import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
@@ -265,26 +266,23 @@ class SlidingContainer extends HookConsumerWidget {
                       child: SizedBox(
                         width: isHorizontal ? pageViewport : crossAxisExtent,
                         height: isHorizontal ? crossAxisExtent : pageViewport,
-                        child: PageView.builder(
+                        child: _PageRow(
                           controller: pageController,
-                          scrollDirection: direction,
-                          itemCount: children.length,
-                          itemBuilder: (context, index) {
-                            return children[index];
-                          },
-                          // A keyed page keeps its state when it moves to
-                          // another index, instead of the page now at its old
-                          // index taking that state over.
-                          findChildIndexCallback: (key) {
-                            final index = children.indexWhere(
-                              (child) => child.key == key,
-                            );
-                            return index < 0 ? null : index;
-                          },
-                          allowImplicitScrolling: buildsNeighbors,
-                          physics: const NeverScrollableScrollPhysics(),
-                          pageSnapping: false,
-                          padEnds: false,
+                          direction: direction,
+                          buildsNeighbors: buildsNeighbors,
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) => children[index],
+                            childCount: children.length,
+                            // A keyed page keeps its state when it moves to
+                            // another index, instead of the page now at its
+                            // old index taking that state over.
+                            findChildIndexCallback: (key) {
+                              final index = children.indexWhere(
+                                (child) => child.key == key,
+                              );
+                              return index < 0 ? null : index;
+                            },
+                          ),
                         ),
                       ),
                     ),
@@ -395,4 +393,149 @@ class _SelectionIndicatorPainter extends CustomPainter {
       pageController != oldDelegate.pageController ||
       pageExtent != oldDelegate.pageExtent ||
       direction != oldDelegate.direction;
+}
+
+/// What a `PageView` builds for [SlidingContainer] (the same scrollable,
+/// viewport and pages, never scrolled by the user), but its pages paint
+/// whenever they are built.
+///
+/// A page slides to a new slot by translating it from the old one (see
+/// `TileDropSlot`): a page whose slot is out of view, but which is shown
+/// sliding over a visible one, must still paint. A `PageView` only paints
+/// the pages whose slot is in view, so a tile sliding off screen vanished at
+/// once instead. The viewport still clips whatever is outside it.
+class _PageRow extends StatelessWidget {
+  const _PageRow({
+    required this.controller,
+    required this.direction,
+    required this.buildsNeighbors,
+    required this.delegate,
+  });
+
+  final PageController controller;
+  final Axis direction;
+
+  /// Keeps a viewport's worth of pages built on each side of the visible
+  /// ones (`PageView.allowImplicitScrolling`).
+  final bool buildsNeighbors;
+  final SliverChildDelegate delegate;
+
+  @override
+  Widget build(BuildContext context) {
+    final axisDirection = getAxisDirectionFromAxisReverseAndDirectionality(
+      context,
+      direction,
+      false,
+    );
+    return Scrollable(
+      axisDirection: axisDirection,
+      controller: controller,
+      physics: const NeverScrollableScrollPhysics(),
+      scrollBehavior: ScrollConfiguration.of(
+        context,
+      ).copyWith(scrollbars: false),
+      viewportBuilder: (context, position) => Viewport(
+        scrollCacheExtent: ScrollCacheExtent.viewport(buildsNeighbors ? 1 : 0),
+        axisDirection: axisDirection,
+        offset: position,
+        slivers: [
+          _SliverPages(
+            viewportFraction: controller.viewportFraction,
+            allowImplicitScrolling: buildsNeighbors,
+            delegate: delegate,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// `SliverFillViewport`'s pages, painting every built page.
+class _SliverPages extends SliverMultiBoxAdaptorWidget {
+  const _SliverPages({
+    required super.delegate,
+    required this.viewportFraction,
+    required this.allowImplicitScrolling,
+  });
+
+  final double viewportFraction;
+  final bool allowImplicitScrolling;
+
+  @override
+  RenderSliverFillViewport createRenderObject(BuildContext context) =>
+      _RenderSliverPages(
+        childManager: context as SliverMultiBoxAdaptorElement,
+        viewportFraction: viewportFraction,
+        allowImplicitScrolling: allowImplicitScrolling,
+      );
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    RenderSliverFillViewport renderObject,
+  ) {
+    renderObject
+      ..viewportFraction = viewportFraction
+      ..allowImplicitScrolling = allowImplicitScrolling;
+  }
+}
+
+class _RenderSliverPages extends RenderSliverFillViewport {
+  _RenderSliverPages({
+    required super.childManager,
+    required super.viewportFraction,
+    required super.allowImplicitScrolling,
+  });
+
+  /// `RenderSliverMultiBoxAdaptor.paint`, without skipping the pages whose
+  /// slot is out of view: one may be shown sliding over a visible slot.
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (firstChild == null) {
+      return;
+    }
+    final Offset mainAxisUnit;
+    final Offset crossAxisUnit;
+    final Offset originOffset;
+    final bool addExtent;
+    switch (applyGrowthDirectionToAxisDirection(
+      constraints.axisDirection,
+      constraints.growthDirection,
+    )) {
+      case AxisDirection.up:
+        mainAxisUnit = const Offset(0, -1);
+        crossAxisUnit = const Offset(1, 0);
+        originOffset = offset + Offset(0, geometry!.paintExtent);
+        addExtent = true;
+      case AxisDirection.right:
+        mainAxisUnit = const Offset(1, 0);
+        crossAxisUnit = const Offset(0, 1);
+        originOffset = offset;
+        addExtent = false;
+      case AxisDirection.down:
+        mainAxisUnit = const Offset(0, 1);
+        crossAxisUnit = const Offset(1, 0);
+        originOffset = offset;
+        addExtent = false;
+      case AxisDirection.left:
+        mainAxisUnit = const Offset(-1, 0);
+        crossAxisUnit = const Offset(0, 1);
+        originOffset = offset + Offset(geometry!.paintExtent, 0);
+        addExtent = true;
+    }
+    var child = firstChild;
+    while (child != null) {
+      final mainAxisDelta = childMainAxisPosition(child);
+      final crossAxisDelta = childCrossAxisPosition(child);
+      var childOffset =
+          originOffset +
+          mainAxisUnit * mainAxisDelta +
+          crossAxisUnit * crossAxisDelta;
+      if (addExtent) {
+        childOffset += mainAxisUnit * paintExtentOf(child);
+      }
+      context.paintChild(child, childOffset);
+      child = childAfter(child);
+    }
+  }
 }
