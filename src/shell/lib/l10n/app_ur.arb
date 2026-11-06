@@ -314,6 +314,7 @@
   "sleep": "سلیپ",
   "hibernate": "ہائبرنیٹ کریں",
   "unableToHibernate": "ہائبرنیٹ نہیں ہو سکا",
+  "sessionActionFailed": "{action}: ناکام",
   "reboot": "دوبارہ شروع کریں",
   "shutDown": "سسٹم بند کریں",
   "unavailable": "دستیاب نہیں",

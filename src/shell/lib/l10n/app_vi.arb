@@ -314,6 +314,7 @@
   "sleep": "Ngủ",
   "hibernate": "Ngủ đông",
   "unableToHibernate": "Không thể ngủ đông",
+  "sessionActionFailed": "{action}: thất bại",
   "reboot": "Khởi động lại",
   "shutDown": "Tắt máy",
   "unavailable": "Không khả dụng",

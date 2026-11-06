@@ -314,6 +314,7 @@
   "sleep": "挂起",
   "hibernate": "休眠",
   "unableToHibernate": "无法休眠",
+  "sessionActionFailed": "{action}：失败",
   "reboot": "重启",
   "shutDown": "关机",
   "unavailable": "不可用",

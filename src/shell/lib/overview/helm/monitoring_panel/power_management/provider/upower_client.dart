@@ -1,4 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/shared/provider/dbus_client.dart';
 import 'package:upower/upower.dart';
 
 part 'upower_client.g.dart';
@@ -7,7 +8,9 @@ part 'upower_client.g.dart';
 class UpowerClient extends _$UpowerClient {
   @override
   Future<UPowerClient> build() async {
-    final client = UPowerClient();
+    final bus = restrictedSystemBus();
+    final client = UPowerClient(bus: bus);
+    ref.onDispose(() => bus?.close());
     await client.connect();
     ref.onDispose(client.close);
     return client;

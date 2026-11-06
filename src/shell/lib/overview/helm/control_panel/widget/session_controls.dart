@@ -41,9 +41,12 @@ class SessionControls extends HookConsumerWidget {
                 preferBelow: true,
                 verticalOffset: 32,
                 child: IconButton(
-                  onPressed: () {
-                    ref.read(sessionProvider.notifier).logout();
-                  },
+                  onPressed: () => _perform(
+                    context,
+                    ref,
+                    context.l10n.logOut,
+                    (session) => session.logout(),
+                  ),
                   style: IconButton.styleFrom(
                     padding: const EdgeInsets.all(12),
                   ),
@@ -56,9 +59,12 @@ class SessionControls extends HookConsumerWidget {
                 preferBelow: true,
                 verticalOffset: 32,
                 child: IconButton(
-                  onPressed: () {
-                    ref.read(sessionProvider.notifier).sleep();
-                  },
+                  onPressed: () => _perform(
+                    context,
+                    ref,
+                    context.l10n.sleep,
+                    (session) => session.sleep(),
+                  ),
                   icon: const ShellIcon(MdiIcons.powerSleep),
                   style: IconButton.styleFrom(
                     padding: const EdgeInsets.all(12),
@@ -106,9 +112,12 @@ class SessionControls extends HookConsumerWidget {
                 preferBelow: true,
                 verticalOffset: 32,
                 child: IconButton(
-                  onPressed: () {
-                    ref.read(sessionProvider.notifier).reboot();
-                  },
+                  onPressed: () => _perform(
+                    context,
+                    ref,
+                    context.l10n.reboot,
+                    (session) => session.reboot(),
+                  ),
                   icon: const ShellIcon(MdiIcons.restart),
                   style: IconButton.styleFrom(
                     padding: const EdgeInsets.all(12),
@@ -121,9 +130,12 @@ class SessionControls extends HookConsumerWidget {
                 preferBelow: true,
                 verticalOffset: 32,
                 child: IconButton(
-                  onPressed: () {
-                    ref.read(sessionProvider.notifier).shutdown();
-                  },
+                  onPressed: () => _perform(
+                    context,
+                    ref,
+                    context.l10n.shutDown,
+                    (session) => session.shutdown(),
+                  ),
                   style: IconButton.styleFrom(
                     padding: const EdgeInsets.all(12),
                   ),
@@ -132,6 +144,35 @@ class SessionControls extends HookConsumerWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Runs a session [action], and says so when it fails (logind refused it, a
+/// polkit denial, an instance isolated by veshell-probe, which may not act
+/// on the host) instead of leaving the click without an answer.
+Future<void> _perform(
+  BuildContext context,
+  WidgetRef ref,
+  String label,
+  Future<void> Function(Session session) action,
+) async {
+  try {
+    await action(ref.read(sessionProvider.notifier));
+  } on Object catch (error) {
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(context.l10n.sessionActionFailed(label)),
+        content: Text('$error'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(context.l10n.ok),
+          ),
+        ],
       ),
     );
   }
