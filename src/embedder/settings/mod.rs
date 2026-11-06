@@ -120,6 +120,22 @@ where
     Ok(i64::deserialize(deserializer)?.max(0) as u64)
 }
 
+fn deserialize_u32_saturating<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(i64::deserialize(deserializer)?.clamp(0, i64::from(u32::MAX)) as u32)
+}
+
+/// A string where `null` means unset, so a cleared value cannot fail the
+/// whole settings file.
+fn deserialize_string_or_null<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(Option::<String>::deserialize(deserializer)?.unwrap_or_default())
+}
+
 fn default_keyboard_repeat() -> bool {
     true
 }
@@ -182,6 +198,13 @@ pub struct ThemeSettings {
     pub gtk_theme: String,
     #[serde(default)]
     pub icon_theme: String,
+    /// Xcursor theme name. Empty keeps the session's `XCURSOR_THEME`.
+    #[serde(default, deserialize_with = "deserialize_string_or_null")]
+    pub cursor_theme: String,
+    /// Nominal cursor size in logical pixels. `0` keeps the session's
+    /// `XCURSOR_SIZE`.
+    #[serde(default, deserialize_with = "deserialize_u32_saturating")]
+    pub cursor_size: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]

@@ -19,6 +19,7 @@ import 'package:shell/screen/widget/screen.dart';
 import 'package:shell/settings/widget/monitor_setting_change_confirmation_overlay.dart';
 import 'package:shell/shortcut_manager/widget/shortcut_manager.dart';
 import 'package:shell/shared/widget/multi_view_drag.dart';
+import 'package:shell/tile_grab/widget/tile_grab_cursor.dart';
 import 'package:shell/tile_grab/widget/tile_grab_preview.dart';
 import 'package:shell/theme/provider/theme.dart';
 
@@ -176,6 +177,7 @@ class MonitorWidget extends HookConsumerWidget {
                           ],
                         ),
                       TileGrabPreview(origin: origin),
+                      const TileGrabCursor(),
                     ],
                   ),
                 ),

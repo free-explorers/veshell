@@ -3,7 +3,7 @@ use smithay::xwayland::X11Wm;
 pub mod xwayland {
     use crate::backend::Backend;
     use crate::capture::selection::{send_native_selection, NATIVE_SCREENSHOT_MIME, PNG_MIME};
-    use crate::cursor::{load_cursor_theme, Cursor};
+    use crate::cursor::CursorState;
     use crate::flutter_engine::wayland_messages::{MapX11Surface, MyPoint, NewX11Surface};
     use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
     use crate::meta_window_state::floating_move::clamp_position;
@@ -23,7 +23,6 @@ pub mod xwayland {
     use smithay::backend::renderer::pixman::{PixmanError, PixmanRenderer};
     use smithay::backend::renderer::utils::draw_render_elements;
     use smithay::backend::renderer::{Bind, Frame, Offscreen, Renderer};
-    use smithay::input::pointer::CursorIcon;
     use smithay::reexports::gbm::Format;
     use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 
@@ -59,14 +58,23 @@ pub mod xwayland {
         pub client: Client,
         pub xwm: Option<X11Wm>,
         pub display: u32,
+        /// Cursor theme and pixel size last merged into the X resource
+        /// database, so scale updates do not respawn `xrdb` for nothing.
+        merged_cursor_resources: Option<(String, u32)>,
     }
 
     impl XWaylandState {
-        pub fn reload_cursor(&mut self, scale: f64) {
+        /// Hands the WM the current theme's default arrow, drawn for `scale`.
+        pub fn reload_cursor(&mut self, scale: f64, cursor_state: &CursorState) {
             if let Some(wm) = self.xwm.as_mut() {
-                let (theme, size) = load_cursor_theme();
-                let cursor = Cursor::load(&theme, CursorIcon::Default, size);
-                let image = cursor.get_image(scale.ceil() as u32, 0);
+                let (image, size) = {
+                    let mut cursor_state = cursor_state.lock().unwrap();
+                    let size = cursor_state.size();
+                    let image = cursor_state
+                        .default_cursor()
+                        .get_image(scale.ceil() as u32, 0);
+                    (image, size)
+                };
 
                 let (pixels_rgba, size, hotspot) = match scale_cursor(scale, size, &image) {
                     Ok(x) => x,
@@ -89,6 +97,49 @@ pub mod xwayland {
                 }
             }
         }
+    }
+
+    /// The X resources libXcursor reads to pick a theme and size.
+    pub(crate) fn cursor_resources(theme: &str, size: u32) -> String {
+        format!("Xcursor.theme: {theme}\nXcursor.size: {size}\n")
+    }
+
+    /// Merges the cursor resources into Xwayland's `RESOURCE_MANAGER`, which
+    /// libXcursor reads (before `XCURSOR_*`) in X clients that were not started
+    /// by the shell. Spawned so a slow or missing `xrdb` never blocks the
+    /// compositor; without it only XSETTINGS and the environment carry the
+    /// cursor.
+    fn merge_cursor_resources(display: u32, theme: &str, size: u32) {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+
+        let child = Command::new("xrdb")
+            .args(["-merge", "-nocpp", "-"])
+            .env("DISPLAY", format!(":{display}"))
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+        let mut child = match child {
+            Ok(child) => child,
+            Err(err) => {
+                info!(?err, "xrdb unavailable; X cursor resources not merged");
+                return;
+            }
+        };
+        let resources = cursor_resources(theme, size);
+        std::thread::spawn(move || {
+            if let Some(mut stdin) = child.stdin.take() {
+                if let Err(err) = stdin.write_all(resources.as_bytes()) {
+                    warn!(?err, "failed to write X cursor resources to xrdb");
+                }
+            }
+            match child.wait() {
+                Ok(status) if !status.success() => warn!(%status, "xrdb -merge failed"),
+                Err(err) => warn!(?err, "failed to wait for xrdb"),
+                _ => {}
+            }
+        });
     }
 
     fn scale_cursor(
@@ -224,6 +275,7 @@ pub mod xwayland {
                             client: client.clone(),
                             xwm: None,
                             display: display_number,
+                            merged_cursor_resources: None,
                         });
                         let wm = X11Wm::start_wm(
                             data.loop_handle.clone(),
@@ -239,17 +291,7 @@ pub mod xwayland {
                         // the first X client falls back to its own defaults,
                         // which on a multi-monitor setup made it use a 2x
                         // cursor until an output change re-applied the scale.
-                        let highest_scale = data
-                            .space
-                            .outputs()
-                            .map(|output| output.current_scale().fractional_scale())
-                            .fold(f64::NAN, f64::max);
-                        let highest_scale = if highest_scale.is_nan() {
-                            1.0
-                        } else {
-                            highest_scale
-                        };
-                        data.update_xwayland_scale(highest_scale);
+                        data.refresh_xwayland_settings();
 
                         std::env::set_var("DISPLAY", format!(":{}", display_number));
                         if let Some(flutter_engine) = data.flutter_engine.as_mut() {
@@ -325,50 +367,90 @@ pub mod xwayland {
             );
         }
 
+        /// XSETTINGS, X resources and the WM cursor for `scale`.
+        fn apply_xwayland_toolkit_settings(&mut self, new_scale: f64) {
+            let Some(xwayland) = self.xwayland_state.as_mut() else {
+                return;
+            };
+            let (cursor_theme, cursor_size) = {
+                let cursor_state = self.cursor_state.lock().unwrap();
+                (cursor_state.theme_name().to_owned(), cursor_state.size())
+            };
+            // X clients render at the highest output scale, so their cursor is
+            // sized in those pixels.
+            let scaled_cursor_size = (new_scale * cursor_size as f64).round() as i32;
+
+            // update xorg dpi
+            if let Some(xwm) = xwayland.xwm.as_mut() {
+                let dpi = new_scale * 96. * 1024.;
+                if let Err(err) = xwm.set_xsettings(
+                    [
+                        ("Xft/DPI".into(), (dpi.round() as i32).into()),
+                        ("Xcursor/size".into(), scaled_cursor_size.into()),
+                        (
+                            "Gdk/UnscaledDPI".into(),
+                            ((dpi / new_scale).round() as i32).into(),
+                        ),
+                        (
+                            "Gdk/WindowScalingFactor".into(),
+                            (new_scale.round() as i32).into(),
+                        ),
+                        ("Gtk/CursorThemeSize".into(), scaled_cursor_size.into()),
+                        ("Gtk/CursorThemeName".into(), cursor_theme.clone().into()),
+                    ]
+                    .into_iter(),
+                ) {
+                    warn!(wm_id = ?xwm.id(), ?err, "Failed to update XSETTINGS.");
+                }
+            }
+
+            // update cursor
+            xwayland.reload_cursor(new_scale, &self.cursor_state);
+
+            let resources = (cursor_theme, scaled_cursor_size.max(1) as u32);
+            if xwayland.merged_cursor_resources.as_ref() != Some(&resources) {
+                merge_cursor_resources(xwayland.display, &resources.0, resources.1);
+                xwayland.merged_cursor_resources = Some(resources);
+            }
+        }
+
+        /// The highest output scale, which Xwayland clients render at.
+        fn highest_output_scale(&self) -> f64 {
+            let highest_scale = self
+                .space
+                .outputs()
+                .map(|output| output.current_scale().fractional_scale())
+                .fold(f64::NAN, f64::max);
+            if highest_scale.is_nan() {
+                1.0
+            } else {
+                highest_scale
+            }
+        }
+
+        /// Re-applies the X toolkit settings (DPI, cursor theme and size), the
+        /// WM cursor and the client scale for the highest output scale. Used
+        /// when Xwayland attaches.
+        pub fn refresh_xwayland_settings(&mut self) {
+            self.update_xwayland_scale(self.highest_output_scale());
+        }
+
+        /// Pushes a new cursor theme or size to Xwayland without touching the
+        /// window geometry: XSETTINGS (GTK follows it live), the X resource
+        /// database (read by libXcursor in newly started clients) and the
+        /// WM's default cursor.
+        pub fn refresh_xwayland_cursor(&mut self) {
+            self.apply_xwayland_toolkit_settings(self.highest_output_scale());
+        }
+
         pub fn update_xwayland_scale(&mut self, new_scale: f64) {
+            self.apply_xwayland_toolkit_settings(new_scale);
             if let Some(xwayland) = self.xwayland_state.as_mut() {
                 let geometries = self
                     .x11_surfaces
                     .iter()
                     .filter_map(|s| Some((s.1.clone(), s.1.geometry())))
                     .collect::<Vec<_>>();
-
-                let cursor_size = std::env::var("XCURSOR_SIZE")
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(24);
-
-                // update xorg dpi
-                if let Some(xwm) = xwayland.xwm.as_mut() {
-                    let dpi = new_scale * 96. * 1024.;
-                    if let Err(err) = xwm.set_xsettings(
-                        [
-                            ("Xft/DPI".into(), (dpi.round() as i32).into()),
-                            (
-                                "Xcursor/size".into(),
-                                ((new_scale * cursor_size as f64).round() as i32).into(),
-                            ),
-                            (
-                                "Gdk/UnscaledDPI".into(),
-                                ((dpi / new_scale).round() as i32).into(),
-                            ),
-                            (
-                                "Gdk/WindowScalingFactor".into(),
-                                (new_scale.round() as i32).into(),
-                            ),
-                            (
-                                "Gtk/CursorThemeSize".into(),
-                                ((new_scale * cursor_size as f64).round() as i32).into(),
-                            ),
-                        ]
-                        .into_iter(),
-                    ) {
-                        warn!(wm_id = ?xwm.id(), ?err, "Failed to update XSETTINGS.");
-                    }
-                }
-
-                // update cursor
-                xwayland.reload_cursor(new_scale);
 
                 // update client scale
                 xwayland
@@ -1358,5 +1440,18 @@ pub mod xwayland {
                     .insert(get_surface_id(wl_surface.borrow()), meta_window.id);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::xwayland::cursor_resources;
+
+    #[test]
+    fn cursor_resources_name_theme_and_size() {
+        assert_eq!(
+            cursor_resources("Breeze_Snow", 48),
+            "Xcursor.theme: Breeze_Snow\nXcursor.size: 48\n"
+        );
     }
 }

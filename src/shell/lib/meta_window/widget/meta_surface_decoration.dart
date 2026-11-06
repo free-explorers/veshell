@@ -143,6 +143,7 @@ class WindowTitleBar extends HookConsumerWidget {
               ),
               const Spacer(),
               InkWell(
+                mouseCursor: WidgetStateMouseCursor.clickable,
                 onTap: () {
                   ref
                       .read(metaWindowStateProvider(metaWindowId).notifier)

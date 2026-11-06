@@ -38,6 +38,7 @@ class PanelTab extends StatelessWidget {
           : colorScheme.surfaceContainerLow,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
+        mouseCursor: WidgetStateMouseCursor.clickable,
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

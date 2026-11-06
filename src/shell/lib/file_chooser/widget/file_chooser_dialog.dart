@@ -267,6 +267,8 @@ class FileChooserDialog extends HookConsumerWidget {
         : SizedBox(
             width: 200,
             child: DropdownButtonFormField<int?>(
+              mouseCursor: WidgetStateMouseCursor.clickable,
+              dropdownMenuItemMouseCursor: WidgetStateMouseCursor.clickable,
               initialValue: selectedFilter.value,
               isExpanded: true,
               decoration: _fieldDecoration(

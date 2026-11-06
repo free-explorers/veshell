@@ -474,6 +474,7 @@ class _FloatingTaskBarItem extends StatelessWidget {
             : theme.colorScheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(6),
         child: InkWell(
+          mouseCursor: WidgetStateMouseCursor.clickable,
           borderRadius: BorderRadius.circular(6),
           onTap: onTap,
           child: Padding(

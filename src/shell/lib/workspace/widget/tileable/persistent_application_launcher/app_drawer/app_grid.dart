@@ -67,6 +67,7 @@ class AppEntry extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return InkWell(
+      mouseCursor: WidgetStateMouseCursor.clickable,
       borderRadius: BorderRadius.circular(24),
       onTap: () async {
         onLaunch(desktopEntry);
