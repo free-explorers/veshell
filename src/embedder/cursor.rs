@@ -129,6 +129,14 @@ pub struct CursorStateInner {
     /// the grab feedback, and ending the grab must restore Flutter's shape
     /// rather than forget it.
     grab_cursor: Option<CursorIcon>,
+    /// Whether a shell transition (a sliding tile row or workspace) is in
+    /// progress. Flutter reports the arrow while the page under the pointer
+    /// leaves the hit test, although it is still painted, so its updates are
+    /// recorded but not displayed meanwhile.
+    transitioning: bool,
+    /// The shape Flutter reported during [`Self::transitioning`], applied when
+    /// the transition ends.
+    pending_flutter_cursor: Option<CursorIcon>,
 
     cursor_theme: CursorTheme,
     cursor_theme_name: String,
@@ -143,6 +151,34 @@ impl CursorStateInner {
     /// Records the shape Flutter asked for. Returns whether the displayed
     /// cursor changed, so the caller knows to schedule a render.
     pub fn set_flutter_shape(&mut self, shape: CursorIcon) -> bool {
+        if self.transitioning {
+            self.pending_flutter_cursor = Some(shape);
+            return false;
+        }
+        let before = self.shape();
+        self.flutter_cursor = Some(shape);
+        before != self.shape()
+    }
+
+    /// Starts or ends a shell transition.
+    ///
+    /// While one runs, Flutter's cursor reports are kept pending instead of
+    /// applied: a page leaving the hit test reports the arrow even though it
+    /// is still painted under a stationary pointer, and showing it would blink
+    /// the cursor on every navigation. Ending the transition applies the last
+    /// shape Flutter reported. Returns whether the displayed cursor changed,
+    /// so the caller knows to schedule a render.
+    pub fn set_transitioning(&mut self, transitioning: bool) -> bool {
+        if self.transitioning == transitioning {
+            return false;
+        }
+        self.transitioning = transitioning;
+        if transitioning {
+            return false;
+        }
+        let Some(shape) = self.pending_flutter_cursor.take() else {
+            return false;
+        };
         let before = self.shape();
         self.flutter_cursor = Some(shape);
         before != self.shape()
@@ -244,6 +280,8 @@ impl CursorStateInner {
         CursorStateInner {
             flutter_cursor: None,
             grab_cursor: None,
+            transitioning: false,
+            pending_flutter_cursor: None,
 
             cursor_theme: CursorTheme::load(&name),
             cursor_theme_name: name,
@@ -553,5 +591,36 @@ mod tests {
         state.clear_grab_shape();
         assert!(!state.overrides_clients());
         assert_eq!(state.shape(), Some(CursorIcon::Default));
+    }
+
+    #[test]
+    fn a_transition_holds_the_cursor_and_applies_the_last_shape_reported() {
+        let mut state = CursorStateInner::default();
+        assert!(state.set_flutter_shape(CursorIcon::Grab));
+
+        assert!(!state.set_transitioning(true));
+        // The page under the pointer left the hit test and reports the arrow;
+        // the hand stays.
+        assert!(!state.set_flutter_shape(CursorIcon::Default));
+        assert_eq!(state.shape(), Some(CursorIcon::Grab));
+        // The settled layout reports the window under the pointer; the hand
+        // still stays until the transition ends.
+        assert!(!state.set_flutter_shape(CursorIcon::Pointer));
+        assert_eq!(state.shape(), Some(CursorIcon::Grab));
+
+        assert!(state.set_transitioning(false));
+        assert_eq!(state.shape(), Some(CursorIcon::Pointer));
+        assert!(state.set_flutter_shape(CursorIcon::Default));
+        assert_eq!(state.shape(), Some(CursorIcon::Default));
+    }
+
+    #[test]
+    fn a_transition_end_without_a_new_shape_keeps_the_current_one() {
+        let mut state = CursorStateInner::default();
+        state.set_flutter_shape(CursorIcon::Grab);
+        state.set_transitioning(true);
+
+        assert!(!state.set_transitioning(false));
+        assert_eq!(state.shape(), Some(CursorIcon::Grab));
     }
 }

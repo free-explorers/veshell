@@ -10,6 +10,12 @@ import 'package:shell/workspace/widget/current_workspace_id.dart';
 import 'package:shell/workspace/widget/tileable/persistent_window/persistent_window.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
 
+/// The durable identity of a panel item: a window keeps its key across
+/// reorders, and the launcher slot is a singleton.
+Object _panelKey(Tileable tileable) => tileable is PersistentWindowTileable
+    ? tileable.windowId
+    : const ValueKey('application-launcher');
+
 class TileableListView extends HookConsumerWidget {
   const TileableListView({required this.tileableList, super.key});
   final List<Tileable> tileableList;
@@ -25,10 +31,18 @@ class TileableListView extends HookConsumerWidget {
     );
     final dropInProgressState = useState(false);
 
-    final tileableKeyList = useMemoized(
-      () => tileableList.map((Widget tab) => GlobalKey()).toList(),
-      [tileableList],
-    );
+    // The keys must outlive a rebuild: `tileableList` is rebuilt from fresh
+    // `Tileable` instances whenever the workspace changes, and a new key on the
+    // item's `LayoutBuilder` would remount its subtree. That drops the
+    // pointer's ink ripple (and any transient state) halfway through a click,
+    // exactly when selecting a tileable moves the indicator.
+    final tileableKeys = useMemoized(() => <Object, GlobalKey>{});
+    final liveKeys = {for (final tileable in tileableList) _panelKey(tileable)};
+    tileableKeys.removeWhere((key, _) => !liveKeys.contains(key));
+    final tileableKeyList = [
+      for (final tileable in tileableList)
+        tileableKeys.putIfAbsent(_panelKey(tileable), GlobalKey.new),
+    ];
 
     final offsetMap = useState(IMap<GlobalKey, Offset>());
     useEffect(() {
