@@ -12,6 +12,7 @@ import 'package:flutter/gestures.dart'
         PointerDownEvent,
         kPrecisePointerHitSlop;
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/shared/util/reorder_drag.dart';
 import 'package:shell/shared/widget/multi_view_drag.dart';
 
 /// A [Draggable] that only starts a drag once the pointer has moved by at
@@ -177,6 +178,7 @@ class _CrossReorderableListState<T extends Object>
   T? dropData;
   T? _draggedData;
   bool _acceptedHere = false;
+  bool _dragActive = false;
   ShellDragSession? _session;
 
   Key _keyFor(T data) => widget.itemKey?.call(data) ?? ValueKey(data);
@@ -222,6 +224,7 @@ class _CrossReorderableListState<T extends Object>
   @override
   void dispose() {
     _session?.dispose();
+    if (_dragActive) ReorderDragController.instance.end();
     super.dispose();
   }
 
@@ -316,6 +319,8 @@ class _CrossReorderableListState<T extends Object>
                                 _finishDrag();
                               },
                               onDragStarted: () {
+                                _dragActive = true;
+                                ReorderDragController.instance.begin();
                                 _draggedData = data;
                                 _acceptedHere = false;
                                 _session = ShellDragSession(
@@ -457,6 +462,10 @@ class _CrossReorderableListState<T extends Object>
   }
 
   void _finishDrag() {
+    if (_dragActive) {
+      _dragActive = false;
+      ReorderDragController.instance.end();
+    }
     _session?.dispose();
     _session = null;
     _draggedData = null;
