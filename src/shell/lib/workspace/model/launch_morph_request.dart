@@ -4,8 +4,14 @@ import 'package:flutter/rendering.dart' show LayerLink;
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 
 /// Where a launch starts: the launcher item, its icon and its label, in
-/// global coordinates.
-typedef LaunchOrigin = ({ui.Rect item, ui.Rect icon, ui.Rect label});
+/// global coordinates, and the `section` of the launcher it was in (as the
+/// launcher names its sections), where a new item replaces the one that left.
+typedef LaunchOrigin = ({
+  ui.Rect item,
+  ui.Rect icon,
+  ui.Rect label,
+  Object? section,
+});
 
 /// A launch from the tiled launcher, for the new tile to open with: its item
 /// morphs into the tile's placeholder (see `LaunchMorph`).

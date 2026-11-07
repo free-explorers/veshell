@@ -11,6 +11,7 @@ import 'package:shell/application/provider/app_drawer.dart';
 import 'package:shell/application/provider/app_launch_history.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/shared/widget/shell_icon.dart';
+import 'package:shell/workspace/provider/launch_morphs.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/app_drawer/app_grid.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/launch_morph.dart';
 
@@ -18,6 +19,9 @@ import 'package:shell/workspace/widget/tileable/persistent_application_launcher/
 /// taken over (its opening animation included).
 typedef AppDrawerLaunchCallback =
     Future<void> Function(LocalizedDesktopEntry entry, LaunchOrigin? origin);
+
+/// The launcher's sections, where a launched item can come from.
+enum _Section { frequent, list }
 
 /// The widest the search field grows; past it a long empty bar reads as a
 /// divider rather than a field.
@@ -67,6 +71,26 @@ class AppDrawer extends HookConsumerWidget {
     // How to find where the entry `Enter` launches sits (see
     // `AppEntry.launchTarget`); rebuilt with the grid, so cleared first.
     final launchTarget = useRef<LaunchOriginGetter?>(null)..value = null;
+    // The entry whose launch is morphing into its tile: it detached from the
+    // section it was launched from, where a new one fades in at its place
+    // (its copy in the other section stays). Read from the morphs, not kept
+    // here: the tile takes the launcher's slot, which can rebuild the
+    // launcher afresh.
+    final reappearing = ref.watch(
+      launchMorphsProvider.select(
+        (morphs) => switch (morphs.values.lastOrNull) {
+          final request? => (
+            entry: (id: request.entry.desktopEntry.id, token: request),
+            section: request.origin.section,
+          ),
+          null => null,
+        },
+      ),
+    );
+    AppEntryReappearance? reappearingIn(_Section section) =>
+        reappearing != null && reappearing.section == section
+        ? reappearing.entry
+        : null;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -119,7 +143,19 @@ class AppDrawer extends HookConsumerWidget {
           LocalizedDesktopEntry entry,
           LaunchOrigin? origin,
         ) async {
-          await onSelect(entry, origin);
+          await onSelect(
+            entry,
+            origin == null
+                ? null
+                : (
+                    item: origin.item,
+                    icon: origin.icon,
+                    label: origin.label,
+                    section: index < frequentRow.length
+                        ? _Section.frequent
+                        : _Section.list,
+                  ),
+          );
           if (!context.mounted) {
             return;
           }
@@ -226,6 +262,7 @@ class AppDrawer extends HookConsumerWidget {
                     ? null
                     : selectedIndex - frequentRow.length,
                 launchTarget: launchTarget,
+                reappearing: reappearingIn(_Section.list),
                 onLaunch: (index, entry, origin) =>
                     onLaunch(frequentRow.length + index, entry, origin),
               );
@@ -281,6 +318,7 @@ class AppDrawer extends HookConsumerWidget {
                           padding: gridPadding,
                           launchTargetIndex: selectedIndex,
                           launchTarget: launchTarget,
+                          reappearing: reappearingIn(_Section.frequent),
                           onLaunch: onLaunch,
                         ),
                       ),
