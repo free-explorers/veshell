@@ -9,8 +9,11 @@ import 'package:shell/capture/provider/recording_workspaces.dart';
 import 'package:shell/capture/provider/screen_cast_indicator.dart';
 import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
 import 'package:shell/l10n/l10n.dart';
+import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/widget/tile_popup_host.dart';
+import 'package:shell/platform/model/request/release_texture/release_texture.serializable.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/tile_grab/widget/tile_grab_region.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
@@ -18,11 +21,13 @@ import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/selected_dialog_for_window.dart';
+import 'package:shell/window/provider/window_close_requests.dart';
 import 'package:shell/window/widget/floating_window_area.dart';
 import 'package:shell/window/widget/visible_popup_meta_windows.dart';
 import 'package:shell/window/widget/window.dart';
 import 'package:shell/window/widget/window_dialog_area.dart';
 import 'package:shell/window/widget/window_open_transition.dart';
+import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/window/widget/window_placeholder.dart';
 import 'package:shell/workspace/provider/launch_morphs.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
@@ -126,6 +131,30 @@ class PersistentWindowTileable extends Tileable {
       },
     );
 
+    // Closing plays the opening backwards over the placeholder: the window
+    // wraps back into its card. The surface is gone by then, so a frame is
+    // captured as the shell asks it to close; a window closing on its own
+    // wraps up without one. A floating tile has no card to wrap into.
+    final frameKey = useMemoized(GlobalKey.new);
+    final closing = useWindowClosing(
+      metaWindowId: metaWindowId,
+      closeRequests: ref.watch(windowCloseRequestsProvider(windowId)),
+      frameKey: frameKey,
+      // The window's own texture: the compositor keeps it past a close the
+      // shell asked for, and `toImageSync` does not draw it.
+      windowTextureId: () => _windowTextureId(ref, metaWindowId),
+      releaseTexture: (textureId) => ref
+          .read(platformManagerProvider.notifier)
+          .request(
+            ReleaseTextureRequest(
+              message: ReleaseTextureMessage(textureId: textureId),
+            ),
+          ),
+      enabled:
+          window.displayMode != DisplayMode.floating &&
+          !MediaQuery.disableAnimationsOf(context),
+    );
+
     // The placeholder's card opens onto the window behind it and expands to
     // uncover it. Both directions share one duration so the outgoing
     // placeholder stays painted around the opening until it covers the tile.
@@ -139,7 +168,11 @@ class PersistentWindowTileable extends Tileable {
       duration: windowOpenTransitionDuration,
       transitionBuilder: (child, animation) => child is WindowWidget
           ? WindowOpenTransition(animation: animation, child: child)
-          : PlaceholderSwapTransition(animation: animation, child: child),
+          : PlaceholderSwapTransition(
+              animation: animation,
+              underClosing: closing != null,
+              child: child,
+            ),
       child: metaWindowId != null
           ? WindowWidget(
               metaWindowId: metaWindowId,
@@ -237,7 +270,7 @@ class PersistentWindowTileable extends Tileable {
                       // stay out of the area in game mode (the overlay must not
                       // be covered). Floating tiles bypass it entirely and float
                       // every native child instead.
-                      child: area,
+                      child: RepaintBoundary(key: frameKey, child: area),
                     ),
                   ),
                 ),
@@ -245,6 +278,15 @@ class PersistentWindowTileable extends Tileable {
               Positioned.fill(
                 child: TilePopupHost(metaWindowIds: popupMetaWindowIds),
               ),
+              if (closing != null)
+                Positioned.fill(
+                  key: ObjectKey(closing),
+                  child: WindowCloseTransition(
+                    image: closing.image,
+                    texture: closing.texture,
+                    onDone: closing.done,
+                  ),
+                ),
             ],
           ),
         ),
@@ -452,5 +494,19 @@ class PersistentWindowTileable extends Tileable {
         child: Text(context.l10n.close),
       ),
     ];
+  }
+}
+
+/// The texture of the window [metaWindowId] shows, if it is painting.
+int? _windowTextureId(WidgetRef ref, MetaWindowId? metaWindowId) {
+  if (metaWindowId == null) {
+    return null;
+  }
+  try {
+    final surfaceId = ref.read(metaWindowStateProvider(metaWindowId)).surfaceId;
+    return ref.read(wlSurfaceStateProvider(surfaceId)).texture?.id;
+  } on Object {
+    // The window is already gone (see `WindowWidget`).
+    return null;
   }
 }

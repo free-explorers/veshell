@@ -21,6 +21,7 @@ import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/resume_context_capture.dart';
+import 'package:shell/window/provider/window_close_requests.dart';
 import 'package:shell/window/provider/window_manager/matching_utils.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/window/provider/window_provider.mixin.dart';
@@ -402,6 +403,9 @@ class PersistentWindowState extends _$PersistentWindowState
       removeWindow();
       return;
     }
+    // Before the request reaches the client: the tile captures the frame the
+    // closing window wraps back into the placeholder with.
+    ref.read(windowCloseRequestsProvider(windowId).notifier).request();
     super.closeWindow();
     if (forceRemove) {
       removeWindow();

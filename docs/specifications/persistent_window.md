@@ -18,6 +18,26 @@ title-change events are transient: the tile does not persist them, so the last
 complete window state survives into the next session. See
 [state_manager.md](state_manager.md).
 
+## Opening and closing
+
+A tile's own launch opens its first window through the placeholder's centered
+card: the window, already at its final place and size, shows through the card,
+then the opening expands to the tile's edges as its corners straighten.
+
+Closing plays it backwards: the placeholder is shown whole at once, and the
+window wraps back into its card over it (the opening narrows to the card, its
+corners round, then the window fades out into the card's content). A closed
+window has no surface left to paint, so when the shell asks it to close (the
+tab's close button, the close shortcut, the menu, a middle click) the tile's
+frame is captured at that moment and is what wraps up: what the shell painted,
+and the window's own texture, which the compositor keeps past the surface's
+destruction until the shell releases it (5 seconds at most). A captured frame
+is dropped after 5 seconds if the window stays (a client asking first about
+unsaved changes). A window that closes on
+its own wraps up the same way with a plain surface in its place. A window
+shown again (a splash handing over, a recreated surface) cancels the closing.
+Floating tiles, and the shell with animations disabled, do neither.
+
 ## Resume context
 
 A tile that has no window resumes its saved work when clicked; it is never

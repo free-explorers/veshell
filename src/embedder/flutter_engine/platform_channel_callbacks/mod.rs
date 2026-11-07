@@ -29,6 +29,7 @@ mod notification_ready;
 mod on_shell_ready;
 mod pointer_exit;
 mod pointer_focus;
+mod release_texture;
 mod screen_cast_consent_decision;
 mod screen_cast_stop;
 mod screenshot_prompt_decision;
@@ -70,6 +71,7 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             "start_move_window" => start_move_window(method_call, result, data),
             "start_resize_window" => start_resize_window(method_call, result, data),
             "close_window" => close_window(method_call, result, data),
+            "release_texture" => self::release_texture::release_texture(method_call, result, data),
             "adjust_brightness" => adjust_brightness(method_call, result, data),
             "switch_keyboard_layout" => switch_keyboard_layout(method_call, result, data),
             "get_monitor_layout" => get_monitor_layout(method_call, result, data),
