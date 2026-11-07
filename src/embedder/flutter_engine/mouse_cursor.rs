@@ -64,6 +64,30 @@ pub fn mouse_cursor_channel_method_call_handler<BackendData: Backend + 'static>(
 ) {
     if let Event::Msg((method_call, mut result)) = event {
         let arguments = method_call.arguments();
+        // Sent by the shell while a tile row or workspace slides: Flutter
+        // reports the arrow as the page under the pointer leaves the hit test,
+        // which must not replace the shape the pointer had before the slide.
+        if method_call.method() == "setCursorTransitioning" {
+            let transitioning = arguments
+                .and_then(|arguments| arguments.map())
+                .and_then(|arguments| {
+                    arguments.iter().find_map(|(key, value)| {
+                        (key.string() == Some("transitioning"))
+                            .then(|| value.bool())
+                            .flatten()
+                    })
+                })
+                .unwrap_or(false);
+            let changed = data
+                .cursor_state
+                .lock()
+                .unwrap()
+                .set_transitioning(transitioning);
+            if changed {
+                data.request_render();
+            }
+            return result.success(None);
+        }
         if method_call.method() == "activateSystemCursor" {
             let args = arguments.unwrap().map().unwrap();
             let mut kind = None;

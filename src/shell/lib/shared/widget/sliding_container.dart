@@ -4,6 +4,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/platform/widget/swipe_gesture_detector.dart';
+import 'package:shell/shared/provider/cursor_transition.dart';
 import 'package:shell/shared/util/snapping.dart';
 
 const swipeVelocityThreshold = 800;
@@ -55,6 +56,15 @@ class SlidingContainer extends HookConsumerWidget {
   final bool buildsNeighbors;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // A page leaving the hit test reports the arrow while it is still painted
+    // under the pointer. Hold the cursor for the duration of this container's
+    // slide so it does not blink on every navigation.
+    final transitionToken = useMemoized(Object.new);
+    final cursorTransition = ref.read(cursorTransitionProvider.notifier);
+    useEffect(() {
+      return () => cursorTransition.end(transitionToken);
+    }, [cursorTransition, transitionToken]);
+
     // Resolve the leading tile up front: the effect below runs during the build
     // that mounts the `PageView`, before it has a scroll position, so it cannot
     // perform the initial scroll. If the selected tile falls outside the
@@ -270,6 +280,10 @@ class SlidingContainer extends HookConsumerWidget {
                           controller: pageController,
                           direction: direction,
                           buildsNeighbors: buildsNeighbors,
+                          onScrollStart: () =>
+                              cursorTransition.begin(transitionToken),
+                          onScrollEnd: () =>
+                              cursorTransition.end(transitionToken),
                           delegate: SliverChildBuilderDelegate(
                             (context, index) => children[index],
                             childCount: children.length,
@@ -410,6 +424,8 @@ class _PageRow extends StatelessWidget {
     required this.direction,
     required this.buildsNeighbors,
     required this.delegate,
+    required this.onScrollStart,
+    required this.onScrollEnd,
   });
 
   final PageController controller;
@@ -419,6 +435,8 @@ class _PageRow extends StatelessWidget {
   /// ones (`PageView.allowImplicitScrolling`).
   final bool buildsNeighbors;
   final SliverChildDelegate delegate;
+  final VoidCallback onScrollStart;
+  final VoidCallback onScrollEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -427,24 +445,41 @@ class _PageRow extends StatelessWidget {
       direction,
       false,
     );
-    return Scrollable(
-      axisDirection: axisDirection,
-      controller: controller,
-      physics: const NeverScrollableScrollPhysics(),
-      scrollBehavior: ScrollConfiguration.of(
-        context,
-      ).copyWith(scrollbars: false),
-      viewportBuilder: (context, position) => Viewport(
-        scrollCacheExtent: ScrollCacheExtent.viewport(buildsNeighbors ? 1 : 0),
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        // Only this page row's own scroll: depth counts the viewports a
+        // notification bubbled through, so a list inside a page arrives with a
+        // deeper notification and must not hold the cursor.
+        if (notification.depth == 0) {
+          if (notification is ScrollStartNotification) {
+            onScrollStart();
+          } else if (notification is ScrollEndNotification) {
+            onScrollEnd();
+          }
+        }
+        return false;
+      },
+      child: Scrollable(
         axisDirection: axisDirection,
-        offset: position,
-        slivers: [
-          _SliverPages(
-            viewportFraction: controller.viewportFraction,
-            allowImplicitScrolling: buildsNeighbors,
-            delegate: delegate,
+        controller: controller,
+        physics: const NeverScrollableScrollPhysics(),
+        scrollBehavior: ScrollConfiguration.of(
+          context,
+        ).copyWith(scrollbars: false),
+        viewportBuilder: (context, position) => Viewport(
+          scrollCacheExtent: ScrollCacheExtent.viewport(
+            buildsNeighbors ? 1 : 0,
           ),
-        ],
+          axisDirection: axisDirection,
+          offset: position,
+          slivers: [
+            _SliverPages(
+              viewportFraction: controller.viewportFraction,
+              allowImplicitScrolling: buildsNeighbors,
+              delegate: delegate,
+            ),
+          ],
+        ),
       ),
     );
   }
