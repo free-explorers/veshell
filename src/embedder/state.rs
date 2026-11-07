@@ -16,6 +16,7 @@ use smithay::input::tablet::TabletSeatHandler;
 use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::output::{Output, Scale};
 use smithay::reexports::calloop::generic::Generic;
+use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::calloop::{Interest, LoopHandle, Mode, PostAction};
 use smithay::reexports::input;
 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1;
@@ -179,6 +180,13 @@ pub struct State<BackendData: Backend + 'static> {
     pub subsurfaces: HashMap<u64, WlSurface>,
     pub texture_ids_per_surface_id: HashMap<u64, Vec<(i64, Size<i32, BufferCoords>)>>,
     pub texture_swapchains: HashMap<i64, TextureSwapChain>,
+    /// Surfaces the shell asked to close: their textures outlive them, so the
+    /// shell can still paint the window's last frame while it wraps the tile
+    /// back into its placeholder.
+    pub surfaces_retaining_textures: HashSet<u64>,
+    /// Textures of destroyed surfaces kept for the shell, until it releases
+    /// them (`release_texture`) or [RETAINED_TEXTURE_LIFETIME] has passed.
+    pub retained_texture_ids: HashSet<i64>,
     pub wayland_socket_name: Option<String>,
     pub x11_surfaces: HashMap<u64, X11Surface>,
     pub x11_surface_per_wl_surface: HashMap<WlSurface, X11Surface>,
@@ -285,11 +293,40 @@ impl<BackendData: Backend + 'static> State<BackendData> {
     /// Releases every external texture owned by `surface_id`, used when the
     /// surface is destroyed. The bookkeeping for the surface is forgotten so a
     /// long-lived session cannot accumulate one entry per closed surface.
+    ///
+    /// The textures of a surface the shell asked to close are kept instead
+    /// (its last frame, for the closing animation) until the shell releases
+    /// them, or at the latest after [RETAINED_TEXTURE_LIFETIME].
     pub fn release_surface_textures(&mut self, surface_id: u64) {
-        if let Some(texture_ids) = self.texture_ids_per_surface_id.remove(&surface_id) {
+        let retained = self.surfaces_retaining_textures.remove(&surface_id);
+        let Some(texture_ids) = self.texture_ids_per_surface_id.remove(&surface_id) else {
+            return;
+        };
+        if !retained {
             for (texture_id, _) in texture_ids {
                 self.release_texture_id(texture_id);
             }
+            return;
+        }
+        let texture_ids: Vec<i64> = texture_ids.into_iter().map(|(id, _)| id).collect();
+        self.retained_texture_ids
+            .extend(texture_ids.iter().copied());
+        let _ = self.loop_handle.insert_source(
+            Timer::from_duration(RETAINED_TEXTURE_LIFETIME),
+            move |_, _, state| {
+                for texture_id in &texture_ids {
+                    state.release_retained_texture(*texture_id);
+                }
+                TimeoutAction::Drop
+            },
+        );
+    }
+
+    /// Releases a texture kept after its surface was destroyed; any other
+    /// texture is left alone (the shell cannot release a live surface's).
+    pub fn release_retained_texture(&mut self, texture_id: i64) {
+        if self.retained_texture_ids.remove(&texture_id) {
+            self.release_texture_id(texture_id);
         }
     }
 
@@ -412,6 +449,11 @@ fn restore_or_unset(name: &str) {
 /// The built-in non-session variables [`State::new`] sets, restored when a user
 /// override is removed. `WAYLAND_DISPLAY` and `DISPLAY` are excluded: they are
 /// session-derived and never user-overridable.
+/// How long the textures of a surface the shell closed are kept after it is
+/// destroyed, should the shell never release them: well past its closing
+/// animation.
+pub const RETAINED_TEXTURE_LIFETIME: std::time::Duration = std::time::Duration::from_secs(5);
+
 const BUILTIN_ENVIRONMENT_DEFAULTS: [(&str, &str); 5] = [
     ("XDG_CURRENT_DESKTOP", CURRENT_DESKTOP),
     ("DESKTOP_SESSION", LEGACY_DESKTOP_SESSION),
@@ -640,6 +682,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             texture_ids_per_surface_id: HashMap::new(),
             surface_id_per_texture_id: HashMap::new(),
             texture_swapchains: HashMap::new(),
+            surfaces_retaining_textures: HashSet::new(),
+            retained_texture_ids: HashSet::new(),
             xwayland_shell_state,
             xwayland_state: None,
             space: Space::default(),

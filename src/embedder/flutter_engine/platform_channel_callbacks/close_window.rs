@@ -61,6 +61,8 @@ pub fn close_window<BackendData: Backend + 'static>(
             };
 
             toplevel.send_close();
+            data.surfaces_retaining_textures
+                .insert(meta_window.surface_id);
             result.success(None);
         }
         Some(XWAYLAND_SHELL_ROLE) => {
@@ -74,6 +76,8 @@ pub fn close_window<BackendData: Backend + 'static>(
             };
 
             let _ = x11_surface.close();
+            data.surfaces_retaining_textures
+                .insert(meta_window.surface_id);
             result.success(None);
         }
         _ => {
