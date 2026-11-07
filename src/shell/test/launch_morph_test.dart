@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/application/provider/app_drawer.dart';
 import 'package:shell/application/provider/app_drawer_desktop_entries.dart';
 import 'package:shell/application/provider/icon_file_from_query.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
@@ -13,6 +14,7 @@ import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/model/window_properties.serializable.dart';
 import 'package:shell/window/widget/window_placeholder.dart';
 import 'package:shell/workspace/provider/launch_morphs.dart';
+import 'package:shell/workspace/widget/tileable/persistent_application_launcher/app_drawer/app_drawer.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/app_drawer/app_grid.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/launch_morph.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/persistent_application_launcher.dart';
@@ -266,10 +268,10 @@ void main() {
     await tester.tap(_entryNamed('Alpha'));
     await _untilStarted(tester);
     for (var step = 0; step < 3; step++) {
-      await tester.pump(launchMorphDuration * 0.15);
+      await tester.pump(launchMorphDuration * 0.08);
       expect(cardColor().a, 1);
     }
-    await tester.pump(launchMorphDuration * 0.55);
+    await tester.pump(launchMorphDuration * 0.76);
     // Landed: the placeholder card's translucent color.
     expect(cardColor().a, lessThan(1));
     await tester.pumpAndSettle();
@@ -335,5 +337,124 @@ void main() {
         await tester.pumpAndSettle();
       });
     }
+  });
+
+  testWidgets('a launched entry detaches: a new one fades in at its place', (
+    tester,
+  ) async {
+    Future<void> pumpEntry(Object? reappearing) => tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 120,
+            height: 150,
+            child: AppEntry(
+              desktopEntry: _entry('Alpha'),
+              onLaunch: (_, _) {},
+              reappearing: reappearing,
+            ),
+          ),
+        ),
+      ),
+    );
+    double opacity() => tester
+        .widget<FadeTransition>(
+          find
+              .descendant(
+                of: find.byType(AppEntry),
+                matching: find.byType(FadeTransition),
+              )
+              .first,
+        )
+        .opacity
+        .value;
+
+    await pumpEntry(null);
+    expect(opacity(), 1);
+
+    final launch = Object();
+    await pumpEntry(launch);
+    // Hidden while the launched item leaves its place…
+    expect(opacity(), 0);
+    await tester.pump(launchMorphDuration * 0.3);
+    expect(opacity(), 0);
+    // …then back in, by the end of the morph.
+    await tester.pump(launchMorphDuration * 0.3);
+    expect(opacity(), inExclusiveRange(0, 1));
+    await tester.pump(launchMorphDuration * 0.4);
+    expect(opacity(), 1);
+
+    // The same launch, rebuilt, does not replay; the next one does.
+    await pumpEntry(launch);
+    expect(opacity(), 1);
+    await pumpEntry(Object());
+    expect(opacity(), 0);
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets("only the launched section's entry detaches", (tester) async {
+    final searchFocusNode = FocusNode();
+    addTearDown(searchFocusNode.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDrawerDesktopEntriesProvider.overrideWith(
+            (ref) async => [_entry('Alpha'), _entry('Beta')],
+          ),
+          appDrawerFrequentDesktopEntriesProvider.overrideWithValue(
+            AsyncData([_entry('Alpha')]),
+          ),
+          iconFileFromQueryProvider.overrideWith((ref, query) async => null),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Consumer(
+              builder: (context, ref, _) => AppDrawer(
+                searchFocusNode: searchFocusNode,
+                // Registers the morph as the launcher does.
+                onSelect: (entry, origin) async => ref
+                    .read(launchMorphsProvider.notifier)
+                    .start(
+                      const PersistentWindowId('tile'),
+                      LaunchMorphRequest(
+                        entry: entry,
+                        origin: origin!,
+                        launcherRect: Rect.zero,
+                      ),
+                    ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    double opacityIn(Type section) => tester
+        .widget<FadeTransition>(
+          find
+              .descendant(
+                of: find.descendant(
+                  of: find.byType(section),
+                  matching: _entryNamed('Alpha'),
+                ),
+                matching: find.byType(FadeTransition),
+              )
+              .first,
+        )
+        .opacity
+        .value;
+
+    await tester.tap(
+      find.descendant(of: find.byType(AppRow), matching: _entryNamed('Alpha')),
+    );
+    await tester.pump();
+
+    // The row's Alpha left; the list's stays.
+    expect(opacityIn(AppRow), 0);
+    expect(opacityIn(AppGridSliver), 1);
+    await tester.pumpAndSettle();
   });
 }

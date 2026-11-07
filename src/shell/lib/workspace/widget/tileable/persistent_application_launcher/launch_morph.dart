@@ -40,7 +40,10 @@ typedef _Landing = ({ui.Rect card, ui.Rect icon, ui.Rect title});
 /// - its icon and label travel to the placeholder's icon and title, the small
 ///   label giving way to the title along the way;
 /// - the rest of the card's content fades in at its place;
-/// - behind it, the blurred icon backdrop fades in.
+/// - behind it, the blurred icon backdrop fades in, early, hiding the
+///   launcher as it slides aside;
+/// - the item detaches from the launcher, where a new one fades in at its
+///   place (`AppEntry.reappearing`).
 ///
 /// The backdrop and the card's content are drawn by [WindowPlaceholder]
 /// layers laid out at the tile's size from the start, which is also where the
@@ -69,11 +72,14 @@ class LaunchMorph extends HookConsumerWidget {
   static const ValueKey<String> flyingTitleKey = ValueKey('launch-morph-title');
 
   static const Curve _move = Curves.easeInOutCubicEmphasized;
-  static const Curve _backdropIn = Interval(0, 0.6, curve: Curves.easeInOut);
+
+  /// The backdrop comes in early: it covers the launcher sliding aside
+  /// behind the morph.
+  static const Curve _backdropIn = Interval(0, 0.25, curve: Curves.easeOut);
 
   /// The card stays opaque until the backdrop is in: only then may it turn
   /// translucent, showing the backdrop rather than the launcher behind it.
-  static const Curve _cardClears = Interval(0.6, 1, curve: Curves.easeInOut);
+  static const Curve _cardClears = Interval(0.25, 1, curve: Curves.easeInOut);
   static const Curve _contentIn = Interval(0.45, 1, curve: Curves.easeOut);
   static const Curve _iconSwap = Interval(0.15, 0.75, curve: Curves.easeInOut);
   static const Curve _titleSwap = Interval(0.1, 0.65, curve: Curves.easeInOut);

@@ -27,6 +27,15 @@ typedef AppItemLaunchCallback =
 /// Reports where the item `Enter` would launch sits on screen.
 typedef LaunchOriginGetter = LaunchOrigin? Function();
 
+/// An entry just launched with a morph, which detached from the launcher:
+/// the launcher's own [AppEntry] of `id` fades back in at its place. `token`
+/// tells one launch from the next of the same entry.
+typedef AppEntryReappearance = ({String? id, Object token});
+
+/// When, in the launch morph, the launcher's entry fades back in: once the
+/// detached item has left its place.
+const Curve _reappear = Interval(0.35, 1, curve: Curves.easeOut);
+
 const _maxTileExtent = 120.0;
 const _tileAspectRatio = 0.8;
 const _tileSpacing = 16.0;
@@ -103,6 +112,7 @@ class AppGridSliver extends StatelessWidget {
     this.padding = 24,
     this.launchTargetIndex,
     this.launchTarget,
+    this.reappearing,
     super.key,
   });
 
@@ -123,6 +133,9 @@ class AppGridSliver extends StatelessWidget {
   final int? launchTargetIndex;
 
   final ObjectRef<LaunchOriginGetter?>? launchTarget;
+
+  /// The entry fading back in after its launch, if it left this section.
+  final AppEntryReappearance? reappearing;
 
   final double padding;
 
@@ -146,6 +159,7 @@ class AppGridSliver extends StatelessWidget {
             query: query,
             isSelected: index == selectedIndex,
             launchTarget: index == launchTargetIndex ? launchTarget : null,
+            reappearing: _reappearingToken(reappearing, entry),
             onLaunch: (entry, origin) => onLaunch(index, entry, origin),
           );
         },
@@ -165,6 +179,7 @@ class AppRow extends StatelessWidget {
     this.padding = 24,
     this.launchTargetIndex,
     this.launchTarget,
+    this.reappearing,
     super.key,
   });
 
@@ -182,6 +197,9 @@ class AppRow extends StatelessWidget {
   final int? launchTargetIndex;
 
   final ObjectRef<LaunchOriginGetter?>? launchTarget;
+
+  /// The entry fading back in after its launch, if it left this section.
+  final AppEntryReappearance? reappearing;
 
   final double padding;
 
@@ -208,6 +226,7 @@ class AppRow extends StatelessWidget {
                     launchTarget: index == launchTargetIndex
                         ? launchTarget
                         : null,
+                    reappearing: _reappearingToken(reappearing, entry),
                     onLaunch: (entry, origin) => onLaunch(index, entry, origin),
                   ),
                 ),
@@ -219,6 +238,13 @@ class AppRow extends StatelessWidget {
   }
 }
 
+Object? _reappearingToken(
+  AppEntryReappearance? reappearing,
+  LocalizedDesktopEntry entry,
+) => reappearing != null && reappearing.id == entry.desktopEntry.id
+    ? reappearing.token
+    : null;
+
 /// Application entry
 class AppEntry extends HookWidget {
   /// Const constructor
@@ -228,6 +254,7 @@ class AppEntry extends HookWidget {
     this.isSelected = false,
     this.query = '',
     this.launchTarget,
+    this.reappearing,
     super.key,
   });
 
@@ -246,10 +273,29 @@ class AppEntry extends HookWidget {
   /// where it sits, so the launch can start the opening morph from it.
   final ObjectRef<LaunchOriginGetter?>? launchTarget;
 
+  /// Set (a new value per launch) when this entry was just launched with a
+  /// morph: the launched item has detached from it, so it starts hidden and
+  /// a new one fades in at its place along the morph.
+  final Object? reappearing;
+
   @override
   Widget build(BuildContext context) {
     final iconKey = useMemoized(GlobalKey.new);
     final labelKey = useMemoized(GlobalKey.new);
+    final reappearance = useAnimationController(
+      duration: launchMorphDuration,
+      initialValue: 1,
+    );
+    final opacity = useMemoized(
+      () => reappearance.drive(CurveTween(curve: _reappear)),
+      [reappearance],
+    );
+    useEffect(() {
+      if (reappearing != null) {
+        reappearance.forward(from: 0);
+      }
+      return null;
+    }, [reappearing]);
 
     LaunchOrigin? origin() {
       Rect? rectOf(BuildContext? of) {
@@ -269,7 +315,7 @@ class AppEntry extends HookWidget {
       if (item == null || icon == null || label == null) {
         return null;
       }
-      return (item: item, icon: icon, label: label);
+      return (item: item, icon: icon, label: label, section: null);
     }
 
     launchTarget?.value = origin;
@@ -290,48 +336,51 @@ class AppEntry extends HookWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final borderRadius = BorderRadius.circular(24);
     final name = desktopEntry.entries[DesktopEntryKey.name.string] ?? '';
-    return Material(
-      // A light tint and an outline: it marks the `Enter` target without
-      // outshouting the icons, and stays distinct from the hover fill.
-      color: isSelected
-          ? colorScheme.primary.withValues(alpha: 0.08)
-          : Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: borderRadius,
-        side: isSelected
-            ? BorderSide(color: colorScheme.primary, width: 2)
-            : BorderSide.none,
-      ),
-      child: InkWell(
-        mouseCursor: WidgetStateMouseCursor.clickable,
-        borderRadius: borderRadius,
-        // The search field keeps the keyboard; the selection stands in for
-        // the focus.
-        canRequestFocus: false,
-        onTap: () => onLaunch(desktopEntry, origin()),
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(10),
-                child: AspectRatio(
-                  key: iconKey,
-                  aspectRatio: 1,
-                  child: AppIconByPath(
-                    path: desktopEntry.entries[DesktopEntryKey.icon.string],
-                    title: name,
+    return FadeTransition(
+      opacity: opacity,
+      child: Material(
+        // A light tint and an outline: it marks the `Enter` target without
+        // outshouting the icons, and stays distinct from the hover fill.
+        color: isSelected
+            ? colorScheme.primary.withValues(alpha: 0.08)
+            : Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: borderRadius,
+          side: isSelected
+              ? BorderSide(color: colorScheme.primary, width: 2)
+              : BorderSide.none,
+        ),
+        child: InkWell(
+          mouseCursor: WidgetStateMouseCursor.clickable,
+          borderRadius: borderRadius,
+          // The search field keeps the keyboard; the selection stands in for
+          // the focus.
+          canRequestFocus: false,
+          onTap: () => onLaunch(desktopEntry, origin()),
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: AspectRatio(
+                    key: iconKey,
+                    aspectRatio: 1,
+                    child: AppIconByPath(
+                      path: desktopEntry.entries[DesktopEntryKey.icon.string],
+                      title: name,
+                    ),
                   ),
                 ),
-              ),
-              Text.rich(
-                key: labelKey,
-                _highlightedName(name, matchedNameRanges(name, query)),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-              ),
-            ],
+                Text.rich(
+                  key: labelKey,
+                  _highlightedName(name, matchedNameRanges(name, query)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
           ),
         ),
       ),

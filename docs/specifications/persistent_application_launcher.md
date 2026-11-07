@@ -39,7 +39,12 @@ The tile opens with the launched item morphing into its
 - the item's icon and label travel to the placeholder's icon and title, the
   label growing into the title;
 - the rest of the card's content fades in at its place;
-- behind it, the placeholder's blurred icon backdrop fades in.
+- behind it, the placeholder's blurred icon backdrop fades in early, in the
+  first quarter of the morph, hiding the launcher as it slides away;
+- the item detaches from the launcher: its button there is hidden, and a new
+  one fades in at its place as the card lands. Only the section it was
+  launched from (the most used row or the list) replaces it; its copy in the
+  other section stays.
 
 The tile's placeholder is mounted from the start (it holds the keyboard) but
 only painted once the morph, which ends exactly as it looks, is over. With
