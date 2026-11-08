@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::os::fd::OwnedFd;
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use smithay::backend::allocator::dmabuf::Dmabuf;
@@ -440,12 +440,30 @@ fn apply_environment_variables(
     changed.then_some(removed)
 }
 
+/// The `PATH` the compositor was started with.
+///
+/// Unlike the built-in defaults, `PATH` has no fixed value to restore: it is
+/// inherited from whatever started the compositor (a login shell during
+/// development, the session wrapper in an installed session). Remembering it
+/// lets a removed `PATH` override restore the inherited value instead of
+/// leaving the compositor and its children without a usable `PATH`.
+static INITIAL_PATH: OnceLock<Option<std::ffi::OsString>> = OnceLock::new();
+
 /// Restores a removed user override to the compositor's built-in default, or
 /// unsets it when it is not a built-in variable.
 ///
 /// Without this, removing an override of e.g. `QT_QPA_PLATFORM` would leave the
 /// compositor's children and the session without the built-in value.
 fn restore_or_unset(name: &str) {
+    if name == "PATH" {
+        if let Some(initial) = INITIAL_PATH.get() {
+            match initial {
+                Some(path) => std::env::set_var("PATH", path),
+                None => std::env::remove_var("PATH"),
+            }
+        }
+        return;
+    }
     match BUILTIN_ENVIRONMENT_DEFAULTS
         .iter()
         .find(|(key, _)| *key == name)
@@ -567,6 +585,12 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         std::env::set_var("XDG_SESSION_TYPE", "wayland");
         std::env::set_var("GDK_BACKEND", "wayland"); // Force GTK apps to run on Wayland.
         std::env::set_var("QT_QPA_PLATFORM", "wayland"); // Force QT apps to run on Wayland.
+
+        // Remember the `PATH` inherited from whatever started the compositor
+        // before user settings can override it, so removing such an override
+        // restores the session's `PATH` instead of leaving the compositor
+        // without one (see `restore_or_unset`).
+        let _ = INITIAL_PATH.set(std::env::var_os("PATH"));
 
         // Apply the user's environment variables on top of the built-in ones,
         // before the startup session import snapshots this process's
