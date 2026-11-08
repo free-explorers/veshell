@@ -30,13 +30,40 @@ corners round, then the window fades out into the card's content). A closed
 window has no surface left to paint, so when the shell asks it to close (the
 tab's close button, the close shortcut, the menu, a middle click) the tile's
 frame is captured at that moment and is what wraps up: what the shell painted,
-and the window's own texture, which the compositor keeps past the surface's
-destruction until the shell releases it (5 seconds at most). A captured frame
-is dropped after 5 seconds if the window stays (a client asking first about
-unsaved changes). A window that closes on
-its own wraps up the same way with a plain surface in its place. A window
-shown again (a splash handing over, a recreated surface) cancels the closing.
-Floating tiles, and the shell with animations disabled, do neither.
+and the window's own frame, which the compositor copies into a texture of its
+own as the request arrives, before the client handles it. Nothing the client
+paints afterwards (its teardown, a recycled buffer) reaches the copy, and a
+window that stays (a client asking first about unsaved changes) keeps painting
+normally. The shell releases the copy once the closing is over, the compositor
+after 5 seconds at most; a captured frame is dropped after 5 seconds if the
+window stays. A window that closes on its own (the application quitting,
+crashing or being killed) wraps up the same way from the last frame it
+committed, which a client that is gone can no longer change: the compositor
+keeps that texture for the closing, and the shell remembers where it was
+painted, so it shows over a plain surface in place of the frame the shell did
+not capture. A window shown again (a splash handing over, a recreated surface)
+cancels the closing. Floating tiles, and the shell with animations disabled,
+do neither.
+
+The tile's last frame is also persisted, as `window_previews/<uuid>.png` in the
+compositor's cache directory (`VESHELL_CACHE_DIR`, by default
+`$XDG_CACHE_HOME/veshell`): from the frame captured when the shell asks the
+window to close, or else from the window's last committed frame when it is
+removed. Nothing is copied while the window lives. The compositor stores the
+window's content (without client-side decorations) averaged down to one pixel
+per frost sigma (`frostSigmaFor`) and blurred by one more pixel, so the file
+never holds a readable window: what was averaged together cannot be recovered,
+and scaled back up it matches the shell's frost. A frame with nothing to show
+(fully transparent, or one plain colour, as a client clearing its window as it
+quits) is not stored, and the previous preview stays. The file is readable by
+the user only. A sidecar, `<uuid>.layout`, written by the shell once the window
+is gone, records the window's content size and whether it filled its tile. The
+placeholder paints the stored frame at that size under the same glass as the
+dialog backdrop and the overview (vibrancy, wash and grain), instead of the
+application icon, until the tile displays a window again; the closing
+animation ramps the live frame to that same frost. The files are removed with
+the tile, once the compositor stopped writing for it, and the compositor
+removes at startup the previews of tiles whose state is gone.
 
 ## Resume context
 

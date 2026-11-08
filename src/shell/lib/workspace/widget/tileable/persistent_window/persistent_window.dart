@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -18,10 +21,12 @@ import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/tile_grab/widget/tile_grab_region.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
+import 'package:shell/window/model/window_preview_path.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/selected_dialog_for_window.dart';
 import 'package:shell/window/provider/window_close_requests.dart';
+import 'package:shell/window/provider/window_preview_image.dart';
 import 'package:shell/window/widget/floating_window_area.dart';
 import 'package:shell/window/widget/visible_popup_meta_windows.dart';
 import 'package:shell/window/widget/window.dart';
@@ -95,6 +100,16 @@ class PersistentWindowTileable extends Tileable {
     }, [isSelected, window.displayMode]);
 
     final metaWindowId = window.metaWindowId;
+    // A maximized client can resize after it is first shown (the initial
+    // window size commits first). Watching its content size rebuilds the tile,
+    // so the size recorded for the preview's layout is the last one.
+    if (metaWindowId != null) {
+      ref.watch(
+        metaWindowStateProvider(
+          metaWindowId,
+        ).select((metaWindow) => metaWindow.geometry?.size),
+      );
+    }
 
     // With a dialog open, the tile's focus node drives the selected dialog
     // rather than the window behind it; game mode ignores dialogs entirely.
@@ -137,12 +152,22 @@ class PersistentWindowTileable extends Tileable {
     // wraps up without one. A floating tile has no card to wrap into.
     final frameKey = useMemoized(GlobalKey.new);
     final closing = useWindowClosing(
+      ref: ref,
+      windowId: windowId,
       metaWindowId: metaWindowId,
       closeRequests: ref.watch(windowCloseRequestsProvider(windowId)),
       frameKey: frameKey,
       // The window's own texture: the compositor keeps it past a close the
       // shell asked for, and `toImageSync` does not draw it.
       windowTextureId: () => _windowTextureId(ref, metaWindowId),
+      onWindowClosed: (size, fullBleed) => unawaited(
+        _recordPreviewLayout(
+          ProviderScope.containerOf(context, listen: false),
+          windowId,
+          size,
+          fullBleed,
+        ),
+      ),
       releaseTexture: (textureId) => ref
           .read(platformManagerProvider.notifier)
           .request(
@@ -509,4 +534,32 @@ int? _windowTextureId(WidgetRef ref, MetaWindowId? metaWindowId) {
     // The window is already gone (see `WindowWidget`).
     return null;
   }
+}
+
+/// Records where the window that just closed sat in [windowId]'s tile, next to
+/// the preview the compositor persisted of it, then reloads the preview.
+///
+/// Written once per close; nothing is written for a window that left no
+/// preview.
+Future<void> _recordPreviewLayout(
+  ProviderContainer container,
+  PersistentWindowId windowId,
+  Size size,
+  bool fullBleed,
+) async {
+  try {
+    final directory = container.read(windowPreviewDirectoryProvider);
+    if (!File(windowPreviewPath(windowId, directory)).existsSync()) {
+      return;
+    }
+    await writeWindowPreviewLayout(
+      windowId,
+      directory,
+      size: size,
+      fullBleed: fullBleed,
+    );
+  } on Object {
+    // Only a layout hint: the preview then fills the tile.
+  }
+  container.invalidate(windowPreviewImageProvider(windowId));
 }

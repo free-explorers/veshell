@@ -13,17 +13,21 @@ import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/process_info_state.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/platform/model/event/process_info/process_info.serializable.dart';
+import 'package:shell/platform/model/request/window_preview/window_preview.serializable.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/provider/persistent_storage_state.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/systemd/provider/session_guard.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
+import 'package:shell/window/model/window_preview_path.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
 import 'package:shell/window/provider/resume_context_capture.dart';
 import 'package:shell/window/provider/window_close_requests.dart';
 import 'package:shell/window/provider/window_manager/matching_utils.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
+import 'package:shell/window/provider/window_preview_image.dart';
 import 'package:shell/window/provider/window_provider.mixin.dart';
 import 'package:shell/workspace/provider/window_workspace_map.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
@@ -318,8 +322,58 @@ class PersistentWindowState extends _$PersistentWindowState
     }
   }
 
+  /// Binds or clears this tile's last-frame preview for [metaWindowId] in the
+  /// compositor, which persists the frame when the window goes away. Completes
+  /// once the compositor handled it.
+  Future<void> _setWindowPreview(
+    MetaWindowId metaWindowId, {
+    required bool attach,
+  }) => ref
+      .read(platformManagerProvider.notifier)
+      .request(
+        WindowPreviewRequest(
+          message: WindowPreviewMessage(
+            metaWindowId: metaWindowId,
+            persistentWindowId: windowId.uuid,
+            attach: attach,
+          ),
+        ),
+      );
+
+  /// Removes the tile's preview files, once nothing writes them any more.
+  void _deleteWindowPreview(Future<void> detached) {
+    final Directory directory;
+    try {
+      directory = ref.read(windowPreviewDirectoryProvider);
+    } on Object {
+      return;
+    }
+    final files = [
+      File(windowPreviewPath(windowId, directory)),
+      File(windowPreviewLayoutPath(windowId, directory)),
+    ];
+    // After the compositor dropped the binding: until then, the window
+    // closing could still write the preview. A preview written anyway is
+    // swept at the next start.
+    unawaited(
+      detached.catchError((_) {}).whenComplete(() {
+        for (final file in files) {
+          try {
+            if (file.existsSync()) {
+              file.deleteSync();
+            }
+          } on Object {
+            // The preview is a cache: failing to remove it leaves a small,
+            // frosted file for the next start's sweep.
+          }
+        }
+      }),
+    );
+  }
+
   @override
   void onCurrentlyDisplayedMetaWindowChanged(MetaWindowId? metaWindowId) {
+    final previous = state.metaWindowId;
     if (_isSessionLeaving) {
       // The session is ending: applications are being terminated and their
       // windows disappear. Do not adopt a title/pid from that teardown, and do
@@ -330,6 +384,12 @@ class PersistentWindowState extends _$PersistentWindowState
         state = state.copyWith(metaWindowId: null, isWaitingForSurface: false);
       }
       return;
+    }
+    if (previous != null && previous != metaWindowId) {
+      unawaited(_setWindowPreview(previous, attach: false));
+    }
+    if (metaWindowId != null) {
+      unawaited(_setWindowPreview(metaWindowId, attach: true));
     }
     if (metaWindowId == null) {
       // The native window is gone: drop the reference so the tile falls back
@@ -416,6 +476,13 @@ class PersistentWindowState extends _$PersistentWindowState
   void removeWindow() {
     _resumeTimeoutTimer?.cancel();
     _resumeTimeoutTimer = null;
+    // The tile is going away: stop the compositor from writing a preview for
+    // a window it still displays.
+    final displayed = state.metaWindowId;
+    final detached = displayed == null
+        ? Future<void>.value()
+        : _setWindowPreview(displayed, attach: false);
+    _deleteWindowPreview(detached);
     // A tile removed while its launch has not produced a window cancels that
     // launch (see [AppLaunch.cancelPendingLaunch]); a tile that showed a window
     // is not "pending" and is left to close through its window.

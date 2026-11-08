@@ -91,6 +91,7 @@ class FrostedSurface extends StatelessWidget {
     this.highlight = true,
     this.noise = false,
     this.noiseOpacity = 1,
+    this.preBlurred = false,
     this.absorbPointers = false,
     super.key,
   });
@@ -126,6 +127,14 @@ class FrostedSurface extends StatelessWidget {
 
   /// Adds a fine grain that breaks up banding in the wash.
   final bool noise;
+
+  /// Whether [child] is already blurred, so the grain may be painted without
+  /// the live blur that normally gates it.
+  ///
+  /// The placeholder's stored preview carries its blur on disk (the
+  /// compositor bakes the frost into the PNG), and must still show the same
+  /// grain as the surfaces that blur live.
+  final bool preBlurred;
 
   /// How strongly the grain paints, `0`..`1`.
   ///
@@ -183,7 +192,8 @@ class FrostedSurface extends StatelessWidget {
     // passes `tint: null` and must not keep drawing a grain over its window.
     // The grain drops out too unless the surface is actually blurred, and is
     // faded by [noiseOpacity] while the frost ramps.
-    final showNoise = noise && noiseOpacity > 0 && blurSigma > _noiseMinSigma;
+    final showNoise =
+        noise && noiseOpacity > 0 && (preBlurred || blurSigma > _noiseMinSigma);
     final hasGlass =
         tint != null || highlight || showNoise || frameColor != null;
     Widget? glass;

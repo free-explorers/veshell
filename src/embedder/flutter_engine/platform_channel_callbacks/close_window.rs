@@ -46,6 +46,22 @@ pub fn close_window<BackendData: Backend + 'static>(
         );
         return;
     };
+    // The frame the window paints now, before the request reaches it: the
+    // client may paint its teardown or recycle its buffer as soon as it
+    // handles the close. The closing animation gets a copy of its own, and the
+    // tile's preview is written from the same moment.
+    let frozen_texture_id =
+        crate::capture::window_preview::freeze_for_close(data, &payload.meta_window_id);
+    if let Some(preview) = data.window_previews.get_mut(&payload.meta_window_id) {
+        preview.persisted = true;
+        let path = preview.path.clone();
+        crate::capture::window_preview::persist_window_preview(
+            data,
+            &payload.meta_window_id,
+            &path,
+        );
+    }
+    let reply = Some(serde_json::json!({ "frozenTextureId": frozen_texture_id }));
     let role = with_states(&wl_surface, |states| states.role);
     match role {
         Some(xdg::XDG_TOPLEVEL_ROLE) => {
@@ -63,7 +79,7 @@ pub fn close_window<BackendData: Backend + 'static>(
             toplevel.send_close();
             data.surfaces_retaining_textures
                 .insert(meta_window.surface_id);
-            result.success(None);
+            result.success(reply);
         }
         Some(XWAYLAND_SHELL_ROLE) => {
             let Some(x11_surface) = data.x11_surface_per_wl_surface.get(&wl_surface) else {
@@ -78,7 +94,7 @@ pub fn close_window<BackendData: Backend + 'static>(
             let _ = x11_surface.close();
             data.surfaces_retaining_textures
                 .insert(meta_window.surface_id);
-            result.success(None);
+            result.success(reply);
         }
         _ => {
             result.error(

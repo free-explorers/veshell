@@ -1,8 +1,10 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/meta_window/provider/frozen_close_textures.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
+import 'package:shell/window/provider/window_close_requests.dart';
 import 'package:shell/window/widget/window_open_transition.dart';
 import 'package:shell/window/widget/window_placeholder.dart';
 
@@ -152,7 +154,9 @@ void main() {
         .outerRect;
     double opacity() => tester
         .widget<Opacity>(
-          find.descendant(of: transition, matching: find.byType(Opacity)),
+          // The first descendant is the close transition's own fade; the
+          // frosted glass adds another, inner one for its grain.
+          find.descendant(of: transition, matching: find.byType(Opacity)).first,
         )
         .opacity;
     final card = Rect.fromLTRB(
@@ -185,30 +189,82 @@ void main() {
     expect(done, isTrue);
   });
 
+  testWidgets('a closed window paints its kept texture where it was', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 1000,
+            height: 500,
+            child: WindowCloseTransition(
+              image: null,
+              texture: (id: 7, rect: const Rect.fromLTWH(10, 20, 300, 200)),
+              onDone: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    final transition = tester.getRect(find.byType(WindowCloseTransition));
+    final texture = find.byType(Texture);
+    expect(tester.widget<Texture>(texture).textureId, 7);
+    expect(
+      tester.getRect(texture),
+      const Rect.fromLTWH(10, 20, 300, 200).shift(transition.topLeft),
+    );
+  });
+
   group('useWindowClosing', () {
     late WindowClosing? closing;
+    late ProviderContainer container;
+    late List<int> released;
+    late List<(Size, bool)> closedLayouts;
     final frameKey = GlobalKey();
+    const tile = PersistentWindowId('tile');
+
+    setUp(() {
+      container = ProviderContainer();
+      released = [];
+      closedLayouts = [];
+    });
+    tearDown(() => container.dispose());
+
+    void request() =>
+        container.read(windowCloseRequestsProvider(tile).notifier).request();
 
     Future<void> build(
       WidgetTester tester, {
       required String? metaWindowId,
-      int closeRequests = 0,
       bool enabled = true,
     }) => tester.pumpWidget(
-      MaterialApp(
-        home: HookBuilder(
-          builder: (context) {
-            closing = useWindowClosing(
-              metaWindowId: metaWindowId,
-              closeRequests: closeRequests,
-              frameKey: frameKey,
-              enabled: enabled,
-            );
-            return RepaintBoundary(
-              key: frameKey,
-              child: const ColoredBox(color: Colors.red),
-            );
-          },
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: HookConsumer(
+            builder: (context, ref, child) {
+              closing = useWindowClosing(
+                ref: ref,
+                windowId: tile,
+                metaWindowId: metaWindowId,
+                closeRequests: ref.watch(windowCloseRequestsProvider(tile)),
+                frameKey: frameKey,
+                enabled: enabled,
+                windowTextureId: () => 7,
+                releaseTexture: released.add,
+                onWindowClosed: (size, fullBleed) =>
+                    closedLayouts.add((size, fullBleed)),
+              );
+              return RepaintBoundary(
+                key: frameKey,
+                child: const Padding(
+                  padding: EdgeInsets.fromLTRB(10, 20, 30, 40),
+                  child: Texture(textureId: 7),
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
@@ -218,12 +274,14 @@ void main() {
     ) async {
       await build(tester, metaWindowId: 'a');
       expect(closing, isNull);
-      await build(tester, metaWindowId: 'a', closeRequests: 1);
-      // Asked to close, but not closed yet: nothing plays.
+      // The request captures the frame before it reaches the client, so the
+      // window can be gone by the time the next frame builds.
+      request();
       await tester.pump();
+      // Asked to close, but not closed yet: nothing plays.
       expect(closing, isNull);
 
-      await build(tester, metaWindowId: null, closeRequests: 1);
+      await build(tester, metaWindowId: null);
       final started = closing!;
       final image = started.image!;
       // At the screen's resolution.
@@ -240,33 +298,9 @@ void main() {
     testWidgets("the window's kept texture is placed and released", (
       tester,
     ) async {
-      final released = <int>[];
-      Future<void> pump({required String? metaWindowId}) => tester.pumpWidget(
-        MaterialApp(
-          home: HookBuilder(
-            builder: (context) {
-              closing = useWindowClosing(
-                metaWindowId: metaWindowId,
-                closeRequests: 1,
-                frameKey: frameKey,
-                enabled: true,
-                windowTextureId: () => 7,
-                releaseTexture: released.add,
-              );
-              return RepaintBoundary(
-                key: frameKey,
-                child: const Padding(
-                  padding: EdgeInsets.fromLTRB(10, 20, 30, 40),
-                  child: Texture(textureId: 7),
-                ),
-              );
-            },
-          ),
-        ),
-      );
-
-      await pump(metaWindowId: 'a');
-      await pump(metaWindowId: null);
+      await build(tester, metaWindowId: 'a');
+      request();
+      await build(tester, metaWindowId: null);
       final started = closing!;
       expect(started.texture?.id, 7);
       expect(started.texture?.rect, const Rect.fromLTRB(10, 20, 770, 560));
@@ -277,20 +311,61 @@ void main() {
       expect(released, [7]);
     });
 
-    testWidgets('a window closing on its own wraps up without a frame', (
+    testWidgets('the frozen copy of a requested close replaces the live '
+        'texture, and both are released', (tester) async {
+      await build(tester, metaWindowId: 'a');
+      request();
+      // The compositor answered the close request with its copy.
+      container.read(frozenCloseTexturesProvider.notifier).put('a', 42);
+      await build(tester, metaWindowId: null);
+      final started = closing!;
+      expect(started.texture?.id, 42);
+      // Painted where the live texture was.
+      expect(started.texture?.rect, const Rect.fromLTRB(10, 20, 770, 560));
+      // Taken once.
+      expect(
+        container.read(frozenCloseTexturesProvider.notifier).take('a'),
+        isNull,
+      );
+
+      started.done();
+      await tester.pump();
+      expect(released, unorderedEquals([7, 42]));
+    });
+
+    testWidgets('a closed window reports its layout once', (tester) async {
+      await build(tester, metaWindowId: 'a');
+      await tester.pump();
+      await build(tester, metaWindowId: null);
+      expect(closedLayouts, hasLength(1));
+      // The texture's rect: the test window has no geometry.
+      expect(closedLayouts.single.$1, const Size(760, 540));
+      expect(closedLayouts.single.$2, isFalse);
+      await build(tester, metaWindowId: null);
+      expect(closedLayouts, hasLength(1));
+    });
+
+    testWidgets('a window closing on its own keeps its last texture', (
       tester,
     ) async {
       await build(tester, metaWindowId: 'a');
+      // The texture is remembered after the frame it was painted in.
+      await tester.pump();
       await build(tester, metaWindowId: null);
       expect(closing, isNotNull);
+      // The shell never captured a frame for a close it did not request, but
+      // the compositor retained the window's texture and the closing still
+      // shows it over a plain surface.
       expect(closing!.image, isNull);
+      expect(closing!.texture?.id, 7);
     });
 
     testWidgets('a window shown again cancels the closing', (tester) async {
-      await build(tester, metaWindowId: 'a', closeRequests: 1);
-      await build(tester, metaWindowId: null, closeRequests: 1);
+      await build(tester, metaWindowId: 'a');
+      request();
+      await build(tester, metaWindowId: null);
       final image = closing!.image!;
-      await build(tester, metaWindowId: 'b', closeRequests: 1);
+      await build(tester, metaWindowId: 'b');
       expect(closing, isNull);
       await tester.pump();
       expect(image.debugDisposed, isTrue);
@@ -299,16 +374,21 @@ void main() {
     testWidgets('a frame captured for another window is not used', (
       tester,
     ) async {
-      await build(tester, metaWindowId: 'a', closeRequests: 1);
-      await build(tester, metaWindowId: 'b', closeRequests: 1);
-      await build(tester, metaWindowId: null, closeRequests: 1);
+      await build(tester, metaWindowId: 'a');
+      request();
+      await build(tester, metaWindowId: 'b');
+      await build(tester, metaWindowId: null);
       expect(closing, isNotNull);
+      // The close request captured 'a', not the window that closed.
       expect(closing!.image, isNull);
+      // 'b' was still live, so its own remembered texture is shown.
+      expect(closing!.texture?.id, 7);
     });
 
     testWidgets('nothing plays when disabled', (tester) async {
-      await build(tester, metaWindowId: 'a', closeRequests: 1, enabled: false);
-      await build(tester, metaWindowId: null, closeRequests: 1, enabled: false);
+      await build(tester, metaWindowId: 'a', enabled: false);
+      request();
+      await build(tester, metaWindowId: null, enabled: false);
       expect(closing, isNull);
     });
   });

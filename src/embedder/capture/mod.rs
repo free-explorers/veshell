@@ -9,6 +9,7 @@ pub mod recording;
 pub mod selection;
 pub mod shm;
 pub mod state;
+pub mod window_preview;
 
 pub use state::CaptureState;
 
@@ -1353,7 +1354,10 @@ pub(crate) fn encode_and_write_png(
     result.map(|()| png)
 }
 
-fn encode_png(size: Size<i32, Physical>, pixels: &[u8]) -> Result<Vec<u8>, png::EncodingError> {
+pub(crate) fn encode_png(
+    size: Size<i32, Physical>,
+    pixels: &[u8],
+) -> Result<Vec<u8>, png::EncodingError> {
     let mut png = Vec::new();
     let mut encoder = png::Encoder::new(&mut png, size.w as u32, size.h as u32);
     encoder.set_color(png::ColorType::Rgba);

@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:hooks_riverpod/misc.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
+import 'package:shell/meta_window/provider/frozen_close_textures.dart';
 import 'package:shell/meta_window/provider/meta_window_id_per_surface_id.dart';
 import 'package:shell/meta_window/provider/pid_to_meta_window_id.dart';
 import 'package:shell/platform/model/event/meta_window_created/meta_window_created.serializable.dart';
@@ -98,7 +100,7 @@ class MetaWindowState extends _$MetaWindowState {
       return;
     }
     if (patch is UpdateGeometry || patch is UpdateScaleRatio) {
-      geometryLog.info('window patch id=$id value=$patch before=${state}');
+      geometryLog.info('window patch id=$id value=$patch before=$state');
     }
     switch (patch) {
       case UpdateAppId():
@@ -180,7 +182,7 @@ class MetaWindowState extends _$MetaWindowState {
       case UpdateScaleRatio():
         state = state.copyWith(scaleRatio: patch.value);
     }
-    if (propagate == true) {
+    if (propagate) {
       await ref
           .read(platformManagerProvider.notifier)
           .request(MetaWindowPatchesRequest(message: patch));
@@ -203,12 +205,22 @@ class MetaWindowState extends _$MetaWindowState {
       return;
     }
     _closeRequested = true;
-    ref
-        .read(platformManagerProvider.notifier)
-        .request(
-          CloseWindowRequest(
-            message: CloseWindowMessage(metaWindowId: state.id),
-          ),
-        );
+    final id = state.id;
+    // The compositor answers with a copy of the frame the window painted when
+    // asked, for the closing animation: the live texture follows whatever the
+    // client paints while it tears down.
+    final frozenTextures = ref.read(frozenCloseTexturesProvider.notifier);
+    unawaited(
+      ref
+          .read(platformManagerProvider.notifier)
+          .requestResult(
+            CloseWindowRequest(message: CloseWindowMessage(metaWindowId: id)),
+          )
+          .then((reply) {
+            if (reply case {'frozenTextureId': final int textureId}) {
+              frozenTextures.put(id, textureId);
+            }
+          }),
+    );
   }
 }
