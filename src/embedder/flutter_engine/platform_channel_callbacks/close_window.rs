@@ -79,7 +79,11 @@ pub fn close_window<BackendData: Backend + 'static>(
             toplevel.send_close();
             data.surfaces_retaining_textures
                 .insert(meta_window.surface_id);
+<<<<<<< HEAD
             result.success(reply);
+=======
+            result.success(None);
+>>>>>>> origin/main
         }
         Some(XWAYLAND_SHELL_ROLE) => {
             let Some(x11_surface) = data.x11_surface_per_wl_surface.get(&wl_surface) else {
@@ -94,7 +98,11 @@ pub fn close_window<BackendData: Backend + 'static>(
             let _ = x11_surface.close();
             data.surfaces_retaining_textures
                 .insert(meta_window.surface_id);
+<<<<<<< HEAD
             result.success(reply);
+=======
+            result.success(None);
+>>>>>>> origin/main
         }
         _ => {
             result.error(

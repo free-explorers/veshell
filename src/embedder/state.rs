@@ -187,10 +187,13 @@ pub struct State<BackendData: Backend + 'static> {
     /// Textures of destroyed surfaces kept for the shell, until it releases
     /// them (`release_texture`) or [RETAINED_TEXTURE_LIFETIME] has passed.
     pub retained_texture_ids: HashSet<i64>,
+<<<<<<< HEAD
     /// Where to write the last frame of a displayed window, keyed by the meta
     /// window id. Set by the shell for persistent tiles (see
     /// `capture::window_preview`); consumed when the window is removed.
     pub window_previews: HashMap<String, crate::capture::window_preview::WindowPreview>,
+=======
+>>>>>>> origin/main
     pub wayland_socket_name: Option<String>,
     pub x11_surfaces: HashMap<u64, X11Surface>,
     pub x11_surface_per_wl_surface: HashMap<WlSurface, X11Surface>,
@@ -312,12 +315,16 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             }
             return;
         }
+<<<<<<< HEAD
         self.retain_textures(texture_ids.into_iter().map(|(id, _)| id).collect());
     }
 
     /// Keeps [texture_ids] registered for the shell until it releases them
     /// (`release_texture`), or at the latest after [RETAINED_TEXTURE_LIFETIME].
     pub fn retain_textures(&mut self, texture_ids: Vec<i64>) {
+=======
+        let texture_ids: Vec<i64> = texture_ids.into_iter().map(|(id, _)| id).collect();
+>>>>>>> origin/main
         self.retained_texture_ids
             .extend(texture_ids.iter().copied());
         let _ = self.loop_handle.insert_source(
@@ -693,7 +700,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             texture_swapchains: HashMap::new(),
             surfaces_retaining_textures: HashSet::new(),
             retained_texture_ids: HashSet::new(),
+<<<<<<< HEAD
             window_previews: HashMap::new(),
+=======
+>>>>>>> origin/main
             xwayland_shell_state,
             xwayland_state: None,
             space: Space::default(),

@@ -30,6 +30,7 @@ corners round, then the window fades out into the card's content). A closed
 window has no surface left to paint, so when the shell asks it to close (the
 tab's close button, the close shortcut, the menu, a middle click) the tile's
 frame is captured at that moment and is what wraps up: what the shell painted,
+<<<<<<< HEAD
 and the window's own frame, which the compositor copies into a texture of its
 own as the request arrives, before the client handles it. Nothing the client
 paints afterwards (its teardown, a recycled buffer) reaches the copy, and a
@@ -64,6 +65,15 @@ application icon, until the tile displays a window again; the closing
 animation ramps the live frame to that same frost. The files are removed with
 the tile, once the compositor stopped writing for it, and the compositor
 removes at startup the previews of tiles whose state is gone.
+=======
+and the window's own texture, which the compositor keeps past the surface's
+destruction until the shell releases it (5 seconds at most). A captured frame
+is dropped after 5 seconds if the window stays (a client asking first about
+unsaved changes). A window that closes on
+its own wraps up the same way with a plain surface in its place. A window
+shown again (a splash handing over, a recreated surface) cancels the closing.
+Floating tiles, and the shell with animations disabled, do neither.
+>>>>>>> origin/main
 
 ## Resume context
 
