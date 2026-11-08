@@ -61,12 +61,22 @@ pub fn get_environment_variables<BackendData: Backend + 'static>(
         )
     };
 
+    // The compositor's own `PATH`. Tracked launches go through the systemd
+    // user manager, whose environment is the system default whenever the
+    // compositor was not started by the session wrapper (for example the
+    // development workflow: `cargo run` from a shell). Forwarding the
+    // session's `PATH` explicitly keeps toolchains installed under the user's
+    // home (`~/.cargo/bin`, `~/.local/bin`, ...) available to launched
+    // applications, including editors and their debug adapters.
+    let path = std::env::var("PATH").ok();
+
     // Environment shared with application launched by the shell.
     // Tracked launches go through the systemd user manager, which has its own
     // session environment, so these values must be forwarded explicitly.
     let mut environment_variables = HashMap::from([
         ("WAYLAND_DISPLAY", wayland_socket_name.as_deref()),
         ("DISPLAY", xwayland_display.as_deref()),
+        ("PATH", path.as_deref()),
         ("XDG_CURRENT_DESKTOP", Some(CURRENT_DESKTOP)),
         ("DESKTOP_SESSION", Some(LEGACY_DESKTOP_SESSION)),
         ("XDG_SESSION_TYPE", Some("wayland")),

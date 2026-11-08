@@ -33,7 +33,7 @@ hand-edited `settings.json` cannot inject shell syntax.
 | Merging user variables into the launch environment | Compositor |
 | Applying them to the compositor process and importing them into the session | Compositor (DRM backend) |
 | Starting applications with that environment | Shell (Flutter), `AppLaunch` |
-| Built-in session variables (`WAYLAND_DISPLAY`, `DISPLAY`, `XDG_*`, `DESKTOP_SESSION`, `GDK_BACKEND`, `QT_QPA_PLATFORM`) | Compositor |
+| Built-in session variables (`WAYLAND_DISPLAY`, `DISPLAY`, `PATH`, `XDG_*`, `DESKTOP_SESSION`, `GDK_BACKEND`, `QT_QPA_PLATFORM`) | Compositor |
 
 ## Desktop identity
 
@@ -59,6 +59,22 @@ The shipped `veshell-portals.conf` also lists both Secret portal backends,
 `gnome-keyring` first and `kwallet` as the fallback, so sandboxed applications
 that use `org.freedesktop.portal.Secret` work on both GNOME- and KDE-based
 systems.
+
+## `PATH`
+
+The launch environment carries the compositor's own `PATH`. Tracked launches
+normally inherit the systemd user manager's environment, which is the system
+default rather than the session's whenever the compositor was not started by
+`veshell-session` — the development workflow (`cargo run` from a shell, or the
+"Run Veshell as Window" launch configuration) is the common case. Forwarding
+`PATH` explicitly keeps toolchains installed under the user's home
+(`~/.cargo/bin`, `~/.local/bin`, …) available to launched applications, such as
+an editor and the debug adapter it starts.
+
+`PATH` is also imported into the session alongside the other built-in
+variables, so D-Bus-activated services and xdg-autostart units see the same
+value. A user setting may override it; removing the override restores the
+`PATH` the compositor was started with.
 
 ## Precedence
 
