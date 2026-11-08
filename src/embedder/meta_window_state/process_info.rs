@@ -15,6 +15,28 @@ const SHELL_NAMES: &[&str] = &[
     "tcsh", "csh",
 ];
 
+/// The survival wrapper a resumed terminal runs its program through.
+///
+/// `resume_launch_plan.dart` builds:
+///
+/// ```text
+/// /bin/sh -c '<this script>' <shell> <title> <program> <args...>
+/// ```
+///
+/// so the terminal stays at an interactive prompt after the program exits. The
+/// wrapper is a non-interactive shell sitting in front of the program: without
+/// unwrapping it, a second capture would report `/bin/sh` as the terminal's
+/// shell and lose the foreground program, and resuming again would open a
+/// fresh shell. Keep this string in sync with `_shellSurvivalScript`.
+const RESUME_WRAPPER_SCRIPT: &str =
+    r#"if [ -n "$1" ]; then printf "\033]0;%s\007" "$1"; fi; shift; "$@"; exec "$0""#;
+
+/// The wrapper shape used before the terminal title was seeded on resume.
+///
+/// Kept readable so a fallback launch from an old persisted argv still
+/// unwraps to the program it replays.
+const LEGACY_RESUME_WRAPPER_SCRIPT: &str = r#""$@"; exec "$0""#;
+
 /// Process-level facts read from `/proc` for a surface client pid.
 ///
 /// The cgroup is a property of the process, not of the window, so it is
@@ -96,6 +118,9 @@ fn terminal_info(proc_root: &Path, pid: i32) -> Option<TerminalInfo> {
     }
 
     let shell = find_shell(proc_root, pid)?;
+    if let Some(wrapper) = resume_wrapper(&shell) {
+        return Some(unwrap_resume_wrapper(proc_root, &shell, &wrapper));
+    }
     let stats = parse_stat_file(proc_root, shell.pid)?;
     let foreground = foreground_process(proc_root, &shell, stats.pgrp, stats.tpgid);
     let shell = process_descriptor(proc_root, shell.pid)?;
@@ -103,6 +128,81 @@ fn terminal_info(proc_root: &Path, pid: i32) -> Option<TerminalInfo> {
         shell: Some(shell),
         foreground,
     })
+}
+
+/// The target shell and program of a resume survival wrapper.
+struct ResumeWrapper<'a> {
+    shell: &'a str,
+    program: &'a str,
+    arguments: &'a [String],
+}
+
+/// Recognizes the wrapper [`RESUME_WRAPPER_SCRIPT`] builds.
+///
+/// The script itself is the marker: it is the only `sh -c` command Veshell
+/// passes to a terminal, so an unrelated shell command is never mistaken for
+/// one and unwrapped.
+fn resume_wrapper(node: &ProcessNode) -> Option<ResumeWrapper<'_>> {
+    let args = &node.cmdline;
+    if args.len() < 5 || args[1] != "-c" {
+        return None;
+    }
+    // The current wrapper carries the title to seed before the program; the
+    // legacy one starts the program at index 4.
+    let program_index = match args[2].as_str() {
+        RESUME_WRAPPER_SCRIPT => 5,
+        LEGACY_RESUME_WRAPPER_SCRIPT => 4,
+        _ => return None,
+    };
+    let shell = args.get(3)?;
+    if !is_shell_path(shell) {
+        return None;
+    }
+    let program = args.get(program_index)?;
+    Some(ResumeWrapper {
+        shell,
+        program,
+        arguments: args.get(program_index + 1..).unwrap_or_default(),
+    })
+}
+
+/// Reports the shell and program behind a survival wrapper.
+///
+/// The wrapper has not exec'd the shell yet (the program is still running), so
+/// the shell is described from the wrapper's argv. The program is the wrapper's
+/// first descendant; when it has already exited, its saved argv keeps the
+/// context resumable until the wrapper execs the shell.
+fn unwrap_resume_wrapper(
+    proc_root: &Path,
+    wrapper_node: &ProcessNode,
+    wrapper: &ResumeWrapper<'_>,
+) -> TerminalInfo {
+    let cwd = read_cwd(proc_root, wrapper_node.pid);
+    let shell = ProcessDescriptor {
+        // The shell is not a live process yet: the wrapper execs it once the
+        // program exits. The descriptor still carries what a resume needs.
+        pid: 0,
+        exe: Some(wrapper.shell.to_string()),
+        cmdline: vec![wrapper.shell.to_string()],
+        cwd: cwd.clone(),
+    };
+    // Breadth-first descendants start with the direct child, which is the
+    // program the wrapper launched.
+    let foreground = descendants(proc_root, wrapper_node.pid)
+        .first()
+        .and_then(|child| process_descriptor(proc_root, child.pid))
+        .unwrap_or_else(|| ProcessDescriptor {
+            pid: 0,
+            exe: Some(wrapper.program.to_string()),
+            cmdline: std::iter::once(wrapper.program.to_string())
+                .chain(wrapper.arguments.iter().cloned())
+                .collect(),
+            cwd,
+        });
+    TerminalInfo {
+        shell: Some(shell),
+        foreground: Some(foreground),
+    }
 }
 
 fn foreground_process(
@@ -147,18 +247,18 @@ fn find_shell(proc_root: &Path, pid: i32) -> Option<ProcessNode> {
 }
 
 fn is_shell(node: &ProcessNode) -> bool {
-    let command = node
-        .exe
+    node.exe
         .as_deref()
-        .and_then(|exe| Path::new(exe).file_name())
-        .and_then(|name| name.to_str())
         .or_else(|| node.cmdline.first().map(String::as_str))
-        .and_then(|command| Path::new(command).file_name())
-        .and_then(|name| name.to_str())
-        .unwrap_or_default();
+        .is_some_and(is_shell_path)
+}
+
+fn is_shell_path(path: &str) -> bool {
+    let Some(command) = Path::new(path).file_name().and_then(|name| name.to_str()) else {
+        return false;
+    };
     // Strip a leading `-` used by login shells (`-bash`).
-    let command = command.trim_start_matches('-');
-    SHELL_NAMES.contains(&command)
+    SHELL_NAMES.contains(&command.trim_start_matches('-'))
 }
 
 fn is_descendant(proc_root: &Path, pid: i32, ancestor: i32) -> bool {
@@ -466,6 +566,124 @@ mod tests {
         assert_eq!(foreground.pid, 200);
         assert_eq!(foreground.cmdline, vec!["nvim", "file.txt"]);
         assert_eq!(foreground.cwd.as_deref(), Some("/home/user/project"));
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn unwraps_the_resume_survival_wrapper() {
+        let root = proc_root();
+        add_process(&root, 100, 1, "alacritty", &["alacritty"], "/home/user");
+        add_process(
+            &root,
+            101,
+            100,
+            "sh",
+            &[
+                "/bin/sh",
+                "-c",
+                RESUME_WRAPPER_SCRIPT,
+                "/usr/bin/zsh",
+                "htop",
+                "/usr/bin/htop",
+                "-d",
+                "10",
+            ],
+            "/home/user/src",
+        );
+        add_process(
+            &root,
+            200,
+            101,
+            "htop",
+            &["htop", "-d", "10"],
+            "/home/user/src",
+        );
+
+        let terminal = ProcessInfo::for_pid_in(&root, 100)
+            .terminal
+            .expect("terminal info");
+        let shell = terminal.shell.expect("shell behind the wrapper");
+        assert_eq!(shell.exe.as_deref(), Some("/usr/bin/zsh"));
+        assert_eq!(shell.cmdline, vec!["/usr/bin/zsh"]);
+        assert_eq!(shell.cwd.as_deref(), Some("/home/user/src"));
+
+        let foreground = terminal.foreground.expect("replayed program");
+        assert_eq!(foreground.pid, 200);
+        assert_eq!(foreground.exe.as_deref(), Some("/usr/bin/htop"));
+        assert_eq!(foreground.cmdline, vec!["htop", "-d", "10"]);
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn unwraps_a_wrapper_whose_program_has_not_started() {
+        let root = proc_root();
+        add_process(&root, 100, 1, "alacritty", &["alacritty"], "/home/user");
+        add_process(
+            &root,
+            101,
+            100,
+            "sh",
+            &[
+                "/bin/sh",
+                "-c",
+                RESUME_WRAPPER_SCRIPT,
+                "/usr/bin/zsh",
+                "htop",
+                "/usr/bin/htop",
+                "-d",
+                "10",
+            ],
+            "/home/user/src",
+        );
+
+        let terminal = ProcessInfo::for_pid_in(&root, 100)
+            .terminal
+            .expect("terminal info");
+        assert_eq!(
+            terminal.shell.expect("shell").exe.as_deref(),
+            Some("/usr/bin/zsh")
+        );
+        let foreground = terminal.foreground.expect("program from the wrapper");
+        assert_eq!(foreground.exe.as_deref(), Some("/usr/bin/htop"));
+        assert_eq!(foreground.cmdline, vec!["/usr/bin/htop", "-d", "10"]);
+        assert_eq!(foreground.cwd.as_deref(), Some("/home/user/src"));
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn unwraps_the_legacy_resume_wrapper() {
+        let root = proc_root();
+        add_process(&root, 100, 1, "alacritty", &["alacritty"], "/home/user");
+        add_process(
+            &root,
+            101,
+            100,
+            "sh",
+            &[
+                "/bin/sh",
+                "-c",
+                LEGACY_RESUME_WRAPPER_SCRIPT,
+                "/usr/bin/zsh",
+                "/usr/bin/htop",
+            ],
+            "/home/user/src",
+        );
+        add_process(&root, 200, 101, "htop", &["htop"], "/home/user/src");
+
+        let terminal = ProcessInfo::for_pid_in(&root, 100)
+            .terminal
+            .expect("terminal info");
+        assert_eq!(
+            terminal.shell.expect("shell").exe.as_deref(),
+            Some("/usr/bin/zsh")
+        );
+        assert_eq!(
+            terminal.foreground.expect("legacy program").cmdline,
+            vec!["htop"]
+        );
 
         std::fs::remove_dir_all(root).ok();
     }

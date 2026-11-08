@@ -86,10 +86,12 @@ by helper surfaces). It stores:
 
 The context is captured from the launch configuration, refreshed from
 `process_info` when a window maps and when its title changes, and polled every
-2 seconds while the tile displays a window. Rust reads `/proc/<pid>/cmdline`,
-`cwd`, `exe`, and — for terminal windows — the shell descendant and its
-foreground job. Capture never blocks a launch; unreadable `/proc` facts simply
-leave the previous context in place.
+2 seconds while the tile displays a window. Close requests take a fresh snapshot
+first, so a foreground program that exited since the last poll (the user quit
+`htop` and closed the tile immediately) is not saved and replayed. Rust reads
+`/proc/<pid>/cmdline`, `cwd`, `exe`, and — for terminal windows — the shell
+descendant and its foreground job. Capture never blocks a launch; unreadable
+`/proc` facts simply leave the previous context in place.
 
 Windows started outside the shell are captured the same way: the displayed
 process is the source of truth, not the fact that this shell launched it.
@@ -168,12 +170,25 @@ the shell cwd only.
 The terminal starts in the shell cwd, then the saved program is run inside it:
 
 ```text
-/bin/sh -c '"$@"; exec "$0"' <shell> <program> <args...>
+/bin/sh -c 'if [ -n "$1" ]; then printf "\033]0;%s\007" "$1"; fi; shift; "$@"; exec "$0"' <shell> <title> <program> <args...>
 ```
 
 The wrapper is non-interactive and non-login. When the program exits, it execs
 the captured shell, so the terminal stays at an interactive prompt. Program and
 arguments are positional argv elements, never shell-interpolated text.
+
+Before starting the program, the wrapper seeds the terminal title with the
+tile's saved window title (control characters stripped, length bounded); when
+that title is empty or only the terminal emulator's own name, the program's
+basename is used instead. The title normally comes from the interactive shell's
+prompt hook, which does not run while the program is alive; without seeding, a
+resumed `htop` would keep the terminal emulator's own title (`Alacritty`) instead
+of `htop`.
+
+The wrapper is an implementation detail of the resume, not part of the captured
+context: process inspection unwraps it and reports the shell it will exec and
+the program it is running. That is what lets a second close and resume replay
+the same program instead of falling back to a fresh shell.
 
 Command separators come from a small terminal table:
 

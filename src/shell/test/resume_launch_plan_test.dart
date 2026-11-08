@@ -12,6 +12,7 @@ ResumeLaunchPlan? plan({
   String? entryName = 'App',
   String? entryIcon = 'app',
   String? appId,
+  String? savedTitle,
   bool Function(String path)? isExecutable,
   required Set<String> existing,
 }) {
@@ -28,6 +29,7 @@ ResumeLaunchPlan? plan({
     entryIcon: entryIcon,
     homeDirectory: '/home/user',
     appId: appId,
+    savedTitle: savedTitle,
     environment: const {'SHELL': '/usr/bin/bash'},
     pathExists: existing.contains,
     isExecutable: isExecutable ?? (_) => true,
@@ -35,6 +37,10 @@ ResumeLaunchPlan? plan({
 }
 
 const _bash = TerminalResumeContext(shell: '/usr/bin/bash');
+
+const _survivalScript =
+    r'if [ -n "$1" ]; then printf "\033]0;%s\007" "$1"; fi; '
+    r'shift; "$@"; exec "$0"';
 
 TerminalResumeContext terminalWith(ForegroundProgram foreground) =>
     TerminalResumeContext(
@@ -220,6 +226,7 @@ void main() {
         ),
         execTemplate: 'foot',
         appId: 'foot',
+        savedTitle: 'htop',
         existing: {'/home/user', '/home/user/src'},
       )!;
 
@@ -230,12 +237,48 @@ void main() {
         '--',
         '/bin/sh',
         '-c',
-        r'"$@"; exec "$0"',
+        _survivalScript,
         '/usr/bin/bash',
+        'htop',
         '/usr/bin/htop',
         '-d',
         '10',
       ]);
+    });
+
+    test('the saved title is seeded without terminal control characters', () {
+      final result = plan(
+        cwd: '/home/user/src',
+        executable: '/usr/bin/foot',
+        terminal: terminalWith(
+          const ForegroundProgram(program: '/usr/bin/htop'),
+        ),
+        execTemplate: 'foot',
+        appId: 'foot',
+        savedTitle: 'htop\u001b]2;injected\u0007\n',
+        existing: {'/home/user', '/home/user/src'},
+      )!;
+
+      final scriptIndex = result.config.argv.indexOf('-c') + 1;
+      expect(result.config.argv[scriptIndex], _survivalScript);
+      expect(result.config.argv[scriptIndex + 2], 'htop]2;injected');
+    });
+
+    test('a terminal-name title falls back to the program name', () {
+      final result = plan(
+        cwd: '/home/user/src',
+        executable: '/usr/bin/alacritty',
+        terminal: terminalWith(
+          const ForegroundProgram(program: '/usr/bin/htop'),
+        ),
+        execTemplate: 'alacritty',
+        appId: 'alacritty',
+        savedTitle: 'Alacritty',
+        existing: {'/home/user', '/home/user/src'},
+      )!;
+
+      final scriptIndex = result.config.argv.indexOf('-c') + 1;
+      expect(result.config.argv[scriptIndex + 2], 'htop');
     });
 
     test('xterm uses -e', () {
@@ -250,6 +293,7 @@ void main() {
         ),
         execTemplate: 'xterm',
         appId: 'xterm',
+        savedTitle: 'nvim file',
         existing: {'/home/user', '/home/user/src'},
       )!;
 
@@ -258,8 +302,9 @@ void main() {
         '-e',
         '/bin/sh',
         '-c',
-        r'"$@"; exec "$0"',
+        _survivalScript,
         '/usr/bin/bash',
+        'nvim file',
         '/usr/bin/nvim',
         'file',
       ]);
@@ -298,6 +343,44 @@ void main() {
       )!;
 
       expect(result.config.argv, ['mysteryterm']);
+    });
+
+    test('recovers the program from a wrapper saved by an older build', () {
+      final result = plan(
+        cwd: '/home/user/src',
+        argv: [
+          '/usr/bin/alacritty',
+          '--working-directory',
+          '/home/user/src',
+          '-e',
+          '/bin/sh',
+          '-c',
+          r'"$@"; exec "$0"',
+          '/usr/bin/zsh',
+          '/usr/bin/htop',
+        ],
+        executable: '/usr/bin/alacritty',
+        terminal: const TerminalResumeContext(
+          shell: '/usr/bin/bash',
+          workingDirectory: '/home/user/src',
+        ),
+        execTemplate: 'alacritty',
+        appId: 'alacritty',
+        existing: {'/home/user', '/home/user/src'},
+      )!;
+
+      expect(result.config.argv, [
+        'alacritty',
+        '--working-directory',
+        '/home/user/src',
+        '-e',
+        '/bin/sh',
+        '-c',
+        _survivalScript,
+        '/usr/bin/zsh',
+        'htop',
+        '/usr/bin/htop',
+      ]);
     });
 
     test('a missing program leaves the terminal and shell only', () {

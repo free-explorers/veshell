@@ -68,6 +68,12 @@ class PersistentWindowState extends _$PersistentWindowState
 
   Timer? _resumeTimeoutTimer;
 
+  /// Whether a shell-requested close is waiting for a fresh process snapshot.
+  ///
+  /// The snapshot is what records a foreground program that exited since the
+  /// last poll (the user quit `htop` and closed the tile straight away).
+  bool _closing = false;
+
   /// A resume that has not produced a window by then is shown as retryable.
   static const _resumeTimeout = Duration(seconds: 25);
 
@@ -134,6 +140,7 @@ class PersistentWindowState extends _$PersistentWindowState
       entryIcon: entry?.entries[DesktopEntryKey.icon.string],
       homeDirectory: home,
       appId: state.properties.appId,
+      savedTitle: state.properties.title,
       environment: Platform.environment,
     );
     if (plan == null) {
@@ -463,6 +470,61 @@ class PersistentWindowState extends _$PersistentWindowState
       removeWindow();
       return;
     }
+    if (forceRemove) {
+      _requestClose(forceRemove: true);
+      return;
+    }
+    if (_closing) {
+      return;
+    }
+    _closing = true;
+    unawaited(_captureThenClose());
+  }
+
+  /// Refreshes the resume context before asking the window to close.
+  ///
+  /// The periodic capture can be up to two seconds stale. Without this, a
+  /// foreground program that just exited (the user quit `htop` and closed the
+  /// tile immediately) is still the saved program, and the next resume repeats
+  /// it instead of starting at the shell prompt.
+  Future<void> _captureThenClose() async {
+    try {
+      await _captureLatestProcessFacts();
+    } finally {
+      _closing = false;
+    }
+    if (!ref.mounted || state.metaWindowId == null) {
+      return;
+    }
+    _requestClose(forceRemove: false);
+  }
+
+  Future<void> _captureLatestProcessFacts() async {
+    final pid = state.properties.pid;
+    if (pid == null || pid <= 0) {
+      return;
+    }
+    try {
+      final info = await ref
+          .read(platformManagerProvider.notifier)
+          .fetchProcessInfo(pid);
+      if (!ref.mounted || info == null) {
+        return;
+      }
+      ref.read(processInfoStateProvider.notifier).set(info);
+      captureResumeContext(info);
+    } on Object catch (error, stackTrace) {
+      // Closing must not depend on the snapshot: the window is going away.
+      matchingLog.fine(
+        'Resume capture before close failed: $error',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  /// Sends the close request the tile's frame capture hangs off.
+  void _requestClose({required bool forceRemove}) {
     // Before the request reaches the client: the tile captures the frame the
     // closing window wraps back into the placeholder with.
     ref.read(windowCloseRequestsProvider(windowId).notifier).request();
