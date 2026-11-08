@@ -73,10 +73,7 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             "start_resize_window" => start_resize_window(method_call, result, data),
             "close_window" => close_window(method_call, result, data),
             "release_texture" => self::release_texture::release_texture(method_call, result, data),
-<<<<<<< HEAD
             "window_preview" => self::window_preview::window_preview(method_call, result, data),
-=======
->>>>>>> origin/main
             "adjust_brightness" => adjust_brightness(method_call, result, data),
             "switch_keyboard_layout" => switch_keyboard_layout(method_call, result, data),
             "get_monitor_layout" => get_monitor_layout(method_call, result, data),
