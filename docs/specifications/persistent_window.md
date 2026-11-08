@@ -168,12 +168,25 @@ the shell cwd only.
 The terminal starts in the shell cwd, then the saved program is run inside it:
 
 ```text
-/bin/sh -c '"$@"; exec "$0"' <shell> <program> <args...>
+/bin/sh -c 'if [ -n "$1" ]; then printf "\033]0;%s\007" "$1"; fi; shift; "$@"; exec "$0"' <shell> <title> <program> <args...>
 ```
 
 The wrapper is non-interactive and non-login. When the program exits, it execs
 the captured shell, so the terminal stays at an interactive prompt. Program and
 arguments are positional argv elements, never shell-interpolated text.
+
+Before starting the program, the wrapper seeds the terminal title with the
+tile's saved window title (control characters stripped, length bounded); when
+that title is empty or only the terminal emulator's own name, the program's
+basename is used instead. The title normally comes from the interactive shell's
+prompt hook, which does not run while the program is alive; without seeding, a
+resumed `htop` would keep the terminal emulator's own title (`Alacritty`) instead
+of `htop`.
+
+The wrapper is an implementation detail of the resume, not part of the captured
+context: process inspection unwraps it and reports the shell it will exec and
+the program it is running. That is what lets a second close and resume replay
+the same program instead of falling back to a fresh shell.
 
 Command separators come from a small terminal table:
 

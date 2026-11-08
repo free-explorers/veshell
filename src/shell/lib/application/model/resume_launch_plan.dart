@@ -36,6 +36,7 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
   String? entryIcon,
   String? homeDirectory,
   String? appId,
+  String? savedTitle,
   Map<String, String>? environment,
   bool Function(String path)? pathExists,
   bool Function(String path)? isExecutable,
@@ -43,7 +44,7 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
   final exists = pathExists ?? _entityExists;
   final executable = isExecutable ?? isExecutableFile;
   final variables = environment ?? Platform.environment;
-  final saved = context ?? const ResumeContext();
+  final saved = _recoverSurvivalWrapper(context ?? const ResumeContext());
   // A tile that has never been captured keeps the compositor cwd (the
   // historical launch behaviour) instead of jumping to home; home is the
   // fallback for a *saved* directory that disappeared.
@@ -68,6 +69,7 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
         workingDirectory: workingDirectory,
         environment: variables,
         isExecutable: executable,
+        title: savedTitle,
         // `wezterm` needs its `start` subcommand unless the custom exec
         // already has it; every other terminal's suffix is the whole syntax.
         includeSubcommand:
@@ -132,6 +134,7 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
             workingDirectory: workingDirectory,
             environment: variables,
             isExecutable: executable,
+            title: savedTitle,
             includeSubcommand: true,
           );
           if (suffix != null) {
@@ -358,6 +361,7 @@ List<String>? _terminalProgramArguments({
   required Map<String, String> environment,
   required bool Function(String path) isExecutable,
   required bool includeSubcommand,
+  required String? title,
 }) {
   final terminal = saved.terminal;
   final foreground = terminal?.foreground;
@@ -401,8 +405,30 @@ List<String>? _terminalProgramArguments({
     ...includeSubcommand
         ? emulator.commandArguments(workingDirectory)
         : emulator.suffixArguments(workingDirectory),
-    ..._shellSurvivalCommand(shell, program, foreground.arguments),
+    ..._shellSurvivalCommand(
+      shell,
+      program,
+      foreground.arguments,
+      title: _resumeTitle(title, emulator, program),
+    ),
   ];
+}
+
+/// The title a resumed program should show.
+///
+/// The saved window title usually names the foreground program (a shell's
+/// prompt hook sets it). A title that is only the terminal emulator's own name
+/// says nothing about the resumed work, so the program name replaces it.
+String _resumeTitle(
+  String? savedTitle,
+  TerminalEmulator emulator,
+  String program,
+) {
+  final saved = _sanitizedTitle(savedTitle);
+  if (saved.isEmpty || saved.toLowerCase() == emulator.name) {
+    return path.basename(program);
+  }
+  return saved;
 }
 
 String? _resolveTerminalShell(
@@ -431,11 +457,91 @@ String? _resolveTerminalShell(
 
 /// Runs [program] and then replaces the wrapper with the interactive shell, so
 /// the terminal remains at a prompt when the program exits.
+///
+/// The wrapper also seeds the terminal title from [title] before starting the
+/// program. The shell is what normally sets the title (its prompt hook), and it
+/// does not run while the program is alive; without this the terminal keeps its
+/// own name (`Alacritty`) instead of the restored program's title.
+///
+/// Keep the script in sync with `RESUME_WRAPPER_SCRIPT` in `process_info.rs`,
+/// which unwraps this shape when capturing the resumed window again.
 List<String> _shellSurvivalCommand(
   String shell,
   String program,
-  List<String> arguments,
-) => ['/bin/sh', '-c', r'"$@"; exec "$0"', shell, program, ...arguments];
+  List<String> arguments, {
+  required String? title,
+}) => [
+  '/bin/sh',
+  '-c',
+  _shellSurvivalScript,
+  shell,
+  _sanitizedTitle(title),
+  program,
+  ...arguments,
+];
+
+const _shellSurvivalScript =
+    r'if [ -n "$1" ]; then printf "\033]0;%s\007" "$1"; fi; '
+    r'shift; "$@"; exec "$0"';
+
+/// The wrapper used before process inspection learned to unwrap it.
+const _legacyShellSurvivalScript = r'"$@"; exec "$0"';
+
+/// Reconstructs the replay target from a survival wrapper saved in the tile's
+/// argv by an older build.
+///
+/// Those builds captured the wrapper itself as the terminal, so the context has
+/// a shell but no foreground program. Reading the wrapper back keeps the first
+/// resume after the upgrade on the saved program instead of opening a fresh
+/// shell.
+ResumeContext _recoverSurvivalWrapper(ResumeContext context) {
+  final terminal = context.terminal;
+  if (terminal == null || terminal.foreground != null) {
+    return context;
+  }
+  final argv = context.argv;
+  for (var index = 1; index < argv.length; index++) {
+    if (argv[index - 1] != '-c') {
+      continue;
+    }
+    final int programIndex;
+    if (argv[index] == _shellSurvivalScript) {
+      programIndex = index + 3;
+    } else if (argv[index] == _legacyShellSurvivalScript) {
+      programIndex = index + 2;
+    } else {
+      continue;
+    }
+    if (programIndex >= argv.length) {
+      continue;
+    }
+    final shell = argv[index + 1];
+    final program = argv[programIndex];
+    if (!isTerminalShell(shell) || program.isEmpty) {
+      continue;
+    }
+    return context.copyWith(
+      terminal: terminal.copyWith(
+        shell: shell,
+        foreground: ForegroundProgram(
+          program: program,
+          arguments: argv.skip(programIndex + 1).toList(),
+        ),
+      ),
+    );
+  }
+  return context;
+}
+
+/// The window title can be arbitrary client text. Strip control characters so
+/// it cannot inject another terminal escape sequence, and bound its length.
+String _sanitizedTitle(String? title) {
+  if (title == null) {
+    return '';
+  }
+  final sanitized = title.replaceAll(RegExp(r'[\x00-\x1f\x7f]'), '').trim();
+  return sanitized.length > 200 ? sanitized.substring(0, 200) : sanitized;
+}
 
 String _asFileArgument(String document) {
   final uri = Uri.tryParse(document);
