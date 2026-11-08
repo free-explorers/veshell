@@ -3,9 +3,15 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/rendering.dart' show RenderRepaintBoundary, TextureBox;
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
+import 'package:shell/meta_window/provider/frozen_close_textures.dart';
+import 'package:shell/meta_window/provider/meta_window_state.dart';
+import 'package:shell/shared/widget/frosted_surface.dart';
 import 'package:shell/theme/provider/theme.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
+import 'package:shell/window/provider/window_close_requests.dart';
 import 'package:shell/window/widget/window_placeholder.dart';
 
 /// How long a persistent tile takes to swap its placeholder for its window.
@@ -61,7 +67,7 @@ class _CloseFrame {
 /// A tile's window wrapping back into its placeholder (see
 /// [WindowCloseTransition]); [done] ends it.
 class WindowClosing {
-  WindowClosing._(this.image, this.texture, this.done);
+  WindowClosing._(this.image, this.texture, this.done, [this._liveTextureId]);
 
   /// What the shell painted of the tile, or `null` when the window closed on
   /// its own.
@@ -69,6 +75,10 @@ class WindowClosing {
 
   /// The window's own last frame, painted over [image].
   final WindowCloseTexture? texture;
+
+  /// The live texture [texture] stands in for, when the compositor froze a
+  /// copy for the close: kept too, and released with it.
+  final int? _liveTextureId;
 
   final VoidCallback done;
 }
@@ -78,25 +88,48 @@ class WindowClosing {
 /// Each new [closeRequests] (the shell asked [metaWindowId] to close) captures
 /// the tile's frame from the [RenderRepaintBoundary] at [frameKey], while the
 /// window still paints: what the shell drew, and where the window's texture
-/// ([windowTextureId]) sits, which the compositor keeps past the close. Once
+/// ([windowTextureId]) sits. The compositor answers the request with a copy
+/// of that texture ([FrozenCloseTextures]), which the client can no longer
+/// paint over, and keeps the live one past the close as a fallback. The
+/// capture runs in the request's own notification, before the request reaches
+/// the client, so a fast client cannot destroy the surface first. Once
 /// the window is gone ([metaWindowId] turns `null`), the closing starts, with
-/// that frame when it is the window's, or without one when the window closed
-/// on its own. A window shown again (a splash handing over, a surface
-/// recreated) cancels it. The kept texture is handed to [releaseTexture] once
+/// that frame when it is the window's, or with the last texture remembered
+/// from the live window when the application closed it itself (the shell's
+/// frame is only captured for a close it requested). A window shown again (a
+/// splash handing over, a surface recreated) cancels it. The kept texture is
+/// handed to [releaseTexture] once
 /// the closing is over. Nothing is captured or played unless [enabled].
 WindowClosing? useWindowClosing({
+  required WidgetRef ref,
+  required PersistentWindowId windowId,
   required MetaWindowId? metaWindowId,
   required int closeRequests,
   required GlobalKey frameKey,
   required bool enabled,
   int? Function()? windowTextureId,
   void Function(int textureId)? releaseTexture,
+
+  /// Called once the displayed window is gone (however it closed) with its
+  /// content size and whether it covered its tile, so the preview the
+  /// compositor persisted can be drawn at the same place.
+  void Function(Size size, bool fullBleed)? onWindowClosed,
 }) {
   final context = useContext();
   final pending = useRef<_CloseFrame?>(null);
   final expiry = useRef<Timer?>(null);
   final closing = useRef<WindowClosing?>(null);
   final shown = useRef(metaWindowId);
+  // Where the displayed window's texture was painted, remembered while it is
+  // still live: an application that closes its own window leaves no request
+  // to capture it, and its surface can be gone by the time the next frame
+  // builds.
+  final lastTexture =
+      useRef<({MetaWindowId windowId, WindowCloseTexture texture})?>(null);
+  final lastWindowFrame =
+      useRef<({MetaWindowId windowId, Size size, bool fullBleed})?>(null);
+  final captured = useRef(0);
+  final retryScheduled = useRef(0);
   final rebuild = useState(0);
   // Read when the closing ends, which can be after this build's callbacks.
   final release = useRef(releaseTexture)..value = releaseTexture;
@@ -113,8 +146,14 @@ WindowClosing? useWindowClosing({
     if (ended == null) {
       return;
     }
+    if (ended._liveTextureId case final live?) {
+      release.value?.call(live);
+    }
     if (ended.texture case final texture?) {
       release.value?.call(texture.id);
+      if (lastTexture.value?.texture.id == texture.id) {
+        lastTexture.value = null;
+      }
     }
     if (ended.image case final image?) {
       WidgetsBinding.instance.addPostFrameCallback((_) => image.dispose());
@@ -132,6 +171,122 @@ WindowClosing? useWindowClosing({
     }
   }
 
+  _CloseFrame? take(MetaWindowId id) {
+    final boundary = frameKey.currentContext?.findRenderObject();
+    if (boundary is! RenderRepaintBoundary || !boundary.attached) {
+      return null;
+    }
+    ui.Image image;
+    try {
+      image = boundary.toImageSync(
+        pixelRatio: MediaQuery.devicePixelRatioOf(context),
+      );
+    } on Object {
+      // Not painted yet, or being repainted: the frame after has it.
+      return null;
+    }
+    final textureId = windowTextureId?.call();
+    return _CloseFrame(
+      id,
+      image,
+      textureId == null ? null : _findTexture(boundary, textureId),
+    );
+  }
+
+  void keep(_CloseFrame frame) {
+    dropPending();
+    pending.value = frame;
+    expiry.value = Timer(_closeFrameLifetime, () {
+      if (identical(pending.value, frame)) {
+        dropPending();
+      }
+    });
+  }
+
+  void capture(int generation, MetaWindowId id) {
+    if (captured.value >= generation) {
+      return;
+    }
+    if (take(id) case final frame?) {
+      keep(frame);
+      captured.value = generation;
+      return;
+    }
+    // Not painted yet, or being repainted: the frame after has it.
+    if (retryScheduled.value >= generation) {
+      return;
+    }
+    retryScheduled.value = generation;
+    WidgetsBinding.instance
+      ..addPostFrameCallback((_) {
+        if (context.mounted &&
+            captured.value < generation &&
+            shown.value == id) {
+          capture(generation, id);
+        }
+      })
+      ..ensureVisualUpdate();
+  }
+
+  // Capture synchronously when the shell asks the window to close: the close
+  // request reaches the client immediately afterwards, and its surface (with
+  // the texture id and its place in the tile) can be gone by the time the next
+  // frame builds. Waiting for the rebuild is what made the last frame show up
+  // only sometimes.
+  ref.listen(windowCloseRequestsProvider(windowId), (previous, next) {
+    if (!enabled || next <= (previous ?? 0)) {
+      return;
+    }
+    if (metaWindowId case final id?) {
+      capture(next, id);
+    }
+  });
+
+  // Remember where the displayed window's texture is painted while it is
+  // still alive: an application closing its own window leaves no request to
+  // capture it, and the surface (with the texture id) can be gone by the time
+  // the next frame builds.
+  useEffect(() {
+    final id = metaWindowId;
+    if (id == null) {
+      return null;
+    }
+    final textureId = windowTextureId?.call();
+    if (textureId == null) {
+      return null;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) {
+        return;
+      }
+      final boundary = frameKey.currentContext?.findRenderObject();
+      if (boundary is! RenderRepaintBoundary || !boundary.attached) {
+        return;
+      }
+      if (_findTexture(boundary, textureId) case final texture?) {
+        lastTexture.value = (windowId: id, texture: texture);
+        // The window's content geometry, not the surface buffer: client-side
+        // decorations and shadow margins sit outside the window.
+        Rect? geometry;
+        try {
+          geometry = ref.read(metaWindowStateProvider(id)).geometry;
+        } on Object {
+          // The window went away between the frame and this callback.
+        }
+        final size = geometry?.size ?? texture.rect.size;
+        final tile = boundary.size;
+        final fullBleed =
+            size.width >= tile.width - 1 && size.height >= tile.height - 1;
+        lastWindowFrame.value = (
+          windowId: id,
+          size: size,
+          fullBleed: fullBleed,
+        );
+      }
+    });
+    return null;
+  });
+
   if (shown.value != metaWindowId) {
     final gone = shown.value;
     shown.value = metaWindowId;
@@ -141,69 +296,51 @@ WindowClosing? useWindowClosing({
     pending.value = null;
     finish(closing.value);
     closing.value = null;
+    final frozen = gone == null
+        ? null
+        : ref.read(frozenCloseTexturesProvider.notifier).take(gone);
+    if (gone != null && metaWindowId == null) {
+      if (lastWindowFrame.value case final last? when last.windowId == gone) {
+        onWindowClosed?.call(last.size, last.fullBleed);
+      }
+    }
     if (enabled && gone != null && metaWindowId == null) {
       final own = frame != null && frame.metaWindowId == gone ? frame : null;
       if (own == null) {
         frame?.image?.dispose();
       }
+      final remembered = lastTexture.value;
+      final live =
+          own?.texture ??
+          (remembered != null && remembered.windowId == gone
+              ? remembered.texture
+              : null);
+      // The frozen copy covers the same surface as the live texture, at the
+      // same place.
+      final texture = frozen != null && live != null
+          ? (id: frozen, rect: live.rect)
+          : live;
       late final WindowClosing started;
-      started = WindowClosing._(own?.image, own?.texture, () => end(started));
+      started = WindowClosing._(
+        own?.image,
+        texture,
+        () => end(started),
+        identical(texture, live) ? null : live?.id,
+      );
       closing.value = started;
     } else {
       frame?.image?.dispose();
     }
   }
 
+  // Fallback for a request that happened before this tile was built (or
+  // before the listener existed): capture as soon as it can.
   useEffect(() {
     final id = metaWindowId;
     if (closeRequests == 0 || !enabled || id == null) {
       return null;
     }
-    _CloseFrame? take() {
-      final boundary = frameKey.currentContext?.findRenderObject();
-      if (boundary is! RenderRepaintBoundary || !boundary.attached) {
-        return null;
-      }
-      ui.Image image;
-      try {
-        image = boundary.toImageSync(
-          pixelRatio: MediaQuery.devicePixelRatioOf(context),
-        );
-      } on Object {
-        // Not painted yet, or being repainted: the frame after has it.
-        return null;
-      }
-      final textureId = windowTextureId?.call();
-      return _CloseFrame(
-        id,
-        image,
-        textureId == null ? null : _findTexture(boundary, textureId),
-      );
-    }
-
-    void keep(_CloseFrame frame) {
-      dropPending();
-      pending.value = frame;
-      expiry.value = Timer(_closeFrameLifetime, () {
-        if (identical(pending.value, frame)) {
-          dropPending();
-        }
-      });
-    }
-
-    if (take() case final frame?) {
-      keep(frame);
-    } else {
-      WidgetsBinding.instance
-        ..addPostFrameCallback((_) {
-          if (context.mounted && shown.value == id) {
-            if (take() case final frame?) {
-              keep(frame);
-            }
-          }
-        })
-        ..ensureVisualUpdate();
-    }
+    capture(closeRequests, id);
     return null;
   }, [closeRequests]);
 
@@ -309,9 +446,10 @@ Widget _cardOpening(double t, Widget child) => Opacity(
 ///
 /// The window has no surface left by then. Closed by the shell, it shows the
 /// tile's last frame: [image], what the shell painted, under [texture], the
-/// window's last frame which the compositor kept. Closed on its own, it shows
-/// a plain surface in its place. The opening narrows
-/// from the tile's edges to the card while its corners round, then the frame
+/// window's last frame which the compositor kept. Closed by the application
+/// itself, it shows that kept texture over a plain surface in its place. The
+/// opening narrows from the tile's edges to the card while its corners round
+/// and its content blurs towards the stored preview's look, then the frame
 /// fades out into the card's content. [onDone] is called once it has.
 class WindowCloseTransition extends HookWidget {
   const WindowCloseTransition({
@@ -348,13 +486,51 @@ class WindowCloseTransition extends HookWidget {
     }, [controller]);
     final progress = useAnimation(controller);
     final frame = image;
-    return IgnorePointer(
-      child: _cardOpening(
-        1 - progress,
-        frame == null
-            ? ColoredBox(color: Theme.of(context).colorScheme.surface)
-            : RawImage(image: frame, fit: BoxFit.fill),
-      ),
+    Widget content = frame == null
+        ? ColoredBox(color: Theme.of(context).colorScheme.surface)
+        : RawImage(image: frame, fit: BoxFit.fill);
+    // `toImageSync` leaves a hole where the window's external texture is: the
+    // compositor's retained last frame is painted over it, where it was.
+    if (texture case final kept?) {
+      content = Stack(
+        fit: StackFit.expand,
+        children: [
+          content,
+          Positioned.fromRect(
+            rect: kept.rect,
+            child: Texture(textureId: kept.id, freeze: true),
+          ),
+        ],
+      );
+    }
+    // The closing window frosts into its placeholder's look: the same glass
+    // the dialog backdrop and the placeholder use, ramped by the animation,
+    // so the frame lands on the stored preview instead of cutting to it.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scheme = Theme.of(context).colorScheme;
+        final region = texture?.rect.size ?? constraints.biggest;
+        return IgnorePointer(
+          child: _cardOpening(
+            1 - progress,
+            FrostedSurface(
+              blurSigma: frostSigmaFor(region) * progress,
+              saturation: 1 + 0.20 * progress,
+              tint: progress > 0
+                  ? frostedGlassTint(
+                      scheme,
+                    ).withAlpha((frostedWashAlpha * progress).round())
+                  : null,
+              tintOverContent: true,
+              frame: false,
+              highlight: false,
+              noise: true,
+              noiseOpacity: progress,
+              child: content,
+            ),
+          ),
+        );
+      },
     );
   }
 }

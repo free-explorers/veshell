@@ -490,8 +490,16 @@ pub struct SettingsManager<BackendData: Backend + 'static> {
     _loop_handle: LoopHandle<'static, State<BackendData>>,
     default_settings_folder: String,
     config_folder_path: String,
+    cache_folder_path: String,
 }
 impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
+    /// The user's cache directory: data the shell can lose without harm, such
+    /// as the tiles' last-frame previews. Shared with the shell as
+    /// `VESHELL_CACHE_DIR`.
+    pub fn cache_folder_path(&self) -> &str {
+        &self.cache_folder_path
+    }
+
     pub fn new(
         loop_handle: LoopHandle<'static, State<BackendData>>,
         on_settings_changed: SettingsCallback<BackendData>,
@@ -532,6 +540,25 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
             std::env::set_var("VESHELL_CONFIG_DIR", &config_folder_path);
         }
         let config_folder = Path::new(&config_folder_path);
+
+        let cache_folder_path = std::env::var("VESHELL_CACHE_DIR")
+            .or_else(|_| {
+                std::env::var("XDG_CACHE_HOME")
+                    .map(|xdg_cache_home| format!("{}/veshell/", xdg_cache_home))
+                    .or_else(|_| {
+                        std::env::var("HOME").map(|home| format!("{}/.cache/veshell/", home))
+                    })
+            })
+            .unwrap();
+        if std::env::var("VESHELL_CACHE_DIR").is_err() {
+            std::env::set_var("VESHELL_CACHE_DIR", &cache_folder_path);
+        }
+        // The previews of tiles removed while their window was still writing
+        // one would otherwise stay forever.
+        crate::capture::window_preview::sweep_orphan_previews(
+            Path::new(&cache_folder_path),
+            &config_folder.join("persistence"),
+        );
 
         if !config_folder.exists() {
             std::fs::create_dir_all(config_folder.clone())
@@ -581,6 +608,7 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
             _loop_handle: loop_handle.clone(),
             default_settings_folder,
             config_folder_path: config_folder.to_str().unwrap().to_string(),
+            cache_folder_path,
         }
     }
 

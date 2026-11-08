@@ -175,6 +175,26 @@ mixin WindowProviderMixin<T extends Window> {
     }
   }
 
+  /// Settles this tile's owned windows without waiting for [_settleDebounce].
+  ///
+  /// Used on the destination of a late title re-association that emptied the
+  /// tile the window came from: waiting for the quiet timer would leave that
+  /// tile on its placeholder (and hide the window this tile was still
+  /// displaying) for the whole delay. Redistributing at once hands that window
+  /// back in the same frame, so the emptied tile swaps its displayed window in
+  /// place instead of playing the placeholder closing and the opening of the
+  /// window that comes back.
+  void settleOwnedMetaWindowsNow() {
+    // A launch origin is still gathering: its timer must finalize the burst,
+    // not dispatch an overflow early.
+    if (_launchOrigin || _metaWindowSubscriptions.length < 2) {
+      return;
+    }
+    _debouncedTimer?.cancel();
+    _debouncedTimer = null;
+    _redistributeOwnedMetaWindows();
+  }
+
   /// Fires after the [_settleDebounce]. A launch origin finalizes its
   /// gather, unless the only windows it has produced so far are fixed-size and
   /// the splash deferral budget is not exhausted yet, in which case the timer

@@ -426,6 +426,30 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             return;
         }
 
+        // The persistent tile that displays this window wants its last frame
+        // when the application closed it itself (quit, crash, kill): no close
+        // request captured it. The last committed frame is still there, and a
+        // client that is gone cannot change it. Its texture is also kept past
+        // the surface, for the shell to wrap the tile back into its
+        // placeholder with it.
+        if let Some(preview) = self.window_previews.remove(meta_window_id) {
+            if !preview.persisted {
+                if let Some(surface_id) = self
+                    .meta_window_state
+                    .meta_windows
+                    .get(meta_window_id)
+                    .map(|window| window.surface_id)
+                {
+                    self.surfaces_retaining_textures.insert(surface_id);
+                }
+                crate::capture::window_preview::persist_window_preview(
+                    self,
+                    meta_window_id,
+                    &preview.path,
+                );
+            }
+        }
+
         // A game that closes itself is torn down through this path, not through
         // an `UpdateGameModeActivated(false)` patch. Without that deactivation
         // the shell never pops its gaming route, which keeps covering the

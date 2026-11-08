@@ -250,8 +250,10 @@ All of these are observed on the live surfaces and, where meaningful, mirrored o
      dialog of its tile, including before the settle.
 
    Under those conditions every title change re-runs the comparison, and the
-   window moves to a strictly better burst tile; the destination redistributes
-   whatever it was displaying. A comparison that does not move the window
+   window moves to a strictly better burst tile; when that leaves the source
+   tile empty, the destination settles at once and hands back whatever it was
+   displaying in the same frame, so the tile the window left never falls back
+   to its placeholder in between. A comparison that does not move the window
    keeps it pending, since the first specific title can be transient. Generic
    startup titles are never adopted into a tile's matching title, so the
    discriminator is still available when the real title arrives. A window

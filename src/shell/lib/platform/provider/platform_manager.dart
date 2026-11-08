@@ -53,10 +53,17 @@ class PlatformManager extends _$PlatformManager {
   }
 
   /// Send a [PlatformRequest] to the Wayland compositor
-  Future<void> request(PlatformRequest request) async {
+  Future<void> request(PlatformRequest request) => requestResult(request);
+
+  /// Sends [request] like [request], and returns what the compositor replied
+  /// (`null` for a stale request about a gone window).
+  Future<Object?> requestResult(PlatformRequest request) async {
     const channel = MethodChannel('platform', JSONMethodCodec());
     try {
-      await channel.invokeMethod(request.method, request.message?.toJson());
+      return await channel.invokeMethod<Object?>(
+        request.method,
+        request.message?.toJson(),
+      );
     } on PlatformException catch (error) {
       // A window can disappear between the shell deciding to send a request
       // and the compositor handling it: a client crash destroys its surface
@@ -70,6 +77,7 @@ class PlatformManager extends _$PlatformManager {
         '${request.method} dropped for a gone window/surface: '
         '${error.code} ${error.message}',
       );
+      return null;
     }
   }
 

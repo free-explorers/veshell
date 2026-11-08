@@ -361,8 +361,9 @@ class MatchingEngine extends _$MatchingEngine {
   /// stored identities of the other [burstTiles] — the tiles the same burst
   /// settled across, never unrelated tiles of the application — and moves the
   /// window to a strictly better one. Generic titles never overwrite a tile's
-  /// stored matching title, so the discriminator is still there. The
-  /// destination's own settle redistributes whatever it was displaying.
+  /// stored matching title, so the discriminator is still there. When the
+  /// move leaves the source tile empty, the destination settles at once, so
+  /// whatever it was displaying is handed back without the quiet debounce.
   ///
   /// The caller gates this (see `TitleReassociation`): only within
   /// [MAX_TITLE_REASSOCIATION_TIME_MS] of the burst settle, only for a window
@@ -430,6 +431,27 @@ class MatchingEngine extends _$MatchingEngine {
             );
       case DialogWindowId():
         return false;
+    }
+    // The tile the window left may now be empty. Settle the destination at
+    // once so it hands back the window it was displaying in the same frame:
+    // leaving that for the quiet debounce would show the emptied tile's
+    // placeholder (and hide the window) for half a second, then replay the
+    // opening when a window comes back. A source that still owns a window
+    // keeps the ordinary debounce.
+    if (ownerTileOwnsNoWindow(owner)) {
+      switch (other) {
+        case PersistentWindowId():
+          ref
+              .read(persistentWindowStateProvider(other).notifier)
+              .settleOwnedMetaWindowsNow();
+        case EphemeralWindowId():
+          ref
+              .read(ephemeralWindowStateProvider(other).notifier)
+              .settleOwnedMetaWindowsNow();
+        case DialogWindowId():
+          // A destination is always an ordinary tile.
+          break;
+      }
     }
     return true;
   }

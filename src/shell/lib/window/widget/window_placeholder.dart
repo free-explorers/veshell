@@ -13,9 +13,12 @@ import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/application/widget/logs_viewer.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/platform/provider/platform_event_recorder.dart';
+import 'package:shell/shared/widget/frosted_surface.dart';
 import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
+import 'package:shell/window/provider/window_preview_image.dart';
 import 'package:shell/window/widget/resume_context_summary.dart';
 
 /// Fraction of the tile's width and height between each side of the tile and
@@ -361,7 +364,10 @@ class WindowPlaceholder extends HookConsumerWidget {
                 ),
               ),
               Positioned.fill(
-                child: _PlaceholderBackground(iconPath: iconPath),
+                child: _PlaceholderBackground(
+                  iconPath: iconPath,
+                  windowId: window.windowId,
+                ),
               ),
               Positioned.fill(
                 child: InkWell(
@@ -680,28 +686,29 @@ class _ResumeActions extends StatelessWidget {
   }
 }
 
-/// The ambient app-icon wash behind a placeholder.
+/// The ambient wash behind a placeholder: the last window frame when the
+/// compositor persisted one (already blurred for privacy), otherwise the
+/// blurred application icon.
 ///
-/// The blur is baked once into a small image by [iconBackgroundImageProvider]
-/// rather than applied live: a live sigma-300 `ImageFiltered` expands its paint
-/// bounds by roughly 900 logical pixels on every side, so each desktop
-/// re-rasterisation, which the overview forces, allocated a huge offscreen
-/// surface and blurred it every frame.
+/// The icon is baked once into a small image rather than blurred live: a live
+/// sigma-300 `ImageFiltered` expands its paint bounds by roughly 900 logical
+/// pixels on every side, so each desktop re-rasterisation, which the overview
+/// forces, allocated a huge offscreen surface and blurred it every frame.
 class _PlaceholderBackground extends ConsumerWidget {
-  const _PlaceholderBackground({required this.iconPath});
+  const _PlaceholderBackground({
+    required this.iconPath,
+    required this.windowId,
+  });
 
   final String? iconPath;
+  final PersistentWindowId windowId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final path = iconPath;
-    if (path == null) {
-      return const SizedBox.shrink();
-    }
-    final image = ref
-        .watch(iconBackgroundImageProvider(path))
+    final preview = ref
+        .watch(windowPreviewImageProvider(windowId))
         .when(
-          data: (image) => image,
+          data: (preview) => preview,
           // Keep painting nothing while the provider rebuilds. Its previous
           // image is disposed before the replacement is ready, and RawImage
           // would try to clone that disposed handle and throw.
@@ -709,11 +716,67 @@ class _PlaceholderBackground extends ConsumerWidget {
           error: (_, _) => null,
           skipLoadingOnRefresh: false,
         );
-    if (image == null) {
+    if (preview != null) {
+      final layout = preview.layout;
+      Widget image;
+      if (layout == null || layout.fullBleed) {
+        // A maximized/fullscreen window filled its tile: the preview fills
+        // whatever tile the placeholder now occupies.
+        image = RawImage(
+          image: preview.image,
+          fit: BoxFit.fill,
+          filterQuality: FilterQuality.high,
+        );
+      } else {
+        // A fixed-size window kept its own size, centred in the tile: draw
+        // the preview where it was instead of stretching it over the tile.
+        image = FittedBox(
+          fit: BoxFit.scaleDown,
+          child: SizedBox.fromSize(
+            size: layout.size,
+            child: RawImage(
+              image: preview.image,
+              fit: BoxFit.fill,
+              filterQuality: FilterQuality.high,
+            ),
+          ),
+        );
+      }
+      // The same glass as the dialog backdrop and the overview. The stored
+      // frame already carries the frost's blur (the compositor applies the
+      // same sigma when it writes the file), so only the vibrancy, wash and
+      // grain are added here — a second blur would smear it further.
+      return FrostedSurface(
+        saturation: 1 + 0.20,
+        tint: frostedGlassTint(
+          Theme.of(context).colorScheme,
+        ).withAlpha(frostedWashAlpha),
+        tintOverContent: true,
+        frame: false,
+        highlight: false,
+        noise: true,
+        // The stored file is already blurred; the grain still belongs to the
+        // glass.
+        preBlurred: true,
+        child: image,
+      );
+    }
+    final path = iconPath;
+    final icon = path == null
+        ? null
+        : ref
+              .watch(iconBackgroundImageProvider(path))
+              .when(
+                data: (image) => image,
+                loading: () => null,
+                error: (_, _) => null,
+                skipLoadingOnRefresh: false,
+              );
+    if (icon == null) {
       return const SizedBox.shrink();
     }
     return RawImage(
-      image: image,
+      image: icon,
       fit: BoxFit.fill,
       filterQuality: FilterQuality.high,
     );

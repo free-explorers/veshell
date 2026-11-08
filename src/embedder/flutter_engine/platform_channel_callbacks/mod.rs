@@ -36,6 +36,7 @@ mod screenshot_prompt_decision;
 mod start_move_window;
 mod start_resize_window;
 mod switch_keyboard_layout;
+mod window_preview;
 
 use self::activate_window::activate_window;
 use self::adjust_brightness::adjust_brightness;
@@ -72,6 +73,7 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             "start_resize_window" => start_resize_window(method_call, result, data),
             "close_window" => close_window(method_call, result, data),
             "release_texture" => self::release_texture::release_texture(method_call, result, data),
+            "window_preview" => self::window_preview::window_preview(method_call, result, data),
             "adjust_brightness" => adjust_brightness(method_call, result, data),
             "switch_keyboard_layout" => switch_keyboard_layout(method_call, result, data),
             "get_monitor_layout" => get_monitor_layout(method_call, result, data),
