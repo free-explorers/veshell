@@ -86,10 +86,12 @@ by helper surfaces). It stores:
 
 The context is captured from the launch configuration, refreshed from
 `process_info` when a window maps and when its title changes, and polled every
-2 seconds while the tile displays a window. Rust reads `/proc/<pid>/cmdline`,
-`cwd`, `exe`, and — for terminal windows — the shell descendant and its
-foreground job. Capture never blocks a launch; unreadable `/proc` facts simply
-leave the previous context in place.
+2 seconds while the tile displays a window. Close requests take a fresh snapshot
+first, so a foreground program that exited since the last poll (the user quit
+`htop` and closed the tile immediately) is not saved and replayed. Rust reads
+`/proc/<pid>/cmdline`, `cwd`, `exe`, and — for terminal windows — the shell
+descendant and its foreground job. Capture never blocks a launch; unreadable
+`/proc` facts simply leave the previous context in place.
 
 Windows started outside the shell are captured the same way: the displayed
 process is the source of truth, not the fact that this shell launched it.
