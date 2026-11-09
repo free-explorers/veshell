@@ -1,3 +1,4 @@
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
@@ -12,12 +13,15 @@ import 'package:shell/tile_grab/model/tile_drop.dart';
 import 'package:shell/tile_grab/model/tile_grab_marker.dart';
 import 'package:shell/tile_grab/provider/tile_grab_controller.dart';
 import 'package:shell/tile_grab/widget/tile_drop_slot.dart';
+import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
+import 'package:shell/workspace/model/workspace.serializable.dart';
 import 'package:shell/workspace/provider/launch_morphs.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/current_workspace_id.dart';
 import 'package:shell/workspace/widget/launch_morph_layer.dart';
+import 'package:shell/workspace/widget/tile_removal_ghost.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/persistent_application_launcher.dart';
 import 'package:shell/workspace/widget/tileable/persistent_window/persistent_window.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
@@ -36,6 +40,11 @@ class WorkspaceWidget extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final windowManager = ref.watch(windowManagerProvider.notifier);
     final workspaceState = ref.watch(workspaceStateProvider(workspaceId));
+
+    // The workspace as of the previous build, and the faces of the tiles its
+    // last change removed, by the slot they are drawn under.
+    final previousState = useRef<Workspace?>(null);
+    final leavingTiles = useRef<Map<int, Widget>>(const {});
 
     final workspaceFocusScopeNode = useFocusScopeNode(
       debugLabel: 'WorkspaceScope',
@@ -126,6 +135,33 @@ class WorkspaceWidget extends HookConsumerWidget {
         (morphs) => workspaceState.tileableWindowList.any(morphs.containsKey),
       ),
     );
+
+    // When the window list changes, the tiles that move start at the slot
+    // they came from: a page that was off screen (and so never built) has no
+    // position of its own, and would otherwise jump into place. A removed
+    // tile is drawn in its slot until the tile taking it has slid over it.
+    final previous = previousState.value;
+    final previousList =
+        previous != null &&
+            previous.tileableWindowList != workspaceState.tileableWindowList
+        ? previous.tileableWindowList
+        : null;
+    if (previous != null && previousList != null) {
+      // A held tile is already drawn flying to its destination.
+      leavingTiles.value = isGrabbing
+          ? const {}
+          : _leavingTiles(ref, previous, workspaceState.tileableWindowList);
+    }
+    previousState.value = workspaceState;
+
+    double? initialDisplayIndexFor(Tileable tileable) {
+      if (previousList == null) return null;
+      final index = tileable is PersistentWindowTileable
+          ? previousList.indexOf(tileable.windowId)
+          : previousList.length;
+      return index < 0 ? null : index.toDouble();
+    }
+
     final selectionIndicator =
         showsFocusIndicator && focusIndicator == FocusIndicator.border
         ? SlidingSelectionIndicator(
@@ -287,6 +323,10 @@ class WorkspaceWidget extends HookConsumerWidget {
                               windowId: tileable is PersistentWindowTileable
                                   ? tileable.windowId
                                   : null,
+                              initialDisplayIndex: initialDisplayIndexFor(
+                                tileable,
+                              ),
+                              leaving: leavingTiles.value[index],
                               child: _FocusSaturation(
                                 desaturated:
                                     grayscaleUnfocused &&
@@ -338,4 +378,33 @@ class _FocusSaturation extends StatelessWidget {
     ),
     child: child,
   );
+}
+
+/// The faces of the tiles removed from [previous] to give [windowList], by
+/// the slot they leave.
+///
+/// The removed tiles are still mounted while the workspace rebuilds, so their
+/// state is still alive; one whose state is gone was not displayed.
+Map<int, Widget> _leavingTiles(
+  WidgetRef ref,
+  Workspace previous,
+  IList<PersistentWindowId> windowList,
+) {
+  final leaving = <int, Widget>{};
+  var removedBefore = 0;
+  for (final (index, windowId) in previous.tileableWindowList.indexed) {
+    if (windowList.contains(windowId)) continue;
+    final provider = persistentWindowStateProvider(windowId);
+    if (ref.exists(provider)) {
+      // The tiles after it moved back one slot per removal before them.
+      leaving[index - removedBefore] = TileRemovalGhost(
+        // A fresh key per removal: a covered face is never drawn again.
+        key: UniqueKey(),
+        window: ref.read(provider),
+        focused: previous.selectedIndex == index,
+      );
+    }
+    removedBefore++;
+  }
+  return leaving;
 }
