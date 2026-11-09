@@ -218,37 +218,50 @@ class SearchEngine extends HookConsumerWidget {
                     Expanded(
                       child: Card(
                         clipBehavior: Clip.antiAlias,
-                        child: switch (searchMode) {
-                          SearchMode.application => ApplicationSearchResult(
-                            searchText: searchText,
-                            selectedIndex: selectedIndex,
-                            resultFocus: resultFocus,
-                            onSelect: overviewNotifier.selectIndex,
-                            onActivate: (index) =>
-                                activateOverviewApplicationAt(
-                                  ref,
-                                  screenId,
-                                  index,
+                        // Crossfade the result list when the search mode
+                        // changes.
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 120),
+                          layoutBuilder: (currentChild, previousChildren) =>
+                              Stack(
+                                fit: StackFit.expand,
+                                children: [...previousChildren, ?currentChild],
+                              ),
+                          child: KeyedSubtree(
+                            key: ValueKey(searchMode),
+                            child: switch (searchMode) {
+                              SearchMode.application => ApplicationSearchResult(
+                                searchText: searchText,
+                                selectedIndex: selectedIndex,
+                                resultFocus: resultFocus,
+                                onSelect: overviewNotifier.selectIndex,
+                                onActivate: (index) =>
+                                    activateOverviewApplicationAt(
+                                      ref,
+                                      screenId,
+                                      index,
+                                    ),
+                              ),
+                              SearchMode.file => FileExplorerView(
+                                searchText: searchText,
+                                selectedIndex: selectedIndex,
+                                resultFocus: resultFocus,
+                                onSelect: overviewNotifier.selectIndex,
+                                onActivate: (index) => unawaited(
+                                  activateFileIndex(ref, screenId, index),
                                 ),
+                                onOpenDirectory: (path) =>
+                                    openOverviewBreadcrumb(ref, screenId, path),
+                                onOpenParent: () =>
+                                    goToOverviewParent(ref, screenId),
+                              ),
+                              SearchMode.settings => SettingsSearchResult(
+                                searchText: searchText,
+                                selectedIndex: selectedIndex,
+                              ),
+                            },
                           ),
-                          SearchMode.file => FileExplorerView(
-                            searchText: searchText,
-                            selectedIndex: selectedIndex,
-                            resultFocus: resultFocus,
-                            onSelect: overviewNotifier.selectIndex,
-                            onActivate: (index) => unawaited(
-                              activateFileIndex(ref, screenId, index),
-                            ),
-                            onOpenDirectory: (path) =>
-                                openOverviewBreadcrumb(ref, screenId, path),
-                            onOpenParent: () =>
-                                goToOverviewParent(ref, screenId),
-                          ),
-                          SearchMode.settings => SettingsSearchResult(
-                            searchText: searchText,
-                            selectedIndex: selectedIndex,
-                          ),
-                        },
+                        ),
                       ),
                     ),
                   ],
