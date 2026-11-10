@@ -23,7 +23,7 @@ use smithay::{
     input::pointer::{CursorIcon, CursorImageAttributes, CursorImageStatus},
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     render_elements,
-    utils::{Buffer as BufferCoords, IsAlive, Logical, Monotonic, Point, Size, Time, Transform},
+    utils::{IsAlive, Logical, Monotonic, Physical, Point, Rectangle, Size, Time, Transform},
     wayland::compositor::with_states,
 };
 use tracing::warn;
@@ -36,11 +36,10 @@ static FALLBACK_CURSOR_DATA: &[u8] = include_bytes!("resources/cursor.rgba");
 
 pub struct Cursor {
     icons: Vec<Image>,
-    size: u32,
 }
 
 impl Cursor {
-    pub fn load(theme: &CursorTheme, shape: CursorIcon, size: u32) -> Cursor {
+    pub fn load(theme: &CursorTheme, shape: CursorIcon) -> Cursor {
         let icons = load_icon(&theme, shape)
             .map_err(|err| warn!(?err, "Unable to load xcursor, using fallback cursor"))
             .or_else(|_| load_icon(&theme, CursorIcon::Default))
@@ -57,12 +56,53 @@ impl Cursor {
                 }]
             });
 
-        Cursor { icons, size }
+        Cursor { icons }
     }
 
-    pub fn get_image(&self, scale: u32, millis: u32) -> Image {
-        let size = self.size * scale;
+    /// The frame whose nominal size is closest to `size` physical pixels.
+    ///
+    /// The frame is drawn at its own pixel size (see
+    /// [`native_cursor_placement`]); `size` only picks the theme image, so a
+    /// theme without an image for the requested size falls back to its nearest
+    /// one instead of being resampled and blurred.
+    pub fn get_image(&self, size: u32, millis: u32) -> Image {
         frame(millis, size, &self.icons)
+    }
+}
+
+/// Where a theme bitmap is drawn on an output.
+#[derive(Debug, PartialEq)]
+struct NativeCursorPlacement {
+    /// Logical size handed to the render element. It is the bitmap's pixel
+    /// size divided by the output scale, rounded to whole logical pixels, so
+    /// the element maps the bitmap back to its native physical size.
+    logical_size: Size<i32, Logical>,
+    /// Physical hotspot of the drawn bitmap. The bitmap is not resampled, so
+    /// this follows from its pixel size and the (rounded) logical size.
+    hotspot: Point<i32, Physical>,
+}
+
+/// Places a cursor bitmap at its native resolution on an output of `scale`.
+///
+/// Resampling a cursor blurs it. Instead, the bitmap is drawn at (or within a
+/// pixel of) its own pixel size, and its size on screen is the theme image's,
+/// chosen to be the closest to the configured logical size times the output
+/// scale. Themes ship the physical sizes used by common scales (for example
+/// Adwaita has 30 px for 1.25 and 36 px for 1.5 for a 24 logical cursor).
+fn native_cursor_placement(frame: &Image, scale: f64) -> NativeCursorPlacement {
+    let logical = |px: u32| (f64::from(px) / scale).round().max(1.0) as i32;
+    let logical_w = logical(frame.width);
+    let logical_h = logical(frame.height);
+    let physical = |logical: i32| (f64::from(logical) * scale).round();
+    let hotspot = |px: u32, hotspot: u32, physical: f64| {
+        (f64::from(hotspot) * physical / f64::from(px)).round() as i32
+    };
+    NativeCursorPlacement {
+        logical_size: Size::from((logical_w, logical_h)),
+        hotspot: Point::from((
+            hotspot(frame.width, frame.xhot, physical(logical_w)),
+            hotspot(frame.height, frame.yhot, physical(logical_h)),
+        )),
     }
 }
 
@@ -220,7 +260,7 @@ impl CursorStateInner {
     pub fn get_named_cursor(&mut self, shape: CursorIcon) -> &Cursor {
         self.cursors
             .entry(shape)
-            .or_insert_with(|| Cursor::load(&self.cursor_theme, shape, self.cursor_size))
+            .or_insert_with(|| Cursor::load(&self.cursor_theme, shape))
     }
 }
 
@@ -381,7 +421,7 @@ pub fn draw_cursor<R>(
     location: Point<f64, Logical>,
     is_surface_under_pointer: bool,
     gaming_mode: bool,
-) -> Vec<(CursorRenderElement<R>, Point<i32, BufferCoords>)>
+) -> Vec<(CursorRenderElement<R>, Point<i32, Physical>)>
 where
     R: Renderer + ImportMem + ImportAll,
     <R as RendererSuper>::TextureId: Send + Clone + 'static,
@@ -417,10 +457,16 @@ where
         CursorChoice::Hidden => None,
     };
     if let Some(current_cursor) = named_cursor {
-        let integer_scale = scale.integer_scale();
+        let float_scale: utils::Scale<f64> = scale.fractional_scale().into();
+        let output_scale = scale.fractional_scale();
+        // The bitmap nearest the size this output needs is drawn at its own
+        // pixel size. Resampling to force an exact logical size would blur the
+        // pointer; themes ship the physical sizes for common scales instead.
+        let target_px = (f64::from(state.size()) * output_scale).round().max(1.0) as u32;
         let frame = state
             .get_named_cursor(current_cursor)
-            .get_image(integer_scale as u32, time.as_millis());
+            .get_image(target_px, time.as_millis());
+        let placement = native_cursor_placement(&frame, output_scale);
 
         let pointer_images = &mut state.image_cache;
         let maybe_image =
@@ -434,7 +480,7 @@ where
                     &frame.pixels_rgba,
                     Fourcc::Argb8888,
                     (frame.width as i32, frame.height as i32),
-                    integer_scale as i32,
+                    1,
                     Transform::Normal,
                     None,
                 );
@@ -443,9 +489,7 @@ where
             }
         };
 
-        let hotspot = Point::<i32, BufferCoords>::from((frame.xhot as i32, frame.yhot as i32));
-        state.current_image = Some(frame);
-        let float_scale: utils::Scale<f64> = scale.fractional_scale().into();
+        state.current_image = Some(frame.clone());
         return vec![(
             CursorRenderElement::Static(
                 MemoryRenderBufferRenderElement::from_buffer(
@@ -453,13 +497,19 @@ where
                     location.to_physical_precise_round(float_scale),
                     &pointer_image,
                     None,
-                    None,
-                    None,
+                    // The whole bitmap (it is uploaded with buffer scale 1)…
+                    Some(Rectangle::from_size(Size::from((
+                        frame.width as f64,
+                        frame.height as f64,
+                    )))),
+                    // …stretched to the rounded logical size, which lands it
+                    // back on its native pixel size.
+                    Some(placement.logical_size),
                     Kind::Cursor,
                 )
                 .expect("Failed to import cursor bitmap"),
             ),
-            hotspot,
+            placement.hotspot,
         )];
     } else {
         Vec::new()
@@ -471,13 +521,15 @@ pub fn draw_surface_cursor<R>(
     surface: &WlSurface,
     location: impl Into<Point<i32, Logical>>,
     scale: utils::Scale<f64>,
-) -> Vec<(CursorRenderElement<R>, Point<i32, BufferCoords>)>
+) -> Vec<(CursorRenderElement<R>, Point<i32, Physical>)>
 where
     R: Renderer + ImportAll,
     <R as RendererSuper>::TextureId: Clone + 'static,
 {
     let position = location.into();
-    let h: Point<i32, BufferCoords> = with_states(&surface, |states| {
+    // The hotspot is in surface-local (logical) coordinates; the element is
+    // placed in physical pixels, so it has to follow the output scale.
+    let h: Point<i32, Physical> = with_states(&surface, |states| {
         states
             .data_map
             .get::<Mutex<CursorImageAttributes>>()
@@ -485,11 +537,9 @@ where
             .lock()
             .unwrap()
             .hotspot
-            .to_buffer(
-                1,
-                Transform::Normal,
-                &Size::from((1, 1)), /* Size doesn't matter for Transform::Normal */
-            )
+            .to_f64()
+            .to_physical(scale)
+            .to_i32_round()
     });
 
     render_elements_from_surface_tree(
@@ -622,5 +672,56 @@ mod tests {
 
         assert!(!state.set_transitioning(false));
         assert_eq!(state.shape(), Some(CursorIcon::Grab));
+    }
+
+    fn test_icon(size: u32) -> Image {
+        Image {
+            size,
+            width: size,
+            height: size,
+            xhot: 4,
+            yhot: 4,
+            delay: 1,
+            pixels_rgba: vec![0; (size * size * 4) as usize],
+            pixels_argb: vec![],
+        }
+    }
+
+    #[test]
+    fn the_theme_frame_nearest_the_physical_target_is_chosen() {
+        let cursor = Cursor {
+            icons: vec![test_icon(24), test_icon(36), test_icon(48)],
+        };
+        assert_eq!(cursor.get_image(36, 0).size, 36);
+        assert_eq!(cursor.get_image(48, 0).size, 48);
+        assert_eq!(cursor.get_image(40, 0).size, 36);
+        assert_eq!(cursor.get_image(20, 0).size, 24);
+    }
+
+    #[test]
+    fn a_bitmap_is_drawn_at_its_native_pixel_size() {
+        // Adwaita's 36 px arrow is the 1.5× image of its 24 px cursor; drawn
+        // on a 150% output it must stay 36 physical pixels, at 24 logical.
+        let placement = native_cursor_placement(&test_icon(36), 1.5);
+        assert_eq!(placement.logical_size, Size::from((24, 24)));
+        assert_eq!(placement.hotspot, Point::from((4, 4)));
+        assert_eq!((f64::from(placement.logical_size.w) * 1.5).round(), 36.0);
+    }
+
+    #[test]
+    fn integer_scales_keep_the_bitmap_pixel_for_pixel() {
+        let placement = native_cursor_placement(&test_icon(48), 2.0);
+        assert_eq!(placement.logical_size, Size::from((24, 24)));
+        assert_eq!(placement.hotspot, Point::from((4, 4)));
+    }
+
+    #[test]
+    fn a_bitmap_the_theme_lacks_is_not_resampled_to_the_setting() {
+        // Bibata ships 24/32/48. A 24 logical cursor at 150% targets 36 px,
+        // but the nearest bitmap is 32 px: draw it at 32 px (21 logical)
+        // rather than stretching it to 36 and blurring it.
+        let placement = native_cursor_placement(&test_icon(32), 1.5);
+        assert_eq!(placement.logical_size, Size::from((21, 21)));
+        assert_eq!((f64::from(placement.logical_size.w) * 1.5).round(), 32.0);
     }
 }
