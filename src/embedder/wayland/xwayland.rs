@@ -15,22 +15,11 @@ pub mod xwayland {
     use crate::state::State;
     use crate::wayland::wayland::get_surface_id;
     use serde_json::json;
-    use smithay::backend::allocator::Fourcc;
-    use smithay::backend::renderer::element::memory::{
-        MemoryRenderBuffer, MemoryRenderBufferRenderElement,
-    };
-    use smithay::backend::renderer::element::Kind;
-    use smithay::backend::renderer::pixman::{PixmanError, PixmanRenderer};
-    use smithay::backend::renderer::utils::draw_render_elements;
-    use smithay::backend::renderer::{Bind, Frame, Offscreen, Renderer};
-    use smithay::reexports::gbm::Format;
     use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 
     use smithay::reexports::wayland_server::Client;
     use smithay::reexports::x11rb::rust_connection::{DefaultStream, RustConnection};
-    use smithay::utils::{
-        Buffer as BufferCoords, Logical, Point, Rectangle, Size, Transform, SERIAL_COUNTER,
-    };
+    use smithay::utils::{Logical, Point, Rectangle, Size, SERIAL_COUNTER};
     use smithay::wayland::seat::WaylandFocus;
     use smithay::wayland::selection::data_device::{
         clear_data_device_selection, current_data_device_selection_userdata,
@@ -50,7 +39,6 @@ pub mod xwayland {
     use std::cell::RefCell;
     use std::os::fd::OwnedFd;
     use uuid::Uuid;
-    use xcursor::parser::Image;
 
     use tracing::{error, info, trace, warn};
 
@@ -64,31 +52,25 @@ pub mod xwayland {
     }
 
     impl XWaylandState {
-        /// Hands the WM the current theme's default arrow, drawn for `scale`.
+        /// Hands the WM the current theme's default arrow for `scale`.
+        ///
+        /// The theme bitmap chosen closest to the size the X screen needs is
+        /// handed over untouched: Xwayland's client scale takes it back to
+        /// logical pixels, and resampling it here would blur the pointer.
         pub fn reload_cursor(&mut self, scale: f64, cursor_state: &CursorState) {
             if let Some(wm) = self.xwm.as_mut() {
-                let (image, size) = {
+                let image = {
                     let mut cursor_state = cursor_state.lock().unwrap();
-                    let size = cursor_state.size();
-                    let image = cursor_state
-                        .default_cursor()
-                        .get_image(scale.ceil() as u32, 0);
-                    (image, size)
+                    let target_size =
+                        (f64::from(cursor_state.size()) * scale).round().max(1.0) as u32;
+                    cursor_state.default_cursor().get_image(target_size, 0)
                 };
 
-                let (pixels_rgba, size, hotspot) = match scale_cursor(scale, size, &image) {
-                    Ok(x) => x,
-                    Err(err) => {
-                        warn!("Failed to scale Xwayland cursor image: {}", err);
-                        (
-                            image.pixels_rgba,
-                            Size::from((image.width as u16, image.height as u16)),
-                            Point::from((image.xhot as u16, image.yhot as u16)),
-                        )
-                    }
-                };
-
-                if let Err(err) = wm.set_cursor(&pixels_rgba, size, hotspot) {
+                if let Err(err) = wm.set_cursor(
+                    &image.pixels_rgba,
+                    Size::from((image.width as u16, image.height as u16)),
+                    Point::from((image.xhot as u16, image.yhot as u16)),
+                ) {
                     warn!(
                         id = ?wm.id(),
                         ?err,
@@ -140,74 +122,6 @@ pub mod xwayland {
                 _ => {}
             }
         });
-    }
-
-    fn scale_cursor(
-        scale: f64,
-        cursor_size: u32,
-        image: &Image,
-    ) -> Result<(Vec<u8>, Size<u16, Logical>, Point<u16, Logical>), PixmanError> {
-        let mut renderer = PixmanRenderer::new()?;
-        let image_scale = (image.size / cursor_size).max(1);
-        let pixel_size = (cursor_size as f64 * scale).round() as i32;
-        let buffer_size = Size::<i32, BufferCoords>::from((pixel_size, pixel_size));
-        let output_size = buffer_size.to_logical(1, Transform::Normal).to_physical(1);
-
-        let image_buffer = MemoryRenderBuffer::from_slice(
-            &image.pixels_rgba,
-            Fourcc::Abgr8888,
-            (image.width as i32, image.height as i32),
-            image_scale as i32,
-            Transform::Normal,
-            None,
-        );
-        let element = MemoryRenderBufferRenderElement::from_buffer(
-            &mut renderer,
-            (0., 0.),
-            &image_buffer,
-            None,
-            None,
-            None,
-            Kind::Unspecified,
-        )?;
-
-        let mut buffer = renderer.create_buffer(Fourcc::Abgr8888, buffer_size)?;
-        let mut fb = renderer.bind(&mut buffer)?;
-        let mut frame = renderer.render(&mut fb, output_size, Transform::Normal)?;
-        draw_render_elements(
-            &mut frame,
-            scale,
-            &[element],
-            &[Rectangle::new((0, 0).into(), output_size)],
-        )?;
-        let sync = frame.finish()?;
-        while let Err(_) = sync.wait() {}
-
-        let len = (buffer_size.w * buffer_size.h * 4) as usize;
-        let mut data = Vec::with_capacity(len);
-        assert_eq!(buffer.stride(), (buffer_size.w * 4) as usize);
-        data.extend_from_slice(unsafe {
-            std::slice::from_raw_parts(buffer.data() as *mut u8, len)
-        });
-
-        let hotspot = Point::<i32, BufferCoords>::from((image.xhot as i32, image.yhot as i32))
-            .to_f64()
-            .to_logical(
-                image_scale as f64,
-                Transform::Normal,
-                &Size::from((image.width as f64, image.height as f64)),
-            )
-            .to_buffer(
-                scale,
-                Transform::Normal,
-                &output_size.to_logical(1).to_f64(),
-            )
-            .to_i32_round::<i32>();
-        Ok((
-            data,
-            Size::from((buffer_size.w as u16, buffer_size.h as u16)),
-            Point::from((hotspot.x as u16, hotspot.y as u16)),
-        ))
     }
 
     pub struct MyX11SurfaceState {
