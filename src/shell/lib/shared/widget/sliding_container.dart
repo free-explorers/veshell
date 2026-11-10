@@ -1,3 +1,5 @@
+import 'dart:ui' show lerpDouble;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -8,6 +10,9 @@ import 'package:shell/shared/provider/cursor_transition.dart';
 import 'package:shell/shared/util/snapping.dart';
 
 const swipeVelocityThreshold = 800;
+
+/// How long the row takes to resize into a new page count.
+const _resizeDuration = Duration(milliseconds: 120);
 
 class SlidingContainer extends HookConsumerWidget {
   const SlidingContainer({
@@ -69,11 +74,15 @@ class SlidingContainer extends HookConsumerWidget {
     // that mounts the `PageView`, before it has a scroll position, so it cannot
     // perform the initial scroll. If the selected tile falls outside the
     // restored view, shift the view just enough to include it.
+    // The controller must survive a change of the page count: its offset is
+    // part of the resize animation, and recreating it would reset the view to
+    // the new layout at once. The page fraction passed to the row is animated
+    // separately, so the controller's own `viewportFraction` is only the one
+    // the row was mounted with.
     final initialPage = _resolveInitialPage();
     final pageController = usePageController(
       initialPage: initialPage,
       viewportFraction: 1.0 / visible,
-      keys: [visible],
     );
 
     final swipeInProgress = useState(false);
@@ -110,6 +119,56 @@ class SlidingContainer extends HookConsumerWidget {
 
     return HookBuilder(
       builder: (context) {
+        // The page count changed: the row's page fraction and scroll offset
+        // are animated together, so tiles are laid out at every intermediate
+        // size instead of being painted scaled (text and surfaces stay sharp).
+        // The offset follows the leading tile, which keeps the current view in
+        // place: a tile entering from off screen slides in while it shrinks,
+        // and a tile leaving grows out of view.
+        final resizeController = useAnimationController(
+          duration: _resizeDuration,
+        );
+        final resizeTransition = useRef<_TileResize?>(null);
+        final resizePending = useRef(false);
+        final shownVisible = useRef(visible);
+        final shownExtent = useRef<double?>(null);
+        final resizeGeneration = useState(0);
+
+        useEffect(() {
+          void onStatus(AnimationStatus status) {
+            if (status != AnimationStatus.completed) {
+              return;
+            }
+            // The last tick and its rebuild can straddle the completion
+            // callback; land the offset on the transition's target before the
+            // transition is dropped from the tree.
+            final transition = resizeTransition.value;
+            if (transition != null && pageController.hasClients) {
+              pageController.position.correctPixels(transition.toOffset);
+            }
+            // Drop the transition and turn the viewport's extra cache back
+            // off.
+            resizeTransition.value = null;
+            resizeGeneration.value++;
+          }
+
+          resizeController.addStatusListener(onStatus);
+          return () => resizeController.removeStatusListener(onStatus);
+        }, [resizeController, pageController]);
+
+        /// How far the page count transition has gone, eased like the row.
+        double resizeProgress() {
+          if (resizePending.value) {
+            return 0;
+          }
+          if (resizeTransition.value == null) {
+            return 1;
+          }
+          return Curves.easeInOut.transform(
+            resizeController.value.clamp(0.0, 1.0),
+          );
+        }
+
         void scrollToIndex(int indexToScrollTo) {
           if (!pageController.hasClients) {
             return;
@@ -248,59 +307,132 @@ class SlidingContainer extends HookConsumerWidget {
                       ? constraints.maxHeight
                       : constraints.maxWidth) -
                   2 * gap;
+              final pageExtent = pageViewport / visible;
+              final targetOffset = _resolveInitialPage() * pageExtent;
+
+              if (shownVisible.value != visible) {
+                // Capture the layout currently shown so the animation starts
+                // from it instead of jumping. A transition already running is
+                // evaluated at its current instant, so changing the count
+                // again mid-flight continues from there.
+                final transition = resizeTransition.value;
+                final fromExtent = transition == null
+                    ? shownExtent.value ?? pageExtent
+                    : transition.at(resizeProgress()).$1;
+                final fromOffset = pageController.hasClients
+                    ? pageController.offset
+                    : fromExtent * initialPage;
+                resizeTransition.value = _TileResize(
+                  fromExtent: fromExtent,
+                  fromLeading: fromExtent > 0 ? fromOffset / fromExtent : 0,
+                  toExtent: pageExtent,
+                  toLeading: pageExtent > 0 ? targetOffset / pageExtent : 0,
+                );
+                resizePending.value = true;
+                shownVisible.value = visible;
+                // The start of the transition is laid out by this frame;
+                // begin ticking once it is on screen.
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!context.mounted || !resizePending.value) {
+                    return;
+                  }
+                  resizePending.value = false;
+                  resizeController.forward(from: 0);
+                });
+              }
+
+              (double, double) visualLayout() {
+                final transition = resizeTransition.value;
+                final layout = transition == null
+                    ? (pageExtent, targetOffset)
+                    : transition.at(resizeProgress());
+                shownExtent.value = layout.$1;
+                return layout;
+              }
+
+              final resizing =
+                  resizeTransition.value != null &&
+                  (resizePending.value || resizeController.value < 1);
+
               return Align(
                 alignment: isHorizontal
                     ? Alignment.centerLeft
                     : Alignment.topCenter,
-                child: CustomPaint(
-                  foregroundPainter: _SelectionIndicatorPainter(
-                    indicator: selectionIndicator,
-                    position: selectionPosition,
-                    pageController: pageController,
-                    pageExtent: pageViewport / visible,
-                    direction: direction,
-                  ),
-                  child: Padding(
-                    padding: isHorizontal
-                        ? EdgeInsets.symmetric(vertical: gap)
-                        : EdgeInsets.symmetric(horizontal: gap),
-                    child: MetaData(
-                      metaData: viewportMetaData?.call(
-                        () =>
-                            pageController.hasClients &&
-                                pageController.position.hasPixels
-                            ? pageController.offset
-                            : 0,
+                child: AnimatedBuilder(
+                  animation: resizeController,
+                  builder: (context, _) {
+                    final (extent, offset) = visualLayout();
+                    if (resizing && pageController.hasClients) {
+                      // Set the offset without notifying scrollers: it is
+                      // part of the same frame's layout as the page fraction
+                      // below.
+                      pageController.position.correctPixels(offset);
+                    }
+                    return CustomPaint(
+                      foregroundPainter: _SelectionIndicatorPainter(
+                        indicator: selectionIndicator,
+                        position: selectionPosition,
+                        pageController: pageController,
+                        pageExtent: extent,
+                        direction: direction,
                       ),
-                      behavior: HitTestBehavior.translucent,
-                      child: SizedBox(
-                        width: isHorizontal ? pageViewport : crossAxisExtent,
-                        height: isHorizontal ? crossAxisExtent : pageViewport,
-                        child: _PageRow(
-                          controller: pageController,
-                          direction: direction,
-                          buildsNeighbors: buildsNeighbors,
-                          onScrollStart: () =>
-                              cursorTransition.begin(transitionToken),
-                          onScrollEnd: () =>
-                              cursorTransition.end(transitionToken),
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) => children[index],
-                            childCount: children.length,
-                            // A keyed page keeps its state when it moves to
-                            // another index, instead of the page now at its
-                            // old index taking that state over.
-                            findChildIndexCallback: (key) {
-                              final index = children.indexWhere(
-                                (child) => child.key == key,
-                              );
-                              return index < 0 ? null : index;
-                            },
+                      child: Padding(
+                        padding: isHorizontal
+                            ? EdgeInsets.symmetric(vertical: gap)
+                            : EdgeInsets.symmetric(horizontal: gap),
+                        child: MetaData(
+                          metaData: viewportMetaData?.call(
+                            () =>
+                                pageController.hasClients &&
+                                    pageController.position.hasPixels
+                                ? pageController.offset
+                                : 0,
+                          ),
+                          behavior: HitTestBehavior.translucent,
+                          child: SizedBox(
+                            width: isHorizontal
+                                ? pageViewport
+                                : crossAxisExtent,
+                            height: isHorizontal
+                                ? crossAxisExtent
+                                : pageViewport,
+                            child: _PageRow(
+                              controller: pageController,
+                              viewportFraction: extent <= 0
+                                  ? 1.0
+                                  : extent / pageViewport,
+                              direction: direction,
+                              // One viewport of cache is enough for the tile
+                              // just off either edge, which is already built
+                              // when a resize starts moving it in or out.
+                              cacheViewports: resizing || buildsNeighbors
+                                  ? 1.0
+                                  : 0.0,
+                              allowImplicitScrolling:
+                                  buildsNeighbors || resizing,
+                              onScrollStart: () =>
+                                  cursorTransition.begin(transitionToken),
+                              onScrollEnd: () =>
+                                  cursorTransition.end(transitionToken),
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) => children[index],
+                                childCount: children.length,
+                                // A keyed page keeps its state when it moves
+                                // to another index, instead of the page now at
+                                // its old index taking that state over.
+                                findChildIndexCallback: (key) {
+                                  final index = children.indexWhere(
+                                    (child) => child.key == key,
+                                  );
+                                  return index < 0 ? null : index;
+                                },
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               );
             },
@@ -354,6 +486,34 @@ class SlidingSelectionIndicator {
 
   @override
   int get hashCode => Object.hash(color, thickness);
+}
+
+/// The row geometry a page count change animates between.
+///
+/// A layout is a page size and a leading tile (in pages, fractional while the
+/// leading tile changes to keep the selected tile in view). The scroll offset
+/// follows from both, so the row never scrolls past the tile it wants to show.
+class _TileResize {
+  const _TileResize({
+    required this.fromExtent,
+    required this.fromLeading,
+    required this.toExtent,
+    required this.toLeading,
+  });
+
+  final double fromExtent;
+  final double fromLeading;
+  final double toExtent;
+  final double toLeading;
+
+  /// The page size and leading tile position at [progress].
+  (double, double) at(double progress) {
+    final extent = lerpDouble(fromExtent, toExtent, progress)!;
+    final leading = lerpDouble(fromLeading, toLeading, progress)!;
+    return (extent, leading * extent);
+  }
+
+  double get toOffset => toLeading * toExtent;
 }
 
 class _SelectionIndicatorPainter extends CustomPainter {
@@ -421,19 +581,29 @@ class _SelectionIndicatorPainter extends CustomPainter {
 class _PageRow extends StatelessWidget {
   const _PageRow({
     required this.controller,
+    required this.viewportFraction,
     required this.direction,
-    required this.buildsNeighbors,
+    required this.cacheViewports,
+    required this.allowImplicitScrolling,
     required this.delegate,
     required this.onScrollStart,
     required this.onScrollEnd,
   });
 
   final PageController controller;
+
+  /// The fraction of the viewport one page takes. Animated while the page
+  /// count changes; the controller's own fraction stays at the mount value.
+  final double viewportFraction;
   final Axis direction;
 
-  /// Keeps a viewport's worth of pages built on each side of the visible
-  /// ones (`PageView.allowImplicitScrolling`).
-  final bool buildsNeighbors;
+  /// How many viewports of pages to keep built on each side of the visible
+  /// ones. A resize keeps the tiles just off either edge built.
+  final double cacheViewports;
+
+  /// Whether the pages off screen are part of the semantics tree
+  /// (`PageView.allowImplicitScrolling`).
+  final bool allowImplicitScrolling;
   final SliverChildDelegate delegate;
   final VoidCallback onScrollStart;
   final VoidCallback onScrollEnd;
@@ -467,15 +637,13 @@ class _PageRow extends StatelessWidget {
           context,
         ).copyWith(scrollbars: false),
         viewportBuilder: (context, position) => Viewport(
-          scrollCacheExtent: ScrollCacheExtent.viewport(
-            buildsNeighbors ? 1 : 0,
-          ),
+          scrollCacheExtent: ScrollCacheExtent.viewport(cacheViewports),
           axisDirection: axisDirection,
           offset: position,
           slivers: [
             _SliverPages(
-              viewportFraction: controller.viewportFraction,
-              allowImplicitScrolling: buildsNeighbors,
+              viewportFraction: viewportFraction,
+              allowImplicitScrolling: allowImplicitScrolling,
               delegate: delegate,
             ),
           ],

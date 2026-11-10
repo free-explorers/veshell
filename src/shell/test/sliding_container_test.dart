@@ -89,6 +89,42 @@ Future<double?> _leadingPage(
   return (tester.widget<Scrollable>(_pages).controller! as PageController).page;
 }
 
+/// Renders a [SlidingContainer] whose page count can change, in a fixed
+/// viewport of 600x100 logical pixels.
+Future<void> _pumpResizable(
+  WidgetTester tester, {
+  required ValueNotifier<int> visible,
+  required List<Widget> children,
+}) async {
+  final events = StreamController<PlatformEvent>.broadcast();
+  addTearDown(events.close);
+  tester.view
+    ..devicePixelRatio = 1.0
+    ..physicalSize = const Size(600, 100);
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [platformManagerProvider.overrideWithValue(events.stream)],
+      child: MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 600,
+            height: 100,
+            child: ValueListenableBuilder<int>(
+              valueListenable: visible,
+              builder: (context, count, _) => SlidingContainer(
+                index: 0,
+                visible: count,
+                children: children,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 void main() {
   testWidgets(
     'a viewport not divisible by the visible tiles snaps to whole pages',
@@ -176,6 +212,91 @@ void main() {
     expect(
       tester.getTopLeft(find.byKey(const ValueKey('a'))).dx,
       greaterThan(tester.getTopLeft(find.byKey(const ValueKey('b'))).dx),
+    );
+  });
+
+  testWidgets('changing the page count resizes the tiles from their old size', (
+    tester,
+  ) async {
+    final visible = ValueNotifier(1);
+    addTearDown(visible.dispose);
+    await _pumpResizable(
+      tester,
+      visible: visible,
+      children: const [
+        SizedBox(key: ValueKey('page-0')),
+        SizedBox(key: ValueKey('page-1')),
+      ],
+    );
+    await tester.pumpAndSettle();
+
+    final page = find.byKey(const ValueKey('page-0'));
+    expect(tester.getSize(page).width, 600);
+
+    visible.value = 2;
+    await tester.pump();
+
+    // One page used to fill the row; the first frame of the transition still
+    // lays it out at that old size, not the new half.
+    expect(tester.getSize(page).width, 600);
+
+    // The controller starts in a post-frame callback, so its first tick only
+    // marks the start; the next one, half the 120 ms duration later, must
+    // already show the page partway to its new size.
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(tester.getSize(page).width, inExclusiveRange(300.0, 600.0));
+
+    await tester.pumpAndSettle();
+    expect(tester.getSize(page).width, 300);
+  });
+
+  testWidgets('a tile leaving the view stays built until it has slid out', (
+    tester,
+  ) async {
+    final visible = ValueNotifier(3);
+    addTearDown(visible.dispose);
+    await _pumpResizable(
+      tester,
+      visible: visible,
+      children: const [
+        _StatefulPage(key: ValueKey('page-0'), id: '0'),
+        _StatefulPage(key: ValueKey('page-1'), id: '1'),
+        _StatefulPage(key: ValueKey('page-2'), id: '2'),
+        _StatefulPage(key: ValueKey('page-3'), id: '3'),
+      ],
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('page-3'), skipOffstage: false),
+      findsNothing,
+    );
+    final stateOfLeavingPage = tester.state(
+      find.byKey(const ValueKey('page-2'), skipOffstage: false),
+    );
+
+    visible.value = 1;
+    await tester.pump();
+
+    // The leaving tile starts in view and must stay mounted while it slides
+    // out. Off-view sliver children are offstage to finders, so look for them
+    // explicitly.
+    expect(
+      tester.state(find.byKey(const ValueKey('page-2'), skipOffstage: false)),
+      same(stateOfLeavingPage),
+    );
+
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(
+      tester.state(find.byKey(const ValueKey('page-2'), skipOffstage: false)),
+      same(stateOfLeavingPage),
+    );
+
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('page-2'), skipOffstage: false),
+      findsNothing,
     );
   });
 }
