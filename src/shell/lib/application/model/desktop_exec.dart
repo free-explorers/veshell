@@ -53,7 +53,7 @@ class DesktopExec {
       }
 
       switch (char) {
-        case '\\' when i + 1 < exec.length:
+        case r'\' when i + 1 < exec.length:
           i++;
           current.write(exec[i]);
           tokenStarted = true;
@@ -93,7 +93,7 @@ String shellQuoteArgument(String argument) {
   if (RegExp(r'^[A-Za-z0-9_@%+=:,./-]+$').hasMatch(argument)) {
     return argument;
   }
-  return "'${argument.replaceAll("'", "'\\''")}'";
+  return "'${argument.replaceAll("'", r"'\''")}'";
 }
 
 /// Appends [arguments] as safely quoted shell arguments.

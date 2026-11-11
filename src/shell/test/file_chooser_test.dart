@@ -2,8 +2,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:shell/file_explorer/model/file_explorer_settings.dart';
-import 'package:shell/file_explorer/provider/file_explorer_settings.dart';
 import 'package:shell/capture/widget/capture_prompt_overlay.dart';
 import 'package:shell/file_chooser/model/file_chooser_request/file_chooser_request.serializable.dart';
 import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
@@ -11,7 +9,9 @@ import 'package:shell/file_chooser/provider/file_chooser_request.dart';
 import 'package:shell/file_chooser/widget/file_chooser_dialog.dart';
 import 'package:shell/file_explorer/model/directory_path.dart';
 import 'package:shell/file_explorer/model/file_entry.dart';
+import 'package:shell/file_explorer/model/file_explorer_settings.dart';
 import 'package:shell/file_explorer/provider/directory_listing.dart';
+import 'package:shell/file_explorer/provider/file_explorer_settings.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
@@ -215,21 +215,21 @@ void main() {
 
   group('keyboard', () {
     final listing = [
-      FileEntry(
+      const FileEntry(
         name: 'Documents',
-        path: const DirectoryPath('/home/user/Documents'),
+        path: DirectoryPath('/home/user/Documents'),
         isDirectory: true,
         size: 0,
       ),
-      FileEntry(
+      const FileEntry(
         name: 'alpha.png',
-        path: const DirectoryPath('/home/user/alpha.png'),
+        path: DirectoryPath('/home/user/alpha.png'),
         isDirectory: false,
         size: 1,
       ),
-      FileEntry(
+      const FileEntry(
         name: 'beta.txt',
-        path: const DirectoryPath('/home/user/beta.txt'),
+        path: DirectoryPath('/home/user/beta.txt'),
         isDirectory: false,
         size: 1,
       ),

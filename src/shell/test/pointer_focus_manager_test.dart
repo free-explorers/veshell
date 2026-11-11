@@ -12,7 +12,7 @@ import 'package:shell/pointer/provider/pointer_focus.manager.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  PointerFocus _focus(int surfaceId) =>
+  PointerFocus focus(int surfaceId) =>
       PointerFocus(surfaceId: surfaceId, globalOffset: Offset.zero);
 
   setUp(() {
@@ -36,8 +36,8 @@ void main() {
     addTearDown(container.dispose);
     final manager = container.read(pointerFocusManagerProvider.notifier);
 
-    manager.enterSurface(_focus(1));
-    manager.enterSurface(_focus(2));
+    manager.enterSurface(focus(1));
+    manager.enterSurface(focus(2));
     // The old surface's MouseRegion can report its exit after the new surface
     // entered (the MetaWindow -> popup transition). It must not clear focus 2.
     manager.exitSurface(1);
@@ -53,12 +53,12 @@ void main() {
     addTearDown(container.dispose);
     final manager = container.read(pointerFocusManagerProvider.notifier);
 
-    manager.enterSurface(_focus(1));
-    manager.restoreSurface(1, _focus(2));
+    manager.enterSurface(focus(1));
+    manager.restoreSurface(1, focus(2));
     expect(container.read(pointerFocusManagerProvider)?.surfaceId, 2);
 
     // A removal for a surface that is no longer focused is a no-op.
-    manager.restoreSurface(3, _focus(1));
+    manager.restoreSurface(3, focus(1));
     expect(container.read(pointerFocusManagerProvider)?.surfaceId, 2);
   });
 
@@ -70,18 +70,18 @@ void main() {
     // Press on surface 1, then move over surface 2: the mouse tracker enters
     // surface 2 and the pressed surface keeps reporting the stale hover.
     manager.startPotentialDrag();
-    manager.enterSurface(_focus(1));
-    manager.enterSurface(_focus(2));
-    manager.hoverSurface(_focus(1));
+    manager.enterSurface(focus(1));
+    manager.enterSurface(focus(2));
+    manager.hoverSurface(focus(1));
     expect(container.read(pointerFocusManagerProvider)?.surfaceId, 2);
 
     // Moving back over the pressed surface is an enter event, which still wins.
-    manager.enterSurface(_focus(1));
+    manager.enterSurface(focus(1));
     expect(container.read(pointerFocusManagerProvider)?.surfaceId, 1);
 
     // Once the button is released, plain hovers drive the focus again.
     manager.stopPotentialDrag();
-    manager.hoverSurface(_focus(2));
+    manager.hoverSurface(focus(2));
     expect(container.read(pointerFocusManagerProvider)?.surfaceId, 2);
   });
 }

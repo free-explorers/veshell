@@ -35,7 +35,7 @@ class MonitorSettingChange {
 }
 
 /// How long the user has to confirm a display change before it is rolled back.
-@riverpod
+@Riverpod(keepAlive: true)
 Duration monitorSettingConfirmationTimeout(Ref ref) =>
     const Duration(seconds: 15);
 

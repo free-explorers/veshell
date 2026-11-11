@@ -181,7 +181,7 @@ RegExp _globToRegExp(String glob) {
   var inClass = false;
   for (final char in glob.split('')) {
     if (inClass) {
-      buffer.write(char == '\\' ? r'\\' : char);
+      buffer.write(char == r'\' ? r'\\' : char);
       if (char == ']') {
         inClass = false;
       }

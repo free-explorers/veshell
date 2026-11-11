@@ -2,7 +2,6 @@ import 'package:material_ui/material_ui.dart';
 import 'package:uuid/uuid.dart';
 
 const _expandedElevation = 1.0;
-const _expandedShadowPadding = 64.0;
 const _expandedEnlargePadding = 12.0;
 
 typedef ExpandableBuilder =
@@ -65,7 +64,7 @@ class ExpandableCardState extends State<ExpandableCard> {
       opaque: false,
       barrierColor: Colors.black38,
       barrierDismissible: true,
-      pageBuilder: (BuildContext context, _, __) {
+      pageBuilder: (context, _, _) {
         return LayoutBuilder(
           builder: (context, constraints) {
             return Stack(

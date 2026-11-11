@@ -280,13 +280,13 @@ void main() {
           ),
           workspaceStateProvider('ws-b').overrideWith(
             () => _RecordingWorkspaceState(
-              workspace: _workspaceWith(['b1'], selectedIndex: 0),
+              workspace: _workspaceWith(['b1']),
               calls: calls,
             ),
           ),
           workspaceStateProvider('ws-c').overrideWith(
             () => _RecordingWorkspaceState(
-              workspace: _workspaceWith([], selectedIndex: 0),
+              workspace: _workspaceWith([]),
               calls: calls,
             ),
           ),
@@ -308,7 +308,7 @@ void main() {
       notifier(container).moveSelectedTileableToWorkspace(1);
 
       // Appended after ws-b's existing tile and selected there.
-      expect(calls, [(PersistentWindowId.new('t2'), 1, true)]);
+      expect(calls, [(const PersistentWindowId('t2'), 1, true)]);
       // The screen navigates to the destination so the tile is followed.
       expect(selectedWorkspace(container), 1);
     });
@@ -319,7 +319,7 @@ void main() {
 
       notifier(container).moveSelectedTileableToWorkspace(-1);
 
-      expect(calls, [(PersistentWindowId.new('b1'), 2, true)]);
+      expect(calls, [(const PersistentWindowId('b1'), 2, true)]);
       expect(selectedWorkspace(container), 0);
     });
 

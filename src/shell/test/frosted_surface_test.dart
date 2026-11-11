@@ -190,10 +190,7 @@ void main() {
       seedColor: Colors.red,
       brightness: Brightness.dark,
     );
-    final light = ColorScheme.fromSeed(
-      seedColor: Colors.red,
-      brightness: Brightness.light,
-    );
+    final light = ColorScheme.fromSeed(seedColor: Colors.red);
 
     expect(
       frostedGlassTint(dark).computeLuminance(),

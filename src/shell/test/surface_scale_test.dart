@@ -74,7 +74,7 @@ void main() {
       tester.view.devicePixelRatio = 1.2;
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(
-        Directionality(
+        const Directionality(
           textDirection: TextDirection.ltr,
           child: Align(
             alignment: Alignment.topLeft,
@@ -82,9 +82,9 @@ void main() {
               width: 1018,
               height: 658,
               child: ViewportCrop(
-                bufferSize: const Size(1222, 790),
+                bufferSize: Size(1222, 790),
                 source: null,
-                child: const SizedBox.expand(key: childKey),
+                child: SizedBox.expand(key: childKey),
               ),
             ),
           ),

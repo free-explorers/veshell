@@ -6,7 +6,7 @@ import 'package:shell/monitor/provider/connected_monitor_list.dart';
 part 'monitor_by_name.g.dart';
 
 /// Provide list of plugged Monitors
-@riverpod
+@Riverpod(keepAlive: true)
 class MonitorByName extends _$MonitorByName {
   @override
   Monitor? build(String monitorName) {

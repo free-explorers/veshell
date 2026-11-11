@@ -1,4 +1,3 @@
-import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
@@ -49,8 +48,6 @@ class ConfiguredAccesPointTile extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final settings = useFuture(accessPoint.settingsConnection!.getSettings());
-
     final isSelected = accessPoint.accessPoints.contains(
       device.wireless!.activeAccessPoint,
     );

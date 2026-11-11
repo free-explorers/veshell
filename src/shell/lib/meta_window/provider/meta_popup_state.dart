@@ -56,7 +56,7 @@ class MetaPopupState extends _$MetaPopupState {
         state = state.copyWith(geometry: patch.value);
     }
 
-    if (propagate == true) {
+    if (propagate) {
       await ref
           .read(platformManagerProvider.notifier)
           .request(MetaPopupPatchesRequest(message: patch));
@@ -132,4 +132,16 @@ class MetaPopupState extends _$MetaPopupState {
     _keepAliveLink?.close();
     ref.read(metaPopupForIdProvider(state.parent).notifier).remove(id);
   }
+}
+
+/// Access to [MetaPopupState] for keepAlive providers.
+///
+/// riverpod_lint flags keepAlive providers that use auto-dispose ones, but it
+/// cannot see a `ref.keepAlive()` link taken by hand. The state pins itself with one from `create` until `destroy`, so
+/// reading it from a keepAlive provider is safe.
+/// Only add accessors here for that reason: route anything else through
+/// `ref` so the lint keeps checking it.
+extension MetaPopupStateAccess on Ref {
+  MetaPopupState metaPopupNotifier(String id) =>
+      read(metaPopupStateProvider(id).notifier);
 }

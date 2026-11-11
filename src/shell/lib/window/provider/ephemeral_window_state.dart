@@ -156,3 +156,18 @@ class EphemeralWindowState extends _$EphemeralWindowState
     dispose();
   }
 }
+
+/// Access to [EphemeralWindowState] for keepAlive providers.
+///
+/// riverpod_lint flags keepAlive providers that use auto-dispose ones, but it
+/// cannot see a `ref.keepAlive()` link taken by hand. The state pins itself with one from `initialize` until `dispose`
+/// ([WindowProviderMixin]), so reading it from a keepAlive provider is safe.
+/// Only add accessors here for that reason: route anything else through
+/// `ref` so the lint keeps checking it.
+extension EphemeralWindowStateAccess on Ref {
+  EphemeralWindow readEphemeralWindow(EphemeralWindowId id) =>
+      read(ephemeralWindowStateProvider(id));
+
+  EphemeralWindowState ephemeralWindowNotifier(EphemeralWindowId id) =>
+      read(ephemeralWindowStateProvider(id).notifier);
+}

@@ -51,7 +51,6 @@ abstract class MetaPopup with _$MetaPopup {
   const factory MetaPopup({
     required MetaPopupId id,
     required MetaWindowId parent,
-    @Default(MetaPopupCategory.popup) MetaPopupCategory category,
     required SurfaceId surfaceId,
     required double scaleRatio,
 
@@ -63,6 +62,7 @@ abstract class MetaPopup with _$MetaPopup {
     /// space. The tile popup host renders directly in it, so a parent window
     /// move never translates an X11 popup.
     @OffsetConverter() required Offset position,
+    @Default(MetaPopupCategory.popup) MetaPopupCategory category,
     @RectConverter() Rect? geometry,
   }) = _MetaPopup;
   factory MetaPopup.fromJson(Map<String, dynamic> json) =>

@@ -18,7 +18,7 @@ part 'monitor_placement.g.dart';
 /// scale, transform and the user-authored location. Mirrored monitors are
 /// excluded: they present another monitor's content and are not positioned on
 /// their own. See `docs/specifications/monitor.md`.
-@riverpod
+@Riverpod(keepAlive: true)
 List<MonitorPlacement> monitorPlacements(Ref ref) {
   final monitors = ref.watch(connectedMonitorListProvider);
   final placements = <MonitorPlacement>[];

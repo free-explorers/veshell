@@ -76,8 +76,7 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
 
       final route = PageRouteBuilder<void>(
         opaque: false,
-        transitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (context, _, __) => _GamingZoomRoute(
+        pageBuilder: (context, _, _) => _GamingZoomRoute(
           metaWindowId: metaWindowId,
           heroUuid: heroUuid,
           monitorName: monitorName,
@@ -306,7 +305,7 @@ class _GamingZoomRoute extends HookConsumerWidget {
         metaWindowId,
       ).select((value) => value.gameModeActivated),
       (previous, next) {
-        if (next == false) {
+        if (!next) {
           Navigator.of(context).pop();
           ref
               .read(metaWindowGamingStateProvider(metaWindowId).notifier)

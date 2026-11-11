@@ -119,9 +119,7 @@ class SystemNotificationManager extends _$SystemNotificationManager {
     final id = _idByKind.putIfAbsent(kind, () => _nextId--);
     final previousChannel = _popupChannelByKind[kind];
     if (previousChannel != null && previousChannel != screenId) {
-      ref
-          .read(notificationChannelProvider(previousChannel).notifier)
-          .remove(id);
+      ref.notificationChannelNotifier(previousChannel).remove(id);
     }
     _popupChannelByKind[kind] = screenId;
 
@@ -143,7 +141,7 @@ class SystemNotificationManager extends _$SystemNotificationManager {
       isSynthetic: true,
     );
     ref
-        .read(notificationChannelProvider(screenId).notifier)
+        .notificationChannelNotifier(screenId)
         .add(
           notification,
           timeout: timeout,

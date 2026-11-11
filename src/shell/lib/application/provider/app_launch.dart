@@ -207,7 +207,7 @@ class AppLaunch extends _$AppLaunch {
   bool _unitHasOwnedWindow(String unitName) {
     final processInfo = ref.read(processInfoStateProvider.notifier);
     for (final metaWindowId in ref.read(metaWindowWindowMapProvider).keys) {
-      final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+      final metaWindow = ref.readMetaWindow(metaWindowId);
       final cgroup = processInfo.forPid(metaWindow.pid)?.cgroup;
       if (cgroup != null && cgroup.contains('/$unitName')) {
         return true;

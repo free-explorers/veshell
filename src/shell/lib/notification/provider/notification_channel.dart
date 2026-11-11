@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:hooks_riverpod/misc.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/notification/model/notification.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
@@ -36,8 +37,15 @@ Duration? notificationPopupTimeout(int expireTimeoutMs) {
 
 /// A Notification channel is a list of notifications for a specific name
 /// It can be used to group notification for screens or specific windows
+///
+/// A non-empty channel keeps itself alive: popups are added by keepAlive
+/// managers while the channel's notification area may not be mounted, and
+/// must survive (with their expiry timers) until it is. An emptied channel is
+/// released.
 @riverpod
 class NotificationChannel extends _$NotificationChannel {
+  KeepAliveLink? _keepAliveLink;
+
   /// Pending expiry timers, keyed by notification id, so an explicit removal
   /// cancels the timer and never fires [add]'s `onExpire` afterwards.
   final _expiryTimers = <int, Timer>{};
@@ -59,6 +67,7 @@ class NotificationChannel extends _$NotificationChannel {
     void Function()? onExpire,
   }) {
     _cancelTimer(notification.id);
+    _keepAliveLink ??= ref.keepAlive();
     state = state
         .removeWhere((existing) => existing.id == notification.id)
         .add(notification);
@@ -74,11 +83,20 @@ class NotificationChannel extends _$NotificationChannel {
   void remove(int id) {
     _cancelTimer(id);
     state = state.removeWhere((notification) => notification.id == id);
+    _releaseIfEmpty();
   }
 
   void clear() {
     _cancelAllTimers();
     state = <Notification>{}.lock;
+    _releaseIfEmpty();
+  }
+
+  void _releaseIfEmpty() {
+    if (state.isEmpty) {
+      _keepAliveLink?.close();
+      _keepAliveLink = null;
+    }
   }
 
   void _cancelTimer(int id) {
@@ -91,4 +109,16 @@ class NotificationChannel extends _$NotificationChannel {
     }
     _expiryTimers.clear();
   }
+}
+
+/// Access to [NotificationChannel] for keepAlive providers.
+///
+/// riverpod_lint flags keepAlive providers that use auto-dispose ones, but it
+/// cannot see a `ref.keepAlive()` link taken by hand. The channel pins itself with one while it holds notifications, so
+/// adding to it from a keepAlive provider is safe.
+/// Only add accessors here for that reason: route anything else through
+/// `ref` so the lint keeps checking it.
+extension NotificationChannelAccess on Ref {
+  NotificationChannel notificationChannelNotifier(String channelName) =>
+      read(notificationChannelProvider(channelName).notifier);
 }

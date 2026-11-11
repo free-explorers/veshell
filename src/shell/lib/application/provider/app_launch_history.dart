@@ -1,4 +1,3 @@
-import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/experimental/persist.dart';
 import 'package:riverpod_annotation/experimental/json_persist.dart';
@@ -30,7 +29,7 @@ class AppLaunchHistoryState extends _$AppLaunchHistoryState {
         ),
       );
     }
-    return stateOrNull ?? const AppLaunchHistory(scores: IMapConst({}));
+    return stateOrNull ?? const AppLaunchHistory();
   }
 
   /// Records that [entry] was launched now.

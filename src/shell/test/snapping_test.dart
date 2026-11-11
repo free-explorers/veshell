@@ -1,10 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:material_ui/material_ui.dart';
 import 'package:shell/shared/util/snapping.dart';
 
 void main() {
   test('snapToWholePixel rounds to the nearest logical pixel', () {
-    expect(snapToWholePixel(10.0), 10.0);
+    expect(snapToWholePixel(10), 10.0);
     expect(snapToWholePixel(10.4), 10.0);
     expect(snapToWholePixel(10.5), 11.0);
     expect(snapToWholePixel(10.6), 11.0);

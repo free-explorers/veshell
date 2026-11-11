@@ -75,4 +75,45 @@ void main() {
 
     expect(container.read(notificationChannelProvider(_channel)), hasLength(1));
   });
+
+  group('without a listener', () {
+    // A keepAlive manager adds popups to channels whose notification area may
+    // not be mounted (hidden workspace, closed overview).
+    late ProviderContainer unwatched;
+
+    setUp(() {
+      unwatched = ProviderContainer();
+      addTearDown(unwatched.dispose);
+    });
+
+    test('a pending popup survives until it expires', () async {
+      var expired = false;
+      unwatched
+          .read(notificationChannelProvider(_channel).notifier)
+          .add(
+            _notification(1),
+            timeout: const Duration(milliseconds: 30),
+            onExpire: () => expired = true,
+          );
+
+      // Auto-dispose runs asynchronously once the provider has no listener.
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        unwatched.read(notificationChannelProvider(_channel)),
+        hasLength(1),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      expect(expired, isTrue);
+    });
+
+    test('an emptied channel is released', () async {
+      unwatched.read(notificationChannelProvider(_channel).notifier)
+        ..add(_notification(1))
+        ..remove(1);
+
+      await Future<void>.delayed(Duration.zero);
+      expect(unwatched.exists(notificationChannelProvider(_channel)), isFalse);
+    });
+  });
 }

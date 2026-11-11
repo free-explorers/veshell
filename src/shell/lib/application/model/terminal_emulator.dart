@@ -155,7 +155,7 @@ List<String> _execCandidates(List<String> tokens) {
 }
 
 String _normalize(String value) =>
-    value.toLowerCase().replaceFirst(RegExp(r'^-'), '');
+    value.toLowerCase().replaceFirst(RegExp('^-'), '');
 
 TerminalEmulator _flagEmulator(
   String name,

@@ -23,7 +23,7 @@ part 'monitor_setting_state.g.dart';
 /// Settings that can leave a monitor unusable (mode, scale, transform) go
 /// through [MonitorSettingChangeConfirmation]: the change is applied at once
 /// and only kept if the user confirms it before the countdown expires.
-@riverpod
+@Riverpod(keepAlive: true)
 class MonitorSettingState extends _$MonitorSettingState {
   /// Fields owned by the confirmation guard.
   ///
@@ -70,7 +70,7 @@ class MonitorSettingState extends _$MonitorSettingState {
     for (var i = 0; i < parts.length - 1; i++) {
       final part = parts[i];
       if (cursor[part] == null) {
-        cursor[part] = {};
+        cursor[part] = <String, dynamic>{};
       }
       cursor = cursor[part];
     }

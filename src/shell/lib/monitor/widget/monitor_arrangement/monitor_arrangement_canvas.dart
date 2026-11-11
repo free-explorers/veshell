@@ -84,7 +84,7 @@ class _MonitorArrangementCanvasState extends State<MonitorArrangementCanvas> {
     if (_fitScale <= 0) {
       return;
     }
-    final newZoom = (_zoom * factor).clamp(_minZoom, _maxZoom).toDouble();
+    final newZoom = (_zoom * factor).clamp(_minZoom, _maxZoom);
     if (newZoom == _zoom) {
       return;
     }

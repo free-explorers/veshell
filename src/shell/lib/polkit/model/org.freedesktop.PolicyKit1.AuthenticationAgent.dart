@@ -6,7 +6,7 @@ import 'package:dbus/dbus.dart';
 class OrgFreedesktopPolicyKit1AuthenticationAgent extends DBusObject {
   /// Creates a new object to expose on [path].
   OrgFreedesktopPolicyKit1AuthenticationAgent({
-    DBusObjectPath path = const DBusObjectPath.unchecked('/'),
+    DBusObjectPath path = DBusObjectPath.root,
   }) : super(path);
 
   /// Implementation of org.freedesktop.PolicyKit1.AuthenticationAgent.BeginAuthentication()

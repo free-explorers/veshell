@@ -59,7 +59,7 @@ class NumberPicker extends HookConsumerWidget {
               textAlign: TextAlign.center,
               decoration: const InputDecoration(
                 border: OutlineInputBorder(borderSide: BorderSide.none),
-                contentPadding: EdgeInsets.all(0),
+                contentPadding: EdgeInsets.zero,
                 filled: true,
               ),
             ),

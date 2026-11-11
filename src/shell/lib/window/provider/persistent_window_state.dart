@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/experimental/persist.dart';
 import 'package:riverpod_annotation/experimental/json_persist.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/model/resume_launch_plan.dart';
 import 'package:shell/application/provider/app_launch.dart';
@@ -558,4 +559,24 @@ class PersistentWindowState extends _$PersistentWindowState
     ref.read(windowManagerProvider.notifier).removeWindow(state.windowId);
     deletePersistedState();
   }
+}
+
+/// Access to [PersistentWindowState] for keepAlive providers.
+///
+/// riverpod_lint flags keepAlive providers that use auto-dispose ones, but it
+/// cannot see a `ref.keepAlive()` link taken by hand. The state pins itself with one from `initialize` until `dispose`
+/// ([WindowProviderMixin]), so reading it from a keepAlive provider is safe.
+/// Only add accessors here for that reason: route anything else through
+/// `ref` so the lint keeps checking it.
+extension PersistentWindowStateAccess on Ref {
+  PersistentWindow readPersistentWindow(PersistentWindowId id) =>
+      read(persistentWindowStateProvider(id));
+
+  PersistentWindowState persistentWindowNotifier(PersistentWindowId id) =>
+      read(persistentWindowStateProvider(id).notifier);
+
+  ProviderSubscription<PersistentWindow> listenPersistentWindow(
+    PersistentWindowId id,
+    void Function(PersistentWindow? previous, PersistentWindow next) listener,
+  ) => listen(persistentWindowStateProvider(id), listener);
 }

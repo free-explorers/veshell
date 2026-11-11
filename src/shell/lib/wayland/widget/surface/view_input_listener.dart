@@ -149,7 +149,7 @@ class ViewInputListener extends HookConsumerWidget {
           Positioned.fromRect(
             rect: _clipToSurface(inputRegion, surfaceSize),
             child: ArenaListener(
-              onPointerDown: (PointerDownEvent event) {
+              onPointerDown: (event) {
                 if (TileGrabRegion.claims(context, event)) {
                   grabPointers.value.add(event.pointer);
                   return null;
@@ -157,23 +157,21 @@ class ViewInputListener extends HookConsumerWidget {
                 _onPointerDown(ref, event, globalOffsetForSurface());
                 return null;
               },
-              onPointerMove:
-                  (PointerMoveEvent event, GestureDisposition? disposition) {
-                    if (disposition == GestureDisposition.rejected) {
-                      return;
-                    }
-                    _onPointerMove(ref, event, globalOffsetForSurface());
-                    return null;
-                  },
-              onPointerUp:
-                  (PointerUpEvent event, GestureDisposition? disposition) {
-                    if (disposition == GestureDisposition.rejected) {
-                      return null;
-                    }
-                    _onPointerUp(ref, event);
-                    return GestureDisposition.accepted;
-                  },
-              onPointerCancel: (_, __) {
+              onPointerMove: (event, disposition) {
+                if (disposition == GestureDisposition.rejected) {
+                  return;
+                }
+                _onPointerMove(ref, event, globalOffsetForSurface());
+                return null;
+              },
+              onPointerUp: (event, disposition) {
+                if (disposition == GestureDisposition.rejected) {
+                  return null;
+                }
+                _onPointerUp(ref, event);
+                return GestureDisposition.accepted;
+              },
+              onPointerCancel: (_, _) {
                 return GestureDisposition.rejected;
               },
               // The grab wins the arena, so every later event of its pointer
@@ -183,19 +181,19 @@ class ViewInputListener extends HookConsumerWidget {
                 unawaited(_onLoseArena(ref, event));
               },
               child: Listener(
-                onPointerHover: (PointerHoverEvent event) {
+                onPointerHover: (event) {
                   if (event.kind == PointerDeviceKind.mouse) {
                     _pointerMoved(ref, globalOffsetForSurface());
                   }
                 },
-                onPointerSignal: (PointerSignalEvent event) {
+                onPointerSignal: (event) {
                   // https://api.flutter.dev/flutter/gestures/PointerSignalResolver-class.html
                   // Don't propagate scroll events to parent widgets.
                   // Just register an empty handler because dispatching of
                   // scroll events is handled by the Wayland server.
                   GestureBinding.instance.pointerSignalResolver.register(
                     event,
-                    (PointerSignalEvent event) {},
+                    (event) {},
                   );
                 },
                 child: MouseRegion(

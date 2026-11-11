@@ -1,6 +1,4 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
-import 'package:hooks_riverpod/experimental/persist.dart';
-import 'package:riverpod_annotation/experimental/json_persist.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/screen/provider/screen_state.dart';
@@ -18,12 +16,9 @@ class WindowWorkspaceMap extends _$WindowWorkspaceMap {
     state = <WindowId, WorkspaceId>{}.toIMap();
     final screenList = ref.read(screenManagerProvider).screenIds;
     for (final screenId in screenList) {
-      for (final workspaceId
-          in ref.read(screenStateProvider(screenId)).workspaceList) {
+      for (final workspaceId in ref.readScreen(screenId).workspaceList) {
         for (final windowId
-            in ref
-                .read(workspaceStateProvider(workspaceId))
-                .tileableWindowList) {
+            in ref.readWorkspace(workspaceId).tileableWindowList) {
           state = state.add(windowId, workspaceId);
         }
       }

@@ -40,7 +40,7 @@ class SettingPropertyColorEditor extends HookConsumerWidget
           height: 150,
           child: ColorWheelPicker(
             color: initialValue,
-            onChanged: (Color color) {
+            onChanged: (color) {
               updateValue(color);
               updatedBy.value = 'wheel';
             },
@@ -64,7 +64,7 @@ class SettingPropertyColorEditor extends HookConsumerWidget
                         const Color(0xFFD8DEE9),
                       ]
                       .map(
-                        (Color color) => ColorIndicator(
+                        (color) => ColorIndicator(
                           color: color,
                           onSelect: () {
                             updateValue(color);

@@ -19,7 +19,7 @@ void main() {
   });
 
   test('supports single quotes used by entries in the wild', () {
-    expect(DesktopExec.parse(r"app 'two words' %U").tokens, [
+    expect(DesktopExec.parse("app 'two words' %U").tokens, [
       'app',
       'two words',
       '%U',

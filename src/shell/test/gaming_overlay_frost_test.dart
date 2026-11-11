@@ -72,7 +72,7 @@ void main() {
             'M1',
           ).overrideWithValue(const Size(800, 600)),
         ],
-        child: MaterialApp(
+        child: const MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: CurrentMonitorName(

@@ -3,7 +3,7 @@ import 'package:nm/nm.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/overview/helm/control_panel/network/wifi/model/wifi_manager_state.dart';
 import 'package:shell/shared/nm/provider/nm_client.dart';
-import 'package:shell/shared/nm/provider/nm_device.dart';
+import 'package:shell/shared/nm/provider/nm_devices.dart';
 
 part 'wifi_manager.g.dart';
 
@@ -14,9 +14,12 @@ class WifiManager extends _$WifiManager {
     return WifiManagerState(isScanning: false);
   }
 
+  NetworkManagerDevice get _device =>
+      ref.read(nmDevicesProvider.notifier).getDevice(address)!;
+
   Future<void> scan() async {
     if (state.isScanning) return;
-    final wireless = ref.read(nmDeviceProvider(address)).wireless!;
+    final wireless = _device.wireless!;
     final listenToLastScan = wireless.propertiesChanged
         .firstWhere((properties) => properties.contains('LastScan'))
         .then((_) {
@@ -32,7 +35,7 @@ class WifiManager extends _$WifiManager {
     String securityKey,
   ) async {
     final client = ref.read(nmClientProvider).value!;
-    final device = ref.read(nmDeviceProvider(address));
+    final device = _device;
     client.addAndActivateConnection(
       connection: {
         '802-11-wireless-security': {

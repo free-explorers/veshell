@@ -15,11 +15,11 @@ const batteryCriticalThresholdPath = 'notifications.batteryCriticalThreshold';
 const batteryLowThresholdFallback = 20;
 const batteryCriticalThresholdFallback = 10;
 
-@riverpod
+@Riverpod(keepAlive: true)
 int batteryLowThresholdSetting(Ref ref) =>
     _intSetting(ref, batteryLowThresholdPath, batteryLowThresholdFallback);
 
-@riverpod
+@Riverpod(keepAlive: true)
 int batteryCriticalThresholdSetting(Ref ref) => _intSetting(
   ref,
   batteryCriticalThresholdPath,

@@ -1,10 +1,9 @@
-import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shell/application/model/app_launch_history.serializable.dart';
 
 void main() {
   final start = DateTime.utc(2026);
-  const empty = AppLaunchHistory(scores: IMapConst({}));
+  const empty = AppLaunchHistory();
 
   test('a launch weighs one, halving every half-life', () {
     final history = empty.withLaunch('a', start);

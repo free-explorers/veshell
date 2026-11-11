@@ -55,7 +55,7 @@ void main() {
                 child: ElevatedButton(
                   onPressed: () => Navigator.of(context).push(
                     PageRouteBuilder<void>(
-                      pageBuilder: (context, _, __) =>
+                      pageBuilder: (context, _, _) =>
                           const GamingActivationTrigger(
                             metaWindowId: _windowId,
                             child: ColoredBox(color: Colors.red),

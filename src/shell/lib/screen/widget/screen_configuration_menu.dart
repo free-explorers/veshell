@@ -235,7 +235,7 @@ class ScreenListTile extends HookConsumerWidget {
             ),
             PopupMenuItem<void>(
               child: ListTile(
-                leading: ShellIcon(MdiIcons.delete),
+                leading: const ShellIcon(MdiIcons.delete),
                 title: Text(context.l10n.delete),
               ),
               onTap: () {

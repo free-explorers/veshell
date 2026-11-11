@@ -12,7 +12,7 @@ part 'screen_for_view.g.dart';
 /// A monitor can be split into several screens; only one of them can be the
 /// focus target for placement. The primary screen (the first one configured on
 /// the monitor) is the documented deterministic choice.
-@riverpod
+@Riverpod(keepAlive: true)
 ScreenId? screenForView(Ref ref, int viewId) {
   final monitorName = ref.watch(monitorByViewIdProvider(viewId));
   if (monitorName == null) {

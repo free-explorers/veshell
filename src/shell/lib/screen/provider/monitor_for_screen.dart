@@ -7,7 +7,7 @@ import 'package:shell/screen/model/screen.serializable.dart';
 
 part 'monitor_for_screen.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 MonitorId? monitorForScreen(Ref ref, ScreenId screenId) {
   final monitorIds = ref.watch(activeMonitorIdsProvider);
   final monitor = monitorIds.firstWhereOrNull((monitorId) {

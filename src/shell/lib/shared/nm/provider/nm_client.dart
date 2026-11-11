@@ -4,7 +4,7 @@ import 'package:shell/shared/provider/dbus_client.dart';
 
 part 'nm_client.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 Future<NetworkManagerClient> NmClient(Ref ref) async {
   final bus = restrictedSystemBus();
   final client = NetworkManagerClient(bus: bus);

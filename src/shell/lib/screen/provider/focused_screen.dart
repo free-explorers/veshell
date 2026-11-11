@@ -22,7 +22,7 @@ part 'focused_screen.g.dart';
 /// known, the first connected monitor (the compositor's first output) is used;
 /// once known, the monitor's primary screen wins until pointer entry refines
 /// it.
-@riverpod
+@Riverpod(keepAlive: true)
 class FocusedScreen extends _$FocusedScreen {
   /// The screen the user explicitly focused via pointer entry, if any.
   ///

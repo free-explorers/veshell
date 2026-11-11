@@ -119,9 +119,7 @@ class PlatformEventRecorder extends _$PlatformEventRecorder {
       return;
     }
     _startRecording(windowId);
-    unawaited(
-      ref.read(persistentWindowStateProvider(windowId).notifier).launchSelf(),
-    );
+    unawaited(ref.persistentWindowNotifier(windowId).launchSelf());
   }
 
   void _startRecording(PersistentWindowId windowId) {
@@ -164,17 +162,14 @@ class PlatformEventRecorder extends _$PlatformEventRecorder {
       });
       decisionRecorder.start();
 
-      _target = ref.listen<PersistentWindow>(
-        persistentWindowStateProvider(windowId),
-        (previous, next) {
-          if (next.metaWindowId != null && !_matched) {
-            _matched = true;
-            matchingLog.info('Launch matched for tile ${windowId.uuid}');
-            _armSettle();
-          }
-        },
-      );
-      final current = ref.read(persistentWindowStateProvider(windowId));
+      _target = ref.listenPersistentWindow(windowId, (previous, next) {
+        if (next.metaWindowId != null && !_matched) {
+          _matched = true;
+          matchingLog.info('Launch matched for tile ${windowId.uuid}');
+          _armSettle();
+        }
+      });
+      final current = ref.readPersistentWindow(windowId);
       if (current.metaWindowId != null) {
         _matched = true;
         _armSettle();
@@ -226,12 +221,12 @@ class PlatformEventRecorder extends _$PlatformEventRecorder {
   /// whose state cannot be read (e.g. a window id left in the manager without
   /// a state file) is skipped rather than aborting the recording.
   Map<String, Object?> _sessionHeader(PersistentWindowId targetWindowId) {
-    final target = ref.read(persistentWindowStateProvider(targetWindowId));
+    final target = ref.readPersistentWindow(targetWindowId);
     final appId = target.properties.appId;
     final tiles = <Map<String, Object?>>[_tileSummary(target, isTarget: true)];
     for (final windowId in _peerWindowIds(targetWindowId)) {
       try {
-        final window = ref.read(persistentWindowStateProvider(windowId));
+        final window = ref.readPersistentWindow(windowId);
         if (window.properties.appId != appId) continue;
         tiles.add(_tileSummary(window, isTarget: false));
       } on Object catch (error) {
@@ -314,7 +309,7 @@ class PlatformEventRecorder extends _$PlatformEventRecorder {
     _targetWindowId = null;
     final appId = windowId == null
         ? 'unknown'
-        : ref.read(persistentWindowStateProvider(windowId)).properties.appId;
+        : ref.readPersistentWindow(windowId).properties.appId;
 
     // The `process_info` events already carry the `/proc` facts, but a final
     // snapshot makes the dump self-contained and easy to read.

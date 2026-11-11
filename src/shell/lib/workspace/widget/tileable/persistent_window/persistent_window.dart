@@ -19,6 +19,7 @@ import 'package:shell/platform/model/request/release_texture/release_texture.ser
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/tile_grab/widget/tile_grab_region.dart';
+import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/model/window_preview_path.dart';
@@ -32,7 +33,6 @@ import 'package:shell/window/widget/visible_popup_meta_windows.dart';
 import 'package:shell/window/widget/window.dart';
 import 'package:shell/window/widget/window_dialog_area.dart';
 import 'package:shell/window/widget/window_open_transition.dart';
-import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/window/widget/window_placeholder.dart';
 import 'package:shell/workspace/provider/launch_morphs.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';

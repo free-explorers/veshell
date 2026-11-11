@@ -7,7 +7,7 @@ import 'package:shell/settings/provider/util/theme_detection.dart';
 
 part 'default_settings_json.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 class DefaultSettingsJson extends _$DefaultSettingsJson {
   @override
   Map<String, dynamic> build() {

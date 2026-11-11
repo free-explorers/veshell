@@ -4,7 +4,7 @@ import 'package:shell/settings/provider/util/monitor_setting_json.dart';
 
 part 'json_value_by_path.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 dynamic jsonValueByPath(Ref ref, String path) {
   final pathParts = path.split('.');
   dynamic value;

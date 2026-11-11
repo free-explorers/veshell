@@ -42,7 +42,7 @@ import 'package:shell/shared/widget/shell_icon.dart';
 
 part 'settings_properties.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 class SettingsProperties extends _$SettingsProperties {
   @override
   Map<String, SettingGroup> build() {

@@ -17,7 +17,7 @@ class SubsurfaceWidget extends StatelessWidget {
     return _Positioner(
       surfaceId: surfaceId,
       child: Consumer(
-        builder: (BuildContext context, WidgetRef ref, Widget? child) {
+        builder: (context, ref, child) {
           return SurfaceWidget(surfaceId: surfaceId, scaleRatio: scaleRatio);
         },
       ),

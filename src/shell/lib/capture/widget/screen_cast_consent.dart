@@ -158,10 +158,9 @@ class ScreenCastConsentHost extends HookConsumerWidget {
     // The flow owns every input while it is open: the picker is the only
     // thing that reacts until a decision is delivered.
     return Center(
-      child: Container(
+      child: ColoredBox(
         color: Colors.black.withValues(alpha: 0.4),
         child: Align(
-          alignment: Alignment.center,
           // Keying by consent token resets the radio selection when a
           // new flow replaces the current one, so a stale source id can
           // never stay selected across requests.

@@ -10,7 +10,7 @@ part 'connected_monitor_list.g.dart';
 /// Single writer of the live [Monitor] projection: the list is replaced only by
 /// `MonitorLayoutChangedEvent`s from the compositor. See
 /// `docs/specifications/monitor.md` (section "State ownership").
-@riverpod
+@Riverpod(keepAlive: true)
 class ConnectedMonitorList extends _$ConnectedMonitorList {
   @override
   List<Monitor> build() {
