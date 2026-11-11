@@ -333,10 +333,7 @@ impl<BackendData: Backend + 'static> Dispatch2<ZxdgExportedV1, State<BackendData
         _dhandle: &DisplayHandle,
         _data_init: &mut DataInit<'_, State<BackendData>>,
     ) {
-        match request {
-            zxdg_exported_v1::Request::Destroy => {}
-            _ => {}
-        }
+        if let zxdg_exported_v1::Request::Destroy = request {}
     }
 
     fn destroyed(
@@ -491,10 +488,7 @@ impl<BackendData: Backend + 'static> Dispatch2<ZxdgExportedV2, State<BackendData
         _dhandle: &DisplayHandle,
         _data_init: &mut DataInit<'_, State<BackendData>>,
     ) {
-        match request {
-            zxdg_exported_v2::Request::Destroy => {}
-            _ => {}
-        }
+        if let zxdg_exported_v2::Request::Destroy = request {}
     }
 
     fn destroyed(

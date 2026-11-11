@@ -19,8 +19,6 @@ use smithay::reexports::calloop::generic::Generic;
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::calloop::{Interest, LoopHandle, Mode, PostAction};
 use smithay::reexports::input;
-use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1;
-use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::WmCapabilities;
 use smithay::reexports::wayland_server::protocol::wl_buffer;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
@@ -36,9 +34,7 @@ use smithay::wayland::compositor::{
 };
 use smithay::wayland::cursor_shape::CursorShapeManagerState;
 use smithay::wayland::dmabuf::DmabufState;
-use smithay::wayland::fractional_scale::{
-    with_fractional_scale, FractionalScaleHandler, FractionalScaleManagerState,
-};
+use smithay::wayland::fractional_scale::FractionalScaleManagerState;
 use smithay::wayland::idle_inhibit::{IdleInhibitHandler, IdleInhibitManagerState};
 use smithay::wayland::idle_notify::{IdleNotifierHandler, IdleNotifierState};
 use smithay::wayland::output::OutputHandler;
@@ -52,28 +48,21 @@ use smithay::wayland::selection::primary_selection::{
 };
 use smithay::wayland::selection::wlr_data_control::{DataControlHandler, DataControlState};
 use smithay::wayland::selection::{SelectionHandler, SelectionSource, SelectionTarget};
-use smithay::wayland::shell::xdg;
 use smithay::wayland::shell::xdg::decoration::XdgDecorationState;
 use smithay::wayland::shell::xdg::dialog::XdgDialogState;
-use smithay::wayland::shell::xdg::{
-    PopupSurface, SurfaceCachedState, ToplevelSurface, XdgPopupSurfaceData, XdgShellState,
-    XdgToplevelSurfaceData,
-};
+use smithay::wayland::shell::xdg::{PopupSurface, ToplevelSurface, XdgShellState};
 use smithay::wayland::shm::{ShmHandler, ShmState};
 use smithay::wayland::socket::ListeningSocketSource;
 use smithay::wayland::viewporter::{ViewportCachedState, ViewporterState};
 use smithay::wayland::xdg_activation::{XdgActivationState, XdgActivationToken};
-use smithay::wayland::xwayland_shell::{self, XWAYLAND_SHELL_ROLE};
-use smithay::xwayland::{X11Surface, X11Wm};
+use smithay::wayland::xwayland_shell::{self};
+use smithay::xwayland::X11Surface;
 use tracing::{info, warn};
 use xkbcommon::xkb::Keycode;
 
 use crate::cursor::{CursorState, CursorStateInner};
 use crate::flutter_engine::view::OutputViewIdWrapper;
-use crate::flutter_engine::wayland_messages::{
-    PopupMessage, SubsurfaceMessage, SurfaceMessage, SurfaceRole, ToplevelMessage,
-    XdgSurfaceMessage, XdgSurfaceRole,
-};
+use crate::flutter_engine::wayland_messages::{SubsurfaceMessage, SurfaceMessage, SurfaceRole};
 use crate::flutter_engine::FlutterEngine;
 use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
 use crate::keyboard::key_repeater::KeyRepeater;
@@ -349,7 +338,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
     }
 
     pub fn frame_timestamp_millis(&self) -> u32 {
-        self.clock.now().as_millis() as u32
+        self.clock.now().as_millis()
     }
 
     /// Ask the backend to composite the current state on the next idle.
@@ -885,7 +874,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             .texture_ids_per_surface_id
             .get(&surface_id)
             .and_then(|ids| ids.last().cloned())
-            .and_then(|(id, size)| Some((id, Some(size))))
+            .map(|(id, size)| (id, Some(size)))
             .unwrap_or((0, None));
 
         // TODO: Serialize all the rectangles instead of merging them into one.
@@ -1074,11 +1063,11 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 self.space.map_output(output, output.current_location());
             }
             self.output_layout_changed();
-            if new_mode.is_some() {
-                output.set_preferred(new_mode.unwrap());
+            if let Some(mode) = new_mode {
+                output.set_preferred(mode);
             }
             // if scale changed update the scale for all MetaWindow displayed on it
-            if new_scale.is_some() {
+            if let Some(scale) = new_scale {
                 for meta_window in self
                     .meta_window_state
                     .get_meta_windows_for_output(output.clone())
@@ -1086,7 +1075,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     self.patch_meta_window(
                         MetaWindowPatch::UpdateScaleRatio {
                             id: meta_window.clone().id,
-                            value: new_scale.unwrap().fractional_scale(),
+                            value: scale.fractional_scale(),
                         },
                         true,
                     );

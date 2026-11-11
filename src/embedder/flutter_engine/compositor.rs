@@ -224,7 +224,7 @@ where
                         framebuffer: FlutterOpenGLFramebuffer {
                             // RGBA8
                             target: 0x8058,
-                            name: name,
+                            name,
                             user_data: std::ptr::null_mut(),
                             destruction_callback: None,
                         },

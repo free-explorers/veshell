@@ -181,26 +181,6 @@ fn select_suspend_then_hibernate_action(capability: Option<&str>) -> AutomaticPo
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::select_suspend_then_hibernate_action;
-    use crate::settings::AutomaticPowerAction;
-
-    #[test]
-    fn suspend_then_hibernate_is_selected_only_when_logind_says_yes() {
-        assert_eq!(
-            select_suspend_then_hibernate_action(Some("yes")),
-            AutomaticPowerAction::SuspendThenHibernate
-        );
-        for capability in [Some("no"), Some("challenge"), Some("na"), None] {
-            assert_eq!(
-                select_suspend_then_hibernate_action(capability),
-                AutomaticPowerAction::Suspend
-            );
-        }
-    }
-}
-
 async fn serve(events: channel::Sender<IdleDbusEvent>) -> zbus::Result<()> {
     let inhibitors = Arc::new(Mutex::new(Inhibitors::default()));
     let connection = zbus::connection::Builder::session()?
@@ -239,4 +219,24 @@ async fn serve(events: channel::Sender<IdleDbusEvent>) -> zbus::Result<()> {
     }
     drop(connection);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::select_suspend_then_hibernate_action;
+    use crate::settings::AutomaticPowerAction;
+
+    #[test]
+    fn suspend_then_hibernate_is_selected_only_when_logind_says_yes() {
+        assert_eq!(
+            select_suspend_then_hibernate_action(Some("yes")),
+            AutomaticPowerAction::SuspendThenHibernate
+        );
+        for capability in [Some("no"), Some("challenge"), Some("na"), None] {
+            assert_eq!(
+                select_suspend_then_hibernate_action(capability),
+                AutomaticPowerAction::Suspend
+            );
+        }
+    }
 }

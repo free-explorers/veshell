@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use smithay::reexports::calloop;
-use zbus::zvariant::{ObjectPath, OwnedObjectPath, OwnedValue};
+use zbus::zvariant::{OwnedObjectPath, OwnedValue};
 
 use super::service::{FrontendOwner, PortalAction, PortalLedger};
 use super::{

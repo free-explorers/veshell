@@ -1,16 +1,15 @@
 use std::collections::HashMap;
 
 use meta_popup::MetaPopup;
-use meta_window::{DisplayMode, MetaWindow, MetaWindowPatch};
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use meta_window::MetaWindow;
+use serde_json::json;
 use smithay::{
     output::Output,
     reexports::{
         wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode as DecorationMode,
-        wayland_server::{DisplayHandle, Resource},
+        wayland_server::Resource,
     },
-    utils::{Logical, Point, Rectangle, Size},
+    utils::{Logical, Point, Size},
     wayland::{
         compositor::with_states,
         shell::xdg::{SurfaceCachedState, ToplevelSurface, XdgToplevelSurfaceData},
@@ -21,12 +20,7 @@ use tracing::info;
 use uuid::Uuid;
 
 use crate::{
-    backend::Backend,
-    flutter_engine::{
-        platform_channels::method_channel::MethodChannel,
-        wayland_messages::{MyPoint, MyRectangle},
-    },
-    state::State,
+    backend::Backend, flutter_engine::wayland_messages::MyRectangle, state::State,
     wayland::wayland::get_surface_id,
 };
 
@@ -277,11 +271,7 @@ impl MetaWindowState {
         self.focus_order
             .iter()
             .rev()
-            .find(|id| {
-                self.meta_windows
-                    .get(*id)
-                    .is_some_and(|window| predicate(window))
-            })
+            .find(|id| self.meta_windows.get(*id).is_some_and(&predicate))
             .cloned()
             .or_else(|| {
                 self.meta_windows
@@ -346,7 +336,7 @@ impl MetaWindowState {
     pub fn get_meta_windows_for_output(&mut self, output: Output) -> Vec<MetaWindow> {
         let mut meta_windows = Vec::new();
         let some_name = Some(output.name());
-        for (_, meta_window) in self.meta_windows.iter_mut() {
+        for meta_window in self.meta_windows.values_mut() {
             if meta_window.current_output == some_name {
                 meta_windows.push(meta_window.clone());
             }
@@ -607,7 +597,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 
         let meta_window = self.create_meta_window(MetaWindow {
             id: Uuid::new_v4().hyphenated().to_string(),
-            surface_id: surface_id,
+            surface_id,
             app_id: app_id.clone(),
             binary_name: binary_name.clone(),
             pid,
@@ -693,7 +683,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
 
         let meta_window = self.create_meta_window(MetaWindow {
             id: uuid::Uuid::new_v4().to_string(),
-            surface_id: surface_id,
+            surface_id,
             app_id: app_id.clone(),
             binary_name: binary_name.clone(),
             pid,
@@ -723,7 +713,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             current_output: None,
             geometry: Some(x11_surface.geometry().into()),
             need_decoration: !x11_surface.is_decorated(),
-            scale_ratio: scale_ratio,
+            scale_ratio,
             game_mode_activated: false,
             is_recording: false,
         });
@@ -783,8 +773,8 @@ pub(crate) fn get_flatpack_app_id_from_pid(pid: i32) -> (bool, Option<String>) {
     let mut app_id: Option<String> = None;
 
     for line in info_file.lines() {
-        if line.starts_with("name=") {
-            app_id = Some(line[5..].to_string());
+        if let Some(name) = line.strip_prefix("name=") {
+            app_id = Some(name.to_string());
             break;
         }
     }
@@ -852,7 +842,9 @@ pub(crate) fn get_binary_name_from_pid(pid: i32) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::meta_popup::MetaPopupCategory;
+    use super::meta_window::DisplayMode;
     use super::*;
+    use smithay::utils::Rectangle;
 
     fn window(id: &str, pid: i32, app_id: Option<&str>) -> MetaWindow {
         MetaWindow {

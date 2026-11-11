@@ -10,14 +10,13 @@ pub mod wayland {
     use serde_json::json;
     use smithay::{
         backend::renderer::{
-            gles::{GlesRenderer, GlesTexture},
+            gles::GlesTexture,
             utils::{
                 import_surface, on_commit_buffer_handler, with_renderer_surface_state,
                 RendererSurfaceStateUserData,
             },
             Renderer, Texture,
         },
-        desktop::{find_popup_root_surface, PopupKind},
         input::pointer::{CursorImageStatus, CursorImageSurfaceData},
         reexports::wayland_server::{protocol::wl_surface::WlSurface, Client},
         utils::{Buffer as BufferCoords, Rectangle, Size},
@@ -28,19 +27,15 @@ pub mod wayland {
             },
             fractional_scale::with_fractional_scale,
             shell::xdg::{
-                self, dialog::ToplevelDialogHint, SurfaceCachedState, ToplevelSurface,
-                XdgPopupSurfaceData, XdgToplevelSurfaceData, XDG_TOPLEVEL_ROLE,
+                self, dialog::ToplevelDialogHint, SurfaceCachedState, XdgPopupSurfaceData,
+                XdgToplevelSurfaceData,
             },
-            xwayland_shell::XWAYLAND_SHELL_ROLE,
         },
         xwayland::XWaylandClientData,
     };
-    use tracing::info;
 
     use crate::{
-        meta_window_state::{meta_popup, meta_window::MetaWindowPatch},
-        state::State,
-        Backend, ClientState,
+        meta_window_state::meta_window::MetaWindowPatch, state::State, Backend, ClientState,
     };
 
     pub struct WlSurfaceVeshellState {
@@ -210,7 +205,7 @@ pub mod wayland {
             // subsurfaces are also committed recursively.
             for surface_id in subsurfaces_below.iter().chain(subsurfaces_above.iter()) {
                 let surface = self.surfaces.get(surface_id).unwrap().clone();
-                let _ = self.commit(&surface);
+                self.commit(&surface);
             }
 
             let surface_id = get_surface_id(surface);

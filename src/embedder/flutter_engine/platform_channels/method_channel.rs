@@ -1,7 +1,7 @@
 use smithay::reexports::calloop::channel;
 use std::cell::RefCell;
 use std::rc::Rc;
-use tracing::{debug, error, info};
+use tracing::error;
 
 use crate::flutter_engine::platform_channels::binary_messenger::{
     BinaryMessageHandler, BinaryMessenger, BinaryReply,
@@ -48,7 +48,7 @@ impl<T: 'static> MethodChannel<T> {
         } else {
             Box::new(MethodResultFunctions {
                 on_success: None,
-                on_error: Some(Box::new(|code, message, details| {
+                on_error: Some(Box::new(|code, message, _details| {
                     error!(
                         "MethodChannel failed to invoke method {}: {} ",
                         code, message

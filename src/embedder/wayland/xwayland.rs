@@ -1,15 +1,11 @@
-use smithay::xwayland::X11Wm;
-
 pub mod xwayland {
     use crate::backend::Backend;
     use crate::capture::selection::{send_native_selection, NATIVE_SCREENSHOT_MIME, PNG_MIME};
     use crate::cursor::CursorState;
-    use crate::flutter_engine::wayland_messages::{MapX11Surface, MyPoint, NewX11Surface};
+
     use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
     use crate::meta_window_state::floating_move::clamp_position;
-    use crate::meta_window_state::meta_popup::{
-        self, MetaPopup, MetaPopupCategory, MetaPopupPatch,
-    };
+    use crate::meta_window_state::meta_popup::{MetaPopup, MetaPopupCategory, MetaPopupPatch};
     use crate::meta_window_state::meta_resize_edge::MetaResizeEdge;
     use crate::meta_window_state::meta_window::MetaWindowPatch;
     use crate::state::State;
@@ -18,8 +14,8 @@ pub mod xwayland {
     use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 
     use smithay::reexports::wayland_server::Client;
-    use smithay::reexports::x11rb::rust_connection::{DefaultStream, RustConnection};
-    use smithay::utils::{Logical, Point, Rectangle, Size, SERIAL_COUNTER};
+
+    use smithay::utils::{Logical, Point, Rectangle, Size};
     use smithay::wayland::seat::WaylandFocus;
     use smithay::wayland::selection::data_device::{
         clear_data_device_selection, current_data_device_selection_userdata,
@@ -135,14 +131,14 @@ pub mod xwayland {
         surface: &X11Surface,
         geometry: Rectangle<i32, Logical>,
     ) -> MetaPopupCategory {
-        match surface.window_type() {
-            Some(
-                WmWindowType::Menu
-                | WmWindowType::PopupMenu
-                | WmWindowType::DropdownMenu
-                | WmWindowType::Combo,
-            ) => return MetaPopupCategory::Menu,
-            _ => {}
+        if let Some(
+            WmWindowType::Menu
+            | WmWindowType::PopupMenu
+            | WmWindowType::DropdownMenu
+            | WmWindowType::Combo,
+        ) = surface.window_type()
+        {
+            return MetaPopupCategory::Menu;
         }
 
         // A one-pixel window is a backing/preview window, never visible UI. A
@@ -245,11 +241,9 @@ pub mod xwayland {
                 .insert(surface.window_id(), surface.clone());
 
             let x11_surface_id = self.get_new_x11_surface_id();
-            surface.user_data().insert_if_missing(|| {
-                RefCell::new(MyX11SurfaceState {
-                    x11_surface_id: x11_surface_id,
-                })
-            });
+            surface
+                .user_data()
+                .insert_if_missing(|| RefCell::new(MyX11SurfaceState { x11_surface_id }));
 
             self.x11_surfaces.insert(x11_surface_id, surface.clone());
         }
@@ -272,7 +266,7 @@ pub mod xwayland {
                 surface
                     .is_transient_for()
                     .and_then(|x11_surface| self.x11_surface_per_x11_window.get(&x11_surface))
-                    .map(|x11_surface| Self::get_x11_surface_id(&x11_surface))
+                    .map(|x11_surface| Self::get_x11_surface_id(x11_surface))
             };
             info!(
                 "map_x11_surface: {:?} parent: {:?}",
@@ -363,7 +357,7 @@ pub mod xwayland {
                 let geometries = self
                     .x11_surfaces
                     .iter()
-                    .filter_map(|s| Some((s.1.clone(), s.1.geometry())))
+                    .map(|s| (s.1.clone(), s.1.geometry()))
                     .collect::<Vec<_>>();
 
                 // update client scale
@@ -1332,7 +1326,7 @@ pub mod xwayland {
                         );
                         parent_x11_surface
                             .wl_surface()
-                            .and_then(|parent_surface| Some(get_surface_id(&parent_surface)))
+                            .map(|parent_surface| get_surface_id(&parent_surface))
                             .or_else(|| {
                                 self.keyboard.current_focus().and_then(|focus| {
                                     focus.wl_surface().and_then(|focus_surface| {

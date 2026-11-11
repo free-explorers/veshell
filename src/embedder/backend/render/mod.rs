@@ -12,20 +12,15 @@ use crate::{
     },
     capture::CaptureSession,
     cursor::{draw_cursor, CursorRenderElement, CursorStateInner},
-    meta_window_state::meta_window::MetaWindow,
 };
 
 use smithay::{
     backend::{
-        allocator::{
-            dmabuf::{AsDmabuf, Dmabuf},
-            Fourcc,
-        },
+        allocator::Fourcc,
         renderer::{
             element::{
                 memory::{MemoryRenderBuffer, MemoryRenderBufferRenderElement},
                 surface::{render_elements_from_surface_tree, WaylandSurfaceRenderElement},
-                texture::{TextureBuffer, TextureRenderElement},
                 utils::{Relocate, RelocateRenderElement},
                 Id, Kind, RenderElement,
             },
@@ -36,11 +31,10 @@ use smithay::{
     input::pointer::CursorImageStatus,
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    utils::{Buffer, Logical, Monotonic, Physical, Point, Rectangle, Scale, Size, Time, Transform},
+    utils::{Buffer, Logical, Monotonic, Physical, Point, Rectangle, Size, Time, Transform},
 };
 
 pub static CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
-mod fractionnal_memory;
 mod fractionnal_texture;
 smithay::backend::renderer::element::render_elements! {
     pub VeshellRenderElements<R> where

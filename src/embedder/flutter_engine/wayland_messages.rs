@@ -79,21 +79,6 @@ pub struct MonitorsMessage {
     pub monitors: Vec<MyOutput>,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NewX11Surface {
-    pub x11_surface_id: u64,
-    pub override_redirect: bool,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MapX11Surface {
-    pub x11_surface_id: u64,
-    pub geometry: MyRectangle<i32, Logical>,
-    pub parent: Option<u64>,
-}
-
 #[repr(transparent)]
 #[derive(Debug)]
 pub struct MyPoint<N, Kind>(pub Point<N, Kind>);
@@ -270,21 +255,11 @@ impl Serialize for MyOutput {
         )?;
         state.serialize_field("scale", &output.current_scale().fractional_scale())?;
         state.serialize_field("location", &MyPoint(output.current_location()))?;
-        state.serialize_field(
-            "currentMode",
-            &output.current_mode().map(|mode| MyMode(mode)),
-        )?;
-        state.serialize_field(
-            "preferredMode",
-            &output.preferred_mode().map(|mode| MyMode(mode)),
-        )?;
+        state.serialize_field("currentMode", &output.current_mode().map(MyMode))?;
+        state.serialize_field("preferredMode", &output.preferred_mode().map(MyMode))?;
         state.serialize_field(
             "modes",
-            &output
-                .modes()
-                .into_iter()
-                .map(|mode| MyMode(mode))
-                .collect::<Vec<_>>(),
+            &output.modes().into_iter().map(MyMode).collect::<Vec<_>>(),
         )?;
         state.serialize_field("viewId", &view_id)?;
         state.end()

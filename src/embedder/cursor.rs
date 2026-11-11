@@ -40,9 +40,9 @@ pub struct Cursor {
 
 impl Cursor {
     pub fn load(theme: &CursorTheme, shape: CursorIcon) -> Cursor {
-        let icons = load_icon(&theme, shape)
+        let icons = load_icon(theme, shape)
             .map_err(|err| warn!(?err, "Unable to load xcursor, using fallback cursor"))
-            .or_else(|_| load_icon(&theme, CursorIcon::Default))
+            .or_else(|_| load_icon(theme, CursorIcon::Default))
             .unwrap_or_else(|_| {
                 vec![Image {
                     size: 32,
@@ -490,12 +490,12 @@ where
         };
 
         state.current_image = Some(frame.clone());
-        return vec![(
+        vec![(
             CursorRenderElement::Static(
                 MemoryRenderBufferRenderElement::from_buffer(
                     renderer,
                     location.to_physical_precise_round(float_scale),
-                    &pointer_image,
+                    pointer_image,
                     None,
                     // The whole bitmap (it is uploaded with buffer scale 1)…
                     Some(Rectangle::from_size(Size::from((
@@ -510,7 +510,7 @@ where
                 .expect("Failed to import cursor bitmap"),
             ),
             placement.hotspot,
-        )];
+        )]
     } else {
         Vec::new()
     }
@@ -529,7 +529,7 @@ where
     let position = location.into();
     // The hotspot is in surface-local (logical) coordinates; the element is
     // placed in physical pixels, so it has to follow the output scale.
-    let h: Point<i32, Physical> = with_states(&surface, |states| {
+    let h: Point<i32, Physical> = with_states(surface, |states| {
         states
             .data_map
             .get::<Mutex<CursorImageAttributes>>()

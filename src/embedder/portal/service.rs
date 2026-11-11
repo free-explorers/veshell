@@ -99,7 +99,7 @@ pub enum CaptureKind {
 
 /// One in-flight portal screenshot/pick-color request. Either the
 /// prompt or the capture stage holds the method's reply.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ScreenshotEntry {
     pub consent: Option<ScreenshotConsent>,
     pub capture: Option<ScreenshotCapture>,
@@ -112,15 +112,6 @@ pub struct ScreenshotCapture {
     pub consent_token: u64,
     pub kind: CaptureKind,
     pub reply: ReplyLink,
-}
-
-impl Default for ScreenshotEntry {
-    fn default() -> Self {
-        Self {
-            consent: None,
-            capture: None,
-        }
-    }
 }
 
 /// Everything the backend service must know. Every nonclosed state can
@@ -364,7 +355,7 @@ pub fn frontend_owner_changed(
         unexport_request(actions, handle);
     }
     ledger.requests.clear();
-    for (_handle, entry) in ledger.screenshots.iter_mut() {
+    for entry in ledger.screenshots.values_mut() {
         if let Some(consent) = entry.consent.take() {
             consent.reply.send(cancelled());
             ui.push(PortalUiEvent::DismissPicker {
@@ -381,7 +372,7 @@ pub fn frontend_owner_changed(
         unexport_request(actions, handle);
     }
     ledger.screenshots.clear();
-    for (_handle, entry) in ledger.file_choosers.iter() {
+    for entry in ledger.file_choosers.values() {
         entry.reply.clone().send(cancelled());
         ui.push(PortalUiEvent::DismissPicker {
             consent_token: entry.consent_token,
@@ -472,7 +463,7 @@ fn reconcile_portal_pending_pixels<BackendData: crate::backend::Backend + 'stati
     state
         .portal_state
         .pending_pixels
-        .retain(|token, _| live.contains(&token));
+        .retain(|token, _| live.contains(token));
 }
 
 /// Reconciles every MetaWindow's `is_recording` flag with the live screen cast
@@ -716,24 +707,28 @@ fn perform_ui_event<BackendData: crate::backend::Backend + 'static>(
             // carry their own stable kind tag so the decision can be
             // validated against the right registry, and the picker groups
             // outputs and windows separately.
-            let outputs: Vec<(CaptureSource, &'static str)> = types
-                .contains(SourceTypes::MONITOR)
-                .then(|| {
-                    output_source_entries(state)
-                        .into_iter()
-                        .map(|source| (source, "outputs"))
-                        .collect()
-                })
-                .unwrap_or_default();
-            let windows: Vec<(CaptureSource, &'static str)> = types
-                .contains(SourceTypes::WINDOW)
-                .then(|| {
+            let outputs: Vec<(CaptureSource, &'static str)> =
+                if types.contains(SourceTypes::MONITOR) {
+                    {
+                        output_source_entries(state)
+                            .into_iter()
+                            .map(|source| (source, "outputs"))
+                            .collect()
+                    }
+                } else {
+                    Default::default()
+                };
+            let windows: Vec<(CaptureSource, &'static str)> = if types.contains(SourceTypes::WINDOW)
+            {
+                {
                     window_source_entries(state)
                         .into_iter()
                         .map(|source| (source, "windows"))
                         .collect()
-                })
-                .unwrap_or_default();
+                }
+            } else {
+                Default::default()
+            };
             let sources: Vec<serde_json::Value> = outputs
                 .clone()
                 .into_iter()
@@ -752,7 +747,7 @@ fn perform_ui_event<BackendData: crate::backend::Backend + 'static>(
                 // the request normally.
                 let reply = if let Some(runtime) = state.portal_state.runtime.as_mut() {
                     let mut actions = Vec::new();
-                    let mut ui: Vec<PortalUiEvent> = Vec::new();
+                    let _ui: Vec<PortalUiEvent> = Vec::new();
                     let matched = resolve_consent_no_picker(
                         &mut runtime.ledger,
                         &session_handle.clone(),
@@ -821,7 +816,6 @@ fn perform_ui_event<BackendData: crate::backend::Backend + 'static>(
                                 .pending_pixels
                                 .keys()
                                 .min()
-                                .take()
                                 .expect("len above evict bound");
                             state.portal_state.pending_pixels.remove(&oldest);
                         }
@@ -1479,7 +1473,7 @@ pub fn schedule_frame_delivery<BackendData: crate::backend::Backend + 'static>(
 ) {
     use smithay::reexports::calloop::timer::TimeoutAction;
     let session_handle = session_handle.clone();
-    let mut timer = smithay::reexports::calloop::timer::Timer::from_duration(IDLE_REFRESH_INTERVAL);
+    let timer = smithay::reexports::calloop::timer::Timer::from_duration(IDLE_REFRESH_INTERVAL);
     state
         .loop_handle
         .insert_source(timer, move |_, _, state| {
@@ -1625,7 +1619,7 @@ pub fn schedule_window_frame_delivery<BackendData: crate::backend::Backend + 'st
 ) {
     use smithay::reexports::calloop::timer::TimeoutAction;
     let session_handle = session_handle.clone();
-    let mut timer = smithay::reexports::calloop::timer::Timer::from_duration(IDLE_REFRESH_INTERVAL);
+    let timer = smithay::reexports::calloop::timer::Timer::from_duration(IDLE_REFRESH_INTERVAL);
     state
         .loop_handle
         .insert_source(timer, move |_, _, state| {
@@ -1851,15 +1845,12 @@ fn begin_shared_stream<BackendData: crate::backend::Backend + 'static>(
     };
     if state.portal_state.pipewire_producer.is_none() {
         let dmabufs = state.backend_data.capture_dmabuf_setup();
-        match crate::capture::pipewire::Producer::new(
+        if let Ok(producer) = crate::capture::pipewire::Producer::new(
             &state.loop_handle,
             state.portal_state.producer_delivery_sender.clone(),
             dmabufs,
         ) {
-            Ok(producer) => {
-                state.portal_state.pipewire_producer = Some(producer);
-            }
-            Err(_) => {}
+            state.portal_state.pipewire_producer = Some(producer);
         }
     }
     let Some(producer) = state.portal_state.pipewire_producer.as_mut() else {
@@ -2710,7 +2701,6 @@ pub fn apply_portal_call(
     match call {
         PortalCall::FrontendOwnerChanged { owner } => {
             frontend_owner_changed(ledger, actions, ui, owner);
-            return;
         }
         call @ (PortalCall::CreateSession { .. }
         | PortalCall::SelectSources { .. }
@@ -2732,20 +2722,19 @@ pub fn apply_portal_call(
                 } => {
                     let response = if !valid_session_path(session_handle.as_str()) {
                         failed("invalid session handle")
-                    } else if ledger.sessions.contains_key(&session_handle) {
-                        failed("session already exists")
-                    } else {
+                    } else if let std::collections::hash_map::Entry::Vacant(entry) =
+                        ledger.sessions.entry(session_handle.clone())
+                    {
                         tracing::info!(session_path = %session_handle, "Portal session created");
-                        actions.push(PortalAction::ExportSession(session_handle.clone()));
-                        ledger.sessions.insert(
-                            session_handle,
-                            PortalSession {
-                                state: SessionState::Created,
-                                constraints: None,
-                                pending_start: None,
-                            },
-                        );
+                        actions.push(PortalAction::ExportSession(session_handle));
+                        entry.insert(PortalSession {
+                            state: SessionState::Created,
+                            constraints: None,
+                            pending_start: None,
+                        });
                         PortalReply::ok()
+                    } else {
+                        failed("session already exists")
                     };
                     reply.send(response);
                 }
@@ -3153,7 +3142,7 @@ mod tests {
     use std::collections::HashMap;
 
     fn ledger_with_frontend() -> (PortalLedger, PendingReply) {
-        let (link, pending) = make_reply_pair();
+        let (_link, pending) = make_reply_pair();
         let ledger = PortalLedger {
             frontend: Some(FrontendOwner(":1.9".into())),
             ..Default::default()
@@ -3165,7 +3154,7 @@ mod tests {
     const SESSION_BAD: &str = "/wrong/path";
     const SCREEN_OK: &str = "/org/freedesktop/portal/desktop/request/1_9/sh2";
 
-    fn create_call(handle: &str, session: &str, reply: ReplyLink) -> PortalCall {
+    fn create_call(_handle: &str, session: &str, reply: ReplyLink) -> PortalCall {
         PortalCall::CreateSession {
             handle: OwnedObjectPath::try_from("/org/freedesktop/portal/desktop/request/1_9/h0")
                 .unwrap(),
@@ -3192,7 +3181,7 @@ mod tests {
         let _ = actions;
 
         let (link, pending) = make_reply_pair();
-        let (link2, pending2) = make_reply_pair();
+        let (link2, _pending2) = make_reply_pair();
         apply_portal_call(
             &mut ledger,
             PortalCall::CreateSession {
@@ -3496,12 +3485,12 @@ mod tests {
     #[test]
     fn select_configures_then_start_cancels_without_consent() {
         let (mut ledger, _) = ledger_with_frontend();
-        let (link, _pending) = make_reply_pair();
+        let (_link, _pending) = make_reply_pair();
         // create
         {
             let (link, pending) = make_reply_pair();
             let mut actions = Vec::new();
-            let mut ui: Vec<PortalUiEvent> = Vec::new();
+            let _ui: Vec<PortalUiEvent> = Vec::new();
             apply_portal_call(
                 &mut ledger,
                 PortalCall::CreateSession {
@@ -3521,7 +3510,7 @@ mod tests {
         let handle_path = handle();
         {
             let mut actions = Vec::new();
-            let mut ui: Vec<PortalUiEvent> = Vec::new();
+            let _ui: Vec<PortalUiEvent> = Vec::new();
             apply_portal_call(
                 &mut ledger,
                 PortalCall::SelectSources {
@@ -4755,8 +4744,8 @@ mod tests {
             .try_into()
             .expect("u32");
         assert_eq!(persisted, 0, "no grant answers persist_mode=0 explicitly");
-        assert!(no_grant.results.get("restore_token").is_none());
-        assert!(no_grant.results.get("restore_data").is_none());
+        assert!(!no_grant.results.contains_key("restore_token"));
+        assert!(!no_grant.results.contains_key("restore_data"));
 
         let restored = ActiveStream {
             restore_token: Some("tok-1".into()),
@@ -4771,7 +4760,7 @@ mod tests {
             .expect("u32");
         assert_eq!(granted_persisted, 1);
         assert!(
-            granted.results.get("restore_token").is_none(),
+            !granted.results.contains_key("restore_token"),
             "the client-facing token belongs to the frontend, not the backend"
         );
         let mut encoded_options = super::super::PortalDict::new();
@@ -4819,7 +4808,7 @@ mod tests {
     fn screenshot_request_close_completes_cancelled() {
         let (mut ledger, pending) = ledger_with_frontend();
         call_screenshot(&mut ledger, pending);
-        let (reply, waiting) = make_reply_pair();
+        let (reply, _waiting) = make_reply_pair();
         let _ = reply;
         let close = PortalCall::RequestClose {
             handle: OwnedObjectPath::try_from(SCREEN_OK).unwrap(),
@@ -4834,10 +4823,9 @@ mod tests {
         apply_portal_call(&mut ledger, close, &mut actions, &mut ui);
         // The prompt's method reply completes cancelled through its own
         // link (already in the entry before the close).
-        assert!(ledger
+        assert!(!ledger
             .screenshots
-            .get(&OwnedObjectPath::try_from(SCREEN_OK).unwrap())
-            .is_none());
+            .contains_key(&OwnedObjectPath::try_from(SCREEN_OK).unwrap()));
         assert!(matches!(
             actions.as_slice(),
             [PortalAction::UnexportRequest(_)]
@@ -4918,7 +4906,7 @@ mod tests {
             options: super::super::PortalDict::new(),
             caller: Some(Caller(":1.9".into())),
             reply: {
-                let (link, pending_reply) = make_reply_pair();
+                let (link, _pending_reply) = make_reply_pair();
                 link
             },
         };

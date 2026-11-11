@@ -123,7 +123,7 @@ pub fn mouse_cursor_channel_method_call_handler<BackendData: Backend + 'static>(
                 None,
             );
         }
-        return result.not_implemented();
+        result.not_implemented()
     }
 }
 

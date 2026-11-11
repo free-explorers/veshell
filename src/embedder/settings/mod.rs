@@ -20,7 +20,6 @@ type MonitorSettingsCallback<BackendData> = fn(&mut State<BackendData>, &str);
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-
 pub struct KeyboardSettings {
     pub layout: String,
     pub swap_alt_and_win: bool,
@@ -150,7 +149,6 @@ fn default_keyboard_repeat_rate() -> u64 {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-
 pub struct MouseAndTouchpadSettings {
     /// Reverse the scroll direction on mice.
     ///
@@ -209,11 +207,13 @@ pub struct ThemeSettings {
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub enum AutomaticPowerAction {
     Disabled,
     Suspend,
     Hibernate,
     /// Ask logind to suspend, then hibernate after its configured delay.
+    #[default]
     SuspendThenHibernate,
 }
 
@@ -230,12 +230,6 @@ where
         "suspendThenHibernate" => AutomaticPowerAction::SuspendThenHibernate,
         _ => AutomaticPowerAction::Disabled,
     })
-}
-
-impl Default for AutomaticPowerAction {
-    fn default() -> Self {
-        Self::SuspendThenHibernate
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
@@ -513,7 +507,7 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
             if option_env!("VESHELL_DEFAULT_CONFIG_DIR").is_none()
                 && executable_path.starts_with("/usr/local/bin")
             {
-                default_settings_folder = format!("/usr/local/share/veshell/settings/default");
+                default_settings_folder = "/usr/local/share/veshell/settings/default".to_string();
             }
         }
 
@@ -561,8 +555,7 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
         );
 
         if !config_folder.exists() {
-            std::fs::create_dir_all(config_folder.clone())
-                .expect("Unable to create user settings folder");
+            std::fs::create_dir_all(config_folder).expect("Unable to create user settings folder");
         }
 
         let mut config_source = NotifySource::new().unwrap();

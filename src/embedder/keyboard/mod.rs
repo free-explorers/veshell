@@ -503,14 +503,14 @@ fn handle_embedder_hotkeys<BackendData: Backend + 'static>(
     // otherwise Flutter keeps believing that key is held (which froze the
     // shell hotkeys after selection sessions).
     if data.capture_state.session.is_some() {
-        if event.state == KeyState::Released {
-            if data.flutter_sent_keys.remove(&event.key_code).is_some() {
-                data.flutter_engine
-                    .as_mut()
-                    .unwrap()
-                    .send_key_event(event, false, true)
-                    .expect("Failed to send pending key release to Flutter");
-            }
+        if event.state == KeyState::Released
+            && data.flutter_sent_keys.remove(&event.key_code).is_some()
+        {
+            data.flutter_engine
+                .as_mut()
+                .unwrap()
+                .send_key_event(event, false, true)
+                .expect("Failed to send pending key release to Flutter");
         }
         if event.keysym == Keysym::Escape && event.state == KeyState::Pressed {
             crate::capture::cancel_capture_session(data);
@@ -567,7 +567,7 @@ fn handle_embedder_hotkeys<BackendData: Backend + 'static>(
         return true;
     }
 
-    return false;
+    false
 }
 
 pub fn post_flutter_handle_key_event<BackendData: Backend + 'static>(

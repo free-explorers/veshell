@@ -217,7 +217,7 @@ fn render_last_frame(
         .unwrap_or_default();
     if !tree.is_empty() {
         let pixels = render_pixels(renderer, size, &tree)?;
-        if pixels.chunks_exact(4).any(|pixel| pixel[3] != 0) {
+        if pixels.as_chunks::<4>().0.iter().any(|pixel| pixel[3] != 0) {
             return Ok((size, pixels));
         }
     }
@@ -351,7 +351,7 @@ fn area_average(size: Size<i32, Physical>, pixels: &[u8], target: Size<i32, Phys
             let mut sum = [0u64; 4];
             for y in rows.clone() {
                 let row = &pixels[(y * width + columns.start) * 4..(y * width + columns.end) * 4];
-                for pixel in row.chunks_exact(4) {
+                for pixel in row.as_chunks::<4>().0 {
                     for channel in 0..4 {
                         sum[channel] += pixel[channel] as u64;
                     }
@@ -369,11 +369,11 @@ fn area_average(size: Size<i32, Physical>, pixels: &[u8], target: Size<i32, Phys
 
 /// Whether a frame shows nothing: fully transparent, or one plain colour.
 fn is_blank(pixels: &[u8]) -> bool {
-    let Some(first) = pixels.chunks_exact(4).next() else {
+    let Some(first) = pixels.as_chunks::<4>().0.iter().next() else {
         return true;
     };
-    pixels.chunks_exact(4).all(|pixel| pixel[3] == 0)
-        || pixels.chunks_exact(4).all(|pixel| {
+    pixels.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 0)
+        || pixels.as_chunks::<4>().0.iter().all(|pixel| {
             pixel
                 .iter()
                 .zip(first)
@@ -430,7 +430,7 @@ fn gaussian_blur(size: Size<i32, Physical>, pixels: &[u8], sigma: f64) -> Vec<u8
 /// Converts premultiplied RGBA (what the renderer reads back) to the straight
 /// alpha PNG stores.
 fn unpremultiply(pixels: &mut [u8]) {
-    for pixel in pixels.chunks_exact_mut(4) {
+    for pixel in pixels.as_chunks_mut::<4>().0 {
         let alpha = pixel[3] as u32;
         if alpha == 0 || alpha == 255 {
             continue;

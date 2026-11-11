@@ -66,8 +66,8 @@ impl TextInputModel {
         self.composing_range = TextRange::new_position(self.selection.start());
     }
 
-    pub fn update_composing_text_selection(&mut self, text: &Vec<u16>, selection: &TextRange) {
-        if text.len() == 0 && self.composing_range.collapsed() {
+    pub fn update_composing_text_selection(&mut self, text: &[u16], selection: &TextRange) {
+        if text.is_empty() && self.composing_range.collapsed() {
             return;
         }
         let range_to_delete = if self.composing_range.collapsed() {
@@ -87,12 +87,12 @@ impl TextInputModel {
         );
     }
 
-    pub fn update_composing_text(&mut self, text: &Vec<u16>) {
+    pub fn update_composing_text(&mut self, text: &[u16]) {
         self.update_composing_text_selection(text, &TextRange::new_position(text.len()));
     }
 
     pub fn update_composing_text_utf8(&mut self, text: &str) {
-        self.update_composing_text(&text.encode_utf16().collect());
+        self.update_composing_text(&text.encode_utf16().collect::<Vec<_>>());
     }
 
     pub fn commit_composing(&mut self) {
@@ -124,17 +124,17 @@ impl TextInputModel {
 
     pub fn add_char_point(&mut self, c: char) {
         if c as u32 <= 0xFFFF {
-            self.add_text(&vec![c as u16])
+            self.add_text(&[c as u16])
         } else {
             let to_decompose = c as u32 - 0x10000;
-            self.add_text(&vec![
+            self.add_text(&[
                 ((to_decompose >> 10) + 0xd800) as u16,
                 ((to_decompose % 0x400) + 0xdc00) as u16,
             ])
         }
     }
 
-    pub fn add_text(&mut self, text: &Vec<u16>) {
+    pub fn add_text(&mut self, text: &[u16]) {
         self.delete_selected();
         if self.composing {
             self.text.splice(
@@ -170,7 +170,7 @@ impl TextInputModel {
             }
             return true;
         }
-        return false;
+        false
     }
 
     pub fn delete(&mut self) -> bool {
@@ -192,7 +192,7 @@ impl TextInputModel {
             }
             return true;
         }
-        return false;
+        false
     }
 
     pub fn delete_surroundings(&mut self, offset_from_cursor: i32, mut count: usize) -> bool {
@@ -252,7 +252,7 @@ impl TextInputModel {
             self.composing_range
                 .set_end(self.composing_range.end() - deleted_length);
         }
-        return true;
+        true
     }
 
     pub fn move_cursor_to_beginning(&mut self) -> bool {
@@ -261,7 +261,7 @@ impl TextInputModel {
             return false;
         }
         self.selection = TextRange::new_position(min_pos);
-        return true;
+        true
     }
 
     pub fn move_cursor_to_end(&mut self) -> bool {
@@ -270,7 +270,7 @@ impl TextInputModel {
             return false;
         }
         self.selection = TextRange::new_position(max_pos);
-        return true;
+        true
     }
 
     pub fn select_to_beginning(&mut self) -> bool {
@@ -279,7 +279,7 @@ impl TextInputModel {
             return false;
         }
         self.selection = TextRange::new(self.selection.base(), min_pos);
-        return true;
+        true
     }
 
     pub fn select_to_end(&mut self) -> bool {
@@ -288,7 +288,7 @@ impl TextInputModel {
             return false;
         }
         self.selection = TextRange::new(self.selection.base(), max_pos);
-        return true;
+        true
     }
 
     pub fn move_cursor_forward(&mut self) -> bool {
@@ -306,7 +306,7 @@ impl TextInputModel {
             self.selection = TextRange::new_position(position + count);
             return true;
         }
-        return false;
+        false
     }
 
     pub fn move_cursor_back(&mut self) -> bool {
@@ -324,7 +324,7 @@ impl TextInputModel {
             self.selection = TextRange::new_position(position - count);
             return true;
         }
-        return false;
+        false
     }
 
     pub fn get_text(&self) -> String {
@@ -333,7 +333,7 @@ impl TextInputModel {
 
     pub fn get_cursor_offset(&self) -> usize {
         let leading_text = &self.text[0..self.selection.extent()];
-        return String::from_utf16_lossy(leading_text).len();
+        String::from_utf16_lossy(leading_text).len()
     }
 
     pub fn text_range(&self) -> TextRange {

@@ -1,10 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use smithay::{
-    utils::{Logical, Point, Rectangle, Size},
-    wayland::{compositor::with_states, fractional_scale::with_fractional_scale},
-    xwayland::XWaylandClientData,
-};
+use smithay::utils::{Logical, Point, Rectangle, Size};
 
 use crate::{
     backend::Backend,
@@ -385,7 +381,7 @@ fn clamped_popup_position(
 #[cfg(test)]
 mod tests {
     use super::clamped_popup_position;
-    use smithay::utils::{Logical, Point, Rectangle, Size};
+    use smithay::utils::{Point, Rectangle, Size};
 
     #[test]
     fn clamps_a_popup_below_the_tile_back_inside() {

@@ -947,7 +947,7 @@ struct PortalDials {
 
 thread_local! {
     static BRIDGE_CALLS: std::cell::OnceCell<calloop::channel::Sender<PortalCall>> =
-        std::cell::OnceCell::new();
+        const { std::cell::OnceCell::new() };
 }
 
 fn connection_calls_of() -> Option<calloop::channel::Sender<PortalCall>> {
