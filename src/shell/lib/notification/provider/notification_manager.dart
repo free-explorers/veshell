@@ -35,7 +35,7 @@ import 'package:shell/workspace/provider/window_workspace_map.dart';
 
 part 'notification_manager.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 @JsonPersist()
 class NotificationManager extends _$NotificationManager {
   /// The popup channel each live notification was pushed to, so its popup can
@@ -203,7 +203,7 @@ class NotificationManager extends _$NotificationManager {
     if (pid == null) {
       return null;
     }
-    return ref.read(pidToMetaWindowIdProvider(pid));
+    return ref.readMetaWindowIdForPid(pid);
   }
 
   String? _resolveAppId(DbusNotification notification) {
@@ -215,11 +215,11 @@ class NotificationManager extends _$NotificationManager {
     if (pid == null) {
       return null;
     }
-    final metaWindowId = ref.read(pidToMetaWindowIdProvider(pid));
+    final metaWindowId = ref.readMetaWindowIdForPid(pid);
     if (metaWindowId == null) {
       return null;
     }
-    return ref.read(metaWindowStateProvider(metaWindowId)).appId;
+    return ref.readMetaWindow(metaWindowId).appId;
   }
 
   /// Turns a window attention request into a synthesized notification.
@@ -344,7 +344,7 @@ class NotificationManager extends _$NotificationManager {
   /// Reads a meta window state, returning `null` while it is not initialized.
   MetaWindow? _readMetaWindow(String metaWindowId) {
     try {
-      return ref.read(metaWindowStateProvider(metaWindowId));
+      return ref.readMetaWindow(metaWindowId);
     } on Object catch (_) {
       return null;
     }
@@ -368,7 +368,7 @@ class NotificationManager extends _$NotificationManager {
     }
     _popupChannels[notification.id] = channel;
     ref
-        .read(notificationChannelProvider(channel).notifier)
+        .notificationChannelNotifier(channel)
         .add(
           notification,
           timeout: notificationPopupTimeout(
@@ -600,7 +600,7 @@ class NotificationManager extends _$NotificationManager {
     if (channel == null) {
       return;
     }
-    ref.read(notificationChannelProvider(channel).notifier).remove(id);
+    ref.notificationChannelNotifier(channel).remove(id);
   }
 
   Future<void> _sendNotifyResult(int callToken, int id) async {

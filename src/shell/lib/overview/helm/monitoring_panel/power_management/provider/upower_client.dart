@@ -4,7 +4,7 @@ import 'package:upower/upower.dart';
 
 part 'upower_client.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 class UpowerClient extends _$UpowerClient {
   @override
   Future<UPowerClient> build() async {

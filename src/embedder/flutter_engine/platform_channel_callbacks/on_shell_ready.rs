@@ -5,10 +5,7 @@ use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 
 use crate::backend::Backend;
-use crate::flutter_engine::wayland_messages::NewX11Surface;
-use crate::wayland::wayland::get_surface_id;
 use serde_json::json;
-use smithay::reexports::wayland_server::Resource;
 
 use crate::state::State;
 

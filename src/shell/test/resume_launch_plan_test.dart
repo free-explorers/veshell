@@ -3,6 +3,7 @@ import 'package:shell/application/model/resume_launch_plan.dart';
 import 'package:shell/window/model/resume_context.serializable.dart';
 
 ResumeLaunchPlan? plan({
+  required Set<String> existing,
   String? cwd,
   List<String> argv = const [],
   String? executable,
@@ -14,7 +15,6 @@ ResumeLaunchPlan? plan({
   String? appId,
   String? savedTitle,
   bool Function(String path)? isExecutable,
-  required Set<String> existing,
 }) {
   return buildResumeLaunchPlan(
     context: ResumeContext(
@@ -131,7 +131,6 @@ void main() {
     final result = plan(
       cwd: '/home/user/src',
       customExec: 'nvim .',
-      execTemplate: 'app %U',
       existing: {'/home/user/src', '/home/user'},
     )!;
 
@@ -315,7 +314,7 @@ void main() {
         cwd: '/home/user/src',
         executable: '/usr/bin/wezterm',
         terminal: terminalWith(
-          const ForegroundProgram(program: '/usr/bin/less', arguments: []),
+          const ForegroundProgram(program: '/usr/bin/less'),
         ),
         execTemplate: 'wezterm',
         appId: 'wezterm',

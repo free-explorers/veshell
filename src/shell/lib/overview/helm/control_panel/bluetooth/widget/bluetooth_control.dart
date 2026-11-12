@@ -26,11 +26,11 @@ class BluetoothControl extends HookConsumerWidget {
         .sorted((a, b) {
           if (a.connected == b.connected) {
             if (a.paired == b.paired) {
-              return a.name.compareTo(b.name ?? '');
+              return a.name.compareTo(b.name);
             }
-            return (b.paired ?? false) ? 1 : -1;
+            return b.paired ? 1 : -1;
           }
-          return (b.connected ?? false) ? 1 : -1;
+          return b.connected ? 1 : -1;
         })
         .toList();
 

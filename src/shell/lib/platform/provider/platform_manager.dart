@@ -23,7 +23,7 @@ const _goneInteractionCodes = {
 ///
 /// provide a stream of [PlatformEvent]
 /// and a method to send [PlatformRequest]
-@riverpod
+@Riverpod(keepAlive: true)
 class PlatformManager extends _$PlatformManager {
   /// Build the stream of [PlatformEvent]
   @override

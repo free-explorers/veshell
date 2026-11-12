@@ -11,7 +11,7 @@ pub fn install_flutter_sdk() -> Result<(), Box<dyn std::error::Error>> {
     if !std::path::Path::new(FLUTTER_REPO_DIR).exists() {
         println!("Sdk not found, cloning flutter repo...");
         let cloned = std::process::Command::new("git")
-            .args(&["clone", FLUTTER_REPO_URL, FLUTTER_REPO_DIR])
+            .args(["clone", FLUTTER_REPO_URL, FLUTTER_REPO_DIR])
             .status()?;
         if !cloned.success() {
             return Err("Failed to clone the project Flutter SDK".into());

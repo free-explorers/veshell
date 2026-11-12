@@ -9,7 +9,7 @@ part 'platform_focused_view.g.dart';
 /// (or the engine asks to move keyboard focus across views), independent of
 /// Flutter's widget focus quirks. `null` until the compositor first reports a
 /// focused view.
-@riverpod
+@Riverpod(keepAlive: true)
 class PlatformFocusedViewId extends _$PlatformFocusedViewId {
   @override
   int? build() => null;

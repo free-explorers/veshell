@@ -85,12 +85,9 @@ class ScreenshotPromptHost extends ConsumerWidget {
     // The flow owns every input while it is open: the prompt is the only
     // thing that reacts until a decision is delivered.
     return Center(
-      child: Container(
+      child: ColoredBox(
         color: Colors.black.withValues(alpha: 0.4),
-        child: Align(
-          alignment: Alignment.center,
-          child: ScreenshotPromptPicker(),
-        ),
+        child: const Align(child: ScreenshotPromptPicker()),
       ),
     );
   }

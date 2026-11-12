@@ -89,7 +89,6 @@ class TilePopupHost extends HookConsumerWidget {
       child: DeferredPointerHandler(
         child: Stack(
           key: hostKey,
-          clipBehavior: Clip.hardEdge,
           children: [
             for (final popupId in popupIds)
               MetaPopupWidget(metaPopupId: popupId),

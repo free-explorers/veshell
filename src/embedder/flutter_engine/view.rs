@@ -13,8 +13,7 @@ use smithay::backend::allocator::{Allocator, Slot, Swapchain};
 use smithay::backend::renderer::gles::GlesTexture;
 use smithay::backend::renderer::Texture;
 use smithay::output::Output;
-use smithay::reexports::calloop::{self, channel};
-use smithay::reexports::winit::event;
+use smithay::reexports::calloop::channel;
 use smithay::utils::{SerialCounter, Size};
 use tracing::debug;
 pub struct OutputViewIdWrapper {
@@ -319,15 +318,19 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                             })
                             .unwrap();
 
-                        data.flutter_engine
+                        if let Err(err) = data
+                            .flutter_engine
                             .as_mut()
                             .unwrap()
-                            .resize_view(view_id, output);
+                            .resize_view(view_id, output)
+                        {
+                            tracing::error!(view_id, "Failed to size the added view: {err}");
+                        }
                     }
                 }
             })
             .unwrap();
-        let result = unsafe {
+        let _result = unsafe {
             FlutterEngineAddView(
                 self.handle,
                 &FlutterAddViewInfo {
@@ -344,7 +347,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                         physical_view_inset_right: 0.,
                         physical_view_inset_bottom: 0.,
                         physical_view_inset_left: 0.,
-                        display_id: display_id,
+                        display_id,
                         view_id,
                         has_constraints: false,
                         min_width_constraint: 0,
@@ -456,7 +459,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                 physical_view_inset_bottom: 0.0,
                 physical_view_inset_left: 0.0,
                 display_id: 0,
-                view_id: view_id,
+                view_id,
                 has_constraints: false,
                 min_width_constraint: 0,
                 min_height_constraint: 0,

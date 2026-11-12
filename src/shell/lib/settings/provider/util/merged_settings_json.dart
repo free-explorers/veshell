@@ -6,7 +6,7 @@ import 'package:shell/settings/provider/util/default_settings_json.dart';
 
 part 'merged_settings_json.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 class MergedSettingsJson extends _$MergedSettingsJson {
   @override
   Map<String, dynamic> build() {

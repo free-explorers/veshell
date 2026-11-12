@@ -6,7 +6,7 @@ import 'package:upower/upower.dart';
 
 part 'upower_battery_device.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 Future<UPowerDevice?> upowerBatteryDevice(Ref ref) async {
   final devices = await ref.watch(upowerDevicesProvider.future);
   final batteries = devices.where(

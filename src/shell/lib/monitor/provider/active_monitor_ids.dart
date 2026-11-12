@@ -16,7 +16,7 @@ part 'active_monitor_ids.g.dart';
 /// owner). Before the first layout event the connected list is only the empty
 /// initial value, so the persisted registry is used instead to avoid releasing
 /// every screen during startup.
-@riverpod
+@Riverpod(keepAlive: true)
 ISet<MonitorId> activeMonitorIds(Ref ref) {
   // Kept alive eagerly so `MonitorManager` is always built (and its hotplug
   // reconcile listener registered), even once ownership switches to the

@@ -5,7 +5,7 @@ import 'package:shell/settings/provider/settings_properties.dart';
 
 part 'setting_definition_by_path.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 SettingDefinition? settingDefinitionByPath(Ref ref, String path) {
   final properties = ref.watch(settingsPropertiesProvider);
   final pathParts = path.split('.');

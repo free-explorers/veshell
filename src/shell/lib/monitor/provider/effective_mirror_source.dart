@@ -12,7 +12,7 @@ part 'effective_mirror_source.g.dart';
 /// must be connected and must itself be a regular display (not configured to
 /// mirror); otherwise the monitor falls back to a regular display. See
 /// `docs/specifications/monitor.md` (section "Mirroring").
-@riverpod
+@Riverpod(keepAlive: true)
 String? effectiveMirrorSource(Ref ref, MonitorId monitorId) {
   final target = ref.watch(monitorSettingStateProvider(monitorId)).mirrorOf;
   if (target == null || target == monitorId) {

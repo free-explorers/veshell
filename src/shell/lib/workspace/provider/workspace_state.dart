@@ -1,3 +1,4 @@
+// Enum values spell freedesktop menu categories exactly (Game, AudioVideo...).
 // ignore_for_file: constant_identifier_names
 
 import 'package:collection/collection.dart';
@@ -274,7 +275,7 @@ class WorkspaceState extends _$WorkspaceState {
             ).select((value) => value.properties.appId),
           ),
         )
-        .whereNotNull()
+        .nonNulls
         .toList();
     if (appIdList.isEmpty) return null;
     final categoryScoreMap = <WorkspaceCategory, int>{};
@@ -334,4 +335,20 @@ class WorkspaceState extends _$WorkspaceState {
     }
     return mostRatedCategoryEntry?.key;
   }
+}
+
+/// Access to [WorkspaceState] for keepAlive providers.
+///
+/// riverpod_lint flags keepAlive providers that use auto-dispose ones, but it
+/// cannot see a `ref.keepAlive()` link taken by hand. The state pins itself with one from `build` until `delete`, so using
+/// it from a keepAlive provider is safe.
+/// Only add accessors here for that reason: route anything else through
+/// `ref` so the lint keeps checking it.
+extension WorkspaceStateAccess on Ref {
+  Workspace readWorkspace(WorkspaceId id) => read(workspaceStateProvider(id));
+
+  Workspace watchWorkspace(WorkspaceId id) => watch(workspaceStateProvider(id));
+
+  WorkspaceState workspaceNotifier(WorkspaceId id) =>
+      read(workspaceStateProvider(id).notifier);
 }

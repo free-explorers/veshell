@@ -162,11 +162,7 @@ class OverviewWidget extends HookConsumerWidget {
 /// `BackdropFilter`; the blur now lives on the rest of the screen
 /// (`OverviewBlurTarget`), so this only frosts (tint + grain) and fades.
 class _OverviewScrim extends HookWidget {
-  const _OverviewScrim({
-    required this.animationController,
-    this.child,
-    super.key,
-  });
+  const _OverviewScrim({required this.animationController, this.child});
 
   final Widget? child;
   final AnimationController animationController;

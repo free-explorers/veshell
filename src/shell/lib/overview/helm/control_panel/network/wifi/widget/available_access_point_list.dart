@@ -9,7 +9,6 @@ import 'package:shell/overview/helm/control_panel/network/wifi/provider/wifi_acc
 import 'package:shell/overview/helm/control_panel/network/wifi/provider/wifi_manager.dart';
 import 'package:shell/overview/helm/control_panel/network/wifi/widget/access_point_icon.dart';
 import 'package:shell/overview/helm/control_panel/network/wifi/widget/access_point_label.dart';
-import 'package:shell/shared/nm/provider/nm_device.dart';
 import 'package:shell/shared/widget/expandable.dart';
 import 'package:shell/shared/widget/expandable_card.dart';
 import 'package:shell/shared/widget/shell_icon.dart';
@@ -21,8 +20,6 @@ class AvailableAccessPointList extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final device = ref.watch(nmDeviceProvider(address));
-
     final availableAccessPoint = ref
         .watch(wifiAccessPointListProvider(address))
         .where((element) => element.settingsConnection == null)
@@ -75,13 +72,15 @@ class AvailableAccessPointTile extends HookConsumerWidget {
     );
 
     Future<void> onSubmitted() async {
-      final res = await ref
+      await ref
           .read(wifiManagerProvider(address).notifier)
           .connectToAccessPoint(
             accessPoint.bestAccessPoint!,
             textController.text,
           );
-      ExpandableCard.of(context).collapse();
+      if (context.mounted) {
+        ExpandableCard.of(context).collapse();
+      }
     }
 
     return Expandable(

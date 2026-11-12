@@ -69,10 +69,10 @@ class ReadOnlySystemBusClient extends DBusClient {
 
   @override
   Future<DBusMethodSuccessResponse> callMethod({
-    String? destination,
     required DBusObjectPath path,
-    String? interface,
     required String name,
+    String? destination,
+    String? interface,
     Iterable<DBusValue> values = const [],
     DBusSignature? replySignature,
     bool noReplyExpected = false,

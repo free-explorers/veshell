@@ -1,17 +1,11 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use smithay::{
-    reexports::wayland_protocols::xdg::{
-        decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode as DecorationMode,
-        shell::server::xdg_toplevel,
-    },
-    utils::{Logical, Point, Rectangle, Size, Transform},
+    reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
+    utils::{Logical, Point, Rectangle, Size},
     wayland::{
-        compositor::{send_surface_state, with_states},
-        fractional_scale::with_fractional_scale,
-        seat::WaylandFocus,
-        shell::xdg::XDG_TOPLEVEL_ROLE,
-        xwayland_shell::XWAYLAND_SHELL_ROLE,
+        compositor::with_states, fractional_scale::with_fractional_scale,
+        shell::xdg::XDG_TOPLEVEL_ROLE, xwayland_shell::XWAYLAND_SHELL_ROLE,
     },
     xwayland::XWaylandClientData,
 };
@@ -612,7 +606,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     }
                     meta_window.mapped = value;
                 }
-                if value == false {
+                if !value {
                     // An unmapped window stops rendering: there is no
                     // content a window share could keep streaming, so the
                     // session closes with a clear reason (spec 5.3).
@@ -1002,7 +996,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     size_changed = meta_window.geometry.as_ref().map(|rect| rect.0.size)
                         != value.as_ref().map(|rect| rect.0.size);
                     meta_window.geometry = value.clone();
-                    if propagate == false {
+                    if !propagate {
                         let Some(wl_surface) = self.surfaces.get(&meta_window.surface_id).cloned()
                         else {
                             return;
@@ -1247,10 +1241,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         .and_then(|name| self.output_scale_for_name(name));
                     if let Some(scale) = scale {
                         self.patch_meta_window(
-                            MetaWindowPatch::UpdateScaleRatio {
-                                id: id,
-                                value: scale,
-                            },
+                            MetaWindowPatch::UpdateScaleRatio { id, value: scale },
                             true,
                         );
                     }
@@ -1396,7 +1387,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     meta_window.scale_ratio = value;
 
                     if let Some(surface) = self.surfaces.get(&meta_window.surface_id) {
-                        if let Some(x11_surface) = self.x11_surface_per_wl_surface.get(surface) {
+                        if let Some(_x11_surface) = self.x11_surface_per_wl_surface.get(surface) {
                             // for xwayland force scale ratio to be the same as the client scale
                             if let Some(xwayland_scale_ratio) = xwayland_scale_ratio {
                                 meta_window.scale_ratio = xwayland_scale_ratio;

@@ -7,7 +7,7 @@ import 'package:shell/shared/nm/provider/nm_device_removed.dart';
 
 part 'nm_devices.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 class NmDevices extends _$NmDevices {
   IMap<String, NetworkManagerDevice> _addressDeviceMap =
       <String, NetworkManagerDevice>{}.lock;

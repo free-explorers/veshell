@@ -117,7 +117,7 @@ void main() {
     final entryList = [
       _file('b.txt', size: 30, modified: DateTime(2026, 1, 3)),
       _directory('folder'),
-      _file('a.png', size: 10, modified: DateTime(2026, 1, 1)),
+      _file('a.png', size: 10, modified: DateTime(2026)),
       _file('c.md', size: 20, modified: DateTime(2026, 1, 2)),
     ];
 

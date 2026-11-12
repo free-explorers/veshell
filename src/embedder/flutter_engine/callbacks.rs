@@ -8,12 +8,8 @@ use tracing::{debug, error};
 
 use crate::backend::Backend;
 use crate::flutter_engine::embedder::{
-    FlutterAddViewResult, FlutterBackingStore, FlutterBackingStoreConfig,
-    FlutterBackingStoreType_kFlutterBackingStoreTypeOpenGL, FlutterBackingStore__bindgen_ty_1,
-    FlutterDamage, FlutterOpenGLBackingStore, FlutterOpenGLBackingStore__bindgen_ty_1,
-    FlutterOpenGLFramebuffer, FlutterOpenGLTargetType_kFlutterOpenGLTargetTypeFramebuffer,
-    FlutterOpenGLTexture, FlutterPlatformMessage, FlutterPresentInfo, FlutterPresentViewInfo,
-    FlutterRect, FlutterTask, FlutterTransformation, FlutterViewFocusChangeRequest,
+    FlutterDamage, FlutterOpenGLTexture, FlutterPlatformMessage, FlutterPresentInfo, FlutterRect,
+    FlutterTask, FlutterTransformation, FlutterViewFocusChangeRequest,
     FlutterViewFocusState_kFocused,
 };
 use crate::flutter_engine::platform_channels::basic_message_channel::BasicMessageChannel;
@@ -69,7 +65,7 @@ where
     }
 }
 
-pub unsafe extern "C" fn fbo_callback<BackendData>(user_data: *mut c_void) -> u32
+pub unsafe extern "C" fn fbo_callback<BackendData>(_user_data: *mut c_void) -> u32
 where
     BackendData: Backend + 'static,
 {
@@ -79,7 +75,7 @@ where
 }
 
 pub unsafe extern "C" fn present_with_info<BackendData>(
-    user_data: *mut c_void,
+    _user_data: *mut c_void,
     _frame_present_info: *const FlutterPresentInfo,
 ) -> bool
 where

@@ -4,7 +4,7 @@ import 'package:upower/upower.dart';
 
 part 'upower_devices.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 Future<List<UPowerDevice>> upowerDevices(Ref ref) async {
   final upower = await ref.watch(upowerClientProvider.future);
 

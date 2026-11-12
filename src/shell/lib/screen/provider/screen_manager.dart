@@ -45,16 +45,14 @@ class ScreenManager extends _$ScreenManager {
             remainingScreenIds.isEmpty ? null : remainingScreenIds.first,
           );
     }
-    ref.read(screenStateProvider(screenId).notifier).delete();
+    ref.screenNotifier(screenId).delete();
     state = state.copyWith(screenIds: state.screenIds.remove(screenId));
   }
 
   void removeIfEmpty(ScreenId screenId) {
-    final screen = ref.read(screenStateProvider(screenId));
+    final screen = ref.readScreen(screenId);
     if (screen.workspaceList.length == 1) {
-      final workspace = ref.read(
-        workspaceStateProvider(screen.workspaceList.first),
-      );
+      final workspace = ref.readWorkspace(screen.workspaceList.first);
       if (workspace.tileableWindowList.isEmpty) {
         ref.read(screenManagerProvider.notifier).removeScreen(screenId);
       }

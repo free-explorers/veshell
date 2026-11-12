@@ -15,7 +15,7 @@ part 'monitor_setting_json.g.dart';
 /// configuration from the live `Monitor` (reset to detected) without writing
 /// the file. `MonitorSettingState` is the only writer. See
 /// `docs/specifications/monitor.md` (section "State ownership").
-@riverpod
+@Riverpod(keepAlive: true)
 class MonitorSettingJson extends _$MonitorSettingJson {
   StreamSubscription<FileSystemEvent>? _subscription;
 

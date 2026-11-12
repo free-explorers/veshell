@@ -3,20 +3,16 @@ pub mod xdg {
 
     use serde_json::json;
     use smithay::{
-        backend::renderer::utils::with_renderer_surface_state,
         desktop::{find_popup_root_surface, get_popup_toplevel_coords, PopupKind},
         reexports::{
             wayland_protocols::xdg::{
                 decoration::zv1::server::zxdg_toplevel_decoration_v1, shell::server::xdg_toplevel,
             },
-            wayland_server::{
-                protocol::{wl_seat::WlSeat, wl_surface::WlSurface},
-                Resource,
-            },
+            wayland_server::protocol::{wl_seat::WlSeat, wl_surface::WlSurface},
         },
         utils::{Logical, Rectangle, Serial, Size},
         wayland::{
-            compositor::{self, add_post_commit_hook, with_states},
+            compositor::{self, with_states},
             fractional_scale::with_fractional_scale,
             shell::xdg::{
                 decoration::XdgDecorationHandler,
@@ -34,11 +30,11 @@ pub mod xdg {
     use uuid::Uuid;
 
     use crate::{
-        flutter_engine::wayland_messages::{MyPoint, MyRectangle},
+        flutter_engine::wayland_messages::MyRectangle,
         meta_window_state::{
-            meta_popup::{self, MetaPopup, MetaPopupCategory, MetaPopupPatch},
+            meta_popup::{MetaPopup, MetaPopupCategory, MetaPopupPatch},
             meta_resize_edge::MetaResizeEdge,
-            meta_window::{self, MetaWindowPatch},
+            meta_window::MetaWindowPatch,
         },
         state::State,
         wayland::wayland::{get_surface_id, WlSurfaceVeshellState},
@@ -96,11 +92,8 @@ pub mod xdg {
                             // committed buffer is the only size information
                             // available. Without this fallback the window has
                             // no placement and cannot be moved or resized.
-                            let (_, buffer_size) = state
-                                .texture_ids_per_surface_id
-                                .get(&surface_id)?
-                                .last()?
-                                .clone();
+                            let (_, buffer_size) =
+                                *state.texture_ids_per_surface_id.get(&surface_id)?.last()?;
                             let scale = state
                                 .get_meta_window(surface_id)
                                 .map(|meta_window| meta_window.scale_ratio)
@@ -220,8 +213,8 @@ pub mod xdg {
                 native_root: None,
                 parent_relative: Some(parent_relative.into()),
                 surface_id,
-                scale_ratio: scale_ratio,
-                geometry: geometry,
+                scale_ratio,
+                geometry,
             });
             self.meta_window_state
                 .meta_popup_id_per_surface_id
@@ -306,7 +299,7 @@ pub mod xdg {
                 return;
             };
             if pointer.has_grab(serial) {
-                pointer.unset_grab(self, serial, self.clock.now().as_millis() as u32);
+                pointer.unset_grab(self, serial, self.clock.now().as_millis());
             }
 
             if !meta_window.allows_interactive_resize() {

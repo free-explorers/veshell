@@ -7,7 +7,7 @@ import 'package:shell/settings/provider/util/config_directory.dart';
 
 part 'configured_settings_json.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 class ConfiguredSettingsJson extends _$ConfiguredSettingsJson {
   StreamSubscription<FileSystemEvent>? _subscription;
 

@@ -28,7 +28,6 @@ use smithay::backend::renderer::{Bind, ExportMem, ImportAll, ImportMem, Offscree
 use smithay::output::Output;
 use smithay::reexports::calloop::{channel, LoopHandle};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::reexports::wayland_server::Resource;
 use smithay::utils::{Buffer, Logical, Physical, Point, Rectangle, Scale, Size, Transform};
 use smithay::wayland::selection::data_device::set_data_device_selection;
 use smithay::wayland::selection::SelectionTarget;
@@ -494,10 +493,7 @@ pub(crate) fn owned_popup_layers(
         })
         .collect();
     popups.sort_by_key(|(surface_id, _, _, _)| *surface_id);
-    popups
-        .into_iter()
-        .map(|(id, surface, origin, scale)| (id, surface, origin, scale))
-        .collect()
+    popups.into_iter().collect()
 }
 
 /// Renders one client surface's whole tree (subsurfaces included) at the
@@ -941,7 +937,7 @@ fn compose_desktop_area(
 ) -> Result<(Size<i32, Physical>, Vec<u8>), String> {
     let size = pixel_size(area.size, scale)?;
     let mut pixels = vec![0; pixel_len(size)?];
-    for pixel in pixels.chunks_exact_mut(4) {
+    for pixel in pixels.as_chunks_mut::<4>().0 {
         pixel[3] = 255;
     }
 
@@ -990,12 +986,12 @@ fn compose_window_pixels(
 ) -> Result<(Size<i32, Physical>, Vec<u8>), String> {
     let size = pixel_size(viewport.size, viewport_scale)?;
     let mut pixels = vec![0; pixel_len(size)?];
-    for pixel in pixels.chunks_exact_mut(4) {
+    for pixel in pixels.as_chunks_mut::<4>().0 {
         pixel[3] = 255;
     }
 
     let mut ordered: Vec<&CapturedWindowLayer> = layers.iter().collect();
-    ordered.sort_by(|a, b| a.order.cmp(&b.order));
+    ordered.sort_by_key(|a| a.order);
     for layer in ordered {
         if !layer.origin_in_viewport.x.is_finite() || !layer.origin_in_viewport.y.is_finite() {
             return Err("Capture bounds are invalid".to_string());
@@ -1555,7 +1551,7 @@ fn start_area_recording<BackendData: Backend + 'static>(
 /// doomed pipeline.
 fn compose_recording_frame(
     area: Rectangle<f64, Logical>,
-    scale: f64,
+    _scale: f64,
     output_geometry: Rectangle<f64, Logical>,
     snapshot: CaptureSnapshot,
     geometry_size: Option<Size<i32, Physical>>,
@@ -1612,7 +1608,7 @@ fn schedule_recording_heartbeat<BackendData: Backend + 'static>(
     generation: u64,
 ) {
     use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
-    let mut timer = Timer::from_duration(RECORDING_HEARTBEAT_INTERVAL);
+    let timer = Timer::from_duration(RECORDING_HEARTBEAT_INTERVAL);
     state
         .loop_handle
         .insert_source(timer, move |_, _, state| {

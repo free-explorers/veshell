@@ -8,11 +8,11 @@ use smithay::input::pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotio
 use smithay::reexports::wayland_server::protocol::wl_pointer;
 use smithay::utils::{Logical, Point, Rectangle, SERIAL_COUNTER};
 use smithay::wayland::seat::WaylandFocus;
-use tracing::{debug, info};
+use tracing::debug;
 
 use crate::backend::Backend;
 use crate::flutter_engine::embedder::{
-    FlutterPointerDeviceKind, FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
+    FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
     FlutterPointerDeviceKind_kFlutterPointerDeviceKindTrackpad, FlutterPointerEvent,
     FlutterPointerPhase, FlutterPointerPhase_kDown, FlutterPointerPhase_kHover,
     FlutterPointerPhase_kMove, FlutterPointerPhase_kPanZoomEnd, FlutterPointerPhase_kPanZoomStart,
@@ -21,9 +21,9 @@ use crate::flutter_engine::embedder::{
     FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
 };
 use crate::flutter_engine::view::view_id_for_output;
-use crate::flutter_engine::{view, FlutterEngine};
+use crate::flutter_engine::FlutterEngine;
 use crate::focus::PointerFocusTarget;
-use crate::settings::{MouseAndTouchpadSettings, DEFAULT_WHEEL_SCROLL_PIXELS_PER_DETENT};
+use crate::settings::DEFAULT_WHEEL_SCROLL_PIXELS_PER_DETENT;
 use crate::state::PopupPointerGrab;
 use crate::state::State;
 use crate::wayland::wayland::get_surface_id;
@@ -664,8 +664,8 @@ impl<BackendData: Backend> State<BackendData> {
                 self.flutter_engine_mut()
                     .trackpad_scrolling_manager
                     .update_pan(
-                        event.amount(Axis::Horizontal).unwrap_or_else(|| 0.0),
-                        event.amount(Axis::Vertical).unwrap_or_else(|| 0.0),
+                        event.amount(Axis::Horizontal).unwrap_or(0.0),
+                        event.amount(Axis::Vertical).unwrap_or(0.0),
                     );
                 self.send_pointer_pan_zoom_event(
                     device_id,
@@ -681,7 +681,7 @@ impl<BackendData: Backend> State<BackendData> {
 
     pub fn on_gesture_pinch_begin<B: InputBackend>(
         &mut self,
-        event: B::GesturePinchBeginEvent,
+        _event: B::GesturePinchBeginEvent,
         device_id: i32,
         view_id: Option<i64>,
     ) {

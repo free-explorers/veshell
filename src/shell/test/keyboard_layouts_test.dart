@@ -1,3 +1,7 @@
+// The ProviderScope a helper builds here is the root scope handed to
+// pumpWidget; the lint only recognises a root scope written inline there.
+// ignore_for_file: riverpod_lint/scoped_providers_should_specify_dependencies
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';

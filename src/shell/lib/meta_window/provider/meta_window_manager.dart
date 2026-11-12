@@ -27,7 +27,7 @@ import 'package:shell/window/provider/window_provider.mixin.dart';
 
 part 'meta_window_manager.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 class MetaWindowManager extends _$MetaWindowManager {
   final Map<MetaWindowId, ProviderSubscription<bool>> _mappedSubscriptions = {};
   final Map<MetaWindowId, DateTime> _mappedAt = {};
@@ -55,20 +55,19 @@ class MetaWindowManager extends _$MetaWindowManager {
           geometryLog.warning('window patch $patch dropped for unknown window');
           return;
         }
-        ref
-            .read(metaWindowStateProvider(patch.id).notifier)
-            .patch(patch, propagate: false)
-            .then((_) {
-              // A parent/modal/activation hint can arrive after the window was
-              // already matched (Electron sets them late). Re-route it
-              // as a dialog
-              // while it is still inside its settle window.
-              if (patch is UpdateParent ||
-                  patch is UpdateIsModal ||
-                  patch is UpdateActivatedBy) {
-                _maybeRerouteAsDialog(patch.id);
-              }
-            });
+        ref.metaWindowNotifier(patch.id).patch(patch, propagate: false).then((
+          _,
+        ) {
+          // A parent/modal/activation hint can arrive after the window was
+          // already matched (Electron sets them late). Re-route it
+          // as a dialog
+          // while it is still inside its settle window.
+          if (patch is UpdateParent ||
+              patch is UpdateIsModal ||
+              patch is UpdateActivatedBy) {
+            _maybeRerouteAsDialog(patch.id);
+          }
+        });
       }
       if (next case final MetaWindowRemovedEvent event) {
         onMetaWindowRemoved(event.message.id);
@@ -87,7 +86,7 @@ class MetaWindowManager extends _$MetaWindowManager {
           return;
         }
         ref
-            .read(metaPopupStateProvider(event.message.id).notifier)
+            .metaPopupNotifier(event.message.id)
             .patch(event.message, propagate: false);
       }
       if (next case final MetaPopupRemovedEvent event) {
@@ -103,9 +102,7 @@ class MetaWindowManager extends _$MetaWindowManager {
     final metaWindowId = event.message.id;
     _pendingCreated.add(metaWindowId);
     try {
-      await ref
-          .read(metaWindowStateProvider(metaWindowId).notifier)
-          .create(event.message);
+      await ref.metaWindowNotifier(metaWindowId).create(event.message);
     } finally {
       _pendingCreated.remove(metaWindowId);
     }
@@ -125,8 +122,9 @@ class MetaWindowManager extends _$MetaWindowManager {
     }
     state = state.add(metaWindowId);
 
-    _mappedSubscriptions[metaWindowId] = ref.listen(
-      metaWindowStateProvider(metaWindowId).select((value) => value.mapped),
+    _mappedSubscriptions[metaWindowId] = ref.listenMetaWindow(
+      metaWindowId,
+      (value) => value.mapped,
       (previouslyMapped, isMapped) {
         if (isMapped && previouslyMapped != isMapped) {
           onMetaWindowMapped(metaWindowId);
@@ -147,7 +145,7 @@ class MetaWindowManager extends _$MetaWindowManager {
       geometryLog.warning('window=$id mapped event dropped, no longer tracked');
       return;
     }
-    final metaWindow = ref.read(metaWindowStateProvider(id));
+    final metaWindow = ref.readMetaWindow(id);
 
     if (ref.read(metaWindowWindowMapProvider).get(id) != null) {
       return;
@@ -300,7 +298,7 @@ class MetaWindowManager extends _$MetaWindowManager {
             MAX_WINDOW_REASSOCIATION_TIME_MS) {
       return;
     }
-    final metaWindow = ref.read(metaWindowStateProvider(id));
+    final metaWindow = ref.readMetaWindow(id);
     final engine = ref.read(matchingEngineProvider.notifier);
 
     // A late activation relation must not pull a fullscreen-like surface back
@@ -352,9 +350,7 @@ class MetaWindowManager extends _$MetaWindowManager {
     // on the wrong tile. `detachForReroute` below only applies to a tile that
     // displays the window directly.
     if (currentOwner is DialogWindowId) {
-      ref
-          .read(dialogWindowStateProvider(currentOwner).notifier)
-          .reparent(rootOwner);
+      ref.dialogWindowNotifier(currentOwner).reparent(rootOwner);
       return;
     }
     // The tile that briefly matched the window only existed to show it: detach
@@ -362,15 +358,11 @@ class MetaWindowManager extends _$MetaWindowManager {
     // reroute does not leave a stray empty placeholder. The dialog created just
     // after becomes the sole owner.
     (switch (currentOwner) {
-              PersistentWindowId() => ref.read(
-                persistentWindowStateProvider(currentOwner).notifier,
+              PersistentWindowId() => ref.persistentWindowNotifier(
+                currentOwner,
               ),
-              DialogWindowId() => ref.read(
-                dialogWindowStateProvider(currentOwner).notifier,
-              ),
-              EphemeralWindowId() => ref.read(
-                ephemeralWindowStateProvider(currentOwner).notifier,
-              ),
+              DialogWindowId() => ref.dialogWindowNotifier(currentOwner),
+              EphemeralWindowId() => ref.ephemeralWindowNotifier(currentOwner),
             }
             as WindowProviderMixin)
         .detachForReroute(id);
@@ -381,15 +373,9 @@ class MetaWindowManager extends _$MetaWindowManager {
     final windowId = ref.read(metaWindowWindowMapProvider).get(id);
     if (windowId != null) {
       (switch (windowId) {
-                PersistentWindowId() => ref.read(
-                  persistentWindowStateProvider(windowId).notifier,
-                ),
-                DialogWindowId() => ref.read(
-                  dialogWindowStateProvider(windowId).notifier,
-                ),
-                EphemeralWindowId() => ref.read(
-                  ephemeralWindowStateProvider(windowId).notifier,
-                ),
+                PersistentWindowId() => ref.persistentWindowNotifier(windowId),
+                DialogWindowId() => ref.dialogWindowNotifier(windowId),
+                EphemeralWindowId() => ref.ephemeralWindowNotifier(windowId),
               }
               as WindowProviderMixin)
           .onMetaWindowRemoved(id);
@@ -414,7 +400,7 @@ class MetaWindowManager extends _$MetaWindowManager {
   /// error state it throws in when the creation never reached this shell.
   void _destroyMetaWindowState(MetaWindowId id) {
     try {
-      ref.read(metaWindowStateProvider(id).notifier).destroy();
+      ref.metaWindowNotifier(id).destroy();
     } on Object catch (error) {
       geometryLog.warning('destroy of window=$id failed', error);
     }
@@ -422,9 +408,7 @@ class MetaWindowManager extends _$MetaWindowManager {
 
   void onNewMetaPopup(MetaPopupCreatedEvent event) {
     _popupIds.add(event.message.id);
-    ref
-        .read(metaPopupStateProvider(event.message.id).notifier)
-        .create(event.message);
+    ref.metaPopupNotifier(event.message.id).create(event.message);
   }
 
   void onMetaPopupRemoved(String id) {
@@ -434,6 +418,6 @@ class MetaWindowManager extends _$MetaWindowManager {
       geometryLog.warning('popup=$id removal dropped, was not tracked');
       return;
     }
-    ref.read(metaPopupStateProvider(id).notifier).destroy();
+    ref.metaPopupNotifier(id).destroy();
   }
 }

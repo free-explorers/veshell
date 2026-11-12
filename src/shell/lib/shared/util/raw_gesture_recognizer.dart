@@ -136,7 +136,7 @@ class RawGestureRecognizer extends GestureRecognizer {
   @override
   void dispose() {
     _pointers!.keys.toList().forEach(
-      (int pointer) => _removeState(pointer, GestureDisposition.rejected),
+      (pointer) => _removeState(pointer, GestureDisposition.rejected),
     );
     assert(_pointers!.isEmpty);
     _pointers = null;

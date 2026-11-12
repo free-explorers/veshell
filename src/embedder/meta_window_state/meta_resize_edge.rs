@@ -1,22 +1,5 @@
-use std::cell::RefCell;
-
-use smithay::{
-    desktop::{space::SpaceElement, WindowSurface},
-    input::{
-        pointer::{
-            AxisFrame, ButtonEvent, GestureHoldBeginEvent, GestureHoldEndEvent,
-            GesturePinchBeginEvent, GesturePinchEndEvent, GesturePinchUpdateEvent,
-            GestureSwipeBeginEvent, GestureSwipeEndEvent, GestureSwipeUpdateEvent,
-            GrabStartData as PointerGrabStartData, MotionEvent, PointerGrab, PointerInnerHandle,
-            RelativeMotionEvent,
-        },
-        touch::{GrabStartData as TouchGrabStartData, TouchGrab},
-    },
-    reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
-    utils::{IsAlive, Logical, Point, Serial, Size},
-    wayland::{compositor::with_states, shell::xdg::SurfaceCachedState},
-};
-use smithay::{utils::Rectangle, xwayland::xwm::ResizeEdge as X11ResizeEdge};
+use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
+use smithay::xwayland::xwm::ResizeEdge as X11ResizeEdge;
 
 bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash,)]

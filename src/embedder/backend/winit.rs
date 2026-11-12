@@ -257,9 +257,7 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
     // clients. Skip the global entirely instead of publishing an empty one.
     let dmabuf_state = render_node.and_then(|render_node| {
         let dmabuf_formats = backend.renderer().dmabuf_formats();
-        if dmabuf_formats.iter().next().is_none() {
-            return None;
-        }
+        dmabuf_formats.iter().next()?;
         let dmabuf_default_feedback =
             DmabufFeedbackBuilder::new(render_node.dev_id(), dmabuf_formats)
                 .build()
@@ -356,7 +354,7 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                 WinitEvent::Resized { size, scale_factor } => {
                     let scale_changed =
                         data.backend_data.output.current_scale().fractional_scale() != scale_factor;
-                    let new_scale = scale_changed.then(|| Scale::Fractional(scale_factor));
+                    let new_scale = scale_changed.then_some(Scale::Fractional(scale_factor));
 
                     data.backend_data.output.change_current_state(
                         Some(Mode {
@@ -487,7 +485,7 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                                         &data.cursor_image_status,
                                         &data.cursor_state,
                                         data.pointer.current_location(),
-                                        data.surface_id_under_cursor != None,
+                                        data.surface_id_under_cursor.is_some(),
                                         <Winit as Backend>::FLIP_FLUTTER_TEXTURE,
                                         data.idle.dim_alpha(),
                                         game_surfaces.iter().collect::<Vec<_>>(),
@@ -538,7 +536,7 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                                     warn!("Failed to submit winit buffer: {}", err);
                                 }
 
-                                let drained: Vec<_> = data.batons.drain(..).collect();
+                                let drained: Vec<_> = std::mem::take(&mut data.batons);
                                 for baton in drained {
                                     data.flutter_engine().on_vsync(baton, 60_000).unwrap();
                                 }

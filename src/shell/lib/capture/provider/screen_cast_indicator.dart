@@ -32,15 +32,15 @@ class ScreenCastIndicator extends _$ScreenCastIndicator {
           'Screen cast active: app="${event.message.appId}" '
           'source="${event.message.sourceLabel}"',
         );
-        final next_value = {
+        final nextValue = {
           ...state,
           event.message.sessionHandle: event.message,
         };
-        state = next_value;
+        state = nextValue;
       }
       if (next case final ScreenCastStoppedEvent event) {
-        final next_value = {...state}..remove(event.message.sessionHandle);
-        state = next_value;
+        final nextValue = {...state}..remove(event.message.sessionHandle);
+        state = nextValue;
       }
     });
     ref.onDispose(subscription.cancel);

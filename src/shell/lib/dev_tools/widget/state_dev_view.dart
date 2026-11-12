@@ -136,9 +136,7 @@ class ScreenStateViewer extends HookConsumerWidget {
                     screenState.selectedIndex;
                 return ExpandableDataRow(
                   isExpanded: isSelected,
-                  property: isSelected
-                      ? context.l10n.debugSelectedItem('$e')
-                      : '$e',
+                  property: isSelected ? context.l10n.debugSelectedItem(e) : e,
                   builder: (context) => WorkspaceStateViewer(workspaceId: e),
                 );
               }).toList(),

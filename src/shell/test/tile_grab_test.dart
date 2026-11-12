@@ -1,8 +1,8 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
-import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/icon_file_from_query.dart';

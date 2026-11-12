@@ -46,7 +46,7 @@ part 'matching_engine.g.dart';
 /// for the recovery of tracked launches. Observability of the provenance
 /// path goes through `matchingLog` ('Matching'), the ordinary matcher is
 /// intentionally not logged to keep the baseline signal-free.
-@riverpod
+@Riverpod(keepAlive: true)
 class MatchingEngine extends _$MatchingEngine {
   @override
   IMap<MetaWindowId, WindowId> build() {
@@ -54,20 +54,16 @@ class MatchingEngine extends _$MatchingEngine {
   }
 
   Window _getWindowState(WindowId windowId) => switch (windowId) {
-    EphemeralWindowId() => ref.read(ephemeralWindowStateProvider(windowId)),
-    PersistentWindowId() => ref.read(persistentWindowStateProvider(windowId)),
-    DialogWindowId() => ref.read(dialogWindowStateProvider(windowId)),
+    EphemeralWindowId() => ref.readEphemeralWindow(windowId),
+    PersistentWindowId() => ref.readPersistentWindow(windowId),
+    DialogWindowId() => ref.readDialogWindow(windowId),
   };
 
   MatchingInfo _getWindowMatchingInfo(WindowId windowId) => switch (windowId) {
     EphemeralWindowId() =>
-      ref
-          .read(ephemeralWindowStateProvider(windowId).notifier)
-          .getMatchingInfo(),
+      ref.ephemeralWindowNotifier(windowId).getMatchingInfo(),
     PersistentWindowId() =>
-      ref
-          .read(persistentWindowStateProvider(windowId).notifier)
-          .getMatchingInfo(),
+      ref.persistentWindowNotifier(windowId).getMatchingInfo(),
     DialogWindowId() => throw Exception("Dialog don't have matching infos"),
   };
 
@@ -144,7 +140,7 @@ class MatchingEngine extends _$MatchingEngine {
     MetaWindowId metaWindowId, {
     List<WindowId> excludedWindowIds = const [],
   }) {
-    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+    final metaWindow = ref.readMetaWindow(metaWindowId);
 
     final metaWindowMatchInfo = MatchingInfo.fromMetaWindow(metaWindow);
 
@@ -327,7 +323,7 @@ class MatchingEngine extends _$MatchingEngine {
     List<WindowId> excludedWindowIds = const [],
     ISet<WindowId>? onlyAmong,
   }) {
-    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+    final metaWindow = ref.readMetaWindow(metaWindowId);
     final metaWindowMatchInfo = MatchingInfo.fromMetaWindow(metaWindow);
     final candidates = ref.read(windowsAvailableForMatchingProvider).where((
       windowId,
@@ -377,7 +373,7 @@ class MatchingEngine extends _$MatchingEngine {
     MetaWindowId metaWindowId, {
     required ISet<WindowId> burstTiles,
   }) {
-    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+    final metaWindow = ref.readMetaWindow(metaWindowId);
     // The raw owner, not its root tile: a dialog's root is its parent tile,
     // which does not own the native window and cannot move it.
     final owner = ref.read(metaWindowWindowMapProvider).get(metaWindowId);
@@ -413,7 +409,7 @@ class MatchingEngine extends _$MatchingEngine {
     switch (owner) {
       case PersistentWindowId():
         ref
-            .read(persistentWindowStateProvider(owner).notifier)
+            .persistentWindowNotifier(owner)
             .moveMetaWindowTo(
               metaWindowId,
               other,
@@ -422,7 +418,7 @@ class MatchingEngine extends _$MatchingEngine {
             );
       case EphemeralWindowId():
         ref
-            .read(ephemeralWindowStateProvider(owner).notifier)
+            .ephemeralWindowNotifier(owner)
             .moveMetaWindowTo(
               metaWindowId,
               other,
@@ -441,13 +437,9 @@ class MatchingEngine extends _$MatchingEngine {
     if (ownerTileOwnsNoWindow(owner)) {
       switch (other) {
         case PersistentWindowId():
-          ref
-              .read(persistentWindowStateProvider(other).notifier)
-              .settleOwnedMetaWindowsNow();
+          ref.persistentWindowNotifier(other).settleOwnedMetaWindowsNow();
         case EphemeralWindowId():
-          ref
-              .read(ephemeralWindowStateProvider(other).notifier)
-              .settleOwnedMetaWindowsNow();
+          ref.ephemeralWindowNotifier(other).settleOwnedMetaWindowsNow();
         case DialogWindowId():
           // A destination is always an ordinary tile.
           break;
@@ -495,14 +487,14 @@ class MatchingEngine extends _$MatchingEngine {
     MetaWindowId metaWindowId, {
     List<WindowId> excludedWindowIds = const [],
   }) {
-    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+    final metaWindow = ref.readMetaWindow(metaWindowId);
     final metaWindowMatchInfo = MatchingInfo.fromMetaWindow(metaWindow);
     final candidates = ref
         .read(windowsAvailableForMatchingProvider)
         .whereType<PersistentWindowId>()
         .where((windowId) {
           if (excludedWindowIds.contains(windowId)) return false;
-          final state = ref.read(persistentWindowStateProvider(windowId));
+          final state = ref.readPersistentWindow(windowId);
           if (state.metaWindowId != null) return false;
           return _sameApplication(
             state.properties.appId,
@@ -541,9 +533,7 @@ class MatchingEngine extends _$MatchingEngine {
       matchingLog.info(
         'Extracting $metaWindowId onto existing empty placeholder $placeholder',
       );
-      ref
-          .read(persistentWindowStateProvider(placeholder).notifier)
-          .addMetaWindow(metaWindowId);
+      ref.persistentWindowNotifier(placeholder).addMetaWindow(metaWindowId);
       destination = placeholder;
     } else {
       destination = await ref
@@ -573,7 +563,7 @@ class MatchingEngine extends _$MatchingEngine {
   /// it once the window renders in a tile, i.e. after routing. Every connected
   /// monitor is tried instead.
   bool isFullscreenLike(MetaWindowId metaWindowId) {
-    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+    final metaWindow = ref.readMetaWindow(metaWindowId);
     if (metaWindow.isFullscreen) {
       return true;
     }
@@ -594,7 +584,7 @@ class MatchingEngine extends _$MatchingEngine {
     var current = windowId;
     for (var guard = 0; guard < 32 && current is DialogWindowId; guard++) {
       try {
-        current = ref.read(dialogWindowStateProvider(current)).parentWindowId;
+        current = ref.readDialogWindow(current).parentWindowId;
       } on Object {
         break;
       }
@@ -613,7 +603,7 @@ class MatchingEngine extends _$MatchingEngine {
     MetaWindowId metaWindowId, {
     bool log = true,
   }) {
-    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+    final metaWindow = ref.readMetaWindow(metaWindowId);
     final parentId = metaWindow.parent;
     if (parentId != null) {
       final parentTile = ref.read(metaWindowWindowMapProvider).get(parentId);
@@ -664,9 +654,8 @@ class MatchingEngine extends _$MatchingEngine {
     final root = rootTileFor(windowId);
     return switch (root) {
       PersistentWindowId() =>
-        ref.read(persistentWindowStateProvider(root)).metaWindowId == null,
-      EphemeralWindowId() =>
-        ref.read(ephemeralWindowStateProvider(root)).metaWindowId == null,
+        ref.readPersistentWindow(root).metaWindowId == null,
+      EphemeralWindowId() => ref.readEphemeralWindow(root).metaWindowId == null,
       DialogWindowId() => false,
     };
   }
@@ -689,7 +678,7 @@ class MatchingEngine extends _$MatchingEngine {
     MetaWindowId metaWindowId,
     WindowId ownerTile,
   ) {
-    if (ref.read(metaWindowStateProvider(metaWindowId)).isFixedSized) {
+    if (ref.readMetaWindow(metaWindowId).isFixedSized) {
       return false;
     }
     return ownerTileOwnsNoWindow(ownerTile);
@@ -703,13 +692,9 @@ class MatchingEngine extends _$MatchingEngine {
   void attachMetaWindowTo(WindowId windowId, MetaWindowId metaWindowId) {
     switch (windowId) {
       case PersistentWindowId():
-        ref
-            .read(persistentWindowStateProvider(windowId).notifier)
-            .addMetaWindow(metaWindowId);
+        ref.persistentWindowNotifier(windowId).addMetaWindow(metaWindowId);
       case EphemeralWindowId():
-        ref
-            .read(ephemeralWindowStateProvider(windowId).notifier)
-            .addMetaWindow(metaWindowId);
+        ref.ephemeralWindowNotifier(windowId).addMetaWindow(metaWindowId);
       case DialogWindowId():
         break;
     }
@@ -729,7 +714,7 @@ class MatchingEngine extends _$MatchingEngine {
   /// [_sameProcessSiblingFor], so the ordinary matching path stays free of
   /// recovery logging.
   bool isLaunchBurstInProgressFor(MetaWindowId metaWindowId) {
-    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+    final metaWindow = ref.readMetaWindow(metaWindowId);
     final metaAppId = MatchingInfo.fromMetaWindow(metaWindow).appId;
 
     // A clicked placeholder may be gathering a launch for an application whose
@@ -775,7 +760,7 @@ class MatchingEngine extends _$MatchingEngine {
       final siblingTile = entry.value;
       if (siblingTile is DialogWindowId) continue;
       if (!_isGatheringLaunch(siblingTile)) continue;
-      final sibling = ref.read(metaWindowStateProvider(entry.key));
+      final sibling = ref.readMetaWindow(entry.key);
       final samePid = sibling.pid != 0 && sibling.pid == metaWindow.pid;
       final sameCgroup =
           !samePid &&
@@ -793,13 +778,9 @@ class MatchingEngine extends _$MatchingEngine {
   /// Whether [windowId] is a tile currently gathering a launch burst.
   bool _isGatheringLaunch(WindowId windowId) => switch (windowId) {
     EphemeralWindowId() =>
-      ref
-          .read(ephemeralWindowStateProvider(windowId).notifier)
-          .isGatheringLaunch,
+      ref.ephemeralWindowNotifier(windowId).isGatheringLaunch,
     PersistentWindowId() =>
-      ref
-          .read(persistentWindowStateProvider(windowId).notifier)
-          .isGatheringLaunch,
+      ref.persistentWindowNotifier(windowId).isGatheringLaunch,
     DialogWindowId() => false,
   };
 
@@ -940,9 +921,7 @@ class MatchingEngine extends _$MatchingEngine {
       if (excludedWindowIds.contains(siblingWindowId)) continue;
       if (!availableForMatching.contains(siblingWindowId)) continue;
 
-      final siblingMetaWindow = ref.read(
-        metaWindowStateProvider(siblingMetaWindowId),
-      );
+      final siblingMetaWindow = ref.readMetaWindow(siblingMetaWindowId);
       final samePid =
           siblingMetaWindow.pid != 0 && siblingMetaWindow.pid == metaWindow.pid;
       // A shared cgroup is a weak signal: wrapper scopes (terminals, launcher
@@ -1088,11 +1067,11 @@ class MatchingEngine extends _$MatchingEngine {
     switch (leastCostCandidate) {
       case PersistentWindowId():
         ref
-            .read(persistentWindowStateProvider(leastCostCandidate).notifier)
+            .persistentWindowNotifier(leastCostCandidate)
             .addMetaWindow(metaWindowId);
       case EphemeralWindowId():
         ref
-            .read(ephemeralWindowStateProvider(leastCostCandidate).notifier)
+            .ephemeralWindowNotifier(leastCostCandidate)
             .addMetaWindow(metaWindowId);
       case _:
         ref

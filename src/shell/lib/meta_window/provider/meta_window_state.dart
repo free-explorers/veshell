@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:hooks_riverpod/misc.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
@@ -88,7 +89,7 @@ class MetaWindowState extends _$MetaWindowState {
         .read(metaWindowIdPerSurfaceIdProvider(message.surfaceId).notifier)
         .set(id);
 
-    ref.watch(pidToMetaWindowIdProvider(message.pid).notifier).set(id);
+    ref.read(pidToMetaWindowIdProvider(message.pid).notifier).add(id);
   }
 
   Future<void> patch(
@@ -198,6 +199,7 @@ class MetaWindowState extends _$MetaWindowState {
     ref
         .read(metaWindowIdPerSurfaceIdProvider(state.surfaceId).notifier)
         .clear();
+    ref.read(pidToMetaWindowIdProvider(state.pid).notifier).remove(id);
   }
 
   void requestToClose() {
@@ -223,4 +225,25 @@ class MetaWindowState extends _$MetaWindowState {
           }),
     );
   }
+}
+
+/// Access to [MetaWindowState] for keepAlive providers.
+///
+/// riverpod_lint flags keepAlive providers that use auto-dispose ones, but it
+/// cannot see a `ref.keepAlive()` link taken by hand. The state pins itself with one from `create` until `destroy`, so
+/// reading it from a keepAlive provider is safe.
+/// Only add accessors here for that reason: route anything else through
+/// `ref` so the lint keeps checking it.
+extension MetaWindowStateAccess on Ref {
+  MetaWindow readMetaWindow(MetaWindowId id) =>
+      read(metaWindowStateProvider(id));
+
+  MetaWindowState metaWindowNotifier(MetaWindowId id) =>
+      read(metaWindowStateProvider(id).notifier);
+
+  ProviderSubscription<T> listenMetaWindow<T>(
+    MetaWindowId id,
+    T Function(MetaWindow window) select,
+    void Function(T? previous, T next) listener,
+  ) => listen(metaWindowStateProvider(id).select(select), listener);
 }

@@ -36,13 +36,13 @@ class AccessPointConnectionDialog extends HookConsumerWidget {
                       'WPA2-PSK',
                       'WPA2-EAP',
                       'NONE',
-                    ].map((String value) {
+                    ].map((value) {
                       return DropdownMenuItem<String>(
                         value: value,
                         child: Text(value),
                       );
                     }).toList(),
-                onChanged: (String? newValue) {
+                onChanged: (newValue) {
                   // Handle the selected value here
                 },
                 decoration: InputDecoration(

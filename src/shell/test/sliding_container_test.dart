@@ -1,3 +1,7 @@
+// The ProviderScope a helper builds here is the root scope handed to
+// pumpWidget; the lint only recognises a root scope written inline there.
+// ignore_for_file: riverpod_lint/scoped_providers_should_specify_dependencies
+
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -8,7 +12,7 @@ import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
 
 /// The container's pages: the scrollable a `PageView` would build.
-final _pages = find.descendant(
+final Finder _pages = find.descendant(
   of: find.byType(SlidingContainer),
   matching: find.byType(Scrollable),
 );
@@ -35,7 +39,6 @@ Future<Size> _pageViewSize(
             width: width,
             height: 100,
             child: SlidingContainer(
-              direction: Axis.horizontal,
               index: 0,
               visible: visible,
               children: const [SizedBox(), SizedBox(), SizedBox(), SizedBox()],
@@ -73,7 +76,6 @@ Future<double?> _leadingPage(
             width: width,
             height: 100,
             child: SlidingContainer(
-              direction: Axis.horizontal,
               index: index,
               visible: visible,
               firstVisibleIndex: firstVisibleIndex,

@@ -10,7 +10,7 @@ part 'windows_available_for_matching.g.dart';
 
 /// List of windows that are available for matching.
 /// So it consider only windows in active screens in active monitors
-@riverpod
+@Riverpod(keepAlive: true)
 List<WindowId> windowsAvailableForMatching(Ref ref) {
   final monitorList = ref.watch(connectedMonitorListProvider);
   final windowList = <WindowId>[];
@@ -19,11 +19,9 @@ List<WindowId> windowsAvailableForMatching(Ref ref) {
       monitorConfigurationStateProvider(monitor.name),
     );
     for (final screenConfiguration in monitorConfiguration.screenList) {
-      final screen = ref.watch(
-        screenStateProvider(screenConfiguration.screenId),
-      );
+      final screen = ref.watchScreen(screenConfiguration.screenId);
       for (final workspaceId in screen.workspaceList) {
-        final workspace = ref.watch(workspaceStateProvider(workspaceId));
+        final workspace = ref.watchWorkspace(workspaceId);
         for (final windowId in workspace.tileableWindowList) {
           windowList.add(windowId);
         }

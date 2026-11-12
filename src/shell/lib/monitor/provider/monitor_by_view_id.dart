@@ -4,7 +4,7 @@ import 'package:shell/monitor/provider/connected_monitor_list.dart';
 
 part 'monitor_by_view_id.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 String? monitorByViewId(Ref ref, int viewId) {
   final monitorList = ref.watch(connectedMonitorListProvider);
   return monitorList

@@ -139,16 +139,7 @@ class _WorkspaceIndicatorPainter extends BoxPainter {
     final rect = offset & configuration.size!;
     final backgroundPaint = Paint()..color = decoration.backgroundColor;
     canvas.drawRect(rect, backgroundPaint);
-    final Paint paint;
-
-    /* paint = decoration.border.toPaint()..strokeCap = StrokeCap.square;
-    final indicator = decoration
-        ._indicatorRectFor(
-          rect,
-        )
-        .deflate(decoration.borderSide.width / 2.0); */
     decoration.border.paint(canvas, rect);
-    //canvas.drawLine(indicator.topRight, indicator.bottomRight, paint);
   }
 }
 
@@ -331,7 +322,7 @@ class WorkspaceIcon extends HookConsumerWidget {
           )
           .toList(),
       [workspaceState.tileableWindowList],
-    ).whereNotNull();
+    ).nonNulls;
 
     if (appIdList.isEmpty) return const ShellIcon(MdiIcons.plus);
 

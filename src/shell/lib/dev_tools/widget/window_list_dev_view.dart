@@ -40,7 +40,7 @@ class WindowListDevView extends HookConsumerWidget {
                     Text(context.l10n.debugId('${state.windowId}')),
                     Text(context.l10n.debugType('${state.runtimeType}')),
                     Text(context.l10n.debugTitle('${state.properties.title}')),
-                    Text(context.l10n.debugAppId('${state.properties.appId}')),
+                    Text(context.l10n.debugAppId(state.properties.appId)),
                     Text(context.l10n.debugPid('${state.properties.pid}')),
                     Text(
                       context.l10n.debugMetaWindowId('${state.metaWindowId}'),

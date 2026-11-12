@@ -7,9 +7,9 @@ import 'package:shell/shared/mpris/model/mpris_manager_state.dart';
 import 'package:shell/shared/mpris/model/mpris_player.dart';
 import 'package:shell/shared/mpris/provider/mpris_manager.dart';
 import 'package:shell/shortcut_manager/model/media_intents.dart';
+import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 import 'package:shell/shortcut_manager/model/screen_shortcuts.dart';
 import 'package:shell/shortcut_manager/provider/hotkeys_activator.dart';
-import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 import 'package:shell/shortcut_manager/widget/shortcut_manager.dart';
 import 'package:shell/tile_grab/model/tile_grab.dart';
 import 'package:shell/tile_grab/provider/tile_grab_controller.dart';
@@ -123,14 +123,14 @@ void main() {
     const physical = PhysicalKeyboardKey.metaLeft;
     const logical = LogicalKeyboardKey.superKey;
     dispatch(
-      KeyDownEvent(
+      const KeyDownEvent(
         physicalKey: physical,
         logicalKey: logical,
         timeStamp: Duration.zero,
       ),
     );
     dispatch(
-      KeyUpEvent(
+      const KeyUpEvent(
         physicalKey: physical,
         logicalKey: logical,
         timeStamp: Duration.zero,
@@ -140,14 +140,14 @@ void main() {
     expect(overviewCount, 0);
 
     dispatch(
-      KeyDownEvent(
+      const KeyDownEvent(
         physicalKey: physical,
         logicalKey: logical,
         timeStamp: Duration.zero,
       ),
     );
     dispatch(
-      KeyUpEvent(
+      const KeyUpEvent(
         physicalKey: physical,
         logicalKey: logical,
         timeStamp: Duration.zero,

@@ -8,7 +8,6 @@ import 'package:shell/overview/helm/control_panel/network/wifi/widget/available_
 import 'package:shell/overview/helm/control_panel/network/wifi/widget/configured_access_point.dart';
 import 'package:shell/overview/helm/control_panel/network/wifi/widget/wifi_control_icon.dart';
 import 'package:shell/shared/nm/provider/nm_client.dart';
-import 'package:shell/shared/nm/provider/nm_device.dart';
 import 'package:shell/shared/widget/expandable_card.dart';
 import 'package:shell/shared/widget/shell_icon.dart';
 
@@ -18,8 +17,6 @@ class WifiControl extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final device = ref.watch(nmDeviceProvider(address));
-
     return ExpandableCard(
       builder: (context, isExpanded) {
         return Column(

@@ -173,4 +173,4 @@ bool isExecutableFile(String path) {
 }
 
 String _basename(String program) =>
-    path.basename(program).replaceFirst(RegExp(r'^-'), '');
+    path.basename(program).replaceFirst(RegExp('^-'), '');

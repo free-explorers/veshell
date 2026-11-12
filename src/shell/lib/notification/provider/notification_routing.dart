@@ -22,13 +22,13 @@ part 'notification_routing.g.dart';
 
 /// The workspace currently displayed on the focused screen, or `null` when no
 /// screen exists.
-@riverpod
+@Riverpod(keepAlive: true)
 WorkspaceId? focusedWorkspaceId(Ref ref) {
   final screenId = ref.watch(focusedScreenProvider);
   if (screenId == null) {
     return null;
   }
-  final screen = ref.watch(screenStateProvider(screenId));
+  final screen = ref.watchScreen(screenId);
   if (screen.workspaceList.isEmpty) {
     return null;
   }
@@ -39,13 +39,13 @@ WorkspaceId? focusedWorkspaceId(Ref ref) {
 ///
 /// A tile is displayed when it belongs to the focused workspace and its index
 /// falls in the visible range of the workspace's sliding container.
-@riverpod
+@Riverpod(keepAlive: true)
 ISet<PersistentWindowId> displayedWindowIds(Ref ref) {
   final workspaceId = ref.watch(focusedWorkspaceIdProvider);
   if (workspaceId == null) {
     return <PersistentWindowId>{}.lock;
   }
-  final workspace = ref.watch(workspaceStateProvider(workspaceId));
+  final workspace = ref.watchWorkspace(workspaceId);
   return visibleWindowIds(
     windows: workspace.tileableWindowList,
     selectedIndex: workspace.selectedIndex,
@@ -89,7 +89,7 @@ ISet<PersistentWindowId> visibleWindowIds({
 ///
 /// An ephemeral window only exists on screen while its screen's overview is
 /// open, so notifications targeting one must be hidden (not popped) then.
-@riverpod
+@Riverpod(keepAlive: true)
 ISet<EphemeralWindowId> displayedEphemeralWindowIds(Ref ref) {
   final displayed = <EphemeralWindowId>{};
   for (final screenId in ref.watch(screenManagerProvider).screenIds) {
@@ -102,7 +102,7 @@ ISet<EphemeralWindowId> displayedEphemeralWindowIds(Ref ref) {
 }
 
 /// Routes every known notification to the workspace/window it belongs to.
-@riverpod
+@Riverpod(keepAlive: true)
 IMap<int, NotificationTarget> notificationRoutes(Ref ref) {
   final notifications = ref.watch(notificationManagerProvider).notificationMap;
   final windowWorkspaceMap = ref.watch(windowWorkspaceMapProvider);
@@ -217,7 +217,7 @@ WindowId? resolveNotificationTargetWindow(
 ) {
   final pid = notification.pid;
   if (pid != null) {
-    final metaWindowId = ref.read(pidToMetaWindowIdProvider(pid));
+    final metaWindowId = ref.readMetaWindowIdForPid(pid);
     if (metaWindowId != null) {
       final resolved = _resolveFromMetaWindow(ref, metaWindowId);
       if (resolved != null) {

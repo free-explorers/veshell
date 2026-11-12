@@ -683,7 +683,7 @@ mod tests {
 
     fn rgba_frame(size: Size<i32, Physical>, red: u8) -> Vec<u8> {
         let mut pixels = vec![0u8; (size.w as usize) * (size.h as usize) * 4];
-        for pixel in pixels.chunks_exact_mut(4) {
+        for pixel in pixels.as_chunks_mut::<4>().0 {
             pixel[0] = red;
             pixel[1] = 40;
             pixel[2] = 90;

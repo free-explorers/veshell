@@ -21,7 +21,7 @@ class EnvironmentVariables extends _$EnvironmentVariables {
 
   void _set(IMap<String, String?> environmentVariables) {
     for (final entry in environmentVariables.entries) {
-      final MapEntry(key: key, value: value) = entry;
+      final MapEntry(:key, :value) = entry;
       if (value != null) {
         state = state.add(key, value);
       } else {

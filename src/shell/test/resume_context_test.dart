@@ -144,11 +144,11 @@ void main() {
     });
 
     test('round-trips a terminal foreground through JSON', () {
-      final context = ResumeContext(
+      const context = ResumeContext(
         workingDirectory: '/home/user/src',
-        argv: const ['foot'],
+        argv: ['foot'],
         executable: '/usr/bin/foot',
-        terminal: const TerminalResumeContext(
+        terminal: TerminalResumeContext(
           shell: '/usr/bin/bash',
           workingDirectory: '/home/user/src',
           foreground: ForegroundProgram(

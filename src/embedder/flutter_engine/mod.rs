@@ -7,8 +7,6 @@ use mouse_cursor::mouse_cursor_channel_method_call_handler;
 use platform_channels::encodable_value::EncodableValue;
 use platform_channels::standard_method_codec::StandardMethodCodec;
 use serde_json::json;
-use smithay::backend::egl::display::EGLDisplayHandle;
-use smithay::backend::egl::EGLDisplay;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::{c_int, c_void, CString};
@@ -18,7 +16,6 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::ptr::{null, null_mut};
 use std::rc::Rc;
-use std::sync::Arc;
 use std::time::Duration;
 use trackpad_scrolling_manager::TrackpadScrollingManager;
 
@@ -30,7 +27,6 @@ use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::calloop::{Dispatcher, LoopHandle};
 use smithay::{
     backend::{
-        allocator::dmabuf::Dmabuf,
         egl::{
             self,
             context::{GlAttributes, GlProfile, PixelFormatRequirements},
@@ -39,7 +35,6 @@ use smithay::{
         renderer::gles::ffi::Gles2,
     },
     reexports::calloop::channel,
-    utils::{Physical, Size},
 };
 
 use crate::backend::Backend;
@@ -49,23 +44,17 @@ use crate::flutter_engine::callbacks::{
     view_focus_change_request_callback, vsync_callback, FlutterKeyEventData,
 };
 use crate::flutter_engine::embedder::{
-    FlutterAddViewInfo, FlutterBackingStore, FlutterBackingStoreConfig,
-    FlutterBackingStoreType_kFlutterBackingStoreTypeOpenGL, FlutterBackingStore__bindgen_ty_1,
     FlutterCompositor, FlutterCustomTaskRunners, FlutterEngineAOTData, FlutterEngineAOTDataSource,
     FlutterEngineAOTDataSourceType_kFlutterEngineAOTDataSourceTypeElfPath,
-    FlutterEngineAOTDataSource__bindgen_ty_1, FlutterEngineAddView, FlutterEngineCreateAOTData,
-    FlutterEngineDisplay, FlutterEngineDisplaysUpdateType_kFlutterEngineDisplaysUpdateTypeCount,
+    FlutterEngineAOTDataSource__bindgen_ty_1, FlutterEngineCreateAOTData, FlutterEngineDisplay,
     FlutterEngineDisplaysUpdateType_kFlutterEngineDisplaysUpdateTypeStartup,
     FlutterEngineInitialize, FlutterEngineMarkExternalTextureFrameAvailable,
     FlutterEngineNotifyDisplayUpdate, FlutterEngineRegisterExternalTexture,
-    FlutterEngineRemoveView, FlutterEngineRunInitialized, FlutterEngineRunTask,
-    FlutterEngineSendKeyEvent, FlutterEngineSendPointerEvent, FlutterEngineSendViewFocusEvent,
-    FlutterEngineUnregisterExternalTexture, FlutterOpenGLBackingStore,
-    FlutterOpenGLBackingStore__bindgen_ty_1, FlutterOpenGLFramebuffer,
-    FlutterOpenGLTargetType_kFlutterOpenGLTargetTypeFramebuffer, FlutterPointerEvent,
-    FlutterRendererType_kOpenGL, FlutterTaskRunnerDescription,
-    FlutterViewFocusDirection_kUndefined, FlutterViewFocusEvent, FlutterViewFocusState,
-    FlutterViewFocusState_kFocused, FlutterViewFocusState_kUnfocused,
+    FlutterEngineRunInitialized, FlutterEngineRunTask, FlutterEngineSendKeyEvent,
+    FlutterEngineSendPointerEvent, FlutterEngineSendViewFocusEvent,
+    FlutterEngineUnregisterExternalTexture, FlutterPointerEvent, FlutterRendererType_kOpenGL,
+    FlutterTaskRunnerDescription, FlutterViewFocusDirection_kUndefined, FlutterViewFocusEvent,
+    FlutterViewFocusState, FlutterViewFocusState_kFocused, FlutterViewFocusState_kUnfocused,
 };
 use crate::flutter_engine::platform_channel_callbacks::platform_channel_method_handler;
 use crate::flutter_engine::platform_channels::basic_message_channel::BasicMessageChannel;
@@ -91,9 +80,9 @@ use crate::{
         },
         embedder::{
             FlutterEngine as FlutterEngineHandle, FlutterEngineGetCurrentTime,
-            FlutterEngineOnVsync, FlutterEngineSendWindowMetricsEvent, FlutterEngineShutdown,
-            FlutterOpenGLRendererConfig, FlutterProjectArgs, FlutterRendererConfig,
-            FlutterRendererConfig__bindgen_ty_1, FlutterWindowMetricsEvent, FLUTTER_ENGINE_VERSION,
+            FlutterEngineOnVsync, FlutterEngineShutdown, FlutterOpenGLRendererConfig,
+            FlutterProjectArgs, FlutterRendererConfig, FlutterRendererConfig__bindgen_ty_1,
+            FLUTTER_ENGINE_VERSION,
         },
     },
     State,
@@ -178,12 +167,12 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
 
         // if the executable is in /usr/local/bin use /usr/local/share/veshell
         // Default to installed path
-        let mut bundle_root = format!("/usr/share/veshell");
-        let mut lib_path = format!("/usr/lib/veshell");
+        let mut bundle_root = "/usr/share/veshell".to_string();
+        let mut lib_path = "/usr/lib/veshell".to_string();
 
         if executable_path.starts_with("/usr/local/bin") {
-            bundle_root = format!("/usr/local/share/veshell");
-            lib_path = format!("/usr/local/lib/veshell");
+            bundle_root = "/usr/local/share/veshell".to_string();
+            lib_path = "/usr/local/lib/veshell".to_string();
         }
 
         let src_bundle_root = format!("src/shell/build/linux/{arch}/{flutter_engine_build}/bundle");
@@ -207,12 +196,12 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         let socket_number: i32 = server_state
             .wayland_socket_name
             .as_deref()
-            .and_then(|s| s.split('-').last())
+            .and_then(|s| s.split('-').next_back())
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
         debug!("ECHO SOCKET NAME {:?}", socket_number);
         let port = 12345 + socket_number;
-        propagate_vm_service(&host, port)?;
+        propagate_vm_service(host, port)?;
         let assets_path = CString::new(format!("{data_path}/flutter_assets"))?;
         let icu_data_path = CString::new(format!("{data_path}/icudtl.dat"))?;
         let executable_path = CString::new(executable_path.as_os_str().as_bytes())?;
@@ -745,7 +734,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             "monitor_layout_changed",
             Some(Box::new(json!(MonitorsMessage {
                 revision,
-                monitors: outputs.into_iter().map(|output| MyOutput(output)).collect()
+                monitors: outputs.into_iter().map(MyOutput).collect()
             }))),
             None,
         );
@@ -769,13 +758,13 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
     }
 
     pub fn update_display(&mut self, display_id: u64) {
-        let result = unsafe {
+        let _result = unsafe {
             FlutterEngineNotifyDisplayUpdate(
                 self.handle,
                 FlutterEngineDisplaysUpdateType_kFlutterEngineDisplaysUpdateTypeStartup,
                 &FlutterEngineDisplay {
                     struct_size: size_of::<FlutterEngineDisplay>(),
-                    display_id: display_id,
+                    display_id,
                     single_display: true,
                     refresh_rate: 60.,
                     width: 200,
@@ -831,14 +820,14 @@ impl RendererData {
         Ok(Self {
             gl: Gles2::load_with(|s| unsafe { egl::get_proc_address(s) } as *const _),
             main_egl_context: EGLContext::new_shared_with_config(
-                &egl_display,
-                &root_egl_context,
+                egl_display,
+                root_egl_context,
                 gl_attributes,
                 pixel_format_requirements,
             )?,
             resource_egl_context: EGLContext::new_shared_with_config(
-                &egl_display,
-                &root_egl_context,
+                egl_display,
+                root_egl_context,
                 gl_attributes,
                 pixel_format_requirements,
             )?,

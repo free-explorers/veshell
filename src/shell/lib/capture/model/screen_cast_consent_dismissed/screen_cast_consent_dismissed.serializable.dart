@@ -1,5 +1,4 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:shell/platform/model/request/platform_request.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 
 part 'screen_cast_consent_dismissed.serializable.freezed.dart';

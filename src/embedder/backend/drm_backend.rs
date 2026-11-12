@@ -23,7 +23,7 @@ use smithay::backend::drm::{
 };
 use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
 use smithay::backend::input::{
-    Device, Event, GestureBeginEvent, GestureEndEvent, InputEvent, KeyboardKeyEvent,
+    Event, GestureBeginEvent, GestureEndEvent, InputEvent, KeyboardKeyEvent,
 };
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
 use smithay::backend::renderer::element::texture::TextureRenderElement;
@@ -65,10 +65,6 @@ use tracing::{debug, error, info, warn};
 use smithay_drm_extras::display_info;
 use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
 
-use crate::flutter_engine::embedder::{
-    FlutterPointerDeviceKind_kFlutterPointerDeviceKindMouse,
-    FlutterPointerDeviceKind_kFlutterPointerDeviceKindTouch,
-};
 use crate::flutter_engine::view::{view_id_for_output, OutputViewIdWrapper, ViewSwapchain};
 use crate::flutter_engine::wayland_messages::{
     GestureSwipeBeginEventMessage, GestureSwipeEndEventMessage, GestureSwipeUpdateEventMessage,
@@ -730,12 +726,7 @@ pub fn run_drm_backend() {
     };
     state.flutter_engine = Some(flutter_engine);
 
-    let nodes_available: Vec<DrmNode> = state
-        .backend_data
-        .gpus
-        .iter()
-        .map(|(node, _)| *node)
-        .collect();
+    let nodes_available: Vec<DrmNode> = state.backend_data.gpus.keys().copied().collect();
 
     // Initialize already present connectors.
     for node in nodes_available {
@@ -852,7 +843,7 @@ pub fn run_drm_backend() {
                             "gesture_swipe_begin",
                             Some(Box::new(json!(GestureSwipeBeginEventMessage {
                                 time: event.time_msec(),
-                                fingers: fingers,
+                                fingers,
                             }))),
                             None,
                         );
@@ -874,7 +865,7 @@ pub fn run_drm_backend() {
                             "gesture_swipe_update",
                             Some(Box::new(json!(GestureSwipeUpdateEventMessage {
                                 time: event.time_msec(),
-                                fingers: fingers,
+                                fingers,
                                 delta_x,
                                 delta_y
                             }))),
@@ -890,8 +881,8 @@ pub fn run_drm_backend() {
                             "gesture_swipe_end",
                             Some(Box::new(json!(GestureSwipeEndEventMessage {
                                 time: event.time_msec(),
-                                fingers: fingers,
-                                cancelled: cancelled,
+                                fingers,
+                                cancelled,
                             }))),
                             None,
                         );
@@ -1345,9 +1336,7 @@ impl State<DrmBackend> {
 
         output
             .user_data()
-            .insert_if_missing(|| OutputViewIdWrapper {
-                view_id: view_id.clone(),
-            });
+            .insert_if_missing(|| OutputViewIdWrapper { view_id });
 
         output.user_data().insert_if_missing(|| UdevOutputId {
             crtc,
@@ -1726,7 +1715,7 @@ impl State<DrmBackend> {
             return;
         };
 
-        let drained: Vec<_> = self.batons.drain(..).collect();
+        let drained: Vec<_> = std::mem::take(&mut self.batons);
         for baton in drained {
             let _ = self.flutter_engine().on_vsync(baton, mhz as u32);
         }
@@ -2000,7 +1989,7 @@ impl State<DrmBackend> {
             &self.cursor_image_status,
             &self.cursor_state,
             self.pointer.current_location(),
-            self.surface_id_under_cursor != None,
+            self.surface_id_under_cursor.is_some(),
             true,
             self.idle.dim_alpha(),
             game_surfaces.iter().collect::<Vec<_>>(),
@@ -2119,7 +2108,7 @@ impl State<DrmBackend> {
                         .connectors()
                         .get(&surface.connector_handle)
                     {
-                        let (mode_to_use, _) = pick_mode(&connector, Some(config));
+                        let (mode_to_use, _) = pick_mode(connector, Some(config));
                         if let Err(err) = surface.compositor.use_mode(mode_to_use) {
                             warn!("error changing mode: {err:?}");
                         }
@@ -2181,10 +2170,10 @@ fn pick_mode(
         if mode.mode_type().contains(ModeTypeFlags::PREFERRED) {
             if let Some(curr) = preferred_mode {
                 if curr.vrefresh() < mode.vrefresh() {
-                    preferred_mode = Some(mode.clone());
+                    preferred_mode = Some(*mode);
                 }
             } else {
-                preferred_mode = Some(mode.clone());
+                preferred_mode = Some(*mode);
             }
         }
         if let Some(target) = target {
@@ -2201,7 +2190,7 @@ fn pick_mode(
             // If refresh is set, only pick modes with matching refresh.
             let wl_mode = Mode::from(*mode);
             if wl_mode.refresh == refresh {
-                mode_to_use = Some(mode.clone());
+                mode_to_use = Some(*mode);
             }
         }
     }
@@ -2425,7 +2414,7 @@ mod tests {
     }
 
     fn rect(x: i32, y: i32, w: i32, h: i32) -> Rectangle<i32, Logical> {
-        Rectangle::from_loc_and_size((x, y), (w, h))
+        Rectangle::new((x, y).into(), (w, h).into())
     }
 
     #[test]

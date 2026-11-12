@@ -32,7 +32,7 @@ Future<Map<String, LocalizedDesktopEntry>> localizedDesktopEntries(
   );
 }
 
-@riverpod
+@Riverpod(keepAlive: true)
 class LocalizedDesktopEntryForId extends _$LocalizedDesktopEntryForId {
   @override
   Future<LocalizedDesktopEntry?> build(String appId) {
@@ -60,7 +60,7 @@ class LocalizedDesktopEntryForId extends _$LocalizedDesktopEntryForId {
   }
 }
 
-@riverpod
+@Riverpod(keepAlive: true)
 class BinaryToAppId extends _$BinaryToAppId {
   @override
   FutureOr<Map<String, String?>> build() async {

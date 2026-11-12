@@ -15,7 +15,7 @@ import 'package:shell/window/provider/window_manager/window_manager.dart';
 
 part 'overview_state.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 class OverviewState extends _$OverviewState {
   @override
   Overview build(ScreenId screenId) {
@@ -127,6 +127,9 @@ class OverviewState extends _$OverviewState {
     if (index == null || state.searchMode != SearchMode.file) {
       return null;
     }
+    // Only the results the overview is showing matter: unwatched, they are
+    // rebuilt empty and yield no entry, which is the right answer.
+    // ignore: riverpod_lint/only_use_keep_alive_inside_keep_alive
     final entryList = ref.read(filteredEntryListProvider(state.screenId)).value;
     if (entryList == null || index < 0 || index >= entryList.length) {
       return null;
@@ -211,9 +214,7 @@ class OverviewState extends _$OverviewState {
       selectedIndex: null,
     );
 
-    unawaited(
-      ref.read(ephemeralWindowStateProvider(windowId).notifier).launchSelf(),
-    );
+    unawaited(ref.ephemeralWindowNotifier(windowId).launchSelf());
   }
 
   void removeWindow(EphemeralWindowId windowId) {

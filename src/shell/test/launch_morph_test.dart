@@ -254,7 +254,7 @@ void main() {
   testWidgets('the card is opaque until the backdrop is in', (tester) async {
     await _pump(tester);
     Color cardColor() =>
-        ((tester
+        (tester
                     .widget<DecoratedBox>(
                       find.descendant(
                         of: _flyingCard,
@@ -263,7 +263,7 @@ void main() {
                     )
                     .decoration
                 as ShapeDecoration)
-            .color)!;
+            .color!;
 
     await tester.tap(_entryNamed('Alpha'));
     await _untilStarted(tester);

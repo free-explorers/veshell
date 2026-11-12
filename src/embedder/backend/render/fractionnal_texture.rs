@@ -1,13 +1,9 @@
-use smithay::backend::allocator::Fourcc;
 use smithay::backend::renderer::element::{Element, Id, Kind, RenderElement, UnderlyingStorage};
-use smithay::backend::renderer::gles::GlesTexture;
 use smithay::backend::renderer::utils::{CommitCounter, OpaqueRegions};
-use smithay::backend::renderer::{ContextId, Frame as _, ImportMem, Renderer, Texture};
+use smithay::backend::renderer::{ContextId, Frame as _, Renderer, Texture};
 use smithay::utils::user_data::UserDataMap;
 use smithay::utils::{Buffer, Logical, Physical, Point, Rectangle, Scale, Size, Transform};
 use tracing::warn;
-
-use super::fractionnal_memory::FractionalMemoryBuffer;
 
 /// Smithay's texture buffer, but with fractional scale.
 #[derive(Debug, Clone)]
@@ -50,63 +46,6 @@ impl<T: Texture> FractionnalTextureBuffer<T> {
             opaque_regions,
         }
     }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn from_memory<R: Renderer<TextureId = T> + ImportMem>(
-        renderer: &mut R,
-        data: &[u8],
-        format: Fourcc,
-        size: impl Into<Size<i32, Buffer>>,
-        flipped: bool,
-        scale: impl Into<Scale<f64>>,
-        transform: Transform,
-        opaque_regions: Vec<Rectangle<i32, Buffer>>,
-    ) -> Result<Self, R::Error> {
-        let texture = renderer.import_memory(data, format, size.into(), flipped)?;
-        Ok(FractionnalTextureBuffer::from_texture(
-            renderer,
-            texture,
-            scale,
-            transform,
-            opaque_regions,
-        ))
-    }
-
-    pub fn from_memory_buffer<R: Renderer<TextureId = T> + ImportMem>(
-        renderer: &mut R,
-        buffer: &FractionalMemoryBuffer,
-    ) -> Result<Self, R::Error> {
-        Self::from_memory(
-            renderer,
-            buffer.data(),
-            buffer.format(),
-            buffer.size(),
-            false,
-            buffer.scale(),
-            buffer.transform(),
-            Vec::new(),
-        )
-    }
-
-    pub fn texture(&self) -> &T {
-        &self.texture
-    }
-
-    pub fn texture_scale(&self) -> Scale<f64> {
-        self.scale
-    }
-
-    pub fn set_texture_scale(&mut self, scale: impl Into<Scale<f64>>) {
-        self.scale = scale.into();
-    }
-
-    pub fn texture_transform(&self) -> Transform {
-        self.transform
-    }
-
-    pub fn set_texture_transform(&mut self, transform: Transform) {
-        self.transform = transform;
-    }
 }
 
 impl<T: Texture> FractionnalTextureBuffer<T> {
@@ -115,12 +54,6 @@ impl<T: Texture> FractionnalTextureBuffer<T> {
             .size()
             .to_f64()
             .to_logical(self.scale, self.transform)
-    }
-}
-
-impl FractionnalTextureBuffer<GlesTexture> {
-    pub fn is_texture_reference_unique(&mut self) -> bool {
-        self.texture.is_unique_reference()
     }
 }
 
@@ -141,10 +74,6 @@ impl<T: Texture> FractionnalTextureRenderElement<T> {
             size,
             kind,
         }
-    }
-
-    pub fn buffer(&self) -> &FractionnalTextureBuffer<T> {
-        &self.buffer
     }
 }
 
@@ -187,8 +116,13 @@ impl<T: Texture> Element for FractionnalTextureRenderElement<T> {
     }
 
     fn opaque_regions(&self, scale: Scale<f64>) -> OpaqueRegions<i32, Physical> {
-        let texture_size = self.buffer.texture.size().to_f64();
         let src = self.src();
+        // The source rectangle is drawn at `logical_size()`, which differs
+        // from its own logical size when a viewport stretches it.
+        let src_logical_size = src
+            .size
+            .to_logical(self.buffer.scale, self.buffer.transform);
+        let stretch = self.logical_size() / src_logical_size;
 
         self.buffer
             .opaque_regions
@@ -197,10 +131,10 @@ impl<T: Texture> Element for FractionnalTextureRenderElement<T> {
                 let mut region = region.to_f64().intersection(src)?;
 
                 region.loc -= src.loc;
-                region.upscale(texture_size / src.size);
 
-                let logical =
-                    region.to_logical(self.buffer.scale, self.buffer.transform, &src.size);
+                let logical = region
+                    .to_logical(self.buffer.scale, self.buffer.transform, &src.size)
+                    .upscale(stretch);
                 Some(logical.to_physical_precise_down(scale))
             })
             .collect()

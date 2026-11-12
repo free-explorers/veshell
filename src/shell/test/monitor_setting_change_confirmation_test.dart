@@ -13,8 +13,8 @@ class _FakeMonitorSettingState extends MonitorSettingState {
   final writes = <Map<String, dynamic>>[];
 
   @override
-  MonitorSetting build(String monitorId) => MonitorSetting(
-    mode: const Mode(size: Size(1920, 1080), refreshRate: 60000),
+  MonitorSetting build(String monitorId) => const MonitorSetting(
+    mode: Mode(size: Size(1920, 1080), refreshRate: 60000),
     fractionnalScale: 1,
     location: Offset.zero,
   );
@@ -37,7 +37,7 @@ ProviderContainer _container() => ProviderContainer(
 _FakeMonitorSettingState _fakeFor(ProviderContainer container) {
   // Keep the (auto-dispose) setting state alive, as the monitor views do in
   // the shell, so the rollback write reaches the same notifier instance.
-  container.listen(monitorSettingStateProvider('DP-1'), (_, __) {});
+  container.listen(monitorSettingStateProvider('DP-1'), (_, _) {});
   return container.read(monitorSettingStateProvider('DP-1').notifier)
       as _FakeMonitorSettingState;
 }

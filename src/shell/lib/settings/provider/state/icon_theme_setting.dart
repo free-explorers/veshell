@@ -6,7 +6,7 @@ import 'package:shell/settings/provider/util/theme_detection.dart';
 
 part 'icon_theme_setting.g.dart';
 
-@riverpod
+@Riverpod(keepAlive: true)
 String iconThemeSetting(Ref ref) {
   const path = 'theme.iconTheme';
 

@@ -6,6 +6,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:hooks_riverpod/misc.dart';
 import 'package:riverpod_annotation/experimental/json_persist.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/shared/provider/persistent_storage_state.dart';
 import 'package:shell/workspace/model/workspace.serializable.dart';
@@ -101,6 +102,7 @@ class ScreenState extends _$ScreenState {
         .read(persistentStorageStateProvider)
         .requireValue
         .delete(persistKey);
+    ref.invalidate(overviewStateProvider(screenId));
     ref.invalidateSelf();
   }
 
@@ -295,4 +297,20 @@ class ScreenState extends _$ScreenState {
   void setCustomLabel(String? label) {
     state = state.copyWith(label: label);
   }
+}
+
+/// Access to [ScreenState] for keepAlive providers.
+///
+/// riverpod_lint flags keepAlive providers that use auto-dispose ones, but it
+/// cannot see a `ref.keepAlive()` link taken by hand. The state pins itself with one from `build` until `delete`, so using
+/// it from a keepAlive provider is safe.
+/// Only add accessors here for that reason: route anything else through
+/// `ref` so the lint keeps checking it.
+extension ScreenStateAccess on Ref {
+  Screen readScreen(ScreenId id) => read(screenStateProvider(id));
+
+  Screen watchScreen(ScreenId id) => watch(screenStateProvider(id));
+
+  ScreenState screenNotifier(ScreenId id) =>
+      read(screenStateProvider(id).notifier);
 }

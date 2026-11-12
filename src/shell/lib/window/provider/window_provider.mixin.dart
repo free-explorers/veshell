@@ -639,7 +639,7 @@ mixin WindowProviderMixin<T extends Window> {
         ref
             .read(ephemeralWindowStateProvider(destination).notifier)
             .addMetaWindow(metaWindowId);
-      case _: // ignore: no_default_cases
+      case _:
     }
   }
 

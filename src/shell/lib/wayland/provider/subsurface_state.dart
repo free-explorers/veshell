@@ -41,7 +41,7 @@ class SubsurfaceState extends _$SubsurfaceState {
 
     ref.listen(
       wlSurfaceStateProvider(surfaceId).select((state) => state.texture),
-      (_, __) => _checkIfMapped(),
+      (_, _) => _checkIfMapped(),
     );
   }
 

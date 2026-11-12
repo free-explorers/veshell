@@ -79,7 +79,7 @@ class ExpandableContainerState extends State<ExpandableContainer> {
       opaque: false,
       barrierColor: Colors.black38,
       barrierDismissible: true,
-      pageBuilder: (BuildContext context, _, __) {
+      pageBuilder: (context, _, _) {
         return LayoutBuilder(
           builder: (context, constraints) {
             if (!mounted) return const SizedBox.shrink();

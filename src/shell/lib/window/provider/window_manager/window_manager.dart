@@ -34,7 +34,7 @@ part 'window_manager.g.dart';
 final _log = Logger('WindowManager');
 
 /// Window manager
-@riverpod
+@Riverpod(keepAlive: true)
 @JsonPersist()
 class WindowManager extends _$WindowManager {
   final _uuidGenerator = const Uuid();
@@ -78,9 +78,7 @@ class WindowManager extends _$WindowManager {
       ),
     );
 
-    ref
-        .read(persistentWindowStateProvider(windowId).notifier)
-        .initialize(persistentWindow);
+    ref.persistentWindowNotifier(windowId).initialize(persistentWindow);
 
     state = state.copyWith(windows: state.windows.add(windowId));
     return windowId;
@@ -102,9 +100,7 @@ class WindowManager extends _$WindowManager {
       ),
     );
 
-    ref
-        .read(ephemeralWindowStateProvider(windowId).notifier)
-        .initialize(ephemeralWindow);
+    ref.ephemeralWindowNotifier(windowId).initialize(ephemeralWindow);
 
     state = state.copyWith(windows: state.windows.add(windowId));
     return windowId;
@@ -121,7 +117,7 @@ class WindowManager extends _$WindowManager {
       'Creating new PersistentWindow $windowId for surface $metaWindowId',
     );
 
-    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+    final metaWindow = ref.readMetaWindow(metaWindowId);
 
     final desktopEntryForSurface = await ref.read(
       localizedDesktopEntryForIdProvider(metaWindow.appId ?? '').future,
@@ -140,7 +136,7 @@ class WindowManager extends _$WindowManager {
     // The matcher chose this tile for the native window; if a late relation
     // re-routes the window into a dialog, this now-empty tile is disposable
     // (see `detachForReroute`).
-    ref.read(persistentWindowStateProvider(windowId).notifier)
+    ref.persistentWindowNotifier(windowId)
       ..initialize(persistentWindow)
       ..markAutoCreatedForMatching();
 
@@ -158,14 +154,10 @@ class WindowManager extends _$WindowManager {
       return windowId;
     }
 
-    final screenState = ref.read(screenStateProvider(targetScreenId));
+    final screenState = ref.readScreen(targetScreenId);
 
     await ref
-        .read(
-          workspaceStateProvider(
-            screenState.workspaceList[screenState.selectedIndex],
-          ).notifier,
-        )
+        .workspaceNotifier(screenState.workspaceList[screenState.selectedIndex])
         .addWindow(windowId);
 
     return windowId;
@@ -177,7 +169,7 @@ class WindowManager extends _$WindowManager {
   ) {
     // create a new window
     final windowId = DialogWindowId(_uuidGenerator.v4());
-    final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+    final metaWindow = ref.readMetaWindow(metaWindowId);
     // A dialog is no longer a tile's own window: a late title must not try to
     // move it between tiles.
     ref.read(titleReassociationProvider.notifier).cancel(metaWindowId);
@@ -191,13 +183,11 @@ class WindowManager extends _$WindowManager {
       parentWindowId: parentWindowId,
     );
 
-    ref
-        .read(dialogWindowStateProvider(windowId).notifier)
-        .initialize(dialogWindow);
+    ref.dialogWindowNotifier(windowId).initialize(dialogWindow);
 
     state = state.copyWith(windows: state.windows.add(windowId));
 
-    ref.read(dialogSetForWindowProvider(parentWindowId).notifier).add(windowId);
+    ref.dialogSetNotifier(parentWindowId).add(windowId);
     return windowId;
   }
 
@@ -217,7 +207,7 @@ class WindowManager extends _$WindowManager {
     if (tile is DialogWindowId) {
       return;
     }
-    final dialogIds = ref.read(dialogSetForWindowProvider(tile));
+    final dialogIds = ref.readDialogSet(tile);
     if (dialogIds.length != 1) {
       return;
     }
@@ -225,8 +215,8 @@ class WindowManager extends _$WindowManager {
     final MetaWindowId metaWindowId;
     final MetaWindow metaWindow;
     try {
-      metaWindowId = ref.read(dialogWindowStateProvider(dialogId)).metaWindowId;
-      metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
+      metaWindowId = ref.readDialogWindow(dialogId).metaWindowId;
+      metaWindow = ref.readMetaWindow(metaWindowId);
     } on Object {
       // The dialog or its window is already gone; nothing to promote.
       return;
@@ -251,19 +241,15 @@ class WindowManager extends _$WindowManager {
     // Detach the native window from the dialog silently (no rebroadcast may
     // route it back), then drop the now-empty dialog and hand the window to the
     // tile. The tile's display selection shows it and adopts its identity.
-    ref.read(dialogWindowStateProvider(dialogId).notifier)
+    ref.dialogWindowNotifier(dialogId)
       ..removeMetaWindow(metaWindowId, shouldNotify: false)
       ..removeWindow();
 
     switch (tile) {
       case PersistentWindowId():
-        ref
-            .read(persistentWindowStateProvider(tile).notifier)
-            .addMetaWindow(metaWindowId);
+        ref.persistentWindowNotifier(tile).addMetaWindow(metaWindowId);
       case EphemeralWindowId():
-        ref
-            .read(ephemeralWindowStateProvider(tile).notifier)
-            .addMetaWindow(metaWindowId);
+        ref.ephemeralWindowNotifier(tile).addMetaWindow(metaWindowId);
       case DialogWindowId():
         break;
     }

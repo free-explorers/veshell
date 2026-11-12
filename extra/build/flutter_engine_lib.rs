@@ -78,7 +78,7 @@ fn should_download_flutter_engine_library(
     {
         return false;
     }
-    return true;
+    true
 }
 
 fn download_flutter_engine_library(
@@ -188,7 +188,7 @@ fn download_flutter_engine_library(
 
 fn download_from_url(url: &str) -> Result<bytes::Bytes, reqwest::Error> {
     println!("Downloading from {}", url);
-    Ok(reqwest::blocking::get(url)?.error_for_status()?.bytes()?)
+    reqwest::blocking::get(url)?.error_for_status()?.bytes()
 }
 
 fn generate_embedder_bindings() {
@@ -224,7 +224,7 @@ fn link_libflutter_engine(flutter_engine_build: FlutterEngineBuild) {
         println!("cargo:rustc-link-arg=-Wl,-rpath={}", lib_dir);
     } else {
         // link when is running from source
-        println!("cargo:rustc-link-arg=-Wl,-rpath={}", &libflutter_engine_dir);
+        println!("cargo:rustc-link-arg=-Wl,-rpath={}", libflutter_engine_dir);
     }
 }
 

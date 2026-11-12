@@ -31,6 +31,9 @@ abstract class ResumeContext with _$ResumeContext {
     DateTime? capturedAt,
   }) = _ResumeContext;
 
+  factory ResumeContext.fromJson(Map<String, dynamic> json) =>
+      _$ResumeContextFromJson(json);
+
   const ResumeContext._();
 
   /// Arguments passed to [executable], i.e. [argv] without its first element.
@@ -47,9 +50,6 @@ abstract class ResumeContext with _$ResumeContext {
     final program = executable;
     return program == null || program.isEmpty ? null : program;
   }
-
-  factory ResumeContext.fromJson(Map<String, dynamic> json) =>
-      _$ResumeContextFromJson(json);
 }
 
 /// Terminal-specific resume context.
