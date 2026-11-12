@@ -11,6 +11,7 @@ import 'package:shell/application/provider/app_drawer.dart';
 import 'package:shell/application/provider/app_launch_history.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/shared/widget/shell_icon.dart';
+import 'package:shell/shortcut_manager/model/super_key.dart';
 import 'package:shell/workspace/provider/launch_morphs.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/app_drawer/app_grid.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/launch_morph.dart';
@@ -199,7 +200,9 @@ class AppDrawer extends HookConsumerWidget {
               keyboard.isShiftPressed ||
               keyboard.isControlPressed ||
               keyboard.isAltPressed ||
-              keyboard.isMetaPressed) {
+              // The compositor may report Super as `superKey`, which
+              // `isMetaPressed` misses: a Super+Arrow chord is the shell's.
+              isSuperKeyPressed(keyboard)) {
             return KeyEventResult.ignored;
           }
           final index = selectedIndex;
