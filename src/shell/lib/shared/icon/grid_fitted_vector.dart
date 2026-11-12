@@ -69,6 +69,9 @@ class _GridFitPainter extends CustomPainter {
     final picture = _GridFitCache.picture(instructions, pixels, color);
     canvas
       ..save()
+      // Like an SVG viewport, keep the icon to its square: paths past the
+      // view box would otherwise paint over neighbouring widgets.
+      ..clipRect(Offset.zero & Size.square(size))
       // Draw in physical pixels, where the fit happened.
       ..scale(1 / devicePixelRatio)
       ..drawPicture(picture)
