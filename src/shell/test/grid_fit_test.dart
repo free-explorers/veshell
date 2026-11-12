@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
@@ -239,6 +240,48 @@ void main() {
         fontPackage: 'material_design_icons_flutter',
       );
       expect(await GlyphOutlines.instance.outline(missing), isNull);
+    });
+
+    testWidgets('GridFittedVector paints nothing outside its square', (
+      tester,
+    ) async {
+      // A square three times its view box, as some theme icons draw (#240).
+      final overflowing = vg.parseWithoutOptimizers(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+        '<rect x="-24" y="-24" width="72" height="72"/></svg>',
+      );
+      final key = GlobalKey();
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(
+            child: RepaintBoundary(
+              key: key,
+              child: SizedBox.square(
+                dimension: 60,
+                child: GridFittedVector(
+                  instructions: overflowing,
+                  size: 20,
+                  color: const Color(0xFFFFFFFF),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final alpha = await tester.runAsync(() async {
+        final boundary =
+            key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+        final image = await boundary.toImage();
+        final bytes = (await image.toByteData())!.buffer.asUint8List();
+        return [for (var i = 3; i < bytes.length; i += 4) bytes[i]];
+      });
+      for (var y = 0; y < 60; y++) {
+        for (var x = 0; x < 60; x++) {
+          final inside = x >= 20 && x < 40 && y >= 20 && y < 40;
+          expect(alpha![y * 60 + x], inside ? 255 : 0, reason: '($x, $y)');
+        }
+      }
     });
 
     testWidgets('ShellIcon draws the glyph grid-fitted with the icon theme', (
