@@ -104,6 +104,8 @@ pub struct State<BackendData: Backend + 'static> {
     /// at startup, or an event Flutter never received, can be resynchronized.
     pub flutter_num_lock: bool,
     pub super_key_forwarding: crate::keyboard::SuperKeyForwarding,
+    /// Hardware key events waiting for Flutter's answer to the one before.
+    pub key_queue: crate::keyboard::KeyQueue,
     /// Keycodes forwarded to the gaming-mode client and still held. Used to
     /// replay the matching releases when gaming mode ends, so the client can't
     /// keep believing the Ctrl of `Ctrl+Esc` (or any other held key) is down.
@@ -665,6 +667,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             flutter_sent_keys: HashMap::new(),
             flutter_num_lock: false,
             super_key_forwarding: Default::default(),
+            key_queue: Default::default(),
             game_mode_forwarded_keys: HashSet::new(),
             dmabuf_state,
             seat,

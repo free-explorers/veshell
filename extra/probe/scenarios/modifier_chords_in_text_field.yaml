@@ -16,12 +16,9 @@ steps:
   - wait_for: {find: text=Helm, visible: true}
   # The overview's search field.
   - tap: {x: 330, y: 141}
+  # No pause after typing: a character is inserted before the next key
+  # reaches Flutter, so the select-all that follows it is not collapsed.
   - type: ab
-  # The compositor's text input inserts a typed character once Flutter has
-  # answered for its key, while select-all runs in the framework at once:
-  # let the typing land before the chords, or the last insertion collapses
-  # the selection.
-  - wait: 300
   # Select all, copy, then paste after the text: "abab".
   - key: Control+A
   - key: Control+C

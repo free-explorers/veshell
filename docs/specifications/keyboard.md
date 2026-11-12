@@ -37,16 +37,43 @@ chord (Ctrl down, A down, A up, Ctrl up in one burst, as automated input or a
 busy UI thread produces) be dispatched as one queue: the keyboard state then
 already showed Ctrl released when the A reached the shortcuts.
 
-Two orderings remain asynchronous by design:
+### One key in flight
 
-- A key forwarded to a client carries the seat's modifier state at the time
-  Flutter's answer arrives, not at the time of the key; a chord faster than
-  that answer reaches the client without its modifier.
-- A character typed in a shell text field is inserted by the compositor's text
-  input model once Flutter has answered for its key, while editing shortcuts
-  (select all, move by word) run in the framework at once.
+Processing a key updates the seat's keyboard state at once, but the key only
+reaches a client (or a shell text field, which the compositor's text input
+model types into) once Flutter has answered whether the shell handled it.
+Processing the next key before that answer let the two drift apart:
 
-Neither affects keys typed at human speed.
+- a forwarded key carried the seat's modifiers at the time of the answer, so
+  an instant Ctrl+A reached a client as a plain A (smithay sends the current
+  modifier state with a forwarded key);
+- a typed character was inserted after the framework had already applied a
+  later shortcut, so a select-all was collapsed by the letter before it.
+
+Hardware key events therefore go through a queue (`KeyQueue`): while a key
+waits for Flutter's answer, the next ones wait behind it, and each is
+processed — seat state, compositor hotkeys, gaming mode or Flutter — only once
+the answer for the previous one has been applied. Keys that never reach
+Flutter (compositor hotkeys, gaming mode) do not hold the queue. Repeats feed
+the shell only and are not queued.
+
+If Flutter does not answer within 300 ms (a stalled shell, a debugger pause),
+the queue moves on rather than freeze the keyboard for clients too; the late
+answer is still applied.
+
+The cost is paid only by keys arriving faster than Flutter answers, which is
+about a millisecond. Measured on a debug build, through the probe:
+
+| Input | Before | Queued |
+| --- | --- | --- |
+| A lone key press, shell text field focused | 0.5 ms median | 0.5 ms median |
+| A lone key press, client focused | 0.6 ms median | 0.6 ms median |
+| 40 characters at once (80 events), shell text field | 3–7 ms to drain | 24–31 ms to drain |
+| 40 characters at once (80 events), client | 4–5 ms to drain | 10–12 ms to drain |
+
+Typing at human speed never queues (a key is held for tens of milliseconds).
+Automated input (auto-type, remote desktop) and keys piled up behind a stalled
+frame drain one answer at a time, and arrive correct.
 
 ## Key repetition
 
@@ -193,6 +220,8 @@ text field drops a sequence in progress.
 ## Invariants
 
 - Every physical key event is offered to Flutter before any client sees it.
+- Key events are processed in order, one at a time through Flutter: a key is
+  forwarded with the modifiers held when it was pressed.
 - A client never receives a compositor-synthesized repeat; clients own their own
   repetition from `repeat_info`.
 - The shell's repeats reach Flutter even while a client is focused, so shell
