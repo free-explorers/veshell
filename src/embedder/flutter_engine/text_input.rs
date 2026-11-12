@@ -10,6 +10,7 @@ use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
 use crate::flutter_engine::platform_channels::text_input_model::TextInputModel;
 use crate::flutter_engine::platform_channels::text_range::TextRange;
+use crate::keyboard::compose::{ComposeOutcome, Composer};
 use crate::state::State;
 
 pub struct TextInput {
@@ -18,6 +19,9 @@ pub struct TextInput {
     client_id: u64,
     input_type: String,
     input_action: String,
+    /// Compose sequences and dead keys: the shell inserts text itself, so
+    /// it composes like a client would.
+    composer: Composer,
 }
 
 impl TextInput {
@@ -28,6 +32,7 @@ impl TextInput {
             client_id: 0,
             input_type: "".to_string(),
             input_action: "".to_string(),
+            composer: Composer::from_locale(),
         }
     }
 
@@ -40,6 +45,18 @@ impl TextInput {
             None => return false,
             Some(model) => model,
         };
+
+        match self.composer.feed(keysym) {
+            ComposeOutcome::Pass => {}
+            ComposeOutcome::Swallowed => return false,
+            ComposeOutcome::Composed(text) => {
+                for character in text.chars().filter(|c| !c.is_control()) {
+                    model.add_char_point(character);
+                }
+                self.send_state_update();
+                return true;
+            }
+        }
 
         let changed = match keysym {
             // Navigation keys like arrow keys are handled by Flutter, but the following keys are not.
@@ -70,6 +87,7 @@ impl TextInput {
 
     fn set_client(&mut self, id: u64, input_type: &str, input_action: &str) {
         self.active_model = Some(TextInputModel::default());
+        self.composer.reset();
         self.client_id = id;
         self.input_type = input_type.to_string();
         self.input_action = input_action.to_string();
@@ -77,6 +95,7 @@ impl TextInput {
 
     fn clear_client(&mut self) {
         self.active_model = None;
+        self.composer.reset();
         self.client_id = 0;
         self.input_type = "".to_string();
         self.input_action = "".to_string();

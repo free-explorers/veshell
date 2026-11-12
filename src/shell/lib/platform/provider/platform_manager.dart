@@ -142,6 +142,24 @@ class PlatformManager extends _$PlatformManager {
         if (layout is Map) layout.cast<String, dynamic>(),
     ];
   }
+
+  /// The xkb option groups the compositor can compile, each with its options,
+  /// read from libxkbregistry.
+  Future<List<Map<String, dynamic>>> fetchKeyboardOptions() async {
+    const channel = MethodChannel('platform', JSONMethodCodec());
+    final response = await channel.invokeMapMethod<dynamic, dynamic>(
+      'get_keyboard_options',
+      const <String, dynamic>{},
+    );
+    final groups = response?['groups'];
+    if (groups is! List) {
+      return const [];
+    }
+    return [
+      for (final group in groups)
+        if (group is Map) group.cast<String, dynamic>(),
+    ];
+  }
 }
 
 /// base class for a wayland interaction

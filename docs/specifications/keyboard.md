@@ -98,11 +98,23 @@ the focused context upwards, so the same binding means different things in
 different contexts; that model, its contexts and its defaults are specified in
 [Navigation and actions](navigation.md).
 
-## Caps Lock
+## XKB options
 
-`keyboard.capsLock` remaps the Caps Lock key through an xkb **option** on the
-seat keymap — not a shell-side key rewrite, unlike `keyboard.swapAltAndWin`
-(which swaps the left Meta and Alt keycodes on the event path):
+The seat keymap is compiled with one xkb option list, built from three
+settings under `keyboard` by `KeyboardSettings::xkb_config`, both when the seat
+is created and whenever `apply_veshell_settings` re-runs. The shell and
+forwarded clients therefore share one keymap and the same remaps. These are xkb
+options, not shell-side key rewrites, unlike `keyboard.swapAltAndWin` (which
+swaps the left Meta and Alt keycodes on the event path).
+
+The list is the Caps Lock option, then the compose option, then
+`keyboard.options`, each option once. Because it replaces
+`XKB_DEFAULT_OPTIONS`, the option list is owned by the shell (same as
+`keyboard.layout` overriding `XKB_DEFAULT_LAYOUT`).
+
+### Caps Lock
+
+`keyboard.capsLock` picks what the Caps Lock key does:
 
 | Value | xkb option | Effect |
 | --- | --- | --- |
@@ -112,13 +124,44 @@ seat keymap — not a shell-side key rewrite, unlike `keyboard.swapAltAndWin`
 | `swapescape` | `caps:swapescape` | Caps Lock and Escape are swapped |
 | `disabled` | `caps:none` | Caps Lock is disabled |
 
-The option is passed as `XkbConfig::options` both when the seat is created and
-whenever `apply_veshell_settings` re-runs, so the shell and forwarded clients
-share one keymap and therefore the same remap. An unknown value in a hand-edited
-`settings.json` falls back to `default` instead of failing the settings load.
+### Compose key
 
-Because it replaces `XKB_DEFAULT_OPTIONS`, the option list is owned by the shell
-(same as `keyboard.layout` overriding `XKB_DEFAULT_LAYOUT`).
+`keyboard.composeKey` picks the key that starts a compose sequence
+(`Multi_key`: Compose, `e`, `'` types `é`), like GNOME's "Compose Key" picker.
+Each value `<key>` is the xkb option `compose:<key>`: `ralt`, `rwin`, `lwin`,
+`menu`, `rctrl`, `lctrl`, `caps`, `102` (the `< >` key of ISO keyboards),
+`prsc`, `sclk`, `paus` or `ins`.
+
+The default is `none`, as on GNOME and KDE. A compose key on Right Alt would
+take AltGr away from layouts that use it, the shipped `us(altgr-intl)` among
+them, so the choice is the user's.
+
+### Other options
+
+`keyboard.options` lists any further xkb option by its xkb name
+(`["grp:alt_shift_toggle"]`); a hand-edited comma-separated string is read
+too. The settings UI picks each entry from the catalogue the compositor reports
+through `get_keyboard_options`, which reads the option groups of
+libxkbregistry, like the layout picker. The picker leaves out the options the
+Caps Lock and compose key settings own, so one remap has one place to set it.
+On save, only the last option picked from a single-choice group is kept.
+
+An unknown value of `capsLock` or `composeKey` falls back to the default, and a
+malformed entry of `options` is dropped, instead of failing the settings load.
+An unknown but well-formed option is ignored by xkbcommon when the keymap
+compiles.
+
+### Composing in the shell
+
+Clients compose on their own with libxkbcommon from the keysyms they receive.
+The shell's text fields insert text through the embedder's text input model
+instead, so it runs the same machinery (`keyboard::compose::Composer`): a key
+the focused shell text field would type is first fed to an xkb compose state
+loaded from the user's locale (`LC_ALL`, `LC_CTYPE`, `LANG`). Keys inside a
+sequence type nothing, a completed sequence types its result, and a sequence
+that matches nothing is dropped, as in GTK. Dead keys (`dead_acute`, from
+`us(altgr-intl)` for instance) go through the same compose table. A change of
+text field drops a sequence in progress.
 
 ## Invariants
 
@@ -130,5 +173,6 @@ Because it replaces `XKB_DEFAULT_OPTIONS`, the option list is owned by the shell
 - A repeat is only emitted while its key is still physically held: a release that
   races the timer cancels the repeat rather than emitting a stray character.
 - The delay and rate advertised to clients match the shell repeater's behavior.
+- The shell and clients compile the same keymap, xkb options included.
 - Leaving gaming mode releases every key the client believes is held and stops
   any in-flight shell repeat (`release_flutter_keys`).

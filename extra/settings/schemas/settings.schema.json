@@ -48,6 +48,32 @@
                         "disabled"
                     ]
                 },
+                "composeKey": {
+                    "type": "string",
+                    "enum": [
+                        "none",
+                        "ralt",
+                        "lwin",
+                        "rwin",
+                        "menu",
+                        "lctrl",
+                        "rctrl",
+                        "caps",
+                        "102",
+                        "prsc",
+                        "sclk",
+                        "paus",
+                        "ins"
+                    ]
+                },
+                "options": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_.+-]+:[A-Za-z0-9_.+-]+$"
+                    },
+                    "uniqueItems": true
+                },
                 "repeat": {
                     "type": "boolean"
                 },

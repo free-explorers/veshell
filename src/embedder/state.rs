@@ -10,7 +10,7 @@ use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::delegate_dispatch2;
 use smithay::desktop::{Space, Window};
 use smithay::input::dnd::{DnDGrab, DndGrabHandler, GrabType, Source};
-use smithay::input::keyboard::{KeyboardHandle, LedState, XkbConfig};
+use smithay::input::keyboard::{KeyboardHandle, LedState};
 use smithay::input::pointer::{CursorImageStatus, Focus, PointerHandle};
 use smithay::input::tablet::TabletSeatHandler;
 use smithay::input::{Seat, SeatHandler, SeatState};
@@ -523,12 +523,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let repeat_rate: u64 = settings.keyboard.effective_repeat_rate();
         let keyboard = seat
             .add_keyboard(
-                XkbConfig {
-                    layout: &settings.keyboard.layout,
-                    // Caps Lock remapping is an xkb option (see `CapsLockBehavior`).
-                    options: settings.keyboard.caps_lock.xkb_option().map(str::to_owned),
-                    ..XkbConfig::default()
-                },
+                settings.keyboard.xkb_config(),
                 repeat_delay as i32,
                 repeat_rate as i32,
             )
@@ -814,14 +809,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         );
         let keyboard = self.keyboard.clone();
         keyboard
-            .set_xkb_config(
-                self,
-                XkbConfig {
-                    layout: &settings.keyboard.layout.clone(),
-                    options: settings.keyboard.caps_lock.xkb_option().map(str::to_owned),
-                    ..XkbConfig::default()
-                },
-            )
+            .set_xkb_config(self, settings.keyboard.xkb_config())
             .unwrap();
         self.change_keyboard_repeat_info(
             settings.keyboard.repeat_delay_ms,

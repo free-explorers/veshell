@@ -12,6 +12,7 @@ use xkbcommon::xkb::{Keycode, Keysym};
 use crate::backend::Backend;
 use crate::state::State;
 
+pub mod compose;
 pub mod key_mapping;
 pub mod key_repeater;
 pub mod xkb_registry;
