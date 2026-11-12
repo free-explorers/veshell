@@ -27,6 +27,7 @@ mod brightness;
 mod build_info;
 mod capture;
 mod cli;
+mod clipboard;
 mod cursor;
 mod flutter_engine;
 mod focus;

@@ -369,6 +369,8 @@ fn linux_key_code(name: &str) -> Option<u32> {
         "control" | "ctrl" => keys::KEY_LEFTCTRL,
         "shift" => keys::KEY_LEFTSHIFT,
         "alt" => keys::KEY_LEFTALT,
+        "altright" | "rightalt" | "altgr" => keys::KEY_RIGHTALT,
+        "apostrophe" | "quote" => keys::KEY_APOSTROPHE,
         _ => return letter_or_digit_code(name),
     };
     Some(code as u32)

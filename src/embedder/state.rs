@@ -10,7 +10,7 @@ use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::delegate_dispatch2;
 use smithay::desktop::{Space, Window};
 use smithay::input::dnd::{DnDGrab, DndGrabHandler, GrabType, Source};
-use smithay::input::keyboard::{KeyboardHandle, LedState, XkbConfig};
+use smithay::input::keyboard::{KeyboardHandle, LedState};
 use smithay::input::pointer::{CursorImageStatus, Focus, PointerHandle};
 use smithay::input::tablet::TabletSeatHandler;
 use smithay::input::{Seat, SeatHandler, SeatState};
@@ -104,6 +104,8 @@ pub struct State<BackendData: Backend + 'static> {
     /// at startup, or an event Flutter never received, can be resynchronized.
     pub flutter_num_lock: bool,
     pub super_key_forwarding: crate::keyboard::SuperKeyForwarding,
+    /// Hardware key events waiting for Flutter's answer to the one before.
+    pub key_queue: crate::keyboard::KeyQueue,
     /// Keycodes forwarded to the gaming-mode client and still held. Used to
     /// replay the matching releases when gaming mode ends, so the client can't
     /// keep believing the Ctrl of `Ctrl+Esc` (or any other held key) is down.
@@ -120,6 +122,9 @@ pub struct State<BackendData: Backend + 'static> {
     pub pointer: PointerHandle<State<BackendData>>,
     pub pointer_frame_pending: bool,
     pub primary_selection_state: PrimarySelectionState,
+    /// The MIME types the clipboard is offered as, whoever owns it: it tells
+    /// the shell whether there is text to paste.
+    pub clipboard_mime_types: Vec<String>,
     /// Milliseconds a key must be held before repeating starts. Advertised to
     /// clients (`wl_keyboard.repeat_info`) and used by the shell repeater.
     pub repeat_delay: u64,
@@ -523,12 +528,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let repeat_rate: u64 = settings.keyboard.effective_repeat_rate();
         let keyboard = seat
             .add_keyboard(
-                XkbConfig {
-                    layout: &settings.keyboard.layout,
-                    // Caps Lock remapping is an xkb option (see `CapsLockBehavior`).
-                    options: settings.keyboard.caps_lock.xkb_option().map(str::to_owned),
-                    ..XkbConfig::default()
-                },
+                settings.keyboard.xkb_config(),
                 repeat_delay as i32,
                 repeat_rate as i32,
             )
@@ -667,12 +667,14 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             flutter_sent_keys: HashMap::new(),
             flutter_num_lock: false,
             super_key_forwarding: Default::default(),
+            key_queue: Default::default(),
             game_mode_forwarded_keys: HashSet::new(),
             dmabuf_state,
             seat,
             seat_state,
             data_device_state,
             primary_selection_state,
+            clipboard_mime_types: Vec::new(),
             data_control_state,
             pointer,
             pointer_frame_pending: false,
@@ -814,14 +816,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         );
         let keyboard = self.keyboard.clone();
         keyboard
-            .set_xkb_config(
-                self,
-                XkbConfig {
-                    layout: &settings.keyboard.layout.clone(),
-                    options: settings.keyboard.caps_lock.xkb_option().map(str::to_owned),
-                    ..XkbConfig::default()
-                },
-            )
+            .set_xkb_config(self, settings.keyboard.xkb_config())
             .unwrap();
         self.change_keyboard_repeat_info(
             settings.keyboard.repeat_delay_ms,
@@ -1216,7 +1211,7 @@ impl<BackendData: Backend> State<BackendData> {
 }
 
 impl<BackendData: Backend> SelectionHandler for State<BackendData> {
-    type SelectionUserData = crate::capture::selection::SelectionUserData;
+    type SelectionUserData = crate::clipboard::SelectionUserData;
 
     fn new_selection(
         &mut self,
@@ -1224,6 +1219,12 @@ impl<BackendData: Backend> SelectionHandler for State<BackendData> {
         source: Option<SelectionSource>,
         _seat: Seat<Self>,
     ) {
+        if ty == SelectionTarget::Clipboard {
+            self.clipboard_mime_types = source
+                .as_ref()
+                .map(SelectionSource::mime_types)
+                .unwrap_or_default();
+        }
         if let Some(xwm) = self
             .xwayland_state
             .as_mut()
@@ -1243,13 +1244,15 @@ impl<BackendData: Backend> SelectionHandler for State<BackendData> {
         _seat: Seat<Self>,
         user_data: &Self::SelectionUserData,
     ) {
-        if let Some(data) = user_data {
-            if mime_type == crate::capture::selection::PNG_MIME
-                || mime_type == crate::capture::selection::NATIVE_SCREENSHOT_MIME
-            {
-                crate::capture::selection::send_native_selection(fd, data.clone());
-                return;
+        // A payload the compositor owns: serve it, never relay it to Xwayland.
+        if let Some(selection) = user_data {
+            if !selection.send(&mime_type, fd) {
+                warn!(
+                    ?mime_type,
+                    "A client asked for a type the selection is not offered as"
+                );
             }
+            return;
         }
         if let Some(xwm) = self
             .xwayland_state

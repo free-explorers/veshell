@@ -39,9 +39,9 @@ use smithay::{
 
 use crate::backend::Backend;
 use crate::flutter_engine::callbacks::{
-    gl_external_texture_frame_callback, key_event_callback, platform_message_callback,
-    populate_existing_damage, post_task_callback, runs_task_on_current_thread_callback,
-    view_focus_change_request_callback, vsync_callback, FlutterKeyEventData,
+    gl_external_texture_frame_callback, platform_message_callback, populate_existing_damage,
+    post_task_callback, runs_task_on_current_thread_callback, view_focus_change_request_callback,
+    vsync_callback,
 };
 use crate::flutter_engine::embedder::{
     FlutterCompositor, FlutterCustomTaskRunners, FlutterEngineAOTData, FlutterEngineAOTDataSource,
@@ -61,9 +61,11 @@ use crate::flutter_engine::platform_channels::basic_message_channel::BasicMessag
 use crate::flutter_engine::platform_channels::binary_messenger_impl::BinaryMessengerImpl;
 use crate::flutter_engine::platform_channels::json_message_codec::JsonMessageCodec;
 use crate::flutter_engine::platform_channels::json_method_codec::JsonMethodCodec;
+use crate::flutter_engine::platform_channels::message_codec::MessageCodec;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
+use crate::flutter_engine::system_platform::system_platform_channel_method_handler;
 use crate::flutter_engine::task_runner::TaskRunner;
 use crate::flutter_engine::text_input::{text_input_channel_method_call_handler, TextInput};
 use crate::flutter_engine::view::ViewsManagement;
@@ -97,6 +99,7 @@ mod locales;
 mod mouse_cursor;
 pub mod platform_channel_callbacks;
 pub mod platform_channels;
+mod system_platform;
 pub mod task_runner;
 mod text_input;
 pub mod trackpad_scrolling_manager;
@@ -391,6 +394,27 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     )
                     .unwrap();
 
+                // The framework's own platform channel: the clipboard
+                // behind copy and paste in the shell's text fields.
+                let mut system_platform_channel = MethodChannel::<serde_json::Value>::new(
+                    binary_messenger.clone(),
+                    "flutter/platform".to_string(),
+                    method_codec.clone(),
+                );
+                let (tx_system_platform_message, rx_system_platform_message) = channel::channel::<(
+                    MethodCall<serde_json::Value>,
+                    Box<dyn MethodResult<serde_json::Value>>,
+                )>();
+                system_platform_channel
+                    .set_method_call_mpsc_channel(Some(tx_system_platform_message));
+                server_state
+                    .loop_handle
+                    .insert_source(
+                        rx_system_platform_message,
+                        system_platform_channel_method_handler,
+                    )
+                    .unwrap();
+
                 let mut mouse_cursor_channel = MethodChannel::<EncodableValue>::new(
                     binary_messenger.clone(),
                     "flutter/mousecursor".to_string(),
@@ -633,35 +657,19 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             | ((event.mods.alt as u32) << 3)
             | ((event.mods.num_lock as u32) << 4)
             | ((event.mods.logo as u32) << 26);
-        let key_event_data = Box::new(FlutterKeyEventData {
-            key_event: event,
-            repeat,
-            notify,
-            tx_flutter_handled_key_event: self
-                .renderer_data
-                .channels
-                .tx_flutter_handled_key_event
-                .clone(),
-            key_event_channel: BasicMessageChannel::new(
-                self.binary_messenger.clone(),
-                "flutter/keyevent".to_string(),
-                Rc::new(JsonMessageCodec::new()),
-            ),
-            raw_key_event: json!({
-                "keymap": "linux",
-                "toolkit": "gtk",
-                "keyCode": raw_keysym.raw(),
-                "scanCode": event.key_code.raw(),
-                "modifiers": modifiers,
-                "unicodeScalarValues": unicode_scalar_values,
-                "specifiedLogicalKey": logical_key,
-                "type": match event.state {
-                    KeyState::Pressed => "keydown",
-                    KeyState::Released => "keyup",
-                },
-            }),
+        let raw_key_event = json!({
+            "keymap": "linux",
+            "toolkit": "gtk",
+            "keyCode": raw_keysym.raw(),
+            "scanCode": event.key_code.raw(),
+            "modifiers": modifiers,
+            "unicodeScalarValues": unicode_scalar_values,
+            "specifiedLogicalKey": logical_key,
+            "type": match event.state {
+                KeyState::Pressed => "keydown",
+                KeyState::Released => "keyup",
+            },
         });
-        let user_data = Box::into_raw(key_event_data) as *mut c_void;
 
         let flutter_key_event = FlutterKeyEvent {
             struct_size: std::mem::size_of::<FlutterKeyEvent>(),
@@ -674,19 +682,58 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             device_type: 1,
         };
 
+        // The framework queues each KeyData and dispatches the queue when the
+        // next legacy `flutter/keyevent` message arrives, so every KeyData
+        // must be followed by its own companion before the next key's KeyData.
+        // Both are posted to the UI task runner in send order, so the
+        // companion goes out right away, as the GTK embedder does. Waiting for
+        // the KeyData callback instead let a fast chord queue up behind it:
+        // Ctrl down, A down, A up and Ctrl up were then dispatched together,
+        // after the keyboard state already showed Ctrl released, and the A
+        // reached the shortcuts as a plain A.
         let result = unsafe {
             FlutterEngineSendKeyEvent(
                 self.handle,
                 &flutter_key_event as *const _,
-                Some(key_event_callback),
-                user_data,
+                None,
+                null_mut(),
             )
         };
-
         if result != 0 {
-            unsafe { drop(Box::from_raw(user_data as *mut FlutterKeyEventData)) };
             return Err(format!("Could not send key event, error {result}").into());
         }
+
+        // The companion's reply is the dispatch result: whether a shortcut or
+        // a focused widget handled the key.
+        let tx = self
+            .renderer_data
+            .channels
+            .tx_flutter_handled_key_event
+            .clone();
+        BasicMessageChannel::new(
+            self.binary_messenger.clone(),
+            "flutter/keyevent".to_string(),
+            Rc::new(JsonMessageCodec::new()),
+        )
+        .send(
+            &raw_key_event,
+            Some(Box::new(move |response: Option<&[u8]>| {
+                if !notify {
+                    return;
+                }
+                let handled = response
+                    .and_then(|response| JsonMessageCodec::new().decode_message(response))
+                    .and_then(|message| message["handled"].as_bool())
+                    .unwrap_or(false);
+                tracing::debug!(
+                    key_code = event.key_code.raw(),
+                    keysym = ?event.keysym,
+                    ?handled,
+                    "Flutter key event result",
+                );
+                tx.send((event, handled, repeat)).ok();
+            })),
+        );
         Ok(())
     }
 

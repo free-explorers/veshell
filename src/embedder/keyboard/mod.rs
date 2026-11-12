@@ -1,17 +1,20 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use smithay::backend::input::KeyState;
 use smithay::backend::session::Session;
 use smithay::input::keyboard::ModifiersState;
+use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
+use smithay::reexports::calloop::RegistrationToken;
 use smithay::utils::SERIAL_COUNTER;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use xkbcommon::xkb::{Keycode, Keysym};
 
 use crate::backend::Backend;
 use crate::state::State;
 
+pub mod compose;
 pub mod key_mapping;
 pub mod key_repeater;
 pub mod xkb_registry;
@@ -258,13 +261,140 @@ pub fn swap_left_alt_and_meta<BackendData: Backend + 'static>(
     Keycode::new(linux_code + 8)
 }
 
+/// How long the next key waits for Flutter's answer to the one in flight.
+///
+/// Flutter answers in about a millisecond. Past this, the shell is stalled
+/// (a long frame, a debugger pause): the queue moves on rather than freeze the
+/// keyboard for every client too, and the late answer is still applied.
+const FLUTTER_ANSWER_TIMEOUT: Duration = Duration::from_millis(300);
+
+/// A hardware key event waiting for its turn in the [`KeyQueue`].
+#[derive(Debug, Clone, Copy)]
+struct QueuedKey {
+    key_code: Keycode,
+    state: KeyState,
+    time: u32,
+    synthesized: bool,
+}
+
+/// The key Flutter has to answer for before the next one is processed.
+struct InFlightKey {
+    key_code: Keycode,
+    state: KeyState,
+    /// Tells a stale timeout from the current key's.
+    id: u64,
+    timeout: Option<RegistrationToken>,
+}
+
+/// Hardware key events, processed one at a time through Flutter.
+///
+/// Processing a key updates the seat's keyboard state, and the key is only
+/// forwarded to a client (or typed into a shell text field) once Flutter has
+/// answered whether the shell handled it. Processing the next key before that
+/// answer let the two drift apart: a forwarded key carried the modifiers of
+/// later keys (an instant Ctrl+A reached a client as a plain A), and a shell
+/// text field inserted a character after the framework had already applied a
+/// later shortcut (a select-all collapsed by the letter typed before it).
+/// Keys therefore wait here while one is in flight. See
+/// `docs/specifications/keyboard.md`.
+#[derive(Default)]
+pub struct KeyQueue {
+    waiting: VecDeque<QueuedKey>,
+    in_flight: Option<InFlightKey>,
+    next_id: u64,
+}
+
+/// Takes a hardware key event: processed now when no key is waiting for
+/// Flutter's answer, else queued behind it.
 pub fn handle_keyboard_event<BackendData: Backend + 'static>(
     data: &mut State<BackendData>,
-    mut key_code: Keycode,
+    key_code: Keycode,
     state: KeyState,
     time: u32,
     synthesized: bool,
 ) {
+    data.key_queue.waiting.push_back(QueuedKey {
+        key_code,
+        state,
+        time,
+        synthesized,
+    });
+    pump_key_queue(data);
+}
+
+/// Processes queued keys until one has to wait for Flutter's answer.
+fn pump_key_queue<BackendData: Backend + 'static>(data: &mut State<BackendData>) {
+    while data.key_queue.in_flight.is_none() {
+        let Some(key) = data.key_queue.waiting.pop_front() else {
+            return;
+        };
+        let Some((key_code, state)) = process_key_event(data, key) else {
+            continue;
+        };
+        let id = data.key_queue.next_id;
+        data.key_queue.next_id += 1;
+        let timeout = data
+            .loop_handle
+            .insert_source(
+                Timer::from_duration(FLUTTER_ANSWER_TIMEOUT),
+                move |_, _, data| {
+                    if data
+                        .key_queue
+                        .in_flight
+                        .as_ref()
+                        .is_some_and(|key| key.id == id)
+                    {
+                        warn!("Flutter did not answer a key in time: processing the next ones");
+                        data.key_queue.in_flight = None;
+                        pump_key_queue(data);
+                    }
+                    TimeoutAction::Drop
+                },
+            )
+            .ok();
+        data.key_queue.in_flight = Some(InFlightKey {
+            key_code,
+            state,
+            id,
+            timeout,
+        });
+    }
+}
+
+/// Lets the next queued key through once Flutter's answer for the key in
+/// flight has been applied.
+fn complete_in_flight_key<BackendData: Backend + 'static>(
+    data: &mut State<BackendData>,
+    key_code: Keycode,
+    state: KeyState,
+) {
+    let is_in_flight = data
+        .key_queue
+        .in_flight
+        .as_ref()
+        .is_some_and(|key| key.key_code == key_code && key.state == state);
+    if !is_in_flight {
+        return;
+    }
+    if let Some(token) = data.key_queue.in_flight.take().and_then(|key| key.timeout) {
+        data.loop_handle.remove(token);
+    }
+    pump_key_queue(data);
+}
+
+/// Routes one key event: the compositor's own hotkeys, gaming mode, or
+/// Flutter. Returns the key Flutter now has to answer for, if any: its answer
+/// ([`post_flutter_handle_key_event`]) lets the next queued key through.
+fn process_key_event<BackendData: Backend + 'static>(
+    data: &mut State<BackendData>,
+    key: QueuedKey,
+) -> Option<(Keycode, KeyState)> {
+    let QueuedKey {
+        mut key_code,
+        state,
+        time,
+        synthesized,
+    } = key;
     // Flutter only learns about lock keys from their key events. Keep its
     // NumLock state in step with xkb before routing each event.
     sync_flutter_lock_modes(data);
@@ -307,7 +437,7 @@ pub fn handle_keyboard_event<BackendData: Backend + 'static>(
     // 3. Check if the keystroke result in compositor hotkeys shortcuts
     if handle_embedder_hotkeys(data, veshell_key_event) {
         data.super_key_forwarding.consume_pending();
-        return;
+        return None;
     }
 
     if data.gaming_input_active() {
@@ -329,7 +459,7 @@ pub fn handle_keyboard_event<BackendData: Backend + 'static>(
                 data.game_mode_forwarded_keys.remove(&key_code);
             }
         }
-        return;
+        return None;
     }
 
     data.flutter_engine
@@ -375,6 +505,8 @@ pub fn handle_keyboard_event<BackendData: Backend + 'static>(
             }
         }
     }
+
+    Some((key_code, state))
 }
 
 /// Converts a repeat rate in characters per second into the timer interval used
@@ -570,7 +702,21 @@ fn handle_embedder_hotkeys<BackendData: Backend + 'static>(
     false
 }
 
+/// Applies Flutter's answer for a key, then lets the next queued key through.
 pub fn post_flutter_handle_key_event<BackendData: Backend + 'static>(
+    data: &mut State<BackendData>,
+    event: VeshellKeyEvent,
+    handled: bool,
+    repeat: bool,
+) {
+    apply_flutter_answer(data, event, handled, repeat);
+    // A repeat feeds the shell only and is never queued.
+    if !repeat {
+        complete_in_flight_key(data, event.key_code, event.state);
+    }
+}
+
+fn apply_flutter_answer<BackendData: Backend + 'static>(
     data: &mut State<BackendData>,
     event: VeshellKeyEvent,
     handled: bool,

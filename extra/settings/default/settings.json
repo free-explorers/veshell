@@ -9,6 +9,8 @@
         "layout": "us(altgr-intl)",
         "swapAltAndWin": false,
         "capsLock": "default",
+        "composeKey": "none",
+        "options": [],
         "repeat": true,
         "repeatDelayMs": 500,
         "repeatRate": 30,

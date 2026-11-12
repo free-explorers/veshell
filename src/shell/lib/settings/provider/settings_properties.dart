@@ -11,6 +11,8 @@ import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/monitor/util/scale_recommendation.dart';
 import 'package:shell/monitor/widget/monitor_arrangement/monitor_arrangement_editor.dart';
+import 'package:shell/settings/model/keyboard_choices.dart';
+import 'package:shell/settings/model/keyboard_option.dart';
 import 'package:shell/settings/model/setting_group.dart';
 import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/model/types/monitor_setting.serializable.dart';
@@ -21,7 +23,7 @@ import 'package:shell/settings/provider/util/default_settings_json.dart';
 import 'package:shell/settings/widget/environment/environment_variables_editor.dart';
 import 'package:shell/settings/widget/expandable_search_result.dart';
 import 'package:shell/settings/widget/keyboard/keyboard_layouts_editor.dart';
-import 'package:shell/settings/widget/keyboard/setting_property_caps_lock_editor.dart';
+import 'package:shell/settings/widget/keyboard/keyboard_options_editor.dart';
 import 'package:shell/settings/widget/locale/system_locale_editor.dart';
 import 'package:shell/settings/widget/locale/veshell_language_editor.dart';
 import 'package:shell/settings/widget/monitor/monitor_mirror_editor.dart';
@@ -32,6 +34,7 @@ import 'package:shell/settings/widget/monitor/monitor_resolution_editor.dart';
 import 'package:shell/settings/widget/monitor/monitor_resolution_value.dart';
 import 'package:shell/settings/widget/monitor/monitor_transform_editor.dart';
 import 'package:shell/settings/widget/monitor/monitor_transform_value.dart';
+import 'package:shell/settings/widget/primitive/setting_property_choice_editor.dart';
 import 'package:shell/settings/widget/theme/cursor_theme_editor.dart';
 import 'package:shell/settings/widget/theme/focus_indicator_editor.dart';
 import 'package:shell/settings/widget/theme/icon_theme_editor.dart';
@@ -233,12 +236,58 @@ class SettingsProperties extends _$SettingsProperties {
                   path: path,
                   property: property,
                   buildValue: (context, value, {required isExpanded}) =>
-                      CapsLockValue(path: path),
+                      SettingPropertyChoiceValue(
+                        path: path,
+                        choices: capsLockBehaviors,
+                        defaultValue: 'default',
+                        label: capsLockLabel,
+                      ),
                   buildEditor: (context, {required isExpanded}) =>
-                      SettingPropertyCapsLockEditor(
+                      SettingPropertyChoiceEditor(
                         path: path,
                         property: property,
+                        choices: capsLockBehaviors,
+                        defaultValue: 'default',
+                        label: capsLockLabel,
                       ),
+                ),
+          ),
+          'composeKey': SettingProperty<String>(
+            name: l10n.composeKey,
+            description: l10n.composeKeyDescription,
+            buildSearchResult: (context, path, property) =>
+                ExpandableSearchResult<String>(
+                  path: path,
+                  property: property,
+                  buildValue: (context, value, {required isExpanded}) =>
+                      SettingPropertyChoiceValue(
+                        path: path,
+                        choices: composeKeys,
+                        defaultValue: 'none',
+                        label: composeKeyLabel,
+                      ),
+                  buildEditor: (context, {required isExpanded}) =>
+                      SettingPropertyChoiceEditor(
+                        path: path,
+                        property: property,
+                        choices: composeKeys,
+                        defaultValue: 'none',
+                        label: composeKeyLabel,
+                      ),
+                ),
+          ),
+          'options': SettingProperty<List<String>>(
+            name: l10n.keyboardOptions,
+            description: l10n.keyboardOptionsDescription,
+            converter: const KeyboardOptionsConverter(),
+            buildSearchResult: (context, path, property) =>
+                ExpandableSearchResult<List<String>>(
+                  path: path,
+                  property: property,
+                  buildValue: (context, value, {required isExpanded}) =>
+                      KeyboardOptionsValue(path: path),
+                  buildEditor: (context, {required isExpanded}) =>
+                      KeyboardOptionsEditor(path: path, property: property),
                 ),
           ),
           'repeat': SettingProperty<bool>(

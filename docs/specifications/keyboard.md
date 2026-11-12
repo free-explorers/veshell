@@ -21,6 +21,60 @@ flows through to the client.
 | Forwarding unconsumed key events to the focused client | Compositor |
 | Key repetition | Client, by Wayland contract; the shell gets a compositor-side copy |
 
+## Delivery to Flutter
+
+Each key event reaches Flutter as two messages: the embedder `KeyData`
+(`FlutterEngineSendKeyEvent`) and its legacy companion on `flutter/keyevent`
+(the GTK-style raw event). The framework queues every `KeyData` and dispatches
+the queue when the next companion arrives, so each `KeyData` must be followed
+by its own companion before the next key's `KeyData`. The compositor sends the
+companion right after the `KeyData`, as the GTK embedder does: both are posted
+to the UI thread in send order. The companion's reply carries whether the shell
+handled the key, which decides whether the key is forwarded to a client.
+
+Waiting for the `KeyData` callback before sending the companion let a fast
+chord (Ctrl down, A down, A up, Ctrl up in one burst, as automated input or a
+busy UI thread produces) be dispatched as one queue: the keyboard state then
+already showed Ctrl released when the A reached the shortcuts.
+
+### One key in flight
+
+Processing a key updates the seat's keyboard state at once, but the key only
+reaches a client (or a shell text field, which the compositor's text input
+model types into) once Flutter has answered whether the shell handled it.
+Processing the next key before that answer let the two drift apart:
+
+- a forwarded key carried the seat's modifiers at the time of the answer, so
+  an instant Ctrl+A reached a client as a plain A (smithay sends the current
+  modifier state with a forwarded key);
+- a typed character was inserted after the framework had already applied a
+  later shortcut, so a select-all was collapsed by the letter before it.
+
+Hardware key events therefore go through a queue (`KeyQueue`): while a key
+waits for Flutter's answer, the next ones wait behind it, and each is
+processed — seat state, compositor hotkeys, gaming mode or Flutter — only once
+the answer for the previous one has been applied. Keys that never reach
+Flutter (compositor hotkeys, gaming mode) do not hold the queue. Repeats feed
+the shell only and are not queued.
+
+If Flutter does not answer within 300 ms (a stalled shell, a debugger pause),
+the queue moves on rather than freeze the keyboard for clients too; the late
+answer is still applied.
+
+The cost is paid only by keys arriving faster than Flutter answers, which is
+about a millisecond. Measured on a debug build, through the probe:
+
+| Input | Before | Queued |
+| --- | --- | --- |
+| A lone key press, shell text field focused | 0.5 ms median | 0.5 ms median |
+| A lone key press, client focused | 0.6 ms median | 0.6 ms median |
+| 40 characters at once (80 events), shell text field | 3–7 ms to drain | 24–31 ms to drain |
+| 40 characters at once (80 events), client | 4–5 ms to drain | 10–12 ms to drain |
+
+Typing at human speed never queues (a key is held for tens of milliseconds).
+Automated input (auto-type, remote desktop) and keys piled up behind a stalled
+frame drain one answer at a time, and arrive correct.
+
 ## Key repetition
 
 Wayland leaves key repetition to the **client**. The compositor advertises the
@@ -98,11 +152,23 @@ the focused context upwards, so the same binding means different things in
 different contexts; that model, its contexts and its defaults are specified in
 [Navigation and actions](navigation.md).
 
-## Caps Lock
+## XKB options
 
-`keyboard.capsLock` remaps the Caps Lock key through an xkb **option** on the
-seat keymap — not a shell-side key rewrite, unlike `keyboard.swapAltAndWin`
-(which swaps the left Meta and Alt keycodes on the event path):
+The seat keymap is compiled with one xkb option list, built from three
+settings under `keyboard` by `KeyboardSettings::xkb_config`, both when the seat
+is created and whenever `apply_veshell_settings` re-runs. The shell and
+forwarded clients therefore share one keymap and the same remaps. These are xkb
+options, not shell-side key rewrites, unlike `keyboard.swapAltAndWin` (which
+swaps the left Meta and Alt keycodes on the event path).
+
+The list is the Caps Lock option, then the compose option, then
+`keyboard.options`, each option once. Because it replaces
+`XKB_DEFAULT_OPTIONS`, the option list is owned by the shell (same as
+`keyboard.layout` overriding `XKB_DEFAULT_LAYOUT`).
+
+### Caps Lock
+
+`keyboard.capsLock` picks what the Caps Lock key does:
 
 | Value | xkb option | Effect |
 | --- | --- | --- |
@@ -112,17 +178,50 @@ seat keymap — not a shell-side key rewrite, unlike `keyboard.swapAltAndWin`
 | `swapescape` | `caps:swapescape` | Caps Lock and Escape are swapped |
 | `disabled` | `caps:none` | Caps Lock is disabled |
 
-The option is passed as `XkbConfig::options` both when the seat is created and
-whenever `apply_veshell_settings` re-runs, so the shell and forwarded clients
-share one keymap and therefore the same remap. An unknown value in a hand-edited
-`settings.json` falls back to `default` instead of failing the settings load.
+### Compose key
 
-Because it replaces `XKB_DEFAULT_OPTIONS`, the option list is owned by the shell
-(same as `keyboard.layout` overriding `XKB_DEFAULT_LAYOUT`).
+`keyboard.composeKey` picks the key that starts a compose sequence
+(`Multi_key`: Compose, `e`, `'` types `é`), like GNOME's "Compose Key" picker.
+Each value `<key>` is the xkb option `compose:<key>`: `ralt`, `rwin`, `lwin`,
+`menu`, `rctrl`, `lctrl`, `caps`, `102` (the `< >` key of ISO keyboards),
+`prsc`, `sclk`, `paus` or `ins`.
+
+The default is `none`, as on GNOME and KDE. A compose key on Right Alt would
+take AltGr away from layouts that use it, the shipped `us(altgr-intl)` among
+them, so the choice is the user's.
+
+### Other options
+
+`keyboard.options` lists any further xkb option by its xkb name
+(`["grp:alt_shift_toggle"]`); a hand-edited comma-separated string is read
+too. The settings UI picks each entry from the catalogue the compositor reports
+through `get_keyboard_options`, which reads the option groups of
+libxkbregistry, like the layout picker. The picker leaves out the options the
+Caps Lock and compose key settings own, so one remap has one place to set it.
+On save, only the last option picked from a single-choice group is kept.
+
+An unknown value of `capsLock` or `composeKey` falls back to the default, and a
+malformed entry of `options` is dropped, instead of failing the settings load.
+An unknown but well-formed option is ignored by xkbcommon when the keymap
+compiles.
+
+### Composing in the shell
+
+Clients compose on their own with libxkbcommon from the keysyms they receive.
+The shell's text fields insert text through the embedder's text input model
+instead, so it runs the same machinery (`keyboard::compose::Composer`): a key
+the focused shell text field would type is first fed to an xkb compose state
+loaded from the user's locale (`LC_ALL`, `LC_CTYPE`, `LANG`). Keys inside a
+sequence type nothing, a completed sequence types its result, and a sequence
+that matches nothing is dropped, as in GTK. Dead keys (`dead_acute`, from
+`us(altgr-intl)` for instance) go through the same compose table. A change of
+text field drops a sequence in progress.
 
 ## Invariants
 
 - Every physical key event is offered to Flutter before any client sees it.
+- Key events are processed in order, one at a time through Flutter: a key is
+  forwarded with the modifiers held when it was pressed.
 - A client never receives a compositor-synthesized repeat; clients own their own
   repetition from `repeat_info`.
 - The shell's repeats reach Flutter even while a client is focused, so shell
@@ -130,5 +229,6 @@ Because it replaces `XKB_DEFAULT_OPTIONS`, the option list is owned by the shell
 - A repeat is only emitted while its key is still physically held: a release that
   races the timer cancels the repeat rather than emitting a stray character.
 - The delay and rate advertised to clients match the shell repeater's behavior.
+- The shell and clients compile the same keymap, xkb options included.
 - Leaving gaming mode releases every key the client believes is held and stops
   any in-flight shell repeat (`release_flutter_keys`).

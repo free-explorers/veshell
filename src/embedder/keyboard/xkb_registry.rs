@@ -26,6 +26,16 @@ struct RxkbLayout {
 }
 
 #[repr(C)]
+struct RxkbOptionGroup {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
+struct RxkbOption {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
 struct RxkbIso639Code {
     _private: [u8; 0],
 }
@@ -59,6 +69,17 @@ extern "C" {
     fn rxkb_layout_get_iso3166_first(layout: *mut RxkbLayout) -> *mut RxkbIso3166Code;
     fn rxkb_iso3166_code_next(code: *mut RxkbIso3166Code) -> *mut RxkbIso3166Code;
     fn rxkb_iso3166_code_get_code(code: *mut RxkbIso3166Code) -> *const c_char;
+
+    fn rxkb_option_group_first(context: *mut RxkbContext) -> *mut RxkbOptionGroup;
+    fn rxkb_option_group_next(group: *mut RxkbOptionGroup) -> *mut RxkbOptionGroup;
+    fn rxkb_option_group_get_name(group: *mut RxkbOptionGroup) -> *const c_char;
+    fn rxkb_option_group_get_description(group: *mut RxkbOptionGroup) -> *const c_char;
+    fn rxkb_option_group_allows_multiple(group: *mut RxkbOptionGroup) -> bool;
+
+    fn rxkb_option_first(group: *mut RxkbOptionGroup) -> *mut RxkbOption;
+    fn rxkb_option_next(option: *mut RxkbOption) -> *mut RxkbOption;
+    fn rxkb_option_get_name(option: *mut RxkbOption) -> *const c_char;
+    fn rxkb_option_get_description(option: *mut RxkbOption) -> *const c_char;
 }
 
 /// One selectable layout entry: a base layout (`variant` empty) or one of its
@@ -81,42 +102,107 @@ pub struct KeyboardLayout {
     pub iso3166: Vec<String>,
 }
 
+/// One xkb option group, e.g. `compose` ("Position of Compose key").
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyboardOptionGroup {
+    /// The group name (`ctrl`). Not always the prefix of its options: the
+    /// compose group is named `Compose key`, and `compat` holds `numpad:*`.
+    pub name: String,
+    /// The label shown in the picker.
+    pub description: String,
+    /// Whether several options of the group can be set together; when not,
+    /// picking one replaces the other.
+    pub allows_multiple: bool,
+    pub options: Vec<KeyboardOption>,
+}
+
+/// One xkb option, e.g. `compose:ralt` ("Right Alt").
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct KeyboardOption {
+    /// The full option name, as stored in `keyboard.options`.
+    pub name: String,
+    /// The label shown in the picker.
+    pub description: String,
+}
+
 /// Lists every layout and variant in the `evdev` ruleset.
 ///
 /// [`include_exotic`] loads the extra rulesets too (GNOME's "show all
 /// sources"), which adds the rarely used entries.
 pub fn list_keyboard_layouts(include_exotic: bool) -> Result<Vec<KeyboardLayout>, String> {
-    let flags = if include_exotic {
-        RXKB_CONTEXT_LOAD_EXOTIC_RULES
-    } else {
-        RXKB_CONTEXT_NO_FLAGS
-    };
-
-    // SAFETY: every pointer handed out by the registry is either checked for
-    // null or only ever passed back to the same C API before the context is
-    // released at the end of the scope.
-    unsafe {
-        let context = rxkb_context_new(flags);
-        if context.is_null() {
-            return Err("libxkbregistry could not create a context".to_owned());
-        }
-
-        // The ruleset GNOME and xkbcommon's own tools default to.
-        let ruleset = CString::new("evdev").map_err(|_| "invalid ruleset name".to_owned())?;
-        if !rxkb_context_parse(context, ruleset.as_ptr()) {
-            rxkb_context_unref(context);
-            return Err("libxkbregistry could not parse the 'evdev' ruleset".to_owned());
-        }
-
+    // SAFETY: the layout handles are only read while the context is alive.
+    with_evdev_context(include_exotic, |context| unsafe {
         let mut layouts = Vec::new();
         let mut layout = rxkb_layout_first(context);
         while !layout.is_null() {
             layouts.push(read_layout(layout));
             layout = rxkb_layout_next(layout);
         }
+        layouts
+    })
+}
 
+/// Lists every option group in the `evdev` ruleset, with its options.
+///
+/// Groups without a single option are left out: there is nothing to pick.
+pub fn list_keyboard_options(include_exotic: bool) -> Result<Vec<KeyboardOptionGroup>, String> {
+    // SAFETY: the group and option handles are only read while the context
+    // is alive.
+    with_evdev_context(include_exotic, |context| unsafe {
+        let mut groups = Vec::new();
+        let mut group = rxkb_option_group_first(context);
+        while !group.is_null() {
+            let mut options = Vec::new();
+            let mut option = rxkb_option_first(group);
+            while !option.is_null() {
+                options.push(KeyboardOption {
+                    name: owned_string(rxkb_option_get_name(option)),
+                    description: owned_string(rxkb_option_get_description(option)),
+                });
+                option = rxkb_option_next(option);
+            }
+            if !options.is_empty() {
+                groups.push(KeyboardOptionGroup {
+                    name: owned_string(rxkb_option_group_get_name(group)),
+                    description: owned_string(rxkb_option_group_get_description(group)),
+                    allows_multiple: rxkb_option_group_allows_multiple(group),
+                    options,
+                });
+            }
+            group = rxkb_option_group_next(group);
+        }
+        groups
+    })
+}
+
+/// Parses the `evdev` ruleset, the one GNOME and xkbcommon's own tools
+/// default to, and runs `read` on it before releasing the context.
+fn with_evdev_context<T>(
+    include_exotic: bool,
+    read: impl FnOnce(*mut RxkbContext) -> T,
+) -> Result<T, String> {
+    let flags = if include_exotic {
+        RXKB_CONTEXT_LOAD_EXOTIC_RULES
+    } else {
+        RXKB_CONTEXT_NO_FLAGS
+    };
+    let ruleset = CString::new("evdev").map_err(|_| "invalid ruleset name".to_owned())?;
+
+    // SAFETY: the context is checked for null, only passed back to the same C
+    // API, and released once `read` has copied what it needs out of it.
+    unsafe {
+        let context = rxkb_context_new(flags);
+        if context.is_null() {
+            return Err("libxkbregistry could not create a context".to_owned());
+        }
+        if !rxkb_context_parse(context, ruleset.as_ptr()) {
+            rxkb_context_unref(context);
+            return Err("libxkbregistry could not parse the 'evdev' ruleset".to_owned());
+        }
+        let value = read(context);
         rxkb_context_unref(context);
-        Ok(layouts)
+        Ok(value)
     }
 }
 
@@ -196,5 +282,26 @@ mod tests {
             "the evdev ruleset should contain the us(altgr-intl) variant"
         );
         assert!(layouts.iter().all(|layout| !layout.description.is_empty()));
+    }
+
+    #[test]
+    fn lists_the_compose_options_when_available() {
+        let Ok(groups) = list_keyboard_options(false) else {
+            return;
+        };
+        if groups.is_empty() {
+            return;
+        }
+        assert!(
+            groups
+                .iter()
+                .flat_map(|group| &group.options)
+                .any(|option| option.name == "compose:ralt"),
+            "the evdev ruleset should contain the compose:ralt option"
+        );
+        assert!(groups
+            .iter()
+            .flat_map(|group| &group.options)
+            .all(|option| option.name.starts_with(|c: char| c.is_ascii_alphanumeric())));
     }
 }

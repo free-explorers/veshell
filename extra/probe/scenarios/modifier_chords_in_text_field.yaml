@@ -1,0 +1,39 @@
+# Modifier chords pressed in the same instant still reach the shell's text
+# editing shortcuts: each key's KeyData must be dispatched with its own legacy
+# key message, or the framework sees Ctrl already released when the A arrives.
+# The chords also run copy and paste through the compositor's clipboard.
+name: Instant modifier chords edit, copy and paste in a shell text field
+fixture: two-apps
+size: 1280x800
+steps:
+  - wait_for: {find: text=Beta, visible: true}
+  # The overview keeps Flutter busy enough that its answer for a key comes
+  # after the next key of a chord: the idle launcher answers in time and
+  # hides the race.
+  - key: Super
+  # The control panel only the overview shows: the launcher behind it has a
+  # search field of its own.
+  - wait_for: {find: text=Helm, visible: true}
+  # The overview's search field.
+  - tap: {x: 330, y: 141}
+  # No pause after typing: a character is inserted before the next key
+  # reaches Flutter, so the select-all that follows it is not collapsed.
+  - type: ab
+  # Select all, copy, then paste after the text: "abab".
+  - key: Control+A
+  - key: Control+C
+  - key: End
+  - key: Control+V
+  # A paste is answered asynchronously: wait for it before selecting.
+  - wait_for: {find: "type=EditableText,text=abab", count: 1}
+  # Select from the end to the start, shrink the selection by one, and
+  # replace it: only the first character is left before the "z".
+  - key: Shift+Home
+  - key: Shift+Right
+  - type: z
+  - wait_for: {find: "type=EditableText,text=az", count: 1}
+expect:
+  - find: type=EditableText,text=az
+    count: 1
+  - find: type=EditableText,text=abab
+    count: 0

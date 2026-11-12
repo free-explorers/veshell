@@ -5,6 +5,7 @@ use calloop_notify::NotifySource;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use smithay::input::keyboard::XkbConfig;
 use smithay::output::Mode;
 use smithay::reexports::calloop::LoopHandle;
 use smithay::utils::{Logical, Physical, Point, Size, Transform};
@@ -26,6 +27,12 @@ pub struct KeyboardSettings {
     /// What the Caps Lock key does, implemented as an xkb option.
     #[serde(default, deserialize_with = "deserialize_caps_lock_behavior")]
     pub caps_lock: CapsLockBehavior,
+    /// The key that starts a compose sequence, implemented as an xkb option.
+    #[serde(default, deserialize_with = "deserialize_compose_key")]
+    pub compose_key: ComposeKey,
+    /// Further xkb options, in xkb-native names (`grp:alt_shift_toggle`).
+    #[serde(default, deserialize_with = "deserialize_xkb_options")]
+    pub options: Vec<String>,
     /// Whether holding a key repeats it.
     #[serde(default = "default_keyboard_repeat")]
     pub repeat: bool,
@@ -54,6 +61,34 @@ impl KeyboardSettings {
         } else {
             0
         }
+    }
+
+    /// The keymap the seat is compiled with, both when it is created and when
+    /// the settings change, so the shell and clients share one keymap.
+    pub fn xkb_config(&self) -> XkbConfig<'_> {
+        XkbConfig {
+            layout: &self.layout,
+            options: self.xkb_options(),
+            ..XkbConfig::default()
+        }
+    }
+
+    /// The comma-separated xkb option list the seat keymap is compiled with:
+    /// the Caps Lock and compose options first, then [`Self::options`], each
+    /// option once. `None` when no option is set.
+    pub fn xkb_options(&self) -> Option<String> {
+        let mut options: Vec<&str> = Vec::new();
+        let curated = [self.caps_lock.xkb_option(), self.compose_key.xkb_option()];
+        for option in curated
+            .into_iter()
+            .flatten()
+            .chain(self.options.iter().map(String::as_str))
+        {
+            if !options.contains(&option) {
+                options.push(option);
+            }
+        }
+        (!options.is_empty()).then(|| options.join(","))
     }
 }
 
@@ -105,6 +140,147 @@ where
         "disabled" => CapsLockBehavior::Disabled,
         _ => CapsLockBehavior::Default,
     })
+}
+
+/// The key that starts a compose sequence (`Multi_key`), like GNOME's
+/// "Compose Key" picker. Each value is one option of the xkb `compose` group.
+#[derive(Serialize, Clone, Copy, Debug, Default, PartialEq)]
+pub enum ComposeKey {
+    /// No compose key: the default, as on GNOME and KDE.
+    #[default]
+    #[serde(rename = "none")]
+    None,
+    #[serde(rename = "ralt")]
+    RightAlt,
+    #[serde(rename = "lwin")]
+    LeftSuper,
+    #[serde(rename = "rwin")]
+    RightSuper,
+    #[serde(rename = "menu")]
+    Menu,
+    #[serde(rename = "lctrl")]
+    LeftControl,
+    #[serde(rename = "rctrl")]
+    RightControl,
+    #[serde(rename = "caps")]
+    CapsLock,
+    /// The `< >` key next to the left Shift on ISO keyboards.
+    #[serde(rename = "102")]
+    LessGreater,
+    #[serde(rename = "prsc")]
+    PrintScreen,
+    #[serde(rename = "sclk")]
+    ScrollLock,
+    #[serde(rename = "paus")]
+    Pause,
+    #[serde(rename = "ins")]
+    Insert,
+}
+
+impl ComposeKey {
+    const ALL: [Self; 13] = [
+        Self::None,
+        Self::RightAlt,
+        Self::LeftSuper,
+        Self::RightSuper,
+        Self::Menu,
+        Self::LeftControl,
+        Self::RightControl,
+        Self::CapsLock,
+        Self::LessGreater,
+        Self::PrintScreen,
+        Self::ScrollLock,
+        Self::Pause,
+        Self::Insert,
+    ];
+
+    /// The settings value, which is also the key name in the xkb option.
+    fn name(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::RightAlt => "ralt",
+            Self::LeftSuper => "lwin",
+            Self::RightSuper => "rwin",
+            Self::Menu => "menu",
+            Self::LeftControl => "lctrl",
+            Self::RightControl => "rctrl",
+            Self::CapsLock => "caps",
+            Self::LessGreater => "102",
+            Self::PrintScreen => "prsc",
+            Self::ScrollLock => "sclk",
+            Self::Pause => "paus",
+            Self::Insert => "ins",
+        }
+    }
+
+    /// The xkb option that implements this key, or `None` when unset.
+    pub fn xkb_option(self) -> Option<&'static str> {
+        match self {
+            Self::None => None,
+            Self::RightAlt => Some("compose:ralt"),
+            Self::LeftSuper => Some("compose:lwin"),
+            Self::RightSuper => Some("compose:rwin"),
+            Self::Menu => Some("compose:menu"),
+            Self::LeftControl => Some("compose:lctrl"),
+            Self::RightControl => Some("compose:rctrl"),
+            Self::CapsLock => Some("compose:caps"),
+            Self::LessGreater => Some("compose:102"),
+            Self::PrintScreen => Some("compose:prsc"),
+            Self::ScrollLock => Some("compose:sclk"),
+            Self::Pause => Some("compose:paus"),
+            Self::Insert => Some("compose:ins"),
+        }
+    }
+}
+
+/// Reads a [`ComposeKey`], falling back to none for an unknown value so a
+/// hand-edited `settings.json` cannot take the settings load down.
+fn deserialize_compose_key<'de, D>(deserializer: D) -> Result<ComposeKey, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?.unwrap_or_default();
+    Ok(ComposeKey::ALL
+        .into_iter()
+        .find(|key| key.name() == value)
+        .unwrap_or_default())
+}
+
+/// Whether `option` looks like an xkb option name (`group:name`), so a
+/// malformed entry never reaches the keymap compiler.
+fn is_xkb_option_name(option: &str) -> bool {
+    let Some((group, name)) = option.split_once(':') else {
+        return false;
+    };
+    let valid = |part: &str| {
+        !part.is_empty()
+            && part
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '+' | '.'))
+    };
+    valid(group) && valid(name)
+}
+
+/// Reads the extra xkb options: a list of option names, or the xkb-native
+/// comma-separated string. Malformed entries are dropped instead of failing
+/// the settings load.
+fn deserialize_xkb_options<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let entries: Vec<String> = match Value::deserialize(deserializer)? {
+        Value::String(list) => list.split(',').map(str::to_owned).collect(),
+        Value::Array(items) => items
+            .into_iter()
+            .filter_map(|item| item.as_str().map(str::to_owned))
+            .collect(),
+        _ => Vec::new(),
+    };
+    Ok(entries
+        .into_iter()
+        .map(|entry| entry.trim().to_owned())
+        .filter(|entry| is_xkb_option_name(entry))
+        .collect())
 }
 
 /// Reads a non-negative integer, clamping negative values to `0`.
@@ -847,6 +1023,81 @@ mod keyboard_settings_tests {
             assert_eq!(settings.caps_lock, behavior);
             assert_eq!(settings.caps_lock.xkb_option(), option);
         }
+    }
+
+    #[test]
+    fn compose_key_defaults_to_none() {
+        let settings: KeyboardSettings =
+            serde_json::from_str(r#"{"layout":"us","swapAltAndWin":false}"#).unwrap();
+        assert_eq!(settings.compose_key, ComposeKey::None);
+        assert!(settings.options.is_empty());
+        assert_eq!(settings.xkb_options(), None);
+    }
+
+    #[test]
+    fn compose_key_reads_each_value() {
+        for key in ComposeKey::ALL {
+            let settings: KeyboardSettings = serde_json::from_str(&format!(
+                r#"{{"layout":"us","swapAltAndWin":false,"composeKey":"{}"}}"#,
+                key.name()
+            ))
+            .unwrap();
+            assert_eq!(settings.compose_key, key);
+            assert_eq!(
+                serde_json::to_value(key).unwrap(),
+                Value::String(key.name().to_owned())
+            );
+            match key.xkb_option() {
+                None => assert_eq!(key, ComposeKey::None),
+                Some(option) => assert_eq!(option, format!("compose:{}", key.name())),
+            }
+        }
+    }
+
+    #[test]
+    fn unknown_or_null_compose_key_falls_back_to_none() {
+        for value in [r#""nonsense""#, "null"] {
+            let settings: KeyboardSettings = serde_json::from_str(&format!(
+                r#"{{"layout":"us","swapAltAndWin":false,"composeKey":{value}}}"#
+            ))
+            .unwrap();
+            assert_eq!(settings.compose_key, ComposeKey::None);
+        }
+    }
+
+    #[test]
+    fn options_keep_well_formed_entries_only() {
+        let settings: KeyboardSettings = serde_json::from_str(
+            r#"{"layout":"us","swapAltAndWin":false,
+                "options":[" grp:alt_shift_toggle ","", "nonsense", 3, "lv3:ralt_switch", "a:b,c:d"]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            settings.options,
+            ["grp:alt_shift_toggle", "lv3:ralt_switch"]
+        );
+    }
+
+    #[test]
+    fn options_accept_the_xkb_native_string() {
+        let settings: KeyboardSettings = serde_json::from_str(
+            r#"{"layout":"us","swapAltAndWin":false,"options":"ctrl:nocaps, compose:ralt"}"#,
+        )
+        .unwrap();
+        assert_eq!(settings.options, ["ctrl:nocaps", "compose:ralt"]);
+    }
+
+    #[test]
+    fn xkb_options_merge_curated_and_extra_options_once() {
+        let settings: KeyboardSettings = serde_json::from_str(
+            r#"{"layout":"us","swapAltAndWin":false,"capsLock":"escape","composeKey":"ralt",
+                "options":["compose:ralt","grp:alt_shift_toggle","grp:alt_shift_toggle"]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            settings.xkb_options().as_deref(),
+            Some("caps:escape,compose:ralt,grp:alt_shift_toggle")
+        );
     }
 
     #[test]
