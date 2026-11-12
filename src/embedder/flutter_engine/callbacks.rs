@@ -1,9 +1,7 @@
 use std::ffi::c_void;
 use std::ptr::null_mut;
 
-use serde_json::Value;
 use smithay::backend::renderer::gles::ffi;
-use smithay::reexports::calloop::channel;
 use tracing::{debug, error};
 
 use crate::backend::Backend;
@@ -12,12 +10,8 @@ use crate::flutter_engine::embedder::{
     FlutterTask, FlutterTransformation, FlutterViewFocusChangeRequest,
     FlutterViewFocusState_kFocused,
 };
-use crate::flutter_engine::platform_channels::basic_message_channel::BasicMessageChannel;
 use crate::flutter_engine::platform_channels::binary_messenger::BinaryMessenger;
-use crate::flutter_engine::platform_channels::json_message_codec::JsonMessageCodec;
-use crate::flutter_engine::platform_channels::message_codec::MessageCodec;
 use crate::flutter_engine::{Baton, FlutterEngine};
-use crate::keyboard::VeshellKeyEvent;
 
 pub unsafe extern "C" fn make_current<BackendData>(user_data: *mut c_void) -> bool
 where
@@ -234,53 +228,6 @@ where
     texture_out.height = 0;
 
     texture_name != 0
-}
-
-pub struct FlutterKeyEventData {
-    pub key_event: VeshellKeyEvent,
-    pub tx_flutter_handled_key_event: channel::Sender<(VeshellKeyEvent, bool, bool)>,
-    pub key_event_channel: BasicMessageChannel<Value>,
-    pub raw_key_event: Value,
-    /// Whether this event is an auto-repeat synthesized by
-    /// [`crate::keyboard::key_repeater::KeyRepeater`] rather than a physical
-    /// key transition. Repeats feed the Flutter shell but must not be forwarded
-    /// to the focused Wayland client, which owns its own repetition.
-    pub repeat: bool,
-    /// Whether the handled result should be reported to the shell's key
-    /// post-processing (and therefore possibly forwarded to a client). Lock
-    /// sync events feed Flutter only.
-    pub notify: bool,
-}
-
-pub unsafe extern "C" fn key_event_callback(handled: bool, user_data: *mut c_void) {
-    // Flutter queues KeyData before responding. Send the legacy companion only
-    // after this callback so the framework dispatches the queued KeyData.
-    let data = Box::from_raw(user_data as *mut FlutterKeyEventData);
-    debug!(?handled, "Flutter key data queued");
-
-    let event = data.key_event;
-    let repeat = data.repeat;
-    let notify = data.notify;
-    let tx = data.tx_flutter_handled_key_event.clone();
-    data.key_event_channel.send(
-        &data.raw_key_event,
-        Some(Box::new(move |response: Option<&[u8]>| {
-            if !notify {
-                return;
-            }
-            let handled = response
-                .and_then(|response| JsonMessageCodec::new().decode_message(response))
-                .and_then(|message| message["handled"].as_bool())
-                .unwrap_or(false);
-            debug!(
-                key_code = event.key_code.raw(),
-                keysym = ?event.keysym,
-                ?handled,
-                "Flutter key event result",
-            );
-            tx.send((event, handled, repeat)).ok();
-        })),
-    );
 }
 
 // add view callback

@@ -21,6 +21,33 @@ flows through to the client.
 | Forwarding unconsumed key events to the focused client | Compositor |
 | Key repetition | Client, by Wayland contract; the shell gets a compositor-side copy |
 
+## Delivery to Flutter
+
+Each key event reaches Flutter as two messages: the embedder `KeyData`
+(`FlutterEngineSendKeyEvent`) and its legacy companion on `flutter/keyevent`
+(the GTK-style raw event). The framework queues every `KeyData` and dispatches
+the queue when the next companion arrives, so each `KeyData` must be followed
+by its own companion before the next key's `KeyData`. The compositor sends the
+companion right after the `KeyData`, as the GTK embedder does: both are posted
+to the UI thread in send order. The companion's reply carries whether the shell
+handled the key, which decides whether the key is forwarded to a client.
+
+Waiting for the `KeyData` callback before sending the companion let a fast
+chord (Ctrl down, A down, A up, Ctrl up in one burst, as automated input or a
+busy UI thread produces) be dispatched as one queue: the keyboard state then
+already showed Ctrl released when the A reached the shortcuts.
+
+Two orderings remain asynchronous by design:
+
+- A key forwarded to a client carries the seat's modifier state at the time
+  Flutter's answer arrives, not at the time of the key; a chord faster than
+  that answer reaches the client without its modifier.
+- A character typed in a shell text field is inserted by the compositor's text
+  input model once Flutter has answered for its key, while editing shortcuts
+  (select all, move by word) run in the framework at once.
+
+Neither affects keys typed at human speed.
+
 ## Key repetition
 
 Wayland leaves key repetition to the **client**. The compositor advertises the
