@@ -13,5 +13,5 @@
   };
 
   # Verified with rustPlatform.fetchCargoVendor (nixpkgs 774debe7a0d1).
-  cargoHash = "sha256-n4Tetk8KS1mCII7Tt1G+OJypJWRAms/2TNtWTMvVkhw=";
+  cargoHash = "sha256-HOs60PL+Z9yC2x06UgK89f6DkExB8xFp9L/rPDlmc2I=";
 }
