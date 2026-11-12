@@ -64,6 +64,7 @@ use crate::flutter_engine::platform_channels::json_method_codec::JsonMethodCodec
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
+use crate::flutter_engine::system_platform::system_platform_channel_method_handler;
 use crate::flutter_engine::task_runner::TaskRunner;
 use crate::flutter_engine::text_input::{text_input_channel_method_call_handler, TextInput};
 use crate::flutter_engine::view::ViewsManagement;
@@ -97,6 +98,7 @@ mod locales;
 mod mouse_cursor;
 pub mod platform_channel_callbacks;
 pub mod platform_channels;
+mod system_platform;
 pub mod task_runner;
 mod text_input;
 pub mod trackpad_scrolling_manager;
@@ -388,6 +390,27 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     .insert_source(
                         rx_text_input_message,
                         text_input_channel_method_call_handler,
+                    )
+                    .unwrap();
+
+                // The framework's own platform channel: the clipboard
+                // behind copy and paste in the shell's text fields.
+                let mut system_platform_channel = MethodChannel::<serde_json::Value>::new(
+                    binary_messenger.clone(),
+                    "flutter/platform".to_string(),
+                    method_codec.clone(),
+                );
+                let (tx_system_platform_message, rx_system_platform_message) = channel::channel::<(
+                    MethodCall<serde_json::Value>,
+                    Box<dyn MethodResult<serde_json::Value>>,
+                )>();
+                system_platform_channel
+                    .set_method_call_mpsc_channel(Some(tx_system_platform_message));
+                server_state
+                    .loop_handle
+                    .insert_source(
+                        rx_system_platform_message,
+                        system_platform_channel_method_handler,
                     )
                     .unwrap();
 

@@ -6,7 +6,6 @@ use std::thread;
 
 pub mod pipewire;
 pub mod recording;
-pub mod selection;
 pub mod shm;
 pub mod state;
 pub mod window_preview;
@@ -29,14 +28,12 @@ use smithay::output::Output;
 use smithay::reexports::calloop::{channel, LoopHandle};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Buffer, Logical, Physical, Point, Rectangle, Scale, Size, Transform};
-use smithay::wayland::selection::data_device::set_data_device_selection;
-use smithay::wayland::selection::SelectionTarget;
 use tracing::{debug, info, warn};
 
-use self::selection::{NATIVE_SCREENSHOT_MIME, PNG_MIME};
 use crate::backend::render::{
     get_cursor_elements, get_frame_elements, CaptureCursor, VeshellRenderElements,
 };
+use crate::clipboard::{set_native_clipboard, NativeSelection};
 use crate::flutter_engine::view::{Frame, OutputViewIdWrapper};
 use crate::meta_window_state::meta_popup::MetaPopupCategory;
 use crate::meta_window_state::meta_window::MetaWindow;
@@ -365,19 +362,7 @@ fn complete_screenshot_delivery<BackendData: Backend + 'static>(
 ) {
     match outcome {
         ScreenshotDeliveryEvent::Completed { path, png } => {
-            let mime_types = vec![PNG_MIME.to_string(), NATIVE_SCREENSHOT_MIME.to_string()];
-            if let Some(xwm) = state
-                .xwayland_state
-                .as_mut()
-                .and_then(|state| state.xwm.as_mut())
-            {
-                if let Err(error) =
-                    xwm.new_selection(SelectionTarget::Clipboard, Some(mime_types.clone()))
-                {
-                    warn!(?error, "Failed to publish native screenshot to XWayland");
-                }
-            }
-            set_data_device_selection(&state.display_handle, &state.seat, mime_types, Some(png));
+            set_native_clipboard(state, NativeSelection::Screenshot(png));
             info!("Screenshot saved: {}", path.display());
         }
         ScreenshotDeliveryEvent::Failed { message } => warn!("Screenshot failed: {message}"),

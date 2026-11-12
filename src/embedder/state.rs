@@ -120,6 +120,9 @@ pub struct State<BackendData: Backend + 'static> {
     pub pointer: PointerHandle<State<BackendData>>,
     pub pointer_frame_pending: bool,
     pub primary_selection_state: PrimarySelectionState,
+    /// The MIME types the clipboard is offered as, whoever owns it: it tells
+    /// the shell whether there is text to paste.
+    pub clipboard_mime_types: Vec<String>,
     /// Milliseconds a key must be held before repeating starts. Advertised to
     /// clients (`wl_keyboard.repeat_info`) and used by the shell repeater.
     pub repeat_delay: u64,
@@ -668,6 +671,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             seat_state,
             data_device_state,
             primary_selection_state,
+            clipboard_mime_types: Vec::new(),
             data_control_state,
             pointer,
             pointer_frame_pending: false,
@@ -1204,7 +1208,7 @@ impl<BackendData: Backend> State<BackendData> {
 }
 
 impl<BackendData: Backend> SelectionHandler for State<BackendData> {
-    type SelectionUserData = crate::capture::selection::SelectionUserData;
+    type SelectionUserData = crate::clipboard::SelectionUserData;
 
     fn new_selection(
         &mut self,
@@ -1212,6 +1216,12 @@ impl<BackendData: Backend> SelectionHandler for State<BackendData> {
         source: Option<SelectionSource>,
         _seat: Seat<Self>,
     ) {
+        if ty == SelectionTarget::Clipboard {
+            self.clipboard_mime_types = source
+                .as_ref()
+                .map(SelectionSource::mime_types)
+                .unwrap_or_default();
+        }
         if let Some(xwm) = self
             .xwayland_state
             .as_mut()
@@ -1231,13 +1241,15 @@ impl<BackendData: Backend> SelectionHandler for State<BackendData> {
         _seat: Seat<Self>,
         user_data: &Self::SelectionUserData,
     ) {
-        if let Some(data) = user_data {
-            if mime_type == crate::capture::selection::PNG_MIME
-                || mime_type == crate::capture::selection::NATIVE_SCREENSHOT_MIME
-            {
-                crate::capture::selection::send_native_selection(fd, data.clone());
-                return;
+        // A payload the compositor owns: serve it, never relay it to Xwayland.
+        if let Some(selection) = user_data {
+            if !selection.send(&mime_type, fd) {
+                warn!(
+                    ?mime_type,
+                    "A client asked for a type the selection is not offered as"
+                );
             }
+            return;
         }
         if let Some(xwm) = self
             .xwayland_state

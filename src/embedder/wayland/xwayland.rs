@@ -1,6 +1,5 @@
 pub mod xwayland {
     use crate::backend::Backend;
-    use crate::capture::selection::{send_native_selection, NATIVE_SCREENSHOT_MIME, PNG_MIME};
     use crate::cursor::CursorState;
 
     use crate::focus::{KeyboardFocusTarget, PointerFocusTarget};
@@ -1074,11 +1073,14 @@ pub mod xwayland {
                 SelectionTarget::Clipboard => current_data_device_selection_userdata(&self.seat),
                 SelectionTarget::Primary => current_primary_selection_userdata(&self.seat),
             };
-            if let Some(data) = native_data.as_ref().and_then(|data| data.as_ref()) {
-                if mime_type == PNG_MIME || mime_type == NATIVE_SCREENSHOT_MIME {
-                    send_native_selection(fd, data.clone());
-                    return;
+            if let Some(selection) = native_data.as_ref().and_then(|data| data.as_ref()) {
+                if !selection.send(&mime_type, fd) {
+                    warn!(
+                        ?mime_type,
+                        "Xwayland asked for a type the selection is not offered as"
+                    );
                 }
+                return;
             }
             match selection {
                 SelectionTarget::Clipboard => {
@@ -1112,6 +1114,7 @@ pub mod xwayland {
             // TODO check, that focused windows is X11 window before doing this
             match selection {
                 SelectionTarget::Clipboard => {
+                    self.clipboard_mime_types = mime_types.clone();
                     set_data_device_selection(&self.display_handle, &self.seat, mime_types, None)
                 }
                 SelectionTarget::Primary => {
@@ -1126,6 +1129,7 @@ pub mod xwayland {
                     if current_data_device_selection_userdata(&self.seat)
                         .is_some_and(|data| data.is_none())
                     {
+                        self.clipboard_mime_types.clear();
                         clear_data_device_selection(&self.display_handle, &self.seat)
                     }
                 }
