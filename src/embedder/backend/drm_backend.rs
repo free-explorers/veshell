@@ -12,10 +12,11 @@ use std::time::{Duration, Instant};
 use sd_notify::NotifyState;
 use serde_json::json;
 use smithay::backend::allocator::dmabuf::{AnyError, Dmabuf, DmabufAllocator};
+use smithay::backend::allocator::format::FormatSet;
 use smithay::backend::allocator::gbm::GbmDevice;
 use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags};
 use smithay::backend::allocator::{Allocator, Fourcc, Swapchain};
-use smithay::backend::drm::compositor::{DrmCompositor, FrameFlags};
+use smithay::backend::drm::compositor::{DrmCompositor, FrameFlags, PrimaryPlaneElement};
 use smithay::backend::drm::exporter::gbm::GbmFramebufferExporter;
 use smithay::backend::drm::{
     CreateDrmNodeError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent, DrmEventMetadata, DrmNode,
@@ -52,14 +53,17 @@ use smithay::reexports::drm::Device as _;
 use smithay::reexports::input::event::gesture::GestureEventCoordinates;
 use smithay::reexports::input::{self, Libinput};
 use smithay::reexports::rustix::fs::OFlags;
+use smithay::reexports::wayland_protocols::wp::linux_dmabuf::zv1::server::zwp_linux_dmabuf_feedback_v1;
 use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::{DeviceFd, IsAlive, Logical, Point, Rectangle, Transform};
+use smithay::wayland::compositor::{with_surface_tree_downward, TraversalAction};
 use smithay::wayland::dmabuf::{
-    DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier,
+    DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState,
+    ImportNotifier, SurfaceDmabufFeedbackState,
 };
 use smithay::wayland::drm_lease::DrmLease;
 use tracing::{debug, error, info, warn};
@@ -1393,6 +1397,14 @@ impl State<DrmBackend> {
 
         let mut planes = surface.planes().clone();
 
+        let game_feedback = game_dmabuf_feedback(
+            self.backend_data.primary_gpu,
+            device.render_node,
+            node,
+            &renderer.dmabuf_formats(),
+            &surface,
+        );
+
         // Using an overlay plane on a nvidia card breaks
         if driver
             .name()
@@ -1450,6 +1462,8 @@ impl State<DrmBackend> {
             redraw_requested: false,
             last_vblank: None,
             last_composite: None,
+            game_feedback,
+            scanout_feedback_surfaces: Vec::new(),
         };
 
         device.surfaces.insert(crtc, surface);
@@ -1669,16 +1683,18 @@ impl State<DrmBackend> {
                 // non-gaming frame ends the current gaming streak so the next
                 // one starts its interval count fresh.
                 match surface.last_queue.take() {
-                    Some((queued_at, true)) => {
+                    Some((queued_at, true, planes)) => {
                         let now = Instant::now();
                         let since_previous = surface.last_gaming_present.replace(now);
                         debug!(
+                            primary_scanout = planes.primary_scanout,
+                            overlays = planes.overlays,
                             "game present: {:?} after queue, {:?} since previous",
                             now.saturating_duration_since(queued_at),
                             since_previous.map(|previous| now.saturating_duration_since(previous)),
                         );
                     }
-                    Some((_, false)) => surface.last_gaming_present = None,
+                    Some((_, false, _)) => surface.last_gaming_present = None,
                     None => {}
                 }
             }
@@ -1910,6 +1926,45 @@ impl State<DrmBackend> {
         }
     }
 
+    /// Tells the game surfaces shown on this output to allocate for scanout,
+    /// and the surfaces that left gaming mode to go back to the render
+    /// feedback. Only acts when the set changed: entering or leaving the mode.
+    fn update_game_dmabuf_feedback(
+        &mut self,
+        node: DrmNode,
+        crtc: crtc::Handle,
+        game_surfaces: &[WlSurface],
+    ) {
+        let Some(surface) = self
+            .backend_data
+            .gpus
+            .get_mut(&node)
+            .and_then(|gpu| gpu.surfaces.get_mut(&crtc))
+        else {
+            return;
+        };
+        if surface.scanout_feedback_surfaces == game_surfaces {
+            return;
+        }
+        let Some(feedback) = &surface.game_feedback else {
+            return;
+        };
+        for previous in &surface.scanout_feedback_surfaces {
+            if previous.alive() && !game_surfaces.contains(previous) {
+                set_surface_tree_dmabuf_feedback(previous, &feedback.render);
+            }
+        }
+        for game in game_surfaces {
+            set_surface_tree_dmabuf_feedback(game, &feedback.scanout);
+        }
+        debug!(
+            output = %surface.name,
+            games = game_surfaces.len(),
+            "Game dmabuf feedback: scanout tranche sent to game surfaces"
+        );
+        surface.scanout_feedback_surfaces = game_surfaces.to_vec();
+    }
+
     /// Releases a composite skipped by the software frame cap.
     ///
     /// Texture-backed (software EGL) sessions cap full-output composites to
@@ -2053,6 +2108,7 @@ impl State<DrmBackend> {
         let output_name = output.name();
         let game_surfaces = self.game_mode_surfaces_for_output(&output_name);
         let had_game_surfaces = !game_surfaces.is_empty();
+        self.update_game_dmabuf_feedback(node, crtc, &game_surfaces);
 
         // A mirroring output presents the source monitor's Flutter frame,
         // scaled to its own geometry; otherwise it presents its own view.
@@ -2161,12 +2217,21 @@ impl State<DrmBackend> {
             recording_chip,
         );
 
-        let rendered = surface.compositor.render_frame(
-            renderer,
-            &elements,
-            [0.0, 0.0, 0.0, 0.0],
-            FrameFlags::DEFAULT,
-        );
+        // A game buffer rarely has the swapchain's format (the swapchain
+        // prefers 10-bit, games render 8-bit), and by default the primary
+        // plane only takes an element of the same format: the game was always
+        // composited ("format doesn't match"). While a game owns the output,
+        // allow any format; Smithay test-commits the configuration and falls
+        // back to compositing a buffer the plane rejects.
+        let frame_flags = if had_game_surfaces {
+            FrameFlags::DEFAULT | FrameFlags::ALLOW_PRIMARY_PLANE_SCANOUT_ANY
+        } else {
+            FrameFlags::DEFAULT
+        };
+        let rendered =
+            surface
+                .compositor
+                .render_frame(renderer, &elements, [0.0, 0.0, 0.0, 0.0], frame_flags);
 
         match rendered {
             Ok(frame_result) => {
@@ -2176,6 +2241,16 @@ impl State<DrmBackend> {
                     // render loop (and Flutter) alive regardless.
                     return;
                 }
+                // Instrumentation: whether the display shows an element
+                // directly (primary-plane scanout or an overlay plane) rather
+                // than only the composited swapchain.
+                let planes = QueuedPlanes {
+                    primary_scanout: matches!(
+                        frame_result.primary_element,
+                        PrimaryPlaneElement::Element(_)
+                    ),
+                    overlays: frame_result.overlay_elements.len(),
+                };
                 if let Err(err) = surface.compositor.queue_frame(None) {
                     warn!("error queueing frame: {err}");
                     return;
@@ -2183,7 +2258,7 @@ impl State<DrmBackend> {
                 // Instrumentation: remember when this frame was queued and
                 // whether a game surface rode it, so `on_vblank` can report the
                 // presentation latency of gaming frames.
-                surface.last_queue = Some((Instant::now(), had_game_surfaces));
+                surface.last_queue = Some((Instant::now(), had_game_surfaces, planes));
                 // Start the software frame cap's interval from a presented
                 // frame, not from a skipped one.
                 surface.last_composite = Some(Instant::now());
@@ -2298,7 +2373,7 @@ struct SurfaceData {
     /// Instrumentation: the last frame queued on this CRTC and whether a game
     /// surface rode it. Set in `render_surface`, consumed by `on_vblank` to
     /// report presentation latency for gaming frames.
-    last_queue: Option<(Instant, bool)>,
+    last_queue: Option<(Instant, bool, QueuedPlanes)>,
     /// Instrumentation: when the previous gaming frame was presented, to report
     /// the achieved pace.
     last_gaming_present: Option<Instant>,
@@ -2317,6 +2392,98 @@ struct SurfaceData {
     /// When the last frame was actually presented, used by the software frame
     /// cap. Skipped composites leave it untouched.
     last_composite: Option<Instant>,
+    /// Per-surface dmabuf feedback for a game shown on this output; `None`
+    /// when the output is not on the primary GPU or the table failed to build.
+    game_feedback: Option<GameDmabufFeedback>,
+    /// The game surfaces currently told to allocate for scanout, so they get
+    /// the render feedback back once they leave gaming mode.
+    scanout_feedback_surfaces: Vec<WlSurface>,
+}
+
+/// Instrumentation: how a queued frame uses the display planes.
+#[derive(Debug, Clone, Copy)]
+struct QueuedPlanes {
+    /// An element (a game buffer) is scanned out on the primary plane.
+    primary_scanout: bool,
+    /// Elements placed on overlay planes.
+    overlays: usize,
+}
+
+/// The dmabuf feedback a game surface receives on one output.
+struct GameDmabufFeedback {
+    /// What every surface gets by default: buffers the renderer can sample.
+    render: DmabufFeedback,
+    /// The same, preceded by a scanout tranche of the formats this output's
+    /// planes accept: a client that honours it allocates buffers the display
+    /// can show directly, so the DRM compositor puts the game on a plane
+    /// instead of compositing it.
+    scanout: DmabufFeedback,
+}
+
+/// Builds the game feedback for an output of `node`.
+///
+/// The scanout tranche only lists formats the renderer can also sample, so a
+/// buffer that cannot be put on a plane still has the compositing fallback.
+/// Outputs of a secondary GPU get none: their buffers would have to cross
+/// devices, and the default feedback already describes the primary GPU.
+///
+/// `render_node` is the render node of the device that drives the output
+/// (`primary_gpu` is a render node too, while `scanout_node` is the device's
+/// primary `card` node the planes belong to).
+fn game_dmabuf_feedback(
+    primary_gpu: DrmNode,
+    render_node: DrmNode,
+    scanout_node: DrmNode,
+    render_formats: &FormatSet,
+    surface: &smithay::backend::drm::DrmSurface,
+) -> Option<GameDmabufFeedback> {
+    if render_node != primary_gpu {
+        debug!(%render_node, %primary_gpu, "No scanout dmabuf feedback: output is not on the primary GPU");
+        return None;
+    }
+    let planes = surface.planes();
+    let plane_formats = planes
+        .primary
+        .iter()
+        .chain(planes.overlay.iter())
+        .flat_map(|plane| plane.formats.iter().copied())
+        .collect::<FormatSet>()
+        .intersection(render_formats)
+        .copied()
+        .collect::<FormatSet>();
+    let builder = DmabufFeedbackBuilder::new(primary_gpu.dev_id(), render_formats.iter().copied());
+    let render = builder
+        .clone()
+        .build()
+        .map_err(|err| warn!("Failed to build render dmabuf feedback: {err}"))
+        .ok()?;
+    let scanout = builder
+        .add_preference_tranche(
+            scanout_node.dev_id(),
+            zwp_linux_dmabuf_feedback_v1::TrancheFlags::Scanout,
+            plane_formats,
+            4u32..=6,
+        )
+        .build()
+        .map_err(|err| warn!("Failed to build scanout dmabuf feedback: {err}"))
+        .ok()?;
+    Some(GameDmabufFeedback { render, scanout })
+}
+
+/// Sends `feedback` to every surface of the tree rooted at `surface` that
+/// asked for per-surface feedback. Unchanged feedback is not resent.
+fn set_surface_tree_dmabuf_feedback(surface: &WlSurface, feedback: &DmabufFeedback) {
+    with_surface_tree_downward(
+        surface,
+        (),
+        |_, _, _| TraversalAction::DoChildren(()),
+        |_, states, _| {
+            if let Some(state) = SurfaceDmabufFeedbackState::from_states(states) {
+                state.set_feedback(feedback);
+            }
+        },
+        |_, _, _| true,
+    );
 }
 
 pub type GbmDrmCompositor = DrmCompositor<

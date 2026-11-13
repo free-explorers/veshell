@@ -919,6 +919,11 @@ where
 /// Render elements for a game-mode surface tree, drawn at the output's
 /// top-left corner.
 ///
+/// The elements are scanout candidates: a game buffer that covers the output
+/// can be put on a plane by the DRM compositor instead of being composited,
+/// which saves a full-output GPU pass per game frame. The compositor falls
+/// back to rendering when the buffer cannot be scanned out.
+///
 /// `output_scale` maps the surface's logical size to physical pixels, the same
 /// scale the pointer path uses (`Space` logical coordinates, then the client
 /// scale). Drawing at `1.0` instead shrinks the game on a scaled output (a
@@ -941,7 +946,7 @@ where
         (0, 0),
         output_scale,
         1.0,
-        Kind::Unspecified,
+        Kind::ScanoutCandidate,
     )
 }
 
