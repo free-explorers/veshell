@@ -230,9 +230,16 @@ class ViewInputListener extends HookConsumerWidget {
       // the button press uses the current visible surface, not the hover
       // offset from before the move.
       _pointerMoved(ref, globalOffset);
-      await ref.read(pointerFocusManagerProvider.notifier).flushFocus();
-      await _sendMouseButtonsToPlatform(ref, event.buttons);
-      ref.read(pointerFocusManagerProvider.notifier).startPotentialDrag();
+      final pointerFocusManager = ref.read(
+        pointerFocusManagerProvider.notifier,
+      );
+      // Serialized, so a release arriving while the press still waits on the
+      // pointer focus goes out after it (see `MouseButtonTracker`).
+      await ref.read(mouseButtonTrackerProvider).serialize(() async {
+        await pointerFocusManager.flushFocus();
+        await _mouseButtonsChanged(ref, event.buttons);
+        pointerFocusManager.startPotentialDrag();
+      });
     } else if (event.kind == PointerDeviceKind.touch) {
       await ref
           .read(platformManagerProvider.notifier)
@@ -270,8 +277,13 @@ class ViewInputListener extends HookConsumerWidget {
 
   Future<void> _onPointerUp(WidgetRef ref, PointerUpEvent event) async {
     if (event.kind == PointerDeviceKind.mouse) {
-      await _sendMouseButtonsToPlatform(ref, event.buttons);
-      ref.read(pointerFocusManagerProvider.notifier).stopPotentialDrag();
+      final pointerFocusManager = ref.read(
+        pointerFocusManagerProvider.notifier,
+      );
+      await ref.read(mouseButtonTrackerProvider).serialize(() async {
+        await _mouseButtonsChanged(ref, event.buttons);
+        pointerFocusManager.stopPotentialDrag();
+      });
     } else if (event.kind == PointerDeviceKind.touch) {
       await ref
           .read(platformManagerProvider.notifier)
@@ -286,8 +298,13 @@ class ViewInputListener extends HookConsumerWidget {
     PointerEvent lastPointerEvent,
   ) async {
     if (lastPointerEvent.kind == PointerDeviceKind.mouse) {
-      await _sendMouseButtonsToPlatform(ref, 0);
-      ref.read(pointerFocusManagerProvider.notifier).stopPotentialDrag();
+      final pointerFocusManager = ref.read(
+        pointerFocusManagerProvider.notifier,
+      );
+      await ref.read(mouseButtonTrackerProvider).serialize(() async {
+        await _mouseButtonsChanged(ref, 0);
+        pointerFocusManager.stopPotentialDrag();
+      });
     } else if (lastPointerEvent.kind == PointerDeviceKind.touch) {
       await ref
           .read(platformManagerProvider.notifier)
@@ -299,7 +316,17 @@ class ViewInputListener extends HookConsumerWidget {
     }
   }
 
-  Future<void> _sendMouseButtonsToPlatform(WidgetRef ref, int buttons) async {
+  /// Forwards the change of pressed buttons, after any forwarding still in
+  /// flight.
+  Future<void> _sendMouseButtonsToPlatform(WidgetRef ref, int buttons) {
+    return ref
+        .read(mouseButtonTrackerProvider)
+        .serialize(() => _mouseButtonsChanged(ref, buttons));
+  }
+
+  /// Forwards the change of pressed buttons. Only call it from a
+  /// [MouseButtonTracker.serialize] task.
+  Future<void> _mouseButtonsChanged(WidgetRef ref, int buttons) async {
     final events = ref
         .read(mouseButtonTrackerProvider)
         .trackButtonState(buttons);
