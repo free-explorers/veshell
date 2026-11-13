@@ -13,6 +13,7 @@ import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/widget/frosted_surface.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
+import 'package:shell/wayland/widget/surface_visibility.dart';
 import 'package:uuid/uuid.dart';
 
 class MetaSurfaceGamingOverlay extends HookConsumerWidget {
@@ -272,9 +273,14 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
                     // state stops driving Flutter frames).
                     child: metaWindowState.gameModeActivated
                         ? const SizedBox.expand()
-                        : MetaSurfaceWidget(
-                            metaWindowId: metaWindowId,
-                            decorated: false,
+                        // A paused game only shows through its frost: the
+                        // compositor paces it down to free the GPU and CPU.
+                        : SurfaceFrameRateLimit(
+                            limited: paused,
+                            child: MetaSurfaceWidget(
+                              metaWindowId: metaWindowId,
+                              decorated: false,
+                            ),
                           ),
                   ),
                 ),

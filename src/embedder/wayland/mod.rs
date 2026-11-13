@@ -121,6 +121,8 @@ pub mod wayland {
             // flip would miss its vblank. Held back, the surface keeps showing
             // its previous, finished buffer until the new one is ready.
             add_pre_commit_hook::<Self, _>(surface, |state, _display, surface| {
+                // A paused game's commits apply at its limited pace.
+                state.hold_limited_commit(surface);
                 let dmabuf = with_states(surface, |surface_data| {
                     surface_data
                         .cached_state
@@ -406,9 +408,16 @@ pub mod wayland {
                         swapchain.commit(texture.clone());
 
                         if !game_active {
-                            self.flutter_engine_mut()
-                                .mark_external_texture_frame_available(texture_id)
-                                .unwrap();
+                            if self.surface_pacing.is_limited(surface_id) {
+                                // Shown at its limited pace: the shell redraws
+                                // it on the surface's next paced tick.
+                                self.surface_pacing
+                                    .defer_texture_mark(surface_id, texture_id);
+                            } else {
+                                self.flutter_engine_mut()
+                                    .mark_external_texture_frame_available(texture_id)
+                                    .unwrap();
+                            }
                         }
 
                         (texture_id, Some(size))

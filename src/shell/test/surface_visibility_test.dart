@@ -9,11 +9,13 @@ Widget _surface(int id) => SurfaceVisibilityProbe(
 );
 
 void main() {
-  late List<List<int>> reports;
+  late List<({List<int> visible, List<int> limited})> reports;
 
   setUp(() {
     reports = [];
-    SurfaceVisibilityTracker.instance.start(reports.add);
+    SurfaceVisibilityTracker.instance.start(
+      (visible, limited) => reports.add((visible: visible, limited: limited)),
+    );
   });
 
   Future<void> pump(WidgetTester tester, Widget child) async {
@@ -45,7 +47,52 @@ void main() {
       ),
     );
 
-    expect(reports.last, [1]);
+    expect(reports.last.visible, [1]);
+    expect(reports.last.limited, isEmpty);
+  });
+
+  testWidgets('a paused game is reported limited', (tester) async {
+    await pump(
+      tester,
+      Row(
+        children: [
+          _surface(1),
+          SurfaceFrameRateLimit(limited: true, child: _surface(7)),
+        ],
+      ),
+    );
+
+    expect(reports.last.visible, [1]);
+    expect(reports.last.limited, [7]);
+  });
+
+  testWidgets('a paused game stays limited when it is not painted', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      Offstage(child: SurfaceFrameRateLimit(limited: true, child: _surface(7))),
+    );
+
+    expect(reports.last.visible, isEmpty);
+    expect(reports.last.limited, [7]);
+  });
+
+  testWidgets('a surface also shown at full rate is not limited', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      Row(
+        children: [
+          SurfaceFrameRateLimit(limited: true, child: _surface(7)),
+          _surface(7),
+        ],
+      ),
+    );
+
+    expect(reports.last.visible, [7]);
+    expect(reports.last.limited, isEmpty);
   });
 
   testWidgets('a change is reported, an unchanged frame is not', (
@@ -59,6 +106,6 @@ void main() {
 
     await pump(tester, Offstage(child: _surface(1)));
     expect(reports.length, afterFirst + 1);
-    expect(reports.last, isEmpty);
+    expect(reports.last.visible, isEmpty);
   });
 }

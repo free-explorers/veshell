@@ -22,10 +22,13 @@ abstract class SurfaceVisibilityMessage
     implements PlatformMessage {
   /// Factory
   ///
-  /// [visible] lists the surfaces painted on screen; every other surface is
-  /// hidden.
-  factory SurfaceVisibilityMessage({required List<int> visible}) =
-      _SurfaceVisibilityMessage;
+  /// [visible] lists the surfaces painted on screen at full rate; [limited]
+  /// the surfaces painted on screen that only need a low frame rate (a paused
+  /// game behind its frost). Every other surface is hidden.
+  factory SurfaceVisibilityMessage({
+    required List<int> visible,
+    required List<int> limited,
+  }) = _SurfaceVisibilityMessage;
 
   /// Creates a new [SurfaceVisibilityMessage] instance from a map.
   factory SurfaceVisibilityMessage.fromJson(Map<String, dynamic> json) =>
