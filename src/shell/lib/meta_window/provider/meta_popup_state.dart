@@ -87,13 +87,6 @@ class MetaPopupState extends _$MetaPopupState {
             parent.floatingSurfaceOrigin ??
             parent.renderOrigin ??
             ref.read(surfaceRenderOriginsProvider)[parent.surfaceId];
-        // The popup may have consumed the primary button-up when it closed.
-        // Flutter's button bitmap would then stay latched, making the next
-        // primary press look like a release and blocking hover. Flush any stuck
-        // buttons to the owner before restoring focus.
-        final releases = ref
-            .read(mouseButtonTrackerProvider)
-            .trackButtonState(0);
         focusManager.resetDrag();
         if (origin != null) {
           focusManager.restoreSurface(
@@ -103,26 +96,36 @@ class MetaPopupState extends _$MetaPopupState {
         } else {
           focusManager.forgetSurface(popupSurfaceId);
         }
-        if (releases.isNotEmpty) {
-          unawaited(
-            ref
-                .read(platformManagerProvider.notifier)
-                .request(
-                  MouseButtonsEventRequest(
-                    message: MouseButtonsEventMessage(
-                      surfaceId: parent.surfaceId,
-                      buttons: [
-                        for (final event in releases)
-                          Button(
-                            button: event.button,
-                            isPressed: event.state == MouseButtonState.pressed,
-                          ),
-                      ].lockUnsafe,
-                    ),
-                  ),
+        // The popup may have consumed the primary button-up when it closed.
+        // Flutter's button bitmap would then stay latched, making the next
+        // primary press look like a release and blocking hover. Flush any stuck
+        // buttons to the owner, after any button forwarding still in flight so
+        // a pending press cannot land after the flush.
+        final platformManager = ref.read(platformManagerProvider.notifier);
+        final tracker = ref.read(mouseButtonTrackerProvider);
+        final parentSurfaceId = parent.surfaceId;
+        unawaited(
+          tracker.serialize(() async {
+            final releases = tracker.trackButtonState(0);
+            if (releases.isEmpty) {
+              return;
+            }
+            await platformManager.request(
+              MouseButtonsEventRequest(
+                message: MouseButtonsEventMessage(
+                  surfaceId: parentSurfaceId,
+                  buttons: [
+                    for (final event in releases)
+                      Button(
+                        button: event.button,
+                        isPressed: event.state == MouseButtonState.pressed,
+                      ),
+                  ].lockUnsafe,
                 ),
-          );
-        }
+              ),
+            );
+          }),
+        );
       } on Object {
         // The owner may already be torn down; clearing the local focus is the
         // only safe fallback.
