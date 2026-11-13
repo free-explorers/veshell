@@ -124,27 +124,81 @@ fn watch_sleep(events: channel::Sender<IdleDbusEvent>) -> zbus::Result<()> {
     })
 }
 
+/// A system power action the compositor asks logind for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PowerRequest {
+    Suspend,
+    Hibernate,
+    /// Suspend, then hibernate after logind's configured delay; plain suspend
+    /// where logind cannot.
+    SuspendThenHibernate,
+    PowerOff,
+}
+
+impl PowerRequest {
+    /// The request an [`AutomaticPowerAction`] makes, `None` when disabled.
+    pub fn from_automatic(action: AutomaticPowerAction) -> Option<Self> {
+        match action {
+            AutomaticPowerAction::Disabled => None,
+            AutomaticPowerAction::Suspend => Some(Self::Suspend),
+            AutomaticPowerAction::Hibernate => Some(Self::Hibernate),
+            AutomaticPowerAction::SuspendThenHibernate => Some(Self::SuspendThenHibernate),
+        }
+    }
+}
+
 /// Queue logind power requests off the compositor thread.
-pub fn spawn_power_worker() -> std::sync::mpsc::Sender<AutomaticPowerAction> {
+///
+/// The worker also holds logind's `handle-power-key` inhibitor for as long as
+/// it runs: the compositor handles the power button itself (see
+/// [`super::on_power_button`]), so logind must not act on it as well, whatever
+/// `HandlePowerKey=` says.
+pub fn spawn_power_worker() -> std::sync::mpsc::Sender<PowerRequest> {
     let (sender, requests) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        while let Ok(action) = requests.recv() {
-            if action == AutomaticPowerAction::Disabled {
-                continue;
-            }
-            if let Err(error) = zbus::block_on(request_logind_power_action(action)) {
-                warn!(?action, ?error, "Automatic logind power action failed");
+        let _power_key_inhibitor = zbus::block_on(take_power_key_inhibitor());
+        while let Ok(request) = requests.recv() {
+            if let Err(error) = zbus::block_on(request_logind_power_action(request)) {
+                warn!(?request, ?error, "logind power action failed");
             }
         }
     });
     sender
 }
 
-async fn request_logind_power_action(action: AutomaticPowerAction) -> zbus::Result<()> {
+/// Blocks logind's own handling of the power button. Dropping the returned
+/// descriptor releases it.
+async fn take_power_key_inhibitor() -> Option<zbus::zvariant::OwnedFd> {
+    let result = async {
+        let connection = Connection::system().await?;
+        let proxy = Proxy::new(&connection, LOGIN1_NAME, LOGIN1_PATH, LOGIN1_MANAGER).await?;
+        proxy
+            .call::<_, _, zbus::zvariant::OwnedFd>(
+                "Inhibit",
+                &(
+                    "handle-power-key",
+                    "Veshell",
+                    "Veshell handles the power button",
+                    "block",
+                ),
+            )
+            .await
+    }
+    .await;
+    match result {
+        Ok(fd) => Some(fd),
+        Err(error) => {
+            warn!(?error, "Failed to take the power key inhibitor");
+            None
+        }
+    }
+}
+
+async fn request_logind_power_action(request: PowerRequest) -> zbus::Result<()> {
     let connection = Connection::system().await?;
     let proxy = Proxy::new(&connection, LOGIN1_NAME, LOGIN1_PATH, LOGIN1_MANAGER).await?;
-    let action = match action {
-        AutomaticPowerAction::SuspendThenHibernate => {
+    let request = match request {
+        PowerRequest::SuspendThenHibernate => {
             let capability = proxy
                 .call::<_, _, String>("CanSuspendThenHibernate", &())
                 .await;
@@ -157,27 +211,27 @@ async fn request_logind_power_action(action: AutomaticPowerAction) -> zbus::Resu
             };
             select_suspend_then_hibernate_action(capability.as_deref())
         }
-        action => action,
+        request => request,
     };
-    let method = match action {
-        AutomaticPowerAction::Disabled => return Ok(()),
-        AutomaticPowerAction::Suspend => "Suspend",
-        AutomaticPowerAction::Hibernate => "Hibernate",
-        AutomaticPowerAction::SuspendThenHibernate => "SuspendThenHibernate",
+    let method = match request {
+        PowerRequest::Suspend => "Suspend",
+        PowerRequest::Hibernate => "Hibernate",
+        PowerRequest::SuspendThenHibernate => "SuspendThenHibernate",
+        PowerRequest::PowerOff => "PowerOff",
     };
     proxy.call_method(method, &(false,)).await?;
     Ok(())
 }
 
-fn select_suspend_then_hibernate_action(capability: Option<&str>) -> AutomaticPowerAction {
+fn select_suspend_then_hibernate_action(capability: Option<&str>) -> PowerRequest {
     if capability == Some("yes") {
-        AutomaticPowerAction::SuspendThenHibernate
+        PowerRequest::SuspendThenHibernate
     } else {
         tracing::info!(
             ?capability,
             "SuspendThenHibernate is unavailable; falling back to Suspend"
         );
-        AutomaticPowerAction::Suspend
+        PowerRequest::Suspend
     }
 }
 
@@ -223,19 +277,18 @@ async fn serve(events: channel::Sender<IdleDbusEvent>) -> zbus::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::select_suspend_then_hibernate_action;
-    use crate::settings::AutomaticPowerAction;
+    use super::{select_suspend_then_hibernate_action, PowerRequest};
 
     #[test]
     fn suspend_then_hibernate_is_selected_only_when_logind_says_yes() {
         assert_eq!(
             select_suspend_then_hibernate_action(Some("yes")),
-            AutomaticPowerAction::SuspendThenHibernate
+            PowerRequest::SuspendThenHibernate
         );
         for capability in [Some("no"), Some("challenge"), Some("na"), None] {
             assert_eq!(
                 select_suspend_then_hibernate_action(capability),
-                AutomaticPowerAction::Suspend
+                PowerRequest::Suspend
             );
         }
     }
