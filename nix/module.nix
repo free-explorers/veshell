@@ -15,7 +15,7 @@ in
 
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [ cfg.package ];
-    fonts.packages = [ pkgs.roboto pkgs.noto-fonts pkgs.noto-fonts-cjk-sans ];
+    fonts.packages = [ pkgs.roboto pkgs.noto-fonts pkgs.noto-fonts-cjk-sans pkgs.noto-fonts-color-emoji ];
     services.displayManager.sessionPackages = [ cfg.package ];
     systemd.packages = [ cfg.package ];
     hardware.graphics.enable = true;
