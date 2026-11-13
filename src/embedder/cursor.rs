@@ -68,6 +68,12 @@ impl Cursor {
     pub fn get_image(&self, size: u32, millis: u32) -> Image {
         frame(millis, size, &self.icons)
     }
+
+    /// Whether the frame set for `size` has more than one image, so the
+    /// cursor changes over time without any input.
+    pub fn is_animated(&self, size: u32) -> bool {
+        nearest_images(size, &self.icons).nth(1).is_some()
+    }
 }
 
 /// Where a theme bitmap is drawn on an output.
@@ -185,6 +191,11 @@ pub struct CursorStateInner {
     cursors: HashMap<CursorIcon, Cursor>,
     current_image: Option<Image>,
     image_cache: Vec<(Image, MemoryRenderBuffer)>,
+    /// Whether the cursor drawn last is an animated theme cursor. Rendering is
+    /// on demand, so an animation with no input behind it only advances when
+    /// the backend's idle vsync timer asks for a composite (see
+    /// [`Self::is_animated`]).
+    animated: bool,
 }
 
 impl CursorStateInner {
@@ -236,6 +247,12 @@ impl CursorStateInner {
         let before = self.shape();
         self.grab_cursor = None;
         before != self.shape()
+    }
+
+    /// Whether the cursor drawn last animates on its own and therefore needs
+    /// periodic composites while nothing else changes.
+    pub fn is_animated(&self) -> bool {
+        self.animated
     }
 
     /// The shell-chosen shape currently displayed, if any.
@@ -331,6 +348,7 @@ impl CursorStateInner {
             current_image: None,
 
             image_cache: Vec::new(),
+            animated: false,
         }
     }
 
@@ -349,6 +367,7 @@ impl CursorStateInner {
         self.cursors.clear();
         self.image_cache.clear();
         self.current_image = None;
+        self.animated = false;
         true
     }
 
@@ -444,6 +463,9 @@ where
     // even though the shell stops reporting a surface under the cursor.
     let client_owns_cursor =
         gaming_mode || (is_surface_under_pointer && !state.overrides_clients());
+    // A surface or hidden cursor never animates on its own: a client that
+    // animates its cursor surface commits, and each commit renders.
+    state.animated = false;
     let named_cursor = match choose_cursor(cursor_status, state.shape(), client_owns_cursor) {
         CursorChoice::Surface(wl_surface) => {
             return draw_surface_cursor(
@@ -463,9 +485,10 @@ where
         // pixel size. Resampling to force an exact logical size would blur the
         // pointer; themes ship the physical sizes for common scales instead.
         let target_px = (f64::from(state.size()) * output_scale).round().max(1.0) as u32;
-        let frame = state
-            .get_named_cursor(current_cursor)
-            .get_image(target_px, time.as_millis());
+        let cursor = state.get_named_cursor(current_cursor);
+        let frame = cursor.get_image(target_px, time.as_millis());
+        let animated = cursor.is_animated(target_px);
+        state.animated = animated;
         let placement = native_cursor_placement(&frame, output_scale);
 
         let pointer_images = &mut state.image_cache;
@@ -696,6 +719,16 @@ mod tests {
         assert_eq!(cursor.get_image(48, 0).size, 48);
         assert_eq!(cursor.get_image(40, 0).size, 36);
         assert_eq!(cursor.get_image(20, 0).size, 24);
+    }
+
+    #[test]
+    fn only_a_size_with_several_frames_is_animated() {
+        // Two frames at 24 px (a spinner), a single still frame at 48 px.
+        let cursor = Cursor {
+            icons: vec![test_icon(24), test_icon(24), test_icon(48)],
+        };
+        assert!(cursor.is_animated(24));
+        assert!(!cursor.is_animated(48));
     }
 
     #[test]

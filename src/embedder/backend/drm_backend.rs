@@ -1929,6 +1929,12 @@ impl State<DrmBackend> {
         }
         self.send_stale_game_frame_callbacks(now, slack);
 
+        // An animated theme cursor changes with time alone; with on-demand
+        // rendering nothing else would composite its next frame.
+        if self.cursor_state.lock().unwrap().is_animated() {
+            self.request_render();
+        }
+
         interval + slack
     }
 
