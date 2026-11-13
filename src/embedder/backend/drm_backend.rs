@@ -18,6 +18,7 @@ use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags};
 use smithay::backend::allocator::{Allocator, Fourcc, Swapchain};
 use smithay::backend::drm::compositor::{DrmCompositor, FrameFlags, PrimaryPlaneElement};
 use smithay::backend::drm::exporter::gbm::GbmFramebufferExporter;
+use smithay::backend::drm::DrmEventTime;
 use smithay::backend::drm::{
     CreateDrmNodeError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent, DrmEventMetadata, DrmNode,
     NodeType, VrrSupport,
@@ -54,11 +55,13 @@ use smithay::reexports::input::event::gesture::GestureEventCoordinates;
 use smithay::reexports::input::{self, Libinput};
 use smithay::reexports::rustix::fs::OFlags;
 use smithay::reexports::wayland_protocols::wp::linux_dmabuf::zv1::server::zwp_linux_dmabuf_feedback_v1;
+use smithay::reexports::wayland_protocols::wp::presentation_time::server::wp_presentation_feedback;
 use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::DisplayHandle;
+use smithay::utils::{ClockSource, Monotonic};
 use smithay::utils::{DeviceFd, IsAlive, Logical, Point, Rectangle, Transform};
 use smithay::wayland::compositor::{with_surface_tree_downward, TraversalAction};
 use smithay::wayland::dmabuf::{
@@ -66,6 +69,9 @@ use smithay::wayland::dmabuf::{
     ImportNotifier, SurfaceDmabufFeedbackState,
 };
 use smithay::wayland::drm_lease::DrmLease;
+use smithay::wayland::presentation::{
+    PresentationFeedbackCachedState, PresentationFeedbackCallback, PresentationState, Refresh,
+};
 use tracing::{debug, error, info, warn};
 
 use smithay_drm_extras::display_info;
@@ -197,6 +203,9 @@ pub struct DrmBackend {
     /// Whether the last vsync tick held Flutter's batons because games cover
     /// every output; only used to log the transitions.
     shell_paused_for_games: bool,
+    /// The `wp_presentation` global (presentation-time). Kept alive for the
+    /// session; dropping it would remove the global.
+    presentation: Option<PresentationState>,
 }
 
 /// Screensaver wake hook: re-insert every blanked output into the render loop.
@@ -228,6 +237,9 @@ fn idle_apply_blank(state: &mut State<DrmBackend>) {
             }
             // The pending flip is gone with the planes; unblock rendering.
             surface.frame_pending = false;
+            for (callback, _) in surface.queued_presentation.drain(..) {
+                callback.discarded();
+            }
         }
     }
 }
@@ -575,6 +587,7 @@ pub fn run_drm_backend() {
             software_throttled_nodes: HashSet::new(),
             render_scheduled: HashSet::new(),
             shell_paused_for_games: false,
+            presentation: None,
         },
         None,
         settings_manager,
@@ -737,6 +750,15 @@ pub fn run_drm_backend() {
         );
         Some(dmabuf_state)
     };
+    // Presentation-time: clients (Xwayland's Present, Mesa's Vulkan WSI,
+    // DXVK) pace vsync'd frames on the presented timestamps instead of
+    // guessing. Every feedback is answered (see `present_callbacks`), so a
+    // client waiting on one never stalls.
+    state.backend_data.presentation = Some(PresentationState::new::<State<DrmBackend>>(
+        &state.display_handle,
+        Monotonic::ID as u32,
+    ));
+
     // Start the Flutter engine.
     let (flutter_engine, EmbedderChannels { rx_baton }) = match FlutterEngine::new(&mut state) {
         Ok(engine) => engine,
@@ -1464,6 +1486,7 @@ impl State<DrmBackend> {
             last_composite: None,
             game_feedback,
             scanout_feedback_surfaces: Vec::new(),
+            queued_presentation: Vec::new(),
         };
 
         device.surfaces.insert(crtc, surface);
@@ -1668,7 +1691,47 @@ impl State<DrmBackend> {
         }
     }
 
-    fn on_vblank(&mut self, node: DrmNode, crtc: crtc::Handle, _meta: DrmEventMetadata) {
+    fn on_vblank(&mut self, node: DrmNode, crtc: crtc::Handle, meta: DrmEventMetadata) {
+        // The flip that completed carried the game content queued with it:
+        // answer its presentation feedback with the hardware timestamp.
+        let queued = self
+            .backend_data
+            .gpus
+            .get_mut(&node)
+            .and_then(|gpu| gpu.surfaces.get_mut(&crtc))
+            .map(|surface| {
+                (
+                    std::mem::take(&mut surface.queued_presentation),
+                    surface.compositor.vrr_enabled(),
+                )
+            });
+        if let Some((queued, vrr)) = queued.filter(|(queued, _)| !queued.is_empty()) {
+            let output = self.output_for_crtc(node, crtc);
+            let (time, hw_clock) = match meta.time {
+                DrmEventTime::Monotonic(time) if !time.is_zero() => (time, true),
+                _ => (Duration::from(self.clock.now()), false),
+            };
+            let hw_flags = if hw_clock {
+                wp_presentation_feedback::Kind::HwClock
+                    | wp_presentation_feedback::Kind::HwCompletion
+            } else {
+                wp_presentation_feedback::Kind::empty()
+            };
+            let refresh = output
+                .as_ref()
+                .map(|output| output_refresh(output, vrr))
+                .unwrap_or(Refresh::Unknown);
+            present_callbacks(
+                queued
+                    .into_iter()
+                    .map(|(callback, flags)| (callback, flags | hw_flags)),
+                output.as_ref(),
+                time,
+                refresh,
+                u64::from(meta.sequence),
+            );
+        }
+
         // Acknowledge the frame submitted on the CRTC that fired, even when we
         // don't render it (e.g. the slower CRTC of a node).
         if let Some(gpu_data) = self.backend_data.gpus.get_mut(&node) {
@@ -1806,18 +1869,44 @@ impl State<DrmBackend> {
         // (`send_game_frame_callbacks`), not the pacing CRTC's.
         let game_surfaces = self.all_game_mode_surfaces();
         let paced_here = |surface: &WlSurface| !game_surfaces.contains(surface);
+        // Shell-drawn surfaces reach the panel through the Flutter frame; their
+        // presentation feedback is answered on this tick, like their frame
+        // callbacks, as presented on the pacing output.
+        let mut presentation = Vec::new();
         for surface in self.xdg_shell_state.toplevel_surfaces() {
             if paced_here(surface.wl_surface()) {
                 send_frames_surface_tree(surface.wl_surface(), frame_timestamp);
+                take_presentation_callbacks(surface.wl_surface(), &mut presentation);
             }
         }
         for surface in self.xdg_popups.values() {
             send_frames_surface_tree(surface.wl_surface(), frame_timestamp);
+            take_presentation_callbacks(surface.wl_surface(), &mut presentation);
         }
         for surface in self.x11_surface_per_wl_surface.keys() {
             if paced_here(surface) {
                 send_frames_surface_tree(surface, frame_timestamp);
+                take_presentation_callbacks(surface, &mut presentation);
             }
+        }
+        if !presentation.is_empty() {
+            let output = self
+                .backend_data
+                .pacing_crtc
+                .and_then(|(_, node, crtc)| self.output_for_crtc(node, crtc));
+            let refresh = output
+                .as_ref()
+                .map(|output| output_refresh(output, false))
+                .unwrap_or(Refresh::Unknown);
+            present_callbacks(
+                presentation
+                    .into_iter()
+                    .map(|callback| (callback, wp_presentation_feedback::Kind::Vsync)),
+                output.as_ref(),
+                Duration::from(self.clock.now()),
+                refresh,
+                0,
+            );
         }
         let cursor_status = {
             let cursor_image_status = self.cursor_image_status.lock().unwrap();
@@ -1923,6 +2012,26 @@ impl State<DrmBackend> {
         }
         for (node, crtc) in stale {
             self.send_game_frame_callbacks(node, crtc);
+            // A game commit that presented nothing (no damage) still gets
+            // its presentation feedback answered.
+            let Some(output) = self.output_for_crtc(node, crtc) else {
+                continue;
+            };
+            let mut callbacks = Vec::new();
+            for game in self.game_mode_surfaces_for_output(&output.name()) {
+                take_presentation_callbacks(&game, &mut callbacks);
+            }
+            if !callbacks.is_empty() {
+                present_callbacks(
+                    callbacks
+                        .into_iter()
+                        .map(|callback| (callback, wp_presentation_feedback::Kind::empty())),
+                    Some(&output),
+                    Duration::from(self.clock.now()),
+                    output_refresh(&output, false),
+                    0,
+                );
+            }
         }
     }
 
@@ -2259,6 +2368,18 @@ impl State<DrmBackend> {
                 // whether a game surface rode it, so `on_vblank` can report the
                 // presentation latency of gaming frames.
                 surface.last_queue = Some((Instant::now(), had_game_surfaces, planes));
+                // The game content this flip shows is answered at its vblank.
+                let mut callbacks = Vec::new();
+                for game in &game_surfaces {
+                    take_presentation_callbacks(game, &mut callbacks);
+                }
+                let mut flags = wp_presentation_feedback::Kind::Vsync;
+                if planes.primary_scanout {
+                    flags |= wp_presentation_feedback::Kind::ZeroCopy;
+                }
+                surface
+                    .queued_presentation
+                    .extend(callbacks.into_iter().map(|callback| (callback, flags)));
                 // Start the software frame cap's interval from a presented
                 // frame, not from a skipped one.
                 surface.last_composite = Some(Instant::now());
@@ -2398,6 +2519,19 @@ struct SurfaceData {
     /// The game surfaces currently told to allocate for scanout, so they get
     /// the render feedback back once they leave gaming mode.
     scanout_feedback_surfaces: Vec<WlSurface>,
+    /// Presentation feedback of the game surfaces whose content rides the
+    /// flip in flight; answered with that flip's vblank timestamp.
+    queued_presentation: Vec<(PresentationFeedbackCallback, wp_presentation_feedback::Kind)>,
+}
+
+impl Drop for SurfaceData {
+    /// An output that goes away never presents its flip in flight: tell the
+    /// clients waiting on it.
+    fn drop(&mut self) {
+        for (callback, _) in self.queued_presentation.drain(..) {
+            callback.discarded();
+        }
+    }
 }
 
 /// Instrumentation: how a queued frame uses the display planes.
@@ -2468,6 +2602,65 @@ fn game_dmabuf_feedback(
         .map_err(|err| warn!("Failed to build scanout dmabuf feedback: {err}"))
         .ok()?;
     Some(GameDmabufFeedback { render, scanout })
+}
+
+/// Moves the presentation feedback requested by the committed state of every
+/// surface of the tree rooted at `surface` into `callbacks`.
+fn take_presentation_callbacks(
+    surface: &WlSurface,
+    callbacks: &mut Vec<PresentationFeedbackCallback>,
+) {
+    with_surface_tree_downward(
+        surface,
+        (),
+        |_, _, _| TraversalAction::DoChildren(()),
+        |_, states, _| {
+            callbacks.extend(
+                states
+                    .cached_state
+                    .get::<PresentationFeedbackCachedState>()
+                    .current()
+                    .callbacks
+                    .drain(..),
+            );
+        },
+        |_, _, _| true,
+    );
+}
+
+/// Answers presentation feedback as presented on `output` at `time`
+/// (monotonic), or as discarded when there is no output to report.
+fn present_callbacks(
+    callbacks: impl IntoIterator<Item = (PresentationFeedbackCallback, wp_presentation_feedback::Kind)>,
+    output: Option<&Output>,
+    time: Duration,
+    refresh: Refresh,
+    sequence: u64,
+) {
+    for (callback, flags) in callbacks {
+        match output {
+            Some(output) => callback.presented(output, time, refresh, sequence, flags),
+            None => callback.discarded(),
+        }
+    }
+}
+
+/// The refresh reported with presentation feedback for `output`: its mode's
+/// interval, as the fastest rate when adaptive sync lets the panel wait.
+fn output_refresh(output: &Output, variable: bool) -> Refresh {
+    let Some(mhz) = output
+        .current_mode()
+        .map(|mode| mode.refresh)
+        .filter(|mhz| *mhz > 0)
+    else {
+        return Refresh::Unknown;
+    };
+    let interval = Duration::from_nanos(1_000_000_000_000 / mhz as u64);
+    if variable {
+        Refresh::variable(interval)
+    } else {
+        Refresh::fixed(interval)
+    }
 }
 
 /// Sends `feedback` to every surface of the tree rooted at `surface` that
