@@ -49,6 +49,15 @@ impl<T: Texture> FractionnalTextureBuffer<T> {
 }
 
 impl<T: Texture> FractionnalTextureBuffer<T> {
+    /// Reuses an identity across composites: the same `id` with an unchanged
+    /// `commit` reads as an undamaged element to the damage tracker, so only a
+    /// new commit repaints it.
+    pub fn with_identity(mut self, id: Id, commit: CommitCounter) -> Self {
+        self.id = id;
+        self.commit_counter = commit;
+        self
+    }
+
     pub fn logical_size(&self) -> Size<f64, Logical> {
         self.texture
             .size()

@@ -5,7 +5,7 @@ use std::sync::{LazyLock, Mutex, OnceLock};
 use tracing::debug;
 
 use crate::capture::{RECORDING_CHIP_HEIGHT, RECORDING_CHIP_WIDTH};
-use crate::flutter_engine::view::Frame;
+use crate::flutter_engine::view::{Frame, PresentedFrame};
 use crate::{
     backend::render::fractionnal_texture::{
         FractionnalTextureBuffer, FractionnalTextureRenderElement,
@@ -83,7 +83,7 @@ fn stable_solid_id(key: u64) -> Id {
 pub fn get_render_elements<R>(
     renderer: &mut R,
     output: &Output,
-    frame: &Frame,
+    frame: &PresentedFrame,
     output_geometry: Rectangle<f64, smithay::utils::Logical>,
     now: Time<Monotonic>,
     cursor_image_status: &Mutex<CursorImageStatus>,
@@ -127,7 +127,7 @@ where
 pub fn get_frame_elements<R>(
     renderer: &mut R,
     output: &Output,
-    frame: &Frame,
+    frame: &PresentedFrame,
     output_geometry: Rectangle<f64, smithay::utils::Logical>,
     flip_flutter_texture: bool,
     surfaces_in_gaming_mode: Vec<&WlSurface>,
@@ -149,7 +149,7 @@ where
         ));
     }
 
-    let flutter_texture = match frame {
+    let flutter_texture = match &frame.frame {
         Frame::Dmabuf(dmabuf) => renderer.import_dmabuf(dmabuf, None).ok(),
         Frame::Texture(texture) => Some(texture.clone()),
     };
@@ -180,7 +180,9 @@ where
             scale.fractional_scale(),
             transform,
             Vec::new(),
-        );
+        )
+        // Stable per view: only a new Flutter frame damages the output.
+        .with_identity(frame.element_id.clone(), frame.commit);
         let flutter_texture_element = FractionnalTextureRenderElement::from_texture_buffer(
             flutter_texture_buffer,
             Point::from((0.0, 0.0)),
@@ -816,7 +818,7 @@ fn scrim_regions(
 fn get_render_elements_for_frame<R>(
     renderer: &mut R,
     output: &Output,
-    frame: &Frame,
+    frame: &PresentedFrame,
     output_geometry: Rectangle<f64, smithay::utils::Logical>,
     now: Time<Monotonic>,
     cursor_image_status: &Mutex<CursorImageStatus>,

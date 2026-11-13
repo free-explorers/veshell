@@ -454,7 +454,14 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 WinitEvent::Redraw => {
                     let output = data.backend_data.output.clone();
-                    let age = data.backend_data.backend.buffer_age().unwrap_or(0);
+                    // Every redraw repaints the whole window (buffer age 0).
+                    // The Flutter frame keeps a stable damage identity, so an
+                    // unchanged scene now has no damage; this loop still swaps
+                    // on every redraw, and swapping a buffer nothing was drawn
+                    // into loses the nested EGL surface (BAD_SURFACE, then the
+                    // window stops presenting and Flutter gets no more vsync).
+                    // A nested window is not a hot path: always draw it all.
+                    let age = 0;
                     let geometry = match data.space.output_geometry(&output) {
                         Some(geometry) => geometry.to_f64(),
                         None => return,
@@ -472,7 +479,7 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                                 .views_management
                                 .views
                                 .get(&view_id)
-                                .and_then(|view| view.last_rendered.clone());
+                                .and_then(|view| view.presented_frame());
 
                             Some(match frame {
                                 Some(frame) => {

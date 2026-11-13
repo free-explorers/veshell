@@ -10,7 +10,9 @@ use crate::flutter_engine::embedder::{
 use crate::{backend::Backend, flutter_engine::FlutterEngine};
 use smithay::backend::allocator::dmabuf::{AnyError, AsDmabuf, Dmabuf};
 use smithay::backend::allocator::{Allocator, Slot, Swapchain};
+use smithay::backend::renderer::element::Id;
 use smithay::backend::renderer::gles::GlesTexture;
+use smithay::backend::renderer::utils::CommitCounter;
 use smithay::backend::renderer::Texture;
 use smithay::output::Output;
 use smithay::reexports::calloop::channel;
@@ -49,6 +51,21 @@ pub struct BackingStoreId {
 pub enum Frame {
     Dmabuf(Dmabuf),
     Texture(GlesTexture),
+}
+
+/// The frame a view currently shows, with the identity the damage tracker
+/// needs to tell a new Flutter frame from the same one composited again.
+///
+/// The element id is stable for the view's lifetime and the commit only moves
+/// when Flutter presents a new frame. A fresh id on every composite would make
+/// the whole output look new each time: every render would repaint and flip,
+/// on-demand rendering would never go idle, and a game frame would wait behind
+/// the shell's own flips.
+#[derive(Debug, Clone)]
+pub struct PresentedFrame {
+    pub frame: Frame,
+    pub element_id: Id,
+    pub commit: CommitCounter,
 }
 
 pub struct AcquiredBackingStore {
@@ -167,9 +184,22 @@ pub struct VeshellView {
     /// this: the texture itself is kept alive by `last_rendered`.
     last_rendered_slot: Option<Slot<Dmabuf>>,
     pub last_rendered_generation: Option<u64>,
+    /// Render-element identity of this view's frame (see [`PresentedFrame`]).
+    element_id: Id,
+    /// Bumped each time a new frame replaces `last_rendered`.
+    presented_commit: CommitCounter,
 }
 
 impl VeshellView {
+    /// The frame to composite, with its damage-tracking identity.
+    pub fn presented_frame(&self) -> Option<PresentedFrame> {
+        Some(PresentedFrame {
+            frame: self.last_rendered.clone()?,
+            element_id: self.element_id.clone(),
+            commit: self.presented_commit,
+        })
+    }
+
     pub fn acquire_backing_store(
         &mut self,
         create_texture: impl FnOnce(u32, u32) -> Option<GlesTexture>,
@@ -221,6 +251,7 @@ impl VeshellView {
             self.last_rendered_slot = Some(slot);
         }
         self.last_rendered_generation = Some(id.generation);
+        self.presented_commit.increment();
         if let Some(previous) = self.last_rendered.replace(frame.frame) {
             self.recycle(previous);
         }
@@ -304,6 +335,8 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                             last_rendered: None,
                             last_rendered_slot: None,
                             last_rendered_generation: None,
+                            element_id: Id::new(),
+                            presented_commit: CommitCounter::default(),
                         };
                         data.flutter_engine_mut()
                             .views_management

@@ -1913,7 +1913,7 @@ impl State<DrmBackend> {
                 .views_management
                 .views
                 .get(&view_id)
-                .and_then(|view| view.last_rendered.clone())
+                .and_then(|view| view.presented_frame())
         });
 
         // Software EGL (llvmpipe/swrast) cannot afford a full-output composite

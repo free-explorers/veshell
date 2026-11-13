@@ -34,7 +34,7 @@ use crate::backend::render::{
     get_cursor_elements, get_frame_elements, CaptureCursor, VeshellRenderElements,
 };
 use crate::clipboard::{set_native_clipboard, NativeSelection};
-use crate::flutter_engine::view::{Frame, OutputViewIdWrapper};
+use crate::flutter_engine::view::{OutputViewIdWrapper, PresentedFrame};
 use crate::meta_window_state::meta_popup::MetaPopupCategory;
 use crate::meta_window_state::meta_window::MetaWindow;
 use crate::{Backend, State};
@@ -838,7 +838,7 @@ pub fn render_output_into_dmabuf<BackendData: Backend + 'static>(
 fn capture_frame_elements(
     renderer: &mut GlesRenderer,
     output: &Output,
-    flutter_frame: &Frame,
+    flutter_frame: &PresentedFrame,
     output_geometry: Rectangle<f64, Logical>,
     flip_flutter_texture: bool,
     game_surface_list: Vec<&WlSurface>,
@@ -873,7 +873,7 @@ fn capture_frame_elements(
 fn render_output_into_target(
     renderer: &mut GlesRenderer,
     output: &Output,
-    flutter_frame: &Frame,
+    flutter_frame: &PresentedFrame,
     output_geometry: Rectangle<f64, Logical>,
     flip_flutter_texture: bool,
     game_surface_list: Vec<&WlSurface>,
@@ -1199,15 +1199,14 @@ fn blit_scaled(
 fn latest_flutter_frame<BackendData: Backend + 'static>(
     state: &State<BackendData>,
     view_id: i64,
-) -> Result<Frame, String> {
+) -> Result<PresentedFrame, String> {
     let view = state
         .flutter_engine()
         .views_management
         .views
         .get(&view_id)
         .ok_or_else(|| format!("Flutter view {view_id} is missing"))?;
-    view.last_rendered
-        .clone()
+    view.presented_frame()
         .ok_or_else(|| "Flutter has not rendered this output yet".to_string())
 }
 
@@ -1215,7 +1214,7 @@ fn latest_flutter_frame<BackendData: Backend + 'static>(
 fn render_output_to_memory(
     renderer: &mut GlesRenderer,
     output: &Output,
-    flutter_frame: &Frame,
+    flutter_frame: &PresentedFrame,
     output_geometry: Rectangle<f64, Logical>,
     flip_flutter_texture: bool,
     game_surface_list: Vec<&smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
