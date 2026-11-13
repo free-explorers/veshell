@@ -23,12 +23,14 @@ class MonitorPlacement {
     required this.logicalSize,
     required this.location,
     required this.scale,
-  });
+    Offset? storedLocation,
+  }) : _storedLocation = storedLocation;
 
   factory MonitorPlacement.fromMonitor({
     required Monitor monitor,
     required double scale,
     bool transposed = false,
+    Offset? storedLocation,
   }) {
     return MonitorPlacement(
       monitorId: monitor.name,
@@ -36,6 +38,7 @@ class MonitorPlacement {
       logicalSize: monitorLogicalSize(monitor, scale, transposed: transposed),
       location: monitor.location,
       scale: scale,
+      storedLocation: storedLocation,
     );
   }
 
@@ -44,6 +47,13 @@ class MonitorPlacement {
   final Size logicalSize;
   final Offset location;
   final double scale;
+  final Offset? _storedLocation;
+
+  /// The location stored in `monitor/<connector>.json`, which Apply compares
+  /// against. It can differ from the live [location]: the compositor anchors
+  /// the live layout at the origin, while a stored arrangement missing a
+  /// disconnected monitor can start elsewhere.
+  Offset get storedLocation => _storedLocation ?? location;
 
   Rect get rect => location & logicalSize;
 
@@ -53,6 +63,7 @@ class MonitorPlacement {
     logicalSize: logicalSize,
     location: location ?? this.location,
     scale: scale,
+    storedLocation: _storedLocation,
   );
 
   @override
@@ -62,11 +73,18 @@ class MonitorPlacement {
       other.description == description &&
       other.logicalSize == logicalSize &&
       other.location == location &&
-      other.scale == scale;
+      other.scale == scale &&
+      other.storedLocation == storedLocation;
 
   @override
-  int get hashCode =>
-      Object.hash(monitorId, description, logicalSize, location, scale);
+  int get hashCode => Object.hash(
+    monitorId,
+    description,
+    logicalSize,
+    location,
+    scale,
+    storedLocation,
+  );
 }
 
 /// Logical size (physical pixels divided by the fractional scale) of [monitor].

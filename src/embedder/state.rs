@@ -221,6 +221,9 @@ pub struct State<BackendData: Backend + 'static> {
     pub viewporter_state: ViewporterState,
     pub input_devices: HashSet<input::Device>,
     pub output_layout_revision: u64,
+    /// The stored monitor location that the live layout's origin stands
+    /// for. See `output_layout`.
+    pub output_layout_origin: Point<i32, Logical>,
     /// Screensaver: idle stage machine driving the dim overlay and blanking.
     pub idle: crate::idle::IdleState<BackendData>,
     /// Session lock: while set, no input reaches a client. See `crate::lock`.
@@ -734,6 +737,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             viewporter_state,
             input_devices: HashSet::new(),
             output_layout_revision: 0,
+            output_layout_origin: Point::from((0, 0)),
             capture_state,
             portal_state,
             notification_state,
@@ -986,6 +990,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
     }
 
     pub fn output_layout_changed(&mut self) {
+        self.normalize_output_layout();
         self.space.refresh();
         self.output_layout_revision = self.output_layout_revision.wrapping_add(1);
         // The frozen image no longer describes the layout: abort the
@@ -1018,8 +1023,11 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 None
             };
 
-        let new_location = if output.current_location() != configuration.location.into() {
-            Some(configuration.location.into())
+        // The stored location is absolute; the live layout is anchored at the
+        // origin (see `output_layout`).
+        let desired_location = self.live_output_location(configuration.location.into());
+        let new_location = if output.current_location() != desired_location {
+            Some(desired_location)
         } else {
             None
         };
