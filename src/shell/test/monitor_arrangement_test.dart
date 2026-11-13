@@ -178,6 +178,32 @@ void main() {
       scale: 1,
     );
 
+    test('rewrites a stored location the live layout no longer shows', () {
+      // A lone monitor stored at x = 2560 (its neighbour disconnected) is
+      // shown at the origin. Applying the unchanged arrangement must still
+      // write it back at the origin, so it is compared with its stored
+      // location, not the live one.
+      final stored = a.copyWith().storedLocation;
+      expect(stored, Offset.zero);
+      const lone = MonitorPlacement(
+        monitorId: 'A',
+        description: 'A',
+        logicalSize: Size(2560, 1440),
+        location: Offset.zero,
+        scale: 1,
+        storedLocation: Offset(2560, 0),
+      );
+      expect(
+        lone.copyWith(location: Offset.zero).storedLocation,
+        const Offset(2560, 0),
+      );
+      final writes = transposedWrites(
+        {lone.monitorId: lone.storedLocation},
+        [lone],
+      );
+      expect(writes, {'A': Offset.zero});
+    });
+
     test('re-anchors a translated arrangement at the origin', () {
       // The live layout sits at y = 1920; the edited layout is the same shape,
       // so applying must write it back at the origin.

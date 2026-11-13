@@ -39,6 +39,7 @@ mod lock;
 mod meta_window_state;
 mod mouse_button_tracker;
 mod notification;
+mod output_layout;
 mod pointer_constraints;
 mod portal;
 // `veshell-probe`'s control socket: debug builds only.

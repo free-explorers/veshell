@@ -45,9 +45,12 @@ class MonitorArrangementEditor extends HookConsumerWidget {
         ),
     ];
 
+    // Compared with the stored locations, not the live ones: the compositor
+    // anchors the live layout at the origin, so a monitor that does not move
+    // on screen may still need its stored location rewritten.
     final originalLocations = {
       for (final placement in placements)
-        placement.monitorId: placement.location,
+        placement.monitorId: placement.storedLocation,
     };
     // Applying always re-anchors the arrangement at the origin (see
     // `transposedWrites`); `writes` is non-empty when that anchoring or a move

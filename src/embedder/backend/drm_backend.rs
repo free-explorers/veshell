@@ -1192,6 +1192,7 @@ impl State<DrmBackend> {
         let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
         // Computed before borrowing the GPU state so it can read the space.
         let default_position = self.default_output_position();
+        let layout_origin = self.output_layout_origin;
 
         let device = if let Some(device) = self.backend_data.gpus.get_mut(&node) {
             device
@@ -1312,7 +1313,11 @@ impl State<DrmBackend> {
 
         let position = monitor_configuration
             .as_ref()
-            .map(|monitor_configuration| monitor_configuration.location.into())
+            // The stored location is absolute; the live layout is anchored
+            // at the origin (see `output_layout`).
+            .map(|monitor_configuration| {
+                Point::from(monitor_configuration.location) - layout_origin
+            })
             .unwrap_or(default_position);
         let scale = monitor_configuration
             .as_ref()

@@ -32,6 +32,7 @@ List<MonitorPlacement> monitorPlacements(Ref ref) {
         monitor: monitor,
         scale: setting.fractionnalScale,
         transposed: setting.transform.isTransposed,
+        storedLocation: setting.location,
       ),
     );
   }

@@ -35,6 +35,15 @@ Rules:
   Initial DRM connector discovery maps each output as it is configured, then
   publishes one complete monitor-layout snapshot and computes frame pacing
   after the scan. Runtime hotplug changes are published immediately.
+- The actual layout is always anchored at the origin: its bounding-box
+  top-left is `(0, 0)` (`output_layout`). Stored locations are absolute and are
+  left untouched, so with a monitor of a saved arrangement disconnected they
+  can start elsewhere; Rust keeps the offset (`output_layout_origin`) and
+  applies a stored location minus it. Otherwise Xwayland's root would begin
+  with an area no monitor covers, and X11 clients that assume the screen
+  starts at the root origin (Wine games) would misread the pointer. When the
+  layout moves, the pointer, floating windows and the roots of tiled X11
+  windows move with it, so nothing changes on screen.
 - `monitor/<connector>.json` is the only place desired geometry is persisted.
   When the file is absent, `MonitorSettingJson` falls back to the live `Monitor`
   ("reset to detected") without writing anything; it is created by
@@ -87,7 +96,8 @@ rectangles plus `Reset to default` / `Apply` actions.
   left-to-right layout (from the origin, using each monitor's current logical
   size). Mode and scale overrides are preserved.
 - Applying **transposes** the relative layout to a `(0, 0)`-based absolute
-  location and writes every monitor whose absolute position changed, through
+  location and writes every monitor whose **stored** location differs (the
+  live one is anchored at the origin and can differ from it), through
   the existing `MonitorSettingState.setLocation`, so the single-writer rule for
   `monitor/<connector>.json` above is preserved. Rust applies the file live and
   publishes the actual geometry back through `monitor_layout_changed`.
