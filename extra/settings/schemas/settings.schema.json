@@ -183,6 +183,22 @@
                 "wheelScrollFactor": {
                     "type": "number",
                     "minimum": 0
+                },
+                "mouseAccelerationProfile": {
+                    "type": "string",
+                    "enum": [
+                        "default",
+                        "adaptive",
+                        "flat"
+                    ]
+                },
+                "touchpadAccelerationProfile": {
+                    "type": "string",
+                    "enum": [
+                        "default",
+                        "adaptive",
+                        "flat"
+                    ]
                 }
             },
             "additionalProperties": false

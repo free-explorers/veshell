@@ -346,10 +346,49 @@ pub struct MouseAndTouchpadSettings {
     /// This mirrors the `scroll_factor` knobs in KWin, Hyprland and labwc.
     #[serde(default = "default_wheel_scroll_factor")]
     pub wheel_scroll_factor: f64,
+    /// libinput pointer acceleration profile for mice.
+    #[serde(default, deserialize_with = "deserialize_acceleration_profile")]
+    pub mouse_acceleration_profile: AccelerationProfile,
+    /// libinput pointer acceleration profile for touchpads.
+    #[serde(default, deserialize_with = "deserialize_acceleration_profile")]
+    pub touchpad_acceleration_profile: AccelerationProfile,
 }
 
 fn default_touchpad_natural_scrolling() -> bool {
     true
+}
+
+/// How libinput turns device movement into pointer movement, like the
+/// `accel-profile` key of GNOME and the `accel_profile` option of Hyprland
+/// and Sway.
+#[derive(Serialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum AccelerationProfile {
+    /// The device's own libinput default (adaptive for most devices).
+    #[default]
+    Default,
+    /// Acceleration grows with the speed of the movement.
+    Adaptive,
+    /// A constant factor regardless of speed: no acceleration curve, as
+    /// usually preferred for games.
+    Flat,
+}
+
+/// Reads an [`AccelerationProfile`], falling back to the default for an
+/// unknown value so a hand-edited `settings.json` cannot take the settings
+/// load down.
+fn deserialize_acceleration_profile<'de, D>(
+    deserializer: D,
+) -> Result<AccelerationProfile, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    Ok(match value.as_deref() {
+        Some("adaptive") => AccelerationProfile::Adaptive,
+        Some("flat") => AccelerationProfile::Flat,
+        _ => AccelerationProfile::Default,
+    })
 }
 
 /// Shipped default for the shell's wheel step, in logical pixels per detent.
@@ -1135,5 +1174,41 @@ mod mouse_and_touchpad_settings_tests {
         let custom: MouseAndTouchpadSettings =
             serde_json::from_str(r#"{"wheelScrollFactor":1.5}"#).unwrap();
         assert_eq!(custom.wheel_scroll_factor, 1.5);
+    }
+
+    #[test]
+    fn acceleration_profiles_default_and_tolerate_unknown_values() {
+        let defaulted: MouseAndTouchpadSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(
+            defaulted.mouse_acceleration_profile,
+            AccelerationProfile::Default
+        );
+        assert_eq!(
+            defaulted.touchpad_acceleration_profile,
+            AccelerationProfile::Default
+        );
+
+        let custom: MouseAndTouchpadSettings = serde_json::from_str(
+            r#"{"mouseAccelerationProfile":"flat","touchpadAccelerationProfile":"adaptive"}"#,
+        )
+        .unwrap();
+        assert_eq!(custom.mouse_acceleration_profile, AccelerationProfile::Flat);
+        assert_eq!(
+            custom.touchpad_acceleration_profile,
+            AccelerationProfile::Adaptive
+        );
+
+        let unknown: MouseAndTouchpadSettings = serde_json::from_str(
+            r#"{"mouseAccelerationProfile":"custom","touchpadAccelerationProfile":null}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            unknown.mouse_acceleration_profile,
+            AccelerationProfile::Default
+        );
+        assert_eq!(
+            unknown.touchpad_acceleration_profile,
+            AccelerationProfile::Default
+        );
     }
 }
