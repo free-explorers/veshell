@@ -34,6 +34,7 @@
   roboto,
   noto-fonts,
   noto-fonts-cjk-sans,
+  noto-fonts-color-emoji,
   libpulseaudio,
   vulkan-loader,
   xwayland,
@@ -55,7 +56,7 @@
 }:
 let
   manifest = builtins.fromTOML (builtins.readFile ../Cargo.toml);
-  runtimeFonts = [ roboto noto-fonts noto-fonts-cjk-sans ];
+  runtimeFonts = [ roboto noto-fonts noto-fonts-cjk-sans noto-fonts-color-emoji ];
   fontsConf = makeFontsConf { fontDirectories = runtimeFonts; };
   runtimeLibraries = [
     wayland

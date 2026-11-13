@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 
 /// Fontconfig family names from distribution packages (docs/dependencies.md).
 /// Always include every shipped script: the language picker, app names and
-/// notifications can contain text outside the current UI language.
+/// notifications can contain text outside the current UI language, and emoji.
 List<String> shellFontFallbacks(Locale locale) {
   final cjk = switch (locale.languageCode) {
     'ja' => 'Noto Sans CJK JP',
@@ -28,5 +28,8 @@ List<String> shellFontFallbacks(Locale locale) {
       'Noto Sans CJK KR',
     ])
       if (family != cjk) family,
+    // Last, so text glyphs that the emoji font also covers (digits, `#`,
+    // `*`) keep the text families' forms.
+    'Noto Color Emoji',
   ];
 }

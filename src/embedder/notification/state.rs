@@ -40,7 +40,10 @@ impl NotificationState {
     pub fn new<BackendData: Backend + 'static>(
         loop_handle: &LoopHandle<'static, State<BackendData>>,
     ) -> Self {
-        let runtime = if <BackendData as Backend>::RUNS_NOTIFICATION_SERVER {
+        // The probe's isolated instance runs nested on a private session bus
+        // of its own, where owning the name contends with nobody.
+        let probe_isolated = std::env::var_os("VESHELL_PROBE_ISOLATED").is_some_and(|v| v == "1");
+        let runtime = if <BackendData as Backend>::RUNS_NOTIFICATION_SERVER || probe_isolated {
             match spawn_notification_runtime() {
                 Some(Ok((runtime, calls))) => {
                     loop_handle

@@ -18,7 +18,9 @@ so unsupported system languages continue to fall back to English.
 ## Fonts
 
 The shell requests system-installed Roboto and Noto fallbacks for every shipped
-script through Fontconfig. Both themes and tooltips use these families.
+script through Fontconfig, then Noto Color Emoji last (Flutter does not
+resolve Fontconfig's generic `emoji` alias, so the family is named). Both
+themes and tooltips use these families.
 CJK fallback ordering follows the Veshell language (including Traditional
 Chinese), while all fallbacks remain available for mixed-script labels.
 Install the distribution font packages listed in `docs/dependencies.md`;
@@ -26,8 +28,17 @@ font files are not vendored or downloaded by the shell. Font versions and
 rendering follow the distribution and local Fontconfig configuration.
 Flutter tests check theme/fallback configuration, not host font availability.
 Run `python3 extra/tests/system_fonts.py` to check installed families and
-translation glyph coverage. When adding a new script, update the fallback
-list, distribution dependencies and this runtime check.
+translation glyph coverage. When adding a font family, update together:
+
+- the fallback list (`src/shell/lib/theme/fonts.dart`) and its test;
+- `extra/tests/system_fonts.py`;
+- the package table in `docs/dependencies.md`;
+- the RPM/Debian metadata in `Cargo.toml` and the Nix package, module and
+  tests (`nix/`);
+- the recipes of the packaging repository (free-explorers/veshell-packaging):
+  every template that lists `fontconfig` (Arch source and `-bin`, Fedora and
+  openSUSE RPM, Debian `-bin`), the hand-maintained `arch-git/PKGBUILD` and
+  `debian/debian/control`, then `scripts/render-recipes.py`.
 
 ## System locale editor
 

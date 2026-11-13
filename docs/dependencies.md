@@ -162,15 +162,16 @@ UI fonts are distribution-managed runtime dependencies, not bundled assets.
 The shell requests `Roboto`, with `Noto Sans`, `Noto Sans Arabic` (also Urdu),
 `Noto Sans Bengali`, `Noto Sans Devanagari` (Hindi), and `Noto Sans CJK`
 families for Simplified Chinese (SC), Traditional Chinese (TC), Japanese (JP)
-and Korean (KR) as fallbacks. Install all scripts, even for an English UI:
-the language picker, app names and notifications can contain mixed languages.
+and Korean (KR), then `Noto Color Emoji`, as fallbacks. Install all scripts,
+even for an English UI: the language picker, app names and notifications can
+contain mixed languages and emoji.
 
 | Distribution | Runtime font packages |
 | --- | --- |
-| Arch | `fontconfig`, `ttf-roboto`, `noto-fonts`, `noto-fonts-cjk` |
-| Fedora | `fontconfig`, `google-roboto-fonts`, `google-noto-sans-fonts`, `google-noto-sans-arabic-fonts`, `google-noto-sans-bengali-fonts`, `google-noto-sans-devanagari-fonts`, `google-noto-sans-cjk-fonts` |
-| Debian/Ubuntu | `fontconfig`, `fonts-roboto`, `fonts-noto-core`, `fonts-noto-cjk` |
-| Nix/NixOS | `fontconfig`, `roboto`, `noto-fonts`, `noto-fonts-cjk-sans` (provided by the package/module) |
+| Arch | `fontconfig`, `ttf-roboto`, `noto-fonts`, `noto-fonts-cjk`, `noto-fonts-emoji` |
+| Fedora | `fontconfig`, `google-roboto-fonts`, `google-noto-sans-fonts`, `google-noto-sans-arabic-fonts`, `google-noto-sans-bengali-fonts`, `google-noto-sans-devanagari-fonts`, `google-noto-sans-cjk-fonts`, `google-noto-color-emoji-fonts` |
+| Debian/Ubuntu | `fontconfig`, `fonts-roboto`, `fonts-noto-core`, `fonts-noto-cjk`, `fonts-noto-color-emoji` |
+| Nix/NixOS | `fontconfig`, `roboto`, `noto-fonts`, `noto-fonts-cjk-sans`, `noto-fonts-color-emoji` (provided by the package/module) |
 
 The Debian/RPM payload metadata declares the above font dependencies (RPM
 names target Fedora; other RPM distributions must adapt them). The Nix wrapper

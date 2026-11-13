@@ -21,6 +21,7 @@ FAMILIES = (
     "Noto Sans CJK TC",
     "Noto Sans CJK JP",
     "Noto Sans CJK KR",
+    "Noto Color Emoji",
 )
 WEIGHTS = ("regular", "medium", "bold")
 CATALOGS = Path(__file__).resolve().parents[2] / "src/shell/lib/l10n"

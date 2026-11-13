@@ -34,7 +34,9 @@ void main() {
         'Noto Sans CJK TC',
         'Noto Sans CJK JP',
         'Noto Sans CJK KR',
+        'Noto Color Emoji',
       });
+      expect(families.last, 'Noto Color Emoji');
       expect(families.length, families.toSet().length);
     }
   });
