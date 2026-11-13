@@ -142,7 +142,11 @@ where
     let mut elements: Vec<VeshellRenderElements<R>> = Vec::new();
 
     for surface in surfaces_in_gaming_mode {
-        elements.extend(get_surface_elements(renderer, surface));
+        elements.extend(get_surface_elements(
+            renderer,
+            surface,
+            scale.fractional_scale(),
+        ));
     }
 
     let flutter_texture = match frame {
@@ -910,9 +914,18 @@ where
     elements
 }
 
+/// Render elements for a game-mode surface tree, drawn at the output's
+/// top-left corner.
+///
+/// `output_scale` maps the surface's logical size to physical pixels, the same
+/// scale the pointer path uses (`Space` logical coordinates, then the client
+/// scale). Drawing at `1.0` instead shrinks the game on a scaled output (a
+/// 2048-logical-wide game covers 2048 of 2560 pixels at 1.25) and moves every
+/// click away from what is under the cursor.
 pub fn get_surface_elements<R>(
     renderer: &mut R,
     surface: &WlSurface,
+    output_scale: f64,
 ) -> Vec<VeshellRenderElements<R>>
 where
     R: Renderer + ImportAll + ImportMem + ImportDma,
@@ -920,7 +933,14 @@ where
     <R as RendererSuper>::Error:,
     VeshellRenderElements<R>: RenderElement<R>,
 {
-    render_elements_from_surface_tree(renderer, surface, (0, 0), 1.0, 1.0, Kind::Unspecified)
+    render_elements_from_surface_tree(
+        renderer,
+        surface,
+        (0, 0),
+        output_scale,
+        1.0,
+        Kind::Unspecified,
+    )
 }
 
 #[cfg(test)]
