@@ -188,7 +188,11 @@ All of these are observed on the live surfaces and, where meaningful, mirrored o
   geometry matches a monitor's logical size, is a top-level application surface.
   A relation (activation, provenance, process sibling) must not turn it into a
   dialog: it is extracted to its own tile even when it was opened from another
-  window. See [Extract to tile](#extract-to-tile).
+  window. See [Extract to tile](#extract-to-tile). A fullscreen-like window
+  with no relation and no matching tile (a game Steam launches without an
+  `activatedBy`) gets a new tile in `game` mode as well; the check runs once,
+  when the window maps, so a window that goes fullscreen later (a browser's
+  F11) keeps its tile's mode.
 - **One redistributor, displayed window included.** The same pass runs for the
   clicked tile at its burst settle and for any other tile with an overflow. No
   tile — launched or not — keeps a window it does not fit.
