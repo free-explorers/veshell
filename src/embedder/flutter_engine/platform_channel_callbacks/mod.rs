@@ -36,6 +36,7 @@ mod screen_cast_stop;
 mod screenshot_prompt_decision;
 mod start_move_window;
 mod start_resize_window;
+mod surface_visibility;
 mod switch_keyboard_layout;
 mod window_preview;
 
@@ -75,6 +76,9 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             "start_resize_window" => start_resize_window(method_call, result, data),
             "close_window" => close_window(method_call, result, data),
             "release_texture" => self::release_texture::release_texture(method_call, result, data),
+            "surface_visibility" => {
+                self::surface_visibility::surface_visibility(method_call, result, data)
+            }
             "window_preview" => self::window_preview::window_preview(method_call, result, data),
             "adjust_brightness" => adjust_brightness(method_call, result, data),
             "switch_keyboard_layout" => switch_keyboard_layout(method_call, result, data),

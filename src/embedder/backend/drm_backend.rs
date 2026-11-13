@@ -1866,28 +1866,24 @@ impl State<DrmBackend> {
         }
         let frame_timestamp = self.frame_timestamp_millis();
         // Game-mode surfaces follow their own output's vblank
-        // (`send_game_frame_callbacks`), not the pacing CRTC's.
+        // (`send_game_frame_callbacks`), not the pacing CRTC's. The others go
+        // at the pace of what the shell displays (`crate::surface_pacing`).
         let game_surfaces = self.all_game_mode_surfaces();
-        let paced_here = |surface: &WlSurface| !game_surfaces.contains(surface);
+        let sent = self.send_paced_frame_callbacks(&game_surfaces);
         // Shell-drawn surfaces reach the panel through the Flutter frame; their
-        // presentation feedback is answered on this tick, like their frame
-        // callbacks, as presented on the pacing output.
+        // presentation feedback is answered with their frame callbacks: as
+        // presented on the pacing output when shown, discarded when hidden.
         let mut presentation = Vec::new();
-        for surface in self.xdg_shell_state.toplevel_surfaces() {
-            if paced_here(surface.wl_surface()) {
-                send_frames_surface_tree(surface.wl_surface(), frame_timestamp);
-                take_presentation_callbacks(surface.wl_surface(), &mut presentation);
-            }
-        }
-        for surface in self.xdg_popups.values() {
-            send_frames_surface_tree(surface.wl_surface(), frame_timestamp);
-            take_presentation_callbacks(surface.wl_surface(), &mut presentation);
-        }
-        for surface in self.x11_surface_per_wl_surface.keys() {
-            if paced_here(surface) {
-                send_frames_surface_tree(surface, frame_timestamp);
+        let mut discarded = Vec::new();
+        for (surface, shown) in &sent {
+            if *shown {
                 take_presentation_callbacks(surface, &mut presentation);
+            } else {
+                take_presentation_callbacks(surface, &mut discarded);
             }
+        }
+        for callback in discarded {
+            callback.discarded();
         }
         if !presentation.is_empty() {
             let output = self

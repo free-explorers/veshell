@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
+import 'package:shell/wayland/widget/surface_visibility.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/widget/window_placeholder.dart';
 
@@ -106,7 +107,10 @@ class _LiveWindow extends ConsumerWidget {
     return FittedBox(
       child: SizedBox.fromSize(
         size: texture.size,
-        child: Texture(textureId: texture.id),
+        child: SurfaceVisibilityProbe(
+          surfaceId: surfaceId!,
+          child: Texture(textureId: texture.id),
+        ),
       ),
     );
   }

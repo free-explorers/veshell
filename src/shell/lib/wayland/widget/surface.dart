@@ -7,6 +7,7 @@ import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/wayland/widget/subsurface.dart';
 import 'package:shell/wayland/widget/surface/view_input_listener.dart';
 import 'package:shell/wayland/widget/surface_size.dart';
+import 'package:shell/wayland/widget/surface_visibility.dart';
 
 class SurfaceWidget extends ConsumerWidget {
   const SurfaceWidget({
@@ -53,7 +54,10 @@ class SurfaceWidget extends ConsumerWidget {
                   child: ViewportCrop(
                     bufferSize: bufferSize,
                     source: viewportSource,
-                    child: Texture(textureId: textureId),
+                    child: SurfaceVisibilityProbe(
+                      surfaceId: surfaceId,
+                      child: Texture(textureId: textureId),
+                    ),
                   ),
                 );
               },
