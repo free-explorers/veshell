@@ -68,6 +68,9 @@ class NotificationPanel extends HookConsumerWidget {
                       );
                       return Card(
                         margin: EdgeInsets.zero,
+                        // The body's ink is rectangular: clip it to the
+                        // card's rounded shape.
+                        clipBehavior: Clip.antiAlias,
                         color: Theme.of(context).colorScheme.surfaceContainer,
                         child: NotificationWidget(
                           notification: notification,
