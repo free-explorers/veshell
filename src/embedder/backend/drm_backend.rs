@@ -21,6 +21,7 @@ use smithay::backend::drm::{
     CreateDrmNodeError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent, DrmEventMetadata, DrmNode,
     NodeType, VrrSupport,
 };
+use smithay::backend::egl::context::ContextPriority;
 use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
 use smithay::backend::input::{
     Event, GestureBeginEvent, GestureEndEvent, InputEvent, KeyboardKeyEvent,
@@ -503,8 +504,6 @@ pub fn run_drm_backend() {
     libinput_context.udev_assign_seat(&session.seat()).unwrap();
     let libinput_backend = LibinputInputBackend::new(libinput_context.clone());
 
-    /* let gpu_manager =
-    GpuManager::new(GbmGlesBackend::with_context_priority(ContextPriority::High)).unwrap(); */
     let settings_manager = settings::SettingsManager::new(
         event_loop.handle(),
         |data: &mut State<DrmBackend>| {
@@ -1552,7 +1551,13 @@ impl State<DrmBackend> {
             .and_then(|device| device.try_get_render_node().ok().flatten());
         let render_node = drm_render_node.unwrap_or(node);
 
-        let egl_context = EGLContext::new(&egl_display).map_err(DeviceAddError::EglContext)?;
+        // The composite must not queue behind a GPU-bound client: a game
+        // that saturates the GPU would otherwise hold back the compositor's
+        // frame (and the flip waiting on its fence) by a whole refresh.
+        // Drivers that do not support or grant high priority fall back to
+        // the default; Smithay logs the level actually granted.
+        let egl_context = EGLContext::new_with_priority(&egl_display, ContextPriority::High)
+            .map_err(DeviceAddError::EglContext)?;
         let renderer =
             unsafe { GlesRenderer::new(egl_context) }.map_err(DeviceAddError::Renderer)?;
         // Only a software rasterizer is capped; hardware GPUs report their
