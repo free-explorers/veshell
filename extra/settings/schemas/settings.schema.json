@@ -295,6 +295,16 @@
                 "automaticPowerTimeoutSeconds": {
                     "type": "integer",
                     "minimum": 0
+                },
+                "powerButtonAction": {
+                    "type": "string",
+                    "enum": [
+                        "disabled",
+                        "suspend",
+                        "hibernate",
+                        "suspendThenHibernate",
+                        "powerOff"
+                    ]
                 }
             },
             "additionalProperties": false

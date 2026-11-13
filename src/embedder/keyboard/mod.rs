@@ -593,6 +593,17 @@ fn handle_embedder_hotkeys<BackendData: Backend + 'static>(
         }
     }
 
+    // The hardware power button is the compositor's too (logind leaves it to
+    // us, see `idle::on_power_button`): it works while locked, in gaming mode
+    // and before the shell is focused. Both edges are swallowed so no client
+    // or shell hotkey ever sees half of it.
+    if event.keysym == Keysym::XF86_PowerOff {
+        if event.state == KeyState::Pressed {
+            crate::idle::on_power_button(data);
+        }
+        return true;
+    }
+
     // While locked, only the keys that cannot reveal or reach the session
     // stay live: brightness (above), VT switching and the compositor exit.
     // Capture and the gaming-mode toggle are swallowed; everything else goes
