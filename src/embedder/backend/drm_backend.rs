@@ -183,15 +183,27 @@ pub struct DrmBackend {
     /// Nodes with a composite skipped by the software cap, waiting for the
     /// throttle timer to render the next allowed frame.
     software_throttled_nodes: HashSet<DrmNode>,
+    /// Nodes with a composite already queued on the event loop's idle list.
+    /// Every client commit and every pointer event asks for a composite, and a
+    /// 1000 Hz mouse would otherwise queue a thousand idle renders a second;
+    /// requests are coalesced into the one already pending.
+    render_scheduled: HashSet<DrmNode>,
 }
 
 /// Screensaver wake hook: re-insert every blanked output into the render loop.
+///
+/// Also the on-demand render request ([`State::request_render`]): requests for
+/// a node that already has a composite queued are folded into it.
 fn idle_request_render(state: &mut State<DrmBackend>) {
     let nodes: Vec<DrmNode> = state.backend_data.gpus.keys().copied().collect();
     for node in nodes {
-        state
-            .loop_handle
-            .insert_idle(move |data| data.render(node, None));
+        if !state.backend_data.render_scheduled.insert(node) {
+            continue;
+        }
+        state.loop_handle.insert_idle(move |data| {
+            data.backend_data.render_scheduled.remove(&node);
+            data.render(node, None);
+        });
     }
 }
 
@@ -554,6 +566,7 @@ pub fn run_drm_backend() {
             last_vsync_tick: None,
             software_frame_interval: None,
             software_throttled_nodes: HashSet::new(),
+            render_scheduled: HashSet::new(),
         },
         None,
         settings_manager,
@@ -1430,6 +1443,7 @@ impl State<DrmBackend> {
             last_queue: None,
             last_gaming_present: None,
             frame_pending: false,
+            redraw_requested: false,
             last_composite: None,
         };
 
@@ -1673,10 +1687,23 @@ impl State<DrmBackend> {
 
         // Each DRM node renders its own surfaces, driven by its fastest CRTC.
         // This keeps nodes that don't own the globally fastest output alive.
-        if let Some(&(_, fastest_crtc)) = self.backend_data.highest_hz_crtc.get(&node) {
-            if fastest_crtc == crtc {
-                self.render(node, None);
-            }
+        // Another CRTC repaints itself when a composite was held back by its
+        // pending flip.
+        let fastest = self
+            .backend_data
+            .highest_hz_crtc
+            .get(&node)
+            .is_some_and(|&(_, fastest_crtc)| fastest_crtc == crtc);
+        if fastest {
+            self.render(node, None);
+        } else if self
+            .backend_data
+            .gpus
+            .get(&node)
+            .and_then(|gpu| gpu.surfaces.get(&crtc))
+            .is_some_and(|surface| surface.redraw_requested)
+        {
+            self.render_surface(node, crtc);
         }
 
         // The Flutter context is shared among all outputs, so its batons are
@@ -1858,16 +1885,19 @@ impl State<DrmBackend> {
         // only queue a second flip that the vblank coalesces away, and every
         // pointer motion would pay for a full render. The next `on_vblank`
         // repaints with the latest state, cursor included.
-        let frame_pending = self
+        let Some(surface) = self
             .backend_data
             .gpus
-            .get(&node)
-            .and_then(|gpu| gpu.surfaces.get(&crtc))
-            .map(|surface| surface.frame_pending)
-            .unwrap_or(false);
-        if frame_pending {
+            .get_mut(&node)
+            .and_then(|gpu| gpu.surfaces.get_mut(&crtc))
+        else {
+            return;
+        };
+        if surface.frame_pending {
+            surface.redraw_requested = true;
             return;
         }
+        surface.redraw_requested = false;
 
         // Resolve the output and, when it mirrors another monitor, the
         // source's Flutter view. This reads the whole `State`, so it must
@@ -2147,6 +2177,10 @@ struct SurfaceData {
     /// While set, rendering is skipped and the vblank repaints instead, which
     /// caps the render rate to the refresh and keeps pointer motion cheap.
     frame_pending: bool,
+    /// A composite was asked for while `frame_pending` held it back. This
+    /// output's own vblank renders it, so a commit that lands during a flip is
+    /// shown on the next refresh even when another CRTC drives the node.
+    redraw_requested: bool,
     /// When the last frame was actually presented, used by the software frame
     /// cap. Skipped composites leave it untouched.
     last_composite: Option<Instant>,
