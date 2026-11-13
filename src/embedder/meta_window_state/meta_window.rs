@@ -684,6 +684,14 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                                             .expect("Failed to un-fullscreen window");
                                     }
                                     Some(DisplayMode::Fullscreen) => {
+                                        // Like the xdg path: fullscreen only,
+                                        // not maximized too. Wine reads a
+                                        // window with both states as
+                                        // maximized and keeps the work-area
+                                        // size it had.
+                                        x11_surface
+                                            .set_maximized(false)
+                                            .expect("Failed to un-maximize window");
                                         x11_surface
                                             .set_fullscreen(true)
                                             .expect("Failed to fullscreen window");
@@ -988,7 +996,15 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         (None, None) => true,
                         _ => false,
                     };
-                    if are_equal {
+                    // An unchanged geometry reported by the client is a no-op.
+                    // A request from the shell (`!propagate`) is not: the
+                    // client may have resized itself since (an X11 configure
+                    // request, a stale ack), so the stored geometry matching
+                    // says nothing about the committed size, and dropping the
+                    // request would leave the window at its own size. The
+                    // shell sends one correction per observed mismatch, so
+                    // this cannot loop.
+                    if are_equal && propagate {
                         return;
                     }
                     // A size change moves the constraint box the window's
