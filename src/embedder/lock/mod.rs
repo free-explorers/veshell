@@ -152,6 +152,22 @@ impl LockState {
             self.saved_keyboard_focus = None;
         }
     }
+
+    /// Drops the focus to restore on unlock when it is the window displayed
+    /// by `surface`, whatever its role (Wayland or X11).
+    pub fn forget_keyboard_focus_for_surface(
+        &mut self,
+        surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+    ) {
+        use smithay::wayland::seat::WaylandFocus;
+        if self
+            .saved_keyboard_focus
+            .as_ref()
+            .is_some_and(|focus| focus.wl_surface().as_deref() == Some(surface))
+        {
+            self.saved_keyboard_focus = None;
+        }
+    }
 }
 
 impl<BackendData: Backend + 'static> State<BackendData> {
