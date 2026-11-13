@@ -212,20 +212,22 @@ impl<BackendData: Backend> State<BackendData> {
             return;
         }
 
-        pointer.relative_motion(
-            self,
-            self.client_pointer_focus(),
-            &RelativeMotionEvent {
+        // A locked pointer stays put and only reports relative motion; a
+        // confined one stays inside its surface.
+        let target = self.clamp_coords(pointer_location + event.delta());
+        let Some(target) = self.constrain_pointer_motion(
+            pointer_location,
+            target,
+            Some(RelativeMotionEvent {
                 delta: event.delta(),
                 delta_unaccel: event.delta_unaccel(),
                 utime: event.time(),
-            },
-        );
-
-        pointer_location += event.delta();
-
-        // clamp to screen limits
-        pointer_location = self.clamp_coords(pointer_location);
+            }),
+        ) else {
+            self.register_frame();
+            return;
+        };
+        pointer_location = target;
 
         pointer.motion(
             self,
@@ -236,6 +238,7 @@ impl<BackendData: Backend> State<BackendData> {
                 time: event.time_msec(),
             },
         );
+        self.update_pointer_constraint(self.keyboard_focus_surface());
         self.register_frame();
         // The pointer moved: a live recording and any embedded-cursor screen
         // cast on this output need a fresh frame even when the desktop under
@@ -309,6 +312,25 @@ impl<BackendData: Backend> State<BackendData> {
             return;
         }
 
+        // See `on_pointer_motion`: an absolute device moving a locked pointer
+        // reports the distance as relative motion, and a confined one stays
+        // inside its surface.
+        let current_location = self.pointer.current_location();
+        let delta = pointer_location - current_location;
+        let Some(target) = self.constrain_pointer_motion(
+            current_location,
+            pointer_location,
+            Some(RelativeMotionEvent {
+                delta,
+                delta_unaccel: delta,
+                utime: event.time(),
+            }),
+        ) else {
+            self.register_frame();
+            return;
+        };
+        pointer_location = target;
+
         let pointer = self.pointer.clone();
         pointer.motion(
             self,
@@ -319,6 +341,7 @@ impl<BackendData: Backend> State<BackendData> {
                 time: event.time_msec(),
             },
         );
+        self.update_pointer_constraint(self.keyboard_focus_surface());
         self.register_frame();
         // See `on_pointer_motion`: refresh live recording and embedded-cursor
         // screen-cast pointer frames.
@@ -798,6 +821,7 @@ impl<BackendData: Backend> State<BackendData> {
             time: self.frame_timestamp_millis(),
         };
         pointer.motion(self, focus, &event);
+        self.update_pointer_constraint(self.keyboard_focus_surface());
         self.register_frame();
     }
 

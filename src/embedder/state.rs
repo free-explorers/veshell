@@ -38,6 +38,7 @@ use smithay::wayland::fractional_scale::FractionalScaleManagerState;
 use smithay::wayland::idle_inhibit::{IdleInhibitHandler, IdleInhibitManagerState};
 use smithay::wayland::idle_notify::{IdleNotifierHandler, IdleNotifierState};
 use smithay::wayland::output::OutputHandler;
+use smithay::wayland::pointer_constraints::PointerConstraintsState;
 use smithay::wayland::relative_pointer::RelativePointerManagerState;
 use smithay::wayland::seat::WaylandFocus;
 use smithay::wayland::selection::data_device::{
@@ -166,6 +167,9 @@ pub struct State<BackendData: Backend + 'static> {
     /// Flutter hover focus changes until ButtonRelease, so the popup remains
     /// the sole writer of the local pointer basis for the gesture.
     pub popup_pointer_grab: Option<PopupPointerGrab>,
+    /// Where a locked client asked the cursor to appear once its lock is
+    /// released, relative to its surface (see `pointer_constraints`).
+    pub cursor_position_hint: Option<(WlSurface, Point<f64, Logical>)>,
     /// An in-progress move of a window owned by a floating tile.
     pub floating_move: Option<FloatingMove>,
     /// An in-progress compositor-owned resize of a floating window.
@@ -539,6 +543,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         if BackendData::HAS_RELATIVE_MOTION {
             RelativePointerManagerState::new::<Self>(&display_handle);
         }
+        // Pointer lock and confinement (see `pointer_constraints`).
+        PointerConstraintsState::new::<Self>(&display_handle);
 
         let data_device_state = DataDeviceState::new::<Self>(&display_handle);
         let primary_selection_state = PrimarySelectionState::new::<Self>(&display_handle);
@@ -714,6 +720,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             space: Space::default(),
             pointer_focus: None,
             popup_pointer_grab: None,
+            cursor_position_hint: None,
             floating_move: None,
             floating_resize: None,
             cursor_state: CursorState::new(CursorStateInner::new(
@@ -1179,6 +1186,11 @@ impl<BackendData: Backend> SeatHandler for State<BackendData> {
         let client = wl_surface.and_then(|s| dh.get_client(s.id()).ok());
         set_data_device_focus(dh, seat, client.clone());
         set_primary_focus(dh, seat, client);
+        // A pointer constraint only holds while its client has the keyboard.
+        let keyboard_focus = target
+            .and_then(WaylandFocus::wl_surface)
+            .map(|surface| surface.into_owned());
+        self.update_pointer_constraint(keyboard_focus);
     }
 
     fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {
