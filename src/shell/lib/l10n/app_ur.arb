@@ -204,7 +204,6 @@
   "automaticPowerAfterDescription": "طے شدہ وقت 600 سیکنڈ ہے؛ خودکار سلیپ یا ہائبرنیشن بند کرنے کے لیے 0 مقرر کریں",
   "powerButtonAction": "پاور بٹن کی کارروائی",
   "powerButtonActionDescription": "ڈیوائس کا پاور بٹن دبانے پر کیا ہوتا ہے",
-  "powerButtonSameAsIdle": "خودکار توانائی کارروائی جیسا",
   "powerButtonSuspendThenHibernate": "سلیپ، پھر ہائبرنیٹ",
   "powerButtonDoNothing": "کچھ نہ کریں",
   "lowBatteryWarning": "کم بیٹری کی تنبیہ (٪)",

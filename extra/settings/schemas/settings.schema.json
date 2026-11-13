@@ -299,7 +299,6 @@
                 "powerButtonAction": {
                     "type": "string",
                     "enum": [
-                        "sameAsIdle",
                         "disabled",
                         "suspend",
                         "hibernate",

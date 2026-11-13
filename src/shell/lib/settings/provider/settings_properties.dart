@@ -484,7 +484,7 @@ class SettingsProperties extends _$SettingsProperties {
                       SettingPropertyChoiceValue(
                         path: path,
                         choices: powerButtonActions,
-                        defaultValue: 'sameAsIdle',
+                        defaultValue: 'suspendThenHibernate',
                         label: powerButtonActionLabel,
                       ),
                   buildEditor: (context, {required isExpanded}) =>
@@ -492,7 +492,7 @@ class SettingsProperties extends _$SettingsProperties {
                         path: path,
                         property: property,
                         choices: powerButtonActions,
-                        defaultValue: 'sameAsIdle',
+                        defaultValue: 'suspendThenHibernate',
                         label: powerButtonActionLabel,
                       ),
                 ),

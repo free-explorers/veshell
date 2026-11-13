@@ -204,7 +204,6 @@
   "automaticPowerAfterDescription": "القيمة الافتراضية 600 ثانية؛ اضبط على 0 لتعطيل التعليق أو الإسبات التلقائي",
   "powerButtonAction": "إجراء زر الطاقة",
   "powerButtonActionDescription": "ما يحدث عند الضغط على زر الطاقة في الجهاز",
-  "powerButtonSameAsIdle": "مثل إجراء الطاقة التلقائي",
   "powerButtonSuspendThenHibernate": "تعليق ثم إسبات",
   "powerButtonDoNothing": "عدم فعل شيء",
   "lowBatteryWarning": "تحذير انخفاض البطارية (٪)",

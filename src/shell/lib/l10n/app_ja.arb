@@ -204,7 +204,6 @@
   "automaticPowerAfterDescription": "既定は 600 秒です。0 にすると自動サスペンドまたは休止を無効にします",
   "powerButtonAction": "電源ボタンの操作",
   "powerButtonActionDescription": "本体の電源ボタンを押したときの動作",
-  "powerButtonSameAsIdle": "自動電源操作と同じ",
   "powerButtonSuspendThenHibernate": "サスペンド後に休止状態",
   "powerButtonDoNothing": "何もしない",
   "lowBatteryWarning": "バッテリー残量低下の警告（%）",

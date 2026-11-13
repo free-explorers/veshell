@@ -441,10 +441,7 @@ pub fn on_power_button<D: Backend + 'static>(state: &mut State<D>) {
         tracing::debug!("Power button ignored right after resume");
         return;
     }
-    let request = power_button_request(
-        state.idle.power_button_action,
-        state.idle.automatic_power_action,
-    );
+    let request = power_button_request(state.idle.power_button_action);
     tracing::info!(?request, "Power button pressed");
     if let Some(request) = request {
         send_power_request(state, request);
@@ -452,12 +449,8 @@ pub fn on_power_button<D: Backend + 'static>(state: &mut State<D>) {
 }
 
 /// The request the power button makes, `None` when it does nothing.
-fn power_button_request(
-    button: PowerButtonAction,
-    automatic: AutomaticPowerAction,
-) -> Option<dbus::PowerRequest> {
+fn power_button_request(button: PowerButtonAction) -> Option<dbus::PowerRequest> {
     match button {
-        PowerButtonAction::SameAsIdle => dbus::PowerRequest::from_automatic(automatic),
         PowerButtonAction::Disabled => None,
         PowerButtonAction::Suspend => Some(dbus::PowerRequest::Suspend),
         PowerButtonAction::Hibernate => Some(dbus::PowerRequest::Hibernate),
@@ -491,33 +484,14 @@ mod tests {
             AutomaticPowerAction::SuspendThenHibernate
         );
         assert_eq!(settings.automatic_power_timeout_seconds, 600);
-        assert_eq!(settings.power_button_action, PowerButtonAction::SameAsIdle);
+        assert_eq!(
+            settings.power_button_action,
+            PowerButtonAction::SuspendThenHibernate
+        );
     }
 
     #[test]
-    fn power_button_follows_the_idle_action_by_default() {
-        for (automatic, expected) in [
-            (AutomaticPowerAction::Disabled, None),
-            (AutomaticPowerAction::Suspend, Some(PowerRequest::Suspend)),
-            (
-                AutomaticPowerAction::Hibernate,
-                Some(PowerRequest::Hibernate),
-            ),
-            (
-                AutomaticPowerAction::SuspendThenHibernate,
-                Some(PowerRequest::SuspendThenHibernate),
-            ),
-        ] {
-            assert_eq!(
-                power_button_request(PowerButtonAction::SameAsIdle, automatic),
-                expected
-            );
-        }
-    }
-
-    #[test]
-    fn power_button_own_action_overrides_the_idle_action() {
-        let idle = AutomaticPowerAction::SuspendThenHibernate;
+    fn power_button_actions_map_to_logind_requests() {
         for (button, expected) in [
             (PowerButtonAction::Disabled, None),
             (PowerButtonAction::Suspend, Some(PowerRequest::Suspend)),
@@ -528,14 +502,13 @@ mod tests {
             ),
             (PowerButtonAction::PowerOff, Some(PowerRequest::PowerOff)),
         ] {
-            assert_eq!(power_button_request(button, idle), expected);
+            assert_eq!(power_button_request(button), expected);
         }
     }
 
     #[test]
     fn power_button_actions_use_settings_json_names() {
         for (json, expected) in [
-            ("\"sameAsIdle\"", PowerButtonAction::SameAsIdle),
             ("\"disabled\"", PowerButtonAction::Disabled),
             ("\"suspend\"", PowerButtonAction::Suspend),
             ("\"hibernate\"", PowerButtonAction::Hibernate),
@@ -544,8 +517,8 @@ mod tests {
                 PowerButtonAction::SuspendThenHibernate,
             ),
             ("\"powerOff\"", PowerButtonAction::PowerOff),
-            ("\"invalid\"", PowerButtonAction::SameAsIdle),
-            ("null", PowerButtonAction::SameAsIdle),
+            ("\"invalid\"", PowerButtonAction::SuspendThenHibernate),
+            ("null", PowerButtonAction::SuspendThenHibernate),
         ] {
             let settings = serde_json::from_str::<IdleSettings>(&format!(
                 r#"{{"dimTimeoutSeconds":300,"blankTimeoutSeconds":600,"fadeSeconds":3.0,"automaticPowerAction":"suspend","automaticPowerTimeoutSeconds":600,"powerButtonAction":{json}}}"#
@@ -557,7 +530,10 @@ mod tests {
             r#"{"dimTimeoutSeconds":300,"blankTimeoutSeconds":600,"fadeSeconds":3.0,"automaticPowerAction":"suspend","automaticPowerTimeoutSeconds":600}"#,
         )
         .unwrap();
-        assert_eq!(missing.power_button_action, PowerButtonAction::SameAsIdle);
+        assert_eq!(
+            missing.power_button_action,
+            PowerButtonAction::SuspendThenHibernate
+        );
     }
 
     #[test]

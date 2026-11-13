@@ -204,7 +204,6 @@
   "automaticPowerAfterDescription": "Default adalah 600 detik; setel ke 0 untuk menonaktifkan tidur atau hibernasi otomatis",
   "powerButtonAction": "Tindakan tombol daya",
   "powerButtonActionDescription": "Apa yang terjadi saat tombol daya perangkat ditekan",
-  "powerButtonSameAsIdle": "Sama dengan tindakan daya otomatis",
   "powerButtonSuspendThenHibernate": "Tidur lalu hibernasi",
   "powerButtonDoNothing": "Tidak melakukan apa pun",
   "lowBatteryWarning": "Peringatan baterai lemah (%)",

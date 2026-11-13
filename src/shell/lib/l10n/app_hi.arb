@@ -204,7 +204,6 @@
   "automaticPowerAfterDescription": "डिफ़ॉल्ट 600 सेकंड है; स्वचालित स्लीप या हाइबरनेशन बंद करने के लिए 0 सेट करें",
   "powerButtonAction": "पावर बटन कार्रवाई",
   "powerButtonActionDescription": "डिवाइस का पावर बटन दबाने पर क्या होता है",
-  "powerButtonSameAsIdle": "स्वचालित पावर कार्रवाई के समान",
   "powerButtonSuspendThenHibernate": "स्लीप, फिर हाइबरनेट",
   "powerButtonDoNothing": "कुछ न करें",
   "lowBatteryWarning": "कम बैटरी की चेतावनी (%)",

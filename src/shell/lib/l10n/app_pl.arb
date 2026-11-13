@@ -204,7 +204,6 @@
   "automaticPowerAfterDescription": "Domyślnie 600 sekund; ustaw 0, aby wyłączyć automatyczne usypianie lub hibernację",
   "powerButtonAction": "Działanie przycisku zasilania",
   "powerButtonActionDescription": "Co robi naciśnięcie przycisku zasilania urządzenia",
-  "powerButtonSameAsIdle": "Jak automatyczne działanie zasilania",
   "powerButtonSuspendThenHibernate": "Uśpij, potem hibernuj",
   "powerButtonDoNothing": "Nic nie rób",
   "lowBatteryWarning": "Ostrzeżenie o niskim poziomie baterii (%)",

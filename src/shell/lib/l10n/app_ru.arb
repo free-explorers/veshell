@@ -204,7 +204,6 @@
   "automaticPowerAfterDescription": "По умолчанию 600 секунд; установите 0, чтобы отключить автоматический сон или гибернацию",
   "powerButtonAction": "Действие кнопки питания",
   "powerButtonActionDescription": "Что происходит при нажатии кнопки питания устройства",
-  "powerButtonSameAsIdle": "Как автоматическое действие питания",
   "powerButtonSuspendThenHibernate": "Спящий режим, затем гибернация",
   "powerButtonDoNothing": "Ничего не делать",
   "lowBatteryWarning": "Предупреждение о низком заряде (%)",

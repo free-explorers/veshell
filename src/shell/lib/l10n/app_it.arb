@@ -204,7 +204,6 @@
   "automaticPowerAfterDescription": "Il valore predefinito è 600 secondi; imposta 0 per disabilitare sospensione o ibernazione automatica",
   "powerButtonAction": "Azione del pulsante di accensione",
   "powerButtonActionDescription": "Cosa succede premendo il pulsante di accensione del dispositivo",
-  "powerButtonSameAsIdle": "Come l’azione automatica di alimentazione",
   "powerButtonSuspendThenHibernate": "Sospendi, poi iberna",
   "powerButtonDoNothing": "Non fare nulla",
   "lowBatteryWarning": "Avviso batteria scarica (%)",

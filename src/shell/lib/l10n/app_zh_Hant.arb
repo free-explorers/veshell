@@ -204,7 +204,6 @@
   "automaticPowerAfterDescription": "預設為 600 秒；設為 0 可停用自動暫停或休眠",
   "powerButtonAction": "電源按鈕操作",
   "powerButtonActionDescription": "按下裝置電源按鈕時執行的操作",
-  "powerButtonSameAsIdle": "與自動電源操作相同",
   "powerButtonSuspendThenHibernate": "暫停後休眠",
   "powerButtonDoNothing": "不執行任何操作",
   "lowBatteryWarning": "低電量警告（%）",

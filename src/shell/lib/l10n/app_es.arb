@@ -204,7 +204,6 @@
   "automaticPowerAfterDescription": "El valor predeterminado es 600 segundos; establece 0 para desactivar la suspensión o hibernación automática",
   "powerButtonAction": "Acción del botón de encendido",
   "powerButtonActionDescription": "Qué hace al pulsar el botón de encendido del equipo",
-  "powerButtonSameAsIdle": "Igual que la acción automática de energía",
   "powerButtonSuspendThenHibernate": "Suspender y luego hibernar",
   "powerButtonDoNothing": "No hacer nada",
   "lowBatteryWarning": "Aviso de batería baja (%)",

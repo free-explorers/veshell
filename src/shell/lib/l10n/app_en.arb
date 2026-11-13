@@ -228,7 +228,6 @@
   "automaticPowerAfterDescription": "Default is 600 seconds; set to 0 to disable automatic sleep or hibernate",
   "powerButtonAction": "Power Button Action",
   "powerButtonActionDescription": "What pressing the hardware power button does",
-  "powerButtonSameAsIdle": "Same as Automatic Power Action",
   "powerButtonSuspendThenHibernate": "Sleep then Hibernate",
   "powerButtonDoNothing": "Do Nothing",
   "lowBatteryWarning": "Low Battery Warning (%)",

@@ -204,7 +204,6 @@
   "automaticPowerAfterDescription": "기본값은 600초입니다. 자동 절전 또는 최대 절전 모드를 비활성화하려면 0으로 설정하세요",
   "powerButtonAction": "전원 버튼 동작",
   "powerButtonActionDescription": "장치의 전원 버튼을 눌렀을 때의 동작",
-  "powerButtonSameAsIdle": "자동 전원 동작과 동일",
   "powerButtonSuspendThenHibernate": "절전 후 최대 절전",
   "powerButtonDoNothing": "아무것도 하지 않음",
   "lowBatteryWarning": "배터리 부족 경고(%)",

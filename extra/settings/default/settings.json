@@ -71,7 +71,7 @@
         "fadeSeconds": 3.0,
         "automaticPowerAction": "suspendThenHibernate",
         "automaticPowerTimeoutSeconds": 600,
-        "powerButtonAction": "sameAsIdle"
+        "powerButtonAction": "suspendThenHibernate"
     },
     "notifications": {
         "batteryLowThreshold": 20,

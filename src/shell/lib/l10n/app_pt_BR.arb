@@ -204,7 +204,6 @@
   "automaticPowerAfterDescription": "O padrão é 600 segundos; defina como 0 para desativar a suspensão ou hibernação automática",
   "powerButtonAction": "Ação do botão de energia",
   "powerButtonActionDescription": "O que acontece ao pressionar o botão de energia do equipamento",
-  "powerButtonSameAsIdle": "Igual à ação automática de energia",
   "powerButtonSuspendThenHibernate": "Suspender e depois hibernar",
   "powerButtonDoNothing": "Não fazer nada",
   "lowBatteryWarning": "Aviso de bateria baixa (%)",

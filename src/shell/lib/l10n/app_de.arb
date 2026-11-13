@@ -204,7 +204,6 @@
   "automaticPowerAfterDescription": "Standard: 600 Sekunden; auf 0 setzen, um automatischen Bereitschafts- oder Ruhezustand zu deaktivieren",
   "powerButtonAction": "Aktion des Ein-/Ausschalters",
   "powerButtonActionDescription": "Was ein Druck auf den Ein-/Ausschalter des Geräts bewirkt",
-  "powerButtonSameAsIdle": "Wie automatische Energieaktion",
   "powerButtonSuspendThenHibernate": "Bereitschaft, dann Ruhezustand",
   "powerButtonDoNothing": "Nichts tun",
   "lowBatteryWarning": "Warnung bei niedrigem Akkustand (%)",

@@ -204,7 +204,6 @@
   "automaticPowerAfterDescription": "La valeur par défaut est 600 secondes ; définir sur 0 pour désactiver la veille ou l’hibernation automatique",
   "powerButtonAction": "Action du bouton d’alimentation",
   "powerButtonActionDescription": "Ce que fait un appui sur le bouton d’alimentation de l’appareil",
-  "powerButtonSameAsIdle": "Comme l’action d’alimentation automatique",
   "powerButtonSuspendThenHibernate": "Veille puis hibernation",
   "powerButtonDoNothing": "Ne rien faire",
   "lowBatteryWarning": "Avertissement de batterie faible (%)",

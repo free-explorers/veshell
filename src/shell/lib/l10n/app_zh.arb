@@ -204,7 +204,6 @@
   "automaticPowerAfterDescription": "默认为 600 秒；设为 0 可禁用自动挂起或休眠",
   "powerButtonAction": "电源按钮操作",
   "powerButtonActionDescription": "按下设备电源按钮时执行的操作",
-  "powerButtonSameAsIdle": "与自动电源操作相同",
   "powerButtonSuspendThenHibernate": "挂起后休眠",
   "powerButtonDoNothing": "不执行任何操作",
   "lowBatteryWarning": "低电量警告（%）",

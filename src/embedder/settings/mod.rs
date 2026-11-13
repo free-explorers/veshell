@@ -454,14 +454,14 @@ where
 #[derive(Serialize, Clone, Copy, Debug, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum PowerButtonAction {
-    /// Whatever [`IdleSettings::automatic_power_action`] does, so the button
-    /// and an idle machine put the system in the same state.
-    #[default]
-    SameAsIdle,
     /// The button is ignored.
     Disabled,
     Suspend,
     Hibernate,
+    /// Suspend, then hibernate after logind's delay (plain suspend where
+    /// logind cannot): the same default as
+    /// [`IdleSettings::automatic_power_action`].
+    #[default]
     SuspendThenHibernate,
     PowerOff,
 }
@@ -477,9 +477,8 @@ where
         Some("disabled") => PowerButtonAction::Disabled,
         Some("suspend") => PowerButtonAction::Suspend,
         Some("hibernate") => PowerButtonAction::Hibernate,
-        Some("suspendThenHibernate") => PowerButtonAction::SuspendThenHibernate,
         Some("powerOff") => PowerButtonAction::PowerOff,
-        _ => PowerButtonAction::SameAsIdle,
+        _ => PowerButtonAction::SuspendThenHibernate,
     })
 }
 

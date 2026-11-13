@@ -204,7 +204,6 @@
   "automaticPowerAfterDescription": "Типово 600 секунд; встановіть 0, щоб вимкнути автоматичний сон або гібернацію",
   "powerButtonAction": "Дія кнопки живлення",
   "powerButtonActionDescription": "Що відбувається після натискання кнопки живлення пристрою",
-  "powerButtonSameAsIdle": "Як автоматична дія живлення",
   "powerButtonSuspendThenHibernate": "Режим сну, потім гібернація",
   "powerButtonDoNothing": "Нічого не робити",
   "lowBatteryWarning": "Попередження про низький заряд (%)",

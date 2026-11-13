@@ -204,7 +204,6 @@
   "automaticPowerAfterDescription": "Varsayılan 600 saniyedir; otomatik uyku veya hazırda bekletmeyi devre dışı bırakmak için 0 olarak ayarlayın",
   "powerButtonAction": "Güç düğmesi eylemi",
   "powerButtonActionDescription": "Aygıtın güç düğmesine basıldığında ne olacağı",
-  "powerButtonSameAsIdle": "Otomatik güç eylemiyle aynı",
   "powerButtonSuspendThenHibernate": "Uyku, ardından hazırda bekletme",
   "powerButtonDoNothing": "Hiçbir şey yapma",
   "lowBatteryWarning": "Düşük pil uyarısı (%)",
