@@ -179,6 +179,11 @@ presents instead of at a fixed cadence, and holds the last frame while the game
 is idle. A connector that needs a modeset, or does not support VRR, is left at
 the fixed cadence, so entering or leaving the mode never flickers the output.
 
+**Paused games.** A paused game shows only through its frost, so it is paced
+down to 15 frames per second: its frame callbacks, its commits and the shell's
+redraws of its tile (see [Surface pacing](surface_pacing.md)). Resuming lifts
+the limit at once.
+
 **Presentation time.** The DRM backend exposes `wp_presentation`, so clients
 pace vsync'd frames on real presentation timestamps (Xwayland's Present, Mesa's
 Vulkan WSI, DXVK) instead of a fallback timer. A game surface's feedback is
