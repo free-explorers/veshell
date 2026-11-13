@@ -83,7 +83,7 @@ use crate::flutter_engine::wayland_messages::{
 };
 use crate::flutter_engine::FlutterEngine;
 use crate::keyboard::handle_keyboard_event;
-use crate::settings::{self, MonitorConfiguration, MouseAndTouchpadSettings};
+use crate::settings::{self, AccelerationProfile, MonitorConfiguration, MouseAndTouchpadSettings};
 use crate::state;
 use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
 
@@ -1221,6 +1221,32 @@ fn is_touchpad(device: &input::Device) -> bool {
             input::ScrollMethod::TwoFinger | input::ScrollMethod::Edge
         )
     })
+}
+
+/// Sets a libinput device's pointer acceleration profile.
+///
+/// `Default` restores the device's own default profile rather than leaving
+/// the current one, so switching back from `flat` or `adaptive` takes effect
+/// without a replug. Devices without acceleration (keyboards, tablets in
+/// absolute mode) and profiles a device does not offer are left alone.
+fn apply_acceleration_profile(device: &mut input::Device, profile: AccelerationProfile) {
+    if !device.config_accel_is_available() {
+        return;
+    }
+    let profile = match profile {
+        AccelerationProfile::Default => device.config_accel_default_profile(),
+        AccelerationProfile::Adaptive => Some(input::AccelProfile::Adaptive),
+        AccelerationProfile::Flat => Some(input::AccelProfile::Flat),
+    };
+    let Some(profile) = profile else {
+        return;
+    };
+    if !device.config_accel_profiles().contains(&profile) {
+        return;
+    }
+    if let Err(err) = device.config_accel_set_profile(profile) {
+        warn!(?err, ?profile, device = %device.name(), "Failed to set acceleration profile");
+    }
 }
 
 impl State<DrmBackend> {
@@ -2435,20 +2461,27 @@ impl State<DrmBackend> {
     /// shell and Wayland clients then see; there is no separate shell-side
     /// inversion to do. Mice and touchpads have separate preferences.
     pub fn apply_libinput_settings(config: &MouseAndTouchpadSettings, device: &mut input::Device) {
-        if !device.config_scroll_has_natural_scroll() {
-            return;
-        }
-        // Mice and touchpads have separate preferences, mirroring GNOME's two
-        // `natural-scroll` keys and libinput's own defaults (mouse off,
-        // touchpad on).
-        let natural_scrolling = if is_touchpad(device) {
-            config.touchpad_natural_scrolling
+        // Mice and touchpads have separate preferences, mirroring GNOME's
+        // per-device `natural-scroll` and `accel-profile` keys and libinput's
+        // own natural-scrolling defaults (mouse off, touchpad on).
+        let touchpad = is_touchpad(device);
+        let (natural_scrolling, acceleration_profile) = if touchpad {
+            (
+                config.touchpad_natural_scrolling,
+                config.touchpad_acceleration_profile,
+            )
         } else {
-            config.mouse_natural_scrolling
+            (
+                config.mouse_natural_scrolling,
+                config.mouse_acceleration_profile,
+            )
         };
-        device
-            .config_scroll_set_natural_scroll_enabled(natural_scrolling)
-            .expect("Failed to set natural scrolling");
+        if device.config_scroll_has_natural_scroll() {
+            device
+                .config_scroll_set_natural_scroll_enabled(natural_scrolling)
+                .expect("Failed to set natural scrolling");
+        }
+        apply_acceleration_profile(device, acceleration_profile);
     }
 
     fn apply_monitor_configuration_to_drm_surface(

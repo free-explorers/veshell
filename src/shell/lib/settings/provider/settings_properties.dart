@@ -13,6 +13,7 @@ import 'package:shell/monitor/util/scale_recommendation.dart';
 import 'package:shell/monitor/widget/monitor_arrangement/monitor_arrangement_editor.dart';
 import 'package:shell/settings/model/keyboard_choices.dart';
 import 'package:shell/settings/model/keyboard_option.dart';
+import 'package:shell/settings/model/pointer_choices.dart';
 import 'package:shell/settings/model/setting_group.dart';
 import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/model/types/monitor_setting.serializable.dart';
@@ -436,6 +437,14 @@ class SettingsProperties extends _$SettingsProperties {
             name: l10n.wheelScrollFactor,
             description: l10n.wheelScrollFactorDescription,
           ),
+          'mouseAccelerationProfile': _accelerationProfileProperty(
+            name: l10n.mouseAccelerationProfile,
+            description: l10n.mouseAccelerationProfileDescription,
+          ),
+          'touchpadAccelerationProfile': _accelerationProfileProperty(
+            name: l10n.touchpadAccelerationProfile,
+            description: l10n.touchpadAccelerationProfileDescription,
+          ),
         },
       ),
       'idle': SettingGroup(
@@ -687,3 +696,33 @@ String _fractionalScaleDescription(AppLocalizations l10n, Monitor monitor) {
   }
   return lines.join('\n');
 }
+
+/// A pointer acceleration profile setting, picked among
+/// [accelerationProfiles].
+SettingProperty<String> _accelerationProfileProperty({
+  required String name,
+  required String description,
+}) => SettingProperty<String>(
+  name: name,
+  description: description,
+  buildSearchResult: (context, path, property) =>
+      ExpandableSearchResult<String>(
+        path: path,
+        property: property,
+        buildValue: (context, value, {required isExpanded}) =>
+            SettingPropertyChoiceValue(
+              path: path,
+              choices: accelerationProfiles,
+              defaultValue: 'default',
+              label: accelerationProfileLabel,
+            ),
+        buildEditor: (context, {required isExpanded}) =>
+            SettingPropertyChoiceEditor(
+              path: path,
+              property: property,
+              choices: accelerationProfiles,
+              defaultValue: 'default',
+              label: accelerationProfileLabel,
+            ),
+      ),
+);

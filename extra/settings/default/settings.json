@@ -47,7 +47,9 @@
     "mouseAndTouchpad": {
         "mouseNaturalScrolling": false,
         "touchpadNaturalScrolling": true,
-        "wheelScrollFactor": 1.0
+        "wheelScrollFactor": 1.0,
+        "mouseAccelerationProfile": "default",
+        "touchpadAccelerationProfile": "default"
     },
     "files": {
         "showHidden": false,
