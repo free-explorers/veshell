@@ -58,11 +58,6 @@ impl IsAlive for PointerFocusTarget {
     }
 }
 
-impl<BackendData: Backend> smithay::wayland::pointer_constraints::PointerConstraintsHandler
-    for State<BackendData>
-{
-}
-
 pub enum PointerOfferData<S: Source> {
     Wl(WlOfferData<S>),
     X11(XwmOfferData<S>),
