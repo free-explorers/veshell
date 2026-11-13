@@ -14,6 +14,7 @@ import 'package:shell/monitor/widget/monitor_arrangement/monitor_arrangement_edi
 import 'package:shell/settings/model/keyboard_choices.dart';
 import 'package:shell/settings/model/keyboard_option.dart';
 import 'package:shell/settings/model/pointer_choices.dart';
+import 'package:shell/settings/model/power_choices.dart';
 import 'package:shell/settings/model/setting_group.dart';
 import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/model/types/monitor_setting.serializable.dart';
@@ -471,6 +472,30 @@ class SettingsProperties extends _$SettingsProperties {
           'automaticPowerTimeoutSeconds': SettingProperty<int>(
             name: l10n.automaticPowerAfter,
             description: l10n.automaticPowerAfterDescription,
+          ),
+          'powerButtonAction': SettingProperty<String>(
+            name: l10n.powerButtonAction,
+            description: l10n.powerButtonActionDescription,
+            buildSearchResult: (context, path, property) =>
+                ExpandableSearchResult<String>(
+                  path: path,
+                  property: property,
+                  buildValue: (context, value, {required isExpanded}) =>
+                      SettingPropertyChoiceValue(
+                        path: path,
+                        choices: powerButtonActions,
+                        defaultValue: 'sameAsIdle',
+                        label: powerButtonActionLabel,
+                      ),
+                  buildEditor: (context, {required isExpanded}) =>
+                      SettingPropertyChoiceEditor(
+                        path: path,
+                        property: property,
+                        choices: powerButtonActions,
+                        defaultValue: 'sameAsIdle',
+                        label: powerButtonActionLabel,
+                      ),
+                ),
           ),
         },
       ),

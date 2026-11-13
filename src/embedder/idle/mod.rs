@@ -6,10 +6,15 @@ use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::Resource;
 
 use crate::backend::Backend;
-use crate::settings::{AutomaticPowerAction, IdleSettings};
+use crate::settings::{AutomaticPowerAction, IdleSettings, PowerButtonAction};
 use crate::state::State;
 
 mod dbus;
+
+/// How long after a resume the power button is ignored: the press that woke
+/// the machine can reach the compositor once it runs again, and must not send
+/// it straight back to sleep.
+const POWER_BUTTON_RESUME_HOLDOFF: Duration = Duration::from_secs(2);
 
 /// Interval between fade ticks while the dim alpha animates upward.
 const FADE_TICK: Duration = Duration::from_millis(40);
@@ -46,13 +51,16 @@ pub struct IdleState<BackendData: Backend + 'static> {
     fade_token: Option<RegistrationToken>,
     automatic_power_token: Option<RegistrationToken>,
     automatic_power_triggered: bool,
+    power_button_action: PowerButtonAction,
+    /// When the system last resumed from sleep, for the power button holdoff.
+    resumed_at: Option<Instant>,
     pub(crate) inhibiting_surfaces: Vec<WlSurface>,
     dbus_inhibited: bool,
     /// Whether the compositor's seat session is currently active. False while
     /// the VT is switched away: input goes to another TTY where we cannot see
     /// it, so no idle timer may run and no idle action may fire.
     session_active: bool,
-    power_sender: Option<std::sync::mpsc::Sender<AutomaticPowerAction>>,
+    power_sender: Option<std::sync::mpsc::Sender<dbus::PowerRequest>>,
     /// Backend hook that re-drives rendering after waking/blanking.
     request_render: fn(&mut State<BackendData>),
     /// Backend hook that powers the outputs down (`CAN_BLANK` backends only).
@@ -106,6 +114,8 @@ impl<BackendData: Backend + 'static> IdleState<BackendData> {
             fade_token: None,
             automatic_power_token: None,
             automatic_power_triggered: false,
+            power_button_action: settings.power_button_action,
+            resumed_at: None,
             inhibiting_surfaces: Vec::new(),
             dbus_inhibited: false,
             session_active: true,
@@ -259,6 +269,7 @@ pub fn on_prepare_for_sleep<D: Backend + 'static>(state: &mut State<D>, sleeping
         state.idle.cancel_all();
         state.brightness.wake();
     } else {
+        state.idle.resumed_at = Some(Instant::now());
         on_activity(state);
     }
 }
@@ -332,6 +343,7 @@ pub fn apply_idle_settings<D: Backend + 'static>(state: &mut State<D>, settings:
     state.idle.automatic_power_action = settings.automatic_power_action;
     state.idle.automatic_power_timeout =
         Duration::from_secs(settings.automatic_power_timeout_seconds as u64);
+    state.idle.power_button_action = settings.power_button_action;
     if state.idle.stage == IdleStage::Active {
         if is_inhibited(state) {
             state.idle.cancel_all();
@@ -409,17 +421,64 @@ fn automatic_power_fired<D: Backend + 'static>(state: &mut State<D>) {
     }
 
     state.idle.automatic_power_triggered = true;
-    let action = state.idle.automatic_power_action;
+    if let Some(request) = dbus::PowerRequest::from_automatic(state.idle.automatic_power_action) {
+        send_power_request(state, request);
+    }
+}
+
+/// The hardware power button was pressed: run the configured
+/// [`PowerButtonAction`]. Logind leaves the button to us while the power
+/// worker holds its `handle-power-key` inhibitor.
+pub fn on_power_button<D: Backend + 'static>(state: &mut State<D>) {
+    if !state.idle.session_active {
+        return;
+    }
+    if state
+        .idle
+        .resumed_at
+        .is_some_and(|resumed_at| resumed_at.elapsed() < POWER_BUTTON_RESUME_HOLDOFF)
+    {
+        tracing::debug!("Power button ignored right after resume");
+        return;
+    }
+    let request = power_button_request(
+        state.idle.power_button_action,
+        state.idle.automatic_power_action,
+    );
+    tracing::info!(?request, "Power button pressed");
+    if let Some(request) = request {
+        send_power_request(state, request);
+    }
+}
+
+/// The request the power button makes, `None` when it does nothing.
+fn power_button_request(
+    button: PowerButtonAction,
+    automatic: AutomaticPowerAction,
+) -> Option<dbus::PowerRequest> {
+    match button {
+        PowerButtonAction::SameAsIdle => dbus::PowerRequest::from_automatic(automatic),
+        PowerButtonAction::Disabled => None,
+        PowerButtonAction::Suspend => Some(dbus::PowerRequest::Suspend),
+        PowerButtonAction::Hibernate => Some(dbus::PowerRequest::Hibernate),
+        PowerButtonAction::SuspendThenHibernate => Some(dbus::PowerRequest::SuspendThenHibernate),
+        PowerButtonAction::PowerOff => Some(dbus::PowerRequest::PowerOff),
+    }
+}
+
+fn send_power_request<D: Backend + 'static>(state: &State<D>, request: dbus::PowerRequest) {
     if let Some(sender) = &state.idle.power_sender {
-        if sender.send(action).is_err() {
-            tracing::warn!("Automatic power action worker is unavailable");
+        if sender.send(request).is_err() {
+            tracing::warn!("Power action worker is unavailable");
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::settings::{AutomaticPowerAction, IdleSettings};
+    use super::dbus::PowerRequest;
+    use super::power_button_request;
+    use crate::settings::{AutomaticPowerAction, IdleSettings, PowerButtonAction};
 
     #[test]
     fn default_settings_use_five_minute_dim_and_ten_minute_blank() {
@@ -432,6 +491,73 @@ mod tests {
             AutomaticPowerAction::SuspendThenHibernate
         );
         assert_eq!(settings.automatic_power_timeout_seconds, 600);
+        assert_eq!(settings.power_button_action, PowerButtonAction::SameAsIdle);
+    }
+
+    #[test]
+    fn power_button_follows_the_idle_action_by_default() {
+        for (automatic, expected) in [
+            (AutomaticPowerAction::Disabled, None),
+            (AutomaticPowerAction::Suspend, Some(PowerRequest::Suspend)),
+            (
+                AutomaticPowerAction::Hibernate,
+                Some(PowerRequest::Hibernate),
+            ),
+            (
+                AutomaticPowerAction::SuspendThenHibernate,
+                Some(PowerRequest::SuspendThenHibernate),
+            ),
+        ] {
+            assert_eq!(
+                power_button_request(PowerButtonAction::SameAsIdle, automatic),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn power_button_own_action_overrides_the_idle_action() {
+        let idle = AutomaticPowerAction::SuspendThenHibernate;
+        for (button, expected) in [
+            (PowerButtonAction::Disabled, None),
+            (PowerButtonAction::Suspend, Some(PowerRequest::Suspend)),
+            (PowerButtonAction::Hibernate, Some(PowerRequest::Hibernate)),
+            (
+                PowerButtonAction::SuspendThenHibernate,
+                Some(PowerRequest::SuspendThenHibernate),
+            ),
+            (PowerButtonAction::PowerOff, Some(PowerRequest::PowerOff)),
+        ] {
+            assert_eq!(power_button_request(button, idle), expected);
+        }
+    }
+
+    #[test]
+    fn power_button_actions_use_settings_json_names() {
+        for (json, expected) in [
+            ("\"sameAsIdle\"", PowerButtonAction::SameAsIdle),
+            ("\"disabled\"", PowerButtonAction::Disabled),
+            ("\"suspend\"", PowerButtonAction::Suspend),
+            ("\"hibernate\"", PowerButtonAction::Hibernate),
+            (
+                "\"suspendThenHibernate\"",
+                PowerButtonAction::SuspendThenHibernate,
+            ),
+            ("\"powerOff\"", PowerButtonAction::PowerOff),
+            ("\"invalid\"", PowerButtonAction::SameAsIdle),
+            ("null", PowerButtonAction::SameAsIdle),
+        ] {
+            let settings = serde_json::from_str::<IdleSettings>(&format!(
+                r#"{{"dimTimeoutSeconds":300,"blankTimeoutSeconds":600,"fadeSeconds":3.0,"automaticPowerAction":"suspend","automaticPowerTimeoutSeconds":600,"powerButtonAction":{json}}}"#
+            ))
+            .unwrap();
+            assert_eq!(settings.power_button_action, expected, "{json}");
+        }
+        let missing = serde_json::from_str::<IdleSettings>(
+            r#"{"dimTimeoutSeconds":300,"blankTimeoutSeconds":600,"fadeSeconds":3.0,"automaticPowerAction":"suspend","automaticPowerTimeoutSeconds":600}"#,
+        )
+        .unwrap();
+        assert_eq!(missing.power_button_action, PowerButtonAction::SameAsIdle);
     }
 
     #[test]

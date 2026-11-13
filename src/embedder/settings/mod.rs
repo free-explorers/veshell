@@ -447,6 +447,42 @@ where
     })
 }
 
+/// What the hardware power button does, like `HandlePowerKey=` in
+/// `logind.conf` and the power button setting of GNOME and KDE. The
+/// compositor holds logind's `handle-power-key` inhibitor, so this setting is
+/// the only one that applies while Veshell runs.
+#[derive(Serialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum PowerButtonAction {
+    /// Whatever [`IdleSettings::automatic_power_action`] does, so the button
+    /// and an idle machine put the system in the same state.
+    #[default]
+    SameAsIdle,
+    /// The button is ignored.
+    Disabled,
+    Suspend,
+    Hibernate,
+    SuspendThenHibernate,
+    PowerOff,
+}
+
+/// Reads a [`PowerButtonAction`], falling back to the default for an unknown
+/// value so a hand-edited `settings.json` cannot take the settings load down.
+fn deserialize_power_button_action<'de, D>(deserializer: D) -> Result<PowerButtonAction, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    Ok(match value.as_deref() {
+        Some("disabled") => PowerButtonAction::Disabled,
+        Some("suspend") => PowerButtonAction::Suspend,
+        Some("hibernate") => PowerButtonAction::Hibernate,
+        Some("suspendThenHibernate") => PowerButtonAction::SuspendThenHibernate,
+        Some("powerOff") => PowerButtonAction::PowerOff,
+        _ => PowerButtonAction::SameAsIdle,
+    })
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct IdleSettings {
@@ -462,6 +498,9 @@ pub struct IdleSettings {
     pub automatic_power_action: AutomaticPowerAction,
     /// Seconds idle before the automatic power action; `0` disables it.
     pub automatic_power_timeout_seconds: u32,
+    /// What pressing the hardware power button does.
+    #[serde(default, deserialize_with = "deserialize_power_button_action")]
+    pub power_button_action: PowerButtonAction,
 }
 impl Default for IdleSettings {
     fn default() -> Self {
@@ -471,6 +510,7 @@ impl Default for IdleSettings {
             fade_seconds: 3.0,
             automatic_power_action: AutomaticPowerAction::default(),
             automatic_power_timeout_seconds: 600,
+            power_button_action: PowerButtonAction::default(),
         }
     }
 }
