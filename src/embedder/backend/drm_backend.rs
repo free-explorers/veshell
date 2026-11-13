@@ -53,6 +53,7 @@ use smithay::reexports::input::{self, Libinput};
 use smithay::reexports::rustix::fs::OFlags;
 use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
+use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::{DeviceFd, IsAlive, Logical, Point, Rectangle, Transform};
@@ -1444,6 +1445,7 @@ impl State<DrmBackend> {
             last_gaming_present: None,
             frame_pending: false,
             redraw_requested: false,
+            last_vblank: None,
             last_composite: None,
         };
 
@@ -1651,6 +1653,7 @@ impl State<DrmBackend> {
                 let _ = surface.compositor.frame_submitted();
                 // The flip completed: the output may render again.
                 surface.frame_pending = false;
+                surface.last_vblank = Some(Instant::now());
                 // Instrumentation: a completed flip is a presented frame. When
                 // it carried a game surface, report how long it took to present
                 // and how far apart gaming frames are (the achieved pace). A
@@ -1684,6 +1687,11 @@ impl State<DrmBackend> {
         {
             self.deliver_vsync_tick(Instant::now());
         }
+
+        // A game on this output is paced by this output's own flips: its frame
+        // callbacks go out when the frame it committed was presented, not on
+        // another monitor's vblank, which would beat against this refresh.
+        self.send_game_frame_callbacks(node, crtc);
 
         // Each DRM node renders its own surfaces, driven by its fastest CRTC.
         // This keeps nodes that don't own the globally fastest output alive.
@@ -1752,14 +1760,22 @@ impl State<DrmBackend> {
             let _ = self.flutter_engine().on_vsync(baton, mhz as u32);
         }
         let frame_timestamp = self.frame_timestamp_millis();
+        // Game-mode surfaces follow their own output's vblank
+        // (`send_game_frame_callbacks`), not the pacing CRTC's.
+        let game_surfaces = self.all_game_mode_surfaces();
+        let paced_here = |surface: &WlSurface| !game_surfaces.contains(surface);
         for surface in self.xdg_shell_state.toplevel_surfaces() {
-            send_frames_surface_tree(surface.wl_surface(), frame_timestamp);
+            if paced_here(surface.wl_surface()) {
+                send_frames_surface_tree(surface.wl_surface(), frame_timestamp);
+            }
         }
         for surface in self.xdg_popups.values() {
             send_frames_surface_tree(surface.wl_surface(), frame_timestamp);
         }
         for surface in self.x11_surface_per_wl_surface.keys() {
-            send_frames_surface_tree(surface, frame_timestamp);
+            if paced_here(surface) {
+                send_frames_surface_tree(surface, frame_timestamp);
+            }
         }
         let cursor_status = {
             let cursor_image_status = self.cursor_image_status.lock().unwrap();
@@ -1774,6 +1790,84 @@ impl State<DrmBackend> {
 
         if let CursorImageStatus::Surface(wl_surface) = cursor_status {
             send_frames_surface_tree(&wl_surface, frame_timestamp)
+        }
+    }
+
+    /// The output driven by `crtc` on `node`, if it is mapped.
+    fn output_for_crtc(&self, node: DrmNode, crtc: crtc::Handle) -> Option<Output> {
+        self.space
+            .outputs()
+            .find(|output| {
+                output
+                    .user_data()
+                    .get::<UdevOutputId>()
+                    .is_some_and(|id| id.device_id == node && id.crtc == crtc)
+            })
+            .cloned()
+    }
+
+    /// Every game-mode surface, on any output.
+    fn all_game_mode_surfaces(&self) -> Vec<WlSurface> {
+        let names: Vec<String> = self.space.outputs().map(|output| output.name()).collect();
+        names
+            .iter()
+            .flat_map(|name| self.game_mode_surfaces_for_output(name))
+            .collect()
+    }
+
+    /// Sends the frame callbacks of the game-mode surfaces shown on the output
+    /// driven by `crtc`.
+    ///
+    /// Called from that output's vblank, so a game renders its next frame once
+    /// the previous one reached the panel, in step with that panel (and with
+    /// its adaptive-sync refresh) whatever the pacing CRTC is.
+    fn send_game_frame_callbacks(&mut self, node: DrmNode, crtc: crtc::Handle) {
+        let Some(output) = self.output_for_crtc(node, crtc) else {
+            return;
+        };
+        let surfaces = self.game_mode_surfaces_for_output(&output.name());
+        if surfaces.is_empty() {
+            return;
+        }
+        let frame_timestamp = self.frame_timestamp_millis();
+        for surface in &surfaces {
+            send_frames_surface_tree(surface, frame_timestamp);
+        }
+    }
+
+    /// Fallback for game outputs that went a whole refresh without a flip: a
+    /// commit with no damage presents nothing, and the game must not wait on
+    /// a vblank that never comes.
+    fn send_stale_game_frame_callbacks(&mut self, now: Instant, slack: Duration) {
+        let mut stale = Vec::new();
+        for output in self.space.outputs() {
+            let Some(id) = output.user_data().get::<UdevOutputId>() else {
+                continue;
+            };
+            let Some(gpu) = self.backend_data.gpus.get(&id.device_id) else {
+                continue;
+            };
+            if !gpu.drm_device.is_active() {
+                continue;
+            }
+            let Some(surface) = gpu.surfaces.get(&id.crtc) else {
+                continue;
+            };
+            let refresh_mhz = output
+                .current_mode()
+                .map(|mode| mode.refresh)
+                .unwrap_or(60_000)
+                .max(1) as u64;
+            let interval = Duration::from_nanos(1_000_000_000_000 / refresh_mhz);
+            let due = surface
+                .last_vblank
+                .is_none_or(|last| now.saturating_duration_since(last) >= interval + slack);
+            if due {
+                stale.push((id.device_id, id.crtc));
+            }
+        }
+        for (node, crtc) in stale {
+            self.send_game_frame_callbacks(node, crtc);
         }
     }
 
@@ -1833,6 +1927,7 @@ impl State<DrmBackend> {
         if due {
             self.deliver_vsync_tick(now);
         }
+        self.send_stale_game_frame_callbacks(now, slack);
 
         interval + slack
     }
@@ -1902,18 +1997,7 @@ impl State<DrmBackend> {
         // Resolve the output and, when it mirrors another monitor, the
         // source's Flutter view. This reads the whole `State`, so it must
         // happen before the GPU state is borrowed mutably below.
-        let output = self
-            .space
-            .outputs()
-            .find(|output| {
-                output
-                    .user_data()
-                    .get::<UdevOutputId>()
-                    .map(|id| id.device_id == node && id.crtc == crtc)
-                    .unwrap_or(false)
-            })
-            .cloned();
-        let Some(output) = output else {
+        let Some(output) = self.output_for_crtc(node, crtc) else {
             return;
         };
 
@@ -2181,6 +2265,10 @@ struct SurfaceData {
     /// output's own vblank renders it, so a commit that lands during a flip is
     /// shown on the next refresh even when another CRTC drives the node.
     redraw_requested: bool,
+    /// When this output's last page flip completed. Game-mode frame callbacks
+    /// follow this output's vblank; the fallback timer stands in once a whole
+    /// refresh passed without one.
+    last_vblank: Option<Instant>,
     /// When the last frame was actually presented, used by the software frame
     /// cap. Skipped composites leave it untouched.
     last_composite: Option<Instant>,
