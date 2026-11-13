@@ -25,6 +25,7 @@ void main() {
     'pt_PT': 'Português (Portugal)',
     'ru': 'Русский',
     'tr': 'Türkçe',
+    'uk': 'Українська',
     'ur': 'اردو',
     'vi': 'Tiếng Việt',
     'zh': '简体中文',
@@ -188,6 +189,17 @@ void main() {
     expect(l10n.itemCount(5), '5 элементов');
     expect(l10n.itemCount(21), '21 элемент');
     expect(l10n.minutesAgo(21), '21 минуту назад');
+  });
+
+  test('Ukrainian plural forms follow the count, not just singular/plural', () {
+    final l10n = lookupAppLocalizations(const Locale('uk'));
+    expect(l10n.itemCount(1), '1 елемент');
+    expect(l10n.itemCount(2), '2 елементи');
+    expect(l10n.itemCount(5), '5 елементів');
+    expect(l10n.itemCount(12), '12 елементів');
+    expect(l10n.itemCount(21), '21 елемент');
+    expect(l10n.itemCount(22), '22 елементи');
+    expect(l10n.minutesAgo(21), '21 хвилину тому');
   });
 
   test('zero-valued singular categories preserve the actual count', () {
