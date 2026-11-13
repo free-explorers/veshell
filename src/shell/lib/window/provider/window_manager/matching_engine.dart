@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/model/application_identity.dart';
@@ -1074,9 +1076,18 @@ class MatchingEngine extends _$MatchingEngine {
             .ephemeralWindowNotifier(leastCostCandidate)
             .addMetaWindow(metaWindowId);
       case _:
-        ref
-            .read(windowManagerProvider.notifier)
-            .createPersistentWindowForMetaWindow(metaWindowId: metaWindowId);
+        // A fullscreen-like window with no tile of its own (a game launched
+        // by Steam, which gives it no opener relation) gets a tile in gaming
+        // mode, like the relation branch's automatic extraction does.
+        final fullscreenLike = isFullscreenLike(metaWindowId);
+        unawaited(
+          ref
+              .read(windowManagerProvider.notifier)
+              .createPersistentWindowForMetaWindow(
+                metaWindowId: metaWindowId,
+                displayMode: fullscreenLike ? DisplayMode.game : null,
+              ),
+        );
     }
   }
 

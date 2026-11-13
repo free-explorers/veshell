@@ -12,15 +12,18 @@ use std::time::{Duration, Instant};
 use sd_notify::NotifyState;
 use serde_json::json;
 use smithay::backend::allocator::dmabuf::{AnyError, Dmabuf, DmabufAllocator};
+use smithay::backend::allocator::format::FormatSet;
 use smithay::backend::allocator::gbm::GbmDevice;
 use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags};
 use smithay::backend::allocator::{Allocator, Fourcc, Swapchain};
-use smithay::backend::drm::compositor::{DrmCompositor, FrameFlags};
+use smithay::backend::drm::compositor::{DrmCompositor, FrameFlags, PrimaryPlaneElement};
 use smithay::backend::drm::exporter::gbm::GbmFramebufferExporter;
+use smithay::backend::drm::DrmEventTime;
 use smithay::backend::drm::{
     CreateDrmNodeError, DrmDevice, DrmDeviceFd, DrmError, DrmEvent, DrmEventMetadata, DrmNode,
     NodeType, VrrSupport,
 };
+use smithay::backend::egl::context::ContextPriority;
 use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
 use smithay::backend::input::{
     Event, GestureBeginEvent, GestureEndEvent, InputEvent, KeyboardKeyEvent,
@@ -51,15 +54,24 @@ use smithay::reexports::drm::Device as _;
 use smithay::reexports::input::event::gesture::GestureEventCoordinates;
 use smithay::reexports::input::{self, Libinput};
 use smithay::reexports::rustix::fs::OFlags;
+use smithay::reexports::wayland_protocols::wp::linux_dmabuf::zv1::server::zwp_linux_dmabuf_feedback_v1;
+use smithay::reexports::wayland_protocols::wp::presentation_time::server::wp_presentation_feedback;
 use smithay::reexports::wayland_server::backend::GlobalId;
 use smithay::reexports::wayland_server::protocol::wl_shm;
+use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::wayland_server::DisplayHandle;
+use smithay::utils::{ClockSource, Monotonic};
 use smithay::utils::{DeviceFd, IsAlive, Logical, Point, Rectangle, Transform};
+use smithay::wayland::compositor::{with_surface_tree_downward, TraversalAction};
 use smithay::wayland::dmabuf::{
-    DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier,
+    DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal, DmabufHandler, DmabufState,
+    ImportNotifier, SurfaceDmabufFeedbackState,
 };
 use smithay::wayland::drm_lease::DrmLease;
+use smithay::wayland::presentation::{
+    PresentationFeedbackCachedState, PresentationFeedbackCallback, PresentationState, Refresh,
+};
 use tracing::{debug, error, info, warn};
 
 use smithay_drm_extras::display_info;
@@ -183,15 +195,33 @@ pub struct DrmBackend {
     /// Nodes with a composite skipped by the software cap, waiting for the
     /// throttle timer to render the next allowed frame.
     software_throttled_nodes: HashSet<DrmNode>,
+    /// Nodes with a composite already queued on the event loop's idle list.
+    /// Every client commit and every pointer event asks for a composite, and a
+    /// 1000 Hz mouse would otherwise queue a thousand idle renders a second;
+    /// requests are coalesced into the one already pending.
+    render_scheduled: HashSet<DrmNode>,
+    /// Whether the last vsync tick held Flutter's batons because games cover
+    /// every output; only used to log the transitions.
+    shell_paused_for_games: bool,
+    /// The `wp_presentation` global (presentation-time). Kept alive for the
+    /// session; dropping it would remove the global.
+    presentation: Option<PresentationState>,
 }
 
 /// Screensaver wake hook: re-insert every blanked output into the render loop.
+///
+/// Also the on-demand render request ([`State::request_render`]): requests for
+/// a node that already has a composite queued are folded into it.
 fn idle_request_render(state: &mut State<DrmBackend>) {
     let nodes: Vec<DrmNode> = state.backend_data.gpus.keys().copied().collect();
     for node in nodes {
-        state
-            .loop_handle
-            .insert_idle(move |data| data.render(node, None));
+        if !state.backend_data.render_scheduled.insert(node) {
+            continue;
+        }
+        state.loop_handle.insert_idle(move |data| {
+            data.backend_data.render_scheduled.remove(&node);
+            data.render(node, None);
+        });
     }
 }
 
@@ -207,6 +237,9 @@ fn idle_apply_blank(state: &mut State<DrmBackend>) {
             }
             // The pending flip is gone with the planes; unblock rendering.
             surface.frame_pending = false;
+            for (callback, _) in surface.queued_presentation.drain(..) {
+                callback.discarded();
+            }
         }
     }
 }
@@ -490,8 +523,6 @@ pub fn run_drm_backend() {
     libinput_context.udev_assign_seat(&session.seat()).unwrap();
     let libinput_backend = LibinputInputBackend::new(libinput_context.clone());
 
-    /* let gpu_manager =
-    GpuManager::new(GbmGlesBackend::with_context_priority(ContextPriority::High)).unwrap(); */
     let settings_manager = settings::SettingsManager::new(
         event_loop.handle(),
         |data: &mut State<DrmBackend>| {
@@ -554,6 +585,9 @@ pub fn run_drm_backend() {
             last_vsync_tick: None,
             software_frame_interval: None,
             software_throttled_nodes: HashSet::new(),
+            render_scheduled: HashSet::new(),
+            shell_paused_for_games: false,
+            presentation: None,
         },
         None,
         settings_manager,
@@ -716,6 +750,15 @@ pub fn run_drm_backend() {
         );
         Some(dmabuf_state)
     };
+    // Presentation-time: clients (Xwayland's Present, Mesa's Vulkan WSI,
+    // DXVK) pace vsync'd frames on the presented timestamps instead of
+    // guessing. Every feedback is answered (see `present_callbacks`), so a
+    // client waiting on one never stalls.
+    state.backend_data.presentation = Some(PresentationState::new::<State<DrmBackend>>(
+        &state.display_handle,
+        Monotonic::ID as u32,
+    ));
+
     // Start the Flutter engine.
     let (flutter_engine, EmbedderChannels { rx_baton }) = match FlutterEngine::new(&mut state) {
         Ok(engine) => engine,
@@ -1376,6 +1419,14 @@ impl State<DrmBackend> {
 
         let mut planes = surface.planes().clone();
 
+        let game_feedback = game_dmabuf_feedback(
+            self.backend_data.primary_gpu,
+            device.render_node,
+            node,
+            &renderer.dmabuf_formats(),
+            &surface,
+        );
+
         // Using an overlay plane on a nvidia card breaks
         if driver
             .name()
@@ -1430,7 +1481,12 @@ impl State<DrmBackend> {
             last_queue: None,
             last_gaming_present: None,
             frame_pending: false,
+            redraw_requested: false,
+            last_vblank: None,
             last_composite: None,
+            game_feedback,
+            scanout_feedback_surfaces: Vec::new(),
+            queued_presentation: Vec::new(),
         };
 
         device.surfaces.insert(crtc, surface);
@@ -1536,7 +1592,13 @@ impl State<DrmBackend> {
             .and_then(|device| device.try_get_render_node().ok().flatten());
         let render_node = drm_render_node.unwrap_or(node);
 
-        let egl_context = EGLContext::new(&egl_display).map_err(DeviceAddError::EglContext)?;
+        // The composite must not queue behind a GPU-bound client: a game
+        // that saturates the GPU would otherwise hold back the compositor's
+        // frame (and the flip waiting on its fence) by a whole refresh.
+        // Drivers that do not support or grant high priority fall back to
+        // the default; Smithay logs the level actually granted.
+        let egl_context = EGLContext::new_with_priority(&egl_display, ContextPriority::High)
+            .map_err(DeviceAddError::EglContext)?;
         let renderer =
             unsafe { GlesRenderer::new(egl_context) }.map_err(DeviceAddError::Renderer)?;
         // Only a software rasterizer is capped; hardware GPUs report their
@@ -1629,7 +1691,47 @@ impl State<DrmBackend> {
         }
     }
 
-    fn on_vblank(&mut self, node: DrmNode, crtc: crtc::Handle, _meta: DrmEventMetadata) {
+    fn on_vblank(&mut self, node: DrmNode, crtc: crtc::Handle, meta: DrmEventMetadata) {
+        // The flip that completed carried the game content queued with it:
+        // answer its presentation feedback with the hardware timestamp.
+        let queued = self
+            .backend_data
+            .gpus
+            .get_mut(&node)
+            .and_then(|gpu| gpu.surfaces.get_mut(&crtc))
+            .map(|surface| {
+                (
+                    std::mem::take(&mut surface.queued_presentation),
+                    surface.compositor.vrr_enabled(),
+                )
+            });
+        if let Some((queued, vrr)) = queued.filter(|(queued, _)| !queued.is_empty()) {
+            let output = self.output_for_crtc(node, crtc);
+            let (time, hw_clock) = match meta.time {
+                DrmEventTime::Monotonic(time) if !time.is_zero() => (time, true),
+                _ => (Duration::from(self.clock.now()), false),
+            };
+            let hw_flags = if hw_clock {
+                wp_presentation_feedback::Kind::HwClock
+                    | wp_presentation_feedback::Kind::HwCompletion
+            } else {
+                wp_presentation_feedback::Kind::empty()
+            };
+            let refresh = output
+                .as_ref()
+                .map(|output| output_refresh(output, vrr))
+                .unwrap_or(Refresh::Unknown);
+            present_callbacks(
+                queued
+                    .into_iter()
+                    .map(|(callback, flags)| (callback, flags | hw_flags)),
+                output.as_ref(),
+                time,
+                refresh,
+                u64::from(meta.sequence),
+            );
+        }
+
         // Acknowledge the frame submitted on the CRTC that fired, even when we
         // don't render it (e.g. the slower CRTC of a node).
         if let Some(gpu_data) = self.backend_data.gpus.get_mut(&node) {
@@ -1637,22 +1739,25 @@ impl State<DrmBackend> {
                 let _ = surface.compositor.frame_submitted();
                 // The flip completed: the output may render again.
                 surface.frame_pending = false;
+                surface.last_vblank = Some(Instant::now());
                 // Instrumentation: a completed flip is a presented frame. When
                 // it carried a game surface, report how long it took to present
                 // and how far apart gaming frames are (the achieved pace). A
                 // non-gaming frame ends the current gaming streak so the next
                 // one starts its interval count fresh.
                 match surface.last_queue.take() {
-                    Some((queued_at, true)) => {
+                    Some((queued_at, true, planes)) => {
                         let now = Instant::now();
                         let since_previous = surface.last_gaming_present.replace(now);
                         debug!(
+                            primary_scanout = planes.primary_scanout,
+                            overlays = planes.overlays,
                             "game present: {:?} after queue, {:?} since previous",
                             now.saturating_duration_since(queued_at),
                             since_previous.map(|previous| now.saturating_duration_since(previous)),
                         );
                     }
-                    Some((_, false)) => surface.last_gaming_present = None,
+                    Some((_, false, _)) => surface.last_gaming_present = None,
                     None => {}
                 }
             }
@@ -1671,12 +1776,30 @@ impl State<DrmBackend> {
             self.deliver_vsync_tick(Instant::now());
         }
 
+        // A game on this output is paced by this output's own flips: its frame
+        // callbacks go out when the frame it committed was presented, not on
+        // another monitor's vblank, which would beat against this refresh.
+        self.send_game_frame_callbacks(node, crtc);
+
         // Each DRM node renders its own surfaces, driven by its fastest CRTC.
         // This keeps nodes that don't own the globally fastest output alive.
-        if let Some(&(_, fastest_crtc)) = self.backend_data.highest_hz_crtc.get(&node) {
-            if fastest_crtc == crtc {
-                self.render(node, None);
-            }
+        // Another CRTC repaints itself when a composite was held back by its
+        // pending flip.
+        let fastest = self
+            .backend_data
+            .highest_hz_crtc
+            .get(&node)
+            .is_some_and(|&(_, fastest_crtc)| fastest_crtc == crtc);
+        if fastest {
+            self.render(node, None);
+        } else if self
+            .backend_data
+            .gpus
+            .get(&node)
+            .and_then(|gpu| gpu.surfaces.get(&crtc))
+            .is_some_and(|surface| surface.redraw_requested)
+        {
+            self.render_surface(node, crtc);
         }
 
         // The Flutter context is shared among all outputs, so its batons are
@@ -1720,19 +1843,66 @@ impl State<DrmBackend> {
             return;
         };
 
-        let drained: Vec<_> = std::mem::take(&mut self.batons);
-        for baton in drained {
-            let _ = self.flutter_engine().on_vsync(baton, mhz as u32);
+        // While active games cover every output, nothing the shell draws can
+        // be seen: hold its vsync batons so Flutter produces no frames (no
+        // raster, no composite competing with the game for the GPU). Commits
+        // of background windows would otherwise keep it rendering. Leaving
+        // gaming mode, or locking, makes the shell visible again and the
+        // next tick releases the held baton.
+        let shell_hidden = self.shell_hidden_by_games();
+        if shell_hidden != self.backend_data.shell_paused_for_games {
+            self.backend_data.shell_paused_for_games = shell_hidden;
+            if shell_hidden {
+                info!("Shell rendering paused: active games cover every output");
+            } else {
+                info!("Shell rendering resumed");
+            }
+        }
+        if !shell_hidden {
+            let drained: Vec<_> = std::mem::take(&mut self.batons);
+            for baton in drained {
+                let _ = self.flutter_engine().on_vsync(baton, mhz as u32);
+            }
         }
         let frame_timestamp = self.frame_timestamp_millis();
-        for surface in self.xdg_shell_state.toplevel_surfaces() {
-            send_frames_surface_tree(surface.wl_surface(), frame_timestamp);
+        // Game-mode surfaces follow their own output's vblank
+        // (`send_game_frame_callbacks`), not the pacing CRTC's. The others go
+        // at the pace of what the shell displays (`crate::surface_pacing`).
+        let game_surfaces = self.all_game_mode_surfaces();
+        let sent = self.send_paced_frame_callbacks(&game_surfaces);
+        // Shell-drawn surfaces reach the panel through the Flutter frame; their
+        // presentation feedback is answered with their frame callbacks: as
+        // presented on the pacing output when shown, discarded when hidden.
+        let mut presentation = Vec::new();
+        let mut discarded = Vec::new();
+        for (surface, shown) in &sent {
+            if *shown {
+                take_presentation_callbacks(surface, &mut presentation);
+            } else {
+                take_presentation_callbacks(surface, &mut discarded);
+            }
         }
-        for surface in self.xdg_popups.values() {
-            send_frames_surface_tree(surface.wl_surface(), frame_timestamp);
+        for callback in discarded {
+            callback.discarded();
         }
-        for surface in self.x11_surface_per_wl_surface.keys() {
-            send_frames_surface_tree(surface, frame_timestamp);
+        if !presentation.is_empty() {
+            let output = self
+                .backend_data
+                .pacing_crtc
+                .and_then(|(_, node, crtc)| self.output_for_crtc(node, crtc));
+            let refresh = output
+                .as_ref()
+                .map(|output| output_refresh(output, false))
+                .unwrap_or(Refresh::Unknown);
+            present_callbacks(
+                presentation
+                    .into_iter()
+                    .map(|callback| (callback, wp_presentation_feedback::Kind::Vsync)),
+                output.as_ref(),
+                Duration::from(self.clock.now()),
+                refresh,
+                0,
+            );
         }
         let cursor_status = {
             let cursor_image_status = self.cursor_image_status.lock().unwrap();
@@ -1748,6 +1918,156 @@ impl State<DrmBackend> {
         if let CursorImageStatus::Surface(wl_surface) = cursor_status {
             send_frames_surface_tree(&wl_surface, frame_timestamp)
         }
+    }
+
+    /// The output driven by `crtc` on `node`, if it is mapped.
+    fn output_for_crtc(&self, node: DrmNode, crtc: crtc::Handle) -> Option<Output> {
+        self.space
+            .outputs()
+            .find(|output| {
+                output
+                    .user_data()
+                    .get::<UdevOutputId>()
+                    .is_some_and(|id| id.device_id == node && id.crtc == crtc)
+            })
+            .cloned()
+    }
+
+    /// Whether an activated game covers every output, so no shell pixel is
+    /// visible anywhere. The game is only activated once the shell's zoom
+    /// route completed, and never while locked (the lock screen is Flutter).
+    fn shell_hidden_by_games(&self) -> bool {
+        let mut outputs = self.space.outputs().peekable();
+        outputs.peek().is_some()
+            && outputs.all(|output| {
+                !self
+                    .game_mode_surfaces_for_output(&output.name())
+                    .is_empty()
+            })
+    }
+
+    /// Every game-mode surface, on any output.
+    fn all_game_mode_surfaces(&self) -> Vec<WlSurface> {
+        let names: Vec<String> = self.space.outputs().map(|output| output.name()).collect();
+        names
+            .iter()
+            .flat_map(|name| self.game_mode_surfaces_for_output(name))
+            .collect()
+    }
+
+    /// Sends the frame callbacks of the game-mode surfaces shown on the output
+    /// driven by `crtc`.
+    ///
+    /// Called from that output's vblank, so a game renders its next frame once
+    /// the previous one reached the panel, in step with that panel (and with
+    /// its adaptive-sync refresh) whatever the pacing CRTC is.
+    fn send_game_frame_callbacks(&mut self, node: DrmNode, crtc: crtc::Handle) {
+        let Some(output) = self.output_for_crtc(node, crtc) else {
+            return;
+        };
+        let surfaces = self.game_mode_surfaces_for_output(&output.name());
+        if surfaces.is_empty() {
+            return;
+        }
+        let frame_timestamp = self.frame_timestamp_millis();
+        for surface in &surfaces {
+            send_frames_surface_tree(surface, frame_timestamp);
+        }
+    }
+
+    /// Fallback for game outputs that went a whole refresh without a flip: a
+    /// commit with no damage presents nothing, and the game must not wait on
+    /// a vblank that never comes.
+    fn send_stale_game_frame_callbacks(&mut self, now: Instant, slack: Duration) {
+        let mut stale = Vec::new();
+        for output in self.space.outputs() {
+            let Some(id) = output.user_data().get::<UdevOutputId>() else {
+                continue;
+            };
+            let Some(gpu) = self.backend_data.gpus.get(&id.device_id) else {
+                continue;
+            };
+            if !gpu.drm_device.is_active() {
+                continue;
+            }
+            let Some(surface) = gpu.surfaces.get(&id.crtc) else {
+                continue;
+            };
+            let refresh_mhz = output
+                .current_mode()
+                .map(|mode| mode.refresh)
+                .unwrap_or(60_000)
+                .max(1) as u64;
+            let interval = Duration::from_nanos(1_000_000_000_000 / refresh_mhz);
+            let due = surface
+                .last_vblank
+                .is_none_or(|last| now.saturating_duration_since(last) >= interval + slack);
+            if due {
+                stale.push((id.device_id, id.crtc));
+            }
+        }
+        for (node, crtc) in stale {
+            self.send_game_frame_callbacks(node, crtc);
+            // A game commit that presented nothing (no damage) still gets
+            // its presentation feedback answered.
+            let Some(output) = self.output_for_crtc(node, crtc) else {
+                continue;
+            };
+            let mut callbacks = Vec::new();
+            for game in self.game_mode_surfaces_for_output(&output.name()) {
+                take_presentation_callbacks(&game, &mut callbacks);
+            }
+            if !callbacks.is_empty() {
+                present_callbacks(
+                    callbacks
+                        .into_iter()
+                        .map(|callback| (callback, wp_presentation_feedback::Kind::empty())),
+                    Some(&output),
+                    Duration::from(self.clock.now()),
+                    output_refresh(&output, false),
+                    0,
+                );
+            }
+        }
+    }
+
+    /// Tells the game surfaces shown on this output to allocate for scanout,
+    /// and the surfaces that left gaming mode to go back to the render
+    /// feedback. Only acts when the set changed: entering or leaving the mode.
+    fn update_game_dmabuf_feedback(
+        &mut self,
+        node: DrmNode,
+        crtc: crtc::Handle,
+        game_surfaces: &[WlSurface],
+    ) {
+        let Some(surface) = self
+            .backend_data
+            .gpus
+            .get_mut(&node)
+            .and_then(|gpu| gpu.surfaces.get_mut(&crtc))
+        else {
+            return;
+        };
+        if surface.scanout_feedback_surfaces == game_surfaces {
+            return;
+        }
+        let Some(feedback) = &surface.game_feedback else {
+            return;
+        };
+        for previous in &surface.scanout_feedback_surfaces {
+            if previous.alive() && !game_surfaces.contains(previous) {
+                set_surface_tree_dmabuf_feedback(previous, &feedback.render);
+            }
+        }
+        for game in game_surfaces {
+            set_surface_tree_dmabuf_feedback(game, &feedback.scanout);
+        }
+        debug!(
+            output = %surface.name,
+            games = game_surfaces.len(),
+            "Game dmabuf feedback: scanout tranche sent to game surfaces"
+        );
+        surface.scanout_feedback_surfaces = game_surfaces.to_vec();
     }
 
     /// Releases a composite skipped by the software frame cap.
@@ -1806,6 +2126,13 @@ impl State<DrmBackend> {
         if due {
             self.deliver_vsync_tick(now);
         }
+        self.send_stale_game_frame_callbacks(now, slack);
+
+        // An animated theme cursor changes with time alone; with on-demand
+        // rendering nothing else would composite its next frame.
+        if self.cursor_state.lock().unwrap().is_animated() {
+            self.request_render();
+        }
 
         interval + slack
     }
@@ -1858,32 +2185,24 @@ impl State<DrmBackend> {
         // only queue a second flip that the vblank coalesces away, and every
         // pointer motion would pay for a full render. The next `on_vblank`
         // repaints with the latest state, cursor included.
-        let frame_pending = self
+        let Some(surface) = self
             .backend_data
             .gpus
-            .get(&node)
-            .and_then(|gpu| gpu.surfaces.get(&crtc))
-            .map(|surface| surface.frame_pending)
-            .unwrap_or(false);
-        if frame_pending {
+            .get_mut(&node)
+            .and_then(|gpu| gpu.surfaces.get_mut(&crtc))
+        else {
+            return;
+        };
+        if surface.frame_pending {
+            surface.redraw_requested = true;
             return;
         }
+        surface.redraw_requested = false;
 
         // Resolve the output and, when it mirrors another monitor, the
         // source's Flutter view. This reads the whole `State`, so it must
         // happen before the GPU state is borrowed mutably below.
-        let output = self
-            .space
-            .outputs()
-            .find(|output| {
-                output
-                    .user_data()
-                    .get::<UdevOutputId>()
-                    .map(|id| id.device_id == node && id.crtc == crtc)
-                    .unwrap_or(false)
-            })
-            .cloned();
-        let Some(output) = output else {
+        let Some(output) = self.output_for_crtc(node, crtc) else {
             return;
         };
 
@@ -1894,6 +2213,7 @@ impl State<DrmBackend> {
         let output_name = output.name();
         let game_surfaces = self.game_mode_surfaces_for_output(&output_name);
         let had_game_surfaces = !game_surfaces.is_empty();
+        self.update_game_dmabuf_feedback(node, crtc, &game_surfaces);
 
         // A mirroring output presents the source monitor's Flutter frame,
         // scaled to its own geometry; otherwise it presents its own view.
@@ -1913,7 +2233,7 @@ impl State<DrmBackend> {
                 .views_management
                 .views
                 .get(&view_id)
-                .and_then(|view| view.last_rendered.clone())
+                .and_then(|view| view.presented_frame())
         });
 
         // Software EGL (llvmpipe/swrast) cannot afford a full-output composite
@@ -2002,12 +2322,21 @@ impl State<DrmBackend> {
             recording_chip,
         );
 
-        let rendered = surface.compositor.render_frame(
-            renderer,
-            &elements,
-            [0.0, 0.0, 0.0, 0.0],
-            FrameFlags::DEFAULT,
-        );
+        // A game buffer rarely has the swapchain's format (the swapchain
+        // prefers 10-bit, games render 8-bit), and by default the primary
+        // plane only takes an element of the same format: the game was always
+        // composited ("format doesn't match"). While a game owns the output,
+        // allow any format; Smithay test-commits the configuration and falls
+        // back to compositing a buffer the plane rejects.
+        let frame_flags = if had_game_surfaces {
+            FrameFlags::DEFAULT | FrameFlags::ALLOW_PRIMARY_PLANE_SCANOUT_ANY
+        } else {
+            FrameFlags::DEFAULT
+        };
+        let rendered =
+            surface
+                .compositor
+                .render_frame(renderer, &elements, [0.0, 0.0, 0.0, 0.0], frame_flags);
 
         match rendered {
             Ok(frame_result) => {
@@ -2017,6 +2346,16 @@ impl State<DrmBackend> {
                     // render loop (and Flutter) alive regardless.
                     return;
                 }
+                // Instrumentation: whether the display shows an element
+                // directly (primary-plane scanout or an overlay plane) rather
+                // than only the composited swapchain.
+                let planes = QueuedPlanes {
+                    primary_scanout: matches!(
+                        frame_result.primary_element,
+                        PrimaryPlaneElement::Element(_)
+                    ),
+                    overlays: frame_result.overlay_elements.len(),
+                };
                 if let Err(err) = surface.compositor.queue_frame(None) {
                     warn!("error queueing frame: {err}");
                     return;
@@ -2024,7 +2363,19 @@ impl State<DrmBackend> {
                 // Instrumentation: remember when this frame was queued and
                 // whether a game surface rode it, so `on_vblank` can report the
                 // presentation latency of gaming frames.
-                surface.last_queue = Some((Instant::now(), had_game_surfaces));
+                surface.last_queue = Some((Instant::now(), had_game_surfaces, planes));
+                // The game content this flip shows is answered at its vblank.
+                let mut callbacks = Vec::new();
+                for game in &game_surfaces {
+                    take_presentation_callbacks(game, &mut callbacks);
+                }
+                let mut flags = wp_presentation_feedback::Kind::Vsync;
+                if planes.primary_scanout {
+                    flags |= wp_presentation_feedback::Kind::ZeroCopy;
+                }
+                surface
+                    .queued_presentation
+                    .extend(callbacks.into_iter().map(|callback| (callback, flags)));
                 // Start the software frame cap's interval from a presented
                 // frame, not from a skipped one.
                 surface.last_composite = Some(Instant::now());
@@ -2139,7 +2490,7 @@ struct SurfaceData {
     /// Instrumentation: the last frame queued on this CRTC and whether a game
     /// surface rode it. Set in `render_surface`, consumed by `on_vblank` to
     /// report presentation latency for gaming frames.
-    last_queue: Option<(Instant, bool)>,
+    last_queue: Option<(Instant, bool, QueuedPlanes)>,
     /// Instrumentation: when the previous gaming frame was presented, to report
     /// the achieved pace.
     last_gaming_present: Option<Instant>,
@@ -2147,9 +2498,181 @@ struct SurfaceData {
     /// While set, rendering is skipped and the vblank repaints instead, which
     /// caps the render rate to the refresh and keeps pointer motion cheap.
     frame_pending: bool,
+    /// A composite was asked for while `frame_pending` held it back. This
+    /// output's own vblank renders it, so a commit that lands during a flip is
+    /// shown on the next refresh even when another CRTC drives the node.
+    redraw_requested: bool,
+    /// When this output's last page flip completed. Game-mode frame callbacks
+    /// follow this output's vblank; the fallback timer stands in once a whole
+    /// refresh passed without one.
+    last_vblank: Option<Instant>,
     /// When the last frame was actually presented, used by the software frame
     /// cap. Skipped composites leave it untouched.
     last_composite: Option<Instant>,
+    /// Per-surface dmabuf feedback for a game shown on this output; `None`
+    /// when the output is not on the primary GPU or the table failed to build.
+    game_feedback: Option<GameDmabufFeedback>,
+    /// The game surfaces currently told to allocate for scanout, so they get
+    /// the render feedback back once they leave gaming mode.
+    scanout_feedback_surfaces: Vec<WlSurface>,
+    /// Presentation feedback of the game surfaces whose content rides the
+    /// flip in flight; answered with that flip's vblank timestamp.
+    queued_presentation: Vec<(PresentationFeedbackCallback, wp_presentation_feedback::Kind)>,
+}
+
+impl Drop for SurfaceData {
+    /// An output that goes away never presents its flip in flight: tell the
+    /// clients waiting on it.
+    fn drop(&mut self) {
+        for (callback, _) in self.queued_presentation.drain(..) {
+            callback.discarded();
+        }
+    }
+}
+
+/// Instrumentation: how a queued frame uses the display planes.
+#[derive(Debug, Clone, Copy)]
+struct QueuedPlanes {
+    /// An element (a game buffer) is scanned out on the primary plane.
+    primary_scanout: bool,
+    /// Elements placed on overlay planes.
+    overlays: usize,
+}
+
+/// The dmabuf feedback a game surface receives on one output.
+struct GameDmabufFeedback {
+    /// What every surface gets by default: buffers the renderer can sample.
+    render: DmabufFeedback,
+    /// The same, preceded by a scanout tranche of the formats this output's
+    /// planes accept: a client that honours it allocates buffers the display
+    /// can show directly, so the DRM compositor puts the game on a plane
+    /// instead of compositing it.
+    scanout: DmabufFeedback,
+}
+
+/// Builds the game feedback for an output of `node`.
+///
+/// The scanout tranche only lists formats the renderer can also sample, so a
+/// buffer that cannot be put on a plane still has the compositing fallback.
+/// Outputs of a secondary GPU get none: their buffers would have to cross
+/// devices, and the default feedback already describes the primary GPU.
+///
+/// `render_node` is the render node of the device that drives the output
+/// (`primary_gpu` is a render node too, while `scanout_node` is the device's
+/// primary `card` node the planes belong to).
+fn game_dmabuf_feedback(
+    primary_gpu: DrmNode,
+    render_node: DrmNode,
+    scanout_node: DrmNode,
+    render_formats: &FormatSet,
+    surface: &smithay::backend::drm::DrmSurface,
+) -> Option<GameDmabufFeedback> {
+    if render_node != primary_gpu {
+        debug!(%render_node, %primary_gpu, "No scanout dmabuf feedback: output is not on the primary GPU");
+        return None;
+    }
+    let planes = surface.planes();
+    let plane_formats = planes
+        .primary
+        .iter()
+        .chain(planes.overlay.iter())
+        .flat_map(|plane| plane.formats.iter().copied())
+        .collect::<FormatSet>()
+        .intersection(render_formats)
+        .copied()
+        .collect::<FormatSet>();
+    let builder = DmabufFeedbackBuilder::new(primary_gpu.dev_id(), render_formats.iter().copied());
+    let render = builder
+        .clone()
+        .build()
+        .map_err(|err| warn!("Failed to build render dmabuf feedback: {err}"))
+        .ok()?;
+    let scanout = builder
+        .add_preference_tranche(
+            scanout_node.dev_id(),
+            zwp_linux_dmabuf_feedback_v1::TrancheFlags::Scanout,
+            plane_formats,
+            4u32..=6,
+        )
+        .build()
+        .map_err(|err| warn!("Failed to build scanout dmabuf feedback: {err}"))
+        .ok()?;
+    Some(GameDmabufFeedback { render, scanout })
+}
+
+/// Moves the presentation feedback requested by the committed state of every
+/// surface of the tree rooted at `surface` into `callbacks`.
+fn take_presentation_callbacks(
+    surface: &WlSurface,
+    callbacks: &mut Vec<PresentationFeedbackCallback>,
+) {
+    with_surface_tree_downward(
+        surface,
+        (),
+        |_, _, _| TraversalAction::DoChildren(()),
+        |_, states, _| {
+            callbacks.extend(
+                states
+                    .cached_state
+                    .get::<PresentationFeedbackCachedState>()
+                    .current()
+                    .callbacks
+                    .drain(..),
+            );
+        },
+        |_, _, _| true,
+    );
+}
+
+/// Answers presentation feedback as presented on `output` at `time`
+/// (monotonic), or as discarded when there is no output to report.
+fn present_callbacks(
+    callbacks: impl IntoIterator<Item = (PresentationFeedbackCallback, wp_presentation_feedback::Kind)>,
+    output: Option<&Output>,
+    time: Duration,
+    refresh: Refresh,
+    sequence: u64,
+) {
+    for (callback, flags) in callbacks {
+        match output {
+            Some(output) => callback.presented(output, time, refresh, sequence, flags),
+            None => callback.discarded(),
+        }
+    }
+}
+
+/// The refresh reported with presentation feedback for `output`: its mode's
+/// interval, as the fastest rate when adaptive sync lets the panel wait.
+fn output_refresh(output: &Output, variable: bool) -> Refresh {
+    let Some(mhz) = output
+        .current_mode()
+        .map(|mode| mode.refresh)
+        .filter(|mhz| *mhz > 0)
+    else {
+        return Refresh::Unknown;
+    };
+    let interval = Duration::from_nanos(1_000_000_000_000 / mhz as u64);
+    if variable {
+        Refresh::variable(interval)
+    } else {
+        Refresh::fixed(interval)
+    }
+}
+
+/// Sends `feedback` to every surface of the tree rooted at `surface` that
+/// asked for per-surface feedback. Unchanged feedback is not resent.
+fn set_surface_tree_dmabuf_feedback(surface: &WlSurface, feedback: &DmabufFeedback) {
+    with_surface_tree_downward(
+        surface,
+        (),
+        |_, _, _| TraversalAction::DoChildren(()),
+        |_, states, _| {
+            if let Some(state) = SurfaceDmabufFeedbackState::from_states(states) {
+                state.set_feedback(feedback);
+            }
+        },
+        |_, _, _| true,
+    );
 }
 
 pub type GbmDrmCompositor = DrmCompositor<

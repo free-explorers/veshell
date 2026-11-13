@@ -5,7 +5,7 @@ use std::sync::{LazyLock, Mutex, OnceLock};
 use tracing::debug;
 
 use crate::capture::{RECORDING_CHIP_HEIGHT, RECORDING_CHIP_WIDTH};
-use crate::flutter_engine::view::Frame;
+use crate::flutter_engine::view::{Frame, PresentedFrame};
 use crate::{
     backend::render::fractionnal_texture::{
         FractionnalTextureBuffer, FractionnalTextureRenderElement,
@@ -83,7 +83,7 @@ fn stable_solid_id(key: u64) -> Id {
 pub fn get_render_elements<R>(
     renderer: &mut R,
     output: &Output,
-    frame: &Frame,
+    frame: &PresentedFrame,
     output_geometry: Rectangle<f64, smithay::utils::Logical>,
     now: Time<Monotonic>,
     cursor_image_status: &Mutex<CursorImageStatus>,
@@ -127,7 +127,7 @@ where
 pub fn get_frame_elements<R>(
     renderer: &mut R,
     output: &Output,
-    frame: &Frame,
+    frame: &PresentedFrame,
     output_geometry: Rectangle<f64, smithay::utils::Logical>,
     flip_flutter_texture: bool,
     surfaces_in_gaming_mode: Vec<&WlSurface>,
@@ -142,10 +142,14 @@ where
     let mut elements: Vec<VeshellRenderElements<R>> = Vec::new();
 
     for surface in surfaces_in_gaming_mode {
-        elements.extend(get_surface_elements(renderer, surface));
+        elements.extend(get_surface_elements(
+            renderer,
+            surface,
+            scale.fractional_scale(),
+        ));
     }
 
-    let flutter_texture = match frame {
+    let flutter_texture = match &frame.frame {
         Frame::Dmabuf(dmabuf) => renderer.import_dmabuf(dmabuf, None).ok(),
         Frame::Texture(texture) => Some(texture.clone()),
     };
@@ -176,7 +180,10 @@ where
             scale.fractional_scale(),
             transform,
             Vec::new(),
-        );
+        )
+        // Stable per view: only a new Flutter frame damages the output.
+        .with_identity(frame.element_id.clone(), frame.commit)
+        .with_sync(frame.sync.clone());
         let flutter_texture_element = FractionnalTextureRenderElement::from_texture_buffer(
             flutter_texture_buffer,
             Point::from((0.0, 0.0)),
@@ -812,7 +819,7 @@ fn scrim_regions(
 fn get_render_elements_for_frame<R>(
     renderer: &mut R,
     output: &Output,
-    frame: &Frame,
+    frame: &PresentedFrame,
     output_geometry: Rectangle<f64, smithay::utils::Logical>,
     now: Time<Monotonic>,
     cursor_image_status: &Mutex<CursorImageStatus>,
@@ -910,9 +917,23 @@ where
     elements
 }
 
+/// Render elements for a game-mode surface tree, drawn at the output's
+/// top-left corner.
+///
+/// The elements are scanout candidates: a game buffer that covers the output
+/// can be put on a plane by the DRM compositor instead of being composited,
+/// which saves a full-output GPU pass per game frame. The compositor falls
+/// back to rendering when the buffer cannot be scanned out.
+///
+/// `output_scale` maps the surface's logical size to physical pixels, the same
+/// scale the pointer path uses (`Space` logical coordinates, then the client
+/// scale). Drawing at `1.0` instead shrinks the game on a scaled output (a
+/// 2048-logical-wide game covers 2048 of 2560 pixels at 1.25) and moves every
+/// click away from what is under the cursor.
 pub fn get_surface_elements<R>(
     renderer: &mut R,
     surface: &WlSurface,
+    output_scale: f64,
 ) -> Vec<VeshellRenderElements<R>>
 where
     R: Renderer + ImportAll + ImportMem + ImportDma,
@@ -920,7 +941,14 @@ where
     <R as RendererSuper>::Error:,
     VeshellRenderElements<R>: RenderElement<R>,
 {
-    render_elements_from_surface_tree(renderer, surface, (0, 0), 1.0, 1.0, Kind::Unspecified)
+    render_elements_from_surface_tree(
+        renderer,
+        surface,
+        (0, 0),
+        output_scale,
+        1.0,
+        Kind::ScanoutCandidate,
+    )
 }
 
 #[cfg(test)]

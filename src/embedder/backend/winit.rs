@@ -28,7 +28,7 @@ use crate::flutter_engine::view::{OutputViewIdWrapper, ViewSwapchain};
 use crate::flutter_engine::{EmbedderChannels, FlutterEngine};
 use crate::keyboard::handle_keyboard_event;
 use crate::settings::{self, MonitorConfiguration};
-use crate::{send_frames_surface_tree, State};
+use crate::State;
 
 use super::render::get_render_elements;
 use super::Backend;
@@ -454,7 +454,14 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 WinitEvent::Redraw => {
                     let output = data.backend_data.output.clone();
-                    let age = data.backend_data.backend.buffer_age().unwrap_or(0);
+                    // Every redraw repaints the whole window (buffer age 0).
+                    // The Flutter frame keeps a stable damage identity, so an
+                    // unchanged scene now has no damage; this loop still swaps
+                    // on every redraw, and swapping a buffer nothing was drawn
+                    // into loses the nested EGL surface (BAD_SURFACE, then the
+                    // window stops presenting and Flutter gets no more vsync).
+                    // A nested window is not a hot path: always draw it all.
+                    let age = 0;
                     let geometry = match data.space.output_geometry(&output) {
                         Some(geometry) => geometry.to_f64(),
                         None => return,
@@ -472,7 +479,7 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                                 .views_management
                                 .views
                                 .get(&view_id)
-                                .and_then(|view| view.last_rendered.clone());
+                                .and_then(|view| view.presented_frame());
 
                             Some(match frame {
                                 Some(frame) => {
@@ -541,16 +548,9 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                                     data.flutter_engine().on_vsync(baton, 60_000).unwrap();
                                 }
 
-                                let frame_timestamp = data.frame_timestamp_millis();
-                                for surface in data.xdg_shell_state.toplevel_surfaces() {
-                                    send_frames_surface_tree(surface.wl_surface(), frame_timestamp);
-                                }
-                                for surface in data.xdg_popups.values() {
-                                    send_frames_surface_tree(surface.wl_surface(), frame_timestamp);
-                                }
-                                for surface in data.x11_surface_per_wl_surface.keys() {
-                                    send_frames_surface_tree(surface, frame_timestamp);
-                                }
+                                // Each client surface at the pace of what the
+                                // shell displays (`crate::surface_pacing`).
+                                data.send_paced_frame_callbacks(&[]);
 
                                 data.space.refresh();
                             }

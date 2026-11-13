@@ -9,7 +9,11 @@ import 'package:shell/meta_window/widget/meta_surface.dart';
 import 'package:shell/monitor/provider/monitor_placement.dart';
 import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/widget/frosted_surface.dart';
+import 'package:shell/wayland/model/wl_surface.dart';
+import 'package:shell/wayland/provider/wl_surface_state.dart';
+import 'package:shell/wayland/widget/surface_visibility.dart';
 import 'package:uuid/uuid.dart';
 
 class MetaSurfaceGamingOverlay extends HookConsumerWidget {
@@ -88,22 +92,99 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
       });
     }, [metaWindowId]);
 
+    // A game tile owns the monitor size, the way a maximized tile owns the
+    // tile size (see `window.dart`): re-assert it whenever the window's
+    // geometry differs. Switching a running window from maximized to game
+    // resizes it once, and a client can answer with its previous size after
+    // that resize (an X11 client acknowledges the old configure last); without
+    // this the window then stays at the tile size. A mismatch is corrected once
+    // per (target, actual) pair, so a client refusing the size cannot loop.
+    // Measured on the committed buffer, like the maximized tile: a client
+    // resizing itself (an X11 configure request) changes what it commits
+    // without changing the geometry the shell last requested.
+    final (bufferSize, bufferScale, viewportSize) = ref.watch(
+      wlSurfaceStateProvider(metaWindowState.surfaceId).select(
+        (value) => (value.texture?.size, value.scale, value.viewportSize),
+      ),
+    );
+    final windowSize = bufferSize == null
+        ? null
+        : surfaceLogicalSize(
+            bufferSize,
+            bufferScale,
+            metaWindowState.scaleRatio,
+            viewportSize: viewportSize,
+          );
+    final isFixedSized = metaWindowState.isFixedSized;
+    final lastCorrectedMismatch = useRef<(Size, Size)?>(null);
+    useEffect(() {
+      final target = logicalMonitorSize;
+      if (windowSize == null ||
+          target == null ||
+          target.width <= 0 ||
+          target.height <= 0 ||
+          isFixedSized) {
+        return null;
+      }
+      final atTarget =
+          (windowSize.width - target.width).abs() < 1 &&
+          (windowSize.height - target.height).abs() < 1;
+      if (atTarget) {
+        lastCorrectedMismatch.value = null;
+        return null;
+      }
+      final mismatchKey = (target, windowSize);
+      if (lastCorrectedMismatch.value == mismatchKey) return null;
+      lastCorrectedMismatch.value = mismatchKey;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
+        final geometry = ref
+            .read(metaWindowStateProvider(metaWindowId))
+            .geometry;
+        if (geometry == null) return;
+        geometryLog.info(
+          'sizing game id=$metaWindowId '
+          'target=${target.width}x${target.height} '
+          'actual=${geometry.width}x${geometry.height}',
+        );
+        ref
+            .read(metaWindowStateProvider(metaWindowId).notifier)
+            .patch(
+              UpdateGeometry(
+                id: metaWindowId,
+                value: Rect.fromLTWH(
+                  geometry.left,
+                  geometry.top,
+                  target.width,
+                  target.height,
+                ),
+              ),
+            );
+      });
+      return null;
+    }, [windowSize, logicalMonitorSize, isFixedSized]);
+
     useEffect(() {
       WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
         if (!context.mounted) return;
-        final geometry = ref.read(
-          metaWindowStateProvider(
-            metaWindowId,
-          ).select((value) => value.geometry),
-        );
-        final size =
-            ref.read(monitorLogicalSizeForNameProvider(monitorName)) ??
-            geometry?.size;
-
+        // Entering game mode always configures the window to the monitor,
+        // whatever its buffer says. A game can present a monitor-sized buffer
+        // (a DXVK swapchain at the game's resolution) from an X11 window that
+        // the maximized tile configured smaller: comparing buffers sees no
+        // mismatch, the window is never resized, and the game keeps rendering
+        // only its old client area while the rest of the buffer goes stale.
+        final geometry = ref
+            .read(metaWindowStateProvider(metaWindowId))
+            .geometry;
+        final target = ref.read(monitorLogicalSizeForNameProvider(monitorName));
         if (geometry != null &&
-            size != null &&
-            size.width > 0 &&
-            size.height > 0) {
+            target != null &&
+            target.width > 0 &&
+            target.height > 0) {
+          geometryLog.info(
+            'entering game id=$metaWindowId '
+            'target=${target.width}x${target.height}',
+          );
           ref
               .read(metaWindowStateProvider(metaWindowId).notifier)
               .patch(
@@ -112,8 +193,8 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
                   value: Rect.fromLTWH(
                     geometry.left,
                     geometry.top,
-                    size.width,
-                    size.height,
+                    target.width,
+                    target.height,
                   ),
                 ),
               );
@@ -192,9 +273,14 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
                     // state stops driving Flutter frames).
                     child: metaWindowState.gameModeActivated
                         ? const SizedBox.expand()
-                        : MetaSurfaceWidget(
-                            metaWindowId: metaWindowId,
-                            decorated: false,
+                        // A paused game only shows through its frost: the
+                        // compositor paces it down to free the GPU and CPU.
+                        : SurfaceFrameRateLimit(
+                            limited: paused,
+                            child: MetaSurfaceWidget(
+                              metaWindowId: metaWindowId,
+                              decorated: false,
+                            ),
                           ),
                   ),
                 ),

@@ -47,6 +47,7 @@ mod portal;
 mod probe;
 mod settings;
 mod state;
+mod surface_pacing;
 mod texture_swap_chain;
 mod wayland;
 

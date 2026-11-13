@@ -1,4 +1,6 @@
+use crate::flutter_engine::view::FlutterFrameFence;
 use smithay::backend::renderer::element::{Element, Id, Kind, RenderElement, UnderlyingStorage};
+use smithay::backend::renderer::sync::SyncPoint;
 use smithay::backend::renderer::utils::{CommitCounter, OpaqueRegions};
 use smithay::backend::renderer::{ContextId, Frame as _, Renderer, Texture};
 use smithay::utils::user_data::UserDataMap;
@@ -15,6 +17,8 @@ pub struct FractionnalTextureBuffer<T: Texture> {
     scale: Scale<f64>,
     transform: Transform,
     opaque_regions: Vec<Rectangle<i32, Buffer>>,
+    /// Reached once the texture's content is rendered: drawing waits for it.
+    sync: SyncPoint,
 }
 
 /// Render element for a [`TextureBuffer`].
@@ -44,11 +48,28 @@ impl<T: Texture> FractionnalTextureBuffer<T> {
             scale: scale.into(),
             transform,
             opaque_regions,
+            sync: SyncPoint::signaled(),
         }
     }
 }
 
 impl<T: Texture> FractionnalTextureBuffer<T> {
+    /// Reuses an identity across composites: the same `id` with an unchanged
+    /// `commit` reads as an undamaged element to the damage tracker, so only a
+    /// new commit repaints it.
+    pub fn with_identity(mut self, id: Id, commit: CommitCounter) -> Self {
+        self.id = id;
+        self.commit_counter = commit;
+        self
+    }
+
+    /// The texture is still being rendered (by another context) until `sync`
+    /// is reached: every draw of it waits for that first.
+    pub fn with_sync(mut self, sync: SyncPoint) -> Self {
+        self.sync = sync;
+        self
+    }
+
     pub fn logical_size(&self) -> Size<f64, Logical> {
         self.texture
             .size()
@@ -168,6 +189,17 @@ where
             return Ok(());
         }
 
+        let sync = &self.buffer.sync;
+        if !sync.is_reached() {
+            // On the GPU, in this frame's context, when the fence is on its
+            // display; otherwise the renderer imports it or blocks.
+            let inserted = sync
+                .get::<FlutterFrameFence>()
+                .is_some_and(FlutterFrameFence::wait_in_current_context);
+            if !inserted {
+                frame.wait(sync)?;
+            }
+        }
         frame.render_texture_from_to(
             &self.buffer.texture,
             src,

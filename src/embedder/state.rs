@@ -111,6 +111,8 @@ pub struct State<BackendData: Backend + 'static> {
     /// replay the matching releases when gaming mode ends, so the client can't
     /// keep believing the Ctrl of `Ctrl+Esc` (or any other held key) is down.
     pub game_mode_forwarded_keys: HashSet<Keycode>,
+    /// Frame pacing of client surfaces by what the shell displays.
+    pub surface_pacing: crate::surface_pacing::SurfacePacing,
     pub gl: Option<Gles2>,
     pub imported_dmabufs: Vec<Dmabuf>,
     pub is_next_flutter_frame_scheduled: bool,
@@ -678,6 +680,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             super_key_forwarding: Default::default(),
             key_queue: Default::default(),
             game_mode_forwarded_keys: HashSet::new(),
+            surface_pacing: Default::default(),
             dmabuf_state,
             seat,
             seat_state,

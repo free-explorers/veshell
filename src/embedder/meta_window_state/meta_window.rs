@@ -684,6 +684,14 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                                             .expect("Failed to un-fullscreen window");
                                     }
                                     Some(DisplayMode::Fullscreen) => {
+                                        // Like the xdg path: fullscreen only,
+                                        // not maximized too. Wine reads a
+                                        // window with both states as
+                                        // maximized and keeps the work-area
+                                        // size it had.
+                                        x11_surface
+                                            .set_maximized(false)
+                                            .expect("Failed to un-maximize window");
                                         x11_surface
                                             .set_fullscreen(true)
                                             .expect("Failed to fullscreen window");
@@ -988,7 +996,15 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         (None, None) => true,
                         _ => false,
                     };
-                    if are_equal {
+                    // An unchanged geometry reported by the client is a no-op.
+                    // A request from the shell (`!propagate`) is not: the
+                    // client may have resized itself since (an X11 configure
+                    // request, a stale ack), so the stored geometry matching
+                    // says nothing about the committed size, and dropping the
+                    // request would leave the window at its own size. The
+                    // shell sends one correction per observed mismatch, so
+                    // this cannot loop.
+                    if are_equal && propagate {
                         return;
                     }
                     // A size change moves the constraint box the window's
@@ -1329,13 +1345,45 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         }
                     }
                 } else {
+                    // Hand the keyboard back whichever way the mode ends
+                    // (Ctrl+Esc, a pause from the shell, the game closing
+                    // itself). First replay a release for every key the
+                    // client still believes is held, while it still has the
+                    // keyboard focus: a pause from the shell otherwise leaves
+                    // them down in the game. Ctrl+Esc already released its
+                    // keys, so this is a no-op there.
+                    crate::keyboard::release_game_mode_forwarded_keys(self);
                     if self.meta_window_state.meta_window_in_gaming_mode.as_ref() == Some(&id) {
                         self.meta_window_state.meta_window_in_gaming_mode = None;
                     }
-                    // Any keys the client was handed are released by the
-                    // input path that disables the mode; this is the
-                    // backstop for a deactivation that bypassed it.
-                    self.game_mode_forwarded_keys.clear();
+                    // Then take back the keyboard focus set on entry: it
+                    // otherwise stays on the game, and every key the shell
+                    // does not consume (the paused overlay's navigation among
+                    // them) keeps reaching the paused game. Resuming re-focuses
+                    // it on activation.
+                    let game_surface = self
+                        .meta_window_state
+                        .meta_windows
+                        .get(&id)
+                        .and_then(|window| self.surfaces.get(&window.surface_id))
+                        .cloned();
+                    if let Some(game_surface) = game_surface {
+                        use smithay::wayland::seat::WaylandFocus;
+                        let keyboard = self.keyboard.clone();
+                        let focused_on_game = keyboard.current_focus().is_some_and(|focus| {
+                            focus.wl_surface().as_deref() == Some(&game_surface)
+                        });
+                        if focused_on_game {
+                            keyboard.set_focus(
+                                self,
+                                None,
+                                smithay::utils::SERIAL_COUNTER.next_serial(),
+                            );
+                        }
+                        // A lock taken while gaming must not restore the
+                        // keyboard to the game on unlock either.
+                        self.lock.forget_keyboard_focus_for_surface(&game_surface);
+                    }
                     // The game no longer owns the pointer: clear the focus the
                     // compositor set on entry so motion stops reaching it until
                     // the shell re-establishes a focus.
