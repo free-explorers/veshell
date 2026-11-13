@@ -10,7 +10,7 @@ provides both, including in navigator dialogs and overlays.
 The app ships English, Arabic, Bengali, Chinese (Simplified and Traditional),
 French, German, Hindi, Indonesian, Italian, Japanese, Korean, Polish,
 Portuguese (including Brazil and Portugal variants), Russian, Spanish,
-Turkish, Urdu, and Vietnamese. Adding a system locale does not
+Turkish, Ukrainian, Urdu, and Vietnamese. Adding a system locale does not
 add a Veshell translation. English stays first in the generated supported
 locale list through `preferred-supported-locales` in `src/shell/l10n.yaml`,
 so unsupported system languages continue to fall back to English.
@@ -154,7 +154,7 @@ ordering, shipped-only choices, preference resolution, clearing overrides,
 and persistence.
 `l10n_extraction_test.dart` guards common UI text boundaries
 against new hardcoded strings. `translation_catalogs_test.dart` checks all
-catalogs for completeness, locale selection, placeholders, Russian, Polish and Arabic
+catalogs for completeness, locale selection, placeholders, Russian, Ukrainian, Polish and Arabic
 plural forms, and delegate loading and text direction for every language.
 `system_locale_test.dart` covers staged edits,
 regional override preservation, authorization failures, concurrent edits, and
