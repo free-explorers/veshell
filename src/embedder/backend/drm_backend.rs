@@ -190,6 +190,9 @@ pub struct DrmBackend {
     /// 1000 Hz mouse would otherwise queue a thousand idle renders a second;
     /// requests are coalesced into the one already pending.
     render_scheduled: HashSet<DrmNode>,
+    /// Whether the last vsync tick held Flutter's batons because games cover
+    /// every output; only used to log the transitions.
+    shell_paused_for_games: bool,
 }
 
 /// Screensaver wake hook: re-insert every blanked output into the render loop.
@@ -567,6 +570,7 @@ pub fn run_drm_backend() {
             software_frame_interval: None,
             software_throttled_nodes: HashSet::new(),
             render_scheduled: HashSet::new(),
+            shell_paused_for_games: false,
         },
         None,
         settings_manager,
@@ -1760,9 +1764,26 @@ impl State<DrmBackend> {
             return;
         };
 
-        let drained: Vec<_> = std::mem::take(&mut self.batons);
-        for baton in drained {
-            let _ = self.flutter_engine().on_vsync(baton, mhz as u32);
+        // While active games cover every output, nothing the shell draws can
+        // be seen: hold its vsync batons so Flutter produces no frames (no
+        // raster, no composite competing with the game for the GPU). Commits
+        // of background windows would otherwise keep it rendering. Leaving
+        // gaming mode, or locking, makes the shell visible again and the
+        // next tick releases the held baton.
+        let shell_hidden = self.shell_hidden_by_games();
+        if shell_hidden != self.backend_data.shell_paused_for_games {
+            self.backend_data.shell_paused_for_games = shell_hidden;
+            if shell_hidden {
+                info!("Shell rendering paused: active games cover every output");
+            } else {
+                info!("Shell rendering resumed");
+            }
+        }
+        if !shell_hidden {
+            let drained: Vec<_> = std::mem::take(&mut self.batons);
+            for baton in drained {
+                let _ = self.flutter_engine().on_vsync(baton, mhz as u32);
+            }
         }
         let frame_timestamp = self.frame_timestamp_millis();
         // Game-mode surfaces follow their own output's vblank
@@ -1809,6 +1830,19 @@ impl State<DrmBackend> {
                     .is_some_and(|id| id.device_id == node && id.crtc == crtc)
             })
             .cloned()
+    }
+
+    /// Whether an activated game covers every output, so no shell pixel is
+    /// visible anywhere. The game is only activated once the shell's zoom
+    /// route completed, and never while locked (the lock screen is Flutter).
+    fn shell_hidden_by_games(&self) -> bool {
+        let mut outputs = self.space.outputs().peekable();
+        outputs.peek().is_some()
+            && outputs.all(|output| {
+                !self
+                    .game_mode_surfaces_for_output(&output.name())
+                    .is_empty()
+            })
     }
 
     /// Every game-mode surface, on any output.
