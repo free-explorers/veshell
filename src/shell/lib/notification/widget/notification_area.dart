@@ -128,6 +128,8 @@ class NotificationArea extends HookConsumerWidget {
         .remove(notification.id);
 
     return Card(
+      // Keyed: an expanded entry keeps its state as others come and go.
+      key: ValueKey(notification.id),
       // The `Column` spacing is the whole gap between two notifications; keep
       // only the horizontal margin so the card's default 4px vertical margin
       // cannot add to it.

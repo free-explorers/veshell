@@ -6,7 +6,10 @@ import 'package:shell/notification/model/notification.serializable.dart';
 import 'package:shell/notification/model/notification_hints.serializable.dart';
 import 'package:shell/notification/widget/notification.dart';
 
-Notification _notification({List<String> actions = const []}) => Notification(
+Notification _notification({
+  List<String> actions = const [],
+  String body = 'Body',
+}) => Notification(
   id: 1,
   appId: null,
   dbusNotification: DbusNotification(
@@ -15,7 +18,7 @@ Notification _notification({List<String> actions = const []}) => Notification(
     replacesId: 0,
     appIcon: 'file:///nonexistent',
     summary: 'Summary',
-    body: 'Body',
+    body: body,
     actions: actions,
     hints: const NotificationHints(),
     expireTimeout: -1,
@@ -85,5 +88,68 @@ void main() {
     await tester.tap(find.text('Open'));
 
     expect(invoked, 'open');
+  });
+
+  group('a long notification', () {
+    final longBody = List.filled(40, 'word').join(' ');
+    final expand = find.byKey(const ValueKey('notification-expand'));
+
+    Future<void> pump(WidgetTester tester, String body) => tester.pumpWidget(
+      _wrap(
+        Center(
+          child: SizedBox(
+            width: 300,
+            child: NotificationWidget(
+              notification: _notification(body: body),
+              onClose: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    testWidgets('is cut to a few lines until expanded', (tester) async {
+      await pump(tester, longBody);
+      final fade = find.byType(AnimatedCrossFade);
+      CrossFadeState state() =>
+          tester.widget<AnimatedCrossFade>(fade).crossFadeState;
+      // Both versions of the text are built: one cut, one in full.
+      final bodies = tester.widgetList<Text>(find.text(longBody)).toList();
+      final collapsed = tester.getSize(fade).height;
+
+      expect(expand, findsOneWidget);
+      expect(state(), CrossFadeState.showFirst);
+      expect(bodies.map((text) => text.maxLines), unorderedEquals([4, null]));
+      expect(
+        bodies.firstWhere((text) => text.maxLines == 4).overflow,
+        TextOverflow.ellipsis,
+      );
+
+      await tester.tap(expand);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Halfway through, the text is still growing towards its full height.
+      final halfway = tester.getSize(fade).height;
+      expect(halfway, greaterThan(collapsed));
+
+      await tester.pumpAndSettle();
+
+      expect(state(), CrossFadeState.showSecond);
+      expect(tester.getSize(fade).height, greaterThan(halfway));
+
+      await tester.tap(expand);
+      await tester.pumpAndSettle();
+
+      expect(state(), CrossFadeState.showFirst);
+      expect(tester.getSize(fade).height, collapsed);
+    });
+
+    testWidgets('a short one has nothing to expand', (tester) async {
+      await pump(tester, 'Short');
+
+      expect(expand, findsNothing);
+      expect(tester.widget<Text>(find.text('Short')).maxLines, isNull);
+    });
   });
 }
