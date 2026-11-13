@@ -117,6 +117,15 @@ texture frame is not signalled and the shell draws a placeholder instead of
 so there is no duplicate rasterization and no full-output damage from the shell
 — only the game's own damaged region is repainted.
 
+The shell's own frames are **handed over with a fence**: Flutter's raster
+thread creates an EGL fence after each frame and flushes, without waiting for
+the GPU, and the compositor makes its GPU wait for that fence before it samples
+the frame (inserted into its own context, or imported on another GPU). A wait
+on the raster thread (`glFinish`) would grow with the GPU load of the game
+behind the shell: measured on a 144 Hz output with a game running, it blocked
+the raster thread for about 2.3 ms per frame (p95 9.5 ms, over a whole
+refresh), against about 0.13 ms (p95 0.3 ms) with the fence.
+
 **The shell stops rendering** while activated games cover every output: the
 compositor holds Flutter's vsync batons, so Flutter produces no frame at all
 (commits of background windows would otherwise keep it rasterizing and

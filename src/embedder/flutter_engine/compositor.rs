@@ -12,11 +12,13 @@ use crate::{
             FlutterOpenGLFramebuffer, FlutterOpenGLTargetType_kFlutterOpenGLTargetTypeFramebuffer,
             FlutterPresentViewInfo,
         },
-        view::{AcquiredBackingStore, BackingStoreId, Frame},
+        view::{AcquiredBackingStore, BackingStoreId, FlutterFrameFence, Frame},
         FlutterEngine,
     },
     state::State,
 };
+use smithay::backend::egl::fence::EGLFence;
+use smithay::backend::renderer::sync::SyncPoint;
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::calloop::{channel, LoopHandle};
 struct BackingStoreRequest {
@@ -25,7 +27,8 @@ struct BackingStoreRequest {
 }
 
 enum BackingStoreEvent {
-    Presented(BackingStoreId),
+    /// A frame Flutter submitted, and the point its rendering completes.
+    Presented(BackingStoreId, SyncPoint),
     Collected(BackingStoreId),
 }
 
@@ -99,7 +102,7 @@ impl FlutterCompositor {
                     let freeze = data.capture_state.session.is_some();
                     let flutter_engine = data.flutter_engine_mut();
                     match event {
-                        BackingStoreEvent::Presented(id) => {
+                        BackingStoreEvent::Presented(id, sync) => {
                             // While a screenshot session freezes the
                             // desktop, late Flutter frames must not
                             // replace the frame captured at hotkey time.
@@ -112,7 +115,7 @@ impl FlutterCompositor {
                             } else if let Some(view) =
                                 flutter_engine.views_management.views.get_mut(&id.view_id)
                             {
-                                view.present_backing_store(id);
+                                view.present_backing_store(id, sync);
                             }
                             // The presented frame is fresh output damage:
                             // every screen-cast session on this output
@@ -291,7 +294,7 @@ where
     let compositor_data = &mut *(user_data as *mut CompositorUserData);
     let flutter_engine =
         &mut *(compositor_data.flutter_engine_ptr as *mut FlutterEngine<BackendData>);
-    flutter_engine.renderer_data.gl.Finish();
+    let sync = frame_sync_point(&flutter_engine.renderer_data);
     let mut backing_store_id = None;
     for layer in std::slice::from_raw_parts((*info).layers, (*info).layers_count) {
         if layer.is_null() {
@@ -318,8 +321,43 @@ where
         .and_then(|id| {
             compositor_data
                 .tx_backing_store_event
-                .send(BackingStoreEvent::Presented(id))
+                .send(BackingStoreEvent::Presented(id, sync))
                 .ok()
         })
         .is_some()
+}
+
+/// The point at which the frame Flutter just submitted is fully rendered.
+///
+/// The compositor samples the frame from another context, so it must not read
+/// it before Flutter's commands complete. A fence lets the compositor's GPU
+/// wait for them when it composites the frame, instead of blocking the raster
+/// thread here until the GPU is done (`glFinish`), a stall that grows with
+/// every other client loading the GPU.
+///
+/// Called on the raster thread, with Flutter's context current.
+fn frame_sync_point(renderer_data: &super::RendererData) -> SyncPoint {
+    match EGLFence::create(renderer_data.main_egl_context.display()) {
+        Ok(fence) => {
+            // A native fence only gets its file descriptor, and the
+            // compositor's context only sees the commands it follows, once
+            // they are flushed.
+            unsafe { renderer_data.gl.Flush() };
+            SyncPoint::from(FlutterFrameFence::new(
+                fence,
+                renderer_data.main_egl_context.display().clone(),
+            ))
+        }
+        Err(error) => {
+            static WARNED: std::sync::Once = std::sync::Once::new();
+            WARNED.call_once(|| {
+                tracing::warn!(
+                    ?error,
+                    "No EGL fence for Flutter frames: waiting for each one to render"
+                );
+            });
+            unsafe { renderer_data.gl.Finish() };
+            SyncPoint::signaled()
+        }
+    }
 }

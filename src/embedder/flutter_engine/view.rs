@@ -10,13 +10,16 @@ use crate::flutter_engine::embedder::{
 use crate::{backend::Backend, flutter_engine::FlutterEngine};
 use smithay::backend::allocator::dmabuf::{AnyError, AsDmabuf, Dmabuf};
 use smithay::backend::allocator::{Allocator, Slot, Swapchain};
+use smithay::backend::egl::{fence::EGLFence, ffi, EGLDisplay};
 use smithay::backend::renderer::element::Id;
 use smithay::backend::renderer::gles::GlesTexture;
+use smithay::backend::renderer::sync::{Fence, Interrupted, SyncPoint};
 use smithay::backend::renderer::utils::CommitCounter;
 use smithay::backend::renderer::Texture;
 use smithay::output::Output;
 use smithay::reexports::calloop::channel;
 use smithay::utils::{SerialCounter, Size};
+use std::os::fd::OwnedFd;
 use tracing::debug;
 pub struct OutputViewIdWrapper {
     pub view_id: i64,
@@ -53,6 +56,51 @@ pub enum Frame {
     Texture(GlesTexture),
 }
 
+/// The fence Flutter's raster thread creates after rendering a frame, with the
+/// display it belongs to.
+#[derive(Debug)]
+pub struct FlutterFrameFence {
+    fence: EGLFence,
+    display: EGLDisplay,
+}
+
+impl FlutterFrameFence {
+    pub fn new(fence: EGLFence, display: EGLDisplay) -> Self {
+        Self { fence, display }
+    }
+
+    /// Makes the commands the current context submits next wait on the GPU
+    /// for the frame. Returns `false` when the current context is not on the
+    /// fence's display (another GPU); nothing is waited for then.
+    ///
+    /// Unlike the renderer's own wait, this leaves the context's draw surface
+    /// bound: that wait makes the context current without one, which breaks a
+    /// frame being drawn into a window (the nested backend).
+    pub fn wait_in_current_context(&self) -> bool {
+        let current = unsafe { ffi::egl::GetCurrentDisplay() };
+        current == self.display.get_display_handle().handle
+            && self.fence.wait(&self.display).is_ok()
+    }
+}
+
+impl Fence for FlutterFrameFence {
+    fn is_signaled(&self) -> bool {
+        Fence::is_signaled(&self.fence)
+    }
+
+    fn wait(&self) -> Result<(), Interrupted> {
+        Fence::wait(&self.fence)
+    }
+
+    fn is_exportable(&self) -> bool {
+        Fence::is_exportable(&self.fence)
+    }
+
+    fn export(&self) -> Option<OwnedFd> {
+        Fence::export(&self.fence)
+    }
+}
+
 /// The frame a view currently shows, with the identity the damage tracker
 /// needs to tell a new Flutter frame from the same one composited again.
 ///
@@ -64,6 +112,9 @@ pub enum Frame {
 #[derive(Debug, Clone)]
 pub struct PresentedFrame {
     pub frame: Frame,
+    /// Reached once Flutter has finished rendering `frame`: whatever samples
+    /// it waits for this first.
+    pub sync: SyncPoint,
     pub element_id: Id,
     pub commit: CommitCounter,
 }
@@ -183,6 +234,8 @@ pub struct VeshellView {
     /// buffer while it is still being composited. Texture frames do not need
     /// this: the texture itself is kept alive by `last_rendered`.
     last_rendered_slot: Option<Slot<Dmabuf>>,
+    /// When Flutter's rendering of `last_rendered` completes.
+    last_rendered_sync: SyncPoint,
     pub last_rendered_generation: Option<u64>,
     /// Render-element identity of this view's frame (see [`PresentedFrame`]).
     element_id: Id,
@@ -195,6 +248,7 @@ impl VeshellView {
     pub fn presented_frame(&self) -> Option<PresentedFrame> {
         Some(PresentedFrame {
             frame: self.last_rendered.clone()?,
+            sync: self.last_rendered_sync.clone(),
             element_id: self.element_id.clone(),
             commit: self.presented_commit,
         })
@@ -235,7 +289,7 @@ impl VeshellView {
         })
     }
 
-    pub fn present_backing_store(&mut self, id: BackingStoreId) -> bool {
+    pub fn present_backing_store(&mut self, id: BackingStoreId, sync: SyncPoint) -> bool {
         if id.view_id != self.view_id {
             return false;
         }
@@ -251,6 +305,7 @@ impl VeshellView {
             self.last_rendered_slot = Some(slot);
         }
         self.last_rendered_generation = Some(id.generation);
+        self.last_rendered_sync = sync;
         self.presented_commit.increment();
         if let Some(previous) = self.last_rendered.replace(frame.frame) {
             self.recycle(previous);
@@ -334,6 +389,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                             in_flight: HashMap::new(),
                             last_rendered: None,
                             last_rendered_slot: None,
+                            last_rendered_sync: SyncPoint::signaled(),
                             last_rendered_generation: None,
                             element_id: Id::new(),
                             presented_commit: CommitCounter::default(),
