@@ -19,6 +19,7 @@ import 'package:shell/platform/model/event/gesture_swipe/gesture_swipe_end.seria
 import 'package:shell/platform/model/event/gesture_swipe/gesture_swipe_update.serializable.dart';
 import 'package:shell/platform/model/event/interactive_move/interactive_move.serializable.dart';
 import 'package:shell/platform/model/event/interactive_resize/interactive_resize.serializable.dart';
+import 'package:shell/platform/model/event/keyboard_layout_changed/keyboard_layout_changed.serializable.dart';
 import 'package:shell/platform/model/event/meta_popup_created/meta_popup_created.serializable.dart';
 import 'package:shell/platform/model/event/meta_popup_patches/meta_popup_patches.serializable.dart';
 import 'package:shell/platform/model/event/meta_popup_removed/meta_popup_removed.serializable.dart';
@@ -262,6 +263,13 @@ sealed class PlatformEvent with _$PlatformEvent implements PlatformInteraction {
     required String method,
     required LockAuthUpdateMessage message,
   }) = LockAuthUpdateEvent;
+
+  /// The seat's active keyboard layout changed, or may have: the status bar
+  /// shows it.
+  const factory PlatformEvent.keyboardLayoutChanged({
+    required String method,
+    required KeyboardLayoutChangedMessage message,
+  }) = KeyboardLayoutChangedEvent;
 
   /// Gesture Swipe Begin Event
   /// This event is sent when the user performs a swipe gesture.

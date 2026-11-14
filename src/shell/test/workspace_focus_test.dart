@@ -14,6 +14,7 @@ import 'package:shell/screen/provider/screen_for_view.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/settings/provider/state/focus_indicator_setting.dart';
+import 'package:shell/status_bar/provider/status_bar_settings.dart';
 import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/model/window_manager_state.serializable.dart';
@@ -98,6 +99,7 @@ void main() {
         screenForViewProvider(1).overrideWithValue(_screen),
         windowManagerProvider.overrideWith(_FakeWindowManager.new),
         focusIndicatorSettingProvider.overrideWithValue(FocusIndicator.border),
+        statusBarSettingsProvider.overrideWithValue(statusBarSettingsFallback),
         workspaceStateProvider(
           _workspace,
         ).overrideWith(_FakeWorkspaceState.new),
@@ -180,6 +182,7 @@ void main() {
         screenForViewProvider(1).overrideWithValue(_screen),
         windowManagerProvider.overrideWith(_FakeWindowManager.new),
         focusIndicatorSettingProvider.overrideWithValue(FocusIndicator.border),
+        statusBarSettingsProvider.overrideWithValue(statusBarSettingsFallback),
         workspaceStateProvider(
           _workspace,
         ).overrideWith(_FakeWorkspaceState.new),
@@ -256,6 +259,7 @@ void main() {
         ]),
         windowManagerProvider.overrideWith(_FakeWindowManager.new),
         focusIndicatorSettingProvider.overrideWithValue(FocusIndicator.border),
+        statusBarSettingsProvider.overrideWithValue(statusBarSettingsFallback),
         workspaceStateProvider(
           workspaceA,
         ).overrideWith(_FakeWorkspaceState.new),

@@ -16,6 +16,10 @@ import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
 import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 import 'package:shell/shortcut_manager/model/screen_shortcuts.dart';
+import 'package:shell/status_bar/provider/status_bar_settings.dart';
+import 'package:shell/status_bar/provider/status_notch_geometry.dart';
+import 'package:shell/status_bar/widget/status_notch.dart';
+import 'package:shell/status_bar/widget/status_top_panel.dart';
 import 'package:shell/tile_grab/model/tile_grab_marker.dart';
 import 'package:shell/workspace/widget/workspace.dart';
 
@@ -139,28 +143,62 @@ class ScreenWidget extends HookConsumerWidget {
                           textDirection: TextDirection.rtl,
                           children: [
                             Expanded(
-                              child: SlidingContainer(
-                                direction: Axis.vertical,
-                                index: screenState.selectedIndex,
-                                onIndexChanged: (newIndex) {
-                                  ref
-                                      .read(
-                                        screenStateProvider(screenId).notifier,
-                                      )
-                                      .selectWorkspace(newIndex);
-                                },
-                                isSwipeEnabled:
-                                    screenId ==
-                                    ref.watch(focusedScreenProvider),
-                                children: screenState.workspaceList
-                                    .mapIndexed(
-                                      (index, workspaceId) => WorkspaceWidget(
-                                        workspaceId: workspaceId,
-                                        isSelected:
-                                            screenState.selectedIndex == index,
-                                      ),
-                                    )
-                                    .toList(),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  // The top panel style of the status bar
+                                  // lays the workspaces out below it.
+                                  if (ref.watch(
+                                    statusBarSettingsProvider.select(
+                                      (settings) => settings.showsTopPanel,
+                                    ),
+                                  ))
+                                    const StatusTopPanel(),
+                                  Expanded(
+                                    child: Stack(
+                                      children: [
+                                        Positioned.fill(
+                                          child: SlidingContainer(
+                                            direction: Axis.vertical,
+                                            index: screenState.selectedIndex,
+                                            onIndexChanged: (newIndex) {
+                                              ref
+                                                  .read(
+                                                    screenStateProvider(
+                                                      screenId,
+                                                    ).notifier,
+                                                  )
+                                                  .selectWorkspace(newIndex);
+                                            },
+                                            isSwipeEnabled:
+                                                screenId ==
+                                                ref.watch(
+                                                  focusedScreenProvider,
+                                                ),
+                                            children: screenState.workspaceList
+                                                .mapIndexed(
+                                                  (
+                                                    index,
+                                                    workspaceId,
+                                                  ) => WorkspaceWidget(
+                                                    workspaceId: workspaceId,
+                                                    isSelected:
+                                                        screenState
+                                                            .selectedIndex ==
+                                                        index,
+                                                  ),
+                                                )
+                                                .toList(),
+                                          ),
+                                        ),
+                                        // Hung from the top of the screen,
+                                        // above the workspaces sliding
+                                        // under it.
+                                        _PlacedStatusNotch(screenId: screenId),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                             const Material(elevation: 4, child: ScreenPanel()),
@@ -177,6 +215,32 @@ class ScreenWidget extends HookConsumerWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The status notch, placed right before the workspace panels' visible tile
+/// picker, reaching over its rounded end. Hidden until the panel is measured.
+class _PlacedStatusNotch extends ConsumerWidget {
+  const _PlacedStatusNotch({required this.screenId});
+
+  final ScreenId screenId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final trailingWidth = ref.watch(
+      workspacePanelTrailingWidthProvider(screenId),
+    );
+    if (!ref.watch(statusBarSettingsProvider.select((s) => s.showsNotch))) {
+      return const SizedBox.shrink();
+    }
+    return PositionedDirectional(
+      top: 0,
+      end: trailingWidth - StatusNotch.pickerOverlap,
+      child: Visibility.maintain(
+        visible: trailingWidth > 0,
+        child: const StatusNotch(),
       ),
     );
   }
