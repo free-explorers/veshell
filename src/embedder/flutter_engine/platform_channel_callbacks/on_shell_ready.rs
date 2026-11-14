@@ -76,6 +76,8 @@ pub fn on_shell_ready<BackendData: Backend + 'static>(
 
     // A shell restarted while locked must draw the lock screen again.
     crate::lock::replay_to_shell(data);
+    // Its status bar shows the active keyboard layout.
+    super::switch_keyboard_layout::notify_keyboard_layout(data);
 
     result.success(None);
 }

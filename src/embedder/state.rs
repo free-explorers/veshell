@@ -832,6 +832,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         keyboard
             .set_xkb_config(self, settings.keyboard.xkb_config())
             .unwrap();
+        crate::flutter_engine::platform_channel_callbacks::switch_keyboard_layout::notify_keyboard_layout(self);
         self.change_keyboard_repeat_info(
             settings.keyboard.repeat_delay_ms,
             settings.keyboard.effective_repeat_rate(),

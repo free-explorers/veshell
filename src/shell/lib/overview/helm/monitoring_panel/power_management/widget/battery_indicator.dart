@@ -101,56 +101,38 @@ class SystemBatteryIndicator extends HookWidget {
     );
   }
 
-  ShellIcon get icon {
-    final isCharging = device.state == UPowerDeviceState.charging;
-    if (isCharging) {
-      switch (device.percentage) {
-        case >= 90:
-          return const ShellIcon(MdiIcons.batteryCharging100);
-        case >= 80:
-          return const ShellIcon(MdiIcons.batteryCharging90);
-        case >= 70:
-          return const ShellIcon(MdiIcons.batteryCharging80);
-        case >= 60:
-          return const ShellIcon(MdiIcons.batteryCharging70);
-        case >= 50:
-          return const ShellIcon(MdiIcons.batteryCharging60);
-        case >= 40:
-          return const ShellIcon(MdiIcons.batteryCharging50);
-        case >= 30:
-          return const ShellIcon(MdiIcons.batteryCharging40);
-        case >= 20:
-          return const ShellIcon(MdiIcons.batteryCharging30);
-        case >= 10:
-          return const ShellIcon(MdiIcons.batteryCharging20);
-        default:
-          return const ShellIcon(MdiIcons.batteryCharging10);
-      }
-    } else {
-      switch (device.percentage) {
-        case >= 90:
-          return const ShellIcon(MdiIcons.battery);
-        case >= 80:
-          return const ShellIcon(MdiIcons.battery90);
-        case >= 70:
-          return const ShellIcon(MdiIcons.battery80);
-        case >= 60:
-          return const ShellIcon(MdiIcons.battery70);
-        case >= 50:
-          return const ShellIcon(MdiIcons.battery60);
-        case >= 40:
-          return const ShellIcon(MdiIcons.battery50);
-        case >= 30:
-          return const ShellIcon(MdiIcons.battery40);
-        case >= 20:
-          return const ShellIcon(MdiIcons.battery30);
-        case >= 10:
-          return const ShellIcon(MdiIcons.battery20);
-        default:
-          return const ShellIcon(MdiIcons.battery10);
-      }
-    }
+  ShellIcon get icon => ShellIcon(systemBatteryIconData(device));
+}
+
+/// The glyph of the system [device]'s charge level and charging state.
+IconData systemBatteryIconData(UPowerDevice device) {
+  final isCharging = device.state == UPowerDeviceState.charging;
+  if (isCharging) {
+    return switch (device.percentage) {
+      >= 90 => MdiIcons.batteryCharging100,
+      >= 80 => MdiIcons.batteryCharging90,
+      >= 70 => MdiIcons.batteryCharging80,
+      >= 60 => MdiIcons.batteryCharging70,
+      >= 50 => MdiIcons.batteryCharging60,
+      >= 40 => MdiIcons.batteryCharging50,
+      >= 30 => MdiIcons.batteryCharging40,
+      >= 20 => MdiIcons.batteryCharging30,
+      >= 10 => MdiIcons.batteryCharging20,
+      _ => MdiIcons.batteryCharging10,
+    };
   }
+  return switch (device.percentage) {
+    >= 90 => MdiIcons.battery,
+    >= 80 => MdiIcons.battery90,
+    >= 70 => MdiIcons.battery80,
+    >= 60 => MdiIcons.battery70,
+    >= 50 => MdiIcons.battery60,
+    >= 40 => MdiIcons.battery50,
+    >= 30 => MdiIcons.battery40,
+    >= 20 => MdiIcons.battery30,
+    >= 10 => MdiIcons.battery20,
+    _ => MdiIcons.battery10,
+  };
 }
 
 class DeviceIndicator extends StatelessWidget {

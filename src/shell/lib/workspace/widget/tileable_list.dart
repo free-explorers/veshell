@@ -17,8 +17,16 @@ Object _panelKey(Tileable tileable) => tileable is PersistentWindowTileable
     : const ValueKey('application-launcher');
 
 class TileableListView extends HookConsumerWidget {
-  const TileableListView({required this.tileableList, super.key});
+  const TileableListView({
+    required this.tileableList,
+    this.endPadding = 0,
+    super.key,
+  });
   final List<Tileable> tileableList;
+
+  /// The room held after the last tile, so the list scrolls as soon as a
+  /// tile would pass under what floats over its end.
+  final double endPadding;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final workspaceId = CurrentWorkspaceId.of(context);
@@ -112,6 +120,7 @@ class TileableListView extends HookConsumerWidget {
       child: CrossReorderableList<Tileable>(
         key: listKey,
         scrollDirection: Axis.horizontal,
+        padding: EdgeInsetsDirectional.only(end: endPadding),
         itemKey: (tileable) => tileable is PersistentWindowTileable
             ? ValueKey(tileable.windowId)
             : const ValueKey('application-launcher'),

@@ -141,6 +141,7 @@ class CrossReorderableList<T extends Object> extends StatefulWidget {
     this.onDropInProgress,
     this.feedbackBuilder,
     this.itemKey,
+    this.padding,
     super.key,
   });
 
@@ -158,6 +159,9 @@ class CrossReorderableList<T extends Object> extends StatefulWidget {
 
   /// The scroll direction of the list
   final Axis scrollDirection;
+
+  /// The room left around the items, inside the scrolled extent.
+  final EdgeInsetsGeometry? padding;
 
   /// Callback function that is called when the list has changed
   final void Function(List<T> dataList)? onListChanged;
@@ -294,6 +298,7 @@ class _CrossReorderableListState<T extends Object>
         builder: (context, candidateData, rejectedData) {
           return ListView.custom(
             scrollDirection: widget.scrollDirection,
+            padding: widget.padding,
             childrenDelegate: SliverChildBuilderDelegate(
               (context, index) {
                 final data = localDataList[index];

@@ -1,7 +1,12 @@
+import 'dart:math';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:uuid/uuid.dart';
 
 const _expandedEnlargePadding = 12.0;
+
+/// The room the expanded container keeps from the screen's edges.
+const _screenMargin = 12.0;
 
 typedef ExpandableBuilder =
     Widget Function(BuildContext context, {required bool isExpanded});
@@ -32,7 +37,7 @@ class ExpandableContainer extends StatefulWidget {
 class ExpandableContainerState extends State<ExpandableContainer> {
   bool isExpanded = false;
   final String uuid = const Uuid().v4();
-  PageRouteBuilder<LayoutBuilder>? _expandedRoute;
+  PageRouteBuilder<void>? _expandedRoute;
 
   @override
   void dispose() {
@@ -75,31 +80,20 @@ class ExpandableContainerState extends State<ExpandableContainer> {
     final currentBox = context.findRenderObject()! as RenderBox;
     final currentCoordinates = currentBox.localToGlobal(Offset.zero);
 
-    final route = PageRouteBuilder<LayoutBuilder>(
+    final route = PageRouteBuilder<void>(
       opaque: false,
       barrierColor: Colors.black38,
       barrierDismissible: true,
       pageBuilder: (context, _, _) {
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            if (!mounted) return const SizedBox.shrink();
-            return Stack(
-              children: [
-                Positioned(
-                  top: currentCoordinates.dy - _expandedEnlargePadding,
-                  left: currentCoordinates.dx - _expandedEnlargePadding,
-                  child: Container(
-                    constraints: BoxConstraints(
-                      maxHeight:
-                          constraints.biggest.height - currentCoordinates.dy,
-                    ),
-                    width: currentBox.size.width + _expandedEnlargePadding * 2,
-                    child: buildHeroContainer(context, isExpanded: true),
-                  ),
-                ),
-              ],
-            );
-          },
+        if (!mounted) return const SizedBox.shrink();
+        return CustomSingleChildLayout(
+          delegate: _ExpandedLayoutDelegate(
+            anchor:
+                currentCoordinates -
+                const Offset(_expandedEnlargePadding, _expandedEnlargePadding),
+            width: currentBox.size.width + _expandedEnlargePadding * 2,
+          ),
+          child: buildHeroContainer(context, isExpanded: true),
         );
       },
     );
@@ -132,6 +126,41 @@ class ExpandableContainerState extends State<ExpandableContainer> {
       expand();
     }
   }
+}
+
+/// Places the expanded container over the collapsed one, as tall as its
+/// content within the screen's margins, and raised just enough to fit when
+/// the collapsed one sits too low for it.
+class _ExpandedLayoutDelegate extends SingleChildLayoutDelegate {
+  const _ExpandedLayoutDelegate({required this.anchor, required this.width});
+
+  /// Where the expanded container would start: over the collapsed one.
+  final Offset anchor;
+  final double width;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
+    final maxWidth = max(0, constraints.maxWidth - _screenMargin * 2);
+    return BoxConstraints(
+      maxWidth: min(width, maxWidth.toDouble()),
+      minWidth: min(width, maxWidth.toDouble()),
+      maxHeight: max(0, constraints.maxHeight - _screenMargin * 2),
+    );
+  }
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    double fit(double start, double extent, double available) =>
+        max(_screenMargin, min(start, available - _screenMargin - extent));
+    return Offset(
+      fit(anchor.dx, childSize.width, size.width),
+      fit(anchor.dy, childSize.height, size.height),
+    );
+  }
+
+  @override
+  bool shouldRelayout(_ExpandedLayoutDelegate oldDelegate) =>
+      anchor != oldDelegate.anchor || width != oldDelegate.width;
 }
 
 class _ExpandableContainerScope extends InheritedWidget {

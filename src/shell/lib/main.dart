@@ -38,6 +38,7 @@ import 'package:shell/shared/pulseaudio/provider/pulse_server_info.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_sink_list.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_source_list.dart';
 import 'package:shell/shared/util/logger.dart';
+import 'package:shell/status_bar/provider/active_keyboard_layout.dart';
 import 'package:shell/systemd/provider/session_guard.dart';
 import 'package:shell/wayland/provider/surface.manager.dart';
 import 'package:shell/wayland/provider/surface_visibility_reporter.dart';
@@ -117,6 +118,10 @@ class _VeshellState extends ConsumerState<Veshell> with WidgetsBindingObserver {
     // `veshell-probe`'s service extensions; registers nothing outside debug
     // builds.
     registerProbeExtensions(ProviderScope.containerOf(context, listen: false));
+
+    // Listens before the compositor, told the shell is ready, reports the
+    // active keyboard layout.
+    ref.read(activeKeyboardLayoutProvider);
 
     ref.read(platformManagerProvider.notifier)
       ..request(

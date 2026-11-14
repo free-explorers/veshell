@@ -63,7 +63,17 @@
         "cursorTheme": "",
         "cursorSize": 24,
         "focusIndicator": "grayscale",
-        "animationSpeed": 1
+        "animationSpeed": 1,
+        "statusBar": "none",
+        "statusBarContent": {
+            "showClock": true,
+            "clockFormat": "locale",
+            "showKeyboardLayout": true,
+            "showWifi": true,
+            "showVolume": true,
+            "showBattery": true,
+            "showBatteryPercentage": true
+        }
     },
     "idle": {
         "dimTimeoutSeconds": 60,

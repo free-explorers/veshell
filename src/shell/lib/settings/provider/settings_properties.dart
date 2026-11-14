@@ -40,10 +40,12 @@ import 'package:shell/settings/widget/primitive/setting_property_choice_editor.d
 import 'package:shell/settings/widget/theme/cursor_theme_editor.dart';
 import 'package:shell/settings/widget/theme/focus_indicator_editor.dart';
 import 'package:shell/settings/widget/theme/icon_theme_editor.dart';
+import 'package:shell/settings/widget/theme/status_bar_editor.dart';
 import 'package:shell/shared/util/file.dart';
 import 'package:shell/shared/util/json_converter/color.dart';
 import 'package:shell/shared/util/json_converter/logical_key_set.dart';
 import 'package:shell/shared/widget/shell_icon.dart';
+import 'package:shell/status_bar/model/status_bar_style.dart';
 
 part 'settings_properties.g.dart';
 
@@ -606,6 +608,43 @@ class SettingsProperties extends _$SettingsProperties {
           'animationSpeed': SettingProperty<double>(
             name: l10n.animationSpeed,
             description: l10n.animationSpeedDescription,
+          ),
+          'statusBar': SettingProperty<String>(
+            name: l10n.statusBar,
+            description: l10n.statusBarDescription,
+            buildSearchResult: (context, path, property) =>
+                ExpandableSearchResult<String>(
+                  path: path,
+                  property: property,
+                  buildValue: (context, value, {required isExpanded}) =>
+                      SettingPropertyChoiceValue(
+                        path: path,
+                        choices: statusBarStyleChoices,
+                        defaultValue: StatusBarStyle.none.name,
+                        label: statusBarStyleLabel,
+                      ),
+                  buildEditor: (context, {required isExpanded}) =>
+                      SettingPropertyChoiceEditor(
+                        path: path,
+                        property: property,
+                        choices: statusBarStyleChoices,
+                        defaultValue: StatusBarStyle.none.name,
+                        label: statusBarStyleLabel,
+                      ),
+                ),
+          ),
+          'statusBarContent': SettingProperty<Map<String, dynamic>>(
+            name: l10n.statusBarContent,
+            description: l10n.statusBarContentDescription,
+            buildSearchResult: (context, path, property) =>
+                ExpandableSearchResult<Map<String, dynamic>>(
+                  path: path,
+                  property: property,
+                  buildValue: (context, value, {required isExpanded}) =>
+                      const StatusBarContentValue(),
+                  buildEditor: (context, {required isExpanded}) =>
+                      StatusBarContentEditor(path: path, property: property),
+                ),
           ),
           'focusIndicator': SettingProperty<String>(
             name: l10n.focusIndicator,

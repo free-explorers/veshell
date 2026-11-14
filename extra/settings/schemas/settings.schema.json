@@ -264,6 +264,46 @@
                     "minimum": 0.05,
                     "maximum": 10,
                     "description": "Speed of the shell's animations: 1 as designed, 0.5 at half speed, 2 at double speed"
+                },
+                "statusBar": {
+                    "type": "string",
+                    "enum": [
+                        "none",
+                        "topPanel",
+                        "notch"
+                    ]
+                },
+                "statusBarContent": {
+                    "type": "object",
+                    "properties": {
+                        "showClock": {
+                            "type": "boolean"
+                        },
+                        "clockFormat": {
+                            "type": "string",
+                            "enum": [
+                                "locale",
+                                "twelveHour",
+                                "twentyFourHour"
+                            ]
+                        },
+                        "showKeyboardLayout": {
+                            "type": "boolean"
+                        },
+                        "showWifi": {
+                            "type": "boolean"
+                        },
+                        "showVolume": {
+                            "type": "boolean"
+                        },
+                        "showBattery": {
+                            "type": "boolean"
+                        },
+                        "showBatteryPercentage": {
+                            "type": "boolean"
+                        }
+                    },
+                    "additionalProperties": false
                 }
             },
             "additionalProperties": false

@@ -37,7 +37,7 @@ mod screenshot_prompt_decision;
 mod start_move_window;
 mod start_resize_window;
 mod surface_visibility;
-mod switch_keyboard_layout;
+pub mod switch_keyboard_layout;
 mod window_preview;
 
 use self::activate_window::activate_window;

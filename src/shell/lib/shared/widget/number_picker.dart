@@ -21,6 +21,10 @@ class NumberPicker extends HookConsumerWidget {
   final void Function(int value) onValueChange;
   final int? minValue;
   final int? maxValue;
+
+  /// The height the picker is drawn at, its ends rounded to half of it.
+  static const height = 36.0;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final textcontroller = useTextEditingController(text: value.toString());
@@ -29,9 +33,9 @@ class NumberPicker extends HookConsumerWidget {
       return null;
     }, [value]);
     return Container(
-      constraints: const BoxConstraints(maxHeight: 36),
+      constraints: const BoxConstraints(maxHeight: height),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(height / 2),
         color: Colors.white10,
       ),
       clipBehavior: Clip.antiAlias,
