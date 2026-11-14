@@ -439,7 +439,7 @@
   "statusBarVolume": "Volume",
   "statusBarVolumeDescription": "Tampilkan volume keluaran",
   "statusBarBattery": "Baterai",
-  "statusBarBatteryDescription": "Tampilkan level baterai, atau steker jika komputer tidak memiliki baterai",
+  "statusBarBatteryDescription": "Tampilkan level baterai",
   "statusBarBatteryPercentage": "Persentase baterai",
   "statusBarBatteryPercentageDescription": "Tampilkan level baterai dalam persen di samping ikonnya"
 }

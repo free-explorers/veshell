@@ -439,7 +439,7 @@
   "statusBarVolume": "Volume",
   "statusBarVolumeDescription": "Mostrar o volume de saída",
   "statusBarBattery": "Bateria",
-  "statusBarBatteryDescription": "Mostrar o nível da bateria, ou uma tomada quando o computador não tem bateria",
+  "statusBarBatteryDescription": "Mostrar o nível da bateria",
   "statusBarBatteryPercentage": "Percentagem da bateria",
   "statusBarBatteryPercentageDescription": "Mostrar o nível da bateria em percentagem junto ao ícone"
 }

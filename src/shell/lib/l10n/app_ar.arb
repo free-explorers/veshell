@@ -439,7 +439,7 @@
   "statusBarVolume": "مستوى الصوت",
   "statusBarVolumeDescription": "إظهار مستوى صوت الإخراج",
   "statusBarBattery": "البطارية",
-  "statusBarBatteryDescription": "إظهار مستوى البطارية، أو قابس عندما لا يحتوي الحاسوب على بطارية",
+  "statusBarBatteryDescription": "إظهار مستوى البطارية",
   "statusBarBatteryPercentage": "نسبة البطارية",
   "statusBarBatteryPercentageDescription": "إظهار مستوى البطارية كنسبة مئوية بجوار رمزها"
 }

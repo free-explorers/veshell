@@ -439,7 +439,7 @@
   "statusBarVolume": "音量",
   "statusBarVolumeDescription": "出力音量を表示します",
   "statusBarBattery": "バッテリー",
-  "statusBarBatteryDescription": "バッテリー残量を表示します。バッテリーがない場合はプラグを表示します",
+  "statusBarBatteryDescription": "バッテリー残量を表示します",
   "statusBarBatteryPercentage": "バッテリー残量 (%)",
   "statusBarBatteryPercentageDescription": "アイコンの横にバッテリー残量をパーセントで表示します"
 }

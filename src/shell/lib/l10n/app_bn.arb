@@ -439,7 +439,7 @@
   "statusBarVolume": "ভলিউম",
   "statusBarVolumeDescription": "আউটপুট ভলিউম দেখান",
   "statusBarBattery": "ব্যাটারি",
-  "statusBarBatteryDescription": "ব্যাটারির স্তর দেখান, বা কম্পিউটারে ব্যাটারি না থাকলে একটি প্লাগ",
+  "statusBarBatteryDescription": "ব্যাটারির স্তর দেখান",
   "statusBarBatteryPercentage": "ব্যাটারির শতাংশ",
   "statusBarBatteryPercentageDescription": "আইকনের পাশে ব্যাটারির স্তর শতাংশে দেখান"
 }

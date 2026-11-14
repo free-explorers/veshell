@@ -439,7 +439,7 @@
   "statusBarVolume": "Lautstärke",
   "statusBarVolumeDescription": "Ausgabelautstärke anzeigen",
   "statusBarBattery": "Akku",
-  "statusBarBatteryDescription": "Akkustand anzeigen, oder einen Stecker, wenn der Computer keinen Akku hat",
+  "statusBarBatteryDescription": "Akkustand anzeigen",
   "statusBarBatteryPercentage": "Akku in Prozent",
   "statusBarBatteryPercentageDescription": "Akkustand als Prozentwert neben dem Symbol anzeigen"
 }

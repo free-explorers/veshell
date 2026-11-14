@@ -439,7 +439,7 @@
   "statusBarVolume": "Volumen",
   "statusBarVolumeDescription": "Mostrar el volumen de salida",
   "statusBarBattery": "Batería",
-  "statusBarBatteryDescription": "Mostrar el nivel de batería, o un enchufe cuando el equipo no tiene batería",
+  "statusBarBatteryDescription": "Mostrar el nivel de batería",
   "statusBarBatteryPercentage": "Porcentaje de batería",
   "statusBarBatteryPercentageDescription": "Mostrar el nivel de batería en porcentaje junto a su icono"
 }

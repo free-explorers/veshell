@@ -159,13 +159,9 @@ class _BatteryStatus extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final battery = ref.watch(upowerBatteryDeviceProvider);
-    if (!battery.hasValue) return const SizedBox.shrink();
-    final device = battery.value;
-    // Without a battery, the machine runs on mains power.
-    if (device == null) {
-      return const _StatusItem(child: ShellIcon(MdiIcons.powerPlug));
-    }
+    // Hidden while loading, and on a machine without a system battery.
+    final device = ref.watch(upowerBatteryDeviceProvider).value;
+    if (device == null) return const SizedBox.shrink();
     return StreamBuilder(
       stream: device.propertiesChanged,
       builder: (context, _) => _StatusItem(

@@ -439,7 +439,7 @@
   "statusBarVolume": "Ses",
   "statusBarVolumeDescription": "Çıkış ses düzeyini göster",
   "statusBarBattery": "Pil",
-  "statusBarBatteryDescription": "Pil düzeyini veya bilgisayarda pil yoksa bir fişi göster",
+  "statusBarBatteryDescription": "Pil düzeyini göster",
   "statusBarBatteryPercentage": "Pil yüzdesi",
   "statusBarBatteryPercentageDescription": "Pil düzeyini simgesinin yanında yüzde olarak göster"
 }

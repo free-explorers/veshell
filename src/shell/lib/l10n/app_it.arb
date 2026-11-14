@@ -439,7 +439,7 @@
   "statusBarVolume": "Volume",
   "statusBarVolumeDescription": "Mostra il volume di uscita",
   "statusBarBattery": "Batteria",
-  "statusBarBatteryDescription": "Mostra il livello della batteria, o una spina quando il computer non ha batteria",
+  "statusBarBatteryDescription": "Mostra il livello della batteria",
   "statusBarBatteryPercentage": "Percentuale della batteria",
   "statusBarBatteryPercentageDescription": "Mostra il livello della batteria in percentuale accanto all’icona"
 }

@@ -439,7 +439,7 @@
   "statusBarVolume": "Громкость",
   "statusBarVolumeDescription": "Показывать громкость вывода",
   "statusBarBattery": "Батарея",
-  "statusBarBatteryDescription": "Показывать заряд батареи или вилку, если у компьютера нет батареи",
+  "statusBarBatteryDescription": "Показывать заряд батареи",
   "statusBarBatteryPercentage": "Заряд в процентах",
   "statusBarBatteryPercentageDescription": "Показывать заряд батареи в процентах рядом со значком"
 }

@@ -439,7 +439,7 @@
   "statusBarVolume": "音量",
   "statusBarVolumeDescription": "顯示輸出音量",
   "statusBarBattery": "電池",
-  "statusBarBatteryDescription": "顯示電池電量，電腦沒有電池時顯示插頭",
+  "statusBarBatteryDescription": "顯示電池電量",
   "statusBarBatteryPercentage": "電池百分比",
   "statusBarBatteryPercentageDescription": "在圖示旁以百分比顯示電池電量"
 }

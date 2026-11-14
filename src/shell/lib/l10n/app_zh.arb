@@ -439,7 +439,7 @@
   "statusBarVolume": "音量",
   "statusBarVolumeDescription": "显示输出音量",
   "statusBarBattery": "电池",
-  "statusBarBatteryDescription": "显示电池电量，电脑没有电池时显示插头",
+  "statusBarBatteryDescription": "显示电池电量",
   "statusBarBatteryPercentage": "电池百分比",
   "statusBarBatteryPercentageDescription": "在图标旁以百分比显示电池电量"
 }

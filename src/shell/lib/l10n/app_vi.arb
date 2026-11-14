@@ -439,7 +439,7 @@
   "statusBarVolume": "Âm lượng",
   "statusBarVolumeDescription": "Hiện âm lượng đầu ra",
   "statusBarBattery": "Pin",
-  "statusBarBatteryDescription": "Hiện mức pin, hoặc phích cắm khi máy tính không có pin",
+  "statusBarBatteryDescription": "Hiện mức pin",
   "statusBarBatteryPercentage": "Phần trăm pin",
   "statusBarBatteryPercentageDescription": "Hiện mức pin dạng phần trăm cạnh biểu tượng"
 }

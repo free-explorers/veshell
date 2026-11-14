@@ -511,7 +511,7 @@
   "statusBarVolumeDescription": "Show the output volume",
   "statusBarBattery": "Battery",
   "@statusBarBattery": {"description": "Setting that shows the battery icon in the status bar"},
-  "statusBarBatteryDescription": "Show the battery level, or a plug when the computer has no battery",
+  "statusBarBatteryDescription": "Show the battery level",
   "statusBarBatteryPercentage": "Battery Percentage",
   "@statusBarBatteryPercentage": {"description": "Setting that shows the battery percentage in the status bar"},
   "statusBarBatteryPercentageDescription": "Show the battery level as a percentage next to its icon"

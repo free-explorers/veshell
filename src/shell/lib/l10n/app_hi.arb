@@ -439,7 +439,7 @@
   "statusBarVolume": "वॉल्यूम",
   "statusBarVolumeDescription": "आउटपुट वॉल्यूम दिखाएँ",
   "statusBarBattery": "बैटरी",
-  "statusBarBatteryDescription": "बैटरी स्तर दिखाएँ, या कंप्यूटर में बैटरी न होने पर प्लग",
+  "statusBarBatteryDescription": "बैटरी स्तर दिखाएँ",
   "statusBarBatteryPercentage": "बैटरी प्रतिशत",
   "statusBarBatteryPercentageDescription": "आइकन के पास बैटरी स्तर प्रतिशत में दिखाएँ"
 }

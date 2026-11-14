@@ -439,7 +439,7 @@
   "statusBarVolume": "볼륨",
   "statusBarVolumeDescription": "출력 볼륨을 표시합니다",
   "statusBarBattery": "배터리",
-  "statusBarBatteryDescription": "배터리 잔량을 표시하고, 배터리가 없으면 플러그를 표시합니다",
+  "statusBarBatteryDescription": "배터리 잔량을 표시합니다",
   "statusBarBatteryPercentage": "배터리 백분율",
   "statusBarBatteryPercentageDescription": "아이콘 옆에 배터리 잔량을 백분율로 표시합니다"
 }

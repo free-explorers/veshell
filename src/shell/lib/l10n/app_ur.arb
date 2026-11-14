@@ -439,7 +439,7 @@
   "statusBarVolume": "آواز",
   "statusBarVolumeDescription": "آؤٹ پٹ کی آواز دکھائیں",
   "statusBarBattery": "بیٹری",
-  "statusBarBatteryDescription": "بیٹری کی سطح دکھائیں، یا کمپیوٹر میں بیٹری نہ ہونے پر پلگ",
+  "statusBarBatteryDescription": "بیٹری کی سطح دکھائیں",
   "statusBarBatteryPercentage": "بیٹری فیصد",
   "statusBarBatteryPercentageDescription": "آئیکن کے ساتھ بیٹری کی سطح فیصد میں دکھائیں"
 }
