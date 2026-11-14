@@ -31,6 +31,35 @@ pub struct VeshellKeyEvent {
     pub synthesized: bool,
 }
 
+/// Flutter's id plane for GTK keys its key mapping does not name.
+const GTK_PLANE: u64 = 0x01500000000;
+/// The bits of a key id that hold the key's value inside its plane.
+const KEY_VALUE_MASK: u64 = 0x000ffffffff;
+
+/// The Flutter physical key for an xkb keycode. A keycode the generated
+/// mapping does not name gets an id in the GTK plane, as Flutter's GTK
+/// embedder does, so any key a device can send reaches the shell: media keys
+/// on headsets and convertible-hinge switches emit codes outside the map.
+pub(crate) fn flutter_physical_key(key_code: Keycode) -> u64 {
+    let raw = key_code.raw() as u64;
+    key_mapping::XKB_TO_PHYSICAL_KEY_MAP
+        .get(&raw)
+        .copied()
+        .unwrap_or((raw & KEY_VALUE_MASK) | GTK_PLANE)
+}
+
+/// The Flutter logical key for a key's unmodified keysym. Unmapped keysyms
+/// keep their raw value; a key without any keysym gets the GTK-plane id of
+/// keysym 0 rather than 0, which Flutter reserves for "no key".
+pub(crate) fn flutter_logical_key(raw_keysym: Option<Keysym>) -> u64 {
+    let raw = raw_keysym.map_or(0, |keysym| keysym.raw() as u64);
+    match key_mapping::GTK_KEYVAL_TO_LOGICAL_KEY_MAP.get(&raw) {
+        Some(&key) => key,
+        None if raw == 0 => GTK_PLANE,
+        None => raw,
+    }
+}
+
 #[derive(Default)]
 pub struct SuperKeyForwarding {
     // Flutter sees these immediately; clients only see them once the shortcut is resolved.
@@ -230,12 +259,11 @@ fn sync_flutter_lock_modes<BackendData: Backend + 'static>(data: &mut State<Back
     }
     let [pressed, released] = num_lock_sync_events(mods);
     let engine = data.flutter_engine.as_mut().unwrap();
-    engine
-        .send_key_event(pressed, false, false)
-        .expect("Failed to sync Flutter NumLock");
-    engine
-        .send_key_event(released, false, false)
-        .expect("Failed to sync Flutter NumLock");
+    for event in [pressed, released] {
+        if let Err(err) = engine.send_key_event(event, false, false) {
+            error!(?err, "Failed to sync Flutter NumLock");
+        }
+    }
     data.flutter_num_lock = mods.num_lock;
 }
 
@@ -462,11 +490,21 @@ fn process_key_event<BackendData: Backend + 'static>(
         return None;
     }
 
-    data.flutter_engine
-        .as_mut()
-        .unwrap()
-        .send_key_event(veshell_key_event, false, true)
-        .expect("Failed to send key event to Flutter");
+    // A key Flutter never received has no answer to wait for: drop it rather
+    // than stall the queue behind it.
+    if let Err(err) =
+        data.flutter_engine
+            .as_mut()
+            .unwrap()
+            .send_key_event(veshell_key_event, false, true)
+    {
+        error!(
+            ?err,
+            key_code = key_code.raw(),
+            "Failed to send key event to Flutter"
+        );
+        return None;
+    }
     // The framework toggles NumLock on the NumLock key's down event, matching
     // the post-event xkb state; keep our mirror of Flutter's state current.
     data.flutter_num_lock = veshell_key_event.mods.num_lock;
@@ -565,9 +603,9 @@ pub fn release_flutter_keys<BackendData: Backend + 'static>(data: &mut State<Bac
         return;
     };
     for event in released {
-        engine
-            .send_key_event(event, false, true)
-            .expect("Failed to release a Flutter key");
+        if let Err(err) = engine.send_key_event(event, false, true) {
+            error!(?err, "Failed to release a Flutter key");
+        }
     }
 }
 
@@ -649,11 +687,14 @@ fn handle_embedder_hotkeys<BackendData: Backend + 'static>(
         if event.state == KeyState::Released
             && data.flutter_sent_keys.remove(&event.key_code).is_some()
         {
-            data.flutter_engine
+            if let Err(err) = data
+                .flutter_engine
                 .as_mut()
                 .unwrap()
                 .send_key_event(event, false, true)
-                .expect("Failed to send pending key release to Flutter");
+            {
+                error!(?err, "Failed to send pending key release to Flutter");
+            }
         }
         if event.keysym == Keysym::Escape && event.state == KeyState::Pressed {
             crate::capture::cancel_capture_session(data);
@@ -832,6 +873,34 @@ mod tests {
             Some(&0x0010000010a),
             "Num_Lock must resolve to Flutter's numLock logical key",
         );
+    }
+
+    #[test]
+    fn unmapped_keys_get_gtk_plane_ids() {
+        // Keycodes 208 (a headset's play/pause) and 248 (a convertible's
+        // hinge switch) are not in the generated map; they once panicked.
+        for code in [208, 248] {
+            assert_eq!(
+                key_mapping::XKB_TO_PHYSICAL_KEY_MAP.get(&code),
+                None,
+                "{code} should be unmapped for this test to mean anything",
+            );
+            assert_eq!(
+                flutter_physical_key(Keycode::new(code as u32)),
+                0x01500000000 | code,
+            );
+        }
+        // A mapped keycode keeps its mapping.
+        assert_eq!(flutter_physical_key(Keycode::new(0x4d)), 0x00070053);
+    }
+
+    #[test]
+    fn logical_key_is_never_zero() {
+        assert_eq!(flutter_logical_key(None), 0x01500000000);
+        assert_eq!(flutter_logical_key(Some(Keysym::NoSymbol)), 0x01500000000);
+        assert_eq!(flutter_logical_key(Some(Keysym::Num_Lock)), 0x0010000010a);
+        // Unmapped keysyms keep their raw value.
+        assert_eq!(flutter_logical_key(Some(Keysym::a)), 0x61);
     }
 
     #[test]

@@ -71,8 +71,9 @@ use crate::flutter_engine::text_input::{text_input_channel_method_call_handler, 
 use crate::flutter_engine::view::ViewsManagement;
 use crate::flutter_engine::wayland_messages::{EnvironmentVariables, MonitorsMessage, MyOutput};
 use crate::gles_framebuffer_importer::GlesFramebufferImporter;
-use crate::keyboard::key_mapping::{GTK_KEYVAL_TO_LOGICAL_KEY_MAP, XKB_TO_PHYSICAL_KEY_MAP};
-use crate::keyboard::{post_flutter_handle_key_event, VeshellKeyEvent};
+use crate::keyboard::{
+    flutter_logical_key, flutter_physical_key, post_flutter_handle_key_event, VeshellKeyEvent,
+};
 use crate::mouse_button_tracker::MouseButtonTracker;
 use crate::{
     flutter_engine::{
@@ -622,26 +623,15 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             }
         };
 
-        let physical_key = match XKB_TO_PHYSICAL_KEY_MAP.get(&(event.key_code.raw() as u64)) {
-            Some(&key) => key,
-            None => {
-                return Err(format!("Unsupported keysym: {:?}", event.key_code.raw()).into());
-            }
-        };
+        let physical_key = flutter_physical_key(event.key_code);
+        let logical_key = flutter_logical_key(event.raw_keysym);
+        let raw_keysym = event.raw_keysym.map_or(0, |keysym| keysym.raw());
 
-        let raw_keysym = event
-            .raw_keysym
-            .ok_or_else(|| format!("Missing raw keysym for key code {}", event.key_code.raw()))?;
-        let logical_key = match GTK_KEYVAL_TO_LOGICAL_KEY_MAP.get(&(raw_keysym.raw() as u64)) {
-            Some(&key) => key,
-            None => raw_keysym.raw() as u64,
-        };
-
+        // A NUL character cannot cross the C API; such a key is sent without one.
         let character = (event.state != KeyState::Released)
             .then(|| event.keysym.key_char())
             .flatten()
-            .map(|character| CString::new(character.to_string()))
-            .transpose()?;
+            .and_then(|character| CString::new(character.to_string()).ok());
         let unicode_scalar_values = if event.state == KeyState::Released {
             0
         } else {
@@ -660,7 +650,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         let raw_key_event = json!({
             "keymap": "linux",
             "toolkit": "gtk",
-            "keyCode": raw_keysym.raw(),
+            "keyCode": raw_keysym,
             "scanCode": event.key_code.raw(),
             "modifiers": modifiers,
             "unicodeScalarValues": unicode_scalar_values,
