@@ -623,11 +623,14 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 if !data.keyboard.pressed_keys().contains(&event.key_code) {
                     return;
                 }
-                data.flutter_engine
+                if let Err(err) = data
+                    .flutter_engine
                     .as_mut()
                     .unwrap()
                     .send_key_event(event, true, true)
-                    .expect("Failed to send key event");
+                {
+                    tracing::error!(?err, "Failed to send key repeat to Flutter");
+                }
             },
         );
 
