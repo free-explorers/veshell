@@ -3,17 +3,14 @@ use std::collections::HashMap;
 use serde_json::json;
 
 use crate::flutter_engine::wayland_messages::EnvironmentVariables;
-use crate::state::State;
+use crate::state::{State, BUILTIN_ENVIRONMENT_DEFAULTS};
 
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
 
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 
 use crate::backend::Backend;
-use crate::settings::{
-    is_valid_environment_variable_name, CURRENT_DESKTOP, LEGACY_DESKTOP_SESSION,
-    SESSION_DERIVED_ENVIRONMENT_VARIABLES,
-};
+use crate::settings::{is_valid_environment_variable_name, SESSION_DERIVED_ENVIRONMENT_VARIABLES};
 
 /// The user-configured variables that may override the launch environment,
 /// as `(name, value)` pairs.
@@ -77,14 +74,12 @@ pub fn get_environment_variables<BackendData: Backend + 'static>(
         ("WAYLAND_DISPLAY", wayland_socket_name.as_deref()),
         ("DISPLAY", xwayland_display.as_deref()),
         ("PATH", path.as_deref()),
-        ("XDG_CURRENT_DESKTOP", Some(CURRENT_DESKTOP)),
-        ("DESKTOP_SESSION", Some(LEGACY_DESKTOP_SESSION)),
-        ("XDG_SESSION_TYPE", Some("wayland")),
-        ("GDK_BACKEND", Some("wayland")),
-        ("QT_QPA_PLATFORM", Some("wayland")),
         ("XCURSOR_THEME", Some(cursor_theme.as_str())),
         ("XCURSOR_SIZE", Some(cursor_size.as_str())),
     ]);
+    for (key, value) in BUILTIN_ENVIRONMENT_DEFAULTS {
+        environment_variables.insert(key, Some(value));
+    }
 
     // User settings override the defaults above, except the session-derived
     // variables that describe this compositor's socket and display.
@@ -105,6 +100,7 @@ pub fn get_environment_variables<BackendData: Backend + 'static>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::settings::{CURRENT_DESKTOP, LEGACY_DESKTOP_SESSION};
 
     fn variables(pairs: &[(&str, &str)]) -> HashMap<String, String> {
         pairs
