@@ -10,6 +10,7 @@ import 'package:shell/capture/provider/screen_cast_indicator.dart';
 import 'package:shell/capture/provider/screenshot_prompt.dart';
 import 'package:shell/dev_tools/probe/probe_service.dart';
 import 'package:shell/file_chooser/provider/file_chooser_request.dart';
+import 'package:shell/gamepad/provider/gamepad_navigation.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/provider/meta_window_manager.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
@@ -245,6 +246,9 @@ class _EagerInitialization extends ConsumerWidget {
       // events and UPower at startup, so an alert raised before the shell is
       // first interacted with is not missed.
       ..listen(systemNotificationManagerProvider, (_, _) {})
+      // The gamepad drives navigation from the first frame, before any
+      // widget asks for it.
+      ..listen(gamepadNavigationProvider, (_, _) {})
       ..listen(batteryNotificationProvider, (_, _) {})
       // Capture consent/prompt/indicator subscribe at shell start so a
       // portal flow is never dropped while a view is being rebuilt.

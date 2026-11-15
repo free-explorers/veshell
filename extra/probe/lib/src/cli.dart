@@ -35,6 +35,7 @@ Commands:
                                   through the compositor, as a device, when it can).
   key CHORD                       Press a key chord: Enter, "Arrow Down", Control+Escape.
   type TEXT [--clear]             Type into the focused text field.
+  gamepad CHORD [--hold MS]       Press a gamepad chord: south, leftShoulder+dpadLeft.
   animate --for MS [ACTION]       Play ACTION slowed down, capture frames over MS.
                                   ACTION: --tap TARGET | --press CHORD | --type TEXT
                                   Options: --frames N --track TARGET… --region TARGET
@@ -261,6 +262,17 @@ Map<String, Object?> _target(String? spec) {
         'act',
         {
           'action': {'key': arguments.join(' ')},
+        },
+      );
+    case 'gamepad':
+      final results = (ArgParser()..addOption('hold')).parse(arguments);
+      return (
+        'act',
+        {
+          'action': {
+            'gamepad': results.rest.join('+'),
+            'holdMs': int.tryParse(results['hold'] as String? ?? ''),
+          },
         },
       );
     case 'type':

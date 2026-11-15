@@ -101,7 +101,9 @@ and hands each request to the event loop.
 - **`inject`**: pointer motion, buttons and wheel through the compositor's own
   input handlers, from a probe `InputBackend` whose events implement Smithay's
   traits, and keys through the keyboard handler: focus, Super chords, Flutter
-  and Wayland clients see them as real input.
+  and Wayland clients see them as real input. Gamepad buttons go through the
+  gamepad's logical-button path as a source of their own, so gaming mode and
+  the Guide hold apply to them (see [Gamepad](gamepad.md)).
 
 ### 3. Harness: `veshell-probe` (command line and tool server)
 
@@ -172,6 +174,7 @@ tool of the same name returns the same, with images inline.
 | `screenshot [TARGET] [--compositor]` | What a view painted, or (`--compositor`) the composited output with application windows; cropped to a widget's region. |
 | `tap TARGET` / `tap --x X --y Y` | A tap on a widget's visible center, or on a point. |
 | `key CHORD` / `type TEXT` | A key chord (`Enter`, `Arrow Down`, `Super+Q`); text into the focused field. Input goes through the compositor as a device's would (`--via compositor`, the default when the instance has the control socket) or straight into Flutter (`--via flutter`). |
+| `gamepad CHORD [--hold MS]` | A gamepad chord by logical button names (`south`, `leftShoulder+dpadLeft`), pressed, held for MS (a tap by default) and released, through the compositor only. |
 | `animate --for MS [--tap T \| --press C \| --type X] [--frames N] [--slowdown F] [--track T…]` | Play the action slowed down and capture N evenly spaced frames: a contact sheet, each frame, and the tracked widgets' geometry per frame. |
 | `state [STORE]` | A state snapshot. |
 | `slowdown FACTOR` | Animations FACTOR times slower (1 restores). |

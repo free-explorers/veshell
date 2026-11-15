@@ -31,6 +31,7 @@ mod clipboard;
 mod cursor;
 mod flutter_engine;
 mod focus;
+mod gamepad;
 mod gles_framebuffer_importer;
 mod idle;
 mod input_handling;

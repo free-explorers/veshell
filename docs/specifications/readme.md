@@ -29,6 +29,7 @@ answer. Each service specification records its exact split.
   - [Gaming mode](/specifications/gaming_mode.md)
   - [Surface pacing](/specifications/surface_pacing.md)
 - [Keyboard](/specifications/keyboard.md)
+- [Gamepad](/specifications/gamepad.md)
 - [Clipboard](/specifications/clipboard.md)
 - [Lock screen](/specifications/lock_screen.md)
 - [Navigation and actions](/specifications/navigation.md)

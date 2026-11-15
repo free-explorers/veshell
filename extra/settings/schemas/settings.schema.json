@@ -10,6 +10,14 @@
             "items": {
                 "type": "string"
             }
+        },
+        "gamepadChordList": {
+            "description": "One or more gamepad chords bound to the same action: buttons held together, joined by '+' (\"leftShoulder+dpadLeft\").",
+            "type": "array",
+            "items": {
+                "type": "string",
+                "pattern": "^(south|east|north|west|leftShoulder|rightShoulder|leftTrigger|rightTrigger|select|start|guide|leftThumb|rightThumb|dpadUp|dpadDown|dpadLeft|dpadRight|leftStickUp|leftStickDown|leftStickLeft|leftStickRight|rightStickUp|rightStickDown|rightStickLeft|rightStickRight)(\\+(south|east|north|west|leftShoulder|rightShoulder|leftTrigger|rightTrigger|select|start|guide|leftThumb|rightThumb|dpadUp|dpadDown|dpadLeft|dpadRight|leftStickUp|leftStickDown|leftStickLeft|leftStickRight|rightStickUp|rightStickDown|rightStickLeft|rightStickRight))*$"
+            }
         }
     },
     "properties": {
@@ -167,6 +175,95 @@
                             }
                         }
                     }
+                }
+            },
+            "additionalProperties": false
+        },
+        "gamepad": {
+            "type": "object",
+            "properties": {
+                "repeatDelayMs": {
+                    "description": "How long a direction is held before it repeats.",
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "repeatIntervalMs": {
+                    "description": "The interval between repeats of a held direction.",
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "bindings": {
+                    "description": "Gamepad chords bound to shell actions. Any keyboard.hotkeys action id is bindable under the same group and name.",
+                    "type": "object",
+                    "properties": {
+                        "navigation": {
+                            "type": "object",
+                            "properties": {
+                                "up": {
+                                    "$ref": "#/$defs/gamepadChordList"
+                                },
+                                "down": {
+                                    "$ref": "#/$defs/gamepadChordList"
+                                },
+                                "left": {
+                                    "$ref": "#/$defs/gamepadChordList"
+                                },
+                                "right": {
+                                    "$ref": "#/$defs/gamepadChordList"
+                                },
+                                "moveUp": {
+                                    "$ref": "#/$defs/gamepadChordList"
+                                },
+                                "moveDown": {
+                                    "$ref": "#/$defs/gamepadChordList"
+                                },
+                                "moveLeft": {
+                                    "$ref": "#/$defs/gamepadChordList"
+                                },
+                                "moveRight": {
+                                    "$ref": "#/$defs/gamepadChordList"
+                                },
+                                "activate": {
+                                    "$ref": "#/$defs/gamepadChordList"
+                                },
+                                "dismiss": {
+                                    "$ref": "#/$defs/gamepadChordList"
+                                },
+                                "close": {
+                                    "$ref": "#/$defs/gamepadChordList"
+                                },
+                                "cycleBackward": {
+                                    "$ref": "#/$defs/gamepadChordList"
+                                },
+                                "cycleForward": {
+                                    "$ref": "#/$defs/gamepadChordList"
+                                }
+                            },
+                            "additionalProperties": false
+                        },
+                        "overview": {
+                            "type": "object",
+                            "properties": {
+                                "toggle": {
+                                    "$ref": "#/$defs/gamepadChordList"
+                                }
+                            },
+                            "additionalProperties": false
+                        },
+                        "system": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/$defs/gamepadChordList"
+                            }
+                        },
+                        "media": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/$defs/gamepadChordList"
+                            }
+                        }
+                    },
+                    "additionalProperties": false
                 }
             },
             "additionalProperties": false

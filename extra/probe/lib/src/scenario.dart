@@ -289,6 +289,9 @@ class _ScenarioRun {
     if (step['key'] case final String chord) {
       return {'action': 'key', 'key': chord};
     }
+    if (step['gamepad'] case final String chord) {
+      return {'action': 'gamepad', 'gamepad': chord, 'holdMs': step['holdMs']};
+    }
     switch (step['type']) {
       case final String text:
         return {'action': 'type', 'text': text};

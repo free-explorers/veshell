@@ -37,7 +37,8 @@ configure.
 5. The compositor sets `game_mode_activated` and `meta_window_in_gaming_mode`,
    enters the client at the surface origin, and starts forwarding keyboard,
    pointer motion, buttons and axis to it.
-6. `Ctrl+Esc` clears the flag. The compositor replays a release for every key
+6. `Ctrl+Esc`, or holding a gamepad's Guide button for 800 ms
+   ([Gamepad](gamepad.md)), clears the flag. The compositor replays a release for every key
    the client was still holding (the `Ctrl` of the chord included) before the
    grab is dropped, then the shell pops the route and the frost fades back in.
 7. A game that closes itself leaves gaming mode through the same exit: the

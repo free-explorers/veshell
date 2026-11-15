@@ -61,7 +61,10 @@ const _action = {
       '{"tap": {"x": n, "y": n, "viewId"?: n}} (logical pixels in that view, the '
       'first view when no viewId: not screen coordinates); '
       '{"key": "Enter"} (or "Arrow Down", "Control+Escape"); '
-      '{"type": "text", "clear"?: true}.',
+      '{"type": "text", "clear"?: true}; '
+      '{"gamepad": "south", "holdMs"?: n} (a gamepad chord such as '
+      '"leftShoulder+dpadLeft", through the compositor; "guide" held 800 ms '
+      'leaves gaming mode).',
 };
 
 /// The tools, as listed to the client.

@@ -72,6 +72,7 @@ use smithay::wayland::drm_lease::DrmLease;
 use smithay::wayland::presentation::{
     PresentationFeedbackCachedState, PresentationFeedbackCallback, PresentationState, Refresh,
 };
+use std::os::fd::OwnedFd;
 use tracing::{debug, error, info, warn};
 
 use smithay_drm_extras::display_info;
@@ -263,6 +264,28 @@ impl Backend for DrmBackend {
 
     fn get_session(&self) -> LibSeatSession {
         self.session.clone()
+    }
+
+    fn open_input_device(&mut self, path: &std::path::Path) -> std::io::Result<OwnedFd> {
+        let fd = self
+            .session
+            .open(path, OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NONBLOCK)
+            .map_err(std::io::Error::other)?;
+        // The seat daemon decides the flags of the fd it hands over; the
+        // reader drains it until `EAGAIN`, so it must not block.
+        let flags = smithay::reexports::rustix::fs::fcntl_getfl(&fd)?;
+        smithay::reexports::rustix::fs::fcntl_setfl(&fd, flags | OFlags::NONBLOCK)?;
+        Ok(fd)
+    }
+
+    fn close_input_device(&mut self, fd: OwnedFd) {
+        if let Err(err) = self.session.close(fd) {
+            debug!(?err, "Failed to close an input device through the session");
+        }
+    }
+
+    fn input_session_active(&self) -> bool {
+        self.session.is_active()
     }
 
     fn with_primary_renderer_mut<T>(
@@ -610,6 +633,7 @@ pub fn run_drm_backend(real_session: bool) {
     );
     state.idle.set_request_render(idle_request_render);
     state.idle.set_apply_blank(idle_apply_blank);
+    crate::gamepad::init(&mut state);
 
     event_loop
         .handle()
@@ -617,6 +641,9 @@ pub fn run_drm_backend(real_session: bool) {
             SessionEvent::PauseSession => {
                 libinput_context.suspend();
                 info!("pausing session");
+                // The session revokes the gamepads' fds too; they are
+                // reopened on activation.
+                crate::gamepad::suspend(data);
                 // Input now goes to another VT we cannot observe, so freeze
                 // the screensaver: no dim, blank or automatic power action.
                 crate::idle::on_session_paused(data);
@@ -653,6 +680,7 @@ pub fn run_drm_backend(real_session: bool) {
                 if let Err(err) = libinput_context.resume() {
                     error!("Failed to resume libinput context: {:?}", err);
                 }
+                crate::gamepad::resume(data);
                 // Another session may have changed the keyboard LEDs.
                 let led_state = data.keyboard.led_state();
                 data.update_keyboard_leds(led_state);

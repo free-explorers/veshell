@@ -76,6 +76,30 @@ List<Map<String, Object?>> chordEvents(String chord) {
   ];
 }
 
+/// The events of pressing (or releasing) gamepad [chord]
+/// (`leftShoulder+dpadLeft`, the compositor's button names): pressed in order,
+/// released in reverse.
+List<Map<String, Object?>> gamepadChordEvents(
+  String chord, {
+  required bool pressed,
+}) {
+  final buttons = [
+    for (final button in chord.split('+'))
+      if (button.trim().isNotEmpty) button.trim(),
+  ];
+  if (buttons.isEmpty) {
+    throw ProbeError('Give a gamepad button, such as south or dpadLeft');
+  }
+  return [
+    for (final button in pressed ? buttons : buttons.reversed)
+      {
+        'type': 'gamepad',
+        'button': button,
+        'state': pressed ? 'pressed' : 'released',
+      },
+  ];
+}
+
 /// The key events typing [text]: letters, digits and spaces (shift for
 /// capitals). Anything else is typed through Flutter instead.
 List<Map<String, Object?>> typingEvents(String text) {

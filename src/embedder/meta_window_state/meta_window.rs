@@ -1295,6 +1295,10 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     // Flutter must not keep believing keys it was handed are
                     // held: from here they go to the client.
                     crate::keyboard::release_flutter_keys(self);
+                    // Likewise for gamepad buttons: the game reads the pad
+                    // itself from here, and a held direction must not keep
+                    // repeating in the shell behind it.
+                    crate::gamepad::release_shell_buttons(self);
                     // Let the game pace the panel itself while it owns the
                     // output; disabled again on the way out.
                     if let Some(name) = current_output.as_deref() {

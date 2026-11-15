@@ -36,8 +36,9 @@ String? findRepositoryRoot() {
   return above(Directory.current.path);
 }
 
-/// The `act` parameters for an action: `{tap: {…}}`, `{key: chord}` or
-/// `{type: text}` (with an optional `clear`).
+/// The `act` parameters for an action: `{tap: {…}}`, `{key: chord}`,
+/// `{type: text}` (with an optional `clear`) or `{gamepad: chord}` (with an
+/// optional `holdMs`).
 Map<String, Object?> actionParams(Map<String, Object?> action) {
   if (action['tap'] case final Map<String, Object?> tap) {
     return {'action': 'tap', ...tap};
@@ -48,8 +49,12 @@ Map<String, Object?> actionParams(Map<String, Object?> action) {
   if (action['type'] case final String text) {
     return {'action': 'type', 'text': text, 'clear': action['clear'] == true};
   }
+  if (action['gamepad'] case final String chord) {
+    return {'action': 'gamepad', 'gamepad': chord, 'holdMs': action['holdMs']};
+  }
   throw ProbeError(
-    'An action is {"tap": {...}}, {"key": "Enter"} or {"type": "text"}',
+    'An action is {"tap": {...}}, {"key": "Enter"}, {"type": "text"} or '
+    '{"gamepad": "south"}',
   );
 }
 

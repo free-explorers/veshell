@@ -349,6 +349,21 @@ void main() {
       expect(() => chordEvents('+'), throwsA(isA<ProbeError>()));
     });
 
+    test('a gamepad chord presses in order and releases in reverse', () {
+      expect(gamepadChordEvents('leftShoulder+dpadLeft', pressed: true), [
+        {'type': 'gamepad', 'button': 'leftShoulder', 'state': 'pressed'},
+        {'type': 'gamepad', 'button': 'dpadLeft', 'state': 'pressed'},
+      ]);
+      expect(gamepadChordEvents('leftShoulder+dpadLeft', pressed: false), [
+        {'type': 'gamepad', 'button': 'dpadLeft', 'state': 'released'},
+        {'type': 'gamepad', 'button': 'leftShoulder', 'state': 'released'},
+      ]);
+      expect(
+        () => gamepadChordEvents('+', pressed: true),
+        throwsA(isA<ProbeError>()),
+      );
+    });
+
     test('typing shifts capitals and maps spaces', () {
       final keys = [
         for (final event in typingEvents('Ab 1'))
