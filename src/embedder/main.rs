@@ -111,7 +111,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let nested = !session && display_is_live();
     debug!("Selecting backend: requested={requested:?} session={session} nested={nested}");
     match select_backend(&requested, session, nested) {
-        BackendKind::Drm => backend::drm_backend::run_drm_backend(),
+        BackendKind::Drm => backend::drm_backend::run_drm_backend(session),
         BackendKind::Winit => backend::winit::run_winit_backend()?,
     }
 
