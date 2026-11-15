@@ -102,6 +102,13 @@ connect. They are therefore always reported from the live session.
   that alters nothing skips the re-import entirely.
 - The nested (winit) backend never imports into the host session: it is a
   development backend, not a session compositor.
+- Only a `--session` run imports. A DRM run without it (a debug build started
+  from a TTY) shares the user's systemd user manager and D-Bus activation
+  environment with the login session but has no session wrapper to undo the
+  import, so importing would point the live session's new services and
+  xdg-autostart units (an input method, a portal) at a display that dies with
+  the debug run. Applications such a run launches still get its variables
+  through `systemd-run --setenv`.
 - Names must be portable POSIX names (`[A-Za-z_][A-Za-z0-9_]*`); the editor
   rejects malformed or duplicated names before writing, and the compositor skips
   any malformed name it finds in a hand-edited file.
@@ -144,3 +151,5 @@ with `UseIn=veshell` so the backend is never offered to another desktop either.
 - A settings change never mutates the environment of an already-running
   application or service.
 - The nested backend does not touch the host session's environment.
+- Only a `--session` run imports into, or unsets from, the systemd user manager
+  and the D-Bus activation environment.

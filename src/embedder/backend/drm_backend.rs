@@ -206,6 +206,10 @@ pub struct DrmBackend {
     /// The `wp_presentation` global (presentation-time). Kept alive for the
     /// session; dropping it would remove the global.
     presentation: Option<PresentationState>,
+    /// Started with `--session`: the user's login session, the only run that
+    /// publishes its environment to the user's shared systemd and D-Bus
+    /// activation environments (see [`run_drm_backend`]).
+    real_session: bool,
 }
 
 /// Screensaver wake hook: re-insert every blanked output into the render loop.
@@ -474,7 +478,16 @@ fn acquire_primary_gpu(state: &mut State<DrmBackend>, node: DrmNode) {
     }
 }
 
-pub fn run_drm_backend() {
+/// Runs the compositor on the DRM backend.
+///
+/// `real_session` is the `--session` marker: only the user's login session
+/// publishes its environment to the systemd user manager and the D-Bus
+/// activation environment. Both are shared by every session of the user, and
+/// a DRM run without the marker (a debug build started from a TTY) has no
+/// session wrapper to undo the import when it ends, so importing would leave
+/// the live session's services and xdg-autostart units pointed at a display
+/// that dies with the debug run.
+pub fn run_drm_backend(real_session: bool) {
     let mut event_loop = EventLoop::try_new().unwrap();
     let display: Display<State<DrmBackend>> = Display::new().unwrap();
     let mut display_handle = display.handle();
@@ -542,8 +555,10 @@ pub fn run_drm_backend() {
             // User environment variables reach systemd services, D-Bus
             // activation and xdg-autostart only through an explicit import;
             // removed ones must also be unset there. The session variables are
-            // re-imported just below, so they are left to the import.
-            if let Some(removed) = environment_changed {
+            // re-imported just below, so they are left to the import. Only a
+            // real session touches the user's shared managers (see
+            // `run_drm_backend`).
+            if let Some(removed) = environment_changed.filter(|_| data.backend_data.real_session) {
                 let removed: Vec<String> = removed
                     .into_iter()
                     .filter(|name| !SESSION_IMPORTED_VARIABLES.contains(&name.as_str()))
@@ -588,6 +603,7 @@ pub fn run_drm_backend() {
             render_scheduled: HashSet::new(),
             shell_paused_for_games: false,
             presentation: None,
+            real_session,
         },
         None,
         settings_manager,
@@ -1027,10 +1043,17 @@ pub fn run_drm_backend() {
         .unwrap();
     // Import the compositor's environment (including the user's variables,
     // already applied in `State::new`) plus their names, so the session's
-    // systemd user manager and D-Bus activation environment share it.
-    let imported_names =
-        imported_variable_names(&state.settings_manager.get_settings().environment);
-    spawn_environment_import(&imported_names, Some(environment_imported));
+    // systemd user manager and D-Bus activation environment share it. A run
+    // without `--session` leaves both to the user's real session and is ready
+    // at once.
+    if real_session {
+        let imported_names =
+            imported_variable_names(&state.settings_manager.get_settings().environment);
+        spawn_environment_import(&imported_names, Some(environment_imported));
+    } else {
+        info!("Not a --session run: leaving the user manager environment untouched");
+        let _ = environment_imported.send(());
+    }
 
     while state.running.load(Ordering::SeqCst) {
         let result = event_loop.dispatch(None, &mut state);
