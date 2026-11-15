@@ -316,6 +316,7 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
         dmabuf_state,
         settings_manager,
     );
+    crate::gamepad::init(&mut state);
 
     if let Some(monitor_setting) = state
         .settings_manager

@@ -138,6 +138,9 @@ Shipped defaults:
 `Escape` and `Super+Tab` are overview-only intents and stay local to the
 overview; the rest are global settings.
 
+A gamepad reaches the same intents through `gamepad.bindings`, dispatched from
+the primary focus like these chords (see [Gamepad](gamepad.md)).
+
 The shell's `Shortcuts` manager sits **inside** each monitor's `MaterialApp`
 (`MonitorWidget`), below `DefaultTextEditingShortcuts` and the default
 `WidgetsApp` shortcuts. That placement matters: those framework shortcuts bind

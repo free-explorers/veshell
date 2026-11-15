@@ -1,4 +1,4 @@
-use std::os::fd::AsFd;
+use std::os::fd::{AsFd, OwnedFd};
 use std::rc::Rc;
 
 use smithay::backend::{
@@ -96,6 +96,32 @@ pub trait Backend {
     fn seat_name(&self) -> String;
 
     fn get_session(&self) -> LibSeatSession;
+
+    /// Opens an evdev node the compositor reads itself (a gamepad: libinput
+    /// does not handle them), read-only and non-blocking.
+    ///
+    /// A nested run opens it directly: the session's `uaccess` ACL makes the
+    /// user's joysticks readable. The DRM backend goes through the seat
+    /// session, which revokes the fd when the session is paused.
+    fn open_input_device(&mut self, path: &std::path::Path) -> std::io::Result<OwnedFd> {
+        use std::os::unix::fs::OpenOptionsExt;
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC)
+            .open(path)?;
+        Ok(file.into())
+    }
+
+    /// Closes a device opened by [`Backend::open_input_device`].
+    fn close_input_device(&mut self, fd: OwnedFd) {
+        drop(fd);
+    }
+
+    /// Whether the seat session currently owns the input devices. A nested
+    /// run always does; a DRM session does not while switched away.
+    fn input_session_active(&self) -> bool {
+        true
+    }
 
     fn with_primary_renderer_mut<T>(&mut self, f: impl FnOnce(&mut GlesRenderer) -> T)
         -> Option<T>;

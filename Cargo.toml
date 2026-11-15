@@ -55,6 +55,8 @@ features = [
 smithay-drm-extras = { git = "https://github.com/Smithay/smithay.git", rev = "4cf0b62028039661477d482ec4758b687d8f4392" }
 rustix = "0.38.30"
 input-linux = "0.7.1"
+# Gamepad discovery and hotplug (libinput ignores joysticks).
+udev = "0.9.3"
 tracing-subscriber = { version = "0.3.17", features = [
     "env-filter",
     "time",

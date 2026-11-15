@@ -14,6 +14,7 @@ import 'package:shell/platform/model/event/brightness_changed/brightness_changed
 import 'package:shell/platform/model/event/commit_surface/commit_surface.serializable.dart';
 import 'package:shell/platform/model/event/destroy_subsurface/destroy_subsurface.serializable.dart';
 import 'package:shell/platform/model/event/destroy_surface/destroy_surface.serializable.dart';
+import 'package:shell/platform/model/event/gamepad_button/gamepad_button.serializable.dart';
 import 'package:shell/platform/model/event/gesture_swipe/gesture_swipe_begin.serializable.dart';
 import 'package:shell/platform/model/event/gesture_swipe/gesture_swipe_end.serializable.dart';
 import 'package:shell/platform/model/event/gesture_swipe/gesture_swipe_update.serializable.dart';
@@ -270,6 +271,13 @@ sealed class PlatformEvent with _$PlatformEvent implements PlatformInteraction {
     required String method,
     required KeyboardLayoutChangedMessage message,
   }) = KeyboardLayoutChangedEvent;
+
+  /// A gamepad control was pressed or released; the shell resolves it to a
+  /// navigation intent (see `docs/specifications/gamepad.md`).
+  const factory PlatformEvent.gamepadButton({
+    required String method,
+    required GamepadButtonMessage message,
+  }) = GamepadButtonEvent;
 
   /// Gesture Swipe Begin Event
   /// This event is sent when the user performs a swipe gesture.

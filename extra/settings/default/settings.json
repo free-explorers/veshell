@@ -51,6 +51,30 @@
         "mouseAccelerationProfile": "default",
         "touchpadAccelerationProfile": "default"
     },
+    "gamepad": {
+        "repeatDelayMs": 400,
+        "repeatIntervalMs": 120,
+        "bindings": {
+            "navigation": {
+                "up": ["dpadUp", "leftStickUp"],
+                "down": ["dpadDown", "leftStickDown"],
+                "left": ["dpadLeft", "leftStickLeft"],
+                "right": ["dpadRight", "leftStickRight"],
+                "moveUp": ["leftShoulder+dpadUp", "leftShoulder+leftStickUp"],
+                "moveDown": ["leftShoulder+dpadDown", "leftShoulder+leftStickDown"],
+                "moveLeft": ["leftShoulder+dpadLeft", "leftShoulder+leftStickLeft"],
+                "moveRight": ["leftShoulder+dpadRight", "leftShoulder+leftStickRight"],
+                "activate": ["south"],
+                "dismiss": ["east"],
+                "close": ["select+north"],
+                "cycleBackward": ["leftShoulder"],
+                "cycleForward": ["rightShoulder"]
+            },
+            "overview": {
+                "toggle": ["start", "guide"]
+            }
+        }
+    },
     "files": {
         "showHidden": false,
         "sortBy": "name",

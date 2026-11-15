@@ -3758,6 +3758,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "udev",
  "uuid",
  "xcursor",
  "xdg-user",

@@ -238,6 +238,9 @@ pub struct State<BackendData: Backend + 'static> {
     /// brightness keys drive. Unavailable when no controllable panel exists, in
     /// which case the screensaver keeps the black overlay.
     pub brightness: crate::brightness::Brightness,
+    /// Gamepads the compositor reads itself (libinput ignores them) and the
+    /// buttons it reported to the shell. See `crate::gamepad`.
+    pub gamepads: crate::gamepad::GamepadState,
     /// Capture-owned state: the native selection session, the local recording
     /// session, and the channels that carry their worker results back onto the
     /// compositor loop.
@@ -754,6 +757,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             idle_notifier_state,
             idle_inhibit_manager_state,
             brightness,
+            gamepads: Default::default(),
         };
         // Start watching for idleness right away.
         state.idle.arm_activity_timers();

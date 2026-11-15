@@ -735,23 +735,30 @@ fn handle_embedder_hotkeys<BackendData: Backend + 'static>(
 
     // disable gaming mode
     if event.keysym == Keysym::Escape && event.mods.ctrl {
-        if let Some(meta_window_id) = data.meta_window_state.meta_window_in_gaming_mode.clone() {
-            // The client only ever saw the presses of keys forwarded while
-            // gaming: release them now, before the mode is torn down, or it
-            // keeps them held (the Ctrl of this very chord among them).
-            release_game_mode_forwarded_keys(data);
-            data.patch_meta_window(
-                crate::meta_window_state::meta_window::MetaWindowPatch::UpdateGameModeActivated {
-                    id: meta_window_id,
-                    value: false,
-                },
-                true,
-            );
-        }
+        leave_gaming_mode(data);
         return true;
     }
 
     false
+}
+
+/// Ends gaming mode, if a window is in it: the exit shared by `Ctrl+Esc` and
+/// the gamepad's held Guide button.
+pub fn leave_gaming_mode<BackendData: Backend + 'static>(data: &mut State<BackendData>) {
+    let Some(meta_window_id) = data.meta_window_state.meta_window_in_gaming_mode.clone() else {
+        return;
+    };
+    // The client only ever saw the presses of keys forwarded while gaming:
+    // release them now, before the mode is torn down, or it keeps them held
+    // (the Ctrl of `Ctrl+Esc` among them).
+    release_game_mode_forwarded_keys(data);
+    data.patch_meta_window(
+        crate::meta_window_state::meta_window::MetaWindowPatch::UpdateGameModeActivated {
+            id: meta_window_id,
+            value: false,
+        },
+        true,
+    );
 }
 
 /// Applies Flutter's answer for a key, then lets the next queued key through.

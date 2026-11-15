@@ -303,9 +303,18 @@ fn inject_one<BackendData: Backend + 'static>(
                 false,
             );
         }
+        Some("gamepad") => {
+            // Goes through the same logical-button path as a real pad, as a
+            // source of its own, so gaming mode and the Guide hold apply.
+            let name = event["button"].as_str().ok_or("gamepad needs a button")?;
+            let button = crate::gamepad::GamepadButton::from_name(name)
+                .ok_or_else(|| format!("unknown gamepad button {name:?}"))?;
+            let pressed = pressed(&event["state"])?;
+            crate::gamepad::set_held(state, crate::gamepad::GamepadSource::Probe, button, pressed);
+        }
         other => {
             return Err(format!(
-                "unknown event type {other:?}: motion, button, axis or key"
+                "unknown event type {other:?}: motion, button, axis, key or gamepad"
             ))
         }
     }

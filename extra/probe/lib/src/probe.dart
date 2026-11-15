@@ -193,6 +193,9 @@ class Probe {
     final route =
         via ?? (await compositor() != null ? 'compositor' : 'flutter');
     if (route == 'flutter') {
+      if (params['action'] == 'gamepad') {
+        throw ProbeError('A gamepad reaches the shell only via the compositor');
+      }
       return (await connection.call('act', params))! as Map<String, Object?>;
     }
     if (route != 'compositor') {
@@ -221,8 +224,19 @@ class Probe {
         }
         await control.inject(typingEvents('${params['text']}'));
         return {'via': 'compositor', 'typed': params['text']};
+      case 'gamepad':
+        // Held for `holdMs` (a tap by default): the Guide hold that leaves
+        // gaming mode is timed by the compositor.
+        final chord = '${params['gamepad']}';
+        await control.inject(gamepadChordEvents(chord, pressed: true));
+        final hold = (params['holdMs'] as num?)?.toInt() ?? 0;
+        if (hold > 0) {
+          await Future<void>.delayed(Duration(milliseconds: hold));
+        }
+        await control.inject(gamepadChordEvents(chord, pressed: false));
+        return {'via': 'compositor', 'gamepad': chord, 'holdMs': hold};
       case final other:
-        throw ProbeError('Unknown action "$other": tap, key or type');
+        throw ProbeError('Unknown action "$other": tap, key, type or gamepad');
     }
   }
 
