@@ -12,6 +12,7 @@ import 'package:shell/file_chooser/widget/file_chooser_dialog.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
+import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/platform/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/widget/frosted_surface.dart';
@@ -641,9 +642,20 @@ class _DialogWindowBody extends HookConsumerWidget {
       canRequestFocus: false,
     );
 
+    // The panel keeps painting its last dialog while it fades out, including
+    // one that was just extracted to a tile. The window then belongs to that
+    // tile, which sizes it; resizing it to this panel as well would fight the
+    // tile's bounds.
+    final ownsSurface = ref.watch(
+      metaWindowWindowMapProvider.select(
+        (map) => map.get(dialog.metaWindowId) == dialogWindowId,
+      ),
+    );
+
     final window = WindowWidget(
       metaWindowId: dialog.metaWindowId,
       focusNode: focusNode,
+      sizesSurface: ownsSurface,
     );
 
     return LayoutBuilder(
