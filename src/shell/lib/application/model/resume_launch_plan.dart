@@ -20,10 +20,10 @@ class ResumeLaunchPlan {
 ///
 /// Order of resolution:
 ///
-/// 1. a custom exec keeps its shell command;
-/// 2. the desktop entry's `Exec` template is parsed and its document field
-///    codes are filled from the saved context;
-/// 3. when the entry is gone, the saved argv/executable is the fallback.
+/// 1. the tile's custom exec, else the desktop entry's `Exec`, is parsed as
+///    an `Exec` line and its document field codes are filled from the saved
+///    context;
+/// 2. when there is neither, the saved argv/executable is the fallback.
 ///
 /// The working directory is the saved one when it still exists, then home,
 /// then the compositor's cwd. Missing documents and missing executables are
@@ -53,47 +53,37 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
       : _resolveWorkingDirectory(saved.workingDirectory, homeDirectory, exists);
   final resolved = saved.copyWith(workingDirectory: workingDirectory);
 
-  if (customExec != null && customExec.trim().isNotEmpty) {
-    var command = customExec;
-    final customTokens = DesktopExec.parse(customExec).tokens;
-    final emulator = terminalEmulatorFor(
-      executable: saved.executable,
-      execTemplate: customExec,
-      appId: appId,
-      capturedArgv: saved.argv,
-    );
-    if (emulator != null && !emulator.hasCommandArguments(customTokens)) {
-      final suffix = _terminalProgramArguments(
-        saved: saved,
-        emulator: emulator,
-        workingDirectory: workingDirectory,
-        environment: variables,
-        isExecutable: executable,
-        title: savedTitle,
-        // `wezterm` needs its `start` subcommand unless the custom exec
-        // already has it; every other terminal's suffix is the whole syntax.
-        includeSubcommand:
-            emulator.name == 'wezterm' && !customTokens.contains('start'),
-      );
-      if (suffix != null) {
-        command = appendShellArguments(command, suffix);
-      }
-    }
-    return ResumeLaunchPlan(
-      config: LaunchConfig(
-        command: command,
-        workingDirectory: workingDirectory,
-      ),
-      context: resolved,
-    );
-  }
+  // A custom exec is the tile's own `Exec` line: the editor starts from the
+  // entry's, and it resumes exactly like one.
+  final template = customExec != null && customExec.trim().isNotEmpty
+      ? customExec
+      : execTemplate;
 
   // A terminal's own argv describes the emulator (its flags and server mode),
   // not work to replay. The terminal context supplies the cwd; the desktop
   // entry supplies the command. Keep the captured argv only for the fallback
   // when the entry is gone.
   final arguments = saved.terminal != null ? const <String>[] : saved.arguments;
-  final classified = _classifyArguments(arguments, workingDirectory, exists);
+  var classified = _classifyArguments(arguments, workingDirectory, exists);
+  if (template != null &&
+      classified.isNotEmpty &&
+      !_entryRunsCapturedProgram(saved, template)) {
+    // The window's process is not the entry's program (a wrapper script exec'd
+    // another binary, or a flatpak/snap/shell wrapper hides it). Its flags
+    // belong to that inner program's interface, not to the entry's, and some
+    // of its paths are the program's own files: only the user's documents
+    // carry over.
+    classified = classified
+        .where(
+          (argument) =>
+              argument.isDocument && !saved.isProgramFile(argument.value),
+        )
+        .toList();
+    matchingLog.info(
+      'Captured process "${saved.argv.firstOrNull}" is not the entry\'s '
+      'program; keeping only its documents',
+    );
+  }
   final documents = classified
       .whereType<_ClassifiedArgument>()
       .where((argument) => argument.isDocument && argument.exists)
@@ -105,8 +95,8 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
       .map((argument) => argument.value)
       .toList();
 
-  if (execTemplate != null && execTemplate.trim().isNotEmpty) {
-    final exec = DesktopExec.parse(execTemplate);
+  if (template != null && template.trim().isNotEmpty) {
+    final exec = DesktopExec.parse(template);
     final argv = _expandExec(
       exec,
       documents: documents,
@@ -122,7 +112,7 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
     if (argv.isNotEmpty) {
       final emulator = terminalEmulatorFor(
         executable: saved.executable,
-        execTemplate: execTemplate,
+        execTemplate: template,
         appId: appId,
         capturedArgv: saved.argv,
       );
@@ -135,7 +125,11 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
             environment: variables,
             isExecutable: executable,
             title: savedTitle,
-            includeSubcommand: true,
+            // `wezterm` needs its `start` subcommand unless the command
+            // already has it; every other terminal's suffix is the whole
+            // syntax.
+            includeSubcommand:
+                emulator.name != 'wezterm' || !exec.tokens.contains('start'),
           );
           if (suffix != null) {
             argv.addAll(suffix);
@@ -167,6 +161,44 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
     config: LaunchConfig(argv: fallback, workingDirectory: workingDirectory),
     context: resolved,
   );
+}
+
+/// Whether the `Exec` line starts the captured process directly,
+/// so that the captured arguments speak the entry's command-line interface.
+///
+/// Compared by basename against argv[0] and the resolved executable. A
+/// command hidden behind `flatpak run`, `snap run` or a shell cannot be
+/// compared and is treated as a different program.
+bool _entryRunsCapturedProgram(ResumeContext saved, String execTemplate) {
+  final program = _execProgram(DesktopExec.parse(execTemplate).tokens);
+  if (program == null) {
+    return false;
+  }
+  final name = path.basename(program);
+  if (_opaqueLaunchers.contains(name)) {
+    return false;
+  }
+  return [
+    saved.argv.firstOrNull,
+    saved.executable,
+  ].whereType<String>().any((captured) => path.basename(captured) == name);
+}
+
+/// Launchers whose own argv does not name the program they end up running.
+const _opaqueLaunchers = {'flatpak', 'snap', 'sh', 'bash', 'dash', 'zsh'};
+
+/// The program an `Exec` command line runs, skipping an `env` prefix.
+String? _execProgram(List<String> tokens) {
+  var index = 0;
+  if (index < tokens.length && path.basename(tokens[index]) == 'env') {
+    index++;
+    while (index < tokens.length &&
+        (tokens[index].startsWith('-') ||
+            (tokens[index].contains('=') && !tokens[index].contains('/')))) {
+      index++;
+    }
+  }
+  return index < tokens.length ? tokens[index] : null;
 }
 
 String? _resolveWorkingDirectory(

@@ -98,11 +98,23 @@ process is the source of truth, not the fact that this shell launched it.
 
 ### Relaunch
 
-1. A custom exec remains a shell command; the saved cwd applies.
+1. A custom exec is the tile's own `Exec` line and resumes exactly like the
+   entry's (step 2): the editor starts from the entry's `Exec`, so its field
+   codes and arguments mean the same thing. It is not a shell command; shell
+   syntax needs an explicit `sh -c '...'`, as in a desktop entry. The editor
+   keeps an edit when the user clicks elsewhere (on Resume), not only on
+   Enter or ✓.
 2. Otherwise the desktop entry's `Exec` is parsed into argv, `%f/%F/%u/%U` are
    filled from saved documents, `%i/%c` are expanded, and non-document
    arguments are appended. Arguments and paths are never interpolated into a
    shell string; `systemd-run` receives them as discrete argv elements.
+   The captured arguments only speak the entry's interface when the captured
+   process is the entry's program (same basename as argv[0] or the
+   executable). A wrapper that exec'd another binary (Zotero's `zotero`
+   script runs `zotero-bin -app /usr/lib/zotero/application.ini`), or a
+   `flatpak run`/`snap run`/shell launcher that hides it, keeps only the
+   user's documents: the inner program's flags and its own installation files
+   (next to the executable or under `/usr`, `/opt`, `/app`, ...) are dropped.
 3. If the desktop entry is gone, the captured argv/executable is used.
 4. A saved cwd that is gone falls back to `$HOME` (then the compositor cwd);
    a tile with no captured context keeps the compositor cwd. A missing
@@ -139,6 +151,7 @@ the tile does not hide the command it will actually run.
 
 The resume summary only names facts that describe resumable work: a terminal's
 directory and foreground program, an opened document, or the last window title.
+A file of the program's own installation is never named as the document.
 A non-terminal application's working directory is not shown: most applications
 ignore it on launch, and applications such as IDEs restore their own workspace
 or project instead.

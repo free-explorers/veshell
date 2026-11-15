@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:path/path.dart' as path;
 
 part 'resume_context.serializable.freezed.dart';
 part 'resume_context.serializable.g.dart';
@@ -39,6 +40,41 @@ abstract class ResumeContext with _$ResumeContext {
   /// Arguments passed to [executable], i.e. [argv] without its first element.
   List<String> get arguments => argv.length <= 1 ? const [] : argv.sublist(1);
 
+  /// Whether [argument] names a file of the captured program's own
+  /// installation rather than the user's work.
+  ///
+  /// Wrapper launchers start the real binary with its own resources: Zotero's
+  /// `zotero` script runs `zotero-bin -app /usr/lib/zotero/application.ini`,
+  /// an interpreter receives its script. Such a path is plumbing, never a
+  /// document to reopen: it lives next to the executable or under a system
+  /// installation prefix.
+  bool isProgramFile(String argument) {
+    final uri = Uri.tryParse(argument);
+    final String file;
+    if (uri != null && uri.hasScheme) {
+      if (uri.scheme != 'file') {
+        return false;
+      }
+      file = uri.toFilePath();
+    } else {
+      file = argument;
+    }
+    if (!path.isAbsolute(file)) {
+      return false;
+    }
+    final normalized = path.normalize(file);
+    for (final program in [executable, argv.firstOrNull]) {
+      if (program != null &&
+          path.isAbsolute(program) &&
+          path.isWithin(path.dirname(program), normalized)) {
+        return true;
+      }
+    }
+    return _installationPrefixes.any(
+      (prefix) => path.isWithin(prefix, normalized),
+    );
+  }
+
   /// The saved command line in a form suitable for display.
   ///
   /// Mirrors the relaunch fallback: the captured [argv] when present,
@@ -51,6 +87,21 @@ abstract class ResumeContext with _$ResumeContext {
     return program == null || program.isEmpty ? null : program;
   }
 }
+
+/// Where programs and their resources are installed, as opposed to where
+/// users keep documents.
+const _installationPrefixes = [
+  '/usr',
+  '/opt',
+  '/bin',
+  '/sbin',
+  '/lib',
+  '/lib64',
+  '/app',
+  '/snap',
+  '/nix/store',
+  '/gnu/store',
+];
 
 /// Terminal-specific resume context.
 @freezed

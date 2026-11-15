@@ -208,6 +208,24 @@ void main() {
       expect(summary, 'report.pdf');
     });
 
+    test("never names the program's own installation files", () {
+      final summary = resumeContextSummary(
+        const ResumeContext(
+          workingDirectory: '/home/user',
+          argv: [
+            '/usr/lib/zotero/zotero-bin',
+            '-app',
+            '/usr/lib/zotero/application.ini',
+          ],
+          executable: '/usr/lib/zotero/zotero-bin',
+        ),
+        title: 'My Library - Zotero',
+        homeDirectory: '/home/user',
+      );
+
+      expect(summary, 'My Library - Zotero');
+    });
+
     test('falls back to the title instead of the application cwd', () {
       expect(
         resumeContextSummary(

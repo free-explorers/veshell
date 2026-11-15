@@ -52,7 +52,7 @@ String? resumeContextSummary(
 
 String? _firstDocument(ResumeContext context) {
   for (final argument in context.arguments) {
-    if (argument.startsWith('-')) {
+    if (argument.startsWith('-') || context.isProgramFile(argument)) {
       continue;
     }
     final uri = Uri.tryParse(argument);
