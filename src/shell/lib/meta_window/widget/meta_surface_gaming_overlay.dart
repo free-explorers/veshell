@@ -265,7 +265,7 @@ class MetaSurfaceGamingOverlay extends HookConsumerWidget {
                 },
                 child: Hero(
                   tag: heroUuid,
-                  child: _SizedSurface(
+                  child: FittedWindowSurface(
                     size: surfaceSize,
                     // While the native render owns the output the shell must
                     // not draw the game: a placeholder keeps the surface out of
@@ -421,7 +421,7 @@ class _GamingZoomRoute extends HookConsumerWidget {
                 children: [
                   CurrentMonitorName(
                     name: monitorName,
-                    child: _SizedSurface(
+                    child: FittedWindowSurface(
                       size: geometry?.size,
                       child: toContext.widget,
                     ),
@@ -506,8 +506,8 @@ class GamingActivationTrigger extends HookConsumerWidget {
 ///
 /// The size is optional so an unplaced window (no geometry yet) renders
 /// without a fixed box instead of asserting.
-class _SizedSurface extends StatelessWidget {
-  const _SizedSurface({required this.child, this.size});
+class FittedWindowSurface extends StatelessWidget {
+  const FittedWindowSurface({required this.child, this.size, super.key});
   final Widget child;
   final Size? size;
 

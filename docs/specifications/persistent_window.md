@@ -220,6 +220,30 @@ Shell cwd and foreground are refreshed while the terminal window lives (title
 changes and the 2-second process-info poll). The last context is kept when the
 window closes; closing the terminal does not forget it.
 
+## Immersive fullscreen
+
+A client that goes fullscreen inside a `maximized` tile is first shown
+fullscreen within the tile. Once the tile is selected, holds the keyboard (no
+dialog selected over it) and the pointer and keyboard have been idle for 3
+seconds, the window zooms out of the tile and covers its whole monitor, panels
+included. The next pointer or key event, on any monitor, zooms it back into the
+tile, and the event still reaches the client; idling again zooms it out again.
+
+Unlike [gaming mode](gaming_mode.md) this stays inside Flutter: the surface is
+drawn by the shell, input keeps flowing through it, and nothing is grabbed.
+
+- The zoom is a non-opaque route on the monitor's navigator. It never takes
+  focus, so the tile's focus node keeps the keyboard and activation throughout.
+  The tile stays mounted underneath: the route draws a second view of the
+  surface, grown from the tile's bounds (measured again for the return).
+- While out of its tile, the window is configured to the monitor's logical size
+  and the tile stops sizing it; on the way back the tile re-asserts its own
+  bounds. Until the client follows a configure, its committed buffer is scaled
+  into the zoom, so the first frame sits exactly where the tile showed it.
+- Leaving fullscreen, losing the keyboard or selection, a dialog being selected,
+  a display-mode change or the window closing all zoom it back at once.
+- `fullscreen`, `game` and `floating` tiles never do this.
+
 ## Properties
 
 WindowState state; // placeholder or opened  
