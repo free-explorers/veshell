@@ -520,6 +520,12 @@ class ExecCommandEditor extends HookWidget {
                   child: IntrinsicWidth(
                     child: TextField(
                       onSubmitted: (value) => submittedCb(),
+                      // A click elsewhere (on Resume, typically) keeps the
+                      // edit: otherwise the field would still show the edited
+                      // command while the tile resumes with the old one.
+                      onTapOutside: (_) {
+                        if (isEditable.value) submittedCb();
+                      },
                       enabled: isEditable.value,
                       decoration: InputDecoration(
                         prefixIcon: const ShellIcon(MdiIcons.chevronRight),

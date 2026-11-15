@@ -53,7 +53,7 @@ void main() {
   test('substitutes documents and applies the saved working directory', () {
     final result = plan(
       cwd: '/home/user/project',
-      argv: ['code', '/home/user/project/report.pdf', '--new-window'],
+      argv: ['app', '/home/user/project/report.pdf', '--new-window'],
       existing: {
         '/home/user/project',
         '/home/user',
@@ -84,6 +84,83 @@ void main() {
       '/home/user/doc.txt',
       '--last',
     ]);
+  });
+
+  group('a process that is not the entry program', () {
+    // Zotero's `zotero` script runs
+    // `zotero-bin -app /usr/lib/zotero/application.ini "$@"` (#277).
+    const zoteroArgv = [
+      '/usr/lib/zotero/zotero-bin',
+      '-app',
+      '/usr/lib/zotero/application.ini',
+    ];
+
+    test("does not hand the inner binary's files to the entry", () {
+      final result = plan(
+        execTemplate: 'zotero -url %U',
+        argv: zoteroArgv,
+        executable: '/usr/lib/zotero/zotero-bin',
+        existing: {'/home/user', '/usr/lib/zotero/application.ini'},
+      )!;
+
+      expect(result.config.argv, ['zotero', '-url']);
+    });
+
+    test("keeps the user's documents but not the inner flags", () {
+      final result = plan(
+        execTemplate: '/usr/bin/libreoffice --writer %U',
+        argv: [
+          '/usr/lib/libreoffice/program/soffice.bin',
+          '--writer',
+          '/home/user/report.odt',
+          '--splash-pipe=5',
+        ],
+        existing: {'/home/user', '/home/user/report.odt'},
+      )!;
+
+      expect(result.config.argv, [
+        '/usr/bin/libreoffice',
+        '--writer',
+        'file:///home/user/report.odt',
+      ]);
+    });
+
+    test('a flatpak wrapper cannot be compared and keeps only documents', () {
+      final result = plan(
+        execTemplate: 'flatpak run org.example.Editor @@u %U @@',
+        argv: ['/app/bin/editor', '--gapplication-service', '/home/user/a.txt'],
+        existing: {'/home/user', '/home/user/a.txt'},
+      )!;
+
+      expect(result.config.argv, [
+        'flatpak',
+        'run',
+        'org.example.Editor',
+        '@@u',
+        'file:///home/user/a.txt',
+        '@@',
+      ]);
+    });
+
+    test('an env prefix still compares the program itself', () {
+      final result = plan(
+        execTemplate: 'env FOO=1 app %U',
+        argv: ['/usr/bin/app', '--flag'],
+        existing: {'/home/user'},
+      )!;
+
+      expect(result.config.argv, ['env', 'FOO=1', 'app', '--flag']);
+    });
+
+    test('the fallback still replays the captured process as it ran', () {
+      final result = plan(
+        execTemplate: null,
+        argv: zoteroArgv,
+        existing: {'/home/user', '/usr/lib/zotero/application.ini'},
+      )!;
+
+      expect(result.config.argv, zoteroArgv);
+    });
   });
 
   test('drops a missing document instead of failing the launch', () {
@@ -127,16 +204,46 @@ void main() {
     expect(result.config.argv, ['/usr/bin/app']);
   });
 
-  test('custom exec stays a shell command and keeps the cwd', () {
+  test('custom exec is an Exec line and keeps the cwd', () {
     final result = plan(
       cwd: '/home/user/src',
       customExec: 'nvim .',
       existing: {'/home/user/src', '/home/user'},
     )!;
 
-    expect(result.config.command, 'nvim .');
-    expect(result.config.argv, isEmpty);
+    expect(result.config.argv, ['nvim', '.']);
+    expect(result.config.command, isNull);
     expect(result.config.workingDirectory, '/home/user/src');
+  });
+
+  test('custom exec fills its field codes from the saved documents', () {
+    final result = plan(
+      customExec: 'app --private %U',
+      argv: ['app', '/home/user/report.pdf'],
+      existing: {'/home/user', '/home/user/report.pdf'},
+    )!;
+
+    expect(result.config.argv, [
+      'app',
+      '--private',
+      'file:///home/user/report.pdf',
+    ]);
+  });
+
+  test("a custom exec without the wrapper's arguments drops them", () {
+    // #277: editing Zotero's command must not bring `application.ini` back.
+    final result = plan(
+      customExec: 'zotero',
+      argv: [
+        '/usr/lib/zotero/zotero-bin',
+        '-app',
+        '/usr/lib/zotero/application.ini',
+      ],
+      executable: '/usr/lib/zotero/zotero-bin',
+      existing: {'/home/user', '/usr/lib/zotero/application.ini'},
+    )!;
+
+    expect(result.config.argv, ['zotero']);
   });
 
   test('expands icon, name and literal percent codes', () {
@@ -410,12 +517,36 @@ void main() {
         existing: {'/home/user', '/home/user/src'},
       )!;
 
-      expect(result.config.command, isNotNull);
-      expect(
-        result.config.command,
-        startsWith('foot --working-directory /home/user/src -- /bin/sh -c '),
-      );
-      expect(result.config.command, contains('/usr/bin/htop'));
+      expect(result.config.argv.take(5), [
+        'foot',
+        '--working-directory',
+        '/home/user/src',
+        '--',
+        '/bin/sh',
+      ]);
+      expect(result.config.argv, contains('/usr/bin/htop'));
+    });
+
+    test('custom wezterm exec with its own start keeps one subcommand', () {
+      final result = plan(
+        cwd: '/home/user/src',
+        executable: '/usr/bin/wezterm',
+        terminal: terminalWith(
+          const ForegroundProgram(program: '/usr/bin/htop'),
+        ),
+        customExec: 'wezterm start --always-new-process',
+        appId: 'wezterm',
+        existing: {'/home/user', '/home/user/src'},
+      )!;
+
+      expect(result.config.argv.take(6), [
+        'wezterm',
+        'start',
+        '--always-new-process',
+        '--cwd',
+        '/home/user/src',
+        '--',
+      ]);
     });
 
     test('custom exec with its own command separator is left alone', () {
@@ -430,7 +561,7 @@ void main() {
         existing: {'/home/user', '/home/user/src'},
       )!;
 
-      expect(result.config.command, 'alacritty -e bash');
+      expect(result.config.argv, ['alacritty', '-e', 'bash']);
     });
 
     test('custom exec for a non-terminal never appends a program', () {
@@ -443,7 +574,7 @@ void main() {
         existing: {'/home/user', '/home/user/src'},
       )!;
 
-      expect(result.config.command, 'nvim .');
+      expect(result.config.argv, ['nvim', '.']);
     });
 
     test('a stored non-allowlisted program is never replayed', () {
