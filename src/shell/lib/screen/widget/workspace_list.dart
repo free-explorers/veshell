@@ -1,10 +1,7 @@
-import 'package:collection/collection.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/capture/provider/recording_workspaces.dart';
 import 'package:shell/notification/provider/notification_channel.dart';
 import 'package:shell/notification/provider/notification_routing.dart';
@@ -12,16 +9,14 @@ import 'package:shell/notification/widget/notification_area.dart';
 import 'package:shell/notification/widget/notification_dot.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/screen_state.dart';
-import 'package:shell/screen/provider/workspace_display_mode.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
+import 'package:shell/screen/widget/workspace_icon.dart';
 import 'package:shell/shared/widget/cross_reorderable_list.dart';
 import 'package:shell/shared/widget/multi_view_drag.dart';
-import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/theme//provider/theme.dart';
 import 'package:shell/tile_grab/model/tile_drop.dart';
 import 'package:shell/tile_grab/model/tile_grab_marker.dart';
 import 'package:shell/tile_grab/provider/tile_grab_controller.dart';
-import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/tileable/persistent_window/persistent_window.dart';
 
@@ -217,6 +212,7 @@ class WorkspaceListButton extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final screenState = ref.watch(screenStateProvider(screenId));
+    final menuController = useMemoized(MenuController.new);
     final unreadNotifications = ref.watch(
       unreadNotificationsForWorkspaceProvider(workspaceId),
     );
@@ -254,30 +250,54 @@ class WorkspaceListButton extends HookConsumerWidget {
                 clipBehavior: Clip.none,
                 children: [
                   Positioned.fill(
-                    child: IconButton(
-                      style: ButtonStyle(
-                        backgroundColor: WidgetStatePropertyAll(
-                          isHovered
-                              ? Theme.of(context).colorScheme.primaryContainer
-                              : null,
-                        ),
-                        foregroundColor: WidgetStatePropertyAll(
-                          isHovered
-                              ? Theme.of(context).colorScheme.onPrimaryContainer
-                              : null,
-                        ),
-                        shape: WidgetStateProperty.all(
-                          const RoundedRectangleBorder(),
+                    child: MenuAnchor(
+                      controller: menuController,
+                      // Beside the button, on the root overlay so the screen
+                      // panel does not clip it.
+                      useRootOverlay: true,
+                      style: const MenuStyle(
+                        alignment: AlignmentDirectional.topEnd,
+                      ),
+                      menuChildren: workspaceButtonMenuChildren(
+                        context,
+                        ref,
+                        workspaceId,
+                      ),
+                      child: GestureDetector(
+                        onSecondaryTap: menuController.open,
+                        child: IconButton(
+                          onLongPress: menuController.open,
+                          style: ButtonStyle(
+                            backgroundColor: WidgetStatePropertyAll(
+                              isHovered
+                                  ? Theme.of(
+                                      context,
+                                    ).colorScheme.primaryContainer
+                                  : null,
+                            ),
+                            foregroundColor: WidgetStatePropertyAll(
+                              isHovered
+                                  ? Theme.of(
+                                      context,
+                                    ).colorScheme.onPrimaryContainer
+                                  : null,
+                            ),
+                            shape: WidgetStateProperty.all(
+                              const RoundedRectangleBorder(),
+                            ),
+                          ),
+                          onPressed: () {
+                            ref
+                                .read(screenStateProvider(screenId).notifier)
+                                .selectWorkspace(
+                                  screenState.workspaceList.indexOf(
+                                    workspaceId,
+                                  ),
+                                );
+                          },
+                          icon: WorkspaceIcon(workspaceId: workspaceId),
                         ),
                       ),
-                      onPressed: () {
-                        ref
-                            .read(screenStateProvider(screenId).notifier)
-                            .selectWorkspace(
-                              screenState.workspaceList.indexOf(workspaceId),
-                            );
-                      },
-                      icon: WorkspaceIcon(workspaceId: workspaceId),
                     ),
                   ),
                   if (isRecording || unreadNotifications.isNotEmpty)
@@ -299,112 +319,5 @@ class WorkspaceListButton extends HookConsumerWidget {
         ),
       ),
     );
-  }
-}
-
-class WorkspaceIcon extends HookConsumerWidget {
-  const WorkspaceIcon({required this.workspaceId, super.key});
-  final WorkspaceId workspaceId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final workspaceDisplayMode = ref.watch(currentWorkspaceDisplayModeProvider);
-    final workspaceState = ref.watch(workspaceStateProvider(workspaceId));
-
-    final appIdList = useMemoized(
-      () => workspaceState.tileableWindowList
-          .map(
-            (windowId) => ref.read(
-              persistentWindowStateProvider(
-                windowId,
-              ).select((value) => value.properties.appId),
-            ),
-          )
-          .toList(),
-      [workspaceState.tileableWindowList],
-    ).nonNulls;
-
-    if (appIdList.isEmpty) return const ShellIcon(MdiIcons.plus);
-
-    switch (workspaceDisplayMode) {
-      case WorkspaceDisplayMode.hybrid:
-        {
-          if (appIdList.length == 1) {
-            return SizedBox(
-              height: 24,
-              width: 24,
-              child: AppIconById(id: appIdList.first),
-            );
-          } else {
-            return CategoryIcon(category: workspaceState.category);
-          }
-        }
-      case WorkspaceDisplayMode.category:
-        {
-          return CategoryIcon(category: workspaceState.category);
-        }
-      case WorkspaceDisplayMode.application:
-        {
-          const numberOfEachAppMap = <String, int>{};
-          for (final appId in appIdList) {
-            if (numberOfEachAppMap.containsKey(appId)) {
-              numberOfEachAppMap[appId] = numberOfEachAppMap[appId]! + 1;
-            } else {
-              numberOfEachAppMap[appId] = 1;
-            }
-          }
-          final sortedByInstanceAppList = numberOfEachAppMap.entries
-              .sorted((a, b) {
-                return b.value - a.value;
-              })
-              .map((entry) => entry.key);
-          return Stack(
-            children: [
-              for (final appId in sortedByInstanceAppList)
-                SizedBox(height: 24, width: 24, child: AppIconById(id: appId)),
-            ],
-          );
-        }
-    }
-  }
-}
-
-class CategoryIcon extends StatelessWidget {
-  const CategoryIcon({this.category = WorkspaceCategory.System, super.key});
-  final WorkspaceCategory? category;
-  @override
-  Widget build(BuildContext context) {
-    switch (category!) {
-      case WorkspaceCategory.Game:
-        return const ShellIcon(MdiIcons.gamepad);
-      case WorkspaceCategory.Development:
-        return const ShellIcon(MdiIcons.codeBraces);
-      case WorkspaceCategory.Video:
-        return const ShellIcon(MdiIcons.movieOpen);
-      case WorkspaceCategory.Audio:
-        return const ShellIcon(MdiIcons.music);
-      case WorkspaceCategory.AudioVideo:
-        return const ShellIcon(MdiIcons.playCircleOutline);
-      case WorkspaceCategory.Graphics:
-        return const ShellIcon(MdiIcons.palette);
-      case WorkspaceCategory.Office:
-        return const ShellIcon(MdiIcons.fileDocument);
-      case WorkspaceCategory.Science:
-        return const ShellIcon(MdiIcons.flask);
-      case WorkspaceCategory.Education:
-        return const ShellIcon(MdiIcons.school);
-      case WorkspaceCategory.FileManager:
-        return const ShellIcon(MdiIcons.folder);
-      case WorkspaceCategory.InstantMessaging:
-        return const ShellIcon(MdiIcons.forum);
-      case WorkspaceCategory.Network:
-        return const ShellIcon(MdiIcons.web);
-      case WorkspaceCategory.Settings:
-        return const ShellIcon(MdiIcons.cog);
-      case WorkspaceCategory.System:
-        return const ShellIcon(MdiIcons.desktopClassic);
-      case WorkspaceCategory.Utility:
-        return const ShellIcon(MdiIcons.applicationCog);
-    }
   }
 }

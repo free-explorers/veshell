@@ -11,6 +11,7 @@ import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/monitor/util/scale_recommendation.dart';
 import 'package:shell/monitor/widget/monitor_arrangement/monitor_arrangement_editor.dart';
+import 'package:shell/screen/provider/workspace_display_mode.dart';
 import 'package:shell/settings/model/keyboard_choices.dart';
 import 'package:shell/settings/model/keyboard_option.dart';
 import 'package:shell/settings/model/pointer_choices.dart';
@@ -657,6 +658,30 @@ class SettingsProperties extends _$SettingsProperties {
                       const FocusIndicatorValue(),
                   buildEditor: (context, {required isExpanded}) =>
                       FocusIndicatorEditor(path: path, property: property),
+                ),
+          ),
+          'workspaceIcon': SettingProperty<String>(
+            name: l10n.workspaceIconStyle,
+            description: l10n.workspaceIconDescription,
+            buildSearchResult: (context, path, property) =>
+                ExpandableSearchResult<String>(
+                  path: path,
+                  property: property,
+                  buildValue: (context, value, {required isExpanded}) =>
+                      SettingPropertyChoiceValue(
+                        path: path,
+                        choices: workspaceDisplayModeChoices,
+                        defaultValue: workspaceDisplayModeFallback.name,
+                        label: workspaceDisplayModeLabel,
+                      ),
+                  buildEditor: (context, {required isExpanded}) =>
+                      SettingPropertyChoiceEditor(
+                        path: path,
+                        property: property,
+                        choices: workspaceDisplayModeChoices,
+                        defaultValue: workspaceDisplayModeFallback.name,
+                        label: workspaceDisplayModeLabel,
+                      ),
                 ),
           ),
         },
