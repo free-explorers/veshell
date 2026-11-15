@@ -19,6 +19,7 @@ class WindowWidget extends HookConsumerWidget {
     required this.focusNode,
     this.displayMode = DisplayMode.maximized,
     this.activationTarget,
+    this.sizesSurface = true,
     super.key,
   });
 
@@ -34,6 +35,15 @@ class WindowWidget extends HookConsumerWidget {
   /// window behind it — receives the keyboard, exactly like the old floating
   /// stack raised the newest dialog.
   final MetaWindowId? activationTarget;
+
+  /// Whether this widget re-asserts its bounds as the native window's size.
+  ///
+  /// Only the widget hosting the window for its current owner may size it. A
+  /// view that still paints the surface after ownership moved (a dialog panel
+  /// fading out after its dialog was extracted to a tile) passes false: two
+  /// hosts asserting different bounds alternate configures, and the stale one
+  /// can be the last to win.
+  final bool sizesSurface;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -144,6 +154,9 @@ class WindowWidget extends HookConsumerWidget {
                 builder: (context) {
                   useEffect(
                     () {
+                      if (!sizesSurface) {
+                        return null;
+                      }
                       if (constraints.widthConstraints().maxWidth.isInfinite ||
                           constraints
                               .heightConstraints()
@@ -197,7 +210,15 @@ class WindowWidget extends HookConsumerWidget {
                             (logicalBufferSize.height - targetSize.height)
                                     .abs() <
                                 1;
-                        if (atTarget || metaWindow.isFixedSized) {
+                        if (atTarget) {
+                          // The mismatch is resolved: a later one, even with
+                          // the same sizes, is a new mismatch to correct (the
+                          // surface was resized away again, e.g. by another
+                          // host), not the same refused configure.
+                          lastCorrectedMismatch.value = null;
+                          return;
+                        }
+                        if (metaWindow.isFixedSized) {
                           return;
                         }
                         final mismatchKey = (
@@ -229,6 +250,7 @@ class WindowWidget extends HookConsumerWidget {
                       return null;
                     },
                     [
+                      sizesSurface,
                       constraints,
                       metaWindowId,
                       displayedSizing,
