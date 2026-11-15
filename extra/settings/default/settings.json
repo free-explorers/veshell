@@ -87,6 +87,7 @@
         "cursorTheme": "",
         "cursorSize": 24,
         "focusIndicator": "grayscale",
+        "workspaceIcon": "hybrid",
         "animationSpeed": 1,
         "statusBar": "none",
         "statusBarContent": {
