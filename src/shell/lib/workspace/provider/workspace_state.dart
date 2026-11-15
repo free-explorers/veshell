@@ -227,6 +227,18 @@ class WorkspaceState extends _$WorkspaceState {
     }
   }
 
+  /// Fixes the workspace's category, shown as its icon whatever the windows
+  /// it holds; `null` goes back to the category detected from its windows.
+  Future<void> setForcedCategory(WorkspaceCategory? category) async {
+    state = state.copyWith(forcedCategory: category);
+    final resolved =
+        category ?? await _determineCategory(state.tileableWindowList);
+    // The windows may have changed, or the choice been made again, while the
+    // desktop entries were read; only the latest choice applies.
+    if (state.forcedCategory != category) return;
+    state = state.copyWith(category: resolved);
+  }
+
   void selectWindow(PersistentWindowId windowId) {
     final index = state.tileableWindowList.indexOf(windowId);
     if (index == -1) return;

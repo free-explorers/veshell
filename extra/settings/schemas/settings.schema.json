@@ -356,6 +356,15 @@
                         "none"
                     ]
                 },
+                "workspaceIcon": {
+                    "type": "string",
+                    "enum": [
+                        "hybrid",
+                        "category",
+                        "application"
+                    ],
+                    "description": "What the workspace buttons show: hybrid (the application or the category), category, or application"
+                },
                 "animationSpeed": {
                     "type": "number",
                     "minimum": 0.05,
