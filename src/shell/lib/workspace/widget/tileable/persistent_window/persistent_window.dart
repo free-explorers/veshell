@@ -204,6 +204,7 @@ class PersistentWindowTileable extends Tileable {
               focusNode: primaryFocusNode,
               displayMode: window.displayMode,
               activationTarget: selectedDialogMetaWindow,
+              immersiveFullscreen: true,
             )
           : placeholder,
     );

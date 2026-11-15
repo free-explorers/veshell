@@ -12,6 +12,7 @@ import 'package:shell/shared/util/logger.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
+import 'package:shell/window/widget/immersive_fullscreen.dart';
 
 class WindowWidget extends HookConsumerWidget {
   const WindowWidget({
@@ -20,6 +21,7 @@ class WindowWidget extends HookConsumerWidget {
     this.displayMode = DisplayMode.maximized,
     this.activationTarget,
     this.sizesSurface = true,
+    this.immersiveFullscreen = false,
     super.key,
   });
 
@@ -44,6 +46,11 @@ class WindowWidget extends HookConsumerWidget {
   /// hosts asserting different bounds alternate configures, and the stale one
   /// can be the last to win.
   final bool sizesSurface;
+
+  /// Whether a client that went fullscreen inside this maximized tile covers
+  /// the whole monitor once the input has been idle (see
+  /// `useImmersiveFullscreen`). Only a persistent tile opts in.
+  final bool immersiveFullscreen;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -84,7 +91,8 @@ class WindowWidget extends HookConsumerWidget {
     // client is actually rendering: a client is not required to re-set its
     // window geometry on resize, so the geometry can lag (or stay stale) while
     // the buffer shrinks, which made restoring the tile count a no-op.
-    ({int surfaceId, Rect? geometry, double scaleRatio})? displayedSizing;
+    ({int surfaceId, Rect? geometry, double scaleRatio, bool isFullscreen})?
+    displayedSizing;
     try {
       displayedSizing = ref.watch(
         metaWindowStateProvider(metaWindowId).select(
@@ -92,6 +100,7 @@ class WindowWidget extends HookConsumerWidget {
             surfaceId: value.surfaceId,
             geometry: value.geometry,
             scaleRatio: value.scaleRatio,
+            isFullscreen: value.isFullscreen,
           ),
         ),
       );
@@ -136,6 +145,25 @@ class WindowWidget extends HookConsumerWidget {
       };
     }, [focusNode, activateWindow]);
 
+    // A fullscreen client in a maximized tile zooms onto the whole monitor
+    // while the user leaves it alone. Only while the tile drives the window
+    // itself: a selected dialog, or a host that does not own the window, keeps
+    // it in the tile.
+    final hasFocus = useListenableSelector(focusNode, () => focusNode.hasFocus);
+    final immersive = useImmersiveFullscreen(
+      context,
+      enabled:
+          immersiveFullscreen &&
+          displayMode == DisplayMode.maximized &&
+          sizesSurface &&
+          (activationTarget == null || activationTarget == metaWindowId) &&
+          hasFocus &&
+          (displayedSizing?.isFullscreen ?? false),
+      metaWindowId: metaWindowId,
+    );
+    // Out of its tile the monitor sizes the window, not the tile.
+    final sizesToTile = sizesSurface && !immersive;
+
     if (displayedSizing == null) {
       // The native window is gone. Its owner clears `metaWindowId` on the next
       // frame; until then render nothing rather than the error widget.
@@ -154,7 +182,7 @@ class WindowWidget extends HookConsumerWidget {
                 builder: (context) {
                   useEffect(
                     () {
-                      if (!sizesSurface) {
+                      if (!sizesToTile) {
                         return null;
                       }
                       if (constraints.widthConstraints().maxWidth.isInfinite ||
@@ -250,7 +278,7 @@ class WindowWidget extends HookConsumerWidget {
                       return null;
                     },
                     [
-                      sizesSurface,
+                      sizesToTile,
                       constraints,
                       metaWindowId,
                       displayedSizing,
