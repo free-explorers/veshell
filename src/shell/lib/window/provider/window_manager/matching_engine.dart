@@ -11,6 +11,8 @@ import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/meta_window/provider/process_info_state.dart';
 import 'package:shell/monitor/provider/monitor_placement.dart';
+import 'package:shell/screen/provider/focused_screen.dart';
+import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/window/model/matching_decision.dart';
 import 'package:shell/window/model/matching_info.serializable.dart';
@@ -25,6 +27,7 @@ import 'package:shell/window/provider/window_manager/matching_utils.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:shell/window/provider/window_manager/windows_available_for_matching.dart';
 import 'package:shell/window/provider/window_navigation.dart';
+import 'package:shell/workspace/provider/workspace_state.dart';
 
 part 'matching_engine.g.dart';
 
@@ -915,6 +918,12 @@ class MatchingEngine extends _$MatchingEngine {
 
     final availableForMatching = ref.read(windowsAvailableForMatchingProvider);
     final cgroupPath = _cgroupFor(metaWindow);
+    // Several tiles can hold windows of the same process (every Code OSS
+    // window belongs to one Electron process). The window was most likely
+    // opened from the tile the user is on, so that one wins; otherwise the
+    // first sibling found does.
+    final focusedTile = _focusedTile();
+    WindowId? firstSiblingWindowId;
 
     for (final entry in windowMap.entries) {
       final siblingMetaWindowId = entry.key;
@@ -955,18 +964,41 @@ class MatchingEngine extends _$MatchingEngine {
         continue;
       }
 
+      final isFocused = siblingWindowId == focusedTile;
+      if (!isFocused && firstSiblingWindowId != null) continue;
       if (log) {
         matchingLog.info(
           'Process-sibling recovered ${metaWindow.id} '
           'pid=${metaWindow.pid} app_id="${metaWindow.appId}" '
           '(cgroup=${cgroupPath ?? 'unknown'}) '
           '→ $siblingWindowId '
-          '(same ${samePid ? 'pid' : 'cgroup'} as $siblingMetaWindowId)',
+          '(same ${samePid ? 'pid' : 'cgroup'} as $siblingMetaWindowId'
+          '${isFocused ? ', focused tile' : ''})',
         );
       }
-      return siblingWindowId;
+      if (isFocused) return siblingWindowId;
+      firstSiblingWindowId = siblingWindowId;
     }
-    return null;
+    return firstSiblingWindowId;
+  }
+
+  /// The tile selected in the selected workspace of the focused screen, if
+  /// any: the window the user is working in.
+  WindowId? _focusedTile() {
+    final screenId = ref.read(focusedScreenProvider);
+    if (screenId == null) return null;
+    final screen = ref.readScreen(screenId);
+    final workspaceIndex = screen.selectedIndex;
+    if (workspaceIndex < 0 || workspaceIndex >= screen.workspaceList.length) {
+      return null;
+    }
+    final workspace = ref.readWorkspace(screen.workspaceList[workspaceIndex]);
+    final tileIndex = workspace.selectedIndex;
+    // The slot past the last tile is the application launcher.
+    if (tileIndex < 0 || tileIndex >= workspace.tileableWindowList.length) {
+      return null;
+    }
+    return workspace.tileableWindowList[tileIndex];
   }
 
   /// Whether a unified cgroup path names a per-application systemd scope
