@@ -629,8 +629,17 @@ class _DialogWindowBody extends HookConsumerWidget {
     // two nodes fighting over it would activate one window and deactivate the
     // other. The node only exists because `MetaSurfaceWidget` expects one, and
     // keeping it non-focusable means the tile's node always wins.
-    final focusNode = useFocusNode(debugLabel: 'DialogSurface $dialogWindowId')
-      ..canRequestFocus = false;
+    //
+    // Non-focusable through the hook, not by assigning the node afterwards:
+    // the hook re-applies its own `canRequestFocus` on every rebuild, and the
+    // true/false flip made the node notify `WindowWidget`, which deactivated
+    // the dialog. A dialog rebuilds whenever its title changes, so a client
+    // that retitles itself as the user types (Thunderbird's compose window,
+    // after its subject) lost the keyboard after each keystroke.
+    final focusNode = useFocusNode(
+      debugLabel: 'DialogSurface $dialogWindowId',
+      canRequestFocus: false,
+    );
 
     final window = WindowWidget(
       metaWindowId: dialog.metaWindowId,

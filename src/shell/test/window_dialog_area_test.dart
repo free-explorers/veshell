@@ -34,6 +34,7 @@ import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/platform/model/event/interactive_resize/interactive_resize.serializable.dart';
 import 'package:shell/platform/model/event/meta_window_patches/meta_window_patches.serializable.dart';
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
+import 'package:shell/platform/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/platform/model/request/mouse_buttons_event/mouse_buttons_event.serializable.dart';
 import 'package:shell/platform/model/request/platform_request.dart';
 import 'package:shell/platform/model/request/start_move_window/start_move_window.serializable.dart';
@@ -83,6 +84,23 @@ class _FixedDialogState extends DialogWindowState {
 
   @override
   DialogWindow build(DialogWindowId windowId) => _dialog;
+}
+
+/// A dialog whose title the client can change, like a compose window that
+/// follows its subject field.
+class _RetitledDialogState extends DialogWindowState {
+  _RetitledDialogState(this._dialog);
+  DialogWindow _dialog;
+
+  @override
+  DialogWindow build(DialogWindowId windowId) => _dialog;
+
+  void retitle(String title) {
+    _dialog = _dialog.copyWith(
+      properties: _dialog.properties.copyWith(title: title),
+    );
+    state = _dialog;
+  }
 }
 
 /// Keeps the tab icon lookup off the filesystem.
@@ -1699,5 +1717,57 @@ void main() {
         .toList();
     expect(buttons, isNotEmpty);
     expect((buttons.last.message as MouseButtonsEventMessage).surfaceId, 10);
+  });
+
+  testWidgets('a tabbed dialog keeps the keyboard when its title changes', (
+    tester,
+  ) async {
+    // Thunderbird's compose window retitles itself after its subject on every
+    // keystroke. Each retitle rebuilds the dialog's body; that rebuild must not
+    // ask the compositor to deactivate the dialog, which took the keyboard
+    // away from the field being typed into.
+    _FakePlatformManager.requests.clear();
+    final dialogState = _RetitledDialogState(
+      _dialog(_dialogA, 'meta-a', 'Write: (no subject)'),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        platformManagerProvider.overrideWith(_FakePlatformManager.new),
+        hotkeysSettingProvider.overrideWithValue(const {}),
+        dialogSetForWindowProvider(
+          _parent,
+        ).overrideWith(() => _FixedDialogSet([_dialogA])),
+        dialogWindowStateProvider(_dialogA).overrideWith(() => dialogState),
+        metaWindowStateProvider(
+          'meta-a',
+        ).overrideWith(() => _FixedMetaWindowState(_regularDialogMetaWindow())),
+        wlSurfaceStateProvider(
+          8,
+        ).overrideWith(() => _FixedSurfaceState(const Size(200, 150))),
+        localizedDesktopEntryForIdProvider(
+          'org.example.App',
+        ).overrideWith(_NoDesktopEntry.new),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_areaApp(container));
+    await tester.pumpAndSettle();
+    expect(find.text('Write: (no subject)'), findsOneWidget);
+    _FakePlatformManager.requests.clear();
+
+    for (final title in ['Write: s', 'Write: su', 'Write: sub']) {
+      dialogState.retitle(title);
+      await tester.pumpAndSettle();
+      expect(find.text(title), findsOneWidget);
+    }
+
+    final deactivations = _FakePlatformManager.requests
+        .whereType<ActivateWindowRequest>()
+        .map((request) => request.message)
+        .whereType<ActivateWindowMessage>()
+        .where((message) => !message.activate);
+    expect(deactivations, isEmpty);
+    expect(tester.takeException(), isNull);
   });
 }
