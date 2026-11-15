@@ -60,6 +60,15 @@ The shipped `veshell-portals.conf` also lists both Secret portal backends,
 that use `org.freedesktop.portal.Secret` work on both GNOME- and KDE-based
 systems.
 
+## Toolkit backends
+
+`GDK_BACKEND=wayland,x11` and `QT_QPA_PLATFORM=wayland;xcb` make GTK and Qt
+applications prefer Wayland while keeping X11 as a fallback. An application
+built only for X11 (Emacs with the GTK X toolkit rather than its pgtk build,
+for example) asks its toolkit for an X display; a Wayland-only value makes the
+toolkit refuse it with "cannot open display", even though Xwayland serves
+`DISPLAY`. A user can still pin a single backend by overriding either variable.
+
 ## `PATH`
 
 The launch environment carries the compositor's own `PATH`. Tracked launches

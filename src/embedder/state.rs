@@ -479,20 +479,30 @@ fn restore_or_unset(name: &str) {
     }
 }
 
-/// The built-in non-session variables [`State::new`] sets, restored when a user
-/// override is removed. `WAYLAND_DISPLAY` and `DISPLAY` are excluded: they are
-/// session-derived and never user-overridable.
 /// How long the textures of a surface the shell closed are kept after it is
 /// destroyed, should the shell never release them: well past its closing
 /// animation.
 pub const RETAINED_TEXTURE_LIFETIME: std::time::Duration = std::time::Duration::from_secs(5);
 
-const BUILTIN_ENVIRONMENT_DEFAULTS: [(&str, &str); 5] = [
+/// The built-in non-session variables [`State::new`] sets and the shell's
+/// launch environment carries, restored when a user override is removed.
+/// `WAYLAND_DISPLAY` and `DISPLAY` are excluded: they are session-derived and
+/// never user-overridable.
+///
+/// The toolkit backends prefer Wayland but keep X11 as a fallback: an
+/// application built only for X11 (such as Emacs with the GTK X toolkit, as
+/// opposed to its pgtk build) asks GDK or Qt for an X display, which a
+/// Wayland-only `GDK_BACKEND`/`QT_QPA_PLATFORM` refuses ("cannot open display")
+/// even though Xwayland is running.
+pub const BUILTIN_ENVIRONMENT_DEFAULTS: [(&str, &str); 5] = [
+    // The current desktop for xdg-desktop-portal, and the legacy
+    // desktop-session hint Electron needs to select libsecret.
     ("XDG_CURRENT_DESKTOP", CURRENT_DESKTOP),
     ("DESKTOP_SESSION", LEGACY_DESKTOP_SESSION),
+    // The session type xdg-autostart and Qt applications read.
     ("XDG_SESSION_TYPE", "wayland"),
-    ("GDK_BACKEND", "wayland"),
-    ("QT_QPA_PLATFORM", "wayland"),
+    ("GDK_BACKEND", "wayland,x11"),
+    ("QT_QPA_PLATFORM", "wayland;xcb"),
 ];
 
 impl<BackendData: Backend + 'static> State<BackendData> {
@@ -580,14 +590,9 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         // Set WAYLAND_DISPLAY for children.
 
         std::env::set_var("WAYLAND_DISPLAY", socket_name.clone());
-        // Set the current desktop for xdg-desktop-portal, and the legacy
-        // desktop-session hint Electron needs to select libsecret.
-        std::env::set_var("XDG_CURRENT_DESKTOP", CURRENT_DESKTOP);
-        std::env::set_var("DESKTOP_SESSION", LEGACY_DESKTOP_SESSION);
-        // Ensure the session type is set to Wayland for xdg-autostart and Qt apps.
-        std::env::set_var("XDG_SESSION_TYPE", "wayland");
-        std::env::set_var("GDK_BACKEND", "wayland"); // Force GTK apps to run on Wayland.
-        std::env::set_var("QT_QPA_PLATFORM", "wayland"); // Force QT apps to run on Wayland.
+        for (name, value) in BUILTIN_ENVIRONMENT_DEFAULTS {
+            std::env::set_var(name, value);
+        }
 
         // Remember the `PATH` inherited from whatever started the compositor
         // before user settings can override it, so removing such an override
