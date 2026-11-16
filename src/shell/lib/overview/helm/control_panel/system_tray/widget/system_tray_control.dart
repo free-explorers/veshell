@@ -69,7 +69,7 @@ class _SystemTrayHeader extends StatelessWidget {
         SizedBox.square(
           dimension: 24,
           child: ShellIcon(
-            MdiIcons.dotsHorizontalCircleOutline,
+            MdiIcons.dotsHorizontal,
             color: theme.colorScheme.primary,
           ),
         ),
